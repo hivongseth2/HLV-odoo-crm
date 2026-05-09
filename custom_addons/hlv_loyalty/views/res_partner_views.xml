@@ -12,7 +12,8 @@
                 <field name="parent_id" string="Công ty mẹ" optional="show"/>
                 <field name="phone" optional="show"/>
                 <field name="email" optional="hide"/>
-                <field name="loyalty_total_points" string="Điểm tích lũy" sum="Tổng"/>
+                <field name="loyalty_total_points" string="Điểm xếp hạng" sum="Tổng"/>
+                <field name="loyalty_exchange_points" string="Điểm đổi thưởng" sum="Tổng" optional="show"/>
                 <field name="loyalty_voucher_count" string="Voucher hiện có"/>
                 <field name="company_id" groups="base.group_multi_company" optional="show"/>
             </list>
@@ -72,7 +73,7 @@
                         class="oe_stat_button" icon="fa-star">
                     <div class="o_stat_info">
                         <field name="loyalty_total_points" class="o_stat_value"/>
-                        <span class="o_stat_text">Điểm Loyalty</span>
+                        <span class="o_stat_text">Điểm xếp hạng</span>
                     </div>
                 </button>
                 <div class="oe_stat_button" icon="fa-trophy"
@@ -93,29 +94,46 @@
 
             <!-- Tab Loyalty -->
             <xpath expr="//notebook" position="inside">
-                <page string="Loyalty" name="loyalty_tab">
+                <page string="Loyalty" name="loyalty_tab" invisible="parent_id != False">
 
                     <!-- Panel tổng điểm + nút đổi -->
                     <div class="row g-0 mb-3 border">
                         <div class="col-auto bg-warning text-dark p-4 text-center"
                              style="min-width: 160px;">
                             <div class="fw-bold small text-uppercase mb-1"
-                                 style="letter-spacing:1px; opacity:.7">Điểm tích lũy</div>
+                                 style="letter-spacing:1px; opacity:.7">Điểm xếp hạng</div>
                             <div class="fw-bold" style="font-size:2.5rem; line-height:1.1">
                                 <field name="loyalty_total_points" readonly="1" nolabel="1"/>
                             </div>
                             <div class="small mt-1" style="opacity:.8">điểm</div>
                         </div>
+                        <div class="col-auto bg-success text-white p-4 text-center border-start"
+                             style="min-width: 160px;">
+                            <div class="fw-bold small text-uppercase mb-1"
+                                 style="letter-spacing:1px; opacity:.85">Điểm đổi thưởng</div>
+                            <div class="fw-bold" style="font-size:2.5rem; line-height:1.1">
+                                <field name="loyalty_exchange_points" readonly="1" nolabel="1"/>
+                            </div>
+                            <div class="small mt-1" style="opacity:.85">
+                                (<field name="loyalty_pending_points" readonly="1" nolabel="1"/> chờ xác nhận)
+                            </div>
+                        </div>
                         <div class="col d-flex align-items-center px-4 bg-light border-start">
                             <div>
                                 <div class="fw-bold mb-1">Đổi điểm lấy Voucher giảm giá</div>
                                 <div class="text-muted small mb-3">
-                                    Sử dụng điểm tích lũy để đổi Voucher áp dụng cho đơn hàng.
+                                    Sử dụng điểm đổi thưởng để đổi Voucher áp dụng cho đơn hàng.
                                 </div>
                                 <button name="action_open_redeem_wizard" type="object"
                                         string="Đổi Voucher ngay"
                                         class="btn btn-warning fw-bold"
-                                        icon="fa-exchange"/>
+                                        icon="fa-exchange"
+                                        groups="hlv_loyalty.group_loyalty_operator"/>
+                                <button name="action_open_point_adjustment_wizard" type="object"
+                                        string="Điều chỉnh điểm"
+                                        class="btn btn-outline-secondary fw-bold ms-2"
+                                        icon="fa-sliders"
+                                        groups="hlv_loyalty.group_loyalty_admin"/>
                             </div>
                         </div>
                     </div>
@@ -164,6 +182,38 @@
                                    decoration-success="state == 'active'"
                                    decoration-info="state == 'used'"
                                    decoration-muted="state == 'expired'"/>
+                        </list>
+                    </field>
+                    <!-- Tài khoản Portal Loyalty -->
+                    <div class="fw-bold text-uppercase small mb-2 mt-3"
+                         style="letter-spacing:1px; color:#6c757d; border-bottom:2px solid #dee2e6; padding-bottom:6px;">
+                        Cấu hình Loyalty
+                    </div>
+                    <group>
+                        <group>
+                            <field name="loyalty_default_discount"
+                                   string="% Chiết khấu mặc định (Loyalty)"
+                                   widget="percentage"
+                                   help="Nhập theo %, VD: 5 = 5%. Dùng để tính điểm khi dòng hàng không có CK Loyalty."/>
+                        </group>
+                    </group>
+                    <!-- Tài khoản Portal Loyalty -->
+                    <div class="fw-bold text-uppercase small mb-2 mt-3"
+                         style="letter-spacing:1px; color:#6c757d; border-bottom:2px solid #dee2e6; padding-bottom:6px;">
+                        Tài khoản Portal
+                    </div>
+                    <field name="loyalty_portal_account_ids" nolabel="1"
+                           groups="hlv_loyalty.group_loyalty_operator">
+                        <list editable="bottom">
+                            <field name="username" placeholder="Tên đăng nhập..."/>
+                            <field name="active" optional="show"/>
+                            <field name="password_hash" string="Mật khẩu" readonly="1"
+                                   optional="hide"/>
+                            <button name="action_reset_password_wizard"
+                                    string="Reset mật khẩu"
+                                    type="object"
+                                    icon="fa-key"
+                                    class="btn-sm"/>
                         </list>
                     </field>
                 </page>

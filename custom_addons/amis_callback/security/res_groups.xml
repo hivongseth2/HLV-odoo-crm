@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Category riêng cho phân hệ meInvoice / AMIS -->
+    <record id="module_category_meinvoice" model="ir.module.category">
+        <field name="name">meInvoice / AMIS</field>
+        <field name="sequence">50</field>
+    </record>
+
+    <!-- Group 1: Người dùng — xem và tạo hóa đơn nháp -->
+    <record id="group_meinvoice_user" model="res.groups">
+        <field name="name">Người dùng HĐĐT</field>
+        <field name="category_id" ref="module_category_meinvoice"/>
+        <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+        <field name="comment">Xem danh sách hóa đơn, tạo hóa đơn nháp, xem trước HĐ.</field>
+    </record>
+
+    <!-- Group 2: Kế toán — gửi CQT, kiểm tra trạng thái, tải PDF/XML -->
+    <record id="group_meinvoice_accountant" model="res.groups">
+        <field name="name">Kế toán HĐĐT</field>
+        <field name="category_id" ref="module_category_meinvoice"/>
+        <field name="implied_ids" eval="[(4, ref('group_meinvoice_user'))]"/>
+        <field name="comment">Gửi hóa đơn lên Cơ quan Thuế, kiểm tra trạng thái CQT, tải PDF/XML.</field>
+    </record>
+
+    <!-- Group 3: Quản trị — toàn quyền kể cả cấu hình -->
+    <record id="group_meinvoice_manager" model="res.groups">
+        <field name="name">Quản trị HĐĐT</field>
+        <field name="category_id" ref="module_category_meinvoice"/>
+        <field name="implied_ids" eval="[(4, ref('group_meinvoice_accountant'))]"/>
+        <field name="comment">Toàn quyền: cấu hình API, xóa hóa đơn, chạy đồng bộ danh mục.</field>
+    </record>
+</odoo>

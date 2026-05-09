@@ -9,34 +9,34 @@ from odoo import api, fields, models
 
 class AmisCallbackLog(models.Model):
     _name = 'amis.callback.log'
-    _description = 'AMIS Callback Log'
+    _description = 'Nhat ky AMIS Callback'
     _order = 'received_at desc, id desc'
 
     name = fields.Char(default='/', required=True, copy=False, index=True)
     received_at = fields.Datetime(default=fields.Datetime.now, required=True, index=True)
-    request_path = fields.Char(string='Request Path')
-    remote_addr = fields.Char(string='Remote IP')
+    request_path = fields.Char(string='Duong dan request')
+    remote_addr = fields.Char(string='IP nguon')
     app_id = fields.Char(string='App ID')
-    org_company_code = fields.Char(string='Org Company Code', index=True)
-    data_type = fields.Integer(string='Data Type', index=True)
-    input_success = fields.Boolean(string='Input Success')
-    input_error_code = fields.Char(string='Input Error Code')
-    input_error_message = fields.Text(string='Input Error Message')
+    org_company_code = fields.Char(string='Ma cong ty doi tac', index=True)
+    data_type = fields.Integer(string='Loai du lieu', index=True)
+    input_success = fields.Boolean(string='Input hop le')
+    input_error_code = fields.Char(string='Ma loi input')
+    input_error_message = fields.Text(string='Thong diep loi input')
     signature = fields.Char(string='Signature', index=True)
-    signature_valid = fields.Boolean(string='Signature Valid', index=True)
-    raw_payload = fields.Text(string='Raw Payload')
-    data_payload = fields.Text(string='Data Payload')
-    response_success = fields.Boolean(string='Response Success', default=True, index=True)
-    response_error_code = fields.Char(string='Response Error Code')
-    response_error_message = fields.Text(string='Response Error Message')
+    signature_valid = fields.Boolean(string='Signature hop le', index=True)
+    raw_payload = fields.Text(string='Payload goc')
+    data_payload = fields.Text(string='Du lieu data')
+    response_success = fields.Boolean(string='Phan hoi thanh cong', default=True, index=True)
+    response_error_code = fields.Char(string='Ma loi phan hoi')
+    response_error_message = fields.Text(string='Thong diep loi phan hoi')
     state = fields.Selection([
-        ('received', 'Received'),
-        ('validated', 'Validated'),
-        ('rejected', 'Rejected'),
-        ('failed', 'Failed'),
+        ('received', 'Da nhan'),
+        ('validated', 'Hop le'),
+        ('rejected', 'Tu choi'),
+        ('failed', 'That bai'),
     ], default='received', required=True, index=True)
-    detail_line_ids = fields.One2many('amis.callback.log.line', 'log_id', string='Callback Details')
-    detail_count = fields.Integer(string='Detail Count', compute='_compute_detail_count')
+    detail_line_ids = fields.One2many('amis.callback.log.line', 'log_id', string='Chi tiet callback')
+    detail_count = fields.Integer(string='So dong chi tiet', compute='_compute_detail_count')
 
     @api.depends('detail_line_ids')
     def _compute_detail_count(self):
@@ -166,16 +166,16 @@ class AmisCallbackLog(models.Model):
 
 class AmisCallbackLogLine(models.Model):
     _name = 'amis.callback.log.line'
-    _description = 'AMIS Callback Log Line'
+    _description = 'Dong chi tiet AMIS Callback'
     _order = 'sequence, id'
 
     log_id = fields.Many2one('amis.callback.log', required=True, ondelete='cascade', index=True)
     sequence = fields.Integer(default=1)
     org_refid = fields.Char(string='Org Ref ID', index=True)
-    success = fields.Boolean(string='Success')
-    error_code = fields.Char(string='Error Code')
-    error_message = fields.Text(string='Error Message')
+    success = fields.Boolean(string='Thanh cong')
+    error_code = fields.Char(string='Ma loi')
+    error_message = fields.Text(string='Thong diep loi')
     session_id = fields.Char(string='Session ID', index=True)
-    error_call_back_message = fields.Text(string='Error Callback Message')
-    voucher_type = fields.Integer(string='Voucher Type')
-    raw_json = fields.Text(string='Raw JSON')
+    error_call_back_message = fields.Text(string='Thong diep callback loi')
+    voucher_type = fields.Integer(string='Loai chung tu')
+    raw_json = fields.Text(string='JSON goc')

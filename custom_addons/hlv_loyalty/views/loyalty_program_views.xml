@@ -51,6 +51,8 @@
 
                     <group>
                         <group string="Cấu hình chi tiết">
+                            <field name="discount_per_point"/>
+                            <field name="cash_rate_per_point"/>
                             <field name="earning_amount" widget="monetary"
                                    options="{'currency_field': 'currency_id'}"/>
                             <field name="earning_points"/>
@@ -80,6 +82,22 @@
                                     <field name="active" widget="boolean_toggle"/>
                                 </list>
                             </field>
+                        </page>
+                        <page string="Mô tả Portal" name="portal_desc">
+                            <group>
+                                <group string="Điểm Tích lũy (Ranking)">
+                                    <field name="portal_ranking_desc"
+                                           nolabel="1"
+                                           placeholder="Mô tả hiển thị cho khách hàng về Điểm Tích lũy..."
+                                           style="min-height:80px"/>
+                                </group>
+                                <group string="Điểm Đổi thưởng (Exchange)">
+                                    <field name="portal_exchange_desc"
+                                           nolabel="1"
+                                           placeholder="Mô tả hiển thị cho khách hàng về Điểm Đổi thưởng..."
+                                           style="min-height:80px"/>
+                                </group>
+                            </group>
                         </page>
                         <page string="Ghi chú" name="notes">
                             <field name="note" placeholder="Ghi chú về chương trình..."/>

@@ -9,8 +9,18 @@ class ResPartner(models.Model):
     _inherit = 'res.partner'
 
     loyalty_total_points = fields.Integer(
-        string='Tổng điểm tích lũy', compute='_compute_loyalty_total_points',
+        string='Điểm xếp hạng', compute='_compute_loyalty_total_points',
         store=True, readonly=True,
+        help='Điểm tự động xác nhận, dùng để tính hạng thành viên.',
+    )
+    loyalty_exchange_points = fields.Integer(
+        string='Điểm đổi thưởng', compute='_compute_loyalty_exchange_points',
+        store=True, readonly=True,
+        help='Điểm đã được nhân viên xác nhận, dùng để đổi Voucher.',
+    )
+    loyalty_pending_points = fields.Integer(
+        string='Điểm chờ xác nhận', compute='_compute_loyalty_pending_points',
+        store=False, readonly=True,
     )
     loyalty_history_ids = fields.One2many(
         'hlv.loyalty.history', 'partner_id', string='Lịch sử điểm',
@@ -28,13 +38,64 @@ class ResPartner(models.Model):
         'hlv.loyalty.tier', string='Hạng thành viên',
         compute='_compute_loyalty_tier', store=False, readonly=True,
     )
+    loyalty_default_discount = fields.Float(
+        string='% Chiết khấu mặc định (Loyalty)',
+        default=0.05,
+        digits=(5, 4),
+        help='Tỉ lệ chiết khấu mặc định để tính điểm Loyalty khi dòng hàng không có loyalty_discount_pct. '
+             'Nhập theo dạng thập phân: 0.05 = 5%, 0.1 = 10%. Admin có thể sửa trên từng khách hàng.',
+    )
+    loyalty_portal_account_ids = fields.One2many(
+        'hlv.loyalty.portal.account', 'partner_id', string='Tài khoản Portal',
+    )
 
-    @api.depends('loyalty_history_ids', 'loyalty_history_ids.point_amount')
+    @api.depends(
+        'loyalty_history_ids', 'loyalty_history_ids.point_amount',
+        'loyalty_history_ids.point_type', 'loyalty_history_ids.state',
+        'child_ids.loyalty_history_ids', 'child_ids.loyalty_history_ids.point_amount',
+        'child_ids.loyalty_history_ids.point_type', 'child_ids.loyalty_history_ids.state',
+    )
     def _compute_loyalty_total_points(self):
+        """Điểm xếp hạng: ranking confirmed + legacy records (point_type=False)."""
+        History = self.env['hlv.loyalty.history']
         for partner in self:
-            partner.loyalty_total_points = sum(
-                partner.loyalty_history_ids.mapped('point_amount')
-            )
+            all_ids = [partner.id] + (partner.child_ids.ids if not partner.parent_id else [])
+            records = History.search([
+                ('partner_id', 'in', all_ids),
+                ('point_type', 'in', ['ranking', False]),
+                ('state', 'in', ['confirmed', False]),
+            ])
+            partner.loyalty_total_points = sum(records.mapped('point_amount'))
+
+    @api.depends(
+        'loyalty_history_ids', 'loyalty_history_ids.point_amount',
+        'loyalty_history_ids.point_type', 'loyalty_history_ids.state',
+        'child_ids.loyalty_history_ids', 'child_ids.loyalty_history_ids.point_amount',
+        'child_ids.loyalty_history_ids.point_type', 'child_ids.loyalty_history_ids.state',
+    )
+    def _compute_loyalty_exchange_points(self):
+        """Điểm đổi thưởng: exchange confirmed + legacy records (point_type=False)."""
+        History = self.env['hlv.loyalty.history']
+        for partner in self:
+            all_ids = [partner.id] + (partner.child_ids.ids if not partner.parent_id else [])
+            records = History.search([
+                ('partner_id', 'in', all_ids),
+                ('point_type', 'in', ['exchange', False]),
+                ('state', 'in', ['confirmed', False]),
+            ])
+            partner.loyalty_exchange_points = sum(records.mapped('point_amount'))
+
+    def _compute_loyalty_pending_points(self):
+        """Điểm exchange đang chờ xác nhận."""
+        History = self.env['hlv.loyalty.history']
+        for partner in self:
+            all_ids = [partner.id] + (partner.child_ids.ids if not partner.parent_id else [])
+            records = History.search([
+                ('partner_id', 'in', all_ids),
+                ('point_type', '=', 'exchange'),
+                ('state', '=', 'pending'),
+            ])
+            partner.loyalty_pending_points = sum(records.mapped('point_amount'))
 
     @api.depends('loyalty_total_points')
     def _compute_loyalty_tier(self):
@@ -65,6 +126,19 @@ class ResPartner(models.Model):
         for partner in self:
             partner.loyalty_history_count = history_map.get(partner.id, 0)
             partner.loyalty_voucher_count = voucher_map.get(partner.id, 0)
+
+    def _get_loyalty_root(self):
+        """Return the topmost partner in the parent chain for loyalty operations.
+
+        Unlike commercial_partner_id (which stops at the first is_company=True),
+        this walks all the way up so company-type branches (is_company=True with
+        parent_id) share the same loyalty balance as their parent company.
+        """
+        self.ensure_one()
+        partner = self
+        while partner.parent_id:
+            partner = partner.parent_id
+        return partner
 
     def action_view_loyalty_history(self):
         self.ensure_one()
@@ -100,5 +174,19 @@ class ResPartner(models.Model):
             'target': 'new',
             'context': {
                 'default_partner_id': root_partner.id,
+            },
+        }
+
+    def action_open_point_adjustment_wizard(self):
+        """Mở wizard Điều chỉnh điểm thủ công."""
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Điều chỉnh điểm',
+            'res_model': 'hlv.loyalty.point.adjustment.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {
+                'default_partner_id': self.id,
             },
         }

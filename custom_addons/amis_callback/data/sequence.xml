@@ -9,6 +9,6 @@
 
     <record id="amis_callback_config_singleton" model="amis.callback.config">
         <field name="name">AMIS Callback</field>
-        <field name="app_id">0e0a14cf-9e4b-4af9-875b-c490f34a581b</field>
+        <field name="app_id">cfd435c9-b5c9-484f-b86d-ddbba36dc0f4</field>
     </record>
 </odoo>

@@ -26,6 +26,11 @@
                                  help="Gửi email/thông báo cho khách khi được tích điểm">
                             <field name="loyalty_send_notification"/>
                         </setting>
+                        <setting id="loyalty_portal_default_password_setting"
+                                 string="Mật khẩu mặc định Portal"
+                                 help="Mật khẩu mặc định gán khi tạo tài khoản Portal Loyalty mới (tối thiểu 6 ký tự)">
+                            <field name="loyalty_portal_default_password" password="True"/>
+                        </setting>
                     </block>
                 </app>
             </xpath>

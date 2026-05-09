@@ -1,0 +1,400 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+<!-- ================================================================
+     loyalty_portal_redeem.xml  —  /loyalty/redeem
+     Mini-hero + sticky tab strip + animated cards  (v2)
+================================================================ -->
+<template id="loyalty_portal_redeem" name="Loyalty Portal - Đổi thưởng">
+    <t t-call="hlv_loyalty.loyalty_public_layout">
+
+        <!-- ── Top bar ── -->
+        <div class="sr-topbar">
+            <a href="/loyalty/dashboard" class="sr-topbar-back">
+                <span class="ms" style="font-size:20px">arrow_back</span> Quay về Dashboard
+            </a>
+            <div class="sr-topbar-right">
+                <span class="sr-topbar-name">Xin chào, <strong><t t-out="partner.name"/></strong></span>
+                <a href="/loyalty/logout" class="sr-topbar-logout">Đăng xuất</a>
+            </div>
+        </div>
+
+        <!-- ── Mini Hero ── -->
+        <div class="sr-rdm-hero">
+            <div class="sr-rdm-hero-inner">
+                <div class="sr-rdm-hero-left">
+                    <h1 class="sr-rdm-hero-ttl">
+                        <span class="ms ms-fill">redeem</span> Đổi thưởng
+                    </h1>
+                    <p class="sr-rdm-hero-sub">Dùng điểm đổi thưởng để nhận quà hoặc quy đổi thành tiền mặt.</p>
+                </div>
+                <div class="sr-rdm-stats">
+                    <div class="sr-rdm-stat sr-rdm-stat-exchange">
+                        <span class="ms ms-fill sr-rdm-stat-icon">swap_horiz</span>
+                        <div>
+                            <div class="sr-rdm-stat-lbl">Điểm đổi thưởng</div>
+                            <div class="sr-rdm-stat-val"><t t-out="'{:,}'.format(exchange_points)"/></div>
+                            <div class="sr-rdm-stat-unit">điểm khả dụng</div>
+                        </div>
+                    </div>
+                    <t t-if="pending_points > 0">
+                        <div class="sr-rdm-stat sr-rdm-stat-pending">
+                            <span class="ms sr-rdm-stat-icon">hourglass_top</span>
+                            <div>
+                                <div class="sr-rdm-stat-lbl">Chờ xác nhận</div>
+                                <div class="sr-rdm-stat-val">+<t t-out="'{:,}'.format(pending_points)"/></div>
+                                <div class="sr-rdm-stat-unit">điểm đang chờ</div>
+                            </div>
+                        </div>
+                    </t>
+                    <t t-if="program and program.cash_rate_per_point">
+                        <div class="sr-rdm-stat sr-rdm-stat-rate">
+                            <span class="ms sr-rdm-stat-icon">info</span>
+                            <div>
+                                <div class="sr-rdm-stat-lbl">Tỷ lệ đổi tiền</div>
+                                <div class="sr-rdm-stat-val">
+                                    <t t-out="'{:,.0f}'.format(program.cash_rate_per_point)"/>đ
+                                </div>
+                                <div class="sr-rdm-stat-unit">/ 1 điểm ĐT</div>
+                            </div>
+                        </div>
+                    </t>
+                </div>
+            </div>
+            <div class="sr-rdm-hero-wm" aria-hidden="true"><span class="ms ms-xl">redeem</span></div>
+        </div>
+
+        <!-- ── Tab strip (sticky) ── -->
+        <div class="sr-rdm-tab-strip">
+            <div class="sr-rdm-tab-inner">
+                <a t-att-href="'/loyalty/redeem?tab=gift'"
+                   t-att-class="'sr-rdm-tab' + (' active' if active_tab == 'gift' else '')">
+                    <span class="ms">redeem</span> Đổi quà
+                    <t t-if="packages">
+                        <span class="sr-rdm-tab-badge"><t t-out="len(packages)"/></span>
+                    </t>
+                </a>
+                <a t-att-href="'/loyalty/redeem?tab=cash'"
+                   t-att-class="'sr-rdm-tab' + (' active' if active_tab == 'cash' else '')">
+                    <span class="ms">payments</span> Đổi tiền mặt
+                </a>
+                <a t-att-href="'/loyalty/redeem?tab=history'"
+                   t-att-class="'sr-rdm-tab' + (' active' if active_tab == 'history' else '')">
+                    <span class="ms">history</span> Yêu cầu của tôi
+                    <t t-if="my_requests">
+                        <t t-set="pending_cnt" t-value="len([r for r in my_requests if r.state == 'pending'])"/>
+                        <t t-if="pending_cnt > 0">
+                            <span class="sr-rdm-tab-badge"><t t-out="pending_cnt"/></span>
+                        </t>
+                    </t>
+                </a>
+            </div>
+        </div>
+
+        <!-- ── Body ── -->
+        <div class="sr-rdm-body">
+
+            <!-- Flash messages -->
+            <t t-if="success_msg">
+                <div class="sr-flash sr-flash-ok">
+                    <span class="ms">check_circle</span>
+                    <span><t t-out="success_msg"/></span>
+                </div>
+            </t>
+            <t t-if="error_msg">
+                <div class="sr-flash sr-flash-err">
+                    <span class="ms">error</span>
+                    <span><t t-out="error_msg"/></span>
+                </div>
+            </t>
+
+            <!-- ═══════════════ TAB: ĐỔI QUÀ ═══════════════ -->
+            <t t-if="active_tab == 'gift'">
+                <div class="sr-rdm-pane">
+                    <t t-if="packages">
+                        <div class="sr-pkg-grid">
+                            <t t-foreach="packages" t-as="pkg">
+                                <t t-set="can_redeem" t-value="exchange_points >= pkg.points_required"/>
+                                <div t-att-class="'sr-pkg-card' + ('' if can_redeem else ' sr-pkg-disabled')">
+                                    <div class="sr-pkg-top">
+                                        <div class="sr-pkg-icon-wrap">
+                                            <span class="ms ms-fill">redeem</span>
+                                        </div>
+                                        <div class="sr-pkg-pts">
+                                            <div class="sr-pkg-pts-num"><t t-out="'{:,}'.format(pkg.points_required)"/></div>
+                                            <div class="sr-pkg-pts-lbl">điểm ĐT</div>
+                                        </div>
+                                    </div>
+                                    <div class="sr-pkg-name"><t t-out="pkg.name"/></div>
+                                    <div class="sr-pkg-desc">
+                                        <t t-if="pkg.reward_type == 'free_shipping'">Miễn phí vận chuyển</t>
+                                        <t t-elif="pkg.reward_type == 'gift'">
+                                            Quà tặng kèm<t t-if="pkg.gift_product_id">: <t t-out="pkg.gift_product_id.name"/></t>
+                                        </t>
+                                        <t t-elif="pkg.discount_type == 'fixed'">
+                                            Voucher giảm <strong><t t-out="'{:,.0f}'.format(pkg.discount_value)"/>đ</strong>
+                                            <t t-if="pkg.min_order_amount > 0"><br/><span style="font-size:.75rem">Đơn từ <t t-out="'{:,.0f}'.format(pkg.min_order_amount)"/>đ</span></t>
+                                        </t>
+                                        <t t-else="">
+                                            Voucher giảm <strong><t t-out="pkg.discount_value"/>%</strong>
+                                            <t t-if="pkg.max_discount_amount > 0"><br/><span style="font-size:.75rem">Tối đa <t t-out="'{:,.0f}'.format(pkg.max_discount_amount)"/>đ</span></t>
+                                        </t>
+                                    </div>
+                                    <div class="sr-pkg-divider"/>
+                                    <t t-if="can_redeem">
+                                        <form t-att-action="'/loyalty/redeem/gift'" method="post" class="sr-pkg-form"
+                                              t-att-data-pkg-name="pkg.name"
+                                              t-att-data-pts="pkg.points_required"
+                                              onsubmit="return confirm('Xác nhận đổi ' + this.dataset.pts + ' điểm lấy gói: ' + this.dataset.pkgName + '?')">
+                                            <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                                            <input type="hidden" name="package_id" t-att-value="pkg.id"/>
+                                            <button type="submit" class="sr-pkg-btn">
+                                                <span class="ms" style="font-size:16px">redeem</span> Đổi ngay
+                                            </button>
+                                        </form>
+                                    </t>
+                                    <t t-else="">
+                                        <div class="sr-pkg-insufficient">
+                                            <span class="ms" style="font-size:15px">lock</span>
+                                            Cần thêm <t t-out="'{:,}'.format(pkg.points_required - exchange_points)"/> điểm
+                                        </div>
+                                    </t>
+                                </div>
+                            </t>
+                        </div>
+                    </t>
+                    <t t-else="">
+                        <div class="sr-rdm-empty">
+                            <span class="ms">redeem</span>
+                            <p>Chưa có gói quà nào khả dụng.</p>
+                        </div>
+                    </t>
+                </div>
+            </t>
+
+            <!-- ═══════════════ TAB: ĐỔI TIỀN ═══════════════ -->
+            <t t-if="active_tab == 'cash'">
+                <div class="sr-rdm-pane">
+                    <div class="sr-cash-layout">
+                    <div class="sr-cash-wrap">
+                        <form action="/loyalty/redeem/cash" method="post" class="sr-cash-form" id="cash-form">
+                            <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+
+                            <div class="sr-cf-card">
+                                <h3 class="sr-cf-title">
+                                    <span class="ms">swap_horiz</span> Số điểm muốn đổi
+                                </h3>
+                                <div class="sr-cf-field">
+                                    <label class="sr-cf-label" for="pts_input">
+                                        Số điểm đổi thưởng <span class="sr-required">*</span>
+                                    </label>
+                                    <input id="pts_input" type="number" name="points_to_redeem"
+                                           class="sr-cf-input" min="1"
+                                           t-att-max="exchange_points"
+                                           placeholder="Nhập số điểm..."
+                                           required="required"
+                                           t-att-value="form_vals.get('points_to_redeem', '')"/>
+                                    <div class="sr-cf-hint">
+                                        Bạn có <strong><t t-out="'{:,}'.format(exchange_points)"/> điểm</strong> khả dụng.
+                                    </div>
+                                    <t t-if="program and program.cash_rate_per_point > 0">
+                                        <div class="sr-cash-preview sr-cash-preview-zero" id="cash-preview">
+                                            <span class="ms">payments</span>
+                                            <span>Bạn sẽ nhận:</span>
+                                            <span class="sr-cash-preview-val" id="preview-val">0đ</span>
+                                        </div>
+                                    </t>
+                                </div>
+                            </div>
+
+                            <div class="sr-cf-card">
+                                <h3 class="sr-cf-title">
+                                    <span class="ms">account_balance</span> Thông tin tài khoản nhận tiền
+                                </h3>
+                                <div class="sr-cf-field">
+                                    <label class="sr-cf-label">Ngân hàng <span class="sr-required">*</span></label>
+                                    <input type="text" name="bank_name" class="sr-cf-input"
+                                           placeholder="VD: Vietcombank, Techcombank, BIDV..."
+                                           required="required" t-att-value="form_vals.get('bank_name', '')"/>
+                                </div>
+                                <div class="sr-cf-field">
+                                    <label class="sr-cf-label">Số tài khoản <span class="sr-required">*</span></label>
+                                    <input type="text" name="account_number" class="sr-cf-input"
+                                           placeholder="Nhập số tài khoản..."
+                                           required="required" t-att-value="form_vals.get('account_number', '')"/>
+                                </div>
+                                <div class="sr-cf-field">
+                                    <label class="sr-cf-label">Tên chủ tài khoản <span class="sr-required">*</span></label>
+                                    <input type="text" name="account_name" class="sr-cf-input"
+                                           placeholder="Nhập đúng tên chủ tài khoản..."
+                                           required="required" t-att-value="form_vals.get('account_name', '')"/>
+                                    <div class="sr-cf-hint">Tên phải khớp với tên đăng ký tại ngân hàng.</div>
+                                </div>
+                                <div class="sr-cf-field">
+                                    <label class="sr-cf-label">Ghi chú</label>
+                                    <textarea name="customer_note" class="sr-cf-input sr-cf-textarea"
+                                              placeholder="Ghi chú thêm (nếu có)..."><t t-out="form_vals.get('customer_note', '')"/></textarea>
+                                </div>
+                            </div>
+
+                            <div class="sr-cf-actions">
+                                <button type="submit" class="sr-cf-submit">
+                                    <span class="ms">send</span> Gửi yêu cầu
+                                </button>
+                            </div>
+                        </form>
+                    </div><!-- /sr-cash-wrap -->
+
+                    <!-- Right panel -->
+                    <div class="sr-cash-side">
+                        <div class="sr-cash-side-inner">
+                            <span class="ms sr-cash-side-icon">account_balance_wallet</span>
+                            <div class="sr-cash-side-ttl">Quy đổi điểm</div>
+                            <div class="sr-cash-side-pts">
+                                <span class="sr-cash-side-num"><t t-out="'{:,}'.format(exchange_points)"/></span>
+                                <span class="sr-cash-side-unit">points khả dụng</span>
+                            </div>
+                            <t t-if="program and program.cash_rate_per_point > 0">
+                                <div class="sr-cash-side-rate">
+                                    <span class="ms">swap_horiz</span>
+                                    1 điểm = <strong><t t-out="'{:,.0f}'.format(program.cash_rate_per_point)"/>đ</strong>
+                                </div>
+                                <div class="sr-cash-side-max">
+                                    Tối đa có thể đổi:<br/>
+                                    <strong><t t-out="'{:,.0f}'.format(exchange_points * program.cash_rate_per_point)"/>đ</strong>
+                                </div>
+                            </t>
+                            <div class="sr-cash-side-steps">
+                                <div class="sr-css-step">
+                                    <span class="ms sr-css-step-icon">edit_note</span>
+                                    <span>Nhập số điểm và thông tin ngân hàng</span>
+                                </div>
+                                <div class="sr-css-step">
+                                    <span class="ms sr-css-step-icon">send</span>
+                                    <span>Gửi yêu cầu</span>
+                                </div>
+                                <div class="sr-css-step">
+                                    <span class="ms sr-css-step-icon">verified</span>
+                                    <span>Chờ admin xác nhận và chuyển khoản</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div><!-- /sr-cash-side -->
+                    </div><!-- /sr-cash-layout -->
+                </div>
+                <t t-if="program and program.cash_rate_per_point > 0">
+                    <script>
+                    (function(){
+                        var rate = <t t-out="program.cash_rate_per_point"/>;
+                        var max  = <t t-out="exchange_points"/>;
+                        var inp  = document.getElementById('pts_input');
+                        var prv  = document.getElementById('cash-preview');
+                        var val  = document.getElementById('preview-val');
+                        if(!inp || !prv || !val) return;
+                        function fmt(n){ return n.toLocaleString('vi-VN') + 'đ'; }
+                        function update(){
+                            var pts = Math.min(parseInt(inp.value) || 0, max);
+                            val.textContent = fmt(pts * rate);
+                            prv.classList.toggle('sr-cash-preview-zero', pts === 0);
+                        }
+                        inp.addEventListener('input', update);
+                        update();
+                    })();
+                    </script>
+                </t>
+            </t>
+
+            <!-- ═══════════════ TAB: YÊU CẦU CỦA TÔI ═══════════════ -->
+            <t t-if="active_tab == 'history'">
+                <div class="sr-rdm-pane">
+                    <t t-if="my_requests">
+                        <div class="sr-req-list">
+                            <t t-foreach="my_requests" t-as="rq">
+                                <div t-att-class="'sr-req-card sr-rq-' + rq.state">
+                                    <div class="sr-rq-head">
+                                        <div class="sr-rq-name">
+                                            <span class="ms">
+                                                <t t-if="rq.request_type == 'gift'">redeem</t>
+                                                <t t-else="">payments</t>
+                                            </span>
+                                            <strong><t t-out="rq.name"/></strong>
+                                            <span t-att-class="'sr-rq-type-badge rq-type-' + rq.request_type">
+                                                <t t-if="rq.request_type == 'gift'">Đổi quà</t>
+                                                <t t-else="">Đổi tiền</t>
+                                            </span>
+                                        </div>
+                                        <span t-att-class="'sr-rq-state rq-st-' + rq.state">
+                                            <span class="sr-rq-dot"/>
+                                            <t t-if="rq.state == 'pending'">Chờ duyệt</t>
+                                            <t t-elif="rq.state == 'done'">Đã xử lý</t>
+                                            <t t-else="">Đã hủy</t>
+                                        </span>
+                                    </div>
+                                    <div class="sr-rq-body">
+                                        <div class="sr-rq-row">
+                                            <span class="sr-rq-lbl">Điểm sử dụng:</span>
+                                            <span class="sr-rq-val"><t t-out="'{:,}'.format(rq.points_required)"/> điểm ĐT</span>
+                                        </div>
+                                        <t t-if="rq.request_type == 'gift' and rq.package_id">
+                                            <div class="sr-rq-row">
+                                                <span class="sr-rq-lbl">Gói quà:</span>
+                                                <span class="sr-rq-val"><t t-out="rq.package_id.name"/></span>
+                                            </div>
+                                        </t>
+                                        <t t-if="rq.request_type == 'cash'">
+                                            <div class="sr-rq-row">
+                                                <span class="sr-rq-lbl">Giá trị:</span>
+                                                <span class="sr-rq-val" style="font-weight:700;color:#198754">
+                                                    <t t-out="'{:,.0f}'.format(rq.cash_value)"/>đ
+                                                </span>
+                                            </div>
+                                            <div class="sr-rq-row">
+                                                <span class="sr-rq-lbl">Ngân hàng:</span>
+                                                <span class="sr-rq-val">
+                                                    <t t-out="rq.bank_name or ''"/> – <t t-out="rq.account_number or ''"/>
+                                                    (<t t-out="rq.account_name or ''"/>)
+                                                </span>
+                                            </div>
+                                        </t>
+                                        <t t-if="rq.state == 'done' and rq.voucher_id">
+                                            <div class="sr-rq-row sr-rq-voucher">
+                                                <span class="sr-rq-lbl">Voucher:</span>
+                                                <span class="sr-rq-vcode">
+                                                    <span class="ms">confirmation_number</span>
+                                                    <t t-out="rq.voucher_id.code"/>
+                                                </span>
+                                            </div>
+                                        </t>
+                                        <t t-if="rq.admin_note">
+                                            <div class="sr-rq-row">
+                                                <span class="sr-rq-lbl">Phản hồi:</span>
+                                                <span class="sr-rq-val"><t t-out="rq.admin_note"/></span>
+                                            </div>
+                                        </t>
+                                        <div class="sr-rq-date">
+                                            <span class="ms" style="font-size:13px">calendar_today</span>
+                                            <t t-out="fmt_vn_date(rq.date_request)"/> · <t t-out="fmt_vn_time(rq.date_request)"/>
+                                            <t t-if="rq.date_done">
+                                                <span style="margin:0 4px">→</span> Xử lý: <t t-out="fmt_vn_date(rq.date_done)"/>
+                                            </t>
+                                        </div>
+                                    </div>
+                                </div>
+                            </t>
+                        </div>
+                    </t>
+                    <t t-else="">
+                        <div class="sr-rdm-empty">
+                            <span class="ms">inbox</span>
+                            <p>Bạn chưa có yêu cầu đổi thưởng nào.</p>
+                        </div>
+                    </t>
+                </div>
+            </t>
+
+        </div><!-- /sr-rdm-body -->
+    </t>
+</template>
+
+</odoo>
+

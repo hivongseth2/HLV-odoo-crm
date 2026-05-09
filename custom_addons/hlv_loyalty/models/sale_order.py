@@ -162,10 +162,19 @@ class SaleOrder(models.Model):
         if voucher.date_expiry and voucher.date_expiry < fields.Datetime.now():
             raise UserError(f'Voucher {voucher.code} đã hết hạn!')
 
-        # Kiểm tra khách hàng sở hữu - cho phép cả công ty con dùng điểm của công ty gốc
-        order_commercial = self.partner_id.commercial_partner_id or self.partner_id
-        voucher_commercial = voucher.partner_id.commercial_partner_id or voucher.partner_id
-        if voucher_commercial != order_commercial and voucher.partner_id != self.partner_id:
+        # Kiểm tra khách hàng sở hữu:
+        # Cho phép nếu order partner là chính chủ voucher, hoặc là công ty con
+        # (bất kỳ cấp) của chủ voucher (hỗ trợ cấu trúc đa công ty).
+        def _is_descendant_or_self(partner, ancestor):
+            """True nếu partner == ancestor hoặc ancestor là tổ tiên của partner."""
+            p = partner
+            while p:
+                if p == ancestor:
+                    return True
+                p = p.parent_id
+            return False
+
+        if not _is_descendant_or_self(self.partner_id, voucher.partner_id):
             raise UserError(
                 f'Voucher {voucher.code} thuộc sở hữu của {voucher.partner_id.name}, '
                 f'không thể dùng cho khách hàng {self.partner_id.name}!'
@@ -268,4 +277,10 @@ class SaleOrderLine(models.Model):
     )
     loyalty_reward_voucher_id = fields.Many2one(
         'hlv.loyalty.voucher', string='Voucher thưởng', copy=False,
+    )
+    loyalty_discount_pct = fields.Float(
+        string='CK Loyalty (%)',
+        default=0.0,
+        digits=(5, 2),
+        help='% chiết khấu dùng để tính điểm Loyalty cho dòng hàng này. Không ảnh hưởng giá bán. VD: 5 = 5%.',
     )

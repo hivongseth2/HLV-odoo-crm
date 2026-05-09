@@ -4,7 +4,7 @@
         <field name="name">amis.callback.log.tree</field>
         <field name="model">amis.callback.log</field>
         <field name="arch" type="xml">
-            <list string="AMIS Callback Logs" default_order="received_at desc">
+            <list string="Nhat ky AMIS Callback" default_order="received_at desc">
                 <field name="received_at"/>
                 <field name="name"/>
                 <field name="state"/>
@@ -22,7 +22,7 @@
         <field name="name">amis.callback.log.form</field>
         <field name="model">amis.callback.log</field>
         <field name="arch" type="xml">
-            <form string="AMIS Callback Log">
+            <form string="Chi tiet AMIS Callback">
                 <header>
                     <field name="state" widget="statusbar" statusbar_visible="received,validated,rejected,failed"/>
                 </header>
@@ -46,18 +46,18 @@
                         </group>
                     </group>
                     <notebook>
-                        <page string="Input">
+                        <page string="Du lieu nhan vao">
                             <group>
                                 <field name="input_error_message" readonly="1" nolabel="1"/>
                                 <field name="signature" readonly="1"/>
                             </group>
                             <field name="data_payload" readonly="1" widget="text" nolabel="1"/>
                         </page>
-                        <page string="Response">
+                        <page string="Phan hoi">
                             <field name="response_error_message" readonly="1" nolabel="1"/>
                             <field name="raw_payload" readonly="1" widget="text" nolabel="1"/>
                         </page>
-                        <page string="Details">
+                        <page string="Chi tiet">
                             <field name="detail_line_ids" readonly="1">
                                 <list>
                                     <field name="sequence"/>
@@ -80,26 +80,26 @@
         <field name="name">amis.callback.log.search</field>
         <field name="model">amis.callback.log</field>
         <field name="arch" type="xml">
-            <search string="Search AMIS Callback Logs">
+            <search string="Tim kiem nhat ky callback">
                 <field name="name"/>
                 <field name="org_company_code"/>
                 <field name="data_type"/>
                 <field name="state"/>
                 <field name="signature_valid"/>
-                <filter name="filter_valid" string="Signature valid" domain="[('signature_valid', '=', True)]"/>
-                <filter name="filter_invalid" string="Signature invalid" domain="[('signature_valid', '=', False)]"/>
-                <filter name="filter_error" string="Failed" domain="[('state', '=', 'failed')]"/>
-                <group expand="0" string="Group By">
-                    <filter name="group_state" string="State" context="{'group_by': 'state'}"/>
-                    <filter name="group_data_type" string="Data Type" context="{'group_by': 'data_type'}"/>
-                    <filter name="group_company" string="Company Code" context="{'group_by': 'org_company_code'}"/>
+                <filter name="filter_valid" string="Signature hop le" domain="[('signature_valid', '=', True)]"/>
+                <filter name="filter_invalid" string="Signature khong hop le" domain="[('signature_valid', '=', False)]"/>
+                <filter name="filter_error" string="That bai" domain="[('state', '=', 'failed')]"/>
+                <group expand="0" string="Nhom theo">
+                    <filter name="group_state" string="Trang thai" context="{'group_by': 'state'}"/>
+                    <filter name="group_data_type" string="Loai du lieu" context="{'group_by': 'data_type'}"/>
+                    <filter name="group_company" string="Ma cong ty" context="{'group_by': 'org_company_code'}"/>
                 </group>
             </search>
         </field>
     </record>
 
     <record id="action_amis_callback_log" model="ir.actions.act_window">
-        <field name="name">AMIS Callback Logs</field>
+        <field name="name">Nhật ký AMIS Callback</field>
         <field name="res_model">amis.callback.log</field>
         <field name="view_mode">list,form</field>
         <field name="search_view_id" ref="view_amis_callback_log_search"/>
@@ -113,16 +113,99 @@
         <field name="name">amis.callback.config.form</field>
         <field name="model">amis.callback.config</field>
         <field name="arch" type="xml">
-            <form string="AMIS Callback Configuration">
+            <form string="Cấu hình AMIS Callback">
+                <header>
+                    <button name="action_connect_misa" type="object" string="Kết nối MISA" class="btn-primary"/>
+                    <button name="action_connect_meinvoice" type="object" string="Kết nối meInvoice" class="btn-secondary"/>
+                    <button name="action_get_meinvoice_templates" type="object" string="Lấy mẫu HĐ" class="btn-secondary"/>
+                    <button name="action_sync_catalog_to_odoo" type="object" string="Đồng bộ danh mục hàng hóa" class="btn-secondary"/>
+                    <button name="action_sync_catalog_unmapped_only" type="object" string="Đồng bộ sản phẩm mới" class="btn-secondary"/>
+                    <button name="check_call_back_data" type="object" string="Kiểm tra Callback" class="btn-secondary"/>
+                    <button name="delete_call_back_data" type="object" string="Xóa Callback" class="btn-secondary"/>
+                </header>
                 <sheet>
                     <group>
                         <group>
                             <field name="name"/>
                             <field name="app_id"/>
                             <field name="active"/>
+                            <field name="api_url"/>
+                            <field name="org_company_code"/>
+                            <field name="access_code" password="True"/>
+                            <field name="access_token" readonly="1"/>
+                            <field name="token_expired_time" readonly="1"/>
+                            <field name="misa_branch_id"/>
+                            <field name="misa_stock_id"/>
                         </group>
                         <group>
                             <field name="callback_route" readonly="1"/>
+                        </group>
+                    </group>
+                    <group>
+                        <group>
+                            <field name="sync_incoming_po_enabled"/>
+                            <field name="sync_outgoing_so_enabled"/>
+                            <field name="sync_shopee_only"/>
+                        </group>
+                    </group>
+                    <group string="Mapping khách hàng Shopee → MISA">
+                        <group>
+                            <field name="misa_shopee_milwaukee_account_object_id"/>
+                            <field name="misa_shopee_hlv_account_object_id"/>
+                            <field name="misa_shopee_dewalt_account_object_id"/>
+                        </group>
+                        <group string="Fallback (Test)">
+                            <field name="misa_fallback_account_object_id"/>
+                            <field name="misa_fallback_account_object_code"/>
+                            <field name="misa_fallback_account_object_name"/>
+                        </group>
+                    </group>
+                    <group string="meInvoice - Tên người mua mặc định theo kênh Shopee">
+                        <group>
+                            <field name="meinvoice_shopee_only"/>
+                            <field name="meinvoice_auto_draft_on_confirm"/>
+                            <field name="meinvoice_shopee_milwaukee_buyer_name"/>
+                            <field name="meinvoice_shopee_hlv_buyer_name"/>
+                            <field name="meinvoice_shopee_dewalt_buyer_name"/>
+                        </group>
+                        <group>
+                            <field name="meinvoice_default_buyer_name"/>
+                            <field name="meinvoice_shopee_default_address"/>
+                        </group>
+                    </group>
+                    <group string="Hóa đơn VAT kèm SAInvoice (cũ - ACT)">
+                        <group>
+                            <field name="sa_invoice_include_vat"/>
+                            <field name="misa_inv_template_id"
+                                   invisible="not sa_invoice_include_vat"/>
+                            <field name="misa_inv_series"
+                                   invisible="not sa_invoice_include_vat"/>
+                        </group>
+                    </group>
+                    <group string="meInvoice - Hóa đơn điện tử đầu ra">
+                        <group>
+                            <field name="meinvoice_enabled"/>
+                            <field name="meinvoice_inbot_client_id"/>
+                            <field name="meinvoice_api_url"/>
+                            <field name="meinvoice_app_id"/>
+                            <field name="meinvoice_taxcode"/>
+                            <field name="meinvoice_username"/>
+                            <field name="meinvoice_password" password="True"/>
+                            <field name="meinvoice_token" readonly="1" invisible="not meinvoice_token"/>
+                            <field name="meinvoice_token_acquired" readonly="1" invisible="not meinvoice_token_acquired"/>
+                        </group>
+                        <group>
+                            <field name="meinvoice_inv_series"/>
+                            <field name="meinvoice_sign_type"/>
+                            <field name="meinvoice_skip_api"/>
+                            <field name="meinvoice_auto_check_status"/>
+                            <field name="meinvoice_status_check_interval"
+                                   invisible="not meinvoice_auto_check_status"/>
+                            <field name="meinvoice_stock_out_address"/>
+                            <field name="meinvoice_stock_in_address"/>
+                            <field name="meinvoice_is_pxk"/>
+                            <field name="meinvoice_transport_means"
+                                   invisible="not meinvoice_is_pxk"/>
                         </group>
                     </group>
                     <group>
@@ -137,7 +220,7 @@
         <field name="name">amis.callback.config.tree</field>
         <field name="model">amis.callback.config</field>
         <field name="arch" type="xml">
-            <list string="AMIS Callback Configuration">
+            <list string="Cấu hình AMIS Callback">
                 <field name="name"/>
                 <field name="app_id"/>
                 <field name="active"/>
@@ -146,13 +229,266 @@
     </record>
 
     <record id="action_amis_callback_config" model="ir.actions.act_window">
-        <field name="name">AMIS Callback Configuration</field>
+        <field name="name">Cấu hình AMIS Callback</field>
         <field name="res_model">amis.callback.config</field>
         <field name="view_mode">list,form</field>
         <field name="target">current</field>
     </record>
 
-    <menuitem id="menu_amis_callback_root" name="AMIS Callback" sequence="30" web_icon="amis_callback,static/description/icon.svg"/>
-    <menuitem id="menu_amis_callback_logs" name="Callback Logs" parent="menu_amis_callback_root" action="action_amis_callback_log" sequence="10"/>
-    <menuitem id="menu_amis_callback_config" name="Configuration" parent="menu_amis_callback_root" action="action_amis_callback_config" sequence="20" groups="base.group_system"/>
+    <!-- Stock Picking View inherit - add MISA sync button -->
+    <record id="view_picking_form_amis_inherit" model="ir.ui.view">
+        <field name="name">stock.picking.form.amis.inherit</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml">
+            <data>
+                <xpath expr="//button[@name='button_validate']" position="after">
+                    <button name="action_test_outgoing_push" type="object" string="Xuất kho MISA" class="btn-secondary"
+                        invisible="picking_type_code != 'outgoing'"/>
+                </xpath>
+            </data>
+        </field>
+    </record>
+
+    <!-- Sale Order View inherit - add SAInvoice button -->
+    <record id="view_sale_order_form_amis_inherit" model="ir.ui.view">
+        <field name="name">sale.order.form.amis.inherit</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+            <data>
+                <xpath expr="//div[@name='button_box']" position="inside">
+                    <!-- Tạo hóa đơn điện tử nháp từ đơn hàng -->
+                    <button name="action_publish_meinvoice_invoice" type="object"
+                            class="oe_stat_button" icon="fa-plus"
+                            invisible="state not in ('sale','done')">
+                        <div class="o_field_widget o_stat_info">
+                            <span class="o_stat_text">Tạo</span>
+                            <span class="o_stat_text">HĐĐT</span>
+                        </div>
+                    </button>
+                    <!-- Xem danh sách HĐĐT đã tạo -->
+                    <button name="action_view_meinvoice_drafts" type="object"
+                            class="oe_stat_button" icon="fa-file-text"
+                            invisible="amis_draft_invoice_count == 0">
+                        <div class="o_field_widget o_stat_info">
+                            <field name="amis_draft_invoice_count" widget="statinfo" string="HĐĐT"/>
+                        </div>
+                    </button>
+                    <!-- SA Invoice (ẩn, giữ code) -->
+                    <button name="action_sync_misa_sa_invoice" type="object"
+                            class="oe_stat_button" icon="fa-file-text-o"
+                            invisible="True">
+                        <div class="o_field_widget o_stat_info">
+                            <span class="o_stat_text">Sync</span>
+                            <span class="o_stat_text">Hóa đơn MISA</span>
+                        </div>
+                    </button>
+                    <button name="action_sync_misa_sa_invoice" type="object"
+                            class="oe_stat_button" icon="fa-check-circle"
+                            invisible="True">
+                        <div class="o_field_widget o_stat_info">
+                            <span class="o_stat_text">Đã sync</span>
+                            <span class="o_stat_text">Hóa đơn MISA</span>
+                        </div>
+                    </button>
+                    <button name="action_reset_misa_sa_invoice" type="object"
+                            class="oe_stat_button" icon="fa-refresh"
+                            invisible="True"
+                            confirm="Reset sẽ cho phép sync lại SAInvoice. Tiếp tục?">
+                        <div class="o_field_widget o_stat_info">
+                            <span class="o_stat_text">Reset</span>
+                            <span class="o_stat_text">SAInvoice</span>
+                        </div>
+                    </button>
+                </xpath>
+                <xpath expr="//notebook" position="inside">
+                    <page string="Hóa đơn điện tử" name="meinvoice_page">
+                        <group string="Thông tin xuất hóa đơn (điền trước)">
+                            <group>
+                                <field name="meinvoice_prefill_buyer_legal_name"/>
+                                <field name="meinvoice_prefill_buyer_full_name"/>
+                                <field name="meinvoice_prefill_buyer_tax_code"/>
+                            </group>
+                            <group>
+                                <field name="meinvoice_prefill_buyer_address"/>
+                                <field name="meinvoice_prefill_buyer_phone"/>
+                                <field name="meinvoice_prefill_buyer_email"/>
+                                <field name="meinvoice_prefill_inv_series"/>
+                                <field name="meinvoice_prefill_payment_method"/>
+                            </group>
+                        </group>
+                        <field name="amis_draft_invoice_ids" nolabel="1">
+                            <list string="Danh sách HĐĐT" create="false" delete="false"
+                                  default_order="create_date desc"
+                                  decoration-info="state == 'draft'"
+                                  decoration-warning="state == 'submitted'"
+                                  decoration-success="state == 'accepted'"
+                                  decoration-danger="state == 'rejected'"
+                                  decoration-muted="state == 'cancelled'">
+                                <field name="create_date" string="Ngày tạo"/>
+                                <field name="state" widget="badge"
+                                       decoration-info="state == 'draft'"
+                                       decoration-warning="state == 'submitted'"
+                                       decoration-success="state == 'accepted'"
+                                       decoration-danger="state in ('rejected','cancelled')"/>
+                                <field name="inv_series" string="Ký hiệu"/>
+                                <field name="inv_date" string="Ngày HĐ"/>
+                                <field name="buyer_legal_name" string="Tên người mua"/>
+                                <field name="buyer_tax_code" string="MST" optional="show"/>
+                                <field name="total_amount_oc" string="Tổng tiền"/>
+                                <field name="inv_no" string="Số HĐ" optional="show"/>
+                                <field name="cqt_status_desc" string="Kết quả CQT" optional="show"/>
+                                <button name="action_publish" type="object" string="Gửi CQT"
+                                        icon="fa-paper-plane"
+                                        invisible="state != 'draft'"
+                                        groups="amis_callback.group_meinvoice_accountant"
+                                        confirm="Gửi hóa đơn này lên Cơ quan Thuế?"/>
+                                <button name="action_preview_invoice" type="object" string="Xem trước"
+                                        icon="fa-eye"
+                                        invisible="state != 'draft'"/>
+                                <button name="action_check_cqt_status" type="object" string="CQT?"
+                                        icon="fa-refresh"
+                                        invisible="state != 'submitted'"/>
+                                <button name="action_view_invoice" type="object" string="Xem HĐ"
+                                        icon="fa-eye"
+                                        invisible="state not in ('submitted','accepted','rejected')"/>
+                            </list>
+                        </field>
+                    </page>
+                    <page string="MISA" name="misa_info"
+                          invisible="not misa_sa_voucher_synced and not misa_sa_invoice_synced and not misa_meinvoice_synced">
+                        <group>
+                            <group string="SAVoucher (Bán hàng)">
+                                <field name="misa_sa_voucher_synced" readonly="1"/>
+                                <field name="misa_sa_voucher_org_refid" readonly="1"/>
+                            </group>
+                            <group string="SAInvoice (Hóa đơn - ACT)">
+                                <field name="misa_sa_invoice_synced" readonly="1"/>
+                                <field name="misa_sa_invoice_org_refid" readonly="1"/>
+                            </group>
+                        </group>
+                        <group string="meInvoice (Hóa đơn điện tử)" invisible="not misa_meinvoice_synced">
+                            <group>
+                                <field name="misa_meinvoice_synced" readonly="1"/>
+                                <field name="misa_meinvoice_inv_series" readonly="1" string="Ký hiệu"/>
+                                <field name="misa_meinvoice_inv_no" readonly="1" string="Số hóa đơn"/>
+                                <field name="misa_meinvoice_inv_date" readonly="1" string="Ngày HĐ"/>
+                            </group>
+                            <group>
+                                <field name="misa_meinvoice_inv_code" readonly="1" string="Mã CQT"/>
+                                <field name="misa_meinvoice_transaction_id" readonly="1" string="Transaction ID"/>
+                                <field name="misa_meinvoice_ref_id" readonly="1" string="Ref ID"/>
+                            </group>
+                        </group>
+                    </page>
+                </xpath>
+            </data>
+        </field>
+    </record>
+
+    <!-- Queue View -->
+    <record id="view_amis_sync_job_list" model="ir.ui.view">
+        <field name="name">amis.sync.job.list</field>
+        <field name="model">amis.sync.job</field>
+        <field name="arch" type="xml">
+            <list string="Hàng đợi đồng bộ MISA" default_order="create_date desc"
+                  decoration-danger="status == 'error'"
+                  decoration-success="status == 'done'"
+                  decoration-muted="status == 'skipped'">
+                <field name="create_date" string="Tạo lúc"/>
+                <field name="picking_id" optional="show"/>
+                <field name="sale_order_id" optional="show"/>
+                <field name="direction"/>
+                <field name="status"/>
+                <field name="retry_count"/>
+                <field name="processed_at" string="Xử lý lúc"/>
+                <field name="error_msg" string="Lỗi" optional="show"/>
+                <button name="action_retry" type="object" string="Thử lại"
+                        invisible="status not in ('error',)" icon="fa-refresh"/>
+                <button name="action_run_now" type="object" string="Chạy ngay"
+                        invisible="status not in ('pending','error')" icon="fa-play"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_amis_sync_job_form" model="ir.ui.view">
+        <field name="name">amis.sync.job.form</field>
+        <field name="model">amis.sync.job</field>
+        <field name="arch" type="xml">
+            <form string="Sync Job MISA">
+                <header>
+                    <button name="action_run_now" type="object" string="Chạy ngay"
+                            invisible="status not in ('pending','error')" class="btn-primary"/>
+                    <button name="action_retry" type="object" string="Thử lại"
+                            invisible="status not in ('error',)" class="btn-secondary"/>
+                    <field name="status" widget="statusbar" statusbar_visible="pending,done,error"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="picking_id"/>
+                            <field name="sale_order_id"/>
+                            <field name="direction"/>
+                            <field name="status"/>
+                        </group>
+                        <group>
+                            <field name="retry_count"/>
+                            <field name="processed_at"/>
+                        </group>
+                    </group>
+                    <group string="Lỗi" invisible="not error_msg">
+                        <field name="error_msg" nolabel="1"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_amis_sync_job" model="ir.actions.act_window">
+        <field name="name">Hàng đợi đồng bộ MISA</field>
+        <field name="res_model">amis.sync.job</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_pending': 1}</field>
+    </record>
+
+    <!-- Danh sách hóa đơn meInvoice đã phát hành -->
+    <record id="view_sale_order_meinvoice_list" model="ir.ui.view">
+        <field name="name">sale.order.meinvoice.list</field>
+        <field name="model">sale.order</field>
+        <field name="arch" type="xml">
+            <list string="Hóa đơn điện tử meInvoice" default_order="misa_meinvoice_inv_date desc" create="false" delete="false">
+                <field name="name" string="Đơn hàng"/>
+                <field name="partner_id" string="Khách hàng"/>
+                <field name="misa_meinvoice_inv_date" string="Ngày HĐ"/>
+                <field name="misa_meinvoice_inv_series" string="Ký hiệu"/>
+                <field name="misa_meinvoice_inv_no" string="Số hóa đơn"/>
+                <field name="misa_meinvoice_inv_code" string="Mã CQT"/>
+                <field name="amount_total" string="Tổng tiền" widget="monetary"/>
+                <field name="misa_meinvoice_transaction_id" string="Transaction ID" optional="show"/>
+                <button name="action_view_meinvoice_invoice" type="object" string="Xem HĐ"
+                        icon="fa-eye" title="Mở link xem hóa đơn trên meInvoice"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_meinvoice_invoice_list" model="ir.actions.act_window">
+        <field name="name">Danh sách hóa đơn điện tử</field>
+        <field name="res_model">sale.order</field>
+        <field name="view_mode">list,form</field>
+        <field name="view_ids" eval="[(5, 0, 0), (0, 0, {'view_mode': 'list', 'view_id': ref('view_sale_order_meinvoice_list')})]" />
+        <field name="domain">[('misa_meinvoice_synced', '=', True)]</field>
+        <field name="context">{'search_default_misa_meinvoice_synced': 1}</field>
+    </record>
+
+    <menuitem id="menu_amis_callback_root" name="AMIS Callback" sequence="30" web_icon="amis_callback,static/description/icon.png"
+              groups="amis_callback.group_meinvoice_user"/>
+    <menuitem id="menu_amis_callback_logs" name="Nhật ký callback" parent="menu_amis_callback_root" action="action_amis_callback_log" sequence="10"
+              groups="amis_callback.group_meinvoice_manager"/>
+    <menuitem id="menu_amis_sync_jobs" name="Hàng đợi đồng bộ MISA" parent="menu_amis_callback_root" action="action_amis_sync_job" sequence="15"
+              groups="amis_callback.group_meinvoice_manager"/>
+    <menuitem id="menu_meinvoice_invoices" name="Hóa đơn điện tử" parent="menu_amis_callback_root" action="action_meinvoice_invoice" sequence="18"
+              groups="amis_callback.group_meinvoice_user"/>
+    <menuitem id="menu_amis_callback_config" name="Cấu hình" parent="menu_amis_callback_root" action="action_amis_callback_config" sequence="20"
+              groups="amis_callback.group_meinvoice_manager"/>
 </odoo>

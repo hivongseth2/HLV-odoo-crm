@@ -44,14 +44,40 @@ class StockPicking(models.Model):
         if not program:
             return
 
-        # Tính giá trị đơn hàng (sau chiết khấu)
-        order_amount = sale_order.amount_untaxed
-        if order_amount <= 0:
-            return
+        # Tính tổng tiền hàng thực giao trong phiếu này (cho điểm xếp hạng)
+        delivered_subtotal = sum(
+            (move.sale_line_id.price_unit if move.sale_line_id
+             else move.product_id.lst_price) * move.quantity
+            for move in self.move_ids
+            if move.state == 'done'
+        )
 
-        # Tính số điểm
-        points = program.calculate_points(order_amount)
-        if points <= 0:
+        # ── Điểm xếp hạng: mỗi earning_amount tiền hàng = earning_points điểm ──
+        ranking_points = 0
+        if delivered_subtotal > 0 and program.earning_amount > 0:
+            ranking_points = int(delivered_subtotal / program.earning_amount) * program.earning_points
+
+        # ── Điểm đổi thưởng: dựa trên tiền chiết khấu ──
+        discount_amount = sum(
+            move.sale_line_id.price_unit * move.quantity
+            * (move.sale_line_id.loyalty_discount_pct / 100.0)
+            for move in self.move_ids
+            if move.state == 'done'
+            and move.sale_line_id
+            and move.sale_line_id.loyalty_discount_pct > 0
+        )
+        # Fallback: không có dòng nào đặt loyalty_discount_pct → dùng % mặc định của contact
+        if discount_amount <= 0:
+            root_partner_lookup = partner._get_loyalty_root()
+            # loyalty_default_discount lưu dạng 0-1 (Odoo convention: 0.05 = 5%)
+            fallback_pct = root_partner_lookup.loyalty_default_discount or 0.0
+            discount_amount = delivered_subtotal * fallback_pct
+
+        exchange_points = 0
+        if discount_amount > 0 and program.discount_per_point > 0:
+            exchange_points = int(discount_amount / program.discount_per_point)
+
+        if ranking_points <= 0 and exchange_points <= 0:
             return
 
         # Kiểm tra xem phiếu này đã tích điểm chưa (tránh duplicate)
@@ -62,50 +88,79 @@ class StockPicking(models.Model):
         if existing:
             return
 
-        # Luôn tích vào công ty gốc (commercial_partner_id)
-        root_partner = partner.commercial_partner_id or partner
+        # Luôn tích vào công ty gốc (đi lên hết chuỗi parent_id)
+        root_partner = partner._get_loyalty_root()
 
-        # Tạo bản ghi lịch sử điểm
-        self.env['hlv.loyalty.history'].sudo().create({
+        base_vals = {
             'partner_id': root_partner.id,
-            'point_amount': points,
             'transaction_type': 'earn',
-            'description': f'Tích điểm đơn hàng {sale_order.name} - Phiếu {self.name}',
             'picking_id': self.id,
             'sale_order_id': sale_order.id,
             'company_id': self.company_id.id,
             'sale_company_id': sale_order.company_id.id,
             'delivery_company_id': self.company_id.id,
-        })
+        }
 
-        self.loyalty_points_earned = points
+        # 1. Điểm xếp hạng – tự động xác nhận
+        if ranking_points > 0:
+            self.env['hlv.loyalty.history'].sudo().create({
+                **base_vals,
+                'point_amount': ranking_points,
+                'point_type': 'ranking',
+                'state': 'confirmed',
+                'description': f'Tích điểm xếp hạng {sale_order.name} - Phiếu {self.name}',
+            })
+
+        # 2. Điểm đổi thưởng – chờ nhân viên xác nhận
+        if exchange_points > 0:
+            self.env['hlv.loyalty.history'].sudo().create({
+                **base_vals,
+                'point_amount': exchange_points,
+                'point_type': 'exchange',
+                'state': 'pending',
+                'description': f'Tích điểm đổi thưởng {sale_order.name} - Phiếu {self.name}',
+            })
+
+        self.loyalty_points_earned = ranking_points
         _logger.info(
-            'Loyalty: Tích %d điểm cho %s từ phiếu %s (SO: %s)',
-            points, partner.name, self.name, sale_order.name,
+            'Loyalty: Tích ranking=%d exchange=%d cho %s từ phiếu %s (SO: %s)',
+            ranking_points, exchange_points, partner.name, self.name, sale_order.name,
         )
 
     def _loyalty_return_points(self):
-        """Thu hồi điểm khi trả hàng."""
+        """Thu hồi điểm khi trả hàng.
+
+        Hỗ trợ:
+        - Hoàn toàn bộ và hoàn một phần (tính theo tỷ lệ qty)
+        - Điểm đổi thưởng chưa xác nhận (pending): hủy/giảm bản ghi pending gốc,
+          không tạo record âm vì điểm pending chưa vào số dư
+        - Điểm đổi thưởng đã xác nhận (confirmed): tạo bản ghi âm để trừ số dư
+        - Điểm xếp hạng (luôn confirmed): tạo bản ghi âm
+        """
         self.ensure_one()
 
-        # Chỉ áp dụng cho phiếu nhập kho trả hàng từ khách
-        if self.picking_type_code != 'incoming':
+        # Nhận diện phiếu hoàn hàng bằng cách kiểm tra move có origin_returned_move_id
+        # (đáng tin cậy hơn picking_type_code và tránh nhầm với PO receipt)
+        returned_moves = self.move_ids.filtered(
+            lambda m: m.state == 'done' and m.origin_returned_move_id
+        )
+        if not returned_moves:
             return
 
-        # Tìm phiếu xuất gốc từ origin
-        origin_picking = self.env['stock.picking'].sudo().search([
-            ('name', '=', self.origin),
-            ('picking_type_code', '=', 'outgoing'),
-            ('state', '=', 'done'),
-        ], limit=1)
-        if not origin_picking or not origin_picking.sale_id:
+        # Tìm phiếu xuất kho gốc từ move đầu tiên (Odoo lưu link trực tiếp)
+        origin_picking = returned_moves[0].origin_returned_move_id.picking_id
+        if not origin_picking:
+            return
+        if origin_picking.picking_type_code != 'outgoing' or not origin_picking.sale_id:
+            return
+        if origin_picking.state != 'done':
             return
 
         partner = origin_picking.sale_id.partner_id
         if not partner:
             return
 
-        # Kiểm tra đã thu hồi chưa
+        # Kiểm tra đã xử lý chưa (tránh duplicate khi validate lại)
         existing = self.env['hlv.loyalty.history'].sudo().search([
             ('picking_id', '=', self.id),
             ('transaction_type', '=', 'return'),
@@ -113,40 +168,101 @@ class StockPicking(models.Model):
         if existing:
             return
 
-        # Tính giá trị hàng trả lại
-        return_amount = sum(
-            move.product_id.lst_price * move.quantity
-            for move in self.move_ids
-            if move.state == 'done'
+        # ── Tính tỷ lệ hoàn hàng để khấu trừ đúng phần (hoàn một phần) ──────
+        original_qty = sum(
+            m.quantity for m in origin_picking.move_ids if m.state == 'done'
         )
-        if return_amount <= 0:
-            return
+        return_qty = sum(m.quantity for m in returned_moves)
+        ratio = min(return_qty / original_qty, 1.0) if original_qty > 0 else 1.0
+        is_full_return = ratio >= 0.999  # float tolerance
 
-        program = self.env['hlv.loyalty.program'].sudo().search([
-            ('active', '=', True),
+        ranking_to_deduct = round(origin_picking.loyalty_points_earned * ratio)
+
+        # Tìm bản ghi điểm đổi thưởng của phiếu gốc (pending hoặc confirmed)
+        origin_exchange_hist = self.env['hlv.loyalty.history'].sudo().search([
+            ('picking_id', '=', origin_picking.id),
+            ('point_type', '=', 'exchange'),
+            ('transaction_type', '=', 'earn'),
+            ('state', 'in', ['pending', 'confirmed']),
         ], limit=1)
-        if not program:
+
+        if ranking_to_deduct <= 0 and not origin_exchange_hist:
             return
 
-        points_to_deduct = program.calculate_points(return_amount)
-        if points_to_deduct <= 0:
-            return
+        root_partner = partner._get_loyalty_root()
+        pct_label = '' if is_full_return else f' ({int(ratio * 100)}%)'
 
-        # Luôn thu hồi từ công ty gốc
-        root_partner = partner.commercial_partner_id or partner
-
-        self.env['hlv.loyalty.history'].sudo().create({
+        base_vals = {
             'partner_id': root_partner.id,
-            'point_amount': -points_to_deduct,
             'transaction_type': 'return',
-            'description': f'Thu hồi điểm do hoàn hàng phiếu {self.name}',
             'picking_id': self.id,
             'sale_order_id': origin_picking.sale_id.id,
             'company_id': self.company_id.id,
             'sale_company_id': origin_picking.sale_id.company_id.id,
             'delivery_company_id': self.company_id.id,
-        })
+        }
+
+        # ── Điểm xếp hạng (luôn auto-confirmed) → tạo bản ghi âm ────────────
+        if ranking_to_deduct > 0:
+            self.env['hlv.loyalty.history'].sudo().create({
+                **base_vals,
+                'point_amount': -ranking_to_deduct,
+                'point_type': 'ranking',
+                'state': 'confirmed',
+                'description': (
+                    f'Thu hồi điểm xếp hạng do hoàn hàng {self.name}'
+                    f' (gốc: {origin_picking.name}){pct_label}'
+                ),
+            })
+
+        # ── Điểm đổi thưởng ──────────────────────────────────────────────────
+        exchange_log = 0
+        if origin_exchange_hist:
+            exchange_original = origin_exchange_hist.point_amount
+            exchange_to_deduct = round(exchange_original * ratio)
+            exchange_log = exchange_to_deduct
+
+            if origin_exchange_hist.state == 'pending':
+                # Chưa xác nhận → chưa vào số dư khách hàng
+                # → chỉ điều chỉnh bản ghi pending, KHÔNG tạo record âm
+                if is_full_return:
+                    # Hoàn toàn bộ: hủy bản ghi pending gốc
+                    origin_exchange_hist.write({
+                        'state': 'cancelled',
+                        'description': (
+                            origin_exchange_hist.description
+                            + f' [Hủy do hoàn hàng {self.name}]'
+                        ),
+                    })
+                else:
+                    # Hoàn một phần: giảm điểm pending còn lại
+                    # (khi nhân viên xác nhận sau, chỉ cộng phần chưa hoàn)
+                    remaining = max(0, exchange_original - exchange_to_deduct)
+                    origin_exchange_hist.write({
+                        'point_amount': remaining,
+                        'description': (
+                            origin_exchange_hist.description
+                            + f' [Đã giảm {exchange_to_deduct}đ do hoàn {self.name}]'
+                        ),
+                    })
+
+            elif origin_exchange_hist.state == 'confirmed':
+                # Đã xác nhận → đã vào số dư → tạo bản ghi âm để khấu trừ
+                if exchange_to_deduct > 0:
+                    self.env['hlv.loyalty.history'].sudo().create({
+                        **base_vals,
+                        'point_amount': -exchange_to_deduct,
+                        'point_type': 'exchange',
+                        'state': 'confirmed',
+                        'description': (
+                            f'Thu hồi điểm đổi thưởng (đã XN) do hoàn hàng {self.name}'
+                            f' (gốc: {origin_picking.name}){pct_label}'
+                        ),
+                    })
+
         _logger.info(
-            'Loyalty: Thu hồi %d điểm từ %s do hoàn hàng phiếu %s',
-            points_to_deduct, partner.name, self.name,
+            'Loyalty: Thu hồi ranking=%d exchange=%d (ratio=%.0f%%) từ %s'
+            ' do hoàn hàng %s (gốc: %s)',
+            ranking_to_deduct, exchange_log, ratio * 100,
+            partner.name, self.name, origin_picking.name,
         )

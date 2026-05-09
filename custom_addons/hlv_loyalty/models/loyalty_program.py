@@ -26,12 +26,18 @@ class HlvLoyaltyProgram(models.Model):
 
     # Tỷ lệ tích điểm
     earning_amount = fields.Float(
-        string='Số tiền quy đổi', required=True, default=100000,
-        help='Số tiền hàng thực tế để được 1 điểm (VNĐ)',
+        string='Số tiền tích lũy quy đổi', required=True, default=100000,
+        help='Số tiền hàng tích lũy thực tế để được 1 điểm (VNĐ)',
     )
     earning_points = fields.Integer(
-        string='Số điểm nhận được', required=True, default=1,
-        help='Số điểm nhận được khi đạt mức tiền quy đổi',
+        string='Số điểm tích lũy nhận được', required=True, default=1,
+        help='Số điểm tích lũy nhận được khi đạt mức tiền quy đổi',
+    )
+    discount_per_point = fields.Float(
+        string='Mỗi X đồng chiết khấu = 1 điểm (điểm đổi thưởng)',
+        required=True, default=10000,
+        digits=(15, 0),
+        help='Số tiền chiết khấu trên dòng hàng (VNĐ) để được 1 điểm đổi thưởng. VD: 10.000đ chiết khấu = 1 điểm.',
     )
 
     # Voucher packages
@@ -46,6 +52,30 @@ class HlvLoyaltyProgram(models.Model):
         help='Số ngày kể từ ngày đổi Voucher',
     )
 
+    cash_rate_per_point = fields.Float(
+        string='Giá trị quy đổi tiền đổi thưởng (đ/điểm)',
+        required=True, default=10000,
+        digits=(15, 0),
+        help='Mỗi 1 điểm đổi thưởng = X đồng khi khách chọn đổi tiền mặt. VD: 10.000.',
+    )
+
+    portal_ranking_desc = fields.Text(
+        string='Mô tả Điểm Tích lũy (Portal)',
+        default=(
+            'Điểm tích lũy dùng để xếp hạng thành viên, không dùng để đổi thưởng. '
+            'Mỗi 100.000đ mua hàng = 1 điểm.'
+        ),
+        help='Đoạn mô tả hiển thị cho khách hàng trên trang portal về Điểm Tích lũy.',
+    )
+    portal_exchange_desc = fields.Text(
+        string='Mô tả Điểm Đổi thưởng (Portal)',
+        default=(
+            'Điểm đổi thưởng có thể dùng để đổi Voucher hoặc tiền chiết khấu. '
+            'Mỗi 10.000đ chiết khấu = 1 điểm.'
+        ),
+        help='Đoạn mô tả hiển thị cho khách hàng trên trang portal về Điểm Đổi thưởng.',
+    )
+
     note = fields.Html(string='Ghi chú')
 
     _sql_constraints = [
@@ -55,9 +85,9 @@ class HlvLoyaltyProgram(models.Model):
          'Số điểm nhận được phải lớn hơn 0!'),
     ]
 
-    def calculate_points(self, amount):
-        """Tính số điểm từ giá trị đơn hàng."""
+    def calculate_points(self, discount_amount):
+        """Tính số điểm từ tổng tiền chiết khấu trên các dòng hàng."""
         self.ensure_one()
-        if self.earning_amount <= 0:
+        if self.discount_per_point <= 0:
             return 0
-        return int(amount / self.earning_amount) * self.earning_points
+        return int(discount_amount / self.discount_per_point)
