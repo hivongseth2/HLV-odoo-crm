@@ -157,6 +157,8 @@
                 <field name="inv_no" string="Số HĐ"/>
                 <field name="inv_code" string="Mã CQT" optional="show"/>
                 <field name="cqt_status_desc" string="Kết quả CQT" optional="show"/>
+                <field name="cqt_check_queued" string="Trong queue" optional="show" widget="boolean"/>
+                <field name="cqt_checked_at" string="Check lúc" optional="hide"/>
                 <field name="transaction_id" string="Transaction ID" optional="hide"/>
                 <!-- virtual currency field for monetary widget -->
                 <field name="currency_id" invisible="1"/>
@@ -200,6 +202,7 @@
                 <filter name="filter_accepted" string="CQT chấp nhận" domain="[('state','=','accepted')]"/>
                 <filter name="filter_rejected" string="CQT từ chối" domain="[('state','=','rejected')]"/>
                 <filter name="filter_cancelled" string="Đã hủy" domain="[('state','=','cancelled')]"/>
+                <filter name="filter_in_queue" string="Đang chờ CQT" domain="[('cqt_check_queued','=',True)]" help="Hóa đơn đang trong hàng đợi, cron sẽ tự kiểm tra kết quả CQT"/>
                 <separator/>
                 <filter name="filter_today" string="Hôm nay"
                         domain="[('create_date','&gt;=', (context_today()).strftime('%Y-%m-%d 00:00:00')),
