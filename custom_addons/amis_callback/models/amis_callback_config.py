@@ -405,9 +405,8 @@ class AmisCallbackConfig(models.Model):
         if fallback:
             return fallback
 
-        if sale_order:
-            return (sale_order.partner_id.name or 'Khách lẻ')
-        return 'Khách lẻ'
+        # Không dùng tên partner Shopee (buyer_username) — trả về chuỗi rỗng để form để trống
+        return ''
 
     def get_shopee_account_object_id(self, shop_identifier):
         """Lấy account_object_id MISA cho kênh Shopee dựa vào shop identifier.
