@@ -978,6 +978,13 @@ class AmisCallbackConfig(models.Model):
             return []
         body = self._post_meinvoice('/invoice/status', payload=transaction_ids)
         data = body.get('data') or body.get('Data') or []
+        # API trả về data dưới dạng JSON string (ví dụ: "[]") — cần parse
+        if isinstance(data, str):
+            try:
+                import json as _json
+                data = _json.loads(data)
+            except Exception:
+                data = []
         if isinstance(data, dict):
             data = [data]
         _logger.info('meInvoice invoice status: %s', data)
@@ -996,10 +1003,17 @@ class AmisCallbackConfig(models.Model):
         self.ensure_one()
         if not transaction_id:
             raise UserError('Thiếu TransactionID để tải hóa đơn.')
-        # /invoice/download dùng GET với query params
-        params = {'transactionId': transaction_id, 'fileType': file_type.upper()}
-        body = self._get_meinvoice('/invoice/download', params=params)
+        # /invoice/download dùng POST với payload (GET trả 405, GET query params trả 500)
+        payload = {'transactionId': transaction_id, 'fileType': file_type.upper()}
+        body = self._post_meinvoice('/invoice/download', payload=payload)
         url = body.get('data') or body.get('Data') or ''
+        # data có thể là JSON string chứa URL
+        if isinstance(url, str) and url.startswith('"'):
+            try:
+                import json as _json
+                url = _json.loads(url)
+            except Exception:
+                pass
         _logger.info('meInvoice download URL (%s): %s', file_type, url)
         return url
 
