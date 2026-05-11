@@ -1003,17 +1003,34 @@ class AmisCallbackConfig(models.Model):
         self.ensure_one()
         if not transaction_id:
             raise UserError('Thiếu TransactionID để tải hóa đơn.')
-        # /invoice/download dùng POST với payload (GET trả 405, GET query params trả 500)
-        payload = {'transactionId': transaction_id, 'fileType': file_type.upper()}
-        body = self._post_meinvoice('/invoice/download', payload=payload)
-        url = body.get('data') or body.get('Data') or ''
-        # data có thể là JSON string chứa URL
-        if isinstance(url, str) and url.startswith('"'):
+        # /invoice/download: POST list — thử cả 2 dạng: list of dict và list of string
+        # Từ test: POST [transactionId] (string) trả HTTP 200
+        # FileType truyền thêm để server chọn loại file nếu hỗ trợ
+        payload = [{'transactionId': transaction_id, 'fileType': file_type.upper()}]
+        import json as _json
+        try:
+            body = self._post_meinvoice('/invoice/download', payload=payload)
+        except Exception:
+            # fallback: list of string (format đã test thành công)
+            body = self._post_meinvoice('/invoice/download', payload=[transaction_id])
+        data = body.get('data') or body.get('Data') or '[]'
+        # data là JSON string — parse ra list
+        if isinstance(data, str):
             try:
-                import json as _json
-                url = _json.loads(url)
+                data = _json.loads(data)
             except Exception:
-                pass
+                data = []
+        if isinstance(data, dict):
+            data = [data]
+        if not data:
+            raise UserError('meInvoice không trả về link tải cho hóa đơn này.')
+        item = data[0]
+        if not isinstance(item, dict):
+            raise UserError('meInvoice trả về định dạng không xác định: %s' % str(item)[:200])
+        err_code = (item.get('ErrorCode') or item.get('errorCode') or '').strip()
+        if err_code:
+            raise UserError('meInvoice lỗi tải hóa đơn: %s' % err_code)
+        url = item.get('Data') or item.get('data') or item.get('Url') or item.get('url') or ''
         _logger.info('meInvoice download URL (%s): %s', file_type, url)
         return url
 
