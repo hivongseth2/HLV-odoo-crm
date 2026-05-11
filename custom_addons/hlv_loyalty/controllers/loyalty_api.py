@@ -358,18 +358,38 @@ class LoyaltyExternalAPI(http.Controller):
         if not phone and not email:
             return self._json_err('Cần truyền phone hoặc email')
 
-        domain = [('customer_rank', '>', 0)]
-        if phone:
-            domain.append(('phone', 'like', phone))
-        elif email:
-            domain.append(('email', '=ilike', email))
+        partner_ids = set()
 
-        partners = request.env['res.partner'].sudo().search(domain, limit=5)
+        if phone:
+            # 1. Tìm qua portal account (portal_phone đã chuẩn hóa)
+            accounts = request.env['hlv.loyalty.portal.account'].sudo().search(
+                [('portal_phone', 'like', phone), ('active', '=', True)], limit=5
+            )
+            for acc in accounts:
+                partner_ids.add(acc.partner_id.id)
+
+            # 2. Tìm qua res.partner trường phone hoặc mobile (không lọc customer_rank)
+            partners_by_phone = request.env['res.partner'].sudo().search(
+                ['|', ('phone', 'like', phone), ('mobile', 'like', phone)], limit=10
+            )
+            for p in partners_by_phone:
+                partner_ids.add(p.id)
+        elif email:
+            partners_by_email = request.env['res.partner'].sudo().search(
+                [('email', '=ilike', email)], limit=5
+            )
+            for p in partners_by_email:
+                partner_ids.add(p.id)
+
+        if not partner_ids:
+            return self._json_err('Không tìm thấy khách hàng', status=404)
+
+        partners = request.env['res.partner'].sudo().browse(list(partner_ids))
         # Ưu tiên commercial_partner_id (root)
         results = []
         seen = set()
         for p in partners:
-            root = p.commercial_partner_id or p
+            root = p._get_loyalty_root()
             if root.id not in seen:
                 seen.add(root.id)
                 results.append(self._partner_summary(root))
@@ -388,7 +408,7 @@ class LoyaltyExternalAPI(http.Controller):
         if not partner.exists():
             return self._json_err('Khách hàng không tồn tại', status=404)
 
-        root = partner.commercial_partner_id or partner
+        root = partner._get_loyalty_root()
         summary = self._partner_summary(root)
 
         # Voucher active
@@ -427,16 +447,17 @@ class LoyaltyExternalAPI(http.Controller):
 
         limit = min(int(kwargs.get('limit', 20)), 100)
         offset = int(kwargs.get('offset', 0))
+        root = partner._get_loyalty_root()
         history = request.env['hlv.loyalty.history'].sudo().search(
-            [('partner_id', '=', partner.commercial_partner_id.id or partner_id)],
+            [('partner_id', '=', root.id)],
             limit=limit, offset=offset, order='date desc',
         )
         total = request.env['hlv.loyalty.history'].sudo().search_count(
-            [('partner_id', '=', partner.commercial_partner_id.id or partner_id)]
+            [('partner_id', '=', root.id)]
         )
         return self._json_ok({
             'partner_id': partner_id,
-            'total_points': (partner.commercial_partner_id or partner).loyalty_total_points,
+            'total_points': root.loyalty_total_points,
             'total_records': total,
             'limit': limit,
             'offset': offset,
@@ -489,7 +510,7 @@ class LoyaltyExternalAPI(http.Controller):
         if not partner:
             return {'error': 'Không tìm thấy khách hàng'}
 
-        root = partner.commercial_partner_id or partner
+        root = partner._get_loyalty_root()
 
         if points < 0 and root.loyalty_total_points + points < 0:
             return {'error': f'Không đủ điểm. Hiện có {root.loyalty_total_points}'}
@@ -519,7 +540,7 @@ class LoyaltyExternalAPI(http.Controller):
         if not partner.exists():
             return self._json_err('Khách hàng không tồn tại', status=404)
 
-        root_id = (partner.commercial_partner_id or partner).id
+        root_id = partner._get_loyalty_root().id
         domain = [('partner_id', '=', root_id)]
         if kwargs.get('state'):
             domain.append(('state', '=', kwargs['state']))

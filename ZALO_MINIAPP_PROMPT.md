@@ -179,6 +179,7 @@ const api = axios.create({ baseURL: BASE_URL });
 
 // ── 6.1 Tìm khách hàng theo SĐT ─────────────────────────────────────────
 // GET /api/v1/loyalty/partner/lookup?phone=0901234567
+// Tìm qua portal_phone (đã chuẩn hóa) + phone + mobile (không cần customer_rank)
 export async function lookupPartnerByPhone(phone: string): Promise<PartnerSummary | null> {
   const { data } = await api.get('/api/v1/loyalty/partner/lookup', { params: { phone } });
   return Array.isArray(data) ? data[0] : data;
