@@ -789,6 +789,38 @@ class AmisCallbackConfig(models.Model):
             'Authorization': 'Bearer %s' % self.meinvoice_token,
         }
 
+    def _get_meinvoice(self, path, params=None, timeout=30):
+        """Gọi meInvoice API bằng GET và trả về response body (dict)."""
+        self.ensure_one()
+        api_url = (self.meinvoice_api_url or '').rstrip('/')
+        if not api_url:
+            raise UserError('Thiếu meInvoice API URL trong cấu hình.')
+        url = '%s%s' % (api_url, path)
+        headers = self._get_meinvoice_headers()
+        try:
+            resp = requests.get(url, headers=headers, params=params, timeout=timeout)
+            _logger.info('meInvoice GET %s → HTTP %s', path, resp.status_code)
+            try:
+                body = resp.json()
+            except Exception:
+                body = {}
+            _logger.info('meInvoice GET %s response body: %s', path, json.dumps(body, ensure_ascii=False, default=str))
+            resp.raise_for_status()
+        except requests.HTTPError as exc:
+            status = exc.response.status_code if exc.response is not None else '?'
+            raise UserError('meInvoice API lỗi HTTP %s: %s' % (status, exc))
+        except Exception as exc:
+            _logger.exception('meInvoice GET API call failed: %s', path)
+            raise UserError('Gọi meInvoice API thất bại: %s' % exc)
+
+        success = body.get('Success') if body.get('Success') is not None else body.get('success')
+        if not success:
+            err = (body.get('ErrorCode') or body.get('errorCode') or
+                   body.get('descriptionErrorCode') or body.get('Errors') or
+                   body.get('errors') or str(body) or 'Không rõ lỗi')
+            raise UserError('meInvoice trả về lỗi: %s' % err)
+        return body
+
     def _post_meinvoice(self, path, payload=None, params=None, timeout=30):
         """Gọi meInvoice API và trả về response body (dict).
 
@@ -964,8 +996,9 @@ class AmisCallbackConfig(models.Model):
         self.ensure_one()
         if not transaction_id:
             raise UserError('Thiếu TransactionID để tải hóa đơn.')
-        payload = {'TransactionID': transaction_id, 'FileType': file_type.upper()}
-        body = self._post_meinvoice('/invoice/download', payload=payload)
+        # /invoice/download dùng GET với query params
+        params = {'transactionId': transaction_id, 'fileType': file_type.upper()}
+        body = self._get_meinvoice('/invoice/download', params=params)
         url = body.get('data') or body.get('Data') or ''
         _logger.info('meInvoice download URL (%s): %s', file_type, url)
         return url
