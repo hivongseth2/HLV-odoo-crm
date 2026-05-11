@@ -317,10 +317,10 @@ class AmisCallbackConfig(models.Model):
                         _logger.info('Resolved partner %s → account_object_id=%s', partner.name, misa_id)
                     break
 
-        # 2. Fallback theo shopee_shop_id.identifier
+        # 2. Fallback theo shopee_shop_id.shop_identifier
         if not account_object_id and sale_order:
             shop = getattr(sale_order, 'shopee_shop_id', None)
-            shop_identifier = str(getattr(shop, 'identifier', '') or '').strip() if shop else ''
+            shop_identifier = str(getattr(shop, 'shop_identifier', '') or '').strip() if shop else ''
             if shop_identifier:
                 misa_id, misa_code, misa_name = self.get_shopee_account_object_id(shop_identifier)
                 if misa_id:
@@ -389,7 +389,7 @@ class AmisCallbackConfig(models.Model):
         """
         self.ensure_one()
         shop = getattr(sale_order, 'shopee_shop_id', None) if sale_order else None
-        shop_identifier = str(getattr(shop, 'identifier', '') or '').strip() if shop else ''
+        shop_identifier = str(getattr(shop, 'shop_identifier', '') or '').strip() if shop else ''
 
         field_map = {
             '796817584': 'meinvoice_shopee_milwaukee_buyer_name',
