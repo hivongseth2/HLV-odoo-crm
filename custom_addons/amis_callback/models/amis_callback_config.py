@@ -1029,6 +1029,11 @@ class AmisCallbackConfig(models.Model):
             raise UserError('meInvoice trả về định dạng không xác định: %s' % str(item)[:200])
         err_code = (item.get('ErrorCode') or item.get('errorCode') or '').strip()
         if err_code:
+            if err_code == 'InvoiceNotExist':
+                raise UserError(
+                    'Hóa đơn đã được cấp số trên meInvoice nhưng chưa được chuyển tiếp lên Cơ quan Thuế.\n'
+                    'Vui lòng chờ meInvoice xử lý hoặc liên hệ meInvoice để kiểm tra trạng thái hóa đơn.'
+                )
             raise UserError('meInvoice lỗi tải hóa đơn: %s' % err_code)
         url = item.get('Data') or item.get('data') or item.get('Url') or item.get('url') or ''
         _logger.info('meInvoice download URL (%s): %s', file_type, url)
@@ -1110,7 +1115,19 @@ class AmisCallbackConfig(models.Model):
         for inv in invoices:
             item = status_map.get(inv.transaction_id)
             if not item:
-                inv.sudo().write({'cqt_checked_at': now})
+                # Nếu InvCode đã được lưu → CQT đã cấp mã (trả về từ POST /invoice)
+                if inv.inv_code:
+                    inv.sudo().write({
+                        'state': 'accepted',
+                        'cqt_check_queued': False,
+                        'cqt_checked_at': now,
+                    })
+                    _logger.info(
+                        'meInvoice cron: %s đã có InvCode=%s → đánh dấu accepted',
+                        inv.transaction_id, inv.inv_code,
+                    )
+                else:
+                    inv.sudo().write({'cqt_checked_at': now})
                 continue
 
             raw_status = item.get('InvStatus') or item.get('invStatus') or item.get('Status') or 0

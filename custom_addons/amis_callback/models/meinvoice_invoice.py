@@ -157,8 +157,10 @@ class MeinvoiceInvoice(models.Model):
             if err_code:
                 raise UserError('meInvoice phát hành lỗi: %s' % err_code)
 
+        # Nếu InvCode trả về ngay → CQT đã cấp mã, không cần chờ
+        new_state = 'accepted' if inv_code else 'submitted'
         self.write({
-            'state': 'submitted',
+            'state': new_state,
             'transaction_id': transaction_id,
             'inv_no': inv_no,
             'inv_code': inv_code,
@@ -166,7 +168,7 @@ class MeinvoiceInvoice(models.Model):
             'inv_date_result': inv_date_result or (
                 inv_date.strftime('%Y-%m-%d') if inv_date else False
             ),
-            'cqt_check_queued': True,  # đưa vào queue cron check CQT
+            'cqt_check_queued': new_state == 'submitted',  # chỉ queue nếu chưa có InvCode
         })
 
         # Cập nhật SO để backward compat với các field kết quả trên đơn hàng
@@ -183,18 +185,25 @@ class MeinvoiceInvoice(models.Model):
         })
 
         _logger.info(
-            'meInvoice submitted for SO %s: TransactionID=%s InvNo=%s — chờ CQT xác nhận.',
-            order.name, transaction_id, inv_no,
+            'meInvoice submitted for SO %s: TransactionID=%s InvNo=%s InvCode=%s state=%s',
+            order.name, transaction_id, inv_no, inv_code, new_state,
         )
+
+        if new_state == 'accepted':
+            msg = 'Hóa đơn %s %s đã được Cơ quan Thuế cấp mã: %s' % (
+                inv_series_result or new_series, inv_no, inv_code,
+            )
+        else:
+            msg = 'Hóa đơn %s %s đã được gửi. TransactionID: %s — Hệ thống sẽ tự kiểm tra kết quả CQT.' % (
+                inv_series_result or new_series, inv_no, transaction_id,
+            )
 
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
                 'title': 'Đã gửi lên Cơ quan Thuế',
-                'message': 'Hóa đơn %s %s đã được gửi. TransactionID: %s — Hệ thống sẽ tự kiểm tra kết quả CQT.' % (
-                    inv_series_result or new_series, inv_no, transaction_id,
-                ),
+                'message': msg,
                 'type': 'success',
                 'sticky': False,
             },
@@ -252,14 +261,26 @@ class MeinvoiceInvoice(models.Model):
         from datetime import datetime as _dt
         now = _dt.utcnow()
         if not status_list:
+            # Nếu InvCode đã có → CQT đã cấp mã trước đó (từ POST /invoice response)
+            if self.inv_code:
+                self.write({'state': 'accepted', 'cqt_check_queued': False, 'cqt_checked_at': now})
+                return {
+                    'type': 'ir.actions.client',
+                    'tag': 'display_notification',
+                    'params': {
+                        'title': 'Kiểm tra CQT',
+                        'message': 'Hóa đơn đã được Cơ quan Thuế cấp mã: %s' % self.inv_code,
+                        'type': 'success', 'sticky': False,
+                    },
+                }
             self.write({'cqt_checked_at': now})
             return {
                 'type': 'ir.actions.client',
                 'tag': 'display_notification',
                 'params': {
                     'title': 'Kiểm tra CQT',
-                    'message': 'meInvoice không trả về trạng thái cho hóa đơn này.',
-                    'type': 'warning', 'sticky': False,
+                    'message': 'Hóa đơn đã được cấp số trên meInvoice và đang chờ chuyển tiếp lên Cơ quan Thuế. Vui lòng kiểm tra lại sau.',
+                    'type': 'info', 'sticky': False,
                 },
             }
 
