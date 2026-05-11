@@ -345,10 +345,23 @@ class MeinvoiceInvoice(models.Model):
         if self.state not in ('submitted', 'accepted', 'rejected') or not self.transaction_id:
             raise UserError('Chỉ hóa đơn đã gửi CQT mới có thể tải xuống.')
         config = self.env['amis.callback.config'].sudo().ensure_singleton()
-        url = config.get_meinvoice_download_url(self.transaction_id, file_type='PDF')
-        if not url:
-            raise UserError('meInvoice không trả về link tải PDF.')
-        return {'type': 'ir.actions.act_url', 'url': url, 'target': 'new'}
+        b64_data = config.get_meinvoice_download_url(
+            self.transaction_id, file_type='PDF', invoice_with_code=bool(self.inv_code)
+        )
+        filename = 'HoaDon_%s_%s.pdf' % (self.inv_series_result or '', self.inv_no or str(self.id))
+        attachment = self.env['ir.attachment'].sudo().create({
+            'name': filename,
+            'type': 'binary',
+            'datas': b64_data,
+            'res_model': self._name,
+            'res_id': self.id,
+            'mimetype': 'application/pdf',
+        })
+        return {
+            'type': 'ir.actions.act_url',
+            'url': '/web/content/%d?download=true' % attachment.id,
+            'target': 'new',
+        }
 
     def action_download_xml(self):
         """Tải hóa đơn dạng XML từ meInvoice."""
@@ -356,10 +369,23 @@ class MeinvoiceInvoice(models.Model):
         if self.state not in ('submitted', 'accepted', 'rejected') or not self.transaction_id:
             raise UserError('Chỉ hóa đơn đã gửi CQT mới có thể tải xuống.')
         config = self.env['amis.callback.config'].sudo().ensure_singleton()
-        url = config.get_meinvoice_download_url(self.transaction_id, file_type='XML')
-        if not url:
-            raise UserError('meInvoice không trả về link tải XML.')
-        return {'type': 'ir.actions.act_url', 'url': url, 'target': 'new'}
+        b64_data = config.get_meinvoice_download_url(
+            self.transaction_id, file_type='XML', invoice_with_code=bool(self.inv_code)
+        )
+        filename = 'HoaDon_%s_%s.xml' % (self.inv_series_result or '', self.inv_no or str(self.id))
+        attachment = self.env['ir.attachment'].sudo().create({
+            'name': filename,
+            'type': 'binary',
+            'datas': b64_data,
+            'res_model': self._name,
+            'res_id': self.id,
+            'mimetype': 'application/xml',
+        })
+        return {
+            'type': 'ir.actions.act_url',
+            'url': '/web/content/%d?download=true' % attachment.id,
+            'target': 'new',
+        }
 
     def action_view_invoice(self):
         """Mở link xem hóa đơn đã gửi CQT trên cổng meInvoice (link tồn tại 5 phút)."""
