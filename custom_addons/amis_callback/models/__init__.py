@@ -6,3 +6,4 @@ from . import sale_order_sync
 from . import misa_invoice_template_wizard
 from . import meinvoice_publish_wizard
 from . import meinvoice_invoice
+from . import shopee_wallet_import_wizard

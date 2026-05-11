@@ -12,6 +12,7 @@
         "data/ir_cron.xml",
         "views/misa_invoice_template_wizard_views.xml",
         "views/meinvoice_publish_wizard_views.xml",
+        "views/shopee_wallet_import_wizard_views.xml",
         "views/amis_callback_views.xml",
     ],
     "installable": True,
