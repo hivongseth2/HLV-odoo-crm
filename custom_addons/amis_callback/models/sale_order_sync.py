@@ -167,7 +167,13 @@ class SaleOrderAmisSync(models.Model):
             invoice_data = self._build_meinvoice_invoice_data(config)
 
             buyer_full_name = config.get_meinvoice_buyer_name(self)
-            buyer_address = (config.meinvoice_shopee_default_address or 'Khách hàng không cung cấp thông tin').strip()
+            shipping = self.partner_shipping_id
+            shopee_addr = (getattr(shipping, 'street', '') or '').strip()
+            buyer_address = (
+                shopee_addr
+                or config.meinvoice_shopee_default_address
+                or 'Khách hàng không cung cấp thông tin'
+            ).strip()
 
             inv_series = (self.meinvoice_prefill_inv_series or invoice_data.get('InvSeries', '')).strip()
             payment_method = (self.meinvoice_prefill_payment_method or invoice_data.get('PaymentMethodName', 'TM/CK')).strip()
@@ -516,25 +522,44 @@ class SaleOrderAmisSync(models.Model):
         # Tính invoice_data từ SO
         invoice_data = self._build_meinvoice_invoice_data(config)
 
-        # Ưu tiên thông tin từ pre-fill trên SO; nếu trống thì lấy từ dữ liệu tính toán
-        buyer_legal_name = (
-            self.meinvoice_prefill_buyer_legal_name or invoice_data.get('BuyerLegalName', '')
-        ).strip()
-        buyer_full_name = (
-            self.meinvoice_prefill_buyer_full_name or invoice_data.get('BuyerFullName', '')
-        ).strip()
-        buyer_tax_code = (
-            self.meinvoice_prefill_buyer_tax_code or invoice_data.get('BuyerTaxCode', '')
-        ).strip()
-        buyer_address = (
-            self.meinvoice_prefill_buyer_address or invoice_data.get('BuyerAddress', '')
-        ).strip()
-        buyer_phone = (
-            self.meinvoice_prefill_buyer_phone or invoice_data.get('BuyerPhoneNumber', '')
-        ).strip()
-        buyer_email = (
-            self.meinvoice_prefill_buyer_email or invoice_data.get('BuyerEmail', '')
-        ).strip()
+        is_shopee = bool(getattr(self, 'shopee_order_ref', None))
+
+        if is_shopee:
+            # Đơn Shopee: tên đơn vị pháp lý để trống, tên người mua lấy theo kênh shop
+            buyer_legal_name = ''
+            buyer_full_name = config.get_meinvoice_buyer_name(self)
+            buyer_tax_code = ''
+            # Địa chỉ lấy từ địa chỉ giao hàng Shopee (partner_shipping_id.street)
+            shipping = self.partner_shipping_id
+            shopee_addr = (getattr(shipping, 'street', '') or '').strip()
+            buyer_address = (
+                self.meinvoice_prefill_buyer_address
+                or shopee_addr
+                or config.meinvoice_shopee_default_address
+                or 'Khách hàng không cung cấp thông tin'
+            ).strip()
+            buyer_phone = (getattr(shipping, 'phone', '') or '').strip()
+            buyer_email = ''
+        else:
+            # Ưu tiên thông tin từ pre-fill trên SO; nếu trống thì lấy từ dữ liệu tính toán
+            buyer_legal_name = (
+                self.meinvoice_prefill_buyer_legal_name or invoice_data.get('BuyerLegalName', '')
+            ).strip()
+            buyer_full_name = (
+                self.meinvoice_prefill_buyer_full_name or invoice_data.get('BuyerFullName', '')
+            ).strip()
+            buyer_tax_code = (
+                self.meinvoice_prefill_buyer_tax_code or invoice_data.get('BuyerTaxCode', '')
+            ).strip()
+            buyer_address = (
+                self.meinvoice_prefill_buyer_address or invoice_data.get('BuyerAddress', '')
+            ).strip()
+            buyer_phone = (
+                self.meinvoice_prefill_buyer_phone or invoice_data.get('BuyerPhoneNumber', '')
+            ).strip()
+            buyer_email = (
+                self.meinvoice_prefill_buyer_email or invoice_data.get('BuyerEmail', '')
+            ).strip()
         inv_series = (
             self.meinvoice_prefill_inv_series or invoice_data.get('InvSeries', '')
         ).strip()
