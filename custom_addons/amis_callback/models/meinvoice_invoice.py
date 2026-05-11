@@ -345,21 +345,12 @@ class MeinvoiceInvoice(models.Model):
         if self.state not in ('submitted', 'accepted', 'rejected') or not self.transaction_id:
             raise UserError('Chỉ hóa đơn đã gửi CQT mới có thể tải xuống.')
         config = self.env['amis.callback.config'].sudo().ensure_singleton()
-        b64_data = config.get_meinvoice_download_url(self.transaction_id, file_type='PDF')
-        filename = 'HoaDon_%s_%s.pdf' % (self.inv_series_result or '', self.inv_no or str(self.id))
-        attachment = self.env['ir.attachment'].sudo().create({
-            'name': filename,
-            'type': 'binary',
-            'datas': b64_data,
-            'res_model': self._name,
-            'res_id': self.id,
-            'mimetype': 'application/pdf',
-        })
-        return {
-            'type': 'ir.actions.act_url',
-            'url': '/web/content/%d?download=true' % attachment.id,
-            'target': 'new',
-        }
+        # /invoice/publishview trả về URL viewer PDF — đổi Viewer=1 sang Viewer=0 để force download
+        url = config.get_meinvoice_publishview_url([self.transaction_id])
+        if not url:
+            raise UserError('meInvoice không trả về link tải PDF.')
+        url = url.replace('Viewer=1', 'Viewer=0')
+        return {'type': 'ir.actions.act_url', 'url': url, 'target': 'new'}
 
     def action_download_xml(self):
         """Tải hóa đơn dạng XML từ meInvoice."""
@@ -367,21 +358,12 @@ class MeinvoiceInvoice(models.Model):
         if self.state not in ('submitted', 'accepted', 'rejected') or not self.transaction_id:
             raise UserError('Chỉ hóa đơn đã gửi CQT mới có thể tải xuống.')
         config = self.env['amis.callback.config'].sudo().ensure_singleton()
-        b64_data = config.get_meinvoice_download_url(self.transaction_id, file_type='XML')
-        filename = 'HoaDon_%s_%s.xml' % (self.inv_series_result or '', self.inv_no or str(self.id))
-        attachment = self.env['ir.attachment'].sudo().create({
-            'name': filename,
-            'type': 'binary',
-            'datas': b64_data,
-            'res_model': self._name,
-            'res_id': self.id,
-            'mimetype': 'application/xml',
-        })
-        return {
-            'type': 'ir.actions.act_url',
-            'url': '/web/content/%d?download=true' % attachment.id,
-            'target': 'new',
-        }
+        # Dùng publishview URL, đổi type=pdf → type=xml
+        url = config.get_meinvoice_publishview_url([self.transaction_id])
+        if not url:
+            raise UserError('meInvoice không trả về link tải XML.')
+        url = url.replace('type=pdf', 'type=xml').replace('Viewer=1', 'Viewer=0')
+        return {'type': 'ir.actions.act_url', 'url': url, 'target': 'new'}
 
     def action_view_invoice(self):
         """Mở link xem hóa đơn đã gửi CQT trên cổng meInvoice (link tồn tại 5 phút)."""
