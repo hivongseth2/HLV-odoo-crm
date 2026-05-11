@@ -1035,6 +1035,9 @@ class AmisCallbackConfig(models.Model):
         # Map TransactionID → status result
         status_map = {}
         for item in (status_list or []):
+            if not isinstance(item, dict):
+                _logger.warning('meInvoice status cron: item không phải dict, bỏ qua: %r', item)
+                continue
             tid = (item.get('TransactionID') or item.get('transactionId') or '').strip()
             if tid:
                 status_map[tid] = item

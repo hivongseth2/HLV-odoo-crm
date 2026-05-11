@@ -538,7 +538,7 @@ class SaleOrderAmisSync(models.Model):
                 or config.meinvoice_shopee_default_address
                 or 'Khách hàng không cung cấp thông tin'
             ).strip()
-            buyer_phone = (getattr(shipping, 'phone', '') or '').strip()
+            buyer_phone = ''  # Shopee mask SĐT
             buyer_email = ''
         else:
             # Ưu tiên thông tin từ pre-fill trên SO; nếu trống thì lấy từ dữ liệu tính toán

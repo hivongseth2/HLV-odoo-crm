@@ -264,6 +264,18 @@ class MeinvoiceInvoice(models.Model):
             }
 
         item = status_list[0]
+        if not isinstance(item, dict):
+            _logger.warning('meInvoice /invoice/status trả về item không phải dict: %r', item)
+            self.write({'cqt_checked_at': now})
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': 'Kiểm tra CQT',
+                    'message': 'meInvoice trả về định dạng không xác định: %s' % str(item)[:200],
+                    'type': 'warning', 'sticky': True,
+                },
+            }
         raw_status = item.get('InvStatus') or item.get('invStatus') or item.get('Status') or 0
         desc = (item.get('Description') or item.get('description') or '').strip()
         try:
