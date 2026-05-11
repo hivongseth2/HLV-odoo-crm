@@ -361,19 +361,12 @@ class LoyaltyExternalAPI(http.Controller):
         partner_ids = set()
 
         if phone:
-            # 1. Tìm qua portal account (portal_phone đã chuẩn hóa)
+            # Chỉ tìm qua portal_phone (đã chuẩn hóa)
             accounts = request.env['hlv.loyalty.portal.account'].sudo().search(
                 [('portal_phone', 'like', phone), ('active', '=', True)], limit=5
             )
             for acc in accounts:
                 partner_ids.add(acc.partner_id.id)
-
-            # 2. Tìm qua res.partner trường phone hoặc mobile (không lọc customer_rank)
-            partners_by_phone = request.env['res.partner'].sudo().search(
-                ['|', ('phone', 'like', phone), ('mobile', 'like', phone)], limit=10
-            )
-            for p in partners_by_phone:
-                partner_ids.add(p.id)
         elif email:
             partners_by_email = request.env['res.partner'].sudo().search(
                 [('email', '=ilike', email)], limit=5
