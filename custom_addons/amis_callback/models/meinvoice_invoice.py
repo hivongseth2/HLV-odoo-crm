@@ -345,9 +345,7 @@ class MeinvoiceInvoice(models.Model):
         if self.state not in ('submitted', 'accepted', 'rejected') or not self.transaction_id:
             raise UserError('Chỉ hóa đơn đã gửi CQT mới có thể tải xuống.')
         config = self.env['amis.callback.config'].sudo().ensure_singleton()
-        b64_data = config.get_meinvoice_download_url(
-            self.transaction_id, file_type='PDF', invoice_with_code=bool(self.inv_code)
-        )
+        b64_data = config.get_meinvoice_download_url(self.transaction_id, file_type='PDF')
         filename = 'HoaDon_%s_%s.pdf' % (self.inv_series_result or '', self.inv_no or str(self.id))
         attachment = self.env['ir.attachment'].sudo().create({
             'name': filename,
@@ -369,9 +367,7 @@ class MeinvoiceInvoice(models.Model):
         if self.state not in ('submitted', 'accepted', 'rejected') or not self.transaction_id:
             raise UserError('Chỉ hóa đơn đã gửi CQT mới có thể tải xuống.')
         config = self.env['amis.callback.config'].sudo().ensure_singleton()
-        b64_data = config.get_meinvoice_download_url(
-            self.transaction_id, file_type='XML', invoice_with_code=bool(self.inv_code)
-        )
+        b64_data = config.get_meinvoice_download_url(self.transaction_id, file_type='XML')
         filename = 'HoaDon_%s_%s.xml' % (self.inv_series_result or '', self.inv_no or str(self.id))
         attachment = self.env['ir.attachment'].sudo().create({
             'name': filename,
