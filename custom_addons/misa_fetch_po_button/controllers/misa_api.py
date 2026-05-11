@@ -230,64 +230,54 @@ class MisaApiSaleOrder(http.Controller):
 
             if order.state == 'cancel':
                 return {"ok": True, "status": "already_cancelled", "message": "Đơn đã huỷ rồi."}
-            
+
             # ---------------------------------------------------------
-            # BƯỚC 1: XỬ LÝ PHIẾU KHO (PICKING)
+            # BƯỚC 1: CHỈ CHẶN KHI PHIẾU OUT (OUTGOING) ĐÃ DONE
+            # Pick/Pack done vẫn cho hủy — Odoo sẽ tự cascade hủy toàn bộ picking
             # ---------------------------------------------------------
-            for picking in order.picking_ids:
-                if picking.state == 'done':
-                    return {
-                        "ok": False, 
-                        "error": "picking_done", 
-                        "message": f"Lỗi: Đơn {name} đã xuất kho hoàn thành (Done). Phải trả hàng về kho trước khi huỷ."
-                    }
-                if picking.state not in ('done', 'cancel'):
-                    picking.action_cancel()
-            
+            out_done = order.picking_ids.filtered(
+                lambda p: p.picking_type_id.code == 'outgoing' and p.state == 'done'
+            )
+            if out_done:
+                names = ', '.join(out_done.mapped('name'))
+                return {
+                    "ok": False,
+                    "error": "out_picking_done",
+                    "message": f"Lỗi: Đơn {name} đã xuất kho hoàn thành (phiếu OUT: {names}). Phải trả hàng về kho trước khi huỷ."
+                }
+
             # ---------------------------------------------------------
             # BƯỚC 2: XỬ LÝ HOÁ ĐƠN (INVOICE)
             # ---------------------------------------------------------
             for invoice in order.invoice_ids:
                 if invoice.state == 'posted':
                     return {
-                        "ok": False, 
-                        "error": "invoice_posted", 
+                        "ok": False,
+                        "error": "invoice_posted",
                         "message": f"Lỗi: Đơn {name} đã vào sổ hoá đơn. Cần huỷ hoá đơn/làm Credit Note trước."
                     }
-                if invoice.state != 'cancel':
-                    invoice.button_cancel() # Hoặc invoice.action_cancel() tuỳ version Odoo
 
             # ---------------------------------------------------------
-            # BƯỚC 3: MỞ KHÓA (QUAN TRỌNG) & HUỶ SO
+            # BƯỚC 3: HUỶ SO — Odoo tự cascade hủy pick/pack/out còn lại
             # ---------------------------------------------------------
-            # Nếu đơn đang bị khoá (state='done'), phải mở khoá trước mới huỷ được
             if order.state == 'done':
                 order.action_unlock()
 
-            # Gọi action_cancel với context để BỎ QUA các popup cảnh báo (nếu có)
-            # disable_cancel_warning=True giúp vượt qua bước hỏi "Email confirmation"
             order.with_context(disable_cancel_warning=True).action_cancel()
 
             # ---------------------------------------------------------
             # BƯỚC 4: KIỂM TRA & CƯỠNG CHẾ (FALLBACK)
             # ---------------------------------------------------------
-            # Nếu chạy lệnh trên rồi mà trạng thái vẫn chưa về 'cancel' (do Odoo trả về Window Action)
-            # nhưng phiếu kho và hoá đơn ĐÃ huỷ sạch sẽ rồi -> Ta ép trạng thái về cancel luôn.
-            
-            # Kiểm tra lại xem còn phiếu kho nào sống không
-            all_picking_cancelled = all(p.state == 'cancel' for p in order.picking_ids)
-            all_invoice_cancelled = all(i.state == 'cancel' for i in order.invoice_ids)
-            
             if order.state != 'cancel':
-                if all_picking_cancelled and all_invoice_cancelled:
-                    # An toàn để cưỡng chế ghi đè
+                still_open_picks = order.picking_ids.filtered(lambda p: p.state not in ('cancel', 'done'))
+                has_posted_inv = order.invoice_ids.filtered(lambda i: i.state == 'posted')
+                if not still_open_picks and not has_posted_inv:
                     order.write({'state': 'cancel'})
                 else:
-                    # Vẫn còn ràng buộc, không dám cưỡng chế
                     return {
-                        "ok": False, 
-                        "error": "cancel_failed", 
-                        "message": f"Không thể huỷ đơn {name}. Picking/Invoice chưa huỷ hết."
+                        "ok": False,
+                        "error": "cancel_failed",
+                        "message": f"Không thể huỷ đơn {name}. Còn picking/invoice chưa huỷ hết."
                     }
                     
             
