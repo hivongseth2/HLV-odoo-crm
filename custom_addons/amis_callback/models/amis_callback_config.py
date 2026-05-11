@@ -991,30 +991,26 @@ class AmisCallbackConfig(models.Model):
         return data
 
     def get_meinvoice_download_url(self, transaction_id, file_type='PDF'):
-        """Lấy link tải hóa đơn (PDF hoặc XML) qua meInvoice /invoice/download.
+        """Tải file hóa đơn từ meInvoice /invoice/download.
 
-        Args:
-            transaction_id: str — TransactionID hóa đơn đã phát hành.
-            file_type: str — 'PDF' hoặc 'XML'.
+        Body: ["TransactionID"] (list of string)
+        Params: invoiceWithCode=true, invoiceCalcu=false, downloadDataType=pdf/xml
+        Response Data: base64 encoded file content (JSON string wrapping list of dicts)
 
         Returns:
-            str — download URL, hoặc '' nếu không lấy được.
+            str — base64 encoded file content.
         """
         self.ensure_one()
         if not transaction_id:
             raise UserError('Thiếu TransactionID để tải hóa đơn.')
-        # /invoice/download: POST list — thử cả 2 dạng: list of dict và list of string
-        # Từ test: POST [transactionId] (string) trả HTTP 200
-        # FileType truyền thêm để server chọn loại file nếu hỗ trợ
-        payload = [{'transactionId': transaction_id, 'fileType': file_type.upper()}]
         import json as _json
-        try:
-            body = self._post_meinvoice('/invoice/download', payload=payload)
-        except Exception:
-            # fallback: list of string (format đã test thành công)
-            body = self._post_meinvoice('/invoice/download', payload=[transaction_id])
+        params = {
+            'invoiceWithCode': 'true',
+            'invoiceCalcu': 'false',
+            'downloadDataType': file_type.lower(),
+        }
+        body = self._post_meinvoice('/invoice/download', payload=[transaction_id], params=params)
         data = body.get('data') or body.get('Data') or '[]'
-        # data là JSON string — parse ra list
         if isinstance(data, str):
             try:
                 data = _json.loads(data)
@@ -1023,7 +1019,7 @@ class AmisCallbackConfig(models.Model):
         if isinstance(data, dict):
             data = [data]
         if not data:
-            raise UserError('meInvoice không trả về link tải cho hóa đơn này.')
+            raise UserError('meInvoice không trả về dữ liệu hóa đơn.')
         item = data[0]
         if not isinstance(item, dict):
             raise UserError('meInvoice trả về định dạng không xác định: %s' % str(item)[:200])
@@ -1035,9 +1031,11 @@ class AmisCallbackConfig(models.Model):
                     'Vui lòng chờ meInvoice xử lý hoặc liên hệ meInvoice để kiểm tra trạng thái hóa đơn.'
                 )
             raise UserError('meInvoice lỗi tải hóa đơn: %s' % err_code)
-        url = item.get('Data') or item.get('data') or item.get('Url') or item.get('url') or ''
-        _logger.info('meInvoice download URL (%s): %s', file_type, url)
-        return url
+        b64_data = item.get('Data') or item.get('data') or ''
+        if not b64_data:
+            raise UserError('meInvoice không trả về nội dung file hóa đơn.')
+        _logger.info('meInvoice download (%s): nhận được %d bytes base64', file_type, len(b64_data))
+        return b64_data
 
     def get_meinvoice_templates(self):
         """Lấy danh sách mẫu hóa đơn từ meInvoice /invoice/templates.
