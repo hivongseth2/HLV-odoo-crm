@@ -175,6 +175,8 @@
                         <group>
                             <field name="meinvoice_shopee_only"/>
                             <field name="meinvoice_auto_draft_on_confirm"/>
+                            <field name="meinvoice_draft_trigger_step"
+                                   invisible="not meinvoice_auto_draft_on_confirm"/>
                             <field name="meinvoice_shopee_milwaukee_buyer_name"/>
                             <field name="meinvoice_shopee_hlv_buyer_name"/>
                             <field name="meinvoice_shopee_dewalt_buyer_name"/>

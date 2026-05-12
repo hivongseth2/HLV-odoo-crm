@@ -37,7 +37,64 @@ class StockPickingAmisSync(models.Model):
                     picking._enqueue_misa_sync(picking.picking_type_code)
             except Exception:
                 _logger.exception('AMIS enqueue failed for picking %s', picking.name)
+            try:
+                picking._maybe_auto_draft_meinvoice()
+            except Exception:
+                _logger.exception('meInvoice auto-draft check failed for picking %s', picking.name)
         return res
+
+    # ── meInvoice: auto-create draft on picking done ──────────────────────────
+
+    _STEP_KEYWORDS = {
+        'pick': ('pick',),
+        'pack': ('pack',),
+        'out':  ('out', 'ship', 'delivery'),  # WH/OUT, WH/SHIP, v.v.
+    }
+
+    def _get_picking_step(self):
+        """Nhận diện bước pick / pack / out dựa vào sequence_code của picking type.
+
+        Trả về 'pick', 'pack', 'out', hoặc None nếu không khớp.
+        """
+        self.ensure_one()
+        if self.picking_type_code != 'outgoing' and self.picking_type_code != 'internal':
+            return None
+        seq = (self.picking_type_id.sequence_code or '').lower()
+        for step, keywords in self._STEP_KEYWORDS.items():
+            if any(kw in seq for kw in keywords):
+                return step
+        # Fallback: nếu code là outgoing và không có bước nào → coi là 'out'
+        if self.picking_type_code == 'outgoing':
+            return 'out'
+        return None
+
+    def _maybe_auto_draft_meinvoice(self):
+        """Tạo hóa đơn nháp meInvoice nếu picking này đúng bước cấu hình."""
+        self.ensure_one()
+        if self.state != 'done':
+            return
+
+        config = self.env['amis.callback.config'].sudo().search([], limit=1)
+        if not config or not config.meinvoice_auto_draft_on_confirm:
+            return
+
+        trigger_step = config.meinvoice_draft_trigger_step or 'out'
+        if trigger_step == 'confirm':
+            return  # handled by action_confirm
+
+        picking_step = self._get_picking_step()
+        if picking_step != trigger_step:
+            return
+
+        # Lấy sale order liên quan
+        so = self._get_related_sales_order()
+        if not so:
+            return
+
+        if not getattr(so, 'shopee_order_ref', None):
+            return  # chỉ xử lý đơn Shopee
+
+        so.sudo()._auto_create_shopee_meinvoice_draft()
 
     def _enqueue_misa_sync(self, direction):
         """Tạo job trong hàng đợi amis.sync.job thay vì push trực tiếp."""
