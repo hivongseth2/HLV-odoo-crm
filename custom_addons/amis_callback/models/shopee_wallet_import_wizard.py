@@ -317,7 +317,7 @@ class ShopeeWalletImportWizard(models.TransientModel):
                     row[36] = discount_amt if discount_amt else ''
                     row[42] = vat_rate if vat_rate else ''
                     row[44] = vat_amount if vat_amount else ''
-                    row[45] = '3331' if vat_rate else ''
+                    row[45] = '33311' if vat_rate else ''
                     row[47] = 'HLV'
                     row[48] = '632'
                     row[49] = '1561'
@@ -415,7 +415,7 @@ class ShopeeWalletImportWizard(models.TransientModel):
                     row[42] = vat_rate if vat_rate else ''     # % thuế GTGT
                     row[43] = ''                    # % thuế suất KHAC
                     row[44] = vat_amount if vat_amount else '' # Tiền thuế GTGT
-                    row[45] = '3331' if vat_rate else ''       # TK thuế GTGT
+                    row[45] = '33311' if vat_rate else ''       # TK thuế GTGT
                     row[46] = ''                    # HH không TH trên tờ khai thuế GTGT
                     row[47] = 'HLV'                 # Mã kho
                     row[48] = '632'                 # TK giá vốn
