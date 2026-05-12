@@ -367,7 +367,7 @@ class ShopeeWalletImportWizard(models.TransientModel):
                     row[0] = 'Bán hàng hóa trong nước'  # Hình thức bán hàng
                     row[1] = 'TM/CK'                    # Phương thức thanh toán
                     row[2] = 'Có'                       # Kiêm phiếu xuất kho
-                    row[3] = ''                         # Lập kèm hóa đơn
+                    row[3] = 'Không'                         # Lập kèm hóa đơn
                     row[4] = da_lap_hd                  # Đã lập hóa đơn
                     row[5] = today_str                  # Ngày hạch toán (ngày hiện tại)
                     row[6] = today_str                  # Ngày chứng từ (ngày hiện tại)
