@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <!-- ── List view ──────────────────────────────────────────────────────── -->
+    <record id="view_amis_webhook_queue_list" model="ir.ui.view">
+        <field name="name">amis.webhook.queue.list</field>
+        <field name="model">amis.webhook.queue</field>
+        <field name="arch" type="xml">
+            <list string="Hàng đợi Webhook → meInvoice"
+                  default_order="create_date desc"
+                  decoration-success="state == 'done'"
+                  decoration-danger="state == 'error'"
+                  decoration-warning="state == 'processing'"
+                  decoration-muted="state in ('skipped',)">
+                <field name="create_date" string="Thời điểm nhận" optional="show"/>
+                <field name="order_ref" string="Mã đơn Shopee"/>
+                <field name="sale_order_id" optional="show"/>
+                <field name="trigger_status" string="Trạng thái kích hoạt"/>
+                <field name="state" widget="badge"
+                       decoration-success="state == 'done'"
+                       decoration-danger="state == 'error'"
+                       decoration-warning="state in ('pending', 'processing')"
+                       decoration-secondary="state == 'skipped'"/>
+                <field name="attempts" string="Số lần thử"/>
+                <field name="meinvoice_invoice_id" optional="show"/>
+                <field name="processed_at" optional="show"/>
+                <field name="error_msg" optional="hide"/>
+                <button name="action_retry" string="Thử lại" type="object"
+                        icon="fa-refresh"
+                        invisible="state not in ('error', 'skipped')"/>
+                <button name="action_skip" string="Bỏ qua" type="object"
+                        icon="fa-ban"
+                        invisible="state not in ('pending', 'error')"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ── Form view ─────────────────────────────────────────────────────── -->
+    <record id="view_amis_webhook_queue_form" model="ir.ui.view">
+        <field name="name">amis.webhook.queue.form</field>
+        <field name="model">amis.webhook.queue</field>
+        <field name="arch" type="xml">
+            <form string="Chi tiết Webhook Queue">
+                <header>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="pending,processing,done,error,skipped"/>
+                    <button name="action_retry" string="Thử lại" type="object"
+                            class="btn-primary"
+                            invisible="state not in ('error', 'skipped')"/>
+                    <button name="action_skip" string="Bỏ qua" type="object"
+                            invisible="state not in ('pending', 'error')"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group string="Thông tin đơn hàng">
+                            <field name="order_ref"/>
+                            <field name="sale_order_id"/>
+                            <field name="trigger_status"/>
+                            <field name="push_code"/>
+                            <field name="shop_id_raw"/>
+                        </group>
+                        <group string="Kết quả xử lý">
+                            <field name="state"/>
+                            <field name="attempts"/>
+                            <field name="processed_at"/>
+                            <field name="meinvoice_invoice_id"/>
+                        </group>
+                    </group>
+                    <group invisible="not error_msg">
+                        <field name="error_msg" string="Lỗi gần nhất" readonly="1"/>
+                    </group>
+                    <group invisible="not raw_payload">
+                        <field name="raw_payload" string="Payload raw" readonly="1" widget="text"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- ── Search view ───────────────────────────────────────────────────── -->
+    <record id="view_amis_webhook_queue_search" model="ir.ui.view">
+        <field name="name">amis.webhook.queue.search</field>
+        <field name="model">amis.webhook.queue</field>
+        <field name="arch" type="xml">
+            <search string="Tìm kiếm Webhook Queue">
+                <field name="order_ref" string="Mã đơn Shopee"/>
+                <field name="sale_order_id"/>
+                <filter string="Chờ xử lý" name="pending" domain="[('state','=','pending')]"/>
+                <filter string="Lỗi" name="error" domain="[('state','=','error')]"/>
+                <filter string="Hoàn thành" name="done" domain="[('state','=','done')]"/>
+                <filter string="Bỏ qua" name="skipped" domain="[('state','=','skipped')]"/>
+                <separator/>
+                <filter string="Còn thử được" name="retryable"
+                        domain="[('state','in',('pending','error')),('attempts','&lt;',3)]"/>
+                <group expand="0" string="Nhóm theo">
+                    <filter string="Trạng thái" name="group_state" context="{'group_by': 'state'}"/>
+                    <filter string="Ngày tạo" name="group_date" context="{'group_by': 'create_date:day'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- ── Action ────────────────────────────────────────────────────────── -->
+    <record id="action_amis_webhook_queue" model="ir.actions.act_window">
+        <field name="name">Hàng đợi Webhook → meInvoice</field>
+        <field name="res_model">amis.webhook.queue</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_pending': 1}</field>
+    </record>
+
+    <!-- ── Menu ──────────────────────────────────────────────────────────── -->
+    <menuitem id="menu_amis_webhook_queue"
+              name="Webhook Queue"
+              parent="menu_amis_callback_root"
+              action="action_amis_webhook_queue"
+              sequence="17"/>
+</odoo>

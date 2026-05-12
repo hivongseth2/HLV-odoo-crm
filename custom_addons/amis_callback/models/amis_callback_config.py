@@ -279,6 +279,27 @@ class AmisCallbackConfig(models.Model):
              'Tắt khi chạy thực tế.',
     )
 
+    # ── Webhook → meInvoice auto-publish ─────────────────────────────────────
+    webhook_auto_publish_enabled = fields.Boolean(
+        string='Tự động phát hành HĐĐT khi nhận webhook Shopee',
+        default=False,
+        help='Bật: khi webhook Shopee cập nhật trạng thái đơn hàng vào một trong các '
+             'trạng thái cấu hình bên dưới, hệ thống tự động enqueue job phát hành '
+             'HĐĐT meInvoice cho đơn đó.\n'
+             'Tắt: không làm gì khi nhận webhook.',
+    )
+    webhook_trigger_statuses = fields.Char(
+        string='Trạng thái kích hoạt (phân cách dấu phẩy)',
+        default='COMPLETED,Hoàn thành',
+        help='Danh sách trạng thái Shopee (shopee_order_status) sẽ kích hoạt phát hành HĐĐT. '
+             'Phân cách bằng dấu phẩy. VD: COMPLETED,Hoàn thành,TO_CONFIRM_RECEIVE',
+    )
+
+    def get_webhook_trigger_statuses(self):
+        """Trả về set các trạng thái kích hoạt (đã strip + loại bỏ rỗng)."""
+        raw = self.webhook_trigger_statuses or ''
+        return {s.strip() for s in raw.split(',') if s.strip()}
+
     # Mapping cứng: shopee.shop.identifier → account_object_name MISA
     SHOPEE_SHOP_ACCOUNT_MAP = {
         '796817584': 'KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE MILWAUKEE',
