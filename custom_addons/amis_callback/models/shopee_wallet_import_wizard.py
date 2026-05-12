@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import base64
+import datetime
 import logging
 from io import BytesIO
 
@@ -143,6 +144,30 @@ class ShopeeWalletImportWizard(models.TransientModel):
                 seen.add(code)
         return codes
 
+    def _get_customer_map(self):
+        """
+        Trả về dict: shop_identifier → {'name': str, 'code': str}
+        Lấy từ amis.callback.config.shopee_customer_map_ids (persistent).
+        Fallback hardcode nếu config chưa có.
+        """
+        DEFAULTS = {
+            '1357810112': {'name': 'KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE DEWALT', 'code': ''},
+            '796817584':  {'name': 'KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE MILWAUKEE', 'code': ''},
+            '326259406':  {'name': 'KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE HLV', 'code': ''},
+        }
+        config = self.env['amis.callback.config'].sudo().search([], limit=1)
+        if not config or not config.shopee_customer_map_ids:
+            return DEFAULTS
+        result = dict(DEFAULTS)  # bắt đầu từ default, config ghi đè
+        for m in config.shopee_customer_map_ids:
+            ident = (m.shop_identifier or '').strip()
+            if ident:
+                result[ident] = {
+                    'name': m.customer_name or '',
+                    'code': m.customer_code or '',
+                }
+        return result
+
     def _find_sale_orders(self, shopee_codes):
         """Tìm sale.order theo shopee_order_ref. Trả về dict code→SO (hoặc False)."""
         result = {}
@@ -166,59 +191,40 @@ class ShopeeWalletImportWizard(models.TransientModel):
         """Xây dựng danh sách rows cho MISA Phiếu Bán Hàng."""
         misa_rows = []
 
+        # ── Hằng số cho cả batch xuất ────────────────────────────────────────
+        today = datetime.date.today()
+        today_str = today.strftime('%d/%m/%Y')
+        date_tag = today.strftime('%d%m%Y')        # DDMMYYYY
+        so_ref = 'BH%sSP' % date_tag              # VD: BH12052026SP  (12 ký tự)
+        xk_ref = 'XK%sSP' % date_tag              # VD: XK12052026SP
+        customer_map = self._get_customer_map()    # dict identifier → {name, code}
+
         for shopee_code, so in code_so_map.items():
             if not so:
                 # Không tìm thấy SO: 1 dòng cảnh báo
                 row = [''] * len(MISA_COLUMNS)
-                row[7] = ''
+                row[7] = so_ref
                 row[21] = 'KHÔNG TÌM THẤY SO | Shopee: %s' % shopee_code
                 misa_rows.append(row)
                 continue
 
             # ── Thông tin shop ─────────────────────────────────────────────
             shop_name = ''
+            shop_identifier = ''
             if hasattr(so, 'shopee_shop_id') and so.shopee_shop_id:
                 shop_name = so.shopee_shop_id.name or ''
+                shop_identifier = str(getattr(so.shopee_shop_id, 'shop_identifier', '') or '').strip()
+
+            # ── Tên/mã khách hàng từ map theo shop ────────────────────────
+            cust_info = customer_map.get(shop_identifier, {})
+            customer_name = cust_info.get('name', '') or shop_name or ''
+            customer_code = cust_info.get('code', '')
 
             # ── Thông tin đơn xuất (picking) ──────────────────────────────
             pickings = so.picking_ids.filtered(lambda p: p.state == 'done' and p.picking_type_code == 'outgoing')
             picking_names = ', '.join(p.name for p in pickings) if pickings else ''
-            warehouse_code = ''
-            if pickings:
-                wh = pickings[0].picking_type_id.warehouse_id
-                warehouse_code = wh.code if wh else ''
-
-            # ── Ngày ──────────────────────────────────────────────────────
-            date_done = None
-            if pickings:
-                date_done = pickings[0].date_done
-            if not date_done:
-                date_done = so.date_order
-            date_str = ''
-            if date_done:
-                if hasattr(date_done, 'strftime'):
-                    date_str = date_done.strftime('%d/%m/%Y')
-                else:
-                    date_str = str(date_done)[:10]
-
-            # ── Khách hàng ────────────────────────────────────────────────
-            partner = so.partner_id
-            partner_code = ''
-            if partner:
-                partner_code = (partner.company_registry or partner.ref or '').strip()
-            partner_name = (partner.name or '') if partner else ''
-            partner_address = ''
-            if partner:
-                parts = [x for x in [
-                    getattr(partner, 'street', ''),
-                    getattr(partner, 'city', ''),
-                    partner.state_id.name if getattr(partner, 'state_id', False) else '',
-                ] if x]
-                partner_address = ', '.join(parts)
-            partner_vat = (getattr(partner, 'vat', '') or '') if partner else ''
 
             # ── meInvoice ─────────────────────────────────────────────────
-            inv_series = getattr(so, 'misa_meinvoice_inv_series', '') or ''
             inv_no = getattr(so, 'misa_meinvoice_inv_no', '') or ''
             inv_date_val = getattr(so, 'misa_meinvoice_inv_date', False)
             inv_date = ''
@@ -254,23 +260,22 @@ class ShopeeWalletImportWizard(models.TransientModel):
                 vat_amount = round(subtotal * vat_rate / 100, 0) if vat_rate else 0
 
                 row = [''] * len(MISA_COLUMNS)
-                row[0] = 'Bán hàng qua Shopee'  # Hình thức bán hàng
-                row[1] = 'TM/CK'                # Phương thức thanh toán
-                row[2] = 'Có'                   # Kiêm phiếu xuất kho
-                row[3] = ''                     # Lập kèm hóa đơn
-                row[4] = da_lap_hd              # Đã lập hóa đơn
-                row[5] = date_str               # Ngày hạch toán
-                row[6] = date_str               # Ngày chứng từ
-                row[7] = so.name                # Số chứng từ
-                row[8] = picking_names          # Số phiếu xuất
-                row[9] = ''                     # Mẫu số HĐ
-                row[10] = inv_series            # Ký hiệu HĐ
-                row[11] = inv_no                # Số hóa đơn
-                row[12] = inv_date              # Ngày hóa đơn
-                row[13] = partner_code          # Mã khách hàng
-                row[14] = partner_name          # Tên khách hàng
-                row[15] = partner_address       # Địa chỉ
-                row[16] = partner_vat           # Mã số thuế
+                row[0] = 'Bán hàng hóa trong nước'  # Hình thức bán hàng
+                row[1] = 'TM/CK'                    # Phương thức thanh toán
+                row[2] = 'Có'                       # Kiêm phiếu xuất kho
+                row[3] = ''                         # Lập kèm hóa đơn
+                row[4] = da_lap_hd                  # Đã lập hóa đơn
+                row[5] = today_str                  # Ngày hạch toán (ngày hiện tại)
+                row[6] = today_str                  # Ngày chứng từ (ngày hiện tại)
+                row[7] = so_ref                     # Số chứng từ (VD: BH12052026SP)
+                row[8] = xk_ref                     # Số phiếu xuất (VD: XK12052026SP)
+                row[9] = '1'                        # Mẫu số HĐ
+                row[10] = '1C26TLV'                 # Ký hiệu HĐ
+                row[11] = inv_no                    # Số hóa đơn
+                row[12] = inv_date                  # Ngày hóa đơn
+                row[13] = customer_code             # Mã khách hàng (từ map)
+                row[14] = customer_name             # Tên khách hàng (từ map)
+                row[15] = ''                        # Địa chỉ (để trống)
                 row[17] = ''                    # Đơn vị giao đại lý
                 row[18] = ''                    # Người nộp
                 row[19] = ''                    # Nộp vào TK
@@ -288,7 +293,7 @@ class ShopeeWalletImportWizard(models.TransientModel):
                 row[31] = qty                   # Số lượng
                 row[32] = price                 # Đơn giá
                 row[33] = subtotal              # Thành tiền
-                row[34] = discount_pct if discount_pct else ''   # Tỷ lệ CK (%)
+                row[34] = discount_pct if discount_pct else ''   # Tỷ lệ CK (%) — giữ thập phân
                 row[35] = discount_amt if discount_amt else ''   # Tiền chiết khấu
                 row[36] = ''                    # TK chiết khấu
                 row[37] = ''                    # Giá tính thuế XK
@@ -300,9 +305,9 @@ class ShopeeWalletImportWizard(models.TransientModel):
                 row[43] = vat_amount if vat_amount else '' # Tiền thuế GTGT
                 row[44] = '3331' if vat_rate else ''       # TK thuế GTGT
                 row[45] = ''                    # HH không TH trên tờ khai thuế GTGT
-                row[46] = warehouse_code        # Mã kho
-                row[47] = ''                    # TK giá vốn
-                row[48] = ''                    # TK Kho
+                row[46] = 'HLV'                 # Mã kho
+                row[47] = '632'                 # TK giá vốn
+                row[48] = '1561'                # TK Kho
                 row[49] = ''                    # Đơn giá vốn
                 row[50] = ''                    # Tiền vốn
                 row[51] = ''                    # Hàng hóa giữ hộ/bán hộ

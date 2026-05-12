@@ -160,6 +160,17 @@
                             <field name="misa_fallback_account_object_name"/>
                         </group>
                     </group>
+                    <group string="Map Shop Shopee → Tên khách hàng MISA (Phiếu Bán Hàng)">
+                        <field name="shopee_customer_map_ids" colspan="2" nolabel="1">
+                            <list editable="bottom">
+                                <field name="sequence" widget="handle"/>
+                                <field name="shop_identifier"/>
+                                <field name="shop_name"/>
+                                <field name="customer_name"/>
+                                <field name="customer_code"/>
+                            </list>
+                        </field>
+                    </group>
                     <group string="meInvoice - Tên người mua mặc định theo kênh Shopee">
                         <group>
                             <field name="meinvoice_shopee_only"/>
