@@ -49,6 +49,7 @@ MISA_COLUMNS = [
     'Diễn giải/Lý do nộp',
     'Lý do xuất',
     'Mã hàng (*)',
+    'Thuộc combo',
     'Tên hàng',
     'Là dòng ghi chú',
     'Hàng khuyến mại',
@@ -304,21 +305,22 @@ class ShopeeWalletImportWizard(models.TransientModel):
                     row[21] = dien_giai
                     row[22] = ly_do_xuat
                     row[23] = product.default_code or ''
-                    row[24] = product.name or line.name or ''
-                    row[28] = '131'
-                    row[29] = '5111'
-                    row[30] = uom_name
-                    row[31] = line_qty
-                    row[32] = price
-                    row[33] = subtotal
-                    row[34] = discount_pct if discount_pct else ''
-                    row[35] = discount_amt if discount_amt else ''
-                    row[41] = vat_rate if vat_rate else ''
-                    row[43] = vat_amount if vat_amount else ''
-                    row[44] = '3331' if vat_rate else ''
-                    row[46] = 'HLV'
-                    row[47] = '632'
-                    row[48] = '1561'
+                    row[24] = ''                           # Thuộc combo (SP cha — để trống)
+                    row[25] = product.name or line.name or ''
+                    row[29] = '131'
+                    row[30] = '5111'
+                    row[31] = uom_name
+                    row[32] = line_qty
+                    row[33] = price
+                    row[34] = subtotal
+                    row[35] = discount_pct if discount_pct else ''
+                    row[36] = discount_amt if discount_amt else ''
+                    row[42] = vat_rate if vat_rate else ''
+                    row[44] = vat_amount if vat_amount else ''
+                    row[45] = '3331' if vat_rate else ''
+                    row[47] = 'HLV'
+                    row[48] = '632'
+                    row[49] = '1561'
                     misa_rows.append(row)
 
                     # Xuất các dòng con (BOM components) với giá 0
@@ -349,16 +351,17 @@ class ShopeeWalletImportWizard(models.TransientModel):
                         comp_row[21] = dien_giai
                         comp_row[22] = ly_do_xuat
                         comp_row[23] = comp.default_code or ''
-                        comp_row[24] = comp.name or ''
-                        comp_row[28] = '131'
-                        comp_row[29] = '5111'
-                        comp_row[30] = comp_uom
-                        comp_row[31] = comp_qty
-                        comp_row[32] = 0
+                        comp_row[24] = product.default_code or ''  # Thuộc combo (mã SP cha)
+                        comp_row[25] = comp.name or ''
+                        comp_row[29] = '131'
+                        comp_row[30] = '5111'
+                        comp_row[31] = comp_uom
+                        comp_row[32] = comp_qty
                         comp_row[33] = 0
-                        comp_row[46] = 'HLV'
-                        comp_row[47] = '632'
-                        comp_row[48] = '1561'
+                        comp_row[34] = 0
+                        comp_row[47] = 'HLV'
+                        comp_row[48] = '632'
+                        comp_row[49] = '1561'
                         misa_rows.append(comp_row)
 
                 else:
@@ -391,34 +394,35 @@ class ShopeeWalletImportWizard(models.TransientModel):
                     row[21] = dien_giai             # Diễn giải/Lý do nộp
                     row[22] = ly_do_xuat            # Lý do xuất
                     row[23] = product_code          # Mã hàng
-                    row[24] = product_name          # Tên hàng
-                    row[25] = ''                    # Là dòng ghi chú
-                    row[26] = ''                    # Hàng khuyến mại
-                    row[27] = ''                    # Chiết khấu thương mại
-                    row[28] = '131'                 # TK Tiền/Chi phí/Nợ
-                    row[29] = '5111'                # TK Doanh thu/Có
-                    row[30] = uom_name              # ĐVT
-                    row[31] = line_qty              # Số lượng
-                    row[32] = price                 # Đơn giá
-                    row[33] = subtotal              # Thành tiền
-                    row[34] = discount_pct if discount_pct else ''   # Tỷ lệ CK (%) — giữ thập phân
-                    row[35] = discount_amt if discount_amt else ''   # Tiền chiết khấu
-                    row[36] = ''                    # TK chiết khấu
-                    row[37] = ''                    # Giá tính thuế XK
-                    row[38] = ''                    # % thuế xuất khẩu
-                    row[39] = ''                    # Tiền thuế xuất khẩu
-                    row[40] = ''                    # TK thuế xuất khẩu
-                    row[41] = vat_rate if vat_rate else ''     # % thuế GTGT
-                    row[42] = ''                    # % thuế suất KHAC
-                    row[43] = vat_amount if vat_amount else '' # Tiền thuế GTGT
-                    row[44] = '3331' if vat_rate else ''       # TK thuế GTGT
-                    row[45] = ''                    # HH không TH trên tờ khai thuế GTGT
-                    row[46] = 'HLV'                 # Mã kho
-                    row[47] = '632'                 # TK giá vốn
-                    row[48] = '1561'                # TK Kho
-                    row[49] = ''                    # Đơn giá vốn
-                    row[50] = ''                    # Tiền vốn
-                    row[51] = ''                    # Hàng hóa giữ hộ/bán hộ
+                    row[24] = ''                    # Thuộc combo (SP thường — để trống)
+                    row[25] = product_name          # Tên hàng
+                    row[26] = ''                    # Là dòng ghi chú
+                    row[27] = ''                    # Hàng khuyến mại
+                    row[28] = ''                    # Chiết khấu thương mại
+                    row[29] = '131'                 # TK Tiền/Chi phí/Nợ
+                    row[30] = '5111'                # TK Doanh thu/Có
+                    row[31] = uom_name              # ĐVT
+                    row[32] = line_qty              # Số lượng
+                    row[33] = price                 # Đơn giá
+                    row[34] = subtotal              # Thành tiền
+                    row[35] = discount_pct if discount_pct else ''   # Tỷ lệ CK (%) — giữ thập phân
+                    row[36] = discount_amt if discount_amt else ''   # Tiền chiết khấu
+                    row[37] = ''                    # TK chiết khấu
+                    row[38] = ''                    # Giá tính thuế XK
+                    row[39] = ''                    # % thuế xuất khẩu
+                    row[40] = ''                    # Tiền thuế xuất khẩu
+                    row[41] = ''                    # TK thuế xuất khẩu
+                    row[42] = vat_rate if vat_rate else ''     # % thuế GTGT
+                    row[43] = ''                    # % thuế suất KHAC
+                    row[44] = vat_amount if vat_amount else '' # Tiền thuế GTGT
+                    row[45] = '3331' if vat_rate else ''       # TK thuế GTGT
+                    row[46] = ''                    # HH không TH trên tờ khai thuế GTGT
+                    row[47] = 'HLV'                 # Mã kho
+                    row[48] = '632'                 # TK giá vốn
+                    row[49] = '1561'                # TK Kho
+                    row[50] = ''                    # Đơn giá vốn
+                    row[51] = ''                    # Tiền vốn
+                    row[52] = ''                    # Hàng hóa giữ hộ/bán hộ
 
                     misa_rows.append(row)
 
@@ -451,7 +455,7 @@ class ShopeeWalletImportWizard(models.TransientModel):
             5: 15, 6: 15, 7: 20, 8: 30, 9: 12,
             10: 12, 11: 12, 12: 14, 13: 15, 14: 30,
             15: 35, 16: 15, 21: 60, 22: 35, 23: 15,
-            24: 35, 30: 8, 31: 10, 32: 12, 33: 14,
+            24: 18, 25: 35, 31: 8, 32: 10, 33: 12, 34: 14,
         }
 
         # Header
@@ -476,7 +480,7 @@ class ShopeeWalletImportWizard(models.TransientModel):
                 cell.border = border
                 if isinstance(value, (int, float)):
                     cell.alignment = num_align
-                    cell.number_format = '#,##0' if col_idx in (32, 33, 35, 43, 50) else '#,##0.##'
+                    cell.number_format = '#,##0' if col_idx in (33, 34, 36, 44, 51) else '#,##0.##'
                 else:
                     cell.alignment = cell_align
 
