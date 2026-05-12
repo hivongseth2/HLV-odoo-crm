@@ -251,7 +251,7 @@ class ShopeeWalletImportWizard(models.TransientModel):
             inv_date = ''
             if inv_date_val:
                 inv_date = inv_date_val.strftime('%d/%m/%Y') if hasattr(inv_date_val, 'strftime') else str(inv_date_val)[:10]
-            da_lap_hd = 'Có' if getattr(so, 'misa_meinvoice_synced', False) else ''
+            da_lap_hd = 'Có' if getattr(so, 'misa_meinvoice_synced', False) else '' # khúc này xem lại hard cho chưa lập luôn
 
             # ── Diễn giải ─────────────────────────────────────────────────
             dien_giai = 'Đơn bán: %s | Shopee: %s | Shop: %s' % (so.name, shopee_code, shop_name)
@@ -288,7 +288,7 @@ class ShopeeWalletImportWizard(models.TransientModel):
                     row[0] = 'Bán hàng hóa trong nước'
                     row[1] = 'TM/CK'
                     row[2] = 'Có'
-                    row[4] = da_lap_hd
+                    row[4] = 'Chưa lập'
                     row[5] = today_str
                     row[6] = today_str
                     row[7] = so_ref
@@ -365,7 +365,7 @@ class ShopeeWalletImportWizard(models.TransientModel):
 
                     row = [''] * len(MISA_COLUMNS)
                     row[0] = 'Bán hàng hóa trong nước'  # Hình thức bán hàng
-                    row[1] = 'TM/CK'                    # Phương thức thanh toán
+                    row[1] = 'Chưa thu tiền'                    # Phương thức thanh toán
                     row[2] = 'Có'                       # Kiêm phiếu xuất kho
                     row[3] = 'Không'                         # Lập kèm hóa đơn
                     row[4] = da_lap_hd                  # Đã lập hóa đơn
