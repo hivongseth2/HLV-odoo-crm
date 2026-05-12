@@ -19,7 +19,7 @@
                        decoration-success="state == 'done'"
                        decoration-danger="state == 'error'"
                        decoration-warning="state in ('pending', 'processing')"
-                       decoration-secondary="state == 'skipped'"/>
+                       decoration-muted="state == 'skipped'"/>
                 <field name="attempts" string="Số lần thử"/>
                 <field name="meinvoice_invoice_id" optional="show"/>
                 <field name="processed_at" optional="show"/>
