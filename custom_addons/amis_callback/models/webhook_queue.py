@@ -119,19 +119,38 @@ class AmisWebhookQueue(models.Model):
                 })
                 return
 
-            # Gọi action publish (tạo draft + publish luôn qua SO method)
-            so.sudo().action_publish_meinvoice_invoice()
-
-            # Tìm invoice vừa tạo (state submitted/accepted)
-            new_inv = self.env['meinvoice.invoice'].sudo().search([
+            # Tìm nháp hiện có
+            drafts = self.env['meinvoice.invoice'].sudo().search([
                 ('sale_order_id', '=', so.id),
-                ('state', 'in', ('submitted', 'accepted')),
-            ], limit=1)
+                ('state', '=', 'draft'),
+            ], order='id desc')
+
+            if not drafts:
+                self.sudo().write({
+                    'state': 'skipped',
+                    'error_msg': 'Không có HĐĐT nháp để phát hành.',
+                    'processed_at': fields.Datetime.now(),
+                })
+                return
+
+            if len(drafts) > 1:
+                ids_str = ', '.join(str(d.id) for d in drafts)
+                self.sudo().write({
+                    'state': 'error',
+                    'error_msg': 'Có %d HĐĐT nháp (id: %s). Vui lòng xóa bớt và chỉ giữ 1 nháp.' % (len(drafts), ids_str),
+                    'processed_at': fields.Datetime.now(),
+                })
+                return
+
+            draft = drafts[0]
+
+            # Submit nháp lên CQT
+            draft.sudo().action_publish()
 
             self.sudo().write({
                 'state': 'done',
                 'error_msg': False,
-                'meinvoice_invoice_id': new_inv.id if new_inv else False,
+                'meinvoice_invoice_id': draft.id,
                 'processed_at': fields.Datetime.now(),
             })
             _logger.info(
