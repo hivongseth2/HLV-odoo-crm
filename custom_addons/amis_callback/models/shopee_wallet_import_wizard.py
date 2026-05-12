@@ -277,8 +277,9 @@ class ShopeeWalletImportWizard(models.TransientModel):
                 discount_pct = line.discount or 0
                 price = line.price_unit
                 subtotal = line.price_total
-                discount_amt = round(price * discount_pct / (100 + vat_rate), 2) if discount_pct else 0
-                vat_amount = round(subtotal * vat_rate / 100, 2) if vat_rate else 0
+                taxable_base = line.price_subtotal  # sau chiết khấu, trước thuế
+                discount_amt = round(price * line_qty * discount_pct / 100, 2) if discount_pct else 0
+                vat_amount = round(taxable_base * vat_rate / 100, 2) if vat_rate else 0
 
                 # ── Kiểm tra BOM Kit (combo) ──────────────────────────────
                 kit_bom = self._get_kit_bom(product) if product else False
