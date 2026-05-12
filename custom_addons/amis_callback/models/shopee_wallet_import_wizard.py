@@ -185,6 +185,27 @@ class ShopeeWalletImportWizard(models.TransientModel):
             result[code] = so_map.get(code, False)
         return result
 
+    # ── Helpers ──────────────────────────────────────────────────────────────
+
+    def _get_kit_bom(self, product):
+        """
+        Trả về mrp.bom đầu tiên có type='phantom' (Kit) cho sản phẩm.
+        Ưu tiên BOM khớp cả product_id, fallback về product_tmpl_id.
+        Trả về False nếu không có.
+        """
+        MrpBom = self.env['mrp.bom'].sudo()
+        bom = MrpBom.search([
+            ('type', '=', 'phantom'),
+            ('product_id', '=', product.id),
+        ], limit=1)
+        if not bom:
+            bom = MrpBom.search([
+                ('type', '=', 'phantom'),
+                ('product_tmpl_id', '=', product.product_tmpl_id.id),
+                ('product_id', '=', False),
+            ], limit=1)
+        return bom or False
+
     # ── Xây dựng rows MISA ───────────────────────────────────────────────────
 
     def _build_misa_rows(self, code_so_map):
@@ -242,79 +263,160 @@ class ShopeeWalletImportWizard(models.TransientModel):
                     continue
 
                 product = line.product_id
-                product_code = product.default_code or '' if product else ''
-                product_name = (product.name or line.name or '') if product else (line.name or '')
                 uom_name = line.product_uom.name if line.product_uom else ''
-                qty = line.product_uom_qty
-                price = line.price_unit
-                subtotal = line.price_total # lấy ở cột bao gồm thuế 
+                line_qty = line.product_uom_qty
 
-                # Thuế GTGT
+                # Thuế GTGT (từ dòng SO cha)
                 vat_rate = 0
                 for tax in (line.tax_id or []):
                     if tax.amount_type == 'percent' and tax.amount > 0:
                         vat_rate = tax.amount
                         break
-                    
+
                 discount_pct = line.discount or 0
-                # discount_amt = round(price * discount_pct / 100, 2) if discount_pct else 0
+                price = line.price_unit
+                subtotal = line.price_total
                 discount_amt = round(price * discount_pct / (100 + vat_rate), 2) if discount_pct else 0
                 vat_amount = round(subtotal * vat_rate / 100, 2) if vat_rate else 0
 
-                row = [''] * len(MISA_COLUMNS)
-                row[0] = 'Bán hàng hóa trong nước'  # Hình thức bán hàng
-                row[1] = 'TM/CK'                    # Phương thức thanh toán
-                row[2] = 'Có'                       # Kiêm phiếu xuất kho
-                row[3] = ''                         # Lập kèm hóa đơn
-                row[4] = da_lap_hd                  # Đã lập hóa đơn
-                row[5] = today_str                  # Ngày hạch toán (ngày hiện tại)
-                row[6] = today_str                  # Ngày chứng từ (ngày hiện tại)
-                row[7] = so_ref                     # Số chứng từ (VD: BH12052026SP)
-                row[8] = xk_ref                     # Số phiếu xuất (VD: XK12052026SP)
-                row[9] = '1'                        # Mẫu số HĐ
-                row[10] = '1C26TLV'                 # Ký hiệu HĐ
-                row[11] = inv_no                    # Số hóa đơn
-                row[12] = inv_date                  # Ngày hóa đơn
-                row[13] = customer_code             # Mã khách hàng (từ map)
-                row[14] = customer_name             # Tên khách hàng (từ map)
-                row[15] = 'Khách hàng không cung cấp thông tin'                        # Địa chỉ (để trống)
-                row[17] = ''                    # Đơn vị giao đại lý
-                row[18] = ''                    # Người nộp
-                row[19] = ''                    # Nộp vào TK
-                row[20] = ''                    # Tên ngân hàng
-                row[21] = dien_giai             # Diễn giải/Lý do nộp
-                row[22] = ly_do_xuat            # Lý do xuất
-                row[23] = product_code          # Mã hàng
-                row[24] = product_name          # Tên hàng
-                row[25] = ''                    # Là dòng ghi chú
-                row[26] = ''                    # Hàng khuyến mại
-                row[27] = ''                    # Chiết khấu thương mại
-                row[28] = '131'                 # TK Tiền/Chi phí/Nợ
-                row[29] = '5111'                # TK Doanh thu/Có
-                row[30] = uom_name              # ĐVT
-                row[31] = qty                   # Số lượng
-                row[32] = price                 # Đơn giá
-                row[33] = subtotal              # Thành tiền
-                row[34] = discount_pct if discount_pct else ''   # Tỷ lệ CK (%) — giữ thập phân
-                row[35] = discount_amt if discount_amt else ''   # Tiền chiết khấu
-                row[36] = ''                    # TK chiết khấu
-                row[37] = ''                    # Giá tính thuế XK
-                row[38] = ''                    # % thuế xuất khẩu
-                row[39] = ''                    # Tiền thuế xuất khẩu
-                row[40] = ''                    # TK thuế xuất khẩu
-                row[41] = vat_rate if vat_rate else ''     # % thuế GTGT
-                row[42] = ''                    # % thuế suất KHAC
-                row[43] = vat_amount if vat_amount else '' # Tiền thuế GTGT
-                row[44] = '3331' if vat_rate else ''       # TK thuế GTGT
-                row[45] = ''                    # HH không TH trên tờ khai thuế GTGT
-                row[46] = 'HLV'                 # Mã kho
-                row[47] = '632'                 # TK giá vốn
-                row[48] = '1561'                # TK Kho
-                row[49] = ''                    # Đơn giá vốn
-                row[50] = ''                    # Tiền vốn
-                row[51] = ''                    # Hàng hóa giữ hộ/bán hộ
+                # ── Kiểm tra BOM Kit (combo) ──────────────────────────────
+                kit_bom = self._get_kit_bom(product) if product else False
 
-                misa_rows.append(row)
+                if kit_bom:
+                    # Xuất dòng đầu: sản phẩm cha với giá gốc
+                    row = [''] * len(MISA_COLUMNS)
+                    row[0] = 'Bán hàng hóa trong nước'
+                    row[1] = 'TM/CK'
+                    row[2] = 'Có'
+                    row[4] = da_lap_hd
+                    row[5] = today_str
+                    row[6] = today_str
+                    row[7] = so_ref
+                    row[8] = xk_ref
+                    row[9] = '1'
+                    row[10] = '1C26TLV'
+                    row[11] = inv_no
+                    row[12] = inv_date
+                    row[13] = customer_code
+                    row[14] = customer_name
+                    row[15] = ''
+                    row[21] = dien_giai
+                    row[22] = ly_do_xuat
+                    row[23] = product.default_code or ''
+                    row[24] = product.name or line.name or ''
+                    row[28] = '131'
+                    row[29] = '5111'
+                    row[30] = uom_name
+                    row[31] = line_qty
+                    row[32] = price
+                    row[33] = subtotal
+                    row[34] = discount_pct if discount_pct else ''
+                    row[35] = discount_amt if discount_amt else ''
+                    row[41] = vat_rate if vat_rate else ''
+                    row[43] = vat_amount if vat_amount else ''
+                    row[44] = '3331' if vat_rate else ''
+                    row[46] = 'HLV'
+                    row[47] = '632'
+                    row[48] = '1561'
+                    misa_rows.append(row)
+
+                    # Xuất các dòng con (BOM components) với giá 0
+                    for bom_line in kit_bom.bom_line_ids:
+                        comp = bom_line.product_id
+                        if not comp:
+                            continue
+                        comp_qty = bom_line.product_qty * line_qty
+                        comp_uom = bom_line.product_uom_id.name if bom_line.product_uom_id else ''
+                        comp_row = [''] * len(MISA_COLUMNS)
+                        comp_row[0] = 'Bán hàng hóa trong nước'
+                        comp_row[1] = 'TM/CK'
+                        comp_row[2] = 'Có'
+                        comp_row[4] = da_lap_hd
+                        comp_row[5] = today_str
+                        comp_row[6] = today_str
+                        comp_row[7] = so_ref
+                        comp_row[8] = xk_ref
+                        comp_row[9] = '1'
+                        comp_row[10] = '1C26TLV'
+                        comp_row[11] = inv_no
+                        comp_row[12] = inv_date
+                        comp_row[13] = customer_code
+                        comp_row[14] = customer_name
+                        comp_row[15] = ''
+                        comp_row[21] = dien_giai
+                        comp_row[22] = ly_do_xuat
+                        comp_row[23] = comp.default_code or ''
+                        comp_row[24] = comp.name or ''
+                        comp_row[28] = '131'
+                        comp_row[29] = '5111'
+                        comp_row[30] = comp_uom
+                        comp_row[31] = comp_qty
+                        comp_row[32] = 0
+                        comp_row[33] = 0
+                        comp_row[46] = 'HLV'
+                        comp_row[47] = '632'
+                        comp_row[48] = '1561'
+                        misa_rows.append(comp_row)
+
+                else:
+                    # Sản phẩm thường — xuất bình thường
+                    product_code = product.default_code or '' if product else ''
+                    product_name = (product.name or line.name or '') if product else (line.name or '')
+
+                    row = [''] * len(MISA_COLUMNS)
+                    row[0] = 'Bán hàng hóa trong nước'  # Hình thức bán hàng
+                    row[1] = 'TM/CK'                    # Phương thức thanh toán
+                    row[2] = 'Có'                       # Kiêm phiếu xuất kho
+                    row[3] = ''                         # Lập kèm hóa đơn
+                    row[4] = da_lap_hd                  # Đã lập hóa đơn
+                    row[5] = today_str                  # Ngày hạch toán (ngày hiện tại)
+                    row[6] = today_str                  # Ngày chứng từ (ngày hiện tại)
+                    row[7] = so_ref                     # Số chứng từ (VD: BH12052026SP)
+                    row[8] = xk_ref                     # Số phiếu xuất (VD: XK12052026SP)
+                    row[9] = '1'                        # Mẫu số HĐ
+                    row[10] = '1C26TLV'                 # Ký hiệu HĐ
+                    row[11] = inv_no                    # Số hóa đơn
+                    row[12] = inv_date                  # Ngày hóa đơn
+                    row[13] = customer_code             # Mã khách hàng (từ map)
+                    row[14] = customer_name             # Tên khách hàng (từ map)
+                    row[15] = ''                        # Địa chỉ (để trống)
+                    row[17] = ''                    # Đơn vị giao đại lý
+                    row[18] = ''                    # Người nộp
+                    row[19] = ''                    # Nộp vào TK
+                    row[20] = ''                    # Tên ngân hàng
+                    row[21] = dien_giai             # Diễn giải/Lý do nộp
+                    row[22] = ly_do_xuat            # Lý do xuất
+                    row[23] = product_code          # Mã hàng
+                    row[24] = product_name          # Tên hàng
+                    row[25] = ''                    # Là dòng ghi chú
+                    row[26] = ''                    # Hàng khuyến mại
+                    row[27] = ''                    # Chiết khấu thương mại
+                    row[28] = '131'                 # TK Tiền/Chi phí/Nợ
+                    row[29] = '5111'                # TK Doanh thu/Có
+                    row[30] = uom_name              # ĐVT
+                    row[31] = line_qty              # Số lượng
+                    row[32] = price                 # Đơn giá
+                    row[33] = subtotal              # Thành tiền
+                    row[34] = discount_pct if discount_pct else ''   # Tỷ lệ CK (%) — giữ thập phân
+                    row[35] = discount_amt if discount_amt else ''   # Tiền chiết khấu
+                    row[36] = ''                    # TK chiết khấu
+                    row[37] = ''                    # Giá tính thuế XK
+                    row[38] = ''                    # % thuế xuất khẩu
+                    row[39] = ''                    # Tiền thuế xuất khẩu
+                    row[40] = ''                    # TK thuế xuất khẩu
+                    row[41] = vat_rate if vat_rate else ''     # % thuế GTGT
+                    row[42] = ''                    # % thuế suất KHAC
+                    row[43] = vat_amount if vat_amount else '' # Tiền thuế GTGT
+                    row[44] = '3331' if vat_rate else ''       # TK thuế GTGT
+                    row[45] = ''                    # HH không TH trên tờ khai thuế GTGT
+                    row[46] = 'HLV'                 # Mã kho
+                    row[47] = '632'                 # TK giá vốn
+                    row[48] = '1561'                # TK Kho
+                    row[49] = ''                    # Đơn giá vốn
+                    row[50] = ''                    # Tiền vốn
+                    row[51] = ''                    # Hàng hóa giữ hộ/bán hộ
+
+                    misa_rows.append(row)
 
         return misa_rows
 
