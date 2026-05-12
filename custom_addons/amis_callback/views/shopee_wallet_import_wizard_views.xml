@@ -31,7 +31,7 @@
                             </div>
                         </group>
                     </group>
-                    <group string="Kết quả" attrs="{'invisible': [('result_summary', '=', False)]}">
+                    <group string="Kết quả" invisible="not result_summary">
                         <field name="result_summary" readonly="1" nolabel="1"
                                widget="text" style="white-space: pre-wrap; font-family: monospace;"/>
                     </group>
