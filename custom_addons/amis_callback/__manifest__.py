@@ -10,6 +10,7 @@
         "security/ir.model.access.csv",
         "data/sequence.xml",
         "data/ir_cron.xml",
+        "data/shopee_webhook_status_data.xml",
         "views/misa_invoice_template_wizard_views.xml",
         "views/meinvoice_publish_wizard_views.xml",
         "views/shopee_wallet_import_wizard_views.xml",

@@ -222,8 +222,10 @@
                     <group string="Webhook Shopee → Auto-publish HĐĐT">
                         <group>
                             <field name="webhook_auto_publish_enabled"/>
-                            <field name="webhook_trigger_statuses"
-                                   invisible="not webhook_auto_publish_enabled"/>
+                            <field name="webhook_trigger_status_ids"
+                                   widget="many2many_tags"
+                                   invisible="not webhook_auto_publish_enabled"
+                                   options="{'no_create': True}"/>
                         </group>
                     </group>
                     <group>

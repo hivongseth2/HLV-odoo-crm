@@ -1,4 +1,5 @@
 from . import shopee_customer_map
+from . import shopee_webhook_status
 from . import webhook_queue
 from . import amis_callback_config
 from . import amis_callback_log

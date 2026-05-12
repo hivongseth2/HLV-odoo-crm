@@ -259,12 +259,6 @@ class AmisCallbackConfig(models.Model):
         help='Sau bao nhiêu giờ kể từ lần check cuối thì check lại trạng thái CQT. '
              'Mặc định 2 giờ.',
     )
-    meinvoice_auto_draft_on_confirm = fields.Boolean(
-        string='Tự động tạo HĐĐT nháp khi xác nhận đơn Shopee',
-        default=True,
-        help='Bật: khi xác nhận đơn hàng Shopee (có shopee_order_ref), '
-             'tự động tạo hóa đơn điện tử nháp meInvoice.',
-    )
     meinvoice_shopee_only = fields.Boolean(
         string='Chỉ phát hành HĐĐT cho đơn Shopee (meInvoice)',
         default=True,
@@ -285,20 +279,20 @@ class AmisCallbackConfig(models.Model):
         default=False,
         help='Bật: khi webhook Shopee cập nhật trạng thái đơn hàng vào một trong các '
              'trạng thái cấu hình bên dưới, hệ thống tự động enqueue job phát hành '
-             'HĐĐT meInvoice cho đơn đó.\n'
-             'Tắt: không làm gì khi nhận webhook.',
+             'HĐĐT meInvoice cho đơn đó.\nTắt: không làm gì khi nhận webhook.',
     )
-    webhook_trigger_statuses = fields.Char(
-        string='Trạng thái kích hoạt (phân cách dấu phẩy)',
-        default='COMPLETED,Hoàn thành',
-        help='Danh sách trạng thái Shopee (shopee_order_status) sẽ kích hoạt phát hành HĐĐT. '
-             'Phân cách bằng dấu phẩy. VD: COMPLETED,Hoàn thành,TO_CONFIRM_RECEIVE',
+    webhook_trigger_status_ids = fields.Many2many(
+        'amis.shopee.webhook.status',
+        'amis_config_webhook_status_rel',
+        'config_id', 'status_id',
+        string='Trạng thái kích hoạt',
+        help='Chọn các trạng thái Shopee sẽ kích hoạt phát hành HĐĐT tự động.'
+             ' Thường chọn: Hoàn thành, Đã nhận hàng.',
     )
 
     def get_webhook_trigger_statuses(self):
-        """Trả về set các trạng thái kích hoạt (đã strip + loại bỏ rỗng)."""
-        raw = self.webhook_trigger_statuses or ''
-        return {s.strip() for s in raw.split(',') if s.strip()}
+        """Trả về set tên trạng thái kích hoạt."""
+        return set(self.webhook_trigger_status_ids.mapped('name'))
 
     # Mapping cứng: shopee.shop.identifier → account_object_name MISA
     SHOPEE_SHOP_ACCOUNT_MAP = {
