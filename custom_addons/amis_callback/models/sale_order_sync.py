@@ -144,7 +144,7 @@ class SaleOrderAmisSync(models.Model):
             return
 
         config = self.env['amis.callback.config'].sudo().search([], limit=1, order='id asc')
-        if not config or not config.meinvoice_enabled:
+        if not config:
             return
         if not config.meinvoice_auto_draft_on_confirm:
             return
