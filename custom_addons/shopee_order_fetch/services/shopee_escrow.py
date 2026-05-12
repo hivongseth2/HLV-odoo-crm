@@ -178,13 +178,11 @@ def apply_escrow_voucher(so, escrow_data):
     :param escrow_data: dict — giá trị của key 'response' từ Shopee escrow API
     """
     order_income = escrow_data.get('order_income', {})
-    seller_voucher = order_income.get('voucher_from_seller', 0)
-
-    if not seller_voucher:
-        buyer_payment = escrow_data.get('buyer_payment_info', {})
-        seller_voucher = abs(buyer_payment.get('seller_voucher', 0))
-
-    total_voucher = abs(seller_voucher)
+    # Chỉ dùng voucher_from_seller từ order_income — đây là voucher do chính seller tạo
+    # trên Shopee Seller Center → là chiết khấu thương mại hợp lệ trên HĐGTGT.
+    # buyer_payment_info.seller_voucher là khoản Shopee thu của seller để tài trợ
+    # voucher platform (phí marketing) → KHÔNG phải chiết khấu, không đưa vào discount.
+    total_voucher = abs(order_income.get('voucher_from_seller', 0) or 0)
     if total_voucher <= 0:
         return
 
