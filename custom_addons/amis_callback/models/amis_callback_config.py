@@ -243,9 +243,24 @@ class AmisCallbackConfig(models.Model):
     )
     meinvoice_auto_draft_on_confirm = fields.Boolean(
         string='Tự động tạo HĐĐT nháp khi xác nhận đơn Shopee',
-        default=True,
-        help='Bật: khi xác nhận đơn hàng Shopee (có shopee_order_ref), '
-             'tự động tạo hóa đơn điện tử nháp meInvoice.',
+        default=False,
+        help='(Cũ) Tạo hóa đơn nháp ngay khi xác nhận SO. '
+             'Khuyến nghị: dùng "Bước phiếu kho kích hoạt" thay thế.',
+    )
+    meinvoice_draft_trigger_step = fields.Selection(
+        [
+            ('confirm', 'Khi xác nhận SO'),
+            ('pick', 'Khi hoàn thành bước Pick'),
+            ('pack', 'Khi hoàn thành bước Pack'),
+            ('out', 'Khi hoàn thành bước Out (xuất kho)'),
+        ],
+        string='Bước tạo HĐĐT nháp tự động',
+        default='out',
+        help='Chọn bước nào trong quy trình kho sẽ kích hoạt tạo hóa đơn nháp meInvoice.\n'
+             '• Xác nhận SO: tạo ngay sau khi bấm Xác nhận (hành vi cũ).\n'
+             '• Pick: khi phiếu PICK được validate.\n'
+             '• Pack: khi phiếu PACK được validate.\n'
+             '• Out (xuất kho): khi phiếu OUT/WH/OUT được validate — khuyến nghị.',
     )
     meinvoice_auto_check_status = fields.Boolean(
         string='Tự động kiểm tra trạng thái CQT (meInvoice)',

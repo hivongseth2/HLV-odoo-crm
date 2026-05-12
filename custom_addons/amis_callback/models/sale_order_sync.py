@@ -128,11 +128,15 @@ class SaleOrderAmisSync(models.Model):
             order.amis_draft_invoice_count = len(order.amis_draft_invoice_ids)
 
     def action_confirm(self):
-        """Override: sau khi xác nhận, tự động tạo HĐ nháp meInvoice cho đơn Shopee."""
+        """Override: sau khi xác nhận, tạo HĐ nháp meInvoice nếu config chọn bước 'confirm'."""
         res = super().action_confirm()
         for order in self:
             if order.state in ('sale', 'done'):
-                order._auto_create_shopee_meinvoice_draft()
+                config = self.env['amis.callback.config'].sudo().search([], limit=1)
+                if config and config.meinvoice_auto_draft_on_confirm and (
+                    config.meinvoice_draft_trigger_step or 'out'
+                ) == 'confirm':
+                    order._auto_create_shopee_meinvoice_draft()
         return res
 
     def _auto_create_shopee_meinvoice_draft(self):
