@@ -247,9 +247,9 @@ class ShopeeWalletImportWizard(models.TransientModel):
                 uom_name = line.product_uom.name if line.product_uom else ''
                 qty = line.product_uom_qty
                 price = line.price_unit
-                subtotal = line.price_subtotal
+                subtotal = line.price_total # lấy ở cột bao gồm thuế 
                 discount_pct = line.discount or 0
-                discount_amt = round(subtotal * discount_pct / 100, 0) if discount_pct else 0
+                discount_amt = round(price * discount_pct / 100, 0) if discount_pct else 0
 
                 # Thuế GTGT
                 vat_rate = 0
@@ -275,7 +275,7 @@ class ShopeeWalletImportWizard(models.TransientModel):
                 row[12] = inv_date                  # Ngày hóa đơn
                 row[13] = customer_code             # Mã khách hàng (từ map)
                 row[14] = customer_name             # Tên khách hàng (từ map)
-                row[15] = ''                        # Địa chỉ (để trống)
+                row[15] = 'Khách hàng không cung cấp thông tin'                        # Địa chỉ (để trống)
                 row[17] = ''                    # Đơn vị giao đại lý
                 row[18] = ''                    # Người nộp
                 row[19] = ''                    # Nộp vào TK
