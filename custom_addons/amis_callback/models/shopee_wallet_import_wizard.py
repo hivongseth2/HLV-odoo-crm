@@ -238,7 +238,7 @@ class ShopeeWalletImportWizard(models.TransientModel):
 
             # ── Tên/mã khách hàng từ map theo shop ────────────────────────
             cust_info = customer_map.get(shop_identifier, {})
-            customer_name = cust_info.get('name', '') or shop_name or ''
+            customer_name = cust_info.get('name', '') or shop_name or 'Khách hàng không cung cấp thông tin'
             customer_code = cust_info.get('code', '')
 
             # ── Thông tin đơn xuất (picking) ──────────────────────────────
@@ -286,8 +286,9 @@ class ShopeeWalletImportWizard(models.TransientModel):
                     # Xuất dòng đầu: sản phẩm cha với giá gốc
                     row = [''] * len(MISA_COLUMNS)
                     row[0] = 'Bán hàng hóa trong nước'
-                    row[1] = 'TM/CK'
+                    row[1] = 'Chưa thu tiền'
                     row[2] = 'Có'
+                    row[3] = 'Không' # Lập kèm hóa đơn
                     row[4] = 'Chưa lập'
                     row[5] = today_str
                     row[6] = today_str
@@ -329,9 +330,11 @@ class ShopeeWalletImportWizard(models.TransientModel):
                         comp_uom = bom_line.product_uom_id.name if bom_line.product_uom_id else ''
                         comp_row = [''] * len(MISA_COLUMNS)
                         comp_row[0] = 'Bán hàng hóa trong nước'
-                        comp_row[1] = 'TM/CK'
+                        comp_row[1] = 'Chưa thu tiền'
                         comp_row[2] = 'Có'
-                        comp_row[4] = da_lap_hd
+                        comp_row[3] = 'Không'                         # Lập kèm hóa đơn
+                        # comp_row[4] = da_lap_hd
+                        comp_row[4] =  "Chưa lập"                # Đã lập hóa đơn
                         comp_row[5] = today_str
                         comp_row[6] = today_str
                         comp_row[7] = so_ref
@@ -368,7 +371,8 @@ class ShopeeWalletImportWizard(models.TransientModel):
                     row[1] = 'Chưa thu tiền'                    # Phương thức thanh toán
                     row[2] = 'Có'                       # Kiêm phiếu xuất kho
                     row[3] = 'Không'                         # Lập kèm hóa đơn
-                    row[4] = da_lap_hd                  # Đã lập hóa đơn
+                    # row[4] = da_lap_hd                  # Đã lập hóa đơn
+                    row[4] =  "Chưa lập"                # Đã lập hóa đơn
                     row[5] = today_str                  # Ngày hạch toán (ngày hiện tại)
                     row[6] = today_str                  # Ngày chứng từ (ngày hiện tại)
                     row[7] = so_ref                     # Số chứng từ (VD: BH12052026SP)
