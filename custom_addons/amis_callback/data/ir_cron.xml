@@ -31,4 +31,14 @@ if records:
         <field name="interval_type">hours</field>
         <field name="active">True</field>
     </record>
+
+    <record id="ir_cron_amis_webhook_queue" model="ir.cron">
+        <field name="name">meInvoice: Xử lý hàng đợi Webhook Shopee → Phát hành HĐĐT</field>
+        <field name="model_id" ref="model_amis_webhook_queue"/>
+        <field name="state">code</field>
+        <field name="code">model._process_pending()</field>
+        <field name="interval_number">2</field>
+        <field name="interval_type">minutes</field>
+        <field name="active">True</field>
+    </record>
 </odoo>

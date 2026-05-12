@@ -19,3 +19,5 @@ access_shopee_wallet_import_wizard,shopee.wallet.import.wizard accountant,model_
 access_shopee_wallet_import_wizard_manager,shopee.wallet.import.wizard manager,model_shopee_wallet_import_wizard,amis_callback.group_meinvoice_manager,1,1,1,1
 access_amis_shopee_customer_map_manager,amis.shopee.customer.map manager,model_amis_shopee_customer_map,amis_callback.group_meinvoice_manager,1,1,1,1
 access_amis_shopee_customer_map_accountant,amis.shopee.customer.map accountant,model_amis_shopee_customer_map,amis_callback.group_meinvoice_accountant,1,1,0,0
+access_amis_webhook_queue_manager,amis.webhook.queue manager,model_amis_webhook_queue,amis_callback.group_meinvoice_manager,1,1,1,1
+access_amis_webhook_queue_accountant,amis.webhook.queue accountant,model_amis_webhook_queue,amis_callback.group_meinvoice_accountant,1,1,0,0
