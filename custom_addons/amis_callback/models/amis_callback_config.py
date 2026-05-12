@@ -118,6 +118,14 @@ class AmisCallbackConfig(models.Model):
         string='MISA Account Object Name - Fallback (Test)',
     )
 
+    # ── Map Shop Shopee → Tên khách hàng MISA (dùng khi xuất Phiếu Bán Hàng) ──
+    shopee_customer_map_ids = fields.One2many(
+        'amis.shopee.customer.map',
+        'config_id',
+        string='Map khách hàng Shopee',
+        help='Ánh xạ shop_identifier → tên/mã khách hàng MISA dùng cho xuất Phiếu Bán Hàng.',
+    )
+
     # ── Cấu hình sinh hóa đơn VAT kèm SAInvoice ─────────────────────────────────
     sa_invoice_include_vat = fields.Boolean(
         string='Sinh hóa đơn VAT kèm SAInvoice',
