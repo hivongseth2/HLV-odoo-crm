@@ -248,8 +248,6 @@ class ShopeeWalletImportWizard(models.TransientModel):
                 qty = line.product_uom_qty
                 price = line.price_unit
                 subtotal = line.price_total # lấy ở cột bao gồm thuế 
-                discount_pct = line.discount or 0
-                discount_amt = round(price * discount_pct / 100, 0) if discount_pct else 0
 
                 # Thuế GTGT
                 vat_rate = 0
@@ -257,7 +255,11 @@ class ShopeeWalletImportWizard(models.TransientModel):
                     if tax.amount_type == 'percent' and tax.amount > 0:
                         vat_rate = tax.amount
                         break
-                vat_amount = round(subtotal * vat_rate / 100, 0) if vat_rate else 0
+                    
+                discount_pct = line.discount or 0
+                # discount_amt = round(price * discount_pct / 100, 2) if discount_pct else 0
+                discount_amt = round(price * discount_pct / (100 + vat_rate), 2) if discount_pct else 0
+                vat_amount = round(subtotal * vat_rate / 100, 2) if vat_rate else 0
 
                 row = [''] * len(MISA_COLUMNS)
                 row[0] = 'Bán hàng hóa trong nước'  # Hình thức bán hàng
