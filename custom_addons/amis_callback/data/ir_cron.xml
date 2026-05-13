@@ -9,7 +9,7 @@ if records:
     records.action_sync_catalog_unmapped_only()</field>
         <field name="interval_number">30</field>
         <field name="interval_type">minutes</field>
-        <field name="active">True</field>
+        <field name="active">False</field>
     </record>
 
     <record id="ir_cron_amis_sync_queue" model="ir.cron">
@@ -19,7 +19,7 @@ if records:
         <field name="code">model._process_pending()</field>
         <field name="interval_number">1</field>
         <field name="interval_type">minutes</field>
-        <field name="active">True</field>
+        <field name="active">False</field>
     </record>
 
     <record id="ir_cron_meinvoice_check_cqt_status" model="ir.cron">
