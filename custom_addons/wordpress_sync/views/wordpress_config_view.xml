@@ -39,12 +39,17 @@
                             <field name="cache_purge_url" placeholder="/wp-json/litespeed/v1/purge?type=product&amp;sku="/>
                             <field name="sync_log_days"/>
                             <field name="max_retry_attempts"/>
+                            <field name="retry_delay_seconds"/>
                             <field name="batch_size"/>
                             <field name="sync_delay"/>
                         </group>
                         <group>
                             <field name="last_sync_date" readonly="True"/>
                         </group>
+                    </group>
+
+                    <group string="Mẫu lỗi không retry">
+                        <field name="no_retry_patterns" nolabel="1" placeholder="Mỗi dòng 1 pattern (plain text hoặc regex)&#10;VD: Không tìm thấy product trên WordPress&#10;Product không có SKU"/>
                     </group>
                     
                     <separator string="Cài đặt tự động đồng bộ"/>
