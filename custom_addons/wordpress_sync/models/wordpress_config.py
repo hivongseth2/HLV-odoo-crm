@@ -65,6 +65,18 @@ class WordPressConfig(models.Model):
         help='Số lần thử lại khi gặp lỗi trước khi dừng hẳn'
     )
 
+    retry_delay_seconds = fields.Integer(
+        string='Thời gian chờ retry (giây)',
+        default=30,
+        help='Thời gian chờ giữa mỗi lần retry, tính theo giây. VD: 30 = chờ 30s, 60s, 90s... (tăng dần)'
+    )
+
+    no_retry_patterns = fields.Text(
+        string='Mẫu lỗi không retry (mỗi dòng 1 pattern)',
+        default='Không tìm thấy product trên WordPress\nProduct không có SKU',
+        help='Mỗi dòng là 1 chuỗi con hoặc regex. Nếu lỗi khớp với bất kỳ dòng nào → không retry, đánh dấu failed ngay.'
+    )
+
     batch_size = fields.Integer(
         string='Số lượng/Batch',
         default=50,
