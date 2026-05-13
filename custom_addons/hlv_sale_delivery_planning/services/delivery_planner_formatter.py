@@ -467,6 +467,7 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             'x_studio_htgh': so.x_studio_htgh or '',
             'x_studio_delivery_type': so.x_studio_delivery_type or '',
             'x_studio_misa_saler_code': so.x_studio_misa_saler_code or '',
+            'x_studio_ghi_ch_odoo': so.x_studio_ghi_ch_odoo or '',
             'misa_order_date': so.x_studio_misa_order_date.strftime('%Y-%m-%d') if so.x_studio_misa_order_date else False,
             'tag_ids': [[t.id, t.name, t.color] for t in so.tag_ids] if so.tag_ids else [],
             'transfer_suggestions': transfer_suggestions,

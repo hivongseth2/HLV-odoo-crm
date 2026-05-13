@@ -746,6 +746,7 @@ function renderSOCard(o){
   if(o.commitment_date) h+='<small class="text-muted"><i class="fa fa-calendar"></i> '+fd(o.commitment_date)+'</small><br>';
   if(o.x_studio_delivery_type) h+='<small class="text-muted"><i class="fa fa-truck me-1"></i>'+esc(o.x_studio_delivery_type)+'</small><br>';
   if(o.x_studio_htgh) h+='<small class="text-muted"><i class="fa fa-info-circle me-1"></i>'+esc(o.x_studio_htgh)+'</small><br>';
+  if(o.x_studio_ghi_ch_odoo) h+='<small class="text-primary" style="font-size:.7rem"><i class="fa fa-pencil me-1"></i>'+esc(o.x_studio_ghi_ch_odoo)+'</small><br>';
   if(o.x_studio_misa_saler_code) h+='<small class="text-muted"><i class="fa fa-id-badge me-1"></i>NV: '+esc(o.x_studio_misa_saler_code)+'</small><br>';
   if(o.origin) h+='<small class="text-muted" style="font-size:.7rem"><i class="fa fa-sticky-note-o me-1 text-warning"></i><b>Ghi ch\u00fa:</b> '+esc(o.origin)+'</small><br>';
   if(o.misa_shipping_address) h+='<small class="text-muted" style="font-size:.7rem"><i class="fa fa-map-marker me-1 text-danger"></i>'+esc(o.misa_shipping_address)+'</small><br>';
@@ -995,6 +996,7 @@ function openDrawer(id){
     +(o.commitment_date?'<div><i class="fa fa-calendar text-muted me-2"></i><span class="text-muted">Hẹn giao: '+fd(o.commitment_date)+'</span></div>':'')
     +(o.x_studio_delivery_type?'<div><i class="fa fa-truck text-muted me-2"></i><span class="text-muted">'+esc(o.x_studio_delivery_type)+'</span></div>':'')
     +(o.x_studio_htgh?'<div><i class="fa fa-info-circle text-muted me-2"></i><span class="text-muted">HTGH: '+esc(o.x_studio_htgh)+'</span></div>':'')
+    +(o.x_studio_ghi_ch_odoo?'<div><i class="fa fa-pencil text-primary me-2"></i><span class="text-primary">Ghi Chú Odoo: '+esc(o.x_studio_ghi_ch_odoo)+'</span></div>':'')
     +(o.x_studio_misa_saler_code?'<div><i class="fa fa-id-badge text-muted me-2"></i><span class="text-muted">NV MISA: '+esc(o.x_studio_misa_saler_code)+'</span></div>':'')
     +(o.misa_shipping_address?'<div><i class="fa fa-map-marker text-muted me-2"></i><span class="text-muted">'+esc(o.misa_shipping_address)+'</span></div>':'')
     +(o._shipper_names&&o._shipper_names.length?'<div><i class="fa fa-motorcycle text-success me-2"></i><strong class="text-success">Tài xế: '+o._shipper_names.map(esc).join(', ')+'</strong></div>':'')
@@ -1826,7 +1828,7 @@ class SalePlanPublicController(http.Controller):
                 ('Tổng tiền', 15), ('Tình trạng kho', 18), ('Đóng gói', 18),
                 ('Tiến độ giao', 18), ('TT giao thực tế', 18), ('HTGH', 15),
                 ('Loại vận chuyển', 15), ('Địa chỉ giao', 30),
-                ('Đề xuất chuyển kho', 30), ('Tags', 20),
+                ('Ghi Chú Odoo', 30), ('Đề xuất chuyển kho', 30), ('Tags', 20),
             ]
 
             for col, (name, width) in enumerate(headers):
@@ -1859,6 +1861,7 @@ class SalePlanPublicController(http.Controller):
                 sheet.write(row_idx, col, order.get('x_studio_htgh', ''), cell_fmt); col += 1
                 sheet.write(row_idx, col, order.get('x_studio_delivery_type', ''), cell_fmt); col += 1
                 sheet.write(row_idx, col, order.get('misa_shipping_address', ''), cell_fmt); col += 1
+                sheet.write(row_idx, col, order.get('x_studio_ghi_ch_odoo', ''), cell_fmt); col += 1
                 suggestions = order.get('transfer_suggestions', [])
                 if suggestions:
                     parts = []
