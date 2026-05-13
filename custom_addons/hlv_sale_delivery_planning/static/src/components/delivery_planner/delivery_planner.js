@@ -2188,6 +2188,9 @@ export class DeliveryPlannerDashboard extends Component {
     }
 
     async saveGhiChu(so) {
+        // Guard against double-save: Enter triggers keydown→save→cancelGhiChuEdit,
+        // then the resulting blur fires save again with inlineEditGhiChu already ''.
+        if (this.state.inlineEditSOId !== so.id) return;
         const val = (this.state.inlineEditGhiChu || '').trim();
         if (val === (so.x_studio_ghi_ch_odoo || '')) {
             this.cancelGhiChuEdit();
