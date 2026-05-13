@@ -507,10 +507,11 @@
                             <i class="fa fa-paperclip"></i>
                         </button>
                         <textarea class="form-control form-control-sm" rows="1"
-                                  placeholder="Nhập tin nhắn..."
+                                  placeholder="Nhập tin nhắn... (Ctrl+V để dán ảnh)"
                                   t-att-value="state.drawerMessageText"
                                   t-on-input="(ev) => { this.state.drawerMessageText = ev.target.value; }"
                                   t-on-keydown="(ev) => this.onMessageKeydown(ev)"
+                                  t-on-paste="(ev) => this.onDrawerMessagePaste(ev)"
                                   style="resize:none;min-height:36px;"/>
                         <button class="btn btn-sm btn-primary px-3"
                                 t-on-click="() => this.sendDrawerMessage()"

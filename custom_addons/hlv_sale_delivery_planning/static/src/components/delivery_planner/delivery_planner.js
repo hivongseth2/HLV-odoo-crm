@@ -2618,6 +2618,40 @@ export class DeliveryPlannerDashboard extends Component {
         }
     }
 
+    async onDrawerMessagePaste(ev) {
+        const items = ev.clipboardData && ev.clipboardData.items;
+        if (!items) return;
+        const imageItems = Array.from(items).filter(it => it.type.startsWith('image/'));
+        if (!imageItems.length) return;
+        ev.preventDefault();
+        const maxFileSize = 20 * 1024 * 1024;
+        const nextFiles = [...this.state.drawerMessageFiles];
+        for (const item of imageItems) {
+            const file = item.getAsFile();
+            if (!file) continue;
+            if (file.size > maxFileSize) {
+                this.notification.add('Ảnh dán quá 20MB.', { type: 'warning' });
+                continue;
+            }
+            const extMap = { 'image/png': '.png', 'image/jpeg': '.jpg', 'image/gif': '.gif', 'image/webp': '.webp', 'image/bmp': '.bmp' };
+            const ext = extMap[file.type] || '.png';
+            const name = `paste_${Date.now()}${ext}`;
+            try {
+                const datas = await this._readFileAsBase64(file);
+                nextFiles.push({
+                    uid: `${Date.now()}_${Math.random().toString(36).slice(2)}`,
+                    name,
+                    mimetype: file.type,
+                    size: file.size || 0,
+                    datas,
+                });
+            } catch (e) {
+                this.notification.add('Không thể đọc ảnh dán.', { type: 'danger' });
+            }
+        }
+        this.state.drawerMessageFiles = nextFiles;
+    }
+
     triggerDrawerFilePicker() {
         const picker = document.getElementById('drawer-message-file-input');
         if (picker) {

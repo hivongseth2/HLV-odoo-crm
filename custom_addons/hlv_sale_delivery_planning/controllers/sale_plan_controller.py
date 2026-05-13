@@ -1064,6 +1064,26 @@ function openDrawer(id){
   $('dr-msg-files-input').addEventListener('change',onPublicFilesSelected);
   $('dr-msg-send').addEventListener('click',function(){sendPublicMessage();});
   $('dr-msg-input').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();sendPublicMessage();}});
+  $('dr-msg-input').addEventListener('paste',function(e){
+    var items=e.clipboardData&&e.clipboardData.items;
+    if(!items)return;
+    var imgs=Array.from(items).filter(function(it){return it.type.indexOf('image/')===0;});
+    if(!imgs.length)return;
+    e.preventDefault();
+    imgs.forEach(async function(item){
+      var file=item.getAsFile();
+      if(!file)return;
+      if((file.size||0)>20*1024*1024){alert('\u1ea2nh d\u00e1n qu\u00e1 20MB.');return;}
+      var extMap={'image/png':'.png','image/jpeg':'.jpg','image/gif':'.gif','image/webp':'.webp','image/bmp':'.bmp'};
+      var ext=extMap[file.type]||'.png';
+      var name='paste_'+Date.now()+ext;
+      try{
+        var datas=await readFileAsBase64(file);
+        _currentMsgFiles.push({name:name,mimetype:file.type,size:file.size||0,datas:datas});
+        renderPublicFileQueue();
+      }catch(err){alert('Kh\u00f4ng \u0111\u1ecdc \u0111\u01b0\u1ee3c \u1ea3nh d\u00e1n.');}
+    });
+  });
   _currentMsgFiles=[];
   renderPublicFileQueue();
   loadMessages(o.id);
