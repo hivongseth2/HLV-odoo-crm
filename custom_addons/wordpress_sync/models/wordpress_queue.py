@@ -48,6 +48,10 @@ class WordPressSyncQueue(models.Model):
         # Get retry limit from default config
         config = self.env['wordpress.config'].search([('active', '=', True)], limit=1)
         max_retries = config.max_retry_attempts if config else 3
+        retry_delay_seconds = config.retry_delay_seconds if config else 30
+        # Lấy danh sách pattern không retry từ config (mỗi dòng 1 pattern)
+        raw_patterns = (config.no_retry_patterns or '') if config else ''
+        no_retry_patterns = [p.strip() for p in raw_patterns.splitlines() if p.strip()]
 
         # Process jobs one by one with locking
         for _ in range(limit):
@@ -114,17 +118,30 @@ class WordPressSyncQueue(models.Model):
                 import traceback
                 error_msg = str(e)
                 _logger.error(f"Queue Job Failed {job.id}: {error_msg}")
-                
-                # Schedule retry
-                retry_delay = 5 * job.attempt_count # 0, 5, 10 minutes
-                next_exec = fields.Datetime.now() + timedelta(minutes=retry_delay)
-                
-                job.write({
-                    'status': 'failed',
-                    'last_error': error_msg,
-                    'log': f"{job.log or ''}\nFailed Attempt {job.attempt_count}: {error_msg}",
-                    'next_execution': next_exec
-                })
+
+                # Lỗi khớp pattern no-retry → không cần retry, đánh dấu failed vĩnh viễn
+                import re
+                is_no_retry = any(
+                    re.search(pattern, error_msg)
+                    for pattern in no_retry_patterns
+                )
+                if is_no_retry:
+                    job.write({
+                        'status': 'failed',
+                        'last_error': error_msg,
+                        'log': f"{job.log or ''}\nFailed (no retry - SKU not on WP): {error_msg}",
+                        'attempt_count': max_retries,  # Đặt = max để cron không pick lại
+                    })
+                else:
+                    # Retry sau: delay tăng dần (retry_delay_seconds * attempt_count)
+                    retry_delay = retry_delay_seconds * job.attempt_count
+                    next_exec = fields.Datetime.now() + timedelta(seconds=retry_delay)
+                    job.write({
+                        'status': 'failed',
+                        'last_error': error_msg,
+                        'log': f"{job.log or ''}\nFailed Attempt {job.attempt_count}: {error_msg}",
+                        'next_execution': next_exec
+                    })
                 
             # Commit after each job
             self.env.cr.commit()
@@ -144,7 +161,8 @@ class WordPressSyncQueue(models.Model):
         vals = {
             'status': 'pending', 
             'next_execution': fields.Datetime.now(),
-            'priority': max(existing.priority if existing else 0, priority)
+            'priority': max(existing.priority if existing else 0, priority),
+            'attempt_count': 0,  # Reset retry count khi user chủ động sync lại
         }
         
         if old_value: vals['old_value'] = old_value

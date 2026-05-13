@@ -342,7 +342,7 @@ class PriceSyncService:
         result['sale_price'] = sale_price
 
         # Validate regular price
-        if regular_price <= 0:
+        if regular_price < 0:
             result['message'] = f'Giá regular không hợp lệ: {regular_price}'
             return result
 
