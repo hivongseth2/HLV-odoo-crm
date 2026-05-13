@@ -93,6 +93,57 @@
                         </div>
                     </div>
 
+                    <!-- Ghi Chú Odoo: inline editable -->
+                    <div class="col-md-12 mb-2" t-on-click.stop="">
+                        <h6 class="text-muted text-uppercase small mb-2">
+                            <i class="fa fa-pencil me-1 text-primary"></i> Ghi Chú Odoo
+                        </h6>
+                        <t t-if="state.inlineEditSOId === state.selectedOrder.id">
+                            <div class="d-flex gap-2 align-items-start">
+                                <textarea class="form-control form-control-sm"
+                                          rows="2"
+                                          style="font-size:0.85rem; resize:vertical;"
+                                          t-att-value="state.inlineEditGhiChu"
+                                          t-on-input="(ev) => { this.state.inlineEditGhiChu = ev.target.value; }"
+                                          t-on-keydown="(ev) => this.onGhiChuKeydown(ev, state.selectedOrder)"
+                                          t-on-click.stop=""
+                                          placeholder="Nhập ghi chú Odoo..."/>
+                                <div class="d-flex flex-column gap-1">
+                                    <button class="btn btn-sm btn-success py-0 px-2"
+                                            t-on-click.stop="() => this.saveGhiChu(state.selectedOrder)"
+                                            title="Lưu">
+                                        <i class="fa fa-check"/>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-secondary py-0 px-2"
+                                            t-on-click.stop="() => this.cancelGhiChuEdit()"
+                                            title="Huỷ">
+                                        <i class="fa fa-times"/>
+                                    </button>
+                                </div>
+                            </div>
+                        </t>
+                        <t t-else="">
+                            <div class="d-flex align-items-start gap-2">
+                                <div class="text-primary small flex-grow-1"
+                                     style="min-height:24px; cursor:pointer;"
+                                     t-on-click.stop="(ev) => this.startGhiChuEdit(ev, state.selectedOrder)"
+                                     title="Bấm để chỉnh sửa">
+                                    <t t-if="state.selectedOrder.x_studio_ghi_ch_odoo">
+                                        <t t-esc="state.selectedOrder.x_studio_ghi_ch_odoo"/>
+                                    </t>
+                                    <t t-else="">
+                                        <span class="text-muted fst-italic">Bấm để thêm ghi chú Odoo...</span>
+                                    </t>
+                                </div>
+                                <button class="btn btn-sm btn-link p-0 text-muted"
+                                        t-on-click.stop="(ev) => this.startGhiChuEdit(ev, state.selectedOrder)"
+                                        title="Sửa">
+                                    <i class="fa fa-pencil"/>
+                                </button>
+                            </div>
+                        </t>
+                    </div>
+
                     <div class="col-md-6 mb-2" t-if="state.selectedOrder.origin">
                         <h6 class="text-muted text-uppercase small mb-2">Ghi Chú</h6>
                         <div class="text-warning fw-bold  small">
@@ -100,15 +151,51 @@
                             <t t-esc="state.selectedOrder.origin"/>
                         </div>
                     </div>
-                    <div class="col-md-12 mb-0" t-if="state.selectedOrder.tag_ids and state.selectedOrder.tag_ids.length">
+
+                    <!-- Tags: editable -->
+                    <div class="col-md-12 mb-0" t-on-click.stop="">
                         <h6 class="text-muted text-uppercase small mb-2">Tags</h6>
-                        <div class="d-flex flex-wrap gap-1">
-                            <t t-foreach="state.selectedOrder.tag_ids" t-as="tag" t-key="tag[0]">
-                                <span class="badge" style="font-size:0.75rem;"
+                        <div class="d-flex flex-wrap gap-1 align-items-center">
+                            <t t-foreach="state.selectedOrder.tag_ids or []" t-as="tag" t-key="tag[0]">
+                                <span class="badge d-inline-flex align-items-center gap-1"
+                                      style="font-size:0.75rem;"
                                       t-att-style="'font-size:0.75rem;background-color:' + this.getTagColor(tag[2]) + ';color:' + this.getTagTextColor(tag[2])">
                                     <i class="fa fa-tag me-1"></i><t t-esc="tag[1]"/>
+                                    <i class="fa fa-times ms-1 cursor-pointer"
+                                       style="opacity:0.75;"
+                                       t-on-click.stop="(ev) => this.removeTagFromSO(ev, state.selectedOrder, tag[0])"
+                                       title="Xóa tag"/>
                                 </span>
                             </t>
+                            <button class="btn btn-sm btn-outline-secondary py-0 px-2"
+                                    style="font-size:0.72rem;"
+                                    title="Thêm tag"
+                                    t-on-click.stop="(ev) => this.openTagPicker(ev, state.selectedOrder)">
+                                <i class="fa fa-plus me-1"/>Thêm tag
+                            </button>
+                        </div>
+                        <!-- Tag picker dropdown (fixed) -->
+                        <div t-if="state.tagPickerSOId === state.selectedOrder.id and state.tagPickerPos"
+                             class="bg-white border rounded shadow-lg"
+                             style="position:fixed; z-index:2100; min-width:200px; max-height:320px; overflow-y:auto;"
+                             t-att-style="'position:fixed; z-index:2100; min-width:200px; max-height:320px; overflow-y:auto; top:' + state.tagPickerPos.top + 'px; left:' + state.tagPickerPos.left + 'px;'"
+                             t-on-click.stop="">
+                            <div class="px-2 py-1 bg-light border-bottom small fw-bold text-muted d-flex justify-content-between align-items-center">
+                                <span><i class="fa fa-tag me-1"></i> Chọn tag</span>
+                                <i class="fa fa-times cursor-pointer" t-on-click.stop="() => this.closeTagPicker()"/>
+                            </div>
+                            <t t-foreach="state.tags" t-as="avTag" t-key="avTag.id">
+                                <div class="px-2 py-2 d-flex align-items-center gap-2 cursor-pointer"
+                                     style="border-bottom:1px solid #f3f3f3;"
+                                     t-on-click.stop="(ev) => this.toggleTagOnSO(ev, state.selectedOrder, avTag.id)">
+                                    <i t-att-class="this.isTagOnSO(state.selectedOrder, avTag.id) ? 'fa fa-check-square-o text-success' : 'fa fa-square-o text-muted'"/>
+                                    <span class="badge"
+                                          t-att-style="'background-color:' + this.getTagColor(avTag.color || 0) + ';color:' + this.getTagTextColor(avTag.color || 0) + ';font-size:0.72rem;'">
+                                        <i class="fa fa-tag me-1"></i><t t-esc="avTag.name"/>
+                                    </span>
+                                </div>
+                            </t>
+                            <div t-if="!state.tags.length" class="px-2 py-2 text-muted small">Không có tag</div>
                         </div>
                     </div>
                 </div>

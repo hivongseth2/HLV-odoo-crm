@@ -150,6 +150,14 @@ export class DeliveryPlannerDashboard extends Component {
             printMenuPos: null,       // { top, right } — vị trí fixed của dropdown
             selectedPrintMenuPos: null, // vị trí dropdown in cho các SO đã chọn
 
+            // Inline editing: Ghi Chú Odoo
+            inlineEditSOId: null,     // soId đang edit ghi chu
+            inlineEditGhiChu: '',     // giá trị đang nhập
+
+            // Inline editing: Tag picker
+            tagPickerSOId: null,      // soId đang mở tag picker
+            tagPickerPos: null,       // { top, right } — vị trí fixed dropdown
+
             // Drawer messages
             drawerMessages: [],
             drawerMessagesLoading: false,
@@ -2165,6 +2173,109 @@ export class DeliveryPlannerDashboard extends Component {
         this.state.currentPage = 1;
         this.state.selectedSOIds = new Set();
         await this.fetchData();
+    }
+
+    // ── Inline edit: Ghi Chú Odoo ──────────────────────────────────────
+    startGhiChuEdit(ev, so) {
+        ev.stopPropagation();
+        this.state.inlineEditSOId = so.id;
+        this.state.inlineEditGhiChu = so.x_studio_ghi_ch_odoo || '';
+    }
+
+    cancelGhiChuEdit() {
+        this.state.inlineEditSOId = null;
+        this.state.inlineEditGhiChu = '';
+    }
+
+    async saveGhiChu(so) {
+        const val = (this.state.inlineEditGhiChu || '').trim();
+        if (val === (so.x_studio_ghi_ch_odoo || '')) {
+            this.cancelGhiChuEdit();
+            return;
+        }
+        try {
+            await this.orm.write('sale.order', [so.id], { x_studio_ghi_ch_odoo: val });
+            so.x_studio_ghi_ch_odoo = val;
+            // sync drawer if open
+            if (this.state.selectedOrder && this.state.selectedOrder.id === so.id) {
+                this.state.selectedOrder.x_studio_ghi_ch_odoo = val;
+            }
+            this.notification.add('Đã lưu Ghi Chú Odoo', { type: 'success', sticky: false });
+        } catch (e) {
+            this.notification.add('Lỗi khi lưu: ' + e.message, { type: 'danger' });
+        }
+        this.cancelGhiChuEdit();
+    }
+
+    onGhiChuKeydown(ev, so) {
+        if (ev.key === 'Enter' && !ev.shiftKey) {
+            ev.preventDefault();
+            this.saveGhiChu(so);
+        } else if (ev.key === 'Escape') {
+            this.cancelGhiChuEdit();
+        }
+    }
+
+    // ── Inline edit: Tag picker ────────────────────────────────────────
+    openTagPicker(ev, so) {
+        ev.stopPropagation();
+        if (this.state.tagPickerSOId === so.id) {
+            this.state.tagPickerSOId = null;
+            this.state.tagPickerPos = null;
+            return;
+        }
+        const rect = ev.currentTarget.getBoundingClientRect();
+        this.state.tagPickerSOId = so.id;
+        this.state.tagPickerPos = {
+            top: rect.bottom + window.scrollY + 4,
+            left: rect.left + window.scrollX,
+        };
+    }
+
+    closeTagPicker() {
+        this.state.tagPickerSOId = null;
+        this.state.tagPickerPos = null;
+    }
+
+    isTagOnSO(so, tagId) {
+        return (so.tag_ids || []).some(t => t[0] === tagId);
+    }
+
+    async toggleTagOnSO(ev, so, tagId) {
+        ev.stopPropagation();
+        const has = this.isTagOnSO(so, tagId);
+        const tag = this.state.tags.find(t => t.id === tagId);
+        if (!tag) return;
+        let newTagIds;
+        if (has) {
+            newTagIds = (so.tag_ids || []).filter(t => t[0] !== tagId);
+        } else {
+            newTagIds = [...(so.tag_ids || []), [tagId, tag.name, tag.color || 0]];
+        }
+        try {
+            const ids = newTagIds.map(t => t[0]);
+            await this.orm.write('sale.order', [so.id], { tag_ids: [[6, 0, ids]] });
+            so.tag_ids = newTagIds;
+            if (this.state.selectedOrder && this.state.selectedOrder.id === so.id) {
+                this.state.selectedOrder.tag_ids = newTagIds;
+            }
+        } catch (e) {
+            this.notification.add('Lỗi khi cập nhật tag: ' + e.message, { type: 'danger' });
+        }
+    }
+
+    async removeTagFromSO(ev, so, tagId) {
+        ev.stopPropagation();
+        const newTagIds = (so.tag_ids || []).filter(t => t[0] !== tagId);
+        try {
+            await this.orm.write('sale.order', [so.id], { tag_ids: [[6, 0, newTagIds.map(t => t[0])]] });
+            so.tag_ids = newTagIds;
+            if (this.state.selectedOrder && this.state.selectedOrder.id === so.id) {
+                this.state.selectedOrder.tag_ids = newTagIds;
+            }
+        } catch (e) {
+            this.notification.add('Lỗi khi xóa tag: ' + e.message, { type: 'danger' });
+        }
     }
 
     // Odoo crm.tag color integer → background color
