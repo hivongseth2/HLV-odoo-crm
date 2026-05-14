@@ -240,10 +240,11 @@
                                     <t t-else="">0</t>
                                 </td>
                                 <t t-set="eff_stock" t-value="(line.qty_warehouse_free || 0) + (line.qty_reserved_here || 0)"/>
-                                <td t-att-class="eff_stock > 0 ? 'text-success fw-bold' : 'text-danger'">
-                                    <t t-esc="this.formatQty(line.qty_warehouse_free || 0)"/>
+                                <td t-att-class="eff_stock > 0 ? 'text-success fw-bold' : 'text-danger'"
+                                    t-att-title="line.qty_reserved_here > 0 ? ('Tự do: ' + this.formatQty(line.qty_warehouse_free || 0) + '  |  Giữ cho đơn: ' + this.formatQty(line.qty_reserved_here)) : ''">
+                                    <t t-esc="this.formatQty(eff_stock)"/>
                                     <t t-if="line.qty_reserved_here > 0">
-                                        <div class="text-info fw-normal" style="font-size:0.7rem; line-height:1.1;" title="Đang giữ cho đơn này (PICK assigned)">
+                                        <div class="text-info fw-normal" style="font-size:0.7rem; line-height:1.1;">
                                             <i class="fa fa-lock me-1"/>
                                             <t t-esc="this.formatQty(line.qty_reserved_here)"/>
                                         </div>
