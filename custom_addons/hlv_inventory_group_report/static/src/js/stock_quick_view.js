@@ -112,6 +112,14 @@ export class StockQuickView extends Component {
         this.state.whOpen = !this.state.whOpen;
     }
 
+    closeDropdown() {
+        this.state.whOpen = false;
+    }
+
+    getColTotal(index) {
+        return this.state.lines.reduce((s, l) => s + (l.col_qtys[index] || 0), 0);
+    }
+
     async exportExcel() {
         if (!this.state.groupId) return;
         const attId = await this.orm.call(
