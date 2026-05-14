@@ -622,3 +622,65 @@ class DeliveryPlannerController(http.Controller):
         except Exception as e:
             _logger.error("finish_packing error: %s", e, exc_info=True)
             return {'success': False, 'message': str(e)}
+
+    @http.route('/hlv_sale_delivery_planning/packer_stats', type='json', auth='user', methods=['POST'])
+    def packer_stats(self, **kwargs):
+        """
+        Thống kê đóng hàng theo packer trong ngày hôm nay.
+        Trả về: đang đóng, đã xong hôm nay, thời gian trung bình.
+        """
+        try:
+            today_start = fields.Datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            Pick = request.env['stock.picking'].sudo()
+
+            packing = Pick.search_read(
+                [('x_packing_status', '=', 'packing'), ('x_packer_id', '!=', False)],
+                ['id', 'name', 'x_packer_id', 'x_packing_print_time'],
+            )
+            packed_today = Pick.search_read(
+                [
+                    ('x_packing_status', '=', 'packed'),
+                    ('x_packer_id', '!=', False),
+                    ('x_packing_finish_time', '>=', today_start),
+                ],
+                ['id', 'name', 'x_packer_id', 'x_packing_print_time', 'x_packing_finish_time'],
+            )
+
+            packer_map = {}
+
+            for p in packing:
+                uid, uname = p['x_packer_id']
+                if uid not in packer_map:
+                    packer_map[uid] = {'id': uid, 'name': uname, 'packing': [], 'packed_today': [], 'avg_minutes': None}
+                packer_map[uid]['packing'].append({
+                    'picking_id': p['id'],
+                    'picking_name': p['name'],
+                    'print_time': p['x_packing_print_time'].strftime('%H:%M') if p['x_packing_print_time'] else None,
+                })
+
+            durations = {}
+            for p in packed_today:
+                uid, uname = p['x_packer_id']
+                if uid not in packer_map:
+                    packer_map[uid] = {'id': uid, 'name': uname, 'packing': [], 'packed_today': [], 'avg_minutes': None}
+                finish = p['x_packing_finish_time']
+                start = p['x_packing_print_time']
+                duration_min = round((finish - start).total_seconds() / 60) if finish and start else None
+                packer_map[uid]['packed_today'].append({
+                    'picking_id': p['id'],
+                    'picking_name': p['name'],
+                    'finish_time': finish.strftime('%H:%M') if finish else None,
+                    'duration_min': duration_min,
+                })
+                if duration_min is not None:
+                    durations.setdefault(uid, []).append(duration_min)
+
+            for uid, mins in durations.items():
+                if mins and uid in packer_map:
+                    packer_map[uid]['avg_minutes'] = round(sum(mins) / len(mins))
+
+            packers = sorted(packer_map.values(), key=lambda x: (-len(x['packing']), x['name']))
+            return {'success': True, 'packers': packers}
+        except Exception as e:
+            _logger.error("packer_stats error: %s", e, exc_info=True)
+            return {'success': False, 'message': str(e)}

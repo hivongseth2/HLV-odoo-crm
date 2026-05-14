@@ -8,7 +8,7 @@ _PICK_NOTIFY_FIELDS = {
     'state', 'x_printed', 'carrier_id', 'carrier_tracking_ref',
     'scheduled_date', 'date_done', 'x_bien_ban_printed',
     'shipper_received', 'shipper_returned', 'shipper_user_id', 'shipper_received_by',
-    'x_packer_id', 'x_packing_status', 'x_packing_print_time',
+    'x_packer_id', 'x_packing_status', 'x_packing_print_time', 'x_bien_ban_print_time',
 }
 
 
@@ -27,6 +27,12 @@ class StockPicking(models.Model):
         default=False,
         copy=False,
         help='Đánh dấu tự động khi in các report như: biên bản giao nhận/bàn giao, BBGN, BBBG, PXBH, phiếu xuất, phiếu bàn giao... cho phiếu này.',
+    )
+
+    x_bien_ban_print_time = fields.Datetime(
+        string='Thời gian in biên bản',
+        copy=False,
+        help='Thời điểm in biên bản lần đầu tiên cho phiếu này.',
     )
 
     x_packer_id = fields.Many2one(
@@ -64,16 +70,22 @@ class StockPicking(models.Model):
 
     def _action_done(self):
         res = super()._action_done()
-        # Auto-complete packing status khi validate phiếu PACK đang đóng
+        now = fields.Datetime.now()
+        # Khi validate PACK picking → tự động set PICK upstream thành 'packed'
         pack_pickings = self.filtered(
-            lambda p: p.x_packing_status == 'packing'
-            and 'PACK' in (p.picking_type_id.sequence_code or '').upper()
+            lambda p: 'PACK' in (p.picking_type_id.sequence_code or '').upper()
         )
         if pack_pickings:
-            pack_pickings.write({
-                'x_packing_status': 'packed',
-                'x_packing_finish_time': fields.Datetime.now(),
-            })
+            for pack in pack_pickings:
+                origin_pick_pickings = pack.move_ids.mapped('move_orig_ids.picking_id').filtered(
+                    lambda p: 'PICK' in (p.picking_type_id.sequence_code or '').upper()
+                    and p.x_packing_status == 'packing'
+                )
+                if origin_pick_pickings:
+                    origin_pick_pickings.write({
+                        'x_packing_status': 'packed',
+                        'x_packing_finish_time': now,
+                    })
         self._notify_delivery_planner_changed()
         return res
 

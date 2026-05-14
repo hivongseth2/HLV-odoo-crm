@@ -152,14 +152,22 @@ export class DeliveryPlannerDashboard extends Component {
 
             // Packing Slip Wizard
             isPackingWizardOpen: false,
-            packingWizardPickingId: null,
+            packingWizardPickingId: null,    // single picking (từ drawer)
+            packingWizardPickingIds: [],     // batch pickings (từ nút in hàng loạt)
             packingWizardPickingName: '',
             packingWizardPackerId: null,
             packingWizardPackerName: '',
             packingWizardUsers: [],
             packingWizardLoading: false,
             packingWizardPrinting: false,
+            packingWizardReportId: null,     // reportId dùng khi batch
+            packingWizardReportType: null,
             packingReportId: null,    // ir.actions.report id cho "Phiếu Đóng Hàng"
+
+            // Packer Panel
+            packerPanelOpen: false,
+            packerStatsLoading: false,
+            packerStats: [],  // [{id, name, packing:[], packed_today:[], avg_minutes}]
 
             // Inline editing: Ghi Chú Odoo
             inlineEditSOId: null,     // soId đang edit ghi chu
@@ -1997,11 +2005,10 @@ export class DeliveryPlannerDashboard extends Component {
         if (this.selectedCount === 0) return;
         if (this.state.isPrintingPickingSlips) return;
 
-        const selectedIds = Array.from(this.state.selectedSOIds);
         const pickingIds = this.getSelectedPickingIds().filter((id) => {
-        const picking = this.state.saleOrders
-            .flatMap((so) => so.pickings || [])
-            .find((p) => p.id === id);
+            const picking = this.state.saleOrders
+                .flatMap((so) => so.pickings || [])
+                .find((p) => p.id === id);
             return picking && picking.state === 'assigned';
         });
 
@@ -2010,14 +2017,16 @@ export class DeliveryPlannerDashboard extends Component {
             return;
         }
         this.state.selectedPrintMenuPos = null;
+        this.state.isPrintingPickingSlips = true;
 
+        // Mở wizard chọn packer → confirm sẽ tự reserve + in
+        await this.openPackingWizardBatch(pickingIds, reportId, reportType);
+    }
+
+    async _doPrintSelectedPickingSlips(pickingIds, reportId, reportType) {
+        const selectedIds = Array.from(this.state.selectedSOIds);
         try {
-            // Local flag — KHÔNG dùng state.isLoading để tránh triệu hồi full-screen overlay
-            // / re-render kanban. Bus event sẽ tự động triệu hồi subset refresh.
-            this.state.isPrintingPickingSlips = true;
-
-            // Luôn gọi giữ hàng (check availability) trước khi in
-            // Backend sẽ tự xác định picking nào chưa assigned để reserve
+            // Giữ hàng trước khi in
             try {
                 const reserveResponse = await fetch('/hlv_sale_delivery_planning/reserve_stock', {
                     method: 'POST',
@@ -2401,6 +2410,9 @@ export class DeliveryPlannerDashboard extends Component {
 
     async openPackingWizard(pickingId, pickingName) {
         this.state.packingWizardPickingId = pickingId;
+        this.state.packingWizardPickingIds = [];
+        this.state.packingWizardReportId = null;
+        this.state.packingWizardReportType = null;
         this.state.packingWizardPickingName = pickingName || '';
         this.state.packingWizardLoading = true;
         this.state.packingWizardPrinting = false;
@@ -2408,6 +2420,25 @@ export class DeliveryPlannerDashboard extends Component {
         this.state.packingWizardPackerId = null;
         this.state.packingWizardPackerName = '';
         this.state.isPackingWizardOpen = true;
+        await this._loadPackingUsers();
+    }
+
+    async openPackingWizardBatch(pickingIds, reportId, reportType) {
+        this.state.packingWizardPickingId = null;
+        this.state.packingWizardPickingIds = pickingIds;
+        this.state.packingWizardReportId = reportId;
+        this.state.packingWizardReportType = reportType;
+        this.state.packingWizardPickingName = `${pickingIds.length} phiếu lấy hàng`;
+        this.state.packingWizardLoading = true;
+        this.state.packingWizardPrinting = false;
+        this.state.packingWizardUsers = [];
+        this.state.packingWizardPackerId = null;
+        this.state.packingWizardPackerName = '';
+        this.state.isPackingWizardOpen = true;
+        await this._loadPackingUsers();
+    }
+
+    async _loadPackingUsers() {
         try {
             const response = await fetch('/hlv_sale_delivery_planning/load_packing_users', {
                 method: 'POST',
@@ -2434,9 +2465,12 @@ export class DeliveryPlannerDashboard extends Component {
     closePackingWizard() {
         this.state.isPackingWizardOpen = false;
         this.state.packingWizardPickingId = null;
+        this.state.packingWizardPickingIds = [];
         this.state.packingWizardPickingName = '';
         this.state.packingWizardLoading = false;
         this.state.packingWizardPrinting = false;
+        this.state.packingWizardReportId = null;
+        this.state.packingWizardReportType = null;
     }
 
     onPackerChange(ev) {
@@ -2447,71 +2481,69 @@ export class DeliveryPlannerDashboard extends Component {
     }
 
     async confirmPackingSlip() {
-        if (!this.state.packingWizardPackerId || !this.state.packingWizardPickingId) return;
+        if (!this.state.packingWizardPackerId) return;
+        const isBatch = this.state.packingWizardPickingIds.length > 0;
+        const pickingIds = isBatch
+            ? this.state.packingWizardPickingIds
+            : (this.state.packingWizardPickingId ? [this.state.packingWizardPickingId] : []);
+        if (!pickingIds.length) return;
+
         this.state.packingWizardPrinting = true;
-        const pickingId = this.state.packingWizardPickingId;
         const packerId = this.state.packingWizardPackerId;
         const packerName = this.state.packingWizardPackerName;
-        try {
-            // 1. Set packer + status='packing' + print_time
-            const response = await fetch('/hlv_sale_delivery_planning/confirm_packing_slip', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    jsonrpc: '2.0', method: 'call',
-                    params: { picking_id: pickingId, packer_id: packerId },
-                }),
-            });
-            const json = await response.json();
-            const res = json.result || {};
-            if (res.success === false) {
-                this.notification.add(res.message || 'Lỗi cập nhật thông tin đóng hàng', { type: 'danger' });
-                return;
-            }
+        const batchReportId = this.state.packingWizardReportId;
+        const batchReportType = this.state.packingWizardReportType;
 
-            // 2. Load report được phép in cho picking này
-            const allowedIds = await this.orm.call(
-                'ir.actions.actions',
-                'get_allowed_picking_reports',
-                [],
-                {
-                    context: {
-                        active_ids: [pickingId],
-                        active_id: pickingId,
-                        active_model: 'stock.picking',
-                    }
-                }
-            );
-            const allowedSet = new Set(allowedIds);
-            const reports = this.state.pickingReports.filter(r => allowedSet.has(r.id));
+        try {
+            // Set packer + status='packing' cho tất cả pickings
+            for (const pid of pickingIds) {
+                await fetch('/hlv_sale_delivery_planning/confirm_packing_slip', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        jsonrpc: '2.0', method: 'call',
+                        params: { picking_id: pid, packer_id: packerId },
+                    }),
+                });
+            }
 
             this.closePackingWizard();
+            this.notification.add(`Đã giao đóng hàng cho ${packerName}.`, { type: 'success' });
 
-            if (reports.length === 1) {
-                // Chỉ 1 report → in luôn
-                await this.actionService.doAction(reports[0].id, {
-                    additionalContext: {
-                        active_ids: [pickingId],
-                        active_id: pickingId,
-                        active_model: 'stock.picking',
-                    }
-                });
-            } else if (reports.length > 1) {
-                // Nhiều report → mở menu cho user chọn
-                this.state.printMenuPickingId = pickingId;
-                this.state.printMenuReports = reports;
-                this.state.printMenuPos = { top: 200, right: 20 };
+            if (isBatch) {
+                // Batch: dùng lại hàm in gốc (reserve + in)
+                await this._doPrintSelectedPickingSlips(pickingIds, batchReportId, batchReportType);
             } else {
-                this.notification.add('Không tìm thấy mẫu in cho phiếu này.', { type: 'warning' });
+                // Single: load report cho picking này
+                const singleId = pickingIds[0];
+                const allowedIds = await this.orm.call(
+                    'ir.actions.actions',
+                    'get_allowed_picking_reports',
+                    [],
+                    { context: { active_ids: [singleId], active_id: singleId, active_model: 'stock.picking' } }
+                );
+                const allowedSet = new Set(allowedIds);
+                const reports = this.state.pickingReports.filter(r => allowedSet.has(r.id));
+                if (reports.length === 1) {
+                    await this.actionService.doAction(reports[0].id, {
+                        additionalContext: { active_ids: [singleId], active_id: singleId, active_model: 'stock.picking' }
+                    });
+                } else if (reports.length > 1) {
+                    this.state.printMenuPickingId = singleId;
+                    this.state.printMenuReports = reports;
+                    this.state.printMenuPos = { top: 200, right: 20 };
+                } else {
+                    this.notification.add('Không tìm thấy mẫu in cho phiếu này.', { type: 'warning' });
+                }
             }
 
-            this.notification.add(`Đã giao đóng hàng cho ${packerName}.`, { type: 'success' });
             await this.fetchData();
         } catch (e) {
             console.error('confirmPackingSlip error', e);
             this.notification.add('Lỗi: ' + (e.message || e), { type: 'danger' });
         } finally {
             this.state.packingWizardPrinting = false;
+            this.state.isPrintingPickingSlips = false;
         }
     }
 
@@ -2535,6 +2567,27 @@ export class DeliveryPlannerDashboard extends Component {
             await this.fetchData();
         } catch (e) {
             this.notification.add('Lỗi: ' + (e.message || e), { type: 'danger' });
+        }
+    }
+
+    async loadPackerStats() {
+        if (this.state.packerStatsLoading) return;
+        this.state.packerStatsLoading = true;
+        try {
+            const response = await fetch('/hlv_sale_delivery_planning/packer_stats', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ jsonrpc: '2.0', method: 'call', params: {} }),
+            });
+            const json = await response.json();
+            const res = json.result || {};
+            if (res.success !== false) {
+                this.state.packerStats = res.packers || [];
+            }
+        } catch (e) {
+            console.warn('loadPackerStats error', e);
+        } finally {
+            this.state.packerStatsLoading = false;
         }
     }
 

@@ -94,6 +94,9 @@
                         <!-- KPI Đóng Gói -->
                         <t t-call="hlv_sale_delivery_planning.KPIPackingCards"/>
 
+                        <!-- Packer Panel -->
+                        <t t-call="hlv_sale_delivery_planning.PackerPanel"/>
+
                         <!-- Active Filters Bar -->
                         <t t-call="hlv_sale_delivery_planning.ActiveFiltersBar"/>
 

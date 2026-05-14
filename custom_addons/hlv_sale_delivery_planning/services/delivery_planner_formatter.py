@@ -435,6 +435,11 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                     if getattr(p, 'x_packing_print_time', False) and p.x_packing_print_time
                     else False
                 ),
+                'x_bien_ban_print_time': (
+                    p.x_bien_ban_print_time.strftime('%d/%m/%Y %H:%M')
+                    if getattr(p, 'x_bien_ban_print_time', False) and p.x_bien_ban_print_time
+                    else False
+                ),
                 'videos': att_by_picking.get(p.id, []),
             })
 
