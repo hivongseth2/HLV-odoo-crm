@@ -129,7 +129,7 @@
         <div class="mb-3">
             <!-- Header toggle -->
             <div class="d-flex align-items-center gap-2 mb-2 px-1 cursor-pointer user-select-none"
-                 t-on-click="() => { state.packerPanelOpen = !state.packerPanelOpen; if(state.packerPanelOpen) this.loadPackerStats(); }">
+                 t-on-click="togglePackerPanel">
                 <i class="fa fa-users text-primary"></i>
                 <span class="fw-bold text-dark small text-uppercase">Packer Hôm Nay</span>
                 <span t-if="state.packerStats.length"

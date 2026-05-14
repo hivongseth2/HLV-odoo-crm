@@ -2570,6 +2570,13 @@ export class DeliveryPlannerDashboard extends Component {
         }
     }
 
+    togglePackerPanel() {
+        this.state.packerPanelOpen = !this.state.packerPanelOpen;
+        if (this.state.packerPanelOpen) {
+            this.loadPackerStats();
+        }
+    }
+
     async loadPackerStats() {
         if (this.state.packerStatsLoading) return;
         this.state.packerStatsLoading = true;
