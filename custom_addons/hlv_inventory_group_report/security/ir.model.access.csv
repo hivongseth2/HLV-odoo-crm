@@ -1,0 +1,4 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_hlv_product_report_group_user,hlv.product.report.group user,model_hlv_product_report_group,base.group_user,1,0,0,0
+access_hlv_product_report_group_manager,hlv.product.report.group manager,model_hlv_product_report_group,stock.group_stock_manager,1,1,1,1
+access_hlv_inventory_report_wizard_user,hlv.inventory.report.wizard user,model_hlv_inventory_report_wizard,base.group_user,1,1,1,1

@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ============================================================
+         KANBAN VIEW – Dashboard-style group cards
+    ============================================================ -->
+    <record id="view_hlv_product_report_group_kanban" model="ir.ui.view">
+        <field name="name">hlv.product.report.group.kanban</field>
+        <field name="model">hlv.product.report.group</field>
+        <field name="arch" type="xml">
+            <kanban class="o_kanban_mobile" default_group_by="" quick_create="false"
+                    records_draggable="false" sample="1">
+                <field name="name"/>
+                <field name="description"/>
+                <field name="product_count"/>
+                <field name="color"/>
+                <field name="sequence"/>
+                <templates>
+                    <t t-name="card">
+                        <div t-attf-class="oe_kanban_color_#{record.color.raw_value} oe_kanban_global_click"
+                             style="border-left: 4px solid; padding: 12px 16px;">
+                            <div class="o_kanban_record_top mb-2">
+                                <div class="o_kanban_record_headings">
+                                    <strong class="o_kanban_record_title fs-5">
+                                        <field name="name"/>
+                                    </strong>
+                                </div>
+                                <div class="o_kanban_record_top_right">
+                                    <span class="badge rounded-pill text-bg-primary">
+                                        <field name="product_count"/> SP
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="o_kanban_record_body text-muted small" style="min-height: 32px;">
+                                <field name="description" widget="text"/>
+                            </div>
+                            <div class="o_kanban_record_bottom mt-2">
+                                <div class="oe_kanban_bottom_right">
+                                    <button name="action_open_report_wizard"
+                                            type="object"
+                                            class="btn btn-sm btn-outline-primary">
+                                        <i class="fa fa-bar-chart"/> Báo cáo
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
+    <!-- ============================================================
+         LIST VIEW
+    ============================================================ -->
+    <record id="view_hlv_product_report_group_list" model="ir.ui.view">
+        <field name="name">hlv.product.report.group.list</field>
+        <field name="model">hlv.product.report.group</field>
+        <field name="arch" type="xml">
+            <list string="Nhóm sản phẩm báo cáo" multi_edit="1">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="description" optional="hide"/>
+                <field name="product_count" string="Số SP"/>
+                <button name="action_open_report_wizard"
+                        type="object"
+                        icon="fa-bar-chart"
+                        string="Báo cáo tồn kho"
+                        class="btn-link"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ============================================================
+         FORM VIEW
+    ============================================================ -->
+    <record id="view_hlv_product_report_group_form" model="ir.ui.view">
+        <field name="name">hlv.product.report.group.form</field>
+        <field name="model">hlv.product.report.group</field>
+        <field name="arch" type="xml">
+            <form string="Nhóm sản phẩm báo cáo">
+                <sheet>
+                    <!-- Color + Name header bar -->
+                    <widget name="web_ribbon" title="Lưu trữ" bg_color="text-bg-danger"
+                            invisible="active"/>
+                    <div class="oe_title">
+                        <label for="name" string="Tên nhóm"/>
+                        <h1>
+                            <field name="name" placeholder="VD: Nhóm hàng điện tử, Nhóm hàng tiêu dùng..."/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="sequence"/>
+                            <field name="color" widget="color_picker"/>
+                            <field name="active" invisible="1"/>
+                        </group>
+                        <group>
+                            <field name="description" placeholder="Mô tả tuỳ chọn..."/>
+                        </group>
+                    </group>
+
+                    <notebook>
+                        <page string="Danh sách sản phẩm" name="products">
+                            <!-- Summary stat bar -->
+                            <div class="o_stat_buttons mb-3">
+                                <button class="o_stat_button" type="object"
+                                        name="action_open_report_wizard" icon="fa-bar-chart">
+                                    <div class="o_stat_info">
+                                        <span class="o_stat_value">
+                                            <field name="product_count"/>
+                                        </span>
+                                        <span class="o_stat_text">Sản phẩm</span>
+                                    </div>
+                                </button>
+                            </div>
+
+                            <field name="product_ids"
+                                   widget="many2many"
+                                   string="Sản phẩm trong nhóm">
+                                <list string="Sản phẩm" create="false">
+                                    <field name="default_code" string="Mã SP" optional="show"/>
+                                    <field name="display_name" string="Tên sản phẩm"/>
+                                    <field name="categ_id" string="Danh mục" optional="show"/>
+                                    <field name="uom_id" string="ĐVT" groups="uom.group_uom"
+                                           optional="show"/>
+                                    <field name="qty_available" string="Tổng tồn" optional="show"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- ============================================================
+         SEARCH VIEW
+    ============================================================ -->
+    <record id="view_hlv_product_report_group_search" model="ir.ui.view">
+        <field name="name">hlv.product.report.group.search</field>
+        <field name="model">hlv.product.report.group</field>
+        <field name="arch" type="xml">
+            <search string="Tìm kiếm nhóm">
+                <field name="name" string="Tên nhóm" filter_domain="[('name', 'ilike', self)]"/>
+                <field name="product_ids" string="Sản phẩm"/>
+                <separator/>
+                <filter string="Đang hoạt động" name="active" domain="[('active', '=', True)]"/>
+                <filter string="Lưu trữ" name="archived" domain="[('active', '=', False)]"/>
+            </search>
+        </field>
+    </record>
+
+    <!-- ============================================================
+         ACTION
+    ============================================================ -->
+    <record id="action_hlv_product_report_group" model="ir.actions.act_window">
+        <field name="name">Nhóm sản phẩm báo cáo</field>
+        <field name="res_model">hlv.product.report.group</field>
+        <field name="view_mode">kanban,list,form</field>
+        <field name="search_view_id" ref="view_hlv_product_report_group_search"/>
+        <field name="context">{'search_default_active': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Chưa có nhóm sản phẩm nào
+            </p>
+            <p>
+                Tạo nhóm để gom các sản phẩm cần theo dõi tồn kho.<br/>
+                Một sản phẩm có thể thuộc nhiều nhóm khác nhau.
+            </p>
+        </field>
+    </record>
+
+</odoo>

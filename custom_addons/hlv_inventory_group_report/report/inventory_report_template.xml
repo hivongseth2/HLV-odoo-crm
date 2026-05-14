@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ============================================================
+         REPORT ACTIONS
+    ============================================================ -->
+    <record id="action_report_inventory_group_pdf" model="ir.actions.report">
+        <field name="name">Báo cáo tồn kho theo nhóm (PDF)</field>
+        <field name="model">hlv.inventory.report.wizard</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">hlv_inventory_group_report.inventory_group_report_template</field>
+        <field name="report_file">hlv_inventory_group_report.inventory_group_report_template</field>
+        <field name="print_report_name">'Bao_cao_ton_kho_' + (object.group_ids[0].name.replace(' ', '_') if object.group_ids else 'nhom')</field>
+        <field name="paperformat_id" ref="base.paperformat_a4"/>
+    </record>
+
+    <record id="action_report_inventory_group_html" model="ir.actions.report">
+        <field name="name">Xem trước báo cáo tồn kho</field>
+        <field name="model">hlv.inventory.report.wizard</field>
+        <field name="report_type">qweb-html</field>
+        <field name="report_name">hlv_inventory_group_report.inventory_group_report_template</field>
+        <field name="report_file">hlv_inventory_group_report.inventory_group_report_template</field>
+    </record>
+
+    <!-- ============================================================
+         QWEB REPORT TEMPLATE
+    ============================================================ -->
+    <template id="inventory_group_report_template">
+        <t t-call="web.html_container">
+            <t t-call="web.external_layout">
+
+                <t t-foreach="docs" t-as="doc">
+                    <div class="page">
+
+                        <!-- ─── PAGE TITLE ─── -->
+                        <div class="row mb-2">
+                            <div class="col-12 text-center">
+                                <h2 style="
+                                    font-weight: 800;
+                                    letter-spacing: 1.5px;
+                                    color: #1a2639;
+                                    text-transform: uppercase;
+                                    margin-bottom: 4px;
+                                ">
+                                    Báo cáo tồn kho theo nhóm sản phẩm
+                                </h2>
+                                <p style="font-size: 12px; color: #555; margin: 0;">
+                                    Kho:
+                                    <strong>
+                                        <t t-if="not doc['wizard'].warehouse_ids">Tất cả kho</t>
+                                        <t t-else="">
+                                            <t t-esc="', '.join(doc['warehouses'].mapped('name'))"/>
+                                        </t>
+                                    </strong>
+                                    <t t-if="doc['multi_group']">
+                                        &nbsp;|&nbsp; Nhóm:
+                                        <strong>
+                                            <t t-esc="', '.join(doc['wizard'].group_ids.mapped('name'))"/>
+                                        </strong>
+                                    </t>
+                                </p>
+                                <hr style="border-color: #1a2639; margin: 8px 0;"/>
+                            </div>
+                        </div>
+
+                        <!-- ─── GROUPS ─── -->
+                        <t t-foreach="doc['groups_data']" t-as="group_data">
+
+                            <!-- Group header bar -->
+                            <div style="
+                                background-color: #1a2639;
+                                color: #ffffff;
+                                padding: 7px 14px;
+                                border-radius: 4px;
+                                margin-top: 18px;
+                                margin-bottom: 0;
+                                display: flex;
+                                justify-content: space-between;
+                                align-items: center;
+                            ">
+                                <span style="font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">
+                                    <t t-esc="group_data['group'].name"/>
+                                </span>
+                                <span style="font-size: 11px; background: rgba(255,255,255,0.2); border-radius: 12px; padding: 2px 10px;">
+                                    <t t-esc="len(group_data['products'])"/> sản phẩm
+                                </span>
+                            </div>
+
+                            <!-- Products table -->
+                            <table style="
+                                width: 100%;
+                                border-collapse: collapse;
+                                font-size: 11px;
+                                margin-bottom: 4px;
+                            ">
+                                <!-- Table head -->
+                                <thead>
+                                    <tr style="background-color: #d9e1ec; color: #1a2639;">
+                                        <th style="width: 30px; padding: 5px 6px; border: 1px solid #b0bec5; text-align: center;">#</th>
+                                        <th style="width: 90px; padding: 5px 6px; border: 1px solid #b0bec5;">Mã SP</th>
+                                        <th style="padding: 5px 6px; border: 1px solid #b0bec5;">Tên sản phẩm</th>
+                                        <t t-foreach="doc['warehouses']" t-as="wh">
+                                            <th style="width: 85px; padding: 5px 6px; border: 1px solid #b0bec5; text-align: center;">
+                                                <t t-esc="wh.code or wh.name"/>
+                                            </th>
+                                        </t>
+                                        <th style="width: 85px; padding: 5px 6px; border: 1px solid #b0bec5; text-align: center; background-color: #c8e6c9; color: #1b5e20;">
+                                            Tổng
+                                        </th>
+                                    </tr>
+                                </thead>
+
+                                <tbody>
+                                    <t t-foreach="group_data['products']" t-as="prod">
+                                        <tr t-attf-style="background-color: {{ '#ffffff' if prod_index % 2 == 0 else '#f4f6f8' }}; border-bottom: 1px solid #e0e0e0;">
+                                            <td style="padding: 4px 6px; border: 1px solid #e0e0e0; text-align: center; color: #9e9e9e;">
+                                                <t t-esc="prod_index + 1"/>
+                                            </td>
+                                            <td style="padding: 4px 6px; border: 1px solid #e0e0e0; font-family: monospace; color: #546e7a; font-size: 10.5px;">
+                                                <t t-esc="prod['product'].default_code or ''"/>
+                                            </td>
+                                            <td style="padding: 4px 6px; border: 1px solid #e0e0e0; color: #212121;">
+                                                <t t-esc="prod['product'].display_name"/>
+                                            </td>
+                                            <t t-foreach="prod['warehouse_qtys']" t-as="wq">
+                                                <td t-attf-style="
+                                                    padding: 4px 6px;
+                                                    border: 1px solid #e0e0e0;
+                                                    text-align: right;
+                                                    font-weight: {{ '600' if wq['qty'] > 0 else 'normal' }};
+                                                    color: {{ '#1b5e20' if wq['qty'] > 0 else '#9e9e9e' }};
+                                                ">
+                                                    <t t-esc="'%g' % wq['qty']"/>
+                                                </td>
+                                            </t>
+                                            <td t-attf-style="
+                                                padding: 4px 6px;
+                                                border: 1px solid #e0e0e0;
+                                                text-align: right;
+                                                font-weight: 700;
+                                                background-color: {{ '#e8f5e9' if prod['total'] > 0 else '#fafafa' }};
+                                                color: {{ '#1b5e20' if prod['total'] > 0 else '#9e9e9e' }};
+                                            ">
+                                                <t t-esc="'%g' % prod['total']"/>
+                                            </td>
+                                        </tr>
+                                    </t>
+
+                                    <!-- Group subtotal row -->
+                                    <tr style="background-color: #e8eaf6; font-weight: 700; border-top: 2px solid #1a2639;">
+                                        <td colspan="3" style="padding: 5px 8px; border: 1px solid #9fa8da; text-align: right; font-style: italic; color: #283593; font-size: 11px;">
+                                            Tổng nhóm: <t t-esc="group_data['group'].name"/>
+                                        </td>
+                                        <t t-foreach="group_data['group_wh_totals']" t-as="gwt">
+                                            <td style="padding: 5px 6px; border: 1px solid #9fa8da; text-align: right; color: #283593;">
+                                                <t t-esc="'%g' % gwt['qty']"/>
+                                            </td>
+                                        </t>
+                                        <td style="padding: 5px 6px; border: 1px solid #9fa8da; text-align: right; background-color: #c8e6c9; color: #1b5e20; font-size: 12px;">
+                                            <t t-esc="'%g' % group_data['group_total']"/>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                        </t>
+                        <!-- END groups loop -->
+
+                        <!-- ─── GRAND TOTAL (only when >1 group) ─── -->
+                        <t t-if="doc['multi_group']">
+                            <table style="width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 16px;">
+                                <tr style="background-color: #1a2639; color: #ffffff; font-weight: 700;">
+                                    <td colspan="3" style="padding: 7px 10px; text-align: right; text-transform: uppercase; letter-spacing: 0.5px;">
+                                        Tổng cộng tất cả nhóm
+                                    </td>
+                                    <t t-foreach="doc['grand_wh_totals']" t-as="ggt">
+                                        <td style="padding: 7px 8px; text-align: right; width: 85px; border-left: 1px solid rgba(255,255,255,0.2);">
+                                            <t t-esc="'%g' % ggt['qty']"/>
+                                        </td>
+                                    </t>
+                                    <td style="padding: 7px 8px; text-align: right; width: 85px; background-color: #2e7d32; font-size: 13px; border-left: 1px solid rgba(255,255,255,0.3);">
+                                        <t t-esc="'%g' % doc['grand_total']"/>
+                                    </td>
+                                </tr>
+                            </table>
+                        </t>
+
+                    </div>
+                    <!-- END page -->
+                </t>
+
+            </t>
+        </t>
+    </template>
+
+</odoo>

@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ============================================================
+         WIZARD FORM VIEW
+    ============================================================ -->
+    <record id="view_hlv_inventory_report_wizard_form" model="ir.ui.view">
+        <field name="name">hlv.inventory.report.wizard.form</field>
+        <field name="model">hlv.inventory.report.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Báo cáo tồn kho theo nhóm sản phẩm">
+                <div class="o_dialog_warning alert alert-info" role="alert"
+                     style="margin: 0 0 12px 0;">
+                    <i class="fa fa-info-circle me-1"/>
+                    Chọn nhóm sản phẩm và kho hàng cần báo cáo.
+                    Để trống <strong>Kho hàng</strong> để hiển thị tất cả kho.
+                </div>
+
+                <group>
+                    <group string="Nhóm sản phẩm" colspan="2">
+                        <field name="group_ids"
+                               widget="many2many_tags"
+                               options="{'color_field': 'color', 'no_create_edit': True}"
+                               nolabel="1"
+                               placeholder="Chọn một hoặc nhiều nhóm sản phẩm..."/>
+                    </group>
+                </group>
+
+                <group>
+                    <group string="Kho hàng" colspan="2">
+                        <field name="warehouse_ids"
+                               widget="many2many_tags"
+                               options="{'no_create_edit': True}"
+                               nolabel="1"
+                               placeholder="Để trống = tất cả kho..."/>
+                    </group>
+                </group>
+
+                <group>
+                    <field name="show_zero" string="Hiển thị sản phẩm tồn = 0"/>
+                </group>
+
+                <footer>
+                    <button name="action_print_pdf"
+                            string="In PDF"
+                            type="object"
+                            class="btn-primary"
+                            icon="fa-print"/>
+                    <button name="action_preview_html"
+                            string="Xem trực tiếp"
+                            type="object"
+                            class="btn-secondary"
+                            icon="fa-eye"/>
+                    <button special="cancel" string="Đóng" class="btn-light"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- ============================================================
+         ACTION: open wizard
+    ============================================================ -->
+    <record id="action_hlv_inventory_report_wizard" model="ir.actions.act_window">
+        <field name="name">Báo cáo tồn kho theo nhóm</field>
+        <field name="res_model">hlv.inventory.report.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="view_id" ref="view_hlv_inventory_report_wizard_form"/>
+        <field name="target">new</field>
+    </record>
+
+</odoo>
