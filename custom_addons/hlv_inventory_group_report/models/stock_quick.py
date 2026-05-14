@@ -24,7 +24,7 @@ class HlvStockQuick(models.TransientModel):
         for product in group.product_ids.sorted("default_code"):
             if warehouses:
                 col_qtys = [
-                    product.with_context(warehouse=wh.id).qty_available
+                    product.with_context(location=wh.lot_stock_id.id).qty_available
                     for wh in warehouses
                 ]
                 prod_total = sum(col_qtys)
@@ -64,7 +64,7 @@ class HlvStockQuick(models.TransientModel):
         fs = wb.add_format({"border": 1, "align": "center", "font_color": "#adb5bd"})
         n = len(columns)
         last_col = 3 + n if n else 3
-        ws.merge_range(0, 0, 1, last_col, "BAO CAO TON KHO", wb.add_format({"bold": True, "font_size": 14, "align": "center", "valign": "vcenter"}))
+        ws.merge_range(0, 0, 1, last_col, "B\u00c1O C\u00c1O T\u1ed2N KHO", wb.add_format({"bold": True, "font_size": 14, "align": "center", "valign": "vcenter"}))
         ws.set_row(0, 28)
         ws.set_row(1, 8)
         ws.set_column(0, 0, 5)
@@ -74,14 +74,14 @@ class HlvStockQuick(models.TransientModel):
             ws.set_column(3 + i, 3 + i, 16)
         ws.set_row(2, 24)
         ws.write(2, 0, "#", fh)
-        ws.write(2, 1, "Ma SP", fh)
-        ws.write(2, 2, "Ten san pham", fh)
+        ws.write(2, 1, "M\u00e3 SP", fh)
+        ws.write(2, 2, "T\u00ean s\u1ea3n ph\u1ea9m", fh)
         if columns:
             for i, col in enumerate(columns):
                 ws.write(2, 3 + i, col["name"], fh)
-            ws.write(2, 3 + n, "TONG", fh)
+            ws.write(2, 3 + n, "T\u1ed4NG", fh)
         else:
-            ws.write(2, 3, "Ton kho", fh)
+            ws.write(2, 3, "T\u1ed3n kho", fh)
         row = 3
         for idx, line in enumerate(lines):
             ws.write(row, 0, idx + 1, fs)
@@ -94,7 +94,7 @@ class HlvStockQuick(models.TransientModel):
             else:
                 ws.write(row, 3, line["total"], fn if line["total"] > 0 else f0)
             row += 1
-        ws.merge_range(row, 0, row, 2, "TONG TON KHO", fl)
+        ws.merge_range(row, 0, row, 2, "T\u1ed4NG T\u1ed2N KHO", fl)
         if columns:
             for i in range(n):
                 ct = sum(l["col_qtys"][i] for l in lines)
@@ -131,5 +131,5 @@ class HlvStockQuick(models.TransientModel):
             ("default_code", "ilike", query),
             ("id", "not in", exclude_ids or []),
         ]
-        products = self.env["product.product"].search(domain, limit=20, order="name")
+        products = self.env["product.product"].search(domain, limit=50, order="name")
         return [{"id": p.id, "name": p.name, "code": p.default_code or ""} for p in products]

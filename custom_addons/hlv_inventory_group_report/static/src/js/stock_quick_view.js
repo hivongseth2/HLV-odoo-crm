@@ -50,6 +50,8 @@ export class StockQuickView extends Component {
             ]);
             this.state.groups = groups;
             this.state.warehouses = warehouses;
+            // Mac dinh chon tat ca kho de hien cot theo tung kho
+            this.state.warehouseIds = warehouses.map(w => w.id);
             if (ctx.default_group_id) {
                 this.state.groupId = ctx.default_group_id;
             } else if (groups.length > 0) {
@@ -95,7 +97,7 @@ export class StockQuickView extends Component {
 
     selectGroup(id) {
         this.state.groupId = id;
-        this.state.warehouseIds = [];
+        this.state.warehouseIds = this.state.warehouses.map(w => w.id);
         this.state.whOpen = false;
         this.state.activeTab = "stock";
         this.state.editingGroupId = false;
@@ -131,10 +133,10 @@ export class StockQuickView extends Component {
     async confirmAddGroup() {
         const name = this.state.newGroupName.trim();
         if (!name) return;
-        const id = await this.orm.create("hlv.product.report.group", { name, sequence: 10 });
+        const ids = await this.orm.create("hlv.product.report.group", [{ name, sequence: 10 }]);
         this.state.addingGroup = false;
         await this.loadGroups();
-        this.selectGroup(id);
+        this.selectGroup(ids[0]);
     }
 
     startEditGroup(id, name) {
@@ -166,11 +168,11 @@ export class StockQuickView extends Component {
         await this.orm.unlink("hlv.product.report.group", [id]);
         const groups = await this.loadGroups();
         if (this.state.groupId === id) {
-            this.state.warehouseIds = [];
             if (groups.length > 0) {
                 this.selectGroup(groups[0].id);
             } else {
                 this.state.groupId = false;
+                this.state.warehouseIds = this.state.warehouses.map(w => w.id);
                 this.state.lines = [];
                 this.state.columns = [];
                 this.state.total = 0;
@@ -228,7 +230,8 @@ export class StockQuickView extends Component {
 
     get warehouseSummary() {
         const n = this.state.warehouseIds.length;
-        if (n === 0) return "T\u1ea5t c\u1ea3 kho";
+        const total = this.state.warehouses.length;
+        if (n === 0 || n === total) return "T\u1ea5t c\u1ea3 kho";
         if (n === 1) {
             const wh = this.state.warehouses.find(w => w.id === this.state.warehouseIds[0]);
             return wh ? wh.name : "1 kho";
