@@ -424,6 +424,17 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                     if getattr(p, 'shipper_user_id', False) and p.shipper_user_id
                     else False
                 ),
+                'x_packing_status': getattr(p, 'x_packing_status', 'pending') or 'pending',
+                'x_packer_id': (
+                    [p.x_packer_id.id, p.x_packer_id.name]
+                    if getattr(p, 'x_packer_id', False) and p.x_packer_id
+                    else False
+                ),
+                'x_packing_print_time': (
+                    p.x_packing_print_time.strftime('%d/%m/%Y %H:%M')
+                    if getattr(p, 'x_packing_print_time', False) and p.x_packing_print_time
+                    else False
+                ),
                 'videos': att_by_picking.get(p.id, []),
             })
 

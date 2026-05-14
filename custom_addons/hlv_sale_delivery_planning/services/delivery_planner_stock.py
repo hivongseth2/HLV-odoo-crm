@@ -108,7 +108,9 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
 
         # [F] Pickings (tất cả trạng thái) — 1 query
         pick_mf = set(self.env['stock.picking']._fields.keys())
-        pick_opt = [f for f in ['x_printed', 'shipper_received', 'shipper_returned'] if f in pick_mf]
+        pick_opt = [f for f in ['x_printed', 'shipper_received', 'shipper_returned',
+                                'x_packer_id', 'x_packing_print_time', 'x_packing_status']
+                    if f in pick_mf]
         pick_fields = ['id', 'sale_id', 'state', 'picking_type_code', 'date_done',
                        'return_id', 'picking_type_id'] + pick_opt
         pick_recs = self.env['stock.picking'].sudo().search_read([('sale_id', 'in', so_ids)], pick_fields)

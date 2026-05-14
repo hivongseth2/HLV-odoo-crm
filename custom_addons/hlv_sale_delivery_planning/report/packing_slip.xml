@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ── Report Action ─────────────────────────────────────────────── -->
+    <record id="action_report_packing_slip" model="ir.actions.report">
+        <field name="name">Phiếu Đóng Hàng</field>
+        <field name="model">stock.picking</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">hlv_sale_delivery_planning.packing_slip_template</field>
+        <field name="print_report_name">
+            'Phieu_Dong_Hang_%s' % (object.name or 'picking')
+        </field>
+        <field name="binding_model_id" ref="stock.model_stock_picking"/>
+        <field name="binding_type">report</field>
+    </record>
+
+    <!-- ── Report Template ───────────────────────────────────────────── -->
+    <template id="packing_slip_template">
+        <t t-call="web.html_container">
+            <t t-foreach="docs" t-as="o">
+                <t t-call="web.basic_layout">
+                    <div class="page">
+                        <style type="text/css">
+                            body { font-family: Arial, sans-serif; font-size: 12px; }
+                            .packing-header { border-bottom: 2px solid #333; margin-bottom: 16px; padding-bottom: 8px; }
+                            .packing-title { font-size: 22px; font-weight: bold; text-transform: uppercase; text-align: center; }
+                            .packing-subtitle { font-size: 13px; text-align: center; color: #555; margin-top: 4px; }
+                            .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 24px; margin-bottom: 16px; }
+                            .info-label { font-size: 11px; color: #666; text-transform: uppercase; font-weight: bold; }
+                            .info-value { font-size: 13px; font-weight: bold; }
+                            .packer-box {
+                                background: #f0f7ff;
+                                border: 2px solid #2563eb;
+                                border-radius: 6px;
+                                padding: 12px 18px;
+                                margin-bottom: 16px;
+                                display: flex;
+                                align-items: center;
+                                gap: 16px;
+                            }
+                            .packer-label { font-size: 12px; color: #555; white-space: nowrap; }
+                            .packer-name { font-size: 22px; font-weight: bold; color: #1d4ed8; letter-spacing: 0.5px; }
+                            .print-time { font-size: 12px; color: #555; margin-top: 4px; }
+                            table.prod-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+                            table.prod-table th {
+                                background: #2563eb; color: white;
+                                padding: 6px 8px; font-size: 11px;
+                                text-align: left; border: 1px solid #1d4ed8;
+                            }
+                            table.prod-table td { padding: 5px 8px; border: 1px solid #d1d5db; font-size: 12px; }
+                            table.prod-table tr:nth-child(even) td { background: #f9fafb; }
+                            .qty-cell { text-align: center; font-weight: bold; }
+                            .footer-note { margin-top: 24px; font-size: 11px; color: #666; font-style: italic; text-align: center; border-top: 1px solid #ccc; padding-top: 8px; }
+                        </style>
+
+                        <!-- Tiêu đề -->
+                        <div class="packing-header">
+                            <div class="packing-title">Phiếu Đóng Hàng</div>
+                            <div class="packing-subtitle">
+                                <t t-esc="o.name"/>
+                                <t t-if="o.sale_id"> — <t t-esc="o.sale_id.name"/></t>
+                            </div>
+                        </div>
+
+                        <!-- Người đóng hàng (nổi bật) -->
+                        <div class="packer-box">
+                            <div>
+                                <div class="packer-label">Người đóng hàng</div>
+                                <div class="packer-name">
+                                    <t t-if="o.x_packer_id">
+                                        <t t-esc="o.x_packer_id.name"/>
+                                    </t>
+                                    <t t-else="">
+                                        <span style="color:#aaa;">Chưa xác định</span>
+                                    </t>
+                                </div>
+                                <div class="print-time" t-if="o.x_packing_print_time">
+                                    In lúc: <t t-esc="o.x_packing_print_time.strftime('%d/%m/%Y %H:%M')"/>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Thông tin phiếu -->
+                        <div class="info-grid">
+                            <div>
+                                <div class="info-label">Phiếu</div>
+                                <div class="info-value"><t t-esc="o.name"/></div>
+                            </div>
+                            <div>
+                                <div class="info-label">Đơn hàng</div>
+                                <div class="info-value">
+                                    <t t-if="o.sale_id"><t t-esc="o.sale_id.name"/></t>
+                                    <t t-else="">—</t>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="info-label">Khách hàng</div>
+                                <div class="info-value">
+                                    <t t-if="o.partner_id"><t t-esc="o.partner_id.name"/></t>
+                                    <t t-else="">—</t>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="info-label">Trạng thái</div>
+                                <div class="info-value"><t t-esc="o.state"/></div>
+                            </div>
+                        </div>
+
+                        <!-- Danh sách sản phẩm -->
+                        <table class="prod-table">
+                            <thead>
+                                <tr>
+                                    <th style="width:5%;">STT</th>
+                                    <th style="width:12%;">Mã SP</th>
+                                    <th>Tên sản phẩm</th>
+                                    <th style="width:12%; text-align:center;">Cần đóng</th>
+                                    <th style="width:12%; text-align:center;">Đã đóng</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-set="idx" t-value="0"/>
+                                <t t-foreach="o.move_ids.filtered(lambda m: m.state not in ('cancel', 'done') or True)" t-as="move">
+                                    <t t-if="move.state not in ('cancel',)">
+                                        <t t-set="idx" t-value="idx + 1"/>
+                                        <tr>
+                                            <td><t t-esc="idx"/></td>
+                                            <td><t t-esc="move.product_id.default_code or ''"/></td>
+                                            <td><t t-esc="move.product_id.name"/></td>
+                                            <td class="qty-cell">
+                                                <t t-esc="'%.0f' % move.product_uom_qty"/>
+                                            </td>
+                                            <td class="qty-cell">
+                                                <t t-esc="'%.0f' % move.quantity"/>
+                                            </td>
+                                        </tr>
+                                    </t>
+                                </t>
+                            </tbody>
+                        </table>
+
+                        <div class="footer-note">
+                            In từ hệ thống HLV – Phiếu đóng hàng chỉ dùng trong nội bộ kho.
+                        </div>
+                    </div>
+                </t>
+            </t>
+        </t>
+    </template>
+
+</odoo>

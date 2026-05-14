@@ -3,7 +3,7 @@ import base64
 import io
 import logging
 
-from odoo import http
+from odoo import http, fields
 from odoo.http import request
 
 _logger = logging.getLogger(__name__)
@@ -546,3 +546,79 @@ class DeliveryPlannerController(http.Controller):
                 f'Lỗi: {str(e)}',
                 headers=[('Content-Type', 'text/plain; charset=utf-8')],
             )
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Packing Slip: Wizard xác nhận người đóng hàng trước khi in
+    # ─────────────────────────────────────────────────────────────────────────
+
+    @http.route('/hlv_sale_delivery_planning/load_packing_users', type='json', auth='user', methods=['POST'])
+    def load_packing_users(self, **kwargs):
+        """Trả về danh sách người dùng nội bộ để chọn người đóng hàng."""
+        try:
+            users = request.env['res.users'].sudo().search_read(
+                [('share', '=', False), ('active', '=', True)],
+                ['id', 'name'],
+                order='name',
+            )
+            current_user = request.env.user
+            return {
+                'success': True,
+                'users': users,
+                'current_user_id': current_user.id,
+                'current_user_name': current_user.name,
+            }
+        except Exception as e:
+            _logger.error("load_packing_users error: %s", e, exc_info=True)
+            return {'success': False, 'message': str(e)}
+
+    @http.route('/hlv_sale_delivery_planning/confirm_packing_slip', type='json', auth='user', methods=['POST'])
+    def confirm_packing_slip(self, picking_id=None, packer_id=None, **kwargs):
+        """
+        Gọi khi user xác nhận in phiếu đóng hàng từ wizard.
+        Cập nhật: x_packer_id, x_packing_print_time, x_packing_status = 'packing'.
+        """
+        try:
+            if not picking_id:
+                return {'success': False, 'message': 'Thiếu picking_id'}
+            picking = request.env['stock.picking'].browse(int(picking_id)).exists()
+            if not picking:
+                return {'success': False, 'message': 'Không tìm thấy phiếu'}
+            if not packer_id:
+                packer_id = request.env.user.id
+            packer = request.env['res.users'].browse(int(packer_id)).exists()
+            if not packer:
+                return {'success': False, 'message': 'Không tìm thấy người dùng'}
+            picking.write({
+                'x_packer_id': packer.id,
+                'x_packing_print_time': fields.Datetime.now(),
+                'x_packing_status': 'packing',
+            })
+            return {
+                'success': True,
+                'packer_name': packer.name,
+                'print_time': picking.x_packing_print_time.strftime('%d/%m/%Y %H:%M'),
+            }
+        except Exception as e:
+            _logger.error("confirm_packing_slip error: %s", e, exc_info=True)
+            return {'success': False, 'message': str(e)}
+
+    @http.route('/hlv_sale_delivery_planning/finish_packing', type='json', auth='user', methods=['POST'])
+    def finish_packing(self, picking_id=None, **kwargs):
+        """
+        Đánh dấu hoàn thành đóng hàng thủ công (không cần validate phiếu).
+        Cập nhật: x_packing_finish_time, x_packing_status = 'packed'.
+        """
+        try:
+            if not picking_id:
+                return {'success': False, 'message': 'Thiếu picking_id'}
+            picking = request.env['stock.picking'].browse(int(picking_id)).exists()
+            if not picking:
+                return {'success': False, 'message': 'Không tìm thấy phiếu'}
+            picking.write({
+                'x_packing_status': 'packed',
+                'x_packing_finish_time': fields.Datetime.now(),
+            })
+            return {'success': True}
+        except Exception as e:
+            _logger.error("finish_packing error: %s", e, exc_info=True)
+            return {'success': False, 'message': str(e)}

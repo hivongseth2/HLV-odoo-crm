@@ -441,6 +441,13 @@
                                                 <span t-if="picking.bien_ban_printed" class="badge bg-info ms-1" style="font-size:0.6rem;" title="Đã in biên bản cho phiếu này">
                                                     <i class="fa fa-file-text-o me-1"></i>Đã in BB
                                                 </span>
+                                                <!-- Trạng thái đóng hàng (PACK) -->
+                                                <span t-if="picking.x_packing_status === 'packing'" class="badge bg-warning text-dark ms-1" style="font-size:0.6rem;">
+                                                    <i class="fa fa-spinner me-1"></i>Đang đóng<t t-if="picking.x_packer_id">: <t t-esc="picking.x_packer_id[1]"/></t>
+                                                </span>
+                                                <span t-elif="picking.x_packing_status === 'packed'" class="badge bg-success ms-1" style="font-size:0.6rem;">
+                                                    <i class="fa fa-check me-1"></i>Đã đóng gói
+                                                </span>
                                             </div>
                                             <div t-if="picking.return_of" class="small mt-1 text-danger">
                                                 <i class="fa fa-undo me-1" title="Trả hàng"></i>
@@ -480,6 +487,20 @@
                                                     t-on-click="(ev) => this.togglePickingPrintMenu(ev, picking.id)">
                                                 <i class="fa fa-print me-1"></i>In
                                                 <i class="fa fa-caret-down ms-1"></i>
+                                            </button>
+                                            <!-- Nút In Phiếu Đóng Hàng (chỉ PACK, chưa done/cancel) -->
+                                            <button t-if="picking.sequence_code and picking.sequence_code.indexOf('PACK') >= 0 and picking.state !== 'cancel' and picking.state !== 'done'"
+                                                    class="btn btn-sm btn-outline-primary px-2 py-0 w-100"
+                                                    title="Chọn người đóng hàng và in phiếu đóng hàng"
+                                                    t-on-click.stop="() => this.openPackingWizard(picking.id, picking.name)">
+                                                <i class="fa fa-cube me-1"></i>Đóng Hàng
+                                            </button>
+                                            <!-- Nút Hoàn Tất Đóng Hàng -->
+                                            <button t-if="picking.x_packing_status === 'packing'"
+                                                    class="btn btn-sm btn-success px-2 py-0 w-100"
+                                                    title="Xác nhận hoàn thành đóng hàng"
+                                                    t-on-click.stop="(ev) => this.finishPacking(ev, picking.id)">
+                                                <i class="fa fa-check me-1"></i>Hoàn Tất
                                             </button>
                                         </div>
                                     </div>

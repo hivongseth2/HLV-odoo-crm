@@ -150,6 +150,17 @@ export class DeliveryPlannerDashboard extends Component {
             printMenuPos: null,       // { top, right } — vị trí fixed của dropdown
             selectedPrintMenuPos: null, // vị trí dropdown in cho các SO đã chọn
 
+            // Packing Slip Wizard
+            isPackingWizardOpen: false,
+            packingWizardPickingId: null,
+            packingWizardPickingName: '',
+            packingWizardPackerId: null,
+            packingWizardPackerName: '',
+            packingWizardUsers: [],
+            packingWizardLoading: false,
+            packingWizardPrinting: false,
+            packingReportId: null,    // ir.actions.report id cho "Phiếu Đóng Hàng"
+
             // Inline editing: Ghi Chú Odoo
             inlineEditSOId: null,     // soId đang edit ghi chu
             inlineEditGhiChu: '',     // giá trị đang nhập
@@ -216,6 +227,12 @@ export class DeliveryPlannerDashboard extends Component {
                 { order: 'name' }
             );
             this.state.pickingReports = reports;
+            const packingSlipReport = reports.find(r =>
+                r.name === 'Phiếu Đóng Hàng'
+            );
+            if (packingSlipReport) {
+                this.state.packingReportId = packingSlipReport.id;
+            }
         });
 
         // fetchData runs AFTER mount so cached data shows instantly
@@ -2378,6 +2395,123 @@ export class DeliveryPlannerDashboard extends Component {
                 active_model: 'stock.picking',
             }
         });
+    }
+
+    // ── Packing Slip Wizard ──────────────────────────────────────────────────
+
+    async openPackingWizard(pickingId, pickingName) {
+        this.state.packingWizardPickingId = pickingId;
+        this.state.packingWizardPickingName = pickingName || '';
+        this.state.packingWizardLoading = true;
+        this.state.packingWizardPrinting = false;
+        this.state.packingWizardUsers = [];
+        this.state.packingWizardPackerId = null;
+        this.state.packingWizardPackerName = '';
+        this.state.isPackingWizardOpen = true;
+        try {
+            const response = await fetch('/hlv_sale_delivery_planning/load_packing_users', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ jsonrpc: '2.0', method: 'call', params: {} }),
+            });
+            const json = await response.json();
+            const res = json.result || {};
+            if (res.users) {
+                this.state.packingWizardUsers = res.users;
+                const defaultUser = res.users.find(u => u.id === res.current_user_id);
+                if (defaultUser) {
+                    this.state.packingWizardPackerId = defaultUser.id;
+                    this.state.packingWizardPackerName = defaultUser.name;
+                }
+            }
+        } catch (e) {
+            console.warn('Failed to load packing users', e);
+        } finally {
+            this.state.packingWizardLoading = false;
+        }
+    }
+
+    closePackingWizard() {
+        this.state.isPackingWizardOpen = false;
+        this.state.packingWizardPickingId = null;
+        this.state.packingWizardPickingName = '';
+        this.state.packingWizardLoading = false;
+        this.state.packingWizardPrinting = false;
+    }
+
+    onPackerChange(ev) {
+        const selectedId = parseInt(ev.target.value, 10) || null;
+        this.state.packingWizardPackerId = selectedId;
+        const user = this.state.packingWizardUsers.find(u => u.id === selectedId);
+        this.state.packingWizardPackerName = user ? user.name : '';
+    }
+
+    async confirmPackingSlip() {
+        if (!this.state.packingWizardPackerId || !this.state.packingWizardPickingId) return;
+        this.state.packingWizardPrinting = true;
+        const pickingId = this.state.packingWizardPickingId;
+        const packerId = this.state.packingWizardPackerId;
+        try {
+            // 1. Gọi backend cập nhật packer + print_time + status='packing'
+            const response = await fetch('/hlv_sale_delivery_planning/confirm_packing_slip', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    jsonrpc: '2.0', method: 'call',
+                    params: { picking_id: pickingId, packer_id: packerId },
+                }),
+            });
+            const json = await response.json();
+            const res = json.result || {};
+            if (res.success === false) {
+                this.notification.add(res.message || 'Lỗi cập nhật thông tin đóng hàng', { type: 'danger' });
+                this.state.packingWizardPrinting = false;
+                return;
+            }
+
+            // 2. Đóng wizard + in report
+            this.closePackingWizard();
+            const reportId = this.state.packingReportId;
+            if (reportId) {
+                await this.actionService.doAction(reportId, {
+                    additionalContext: {
+                        active_ids: [pickingId],
+                        active_id: pickingId,
+                        active_model: 'stock.picking',
+                    }
+                });
+            } else {
+                this.notification.add('Không tìm thấy mẫu in "Phiếu Đóng Hàng". Vui lòng liên hệ admin.', { type: 'warning' });
+            }
+
+            // 3. Refresh dữ liệu drawer
+            await this.fetchData();
+            this.notification.add('Lỗi khi xác nhận in phiếu đóng hàng: ' + (e.message || e), { type: 'danger' });
+            this.state.packingWizardPrinting = false;
+        }
+    }
+
+    async finishPacking(ev, pickingId) {
+        ev.stopPropagation();
+        try {
+            const response = await fetch('/hlv_sale_delivery_planning/finish_packing', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    jsonrpc: '2.0', method: 'call',
+                    params: { picking_id: pickingId },
+                }),
+            });
+            const json = await response.json();
+            if (json.result && json.result.success === false) {
+                this.notification.add(json.result.message || 'Lỗi', { type: 'danger' });
+                return;
+            }
+            this.notification.add('Đã đánh dấu hoàn thành đóng hàng.', { type: 'success' });
+            await this.fetchData();
+        } catch (e) {
+            this.notification.add('Lỗi: ' + (e.message || e), { type: 'danger' });
+        }
     }
 
     openVideo(url) {

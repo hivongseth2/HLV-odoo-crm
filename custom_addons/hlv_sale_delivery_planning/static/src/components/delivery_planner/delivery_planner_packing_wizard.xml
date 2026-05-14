@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <!-- ================================================================
+         Packing Slip Wizard
+         Hiện ra trước khi in "Phiếu Đóng Hàng" để chọn người đóng hàng.
+         state.isPackingWizardOpen, state.packingWizard*
+         ================================================================ -->
+    <t t-name="hlv_sale_delivery_planning.PackingWizard">
+        <div t-if="state.isPackingWizardOpen"
+             class="modal show d-block" tabindex="-1"
+             style="background: rgba(0,0,0,0.5); z-index: 1080;">
+            <div class="modal-dialog modal-dialog-centered" style="max-width: 460px;">
+                <div class="modal-content shadow-lg border-0">
+
+                    <!-- Header -->
+                    <div class="modal-header py-3" style="background:#1d4ed8;">
+                        <h5 class="modal-title m-0 text-white d-flex align-items-center gap-2">
+                            <i class="fa fa-print"></i>
+                            In Phiếu Đóng Hàng
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white"
+                                t-on-click="closePackingWizard"
+                                t-att-disabled="state.packingWizardPrinting"></button>
+                    </div>
+
+                    <!-- Body -->
+                    <div class="modal-body p-4">
+
+                        <!-- Loading users -->
+                        <div t-if="state.packingWizardLoading"
+                             class="text-center text-muted py-3">
+                            <i class="fa fa-spinner fa-spin fa-2x mb-2"></i>
+                            <div>Đang tải danh sách...</div>
+                        </div>
+
+                        <div t-else="">
+                            <!-- Picking info -->
+                            <div class="bg-light rounded p-3 mb-4 border">
+                                <div class="small text-muted text-uppercase fw-bold mb-1">Phiếu đóng hàng</div>
+                                <div class="fw-bold fs-6">
+                                    <i class="fa fa-barcode me-2 text-primary"></i>
+                                    <t t-esc="state.packingWizardPickingName or '—'"/>
+                                </div>
+                            </div>
+
+                            <!-- Chọn người đóng hàng -->
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">
+                                    <i class="fa fa-user me-1 text-primary"></i>
+                                    Người đóng hàng
+                                    <span class="text-danger ms-1">*</span>
+                                </label>
+                                <select class="form-select form-select-lg"
+                                        t-att-disabled="state.packingWizardPrinting"
+                                        t-on-change="(ev) => this.onPackerChange(ev)">
+                                    <option value="">-- Chọn nhân viên --</option>
+                                    <t t-foreach="state.packingWizardUsers" t-as="u" t-key="u.id">
+                                        <option t-att-value="u.id"
+                                                t-att-selected="u.id === state.packingWizardPackerId">
+                                            <t t-esc="u.name"/>
+                                        </option>
+                                    </t>
+                                </select>
+                            </div>
+
+                            <!-- Hiển thị tên nổi bật -->
+                            <div t-if="state.packingWizardPackerId"
+                                 class="text-center py-3 rounded mb-2"
+                                 style="background:#eff6ff; border:2px solid #2563eb;">
+                                <div class="small text-muted mb-1">Người đóng hàng đã chọn</div>
+                                <div class="fw-bold" style="font-size:1.5rem; color:#1d4ed8;">
+                                    <t t-esc="state.packingWizardPackerName"/>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Footer -->
+                    <div class="modal-footer bg-light border-top p-3">
+                        <button type="button"
+                                class="btn btn-secondary"
+                                t-on-click="closePackingWizard"
+                                t-att-disabled="state.packingWizardPrinting">
+                            Hủy
+                        </button>
+                        <button type="button"
+                                class="btn btn-primary px-4"
+                                t-att-disabled="!state.packingWizardPackerId or state.packingWizardPrinting or state.packingWizardLoading"
+                                t-on-click="() => this.confirmPackingSlip()">
+                            <i t-if="!state.packingWizardPrinting" class="fa fa-print me-2"></i>
+                            <i t-else="" class="fa fa-spinner fa-spin me-2"></i>
+                            <t t-if="!state.packingWizardPrinting">Xác nhận &amp; In</t>
+                            <t t-else="">Đang xử lý...</t>
+                        </button>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </t>
+
+</templates>

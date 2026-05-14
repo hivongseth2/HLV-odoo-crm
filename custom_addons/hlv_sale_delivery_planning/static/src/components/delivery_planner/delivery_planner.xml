@@ -200,6 +200,9 @@
             <!-- Relocation Modal -->
             <t t-call="hlv_sale_delivery_planning.RelocationModal"/>
 
+            <!-- Packing Slip Wizard -->
+            <t t-call="hlv_sale_delivery_planning.PackingWizard"/>
+
             <!-- Message Drawer (Left) -->
             <t t-call="hlv_sale_delivery_planning.MessageDrawer"/>
 
