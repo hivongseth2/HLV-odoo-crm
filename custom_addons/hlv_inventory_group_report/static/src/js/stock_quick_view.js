@@ -13,11 +13,13 @@ export class StockQuickView extends Component {
             groups: [],
             warehouses: [],
             groupId: false,
-            warehouseId: false,
+            warehouseIds: [],
             showZero: false,
             lines: [],
+            columns: [],
             total: 0,
             loading: false,
+            whOpen: false,
         });
 
         onWillStart(async () => {
@@ -50,6 +52,7 @@ export class StockQuickView extends Component {
     async loadData() {
         if (!this.state.groupId) {
             this.state.lines = [];
+            this.state.columns = [];
             this.state.total = 0;
             return;
         }
@@ -58,9 +61,10 @@ export class StockQuickView extends Component {
             const result = await this.orm.call(
                 "hlv.stock.quick",
                 "get_data",
-                [this.state.groupId, this.state.warehouseId || false, this.state.showZero]
+                [this.state.groupId, this.state.warehouseIds, this.state.showZero]
             );
             this.state.lines = result.lines;
+            this.state.columns = result.columns;
             this.state.total = result.total;
         } finally {
             this.state.loading = false;
@@ -72,9 +76,50 @@ export class StockQuickView extends Component {
         this.loadData();
     }
 
-    onWarehouseChange(ev) {
-        this.state.warehouseId = parseInt(ev.target.value) || false;
+    get warehouseSummary() {
+        const n = this.state.warehouseIds.length;
+        if (n === 0) return "Tất cả kho";
+        if (n === 1) {
+            const wh = this.state.warehouses.find(w => w.id === this.state.warehouseIds[0]);
+            return wh ? wh.name : "1 kho";
+        }
+        return n + " kho đã chọn";
+    }
+
+    isWhSelected(id) {
+        return this.state.warehouseIds.includes(id);
+    }
+
+    toggleWarehouse(id) {
+        if (this.isWhSelected(id)) {
+            this.state.warehouseIds = this.state.warehouseIds.filter(x => x !== id);
+        } else {
+            this.state.warehouseIds = [...this.state.warehouseIds, id];
+        }
         this.loadData();
+    }
+
+    toggleAllWarehouses() {
+        if (this.state.warehouseIds.length === this.state.warehouses.length) {
+            this.state.warehouseIds = [];
+        } else {
+            this.state.warehouseIds = this.state.warehouses.map(w => w.id);
+        }
+        this.loadData();
+    }
+
+    toggleWhDropdown() {
+        this.state.whOpen = !this.state.whOpen;
+    }
+
+    async exportExcel() {
+        if (!this.state.groupId) return;
+        const attId = await this.orm.call(
+            "hlv.stock.quick",
+            "export_excel",
+            [this.state.groupId, this.state.warehouseIds, this.state.showZero]
+        );
+        window.location.href = "/web/content/" + attId + "?download=true";
     }
 
     onShowZeroChange(ev) {
