@@ -89,7 +89,7 @@
                     <t t-if="!state.groupId">
                         <div style="text-align:center; padding:80px 20px; color:#adb5bd;">
                             <i class="fa fa-hand-o-left" style="font-size:48px; display:block; margin-bottom:14px;"/>
-                            <div style="font-size:15px;">Ch&#x1ecdn nh&#xf3;m s&#x1ea3;n ph&#x1ea9;m &#x1edf; b&#xean;n tr&#xe1;i</div>
+                            <div style="font-size:15px;">Ch&#x1ecd;n nh&#xf3;m s&#x1ea3;n ph&#x1ea9;m &#x1edf; b&#xea;n tr&#xe1;i</div>
                         </div>
                     </t>
 
@@ -114,7 +114,7 @@
                                     <tr style="background:#1a2639; color:#fff;">
                                         <th style="padding:10px 14px; width:40px; text-align:center;">#</th>
                                         <th style="padding:10px 14px; width:130px;">M&#xe3; SP</th>
-                                        <th style="padding:10px 14px;">T&#xean;n s&#x1ea3;n ph&#x1ea9;m</th>
+                                        <th style="padding:10px 14px;">T&#xea;n s&#x1ea3;n ph&#x1ea9;m</th>
                                         <t t-if="state.columns.length > 0">
                                             <t t-foreach="state.columns" t-as="col" t-key="col.id">
                                                 <th style="padding:10px 14px; width:110px; text-align:right;">
