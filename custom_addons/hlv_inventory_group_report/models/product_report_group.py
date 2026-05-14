@@ -32,12 +32,12 @@ class HlvProductReportGroup(models.Model):
             rec.product_count = len(rec.product_ids)
 
     def action_open_report_wizard(self):
-        """Open report wizard pre-filled with this group."""
+        """Open quick stock viewer pre-filled with this group."""
         return {
             'type': 'ir.actions.act_window',
-            'name': 'Báo cáo tồn kho',
-            'res_model': 'hlv.inventory.report.wizard',
+            'name': 'Tồn kho - ' + (self.name or ''),
+            'res_model': 'hlv.stock.quick',
             'view_mode': 'form',
             'target': 'new',
-            'context': {'default_group_ids': [(4, self.id)]},
+            'context': {'default_group_id': self.id},
         }

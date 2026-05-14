@@ -18,6 +18,7 @@
         'views/inventory_report_wizard_views.xml',
         'views/inventory_report_result_views.xml',
         'report/inventory_report_template.xml',
+        'views/stock_quick_views.xml',
         'views/menu_views.xml',
     ],
     'installable': True,

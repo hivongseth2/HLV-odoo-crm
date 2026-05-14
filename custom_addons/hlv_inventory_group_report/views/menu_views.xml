@@ -11,10 +11,10 @@
               parent="stock.menu_warehouse_report"
               sequence="20"/>
 
-    <menuitem id="menu_hlv_inventory_report_config"
-              name="Cấu hình báo cáo"
+    <menuitem id="menu_hlv_stock_quick"
+              name="Xem tồn kho"
               parent="menu_hlv_inventory_group_report_root"
-              action="action_hlv_inventory_report_config"
+              action="action_hlv_stock_quick"
               sequence="10"/>
 
     <menuitem id="menu_hlv_product_report_group"
@@ -22,11 +22,5 @@
               parent="menu_hlv_inventory_group_report_root"
               action="action_hlv_product_report_group"
               sequence="20"/>
-
-    <menuitem id="menu_hlv_inventory_report_wizard"
-              name="Báo cáo nhanh"
-              parent="menu_hlv_inventory_group_report_root"
-              action="action_hlv_inventory_report_wizard"
-              sequence="30"/>
 
 </odoo>
