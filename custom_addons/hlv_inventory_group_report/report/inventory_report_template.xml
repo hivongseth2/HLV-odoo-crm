@@ -8,8 +8,8 @@
         <field name="name">Báo cáo tồn kho theo nhóm (PDF)</field>
         <field name="model">hlv.inventory.report.wizard</field>
         <field name="report_type">qweb-pdf</field>
-        <field name="report_name">hlv_inventory_group_report.inventory_group_report_template</field>
-        <field name="report_file">hlv_inventory_group_report.inventory_group_report_template</field>
+        <field name="report_name">hlv_inventory_group_report.inv_group_rpt</field>
+        <field name="report_file">hlv_inventory_group_report.inv_group_rpt</field>
         <field name="print_report_name">'Bao_cao_ton_kho_' + (object.group_ids[0].name.replace(' ', '_') if object.group_ids else 'nhom')</field>
         <field name="paperformat_id" ref="base.paperformat_a4"/>
     </record>
@@ -18,14 +18,14 @@
         <field name="name">Xem trước báo cáo tồn kho</field>
         <field name="model">hlv.inventory.report.wizard</field>
         <field name="report_type">qweb-html</field>
-        <field name="report_name">hlv_inventory_group_report.inventory_group_report_template</field>
-        <field name="report_file">hlv_inventory_group_report.inventory_group_report_template</field>
+        <field name="report_name">hlv_inventory_group_report.inv_group_rpt</field>
+        <field name="report_file">hlv_inventory_group_report.inv_group_rpt</field>
     </record>
 
     <!-- ============================================================
          QWEB REPORT TEMPLATE
     ============================================================ -->
-    <template id="inventory_group_report_template">
+    <template id="inv_group_rpt">
         <t t-call="web.html_container">
             <t t-call="web.external_layout">
 

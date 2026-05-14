@@ -3,7 +3,7 @@ from odoo import models, api
 
 class HlvInventoryGroupReportPrint(models.AbstractModel):
     """Abstract model that feeds data into the QWeb inventory group report."""
-    _name = 'report.hlv_inventory_group_report.inventory_group_report_template'
+    _name = 'report.hlv_inventory_group_report.inv_group_rpt'
     _description = 'Inventory Group Report – QWeb renderer'
 
     @api.model
