@@ -32,9 +32,6 @@
                         </list>
                     </field>
                 </sheet>
-                <footer>
-                    <button special="cancel" string="Đóng" class="btn-secondary"/>
-                </footer>
             </form>
         </field>
     </record>
@@ -46,7 +43,6 @@
         <field name="name">Xem tồn kho</field>
         <field name="res_model">hlv.stock.quick</field>
         <field name="view_mode">form</field>
-        <field name="target">new</field>
     </record>
 
 </odoo>

@@ -38,6 +38,6 @@ class HlvProductReportGroup(models.Model):
             'name': 'Tồn kho - ' + (self.name or ''),
             'res_model': 'hlv.stock.quick',
             'view_mode': 'form',
-            'target': 'new',
+            'target': 'current',
             'context': {'default_group_id': self.id},
         }
