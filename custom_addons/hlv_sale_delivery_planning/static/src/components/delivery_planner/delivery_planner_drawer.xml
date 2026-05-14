@@ -496,13 +496,6 @@
                                                 <i class="fa fa-print me-1"></i>In
                                                 <i class="fa fa-caret-down ms-1"></i>
                                             </button>
-                                            <!-- Nút Hoàn Tất Đóng Hàng (PICK đang packing) -->
-                                            <button t-if="picking.x_packing_status === 'packing' and picking.sequence_code and picking.sequence_code.indexOf('PICK') >= 0"
-                                                    class="btn btn-sm btn-success px-2 py-0 w-100"
-                                                    title="Xác nhận hoàn thành đóng hàng"
-                                                    t-on-click.stop="(ev) => this.finishPacking(ev, picking.id)">
-                                                <i class="fa fa-check me-1"></i>Hoàn Tất
-                                            </button>
                                         </div>
                                     </div>
                                 </div>
