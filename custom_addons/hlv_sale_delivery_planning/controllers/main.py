@@ -669,6 +669,7 @@ class DeliveryPlannerController(http.Controller):
                 packer_map[uid]['packed_today'].append({
                     'picking_id': p['id'],
                     'picking_name': p['name'],
+                    'print_time': start.strftime('%H:%M') if start else None,
                     'finish_time': finish.strftime('%H:%M') if finish else None,
                     'duration_min': duration_min,
                 })
@@ -683,4 +684,160 @@ class DeliveryPlannerController(http.Controller):
             return {'success': True, 'packers': packers}
         except Exception as e:
             _logger.error("packer_stats error: %s", e, exc_info=True)
+            return {'success': False, 'message': str(e)}
+
+    @http.route('/hlv_sale_delivery_planning/packing_kpi_history', type='json', auth='user', methods=['POST'])
+    def packing_kpi_history(self, date_from=None, date_to=None, packer_ids=None,
+                            status=None, page=1, page_size=50, **kwargs):
+        """
+        Lịch sử & KPI đóng hàng — dùng cho trang Báo Cáo KPI Đóng Hàng.
+        Filters: date_from/to (YYYY-MM-DD), packer_ids (list[int]), status (list[str]),
+                 page, page_size.
+        Returns: summary stats + paginated rows + packer list (for filter dropdown).
+        """
+        try:
+            from datetime import datetime, timedelta
+            Pick = request.env['stock.picking'].sudo()
+
+            # --- Date range ---
+            now = fields.Datetime.now()
+            if date_from:
+                dt_from = datetime.strptime(date_from, '%Y-%m-%d')
+            else:
+                dt_from = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            if date_to:
+                dt_to = datetime.strptime(date_to, '%Y-%m-%d').replace(
+                    hour=23, minute=59, second=59)
+            else:
+                dt_to = now
+
+            # --- Build domain ---
+            domain = [
+                ('x_packing_print_time', '>=', dt_from),
+                ('x_packing_print_time', '<=', dt_to),
+                ('x_packer_id', '!=', False),
+            ]
+            if packer_ids:
+                domain.append(('x_packer_id', 'in', [int(i) for i in packer_ids]))
+            if status:
+                domain.append(('x_packing_status', 'in', status))
+
+            # --- Fetch all matching ---
+            fields_to_read = [
+                'id', 'name', 'state',
+                'x_packer_id', 'x_packing_status',
+                'x_packing_print_time', 'x_packing_finish_time',
+                'picking_type_id',
+            ]
+            all_recs = Pick.search_read(domain, fields_to_read,
+                                        order='x_packing_print_time desc')
+
+            # --- Summary stats ---
+            total = len(all_recs)
+            count_packing = sum(1 for r in all_recs if r['x_packing_status'] == 'packing')
+            count_packed = sum(1 for r in all_recs if r['x_packing_status'] == 'packed')
+            count_pending = sum(1 for r in all_recs if r['x_packing_status'] == 'pending')
+
+            durations = []
+            for r in all_recs:
+                if r['x_packing_finish_time'] and r['x_packing_print_time']:
+                    d = (r['x_packing_finish_time'] - r['x_packing_print_time']).total_seconds() / 60
+                    durations.append(d)
+            avg_minutes = round(sum(durations) / len(durations)) if durations else None
+
+            # Per-packer summary
+            packer_summary = {}
+            for r in all_recs:
+                uid, uname = r['x_packer_id']
+                ps = packer_summary.setdefault(uid, {
+                    'id': uid, 'name': uname,
+                    'total': 0, 'packed': 0, 'packing': 0,
+                    'durations': [],
+                })
+                ps['total'] += 1
+                if r['x_packing_status'] == 'packed':
+                    ps['packed'] += 1
+                    if r['x_packing_finish_time'] and r['x_packing_print_time']:
+                        d = (r['x_packing_finish_time'] - r['x_packing_print_time']).total_seconds() / 60
+                        ps['durations'].append(d)
+                elif r['x_packing_status'] == 'packing':
+                    ps['packing'] += 1
+
+            packer_kpi = []
+            for ps in packer_summary.values():
+                avg = round(sum(ps['durations']) / len(ps['durations'])) if ps['durations'] else None
+                packer_kpi.append({
+                    'id': ps['id'],
+                    'name': ps['name'],
+                    'total': ps['total'],
+                    'packed': ps['packed'],
+                    'packing': ps['packing'],
+                    'avg_minutes': avg,
+                })
+            packer_kpi.sort(key=lambda x: -x['total'])
+
+            # --- Paginate ---
+            page = int(page)
+            page_size = int(page_size)
+            offset = (page - 1) * page_size
+            page_recs = all_recs[offset: offset + page_size]
+
+            def fmt_dt(dt):
+                return dt.strftime('%d/%m %H:%M') if dt else None
+
+            rows = []
+            for r in page_recs:
+                pt = r['x_packing_print_time']
+                ft = r['x_packing_finish_time']
+                dur = None
+                if pt and ft:
+                    dur = round((ft - pt).total_seconds() / 60)
+                rows.append({
+                    'id': r['id'],
+                    'name': r['name'],
+                    'state': r['state'],
+                    'packer': r['x_packer_id'],
+                    'status': r['x_packing_status'],
+                    'print_time': fmt_dt(pt),
+                    'finish_time': fmt_dt(ft),
+                    'duration_min': dur,
+                    'picking_type': r['picking_type_id'][1] if r['picking_type_id'] else '',
+                })
+
+            # --- Available packers (for dropdown) ---
+            all_packers_raw = Pick.search_read(
+                [('x_packer_id', '!=', False)],
+                ['x_packer_id'],
+                limit=200,
+            )
+            seen = {}
+            for r in all_packers_raw:
+                uid, uname = r['x_packer_id']
+                seen[uid] = uname
+            all_packers = [{'id': k, 'name': v} for k, v in seen.items()]
+            all_packers.sort(key=lambda x: x['name'])
+
+            return {
+                'success': True,
+                'summary': {
+                    'total': total,
+                    'packing': count_packing,
+                    'packed': count_packed,
+                    'pending': count_pending,
+                    'avg_minutes': avg_minutes,
+                    'date_from': dt_from.strftime('%Y-%m-%d'),
+                    'date_to': dt_to.strftime('%Y-%m-%d'),
+                },
+                'packer_kpi': packer_kpi,
+                'rows': rows,
+                'pagination': {
+                    'page': page,
+                    'page_size': page_size,
+                    'total': total,
+                    'pages': max(1, -(-total // page_size)),
+                },
+                'all_packers': all_packers,
+            }
+        except Exception as e:
+            _logger.error("packing_kpi_history error: %s", e, exc_info=True)
             return {'success': False, 'message': str(e)}

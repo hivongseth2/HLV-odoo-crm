@@ -126,71 +126,104 @@
          Packer Panel: Workload + trạng thái đóng hàng theo người
          ================================================================ -->
     <t t-name="hlv_sale_delivery_planning.PackerPanel">
-        <div class="mb-3">
-            <!-- Header toggle -->
-            <div class="d-flex align-items-center gap-2 mb-2 px-1 cursor-pointer user-select-none"
-                 t-on-click="togglePackerPanel">
+        <!-- Toggle button cố định góc dưới phải -->
+        <button class="btn btn-primary shadow d-flex align-items-center gap-2"
+                t-on-click="togglePackerPanel"
+                style="position:fixed; bottom:20px; right:20px; z-index:1050; border-radius:24px; padding:8px 16px;">
+            <i class="fa fa-users"></i>
+            <span class="fw-bold small">Packer</span>
+            <span t-if="state.packerStats.length" class="badge bg-white text-primary ms-1" style="font-size:0.65rem;">
+                <t t-esc="state.packerStats.length"/>
+            </span>
+            <i class="fa" t-att-class="state.packerPanelOpen ? 'fa-chevron-down' : 'fa-chevron-up'"></i>
+        </button>
+
+        <!-- Bottom panel slide-up -->
+        <div t-if="state.packerPanelOpen"
+             style="position:fixed; bottom:0; left:0; right:0; z-index:1049; background:#fff; border-top:2px solid #dee2e6; box-shadow:0 -4px 16px rgba(0,0,0,0.12); max-height:60vh; display:flex; flex-direction:column;">
+
+            <!-- Panel header -->
+            <div class="d-flex align-items-center gap-2 px-3 py-2 border-bottom bg-light flex-shrink-0">
                 <i class="fa fa-users text-primary"></i>
-                <span class="fw-bold text-dark small text-uppercase">Packer Hôm Nay</span>
-                <span t-if="state.packerStats.length"
-                      class="badge bg-primary ms-1" style="font-size:0.65rem;">
-                    <t t-esc="state.packerStats.length"/> người
-                </span>
+                <span class="fw-bold text-uppercase small">Tiến Độ Đóng Hàng Hôm Nay</span>
                 <button class="btn btn-sm btn-link p-0 ms-1 text-muted" title="Làm mới"
-                        t-on-click.stop="refreshPackerStats">
+                        t-on-click="refreshPackerStats">
                     <i class="fa fa-refresh" t-att-class="state.packerStatsLoading ? 'fa-spin' : ''"></i>
                 </button>
-                <i class="fa ms-auto text-muted"
-                   t-att-class="state.packerPanelOpen ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                <button class="btn btn-sm btn-link p-0 ms-auto text-muted" title="Đóng"
+                        t-on-click="togglePackerPanel">
+                    <i class="fa fa-times fa-lg"></i>
+                </button>
             </div>
 
-            <!-- Panel body -->
-            <div t-if="state.packerPanelOpen">
-                <div t-if="state.packerStatsLoading" class="text-center text-muted py-2 small">
+            <!-- Panel body (scrollable) -->
+            <div class="flex-grow-1 overflow-auto p-3">
+                <div t-if="state.packerStatsLoading" class="text-center text-muted py-3">
                     <i class="fa fa-spinner fa-spin me-1"></i> Đang tải...
                 </div>
-                <div t-elif="!state.packerStats.length" class="text-muted small px-1 fst-italic">
+                <div t-elif="!state.packerStats.length" class="text-muted fst-italic">
                     Chưa có packer nào được assign hôm nay.
                 </div>
-                <div t-else="" class="d-flex flex-wrap gap-2">
+                <div t-else="" class="d-flex gap-4 flex-wrap align-items-start">
                     <t t-foreach="state.packerStats" t-as="packer" t-key="packer.id">
-                        <div class="card border-0 shadow-sm flex-shrink-0" style="min-width:200px; max-width:260px;">
-                            <div class="card-body p-2">
-                                <!-- Tên packer + trạng thái -->
-                                <div class="d-flex align-items-center gap-2 mb-2">
-                                    <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center fw-bold"
-                                         style="width:30px;height:30px;font-size:0.75rem;flex-shrink:0;">
-                                        <t t-esc="packer.name.charAt(0).toUpperCase()"/>
-                                    </div>
-                                    <div class="fw-bold text-dark" style="font-size:0.85rem; line-height:1.2;">
-                                        <t t-esc="packer.name"/>
-                                    </div>
+                        <div style="min-width:360px; flex:1;">
+                            <!-- Packer header -->
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center fw-bold flex-shrink-0"
+                                     style="width:28px;height:28px;font-size:0.75rem;">
+                                    <t t-esc="packer.name.charAt(0).toUpperCase()"/>
                                 </div>
-
-                                <!-- Đang đóng -->
-                                <div t-if="packer.packing.length" class="mb-1">
-                                    <span class="badge bg-warning text-dark me-1">
-                                        <i class="fa fa-spinner fa-spin me-1"></i>Đang: <t t-esc="packer.packing.length"/>
-                                    </span>
-                                    <t t-foreach="packer.packing" t-as="pk" t-key="pk.picking_id">
-                                        <div class="small text-muted ms-1">
-                                            <i class="fa fa-barcode me-1"></i><t t-esc="pk.picking_name"/>
-                                            <span t-if="pk.print_time" class="text-secondary ms-1">(<t t-esc="pk.print_time"/>)</span>
-                                        </div>
-                                    </t>
-                                </div>
-                                <div t-else="" class="small text-muted mb-1 fst-italic">Không có phiếu đang đóng</div>
-
-                                <!-- Đã xong hôm nay -->
-                                <div class="d-flex align-items-center gap-2 mt-1 pt-1 border-top">
-                                    <span class="badge bg-success">
-                                        <i class="fa fa-check me-1"></i>Xong: <t t-esc="packer.packed_today.length"/>
-                                    </span>
-                                    <span t-if="packer.avg_minutes !== null" class="small text-muted">
-                                        <i class="fa fa-clock-o me-1"></i>TB: <t t-esc="packer.avg_minutes"/> phút
-                                    </span>
-                                </div>
+                                <span class="fw-bold"><t t-esc="packer.name"/></span>
+                                <span t-if="packer.packing.length" class="badge bg-warning text-dark">
+                                    <i class="fa fa-spinner fa-spin me-1"></i>Đang: <t t-esc="packer.packing.length"/>
+                                </span>
+                                <span class="badge bg-success">
+                                    <i class="fa fa-check me-1"></i>Xong: <t t-esc="packer.packed_today.length"/>
+                                </span>
+                                <span t-if="packer.avg_minutes !== null" class="text-muted small">
+                                    <i class="fa fa-clock-o me-1"></i>TB: <t t-esc="packer.avg_minutes"/> phút
+                                </span>
                             </div>
+                            <!-- Detail table -->
+                            <table class="table table-sm table-bordered mb-0" style="font-size:0.78rem;">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Phiếu</th>
+                                        <th class="text-center" style="width:60px;">TG In</th>
+                                        <th class="text-center" style="width:60px;">TG Xong</th>
+                                        <th class="text-center" style="width:55px;">Thời lượng</th>
+                                        <th style="width:90px;">Trạng thái</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <t t-foreach="packer.packing" t-as="pk" t-key="pk.picking_id">
+                                        <tr class="table-warning">
+                                            <td class="fw-bold"><i class="fa fa-barcode me-1 text-muted"></i><t t-esc="pk.picking_name"/></td>
+                                            <td class="text-center"><t t-esc="pk.print_time or '—'"/></td>
+                                            <td class="text-center text-muted">—</td>
+                                            <td class="text-center text-muted">—</td>
+                                            <td><span class="badge bg-warning text-dark"><i class="fa fa-spinner fa-spin me-1"></i>Đang đóng</span></td>
+                                        </tr>
+                                    </t>
+                                    <t t-foreach="packer.packed_today" t-as="pk" t-key="pk.picking_id">
+                                        <tr>
+                                            <td class="fw-bold"><i class="fa fa-barcode me-1 text-muted"></i><t t-esc="pk.picking_name"/></td>
+                                            <td class="text-center text-muted"><t t-esc="pk.print_time or '—'"/></td>
+                                            <td class="text-center text-success fw-bold"><t t-esc="pk.finish_time or '—'"/></td>
+                                            <td class="text-center">
+                                                <span t-if="pk.duration_min !== null" class="badge bg-light text-dark border">
+                                                    <t t-esc="pk.duration_min"/> ph
+                                                </span>
+                                                <span t-else="">—</span>
+                                            </td>
+                                            <td><span class="badge bg-success"><i class="fa fa-check me-1"></i>Xong</span></td>
+                                        </tr>
+                                    </t>
+                                    <tr t-if="!packer.packing.length and !packer.packed_today.length">
+                                        <td colspan="5" class="text-center text-muted fst-italic">Chưa có phiếu nào hôm nay</td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
                     </t>
                 </div>

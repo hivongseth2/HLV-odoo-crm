@@ -1,0 +1,384 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+<t t-name="hlv_sale_delivery_planning.PackingKpiDashboard">
+<div class="o_action o_view_controller" style="height:100%; display:flex; flex-direction:column; background:#f8f9fa;">
+
+    <!-- ══════════════════════════════════════════════════
+         HEADER
+    ═══════════════════════════════════════════════════ -->
+    <div class="d-flex align-items-center gap-3 px-4 py-3 border-bottom bg-white flex-shrink-0 shadow-sm">
+        <i class="fa fa-bar-chart text-primary fa-lg"></i>
+        <h5 class="mb-0 fw-bold text-dark">KPI Đóng Hàng</h5>
+        <span class="text-muted small">Lịch sử &amp; Hiệu suất đóng gói</span>
+        <div class="ms-auto">
+            <button class="btn btn-sm btn-outline-secondary me-1" t-on-click="() => this.setPreset('today')">Hôm nay</button>
+            <button class="btn btn-sm btn-outline-secondary me-1" t-on-click="() => this.setPreset('week')">Tuần này</button>
+            <button class="btn btn-sm btn-outline-secondary me-1" t-on-click="() => this.setPreset('month')">Tháng này</button>
+        </div>
+    </div>
+
+    <div class="flex-grow-1 overflow-auto p-4">
+
+        <!-- ══════════════════════════════════════════════
+             FILTER BAR
+        ════════════════════════════════════════════════ -->
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body py-2 px-3">
+                <div class="d-flex align-items-center gap-3 flex-wrap">
+
+                    <!-- Date from -->
+                    <div class="d-flex align-items-center gap-1">
+                        <label class="small text-muted mb-0 text-nowrap">Từ ngày</label>
+                        <input type="date" class="form-control form-control-sm" style="width:140px;"
+                               t-att-value="state.dateFrom"
+                               t-on-change="onDateFromChange"/>
+                    </div>
+
+                    <!-- Date to -->
+                    <div class="d-flex align-items-center gap-1">
+                        <label class="small text-muted mb-0 text-nowrap">Đến ngày</label>
+                        <input type="date" class="form-control form-control-sm" style="width:140px;"
+                               t-att-value="state.dateTo"
+                               t-on-change="onDateToChange"/>
+                    </div>
+
+                    <!-- Packer filter dropdown -->
+                    <div class="position-relative">
+                        <button class="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1"
+                                t-on-click="() => { state.packerDropdownOpen = !state.packerDropdownOpen; state.statusDropdownOpen = false; }">
+                            <i class="fa fa-user me-1"></i>
+                            <span t-if="state.selectedPackerIds.length">
+                                <t t-esc="state.selectedPackerIds.length"/> packer
+                            </span>
+                            <span t-else="">Tất cả packer</span>
+                            <i class="fa fa-caret-down ms-1"></i>
+                        </button>
+                        <div t-if="state.packerDropdownOpen"
+                             class="position-absolute bg-white border rounded shadow-lg p-2 mt-1"
+                             style="z-index:200; min-width:200px; max-height:220px; overflow-y:auto;">
+                            <t t-if="!state.allPackers.length">
+                                <div class="text-muted small p-2">Không có dữ liệu</div>
+                            </t>
+                            <t t-foreach="state.allPackers" t-as="p" t-key="p.id">
+                                <div class="form-check px-2 py-1">
+                                    <input class="form-check-input" type="checkbox"
+                                           t-att-id="'packer_' + p.id"
+                                           t-att-checked="isPackerSelected(p.id)"
+                                           t-on-change="() => this.togglePacker(p.id)"/>
+                                    <label class="form-check-label small" t-att-for="'packer_' + p.id">
+                                        <t t-esc="p.name"/>
+                                    </label>
+                                </div>
+                            </t>
+                        </div>
+                    </div>
+
+                    <!-- Status filter dropdown -->
+                    <div class="position-relative">
+                        <button class="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1"
+                                t-on-click="() => { state.statusDropdownOpen = !state.statusDropdownOpen; state.packerDropdownOpen = false; }">
+                            <i class="fa fa-filter me-1"></i>
+                            <span t-if="state.selectedStatuses.length">
+                                <t t-esc="state.selectedStatuses.length"/> trạng thái
+                            </span>
+                            <span t-else="">Tất cả trạng thái</span>
+                            <i class="fa fa-caret-down ms-1"></i>
+                        </button>
+                        <div t-if="state.statusDropdownOpen"
+                             class="position-absolute bg-white border rounded shadow-lg p-2 mt-1"
+                             style="z-index:200; min-width:180px;">
+                            <div class="form-check px-2 py-1">
+                                <input class="form-check-input" type="checkbox" id="status_pending"
+                                       t-att-checked="isStatusSelected('pending')"
+                                       t-on-change="() => this.toggleStatus('pending')"/>
+                                <label class="form-check-label small" for="status_pending">
+                                    <span class="badge bg-secondary me-1">Đang chờ</span>
+                                </label>
+                            </div>
+                            <div class="form-check px-2 py-1">
+                                <input class="form-check-input" type="checkbox" id="status_packing"
+                                       t-att-checked="isStatusSelected('packing')"
+                                       t-on-change="() => this.toggleStatus('packing')"/>
+                                <label class="form-check-label small" for="status_packing">
+                                    <span class="badge bg-warning text-dark me-1">Đang đóng</span>
+                                </label>
+                            </div>
+                            <div class="form-check px-2 py-1">
+                                <input class="form-check-input" type="checkbox" id="status_packed"
+                                       t-att-checked="isStatusSelected('packed')"
+                                       t-on-change="() => this.toggleStatus('packed')"/>
+                                <label class="form-check-label small" for="status_packed">
+                                    <span class="badge bg-success me-1">Đã xong</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Active filter tags -->
+                    <div t-if="hasActiveFilters" class="d-flex align-items-center gap-1 flex-wrap">
+                        <span t-if="state.selectedPackerIds.length"
+                              class="badge bg-primary d-flex align-items-center gap-1">
+                            <i class="fa fa-user me-1"></i>
+                            <t t-esc="selectedPackerNames"/>
+                            <i class="fa fa-times ms-1 cursor-pointer" t-on-click="() => { state.selectedPackerIds = []; applyFilters(); }"></i>
+                        </span>
+                        <span t-if="state.selectedStatuses.length"
+                              class="badge bg-info text-dark d-flex align-items-center gap-1">
+                            <t t-esc="selectedStatusLabels"/>
+                            <i class="fa fa-times ms-1 cursor-pointer" t-on-click="() => { state.selectedStatuses = []; applyFilters(); }"></i>
+                        </span>
+                    </div>
+
+                    <div class="ms-auto d-flex gap-2">
+                        <button t-if="hasActiveFilters"
+                                class="btn btn-sm btn-outline-danger"
+                                t-on-click="clearFilters">
+                            <i class="fa fa-times me-1"></i>Xóa bộ lọc
+                        </button>
+                        <button class="btn btn-sm btn-primary"
+                                t-on-click="applyFilters"
+                                t-att-disabled="state.loading">
+                            <i t-att-class="state.loading ? 'fa fa-spinner fa-spin me-1' : 'fa fa-search me-1'"></i>
+                            Tìm kiếm
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ══════════════════════════════════════════════
+             SUMMARY CARDS
+        ════════════════════════════════════════════════ -->
+        <div t-if="state.summary" class="row g-3 mb-4">
+            <!-- Tổng assign -->
+            <div class="col-6 col-md-3 col-xl">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body text-center py-3">
+                        <div class="text-muted small text-uppercase fw-bold mb-1">Tổng Phiếu Assign</div>
+                        <div class="display-6 fw-bold text-primary">
+                            <t t-esc="state.summary.total"/>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Đang đóng -->
+            <div class="col-6 col-md-3 col-xl">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body text-center py-3">
+                        <div class="text-muted small text-uppercase fw-bold mb-1">Đang Đóng</div>
+                        <div class="display-6 fw-bold text-warning">
+                            <t t-esc="state.summary.packing"/>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Đã xong -->
+            <div class="col-6 col-md-3 col-xl">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body text-center py-3">
+                        <div class="text-muted small text-uppercase fw-bold mb-1">Đã Hoàn Thành</div>
+                        <div class="display-6 fw-bold text-success">
+                            <t t-esc="state.summary.packed"/>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Chờ -->
+            <div class="col-6 col-md-3 col-xl">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body text-center py-3">
+                        <div class="text-muted small text-uppercase fw-bold mb-1">Đang Chờ</div>
+                        <div class="display-6 fw-bold text-secondary">
+                            <t t-esc="state.summary.pending"/>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- TB thời lượng -->
+            <div class="col-6 col-md-3 col-xl">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body text-center py-3">
+                        <div class="text-muted small text-uppercase fw-bold mb-1">TB Thời Lượng</div>
+                        <div class="display-6 fw-bold text-info">
+                            <t t-if="state.summary.avg_minutes !== null">
+                                <t t-esc="state.summary.avg_minutes"/> <span class="small">ph</span>
+                            </t>
+                            <t t-else="">—</t>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ══════════════════════════════════════════════
+             PER-PACKER KPI TABLE
+        ════════════════════════════════════════════════ -->
+        <div t-if="state.packerKpi.length" class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-white py-2 px-3 d-flex align-items-center">
+                <i class="fa fa-users text-primary me-2"></i>
+                <span class="fw-bold">KPI theo Packer</span>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-hover table-sm mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-3">Packer</th>
+                            <th class="text-center">Tổng assign</th>
+                            <th class="text-center">Đang đóng</th>
+                            <th class="text-center">Đã xong</th>
+                            <th class="text-center">Hoàn thành %</th>
+                            <th class="text-center">TB thời lượng</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <t t-foreach="state.packerKpi" t-as="pk" t-key="pk.id">
+                            <tr>
+                                <td class="ps-3 d-flex align-items-center gap-2 border-0 py-2">
+                                    <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center fw-bold flex-shrink-0"
+                                         style="width:26px;height:26px;font-size:0.7rem;">
+                                        <t t-esc="pk.name.charAt(0).toUpperCase()"/>
+                                    </div>
+                                    <span class="fw-bold"><t t-esc="pk.name"/></span>
+                                </td>
+                                <td class="text-center fw-bold"><t t-esc="pk.total"/></td>
+                                <td class="text-center">
+                                    <span t-if="pk.packing" class="badge bg-warning text-dark">
+                                        <t t-esc="pk.packing"/>
+                                    </span>
+                                    <span t-else="" class="text-muted">0</span>
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge bg-success"><t t-esc="pk.packed"/></span>
+                                </td>
+                                <td class="text-center">
+                                    <div class="d-flex align-items-center gap-2 justify-content-center">
+                                        <div class="progress flex-grow-1" style="height:8px; max-width:80px;">
+                                            <div class="progress-bar bg-success"
+                                                 t-att-style="'width:' + (pk.total ? Math.round(pk.packed / pk.total * 100) : 0) + '%'">
+                                            </div>
+                                        </div>
+                                        <span class="small text-muted">
+                                            <t t-esc="pk.total ? Math.round(pk.packed / pk.total * 100) : 0"/>%
+                                        </span>
+                                    </div>
+                                </td>
+                                <td class="text-center">
+                                    <span t-if="pk.avg_minutes !== null" class="badge bg-light text-dark border">
+                                        <i class="fa fa-clock-o me-1"></i><t t-esc="pk.avg_minutes"/> ph
+                                    </span>
+                                    <span t-else="" class="text-muted">—</span>
+                                </td>
+                            </tr>
+                        </t>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ══════════════════════════════════════════════
+             DETAIL TABLE
+        ════════════════════════════════════════════════ -->
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white py-2 px-3 d-flex align-items-center">
+                <i class="fa fa-list text-primary me-2"></i>
+                <span class="fw-bold">Chi Tiết Phiếu</span>
+                <span t-if="state.pagination" class="badge bg-light text-dark border ms-2 small">
+                    <t t-esc="state.pagination.total"/> phiếu
+                </span>
+                <div t-if="state.loading" class="ms-2 text-muted small">
+                    <i class="fa fa-spinner fa-spin me-1"></i>Đang tải...
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div t-if="!state.rows.length and !state.loading"
+                     class="text-center text-muted py-5 fst-italic">
+                    Không có dữ liệu cho bộ lọc đã chọn.
+                </div>
+                <div t-elif="state.rows.length" class="table-responsive">
+                    <table class="table table-hover table-sm mb-0">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th class="ps-3">Phiếu</th>
+                                <th>Loại phiếu</th>
+                                <th>Packer</th>
+                                <th class="text-center">TG In</th>
+                                <th class="text-center">TG Xong</th>
+                                <th class="text-center">Thời lượng</th>
+                                <th class="text-center">Trạng thái</th>
+                                <th class="text-center">Odoo State</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <t t-foreach="state.rows" t-as="row" t-key="row.id">
+                                <tr t-att-class="row.status === 'packing' ? 'table-warning' : (row.status === 'packed' ? '' : 'table-light')">
+                                    <td class="ps-3 fw-bold">
+                                        <i class="fa fa-barcode me-1 text-muted"></i>
+                                        <t t-esc="row.name"/>
+                                    </td>
+                                    <td class="small text-muted"><t t-esc="row.picking_type"/></td>
+                                    <td>
+                                        <span t-if="row.packer" class="d-flex align-items-center gap-1">
+                                            <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center fw-bold flex-shrink-0"
+                                                 style="width:20px;height:20px;font-size:0.6rem;">
+                                                <t t-esc="row.packer[1].charAt(0).toUpperCase()"/>
+                                            </div>
+                                            <span class="small"><t t-esc="row.packer[1]"/></span>
+                                        </span>
+                                    </td>
+                                    <td class="text-center small"><t t-esc="row.print_time or '—'"/></td>
+                                    <td class="text-center small text-success fw-bold"><t t-esc="row.finish_time or '—'"/></td>
+                                    <td class="text-center">
+                                        <span t-if="row.duration_min !== null"
+                                              t-att-class="'badge border ' + (row.duration_min > 30 ? 'bg-danger text-white' : row.duration_min > 15 ? 'bg-warning text-dark' : 'bg-success text-white')">
+                                            <t t-esc="row.duration_min"/> ph
+                                        </span>
+                                        <span t-else="" class="text-muted">—</span>
+                                    </td>
+                                    <td class="text-center">
+                                        <span t-att-class="statusBadgeClass(row.status)">
+                                            <t t-esc="statusLabel(row.status)"/>
+                                        </span>
+                                    </td>
+                                    <td class="text-center small text-muted">
+                                        <t t-esc="stateLabel(row.state)"/>
+                                    </td>
+                                </tr>
+                            </t>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                <div t-if="state.pagination and state.pagination.pages > 1"
+                     class="d-flex align-items-center justify-content-between px-3 py-2 border-top">
+                    <span class="small text-muted">
+                        Trang <t t-esc="state.pagination.page"/> / <t t-esc="state.pagination.pages"/>
+                        — <t t-esc="state.pagination.total"/> phiếu
+                    </span>
+                    <nav>
+                        <ul class="pagination pagination-sm mb-0">
+                            <li t-att-class="'page-item ' + (state.pagination.page <= 1 ? 'disabled' : '')">
+                                <a class="page-link" t-on-click="() => this.goPage(state.page - 1)">‹</a>
+                            </li>
+                            <t t-foreach="pageRange" t-as="pg" t-key="pg">
+                                <li t-att-class="'page-item ' + (pg === state.pagination.page ? 'active' : '')">
+                                    <a class="page-link" t-on-click="() => this.goPage(pg)">
+                                        <t t-esc="pg"/>
+                                    </a>
+                                </li>
+                            </t>
+                            <li t-att-class="'page-item ' + (state.pagination.page >= state.pagination.pages ? 'disabled' : '')">
+                                <a class="page-link" t-on-click="() => this.goPage(state.page + 1)">›</a>
+                            </li>
+                        </ul>
+                    </nav>
+                </div>
+            </div>
+        </div>
+
+    </div> <!-- /overflow-auto -->
+</div>
+</t>
+
+</templates>

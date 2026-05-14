@@ -94,9 +94,6 @@
                         <!-- KPI Đóng Gói -->
                         <t t-call="hlv_sale_delivery_planning.KPIPackingCards"/>
 
-                        <!-- Packer Panel -->
-                        <t t-call="hlv_sale_delivery_planning.PackerPanel"/>
-
                         <!-- Active Filters Bar -->
                         <t t-call="hlv_sale_delivery_planning.ActiveFiltersBar"/>
 
@@ -208,6 +205,9 @@
 
             <!-- Message Drawer (Left) -->
             <t t-call="hlv_sale_delivery_planning.MessageDrawer"/>
+
+            <!-- Packer Bottom Panel -->
+            <t t-call="hlv_sale_delivery_planning.PackerPanel"/>
 
             <!-- Backdrop Drawer -->
             <div t-if="state.isDrawerOpen"

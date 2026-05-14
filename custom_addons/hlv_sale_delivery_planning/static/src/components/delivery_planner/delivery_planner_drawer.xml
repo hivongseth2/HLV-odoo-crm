@@ -448,6 +448,10 @@
                                                 <span t-elif="picking.x_packing_status === 'packed'" class="badge bg-success ms-1" style="font-size:0.6rem;">
                                                     <i class="fa fa-check me-1"></i>Đã đóng gói
                                                 </span>
+                                                <!-- Thời gian in phiếu / giao đóng -->
+                                                <span t-if="picking.x_packing_print_time" class="badge bg-light text-secondary border ms-1" style="font-size:0.6rem;" t-att-title="'In lúc: ' + picking.x_packing_print_time">
+                                                    <i class="fa fa-print me-1"></i><t t-esc="picking.x_packing_print_time"/>
+                                                </span>
                                             </div>
                                             <div t-if="picking.return_of" class="small mt-1 text-danger">
                                                 <i class="fa fa-undo me-1" title="Trả hàng"></i>
