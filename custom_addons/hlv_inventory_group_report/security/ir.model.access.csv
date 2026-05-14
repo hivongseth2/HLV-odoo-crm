@@ -6,4 +6,3 @@ access_hlv_inventory_report_config_user,hlv.inventory.report.config user,model_h
 access_hlv_inventory_report_config_manager,hlv.inventory.report.config manager,model_hlv_inventory_report_config,stock.group_stock_manager,1,1,1,1
 access_hlv_inventory_report_line_user,hlv.inventory.report.line user,model_hlv_inventory_report_line,base.group_user,1,1,1,1
 access_hlv_stock_quick_user,hlv.stock.quick user,model_hlv_stock_quick,base.group_user,1,1,1,1
-access_hlv_stock_quick_line_user,hlv.stock.quick.line user,model_hlv_stock_quick_line,base.group_user,1,1,1,1

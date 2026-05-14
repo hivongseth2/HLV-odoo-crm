@@ -1,48 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-
-    <!-- ============================================================
-         FORM VIEW – Simple one-page stock viewer
-    ============================================================ -->
-    <record id="view_hlv_stock_quick_form" model="ir.ui.view">
-        <field name="name">hlv.stock.quick.form</field>
-        <field name="model">hlv.stock.quick</field>
-        <field name="arch" type="xml">
-            <form string="Xem tồn kho theo nhóm">
-                <sheet>
-                    <group>
-                        <group string="Bộ lọc">
-                            <field name="group_id"
-                                   options="{'no_create': True, 'no_open': True}"
-                                   placeholder="Chọn nhóm sản phẩm..."/>
-                            <field name="warehouse_id"
-                                   options="{'no_create': True, 'no_open': True}"
-                                   placeholder="Tất cả kho (để trống)"/>
-                            <field name="show_zero" widget="boolean_toggle"/>
-                        </group>
-                        <group string="Tổng kết">
-                            <field name="total_qty" readonly="1" string="Tổng tồn kho"/>
-                        </group>
-                    </group>
-                    <field name="line_ids" readonly="1" nolabel="1">
-                        <list string="Tồn kho" create="false" delete="false" editable="">
-                            <field name="product_code" string="Mã SP" optional="show"/>
-                            <field name="product_name" string="Tên sản phẩm"/>
-                            <field name="qty" string="Tồn kho" sum="Tổng tồn kho"/>
-                        </list>
-                    </field>
-                </sheet>
-            </form>
-        </field>
-    </record>
-
-    <!-- ============================================================
-         ACTION
-    ============================================================ -->
-    <record id="action_hlv_stock_quick" model="ir.actions.act_window">
+    <record id="action_hlv_stock_quick" model="ir.actions.client">
         <field name="name">Xem tồn kho</field>
-        <field name="res_model">hlv.stock.quick</field>
-        <field name="view_mode">form</field>
+        <field name="tag">hlv_stock_quick_action</field>
     </record>
-
 </odoo>

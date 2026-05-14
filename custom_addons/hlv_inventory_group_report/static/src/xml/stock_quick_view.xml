@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="hlv_inventory_group_report.StockQuickView">
+        <div class="o_action o_view_controller" style="background:#f4f6f8; min-height:100%; display:flex; flex-direction:column;">
+
+            <!-- ── Toolbar ── -->
+            <div style="background:#fff; border-bottom:1px solid #dee2e6; padding:14px 24px; display:flex; align-items:center; gap:20px; flex-wrap:wrap; box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+
+                <div style="font-size:17px; font-weight:700; color:#1a2639; display:flex; align-items:center; gap:10px; margin-right:8px;">
+                    <i class="fa fa-cubes" style="color:#6c757d;"/>
+                    Tồn kho theo nhóm
+                </div>
+
+                <div style="display:flex; align-items:center; gap:6px;">
+                    <label style="font-size:11px; font-weight:700; color:#8492a6; letter-spacing:.5px; white-space:nowrap;">NHÓM SP</label>
+                    <select style="border:1px solid #ced4da; border-radius:6px; padding:5px 10px; font-size:13px; min-width:210px; outline:none;" t-on-change="onGroupChange">
+                        <option value="">-- Chọn nhóm --</option>
+                        <t t-foreach="state.groups" t-as="g" t-key="g.id">
+                            <option t-att-value="g.id" t-att-selected="state.groupId === g.id">
+                                <t t-esc="g.name"/>
+                            </option>
+                        </t>
+                    </select>
+                </div>
+
+                <div style="display:flex; align-items:center; gap:6px;">
+                    <label style="font-size:11px; font-weight:700; color:#8492a6; letter-spacing:.5px; white-space:nowrap;">KHO</label>
+                    <select style="border:1px solid #ced4da; border-radius:6px; padding:5px 10px; font-size:13px; min-width:170px; outline:none;" t-on-change="onWarehouseChange">
+                        <option value="">Tất cả kho</option>
+                        <t t-foreach="state.warehouses" t-as="wh" t-key="wh.id">
+                            <option t-att-value="wh.id" t-att-selected="state.warehouseId === wh.id">
+                                <t t-esc="wh.name"/>
+                            </option>
+                        </t>
+                    </select>
+                </div>
+
+                <label style="display:flex; align-items:center; gap:7px; font-size:13px; cursor:pointer; color:#495057;">
+                    <input type="checkbox" style="width:15px; height:15px; cursor:pointer;"
+                           t-att-checked="state.showZero" t-on-change="onShowZeroChange"/>
+                    Hiện SP hết hàng
+                </label>
+
+                <t t-if="state.groupId and !state.loading">
+                    <div style="margin-left:auto; background:#198754; color:#fff; border-radius:8px; padding:7px 18px; font-size:14px; font-weight:700; white-space:nowrap;">
+                        Tổng tồn: <t t-esc="formatQty(state.total)"/>
+                    </div>
+                </t>
+            </div>
+
+            <!-- ── Content ── -->
+            <div style="padding:24px; flex:1;">
+
+                <t t-if="!state.groupId">
+                    <div style="text-align:center; padding:100px 20px; color:#adb5bd;">
+                        <i class="fa fa-cubes" style="font-size:52px; display:block; margin-bottom:16px;"/>
+                        <div style="font-size:16px; font-weight:500;">Chọn nhóm sản phẩm để xem tồn kho</div>
+                    </div>
+                </t>
+
+                <t t-elif="state.loading">
+                    <div style="text-align:center; padding:100px;">
+                        <i class="fa fa-spinner fa-spin" style="font-size:36px; color:#6c757d;"/>
+                        <div style="margin-top:12px; color:#6c757d; font-size:14px;">Đang tải...</div>
+                    </div>
+                </t>
+
+                <t t-elif="state.lines.length === 0">
+                    <div style="text-align:center; padding:100px; color:#adb5bd;">
+                        <i class="fa fa-inbox" style="font-size:52px; display:block; margin-bottom:16px;"/>
+                        <div style="font-size:16px; font-weight:500;">Không có sản phẩm nào có tồn kho</div>
+                    </div>
+                </t>
+
+                <t t-else="">
+                    <div style="background:#fff; border-radius:10px; box-shadow:0 1px 6px rgba(0,0,0,0.08); overflow:hidden;">
+                        <table style="width:100%; border-collapse:collapse; font-size:14px;">
+                            <thead>
+                                <tr style="background:#1a2639; color:#fff;">
+                                    <th style="padding:11px 16px; width:44px; text-align:center; font-weight:600;">#</th>
+                                    <th style="padding:11px 16px; width:150px; font-weight:600;">Mã SP</th>
+                                    <th style="padding:11px 16px; font-weight:600;">Tên sản phẩm</th>
+                                    <th style="padding:11px 24px; width:140px; text-align:right; font-weight:600;">Tồn kho</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-foreach="state.lines" t-as="line" t-key="line_index">
+                                    <tr t-att-style="'border-bottom:1px solid #f0f0f0;' + (line_index % 2 === 1 ? 'background:#fafbfc;' : 'background:#fff;')">
+                                        <td style="padding:9px 16px; text-align:center; color:#adb5bd; font-size:12px;">
+                                            <t t-esc="line_index + 1"/>
+                                        </td>
+                                        <td style="padding:9px 16px; font-family:monospace; font-size:12px; color:#546e7a; letter-spacing:.3px;">
+                                            <t t-esc="line.code"/>
+                                        </td>
+                                        <td style="padding:9px 16px; color:#212121;">
+                                            <t t-esc="line.name"/>
+                                        </td>
+                                        <td t-att-style="'padding:9px 24px; text-align:right; font-weight:700; font-size:15px; ' + (line.qty > 0 ? 'color:#198754;' : 'color:#adb5bd;')">
+                                            <t t-esc="formatQty(line.qty)"/>
+                                        </td>
+                                    </tr>
+                                </t>
+                            </tbody>
+                            <tfoot>
+                                <tr style="background:#e8f5e9; border-top:2px solid #198754;">
+                                    <td colspan="3" style="padding:11px 16px; font-weight:700; text-align:right; color:#155724; font-size:13px; letter-spacing:.3px;">
+                                        TỔNG TỒN KHO
+                                    </td>
+                                    <td style="padding:11px 24px; font-weight:700; text-align:right; font-size:17px; color:#198754;">
+                                        <t t-esc="formatQty(state.total)"/>
+                                    </td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </t>
+
+            </div>
+        </div>
+    </t>
+</templates>

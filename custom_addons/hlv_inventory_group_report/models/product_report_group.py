@@ -34,10 +34,9 @@ class HlvProductReportGroup(models.Model):
     def action_open_report_wizard(self):
         """Open quick stock viewer pre-filled with this group."""
         return {
-            'type': 'ir.actions.act_window',
+            'type': 'ir.actions.client',
+            'tag': 'hlv_stock_quick_action',
             'name': 'Tồn kho - ' + (self.name or ''),
-            'res_model': 'hlv.stock.quick',
-            'view_mode': 'form',
             'target': 'current',
             'context': {'default_group_id': self.id},
         }
