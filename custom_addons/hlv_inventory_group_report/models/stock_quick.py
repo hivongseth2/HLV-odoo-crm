@@ -113,3 +113,23 @@ class HlvStockQuick(models.TransientModel):
             "res_id": 0,
         })
         return att.id
+
+    @api.model
+    def get_group_products(self, group_id):
+        group = self.env["hlv.product.report.group"].browse(group_id)
+        result = []
+        for p in group.product_ids.sorted("name"):
+            result.append({"id": p.id, "name": p.name, "code": p.default_code or ""})
+        return result
+
+    @api.model
+    def search_products(self, query, exclude_ids):
+        domain = [
+            ("type", "in", ["consu", "product"]),
+            "|",
+            ("name", "ilike", query),
+            ("default_code", "ilike", query),
+            ("id", "not in", exclude_ids or []),
+        ]
+        products = self.env["product.product"].search(domain, limit=20, order="name")
+        return [{"id": p.id, "name": p.name, "code": p.default_code or ""} for p in products]
