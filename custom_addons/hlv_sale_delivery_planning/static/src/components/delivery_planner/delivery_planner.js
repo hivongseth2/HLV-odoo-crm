@@ -2453,6 +2453,7 @@ export class DeliveryPlannerDashboard extends Component {
         const packerId = this.state.packingWizardPackerId;
         const packerName = this.state.packingWizardPackerName;
         try {
+            // 1. Set packer + status='packing' + print_time
             const response = await fetch('/hlv_sale_delivery_planning/confirm_packing_slip', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -2467,7 +2468,43 @@ export class DeliveryPlannerDashboard extends Component {
                 this.notification.add(res.message || 'Lỗi cập nhật thông tin đóng hàng', { type: 'danger' });
                 return;
             }
+
+            // 2. Load report được phép in cho picking này
+            const allowedIds = await this.orm.call(
+                'ir.actions.actions',
+                'get_allowed_picking_reports',
+                [],
+                {
+                    context: {
+                        active_ids: [pickingId],
+                        active_id: pickingId,
+                        active_model: 'stock.picking',
+                    }
+                }
+            );
+            const allowedSet = new Set(allowedIds);
+            const reports = this.state.pickingReports.filter(r => allowedSet.has(r.id));
+
             this.closePackingWizard();
+
+            if (reports.length === 1) {
+                // Chỉ 1 report → in luôn
+                await this.actionService.doAction(reports[0].id, {
+                    additionalContext: {
+                        active_ids: [pickingId],
+                        active_id: pickingId,
+                        active_model: 'stock.picking',
+                    }
+                });
+            } else if (reports.length > 1) {
+                // Nhiều report → mở menu cho user chọn
+                this.state.printMenuPickingId = pickingId;
+                this.state.printMenuReports = reports;
+                this.state.printMenuPos = { top: 200, right: 20 };
+            } else {
+                this.notification.add('Không tìm thấy mẫu in cho phiếu này.', { type: 'warning' });
+            }
+
             this.notification.add(`Đã giao đóng hàng cho ${packerName}.`, { type: 'success' });
             await this.fetchData();
         } catch (e) {
