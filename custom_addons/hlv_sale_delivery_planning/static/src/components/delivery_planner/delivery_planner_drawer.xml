@@ -241,7 +241,13 @@
                                 </td>
                                 <t t-set="eff_stock" t-value="(line.qty_warehouse_free || 0) + (line.qty_reserved_here || 0)"/>
                                 <td t-att-class="eff_stock > 0 ? 'text-success fw-bold' : 'text-danger'">
-                                    <t t-esc="this.formatQty(eff_stock)"/>
+                                    <t t-esc="this.formatQty(line.qty_warehouse_free || 0)"/>
+                                    <t t-if="line.qty_reserved_here > 0">
+                                        <div class="text-info fw-normal" style="font-size:0.7rem; line-height:1.1;" title="Đang giữ cho đơn này (PICK assigned)">
+                                            <i class="fa fa-lock me-1"/>
+                                            <t t-esc="this.formatQty(line.qty_reserved_here)"/>
+                                        </div>
+                                    </t>
                                 </td>
                                 <td class="text-primary"><t t-esc="this.formatQty(line.qty_delivered)"/></td>
                                 <td t-att-class="'fw-bold ' + (Math.max(line.product_uom_qty - line.qty_delivered - (line.qty_packed || 0) - eff_stock, 0) > 0 ? 'text-danger' : 'text-muted opacity-50')">

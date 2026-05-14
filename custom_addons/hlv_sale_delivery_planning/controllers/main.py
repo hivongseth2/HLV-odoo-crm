@@ -168,14 +168,46 @@ class DeliveryPlannerController(http.Controller):
                 ('state', 'not in', ['done', 'cancel']),
             ])
 
-            # Giữ hàng cho tất cả picking chưa done/cancel
-            # Không loại trừ 'assigned' vì picking có thể ở state assigned
-            # nhưng vẫn chưa reserve đủ số lượng yêu cầu
-            pickings_to_reserve = linked_pickings.filtered(
-                lambda p: p.picking_type_code in ['outgoing', 'internal']
-                          and p.state not in ['done', 'cancel']
-                          and not p.return_id   # Loại bỏ phiếu trả hàng
-            )
+            # Chỉ gọi action_assign khi picking CÒN HÀNG THỰC TẾ để reserve thêm.
+            #
+            # Vấn đề: Nếu quant.reserved_quantity không đồng bộ với move_line.quantity
+            # (inconsistent data), action_assign sẽ thấy "free quant" ảo và tăng
+            # ml.quantity mỗi lần gọi mà không bao giờ update quant.reserved → vòng lặp vô hạn.
+            #
+            # Fix: So sánh tổng move_line.quantity với tổng quant.quantity tại location nguồn.
+            # Nếu move_lines đã claim đủ hàng vật lý có trong kho → không cần assign thêm.
+            Quant = request.env['stock.quant']
+
+            def _needs_reservation(p):
+                if p.picking_type_code not in ('outgoing', 'internal'):
+                    return False
+                if p.state in ('done', 'cancel'):
+                    return False
+                if p.return_id:
+                    return False
+                for mv in p.move_ids:
+                    if mv.state in ('done', 'cancel'):
+                        continue
+                    if mv.product_uom_qty <= mv.quantity:
+                        continue  # move này đã đủ reservation
+                    # Tổng qty move_lines đang claim cho move này
+                    existing_ml_qty = sum(
+                        ml.quantity for ml in mv.move_line_ids
+                        if ml.state not in ('cancel', 'done')
+                    )
+                    # Tổng hàng vật lý tại location nguồn (bất kể reserved hay không)
+                    total_quant_qty = sum(
+                        q.quantity for q in Quant.search([
+                            ('product_id', '=', mv.product_id.id),
+                            ('location_id', 'child_of', mv.location_id.id),
+                        ])
+                    )
+                    # Chỉ cần assign nếu còn hàng vật lý chưa bị ml nào claim
+                    if existing_ml_qty < total_quant_qty:
+                        return True
+                return False
+
+            pickings_to_reserve = linked_pickings.filtered(_needs_reservation)
 
             if not pickings_to_reserve:
                 return {'success': True, 'reserved_count': 0, 'message': 'Tất cả phiếu đã hoàn thành hoặc đã hủy'}
