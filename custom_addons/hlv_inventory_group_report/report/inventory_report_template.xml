@@ -11,7 +11,7 @@
         <field name="report_name">hlv_inventory_group_report.inv_group_rpt</field>
         <field name="report_file">hlv_inventory_group_report.inv_group_rpt</field>
         <field name="print_report_name">'Bao_cao_ton_kho_' + (object.group_ids[0].name.replace(' ', '_') if object.group_ids else 'nhom')</field>
-        <field name="paperformat_id" ref="base.paperformat_a4"/>
+        <field name="paperformat_id" ref="base.paperformat_euro"/>
     </record>
 
     <record id="action_report_inventory_group_html" model="ir.actions.report">
