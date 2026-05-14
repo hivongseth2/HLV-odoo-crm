@@ -88,9 +88,9 @@
                                 class="btn btn-primary px-4"
                                 t-att-disabled="!state.packingWizardPackerId or state.packingWizardPrinting or state.packingWizardLoading"
                                 t-on-click="() => this.confirmPackingSlip()">
-                            <i t-if="!state.packingWizardPrinting" class="fa fa-print me-2"></i>
+                            <i t-if="!state.packingWizardPrinting" class="fa fa-check me-2"></i>
                             <i t-else="" class="fa fa-spinner fa-spin me-2"></i>
-                            <t t-if="!state.packingWizardPrinting">Xác nhận &amp; In</t>
+                            <t t-if="!state.packingWizardPrinting">Xác nhận Giao Đóng</t>
                             <t t-else="">Đang xử lý...</t>
                         </button>
                     </div>

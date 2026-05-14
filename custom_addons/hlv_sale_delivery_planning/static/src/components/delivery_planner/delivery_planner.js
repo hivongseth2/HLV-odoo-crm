@@ -2451,8 +2451,8 @@ export class DeliveryPlannerDashboard extends Component {
         this.state.packingWizardPrinting = true;
         const pickingId = this.state.packingWizardPickingId;
         const packerId = this.state.packingWizardPackerId;
+        const packerName = this.state.packingWizardPackerName;
         try {
-            // 1. Gọi backend cập nhật packer + print_time + status='packing'
             const response = await fetch('/hlv_sale_delivery_planning/confirm_packing_slip', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -2465,28 +2465,15 @@ export class DeliveryPlannerDashboard extends Component {
             const res = json.result || {};
             if (res.success === false) {
                 this.notification.add(res.message || 'Lỗi cập nhật thông tin đóng hàng', { type: 'danger' });
-                this.state.packingWizardPrinting = false;
                 return;
             }
-
-            // 2. Đóng wizard + in report
             this.closePackingWizard();
-            const reportId = this.state.packingReportId;
-            if (reportId) {
-                await this.actionService.doAction(reportId, {
-                    additionalContext: {
-                        active_ids: [pickingId],
-                        active_id: pickingId,
-                        active_model: 'stock.picking',
-                    }
-                });
-            } else {
-                this.notification.add('Không tìm thấy mẫu in "Phiếu Đóng Hàng". Vui lòng liên hệ admin.', { type: 'warning' });
-            }
-
-            // 3. Refresh dữ liệu drawer
+            this.notification.add(`Đã giao đóng hàng cho ${packerName}.`, { type: 'success' });
             await this.fetchData();
-            this.notification.add('Lỗi khi xác nhận in phiếu đóng hàng: ' + (e.message || e), { type: 'danger' });
+        } catch (e) {
+            console.error('confirmPackingSlip error', e);
+            this.notification.add('Lỗi: ' + (e.message || e), { type: 'danger' });
+        } finally {
             this.state.packingWizardPrinting = false;
         }
     }
