@@ -53,7 +53,7 @@
                                         </t>
                                     </strong>
                                     <t t-if="doc['multi_group']">
-                                        &nbsp;|&nbsp; Nhóm:
+                                        &#160;|&#160; Nhóm:
                                         <strong>
                                             <t t-esc="', '.join(doc['wizard'].group_ids.mapped('name'))"/>
                                         </strong>
