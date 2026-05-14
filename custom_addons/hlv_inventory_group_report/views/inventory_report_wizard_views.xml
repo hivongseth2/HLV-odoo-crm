@@ -38,6 +38,9 @@
 
                 <group>
                     <field name="show_zero" string="Hiển thị sản phẩm tồn = 0"/>
+                    <field name="show_location_detail"
+                           string="Chi tiết theo vị trí (Location)"
+                           help="Cột báo cáo sẽ là từng vị trí con (shelf/bin) thay vì theo kho"/>
                 </group>
 
                 <footer>
@@ -51,6 +54,11 @@
                             type="object"
                             class="btn-secondary"
                             icon="fa-eye"/>
+                    <button name="action_export_excel"
+                            string="Xuất Excel"
+                            type="object"
+                            class="btn-success"
+                            icon="fa-file-excel-o"/>
                     <button special="cancel" string="Đóng" class="btn-light"/>
                 </footer>
             </form>

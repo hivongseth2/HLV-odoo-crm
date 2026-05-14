@@ -1,3 +1,6 @@
+import io
+import base64
+
 from odoo import models, fields, api
 from odoo.exceptions import UserError
 
@@ -22,7 +25,11 @@ class HlvInventoryReportWizard(models.TransientModel):
     show_zero = fields.Boolean(
         'Hiển thị sản phẩm tồn = 0',
         default=True,
-        help='Bật để hiển thị cả sản phẩm không có tồn kho tại kho đã chọn',
+    )
+    show_location_detail = fields.Boolean(
+        'Chi tiết theo vị trí (Location)',
+        default=False,
+        help='Khi bật: cột báo cáo là từng vị trí con (shelf/bin) thay vì kho',
     )
 
     # -----------------------------------------------------------------
@@ -32,27 +39,66 @@ class HlvInventoryReportWizard(models.TransientModel):
     def _get_warehouses(self):
         return self.warehouse_ids or self.env['stock.warehouse'].search([])
 
+    def _get_locations(self):
+        """Return all active internal locations under selected warehouses."""
+        root_ids = self._get_warehouses().mapped('lot_stock_id').ids
+        if not root_ids:
+            return self.env['stock.location']
+        return self.env['stock.location'].search([
+            ('id', 'child_of', root_ids),
+            ('usage', '=', 'internal'),
+            ('active', '=', True),
+        ])
+
+    def _get_columns(self):
+        """Return list of column dicts: {id, name, record}."""
+        if self.show_location_detail:
+            return [
+                {'id': loc.id, 'name': loc.display_name, 'record': loc}
+                for loc in self._get_locations()
+            ]
+        return [
+            {'id': wh.id, 'name': wh.name, 'code': wh.code or wh.name, 'record': wh}
+            for wh in self._get_warehouses()
+        ]
+
+    def _get_product_qtys(self, product, columns):
+        """Return list of {'col': col_dict, 'qty': float} for one product."""
+        if self.show_location_detail:
+            loc_ids = [c['id'] for c in columns]
+            if loc_ids:
+                groups = self.env['stock.quant'].read_group(
+                    [('product_id', '=', product.id), ('location_id', 'in', loc_ids)],
+                    ['location_id', 'quantity'],
+                    ['location_id'],
+                )
+                qty_map = {g['location_id'][0]: g['quantity'] for g in groups}
+            else:
+                qty_map = {}
+            return [{'col': c, 'qty': qty_map.get(c['id'], 0.0)} for c in columns]
+        # Warehouse mode
+        return [
+            {'col': c, 'qty': product.with_context(warehouse=c['id']).qty_available}
+            for c in columns
+        ]
+
     def get_report_data(self):
-        """Compute structured data consumed by the QWeb report template."""
-        warehouses = self._get_warehouses()
+        """Compute structured data for QWeb template and Excel export."""
+        columns = self._get_columns()
         groups_data = []
-        grand_wh_totals = {wh.id: 0.0 for wh in warehouses}
+        grand_col_totals = {c['id']: 0.0 for c in columns}
         grand_total = 0.0
 
         for group in self.group_ids.sorted('sequence'):
             products_data = []
-            group_wh_totals = {wh.id: 0.0 for wh in warehouses}
+            group_col_totals = {c['id']: 0.0 for c in columns}
             group_total = 0.0
 
             for product in group.product_ids.sorted('default_code'):
-                warehouse_qtys = []
-                total = 0.0
-                for wh in warehouses:
-                    qty = product.with_context(warehouse=wh.id).qty_available
-                    warehouse_qtys.append({'warehouse': wh, 'qty': qty})
-                    total += qty
-                    group_wh_totals[wh.id] = group_wh_totals.get(wh.id, 0.0) + qty
-
+                col_qtys = self._get_product_qtys(product, columns)
+                total = sum(cq['qty'] for cq in col_qtys)
+                for cq in col_qtys:
+                    group_col_totals[cq['col']['id']] += cq['qty']
                 group_total += total
 
                 if not self.show_zero and total == 0:
@@ -60,35 +106,33 @@ class HlvInventoryReportWizard(models.TransientModel):
 
                 products_data.append({
                     'product': product,
-                    'warehouse_qtys': warehouse_qtys,
+                    'col_qtys': col_qtys,
                     'total': total,
                 })
 
-            # Accumulate grand totals
-            for wh in warehouses:
-                grand_wh_totals[wh.id] += group_wh_totals[wh.id]
+            for c in columns:
+                grand_col_totals[c['id']] += group_col_totals[c['id']]
             grand_total += group_total
 
             groups_data.append({
                 'group': group,
                 'products': products_data,
-                'group_wh_totals': [
-                    {'warehouse': wh, 'qty': group_wh_totals[wh.id]}
-                    for wh in warehouses
+                'group_col_totals': [
+                    {'col': c, 'qty': group_col_totals[c['id']]} for c in columns
                 ],
                 'group_total': group_total,
             })
 
         return {
             'wizard': self,
-            'warehouses': warehouses,
+            'columns': columns,
             'groups_data': groups_data,
-            'grand_wh_totals': [
-                {'warehouse': wh, 'qty': grand_wh_totals[wh.id]}
-                for wh in warehouses
+            'grand_col_totals': [
+                {'col': c, 'qty': grand_col_totals[c['id']]} for c in columns
             ],
             'grand_total': grand_total,
             'multi_group': len(self.group_ids) > 1,
+            'show_location_detail': self.show_location_detail,
         }
 
     # -----------------------------------------------------------------
@@ -104,3 +148,132 @@ class HlvInventoryReportWizard(models.TransientModel):
         return self.env.ref(
             'hlv_inventory_group_report.action_report_inventory_group_html'
         ).report_action(self)
+
+    def action_export_excel(self):
+        try:
+            import xlsxwriter
+        except ImportError:
+            raise UserError('Thư viện xlsxwriter chưa được cài đặt trên server.')
+
+        data = self.get_report_data()
+        columns = data['columns']
+        total_cols = 3 + len(columns) + 1  # seq | code | name | col… | total
+
+        output = io.BytesIO()
+        wb = xlsxwriter.Workbook(output, {'in_memory': True})
+        ws = wb.add_worksheet('Tồn kho')
+
+        # ── Formats ──────────────────────────────────────────────────
+        def fmt(**kw):
+            return wb.add_format(kw)
+
+        f_title = fmt(bold=True, font_size=14, align='center', valign='vcenter',
+                      font_color='#1a2639')
+        f_grp_hdr = fmt(bold=True, font_size=11, bg_color='#1a2639',
+                        font_color='#ffffff', border=1, valign='vcenter')
+        f_col_hdr = fmt(bold=True, bg_color='#d9e1ec', font_color='#1a2639',
+                        align='center', valign='vcenter', border=1, text_wrap=True)
+        f_col_tot_hdr = fmt(bold=True, bg_color='#c8e6c9', font_color='#1b5e20',
+                            align='center', valign='vcenter', border=1)
+        f_text = fmt(border=1)
+        f_code = fmt(border=1, font_name='Courier New', font_size=9,
+                     font_color='#546e7a')
+        f_seq = fmt(border=1, align='center', font_color='#9e9e9e')
+        f_num_pos = fmt(bold=True, num_format='#,##0.##', align='right',
+                        font_color='#1b5e20', border=1)
+        f_num_zero = fmt(num_format='#,##0.##', align='right',
+                         font_color='#9e9e9e', border=1)
+        f_total = fmt(bold=True, num_format='#,##0.##', align='right',
+                      font_color='#1b5e20', bg_color='#e8f5e9', border=1)
+        f_sub_lbl = fmt(bold=True, italic=True, bg_color='#e8eaf6',
+                        font_color='#283593', align='right', border=1)
+        f_sub_num = fmt(bold=True, num_format='#,##0.##', bg_color='#e8eaf6',
+                        font_color='#283593', align='right', border=1)
+        f_grand_lbl = fmt(bold=True, bg_color='#1a2639', font_color='#ffffff',
+                          align='right', border=1)
+        f_grand_num = fmt(bold=True, num_format='#,##0.##', bg_color='#1a2639',
+                          font_color='#ffffff', align='right', border=1)
+        f_grand_tot = fmt(bold=True, font_size=12, num_format='#,##0.##',
+                          bg_color='#2e7d32', font_color='#ffffff',
+                          align='right', border=1)
+
+        # ── Column widths ─────────────────────────────────────────────
+        ws.set_column(0, 0, 5)
+        ws.set_column(1, 1, 14)
+        ws.set_column(2, 2, 42)
+        for i in range(len(columns)):
+            ws.set_column(3 + i, 3 + i, 16)
+        ws.set_column(3 + len(columns), 3 + len(columns), 14)
+
+        # ── Title ─────────────────────────────────────────────────────
+        ws.merge_range(0, 0, 1, total_cols - 1,
+                       'BÁO CÁO TỒN KHO THEO NHÓM SẢN PHẨM', f_title)
+        ws.set_row(0, 28)
+        ws.set_row(1, 10)
+
+        # ── Column header row ─────────────────────────────────────────
+        hdr_row = 2
+        ws.write(hdr_row, 0, 'STT', f_col_hdr)
+        ws.write(hdr_row, 1, 'Mã SP', f_col_hdr)
+        ws.write(hdr_row, 2, 'Tên sản phẩm', f_col_hdr)
+        for i, col in enumerate(columns):
+            ws.write(hdr_row, 3 + i, col['name'], f_col_hdr)
+        ws.write(hdr_row, 3 + len(columns), 'TỔNG TỒN', f_col_tot_hdr)
+        ws.set_row(hdr_row, 32)
+
+        row = hdr_row + 1
+
+        # ── Data ──────────────────────────────────────────────────────
+        for group_data in data['groups_data']:
+            # Group header
+            ws.merge_range(row, 0, row, total_cols - 1,
+                           group_data['group'].name.upper(), f_grp_hdr)
+            ws.set_row(row, 18)
+            row += 1
+
+            for idx, prod in enumerate(group_data['products']):
+                ws.write(row, 0, idx + 1, f_seq)
+                ws.write(row, 1, prod['product'].default_code or '', f_code)
+                ws.write(row, 2, prod['product'].display_name, f_text)
+                for i, cq in enumerate(prod['col_qtys']):
+                    ws.write(row, 3 + i, cq['qty'],
+                             f_num_pos if cq['qty'] > 0 else f_num_zero)
+                ws.write(row, 3 + len(columns), prod['total'], f_total)
+                row += 1
+
+            # Group subtotal
+            ws.merge_range(row, 0, row, 2,
+                           'Tổng nhóm: ' + group_data['group'].name, f_sub_lbl)
+            for i, gwt in enumerate(group_data['group_col_totals']):
+                ws.write(row, 3 + i, gwt['qty'], f_sub_num)
+            ws.write(row, 3 + len(columns), group_data['group_total'], f_total)
+            ws.set_row(row, 16)
+            row += 2  # spacer
+
+        # ── Grand total ───────────────────────────────────────────────
+        if data['multi_group']:
+            ws.merge_range(row, 0, row, 2, 'TỔNG CỘNG TẤT CẢ NHÓM', f_grand_lbl)
+            for i, ggt in enumerate(data['grand_col_totals']):
+                ws.write(row, 3 + i, ggt['qty'], f_grand_num)
+            ws.write(row, 3 + len(columns), data['grand_total'], f_grand_tot)
+            ws.set_row(row, 20)
+
+        wb.close()
+        output.seek(0)
+        xls_b64 = base64.b64encode(output.read()).decode()
+
+        attachment = self.env['ir.attachment'].create({
+            'name': 'bao_cao_ton_kho.xlsx',
+            'type': 'binary',
+            'datas': xls_b64,
+            'mimetype': (
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            ),
+            'res_model': self._name,
+            'res_id': self.id,
+        })
+        return {
+            'type': 'ir.actions.act_url',
+            'url': '/web/content/%d?download=true' % attachment.id,
+            'target': 'new',
+        }

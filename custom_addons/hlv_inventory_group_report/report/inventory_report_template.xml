@@ -27,9 +27,9 @@
     ============================================================ -->
     <template id="inv_group_rpt">
         <t t-call="web.html_container">
-            <t t-call="web.external_layout">
-
-                <t t-foreach="docs" t-as="doc">
+            <t t-foreach="docs" t-as="o">
+                <t t-call="web.external_layout">
+                    <t t-set="doc" t-value="o.get_report_data()"/>
                     <div class="page">
 
                         <!-- ─── PAGE TITLE ─── -->
@@ -45,17 +45,20 @@
                                     Báo cáo tồn kho theo nhóm sản phẩm
                                 </h2>
                                 <p style="font-size: 12px; color: #555; margin: 0;">
+                                    <t t-if="doc['show_location_detail']">
+                                        Chế độ: <strong>Chi tiết theo vị trí</strong>&#160;|&#160;
+                                    </t>
                                     Kho:
                                     <strong>
-                                        <t t-if="not doc['wizard'].warehouse_ids">Tất cả kho</t>
+                                        <t t-if="not o.warehouse_ids">Tất cả kho</t>
                                         <t t-else="">
-                                            <t t-esc="', '.join(doc['warehouses'].mapped('name'))"/>
+                                            <t t-esc="', '.join(o.warehouse_ids.mapped('name'))"/>
                                         </t>
                                     </strong>
                                     <t t-if="doc['multi_group']">
                                         &#160;|&#160; Nhóm:
                                         <strong>
-                                            <t t-esc="', '.join(doc['wizard'].group_ids.mapped('name'))"/>
+                                            <t t-esc="', '.join(o.group_ids.mapped('name'))"/>
                                         </strong>
                                     </t>
                                 </p>
@@ -87,24 +90,18 @@
                             </div>
 
                             <!-- Products table -->
-                            <table style="
-                                width: 100%;
-                                border-collapse: collapse;
-                                font-size: 11px;
-                                margin-bottom: 4px;
-                            ">
-                                <!-- Table head -->
+                            <table style="width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 4px;">
                                 <thead>
                                     <tr style="background-color: #d9e1ec; color: #1a2639;">
-                                        <th style="width: 30px; padding: 5px 6px; border: 1px solid #b0bec5; text-align: center;">#</th>
-                                        <th style="width: 90px; padding: 5px 6px; border: 1px solid #b0bec5;">Mã SP</th>
+                                        <th style="width: 28px; padding: 5px 6px; border: 1px solid #b0bec5; text-align: center;">#</th>
+                                        <th style="width: 88px; padding: 5px 6px; border: 1px solid #b0bec5;">Mã SP</th>
                                         <th style="padding: 5px 6px; border: 1px solid #b0bec5;">Tên sản phẩm</th>
-                                        <t t-foreach="doc['warehouses']" t-as="wh">
-                                            <th style="width: 85px; padding: 5px 6px; border: 1px solid #b0bec5; text-align: center;">
-                                                <t t-esc="wh.code or wh.name"/>
+                                        <t t-foreach="doc['columns']" t-as="col">
+                                            <th style="width: 82px; padding: 5px 6px; border: 1px solid #b0bec5; text-align: center;">
+                                                <t t-esc="col.get('code') or col['name']"/>
                                             </th>
                                         </t>
-                                        <th style="width: 85px; padding: 5px 6px; border: 1px solid #b0bec5; text-align: center; background-color: #c8e6c9; color: #1b5e20;">
+                                        <th style="width: 82px; padding: 5px 6px; border: 1px solid #b0bec5; text-align: center; background-color: #c8e6c9; color: #1b5e20;">
                                             Tổng
                                         </th>
                                     </tr>
@@ -112,7 +109,7 @@
 
                                 <tbody>
                                     <t t-foreach="group_data['products']" t-as="prod">
-                                        <tr t-attf-style="background-color: {{ '#ffffff' if prod_index % 2 == 0 else '#f4f6f8' }}; border-bottom: 1px solid #e0e0e0;">
+                                        <tr t-attf-style="background-color: {{ '#ffffff' if prod_index % 2 == 0 else '#f4f6f8' }};">
                                             <td style="padding: 4px 6px; border: 1px solid #e0e0e0; text-align: center; color: #9e9e9e;">
                                                 <t t-esc="prod_index + 1"/>
                                             </td>
@@ -122,15 +119,15 @@
                                             <td style="padding: 4px 6px; border: 1px solid #e0e0e0; color: #212121;">
                                                 <t t-esc="prod['product'].display_name"/>
                                             </td>
-                                            <t t-foreach="prod['warehouse_qtys']" t-as="wq">
+                                            <t t-foreach="prod['col_qtys']" t-as="cq">
                                                 <td t-attf-style="
                                                     padding: 4px 6px;
                                                     border: 1px solid #e0e0e0;
                                                     text-align: right;
-                                                    font-weight: {{ '600' if wq['qty'] > 0 else 'normal' }};
-                                                    color: {{ '#1b5e20' if wq['qty'] > 0 else '#9e9e9e' }};
+                                                    font-weight: {{ '600' if cq['qty'] > 0 else 'normal' }};
+                                                    color: {{ '#1b5e20' if cq['qty'] > 0 else '#9e9e9e' }};
                                                 ">
-                                                    <t t-esc="'%g' % wq['qty']"/>
+                                                    <t t-esc="'%g' % cq['qty']"/>
                                                 </td>
                                             </t>
                                             <td t-attf-style="
@@ -151,7 +148,7 @@
                                         <td colspan="3" style="padding: 5px 8px; border: 1px solid #9fa8da; text-align: right; font-style: italic; color: #283593; font-size: 11px;">
                                             Tổng nhóm: <t t-esc="group_data['group'].name"/>
                                         </td>
-                                        <t t-foreach="group_data['group_wh_totals']" t-as="gwt">
+                                        <t t-foreach="group_data['group_col_totals']" t-as="gwt">
                                             <td style="padding: 5px 6px; border: 1px solid #9fa8da; text-align: right; color: #283593;">
                                                 <t t-esc="'%g' % gwt['qty']"/>
                                             </td>
@@ -173,12 +170,12 @@
                                     <td colspan="3" style="padding: 7px 10px; text-align: right; text-transform: uppercase; letter-spacing: 0.5px;">
                                         Tổng cộng tất cả nhóm
                                     </td>
-                                    <t t-foreach="doc['grand_wh_totals']" t-as="ggt">
-                                        <td style="padding: 7px 8px; text-align: right; width: 85px; border-left: 1px solid rgba(255,255,255,0.2);">
+                                    <t t-foreach="doc['grand_col_totals']" t-as="ggt">
+                                        <td style="padding: 7px 8px; text-align: right; width: 82px; border-left: 1px solid rgba(255,255,255,0.2);">
                                             <t t-esc="'%g' % ggt['qty']"/>
                                         </td>
                                     </t>
-                                    <td style="padding: 7px 8px; text-align: right; width: 85px; background-color: #2e7d32; font-size: 13px; border-left: 1px solid rgba(255,255,255,0.3);">
+                                    <td style="padding: 7px 8px; text-align: right; width: 82px; background-color: #2e7d32; font-size: 13px; border-left: 1px solid rgba(255,255,255,0.3);">
                                         <t t-esc="'%g' % doc['grand_total']"/>
                                     </td>
                                 </tr>
@@ -188,7 +185,6 @@
                     </div>
                     <!-- END page -->
                 </t>
-
             </t>
         </t>
     </template>

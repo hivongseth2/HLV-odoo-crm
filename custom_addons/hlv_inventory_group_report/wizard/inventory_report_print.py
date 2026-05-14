@@ -9,9 +9,8 @@ class HlvInventoryGroupReportPrint(models.AbstractModel):
     @api.model
     def _get_report_values(self, docids, data=None):
         wizards = self.env['hlv.inventory.report.wizard'].browse(docids)
-        docs = [wizard.get_report_data() for wizard in wizards]
         return {
             'doc_ids': docids,
             'doc_model': 'hlv.inventory.report.wizard',
-            'docs': docs,
+            'docs': wizards,
         }
