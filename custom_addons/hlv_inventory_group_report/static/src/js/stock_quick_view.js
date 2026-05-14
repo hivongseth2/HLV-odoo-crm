@@ -1,4 +1,4 @@
-/** @odoo-module **/
+﻿/** @odoo-module **/
 import { registry } from "@web/core/registry";
 import { Component, useState, onWillStart } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
@@ -24,9 +24,6 @@ export class StockQuickView extends Component {
 
         onWillStart(async () => {
             const ctx = this.props.action?.context || {};
-            if (ctx.default_group_id) {
-                this.state.groupId = ctx.default_group_id;
-            }
             const [groups, warehouses] = await Promise.all([
                 this.orm.searchRead(
                     "hlv.product.report.group",
@@ -35,14 +32,19 @@ export class StockQuickView extends Component {
                     { order: "sequence, name" }
                 ),
                 this.orm.searchRead(
-                    "stock.warehouse",
-                    [],
+                    "stock.warehouse", [],
                     ["id", "name"],
                     { order: "name" }
                 ),
             ]);
             this.state.groups = groups;
             this.state.warehouses = warehouses;
+            // Auto-chon nhom dau tien hoac nhom duoc truyen vao
+            if (ctx.default_group_id) {
+                this.state.groupId = ctx.default_group_id;
+            } else if (groups.length > 0) {
+                this.state.groupId = groups[0].id;
+            }
             if (this.state.groupId) {
                 await this.loadData();
             }
@@ -59,8 +61,7 @@ export class StockQuickView extends Component {
         this.state.loading = true;
         try {
             const result = await this.orm.call(
-                "hlv.stock.quick",
-                "get_data",
+                "hlv.stock.quick", "get_data",
                 [this.state.groupId, this.state.warehouseIds, this.state.showZero]
             );
             this.state.lines = result.lines;
@@ -71,19 +72,25 @@ export class StockQuickView extends Component {
         }
     }
 
-    onGroupChange(ev) {
-        this.state.groupId = parseInt(ev.target.value) || false;
+    selectGroup(id) {
+        this.state.groupId = id;
+        this.state.whOpen = false;
         this.loadData();
+    }
+
+    get selectedGroupName() {
+        const g = this.state.groups.find(x => x.id === this.state.groupId);
+        return g ? g.name : "";
     }
 
     get warehouseSummary() {
         const n = this.state.warehouseIds.length;
-        if (n === 0) return "Tất cả kho";
+        if (n === 0) return "T\u1ea5t c\u1ea3 kho";
         if (n === 1) {
             const wh = this.state.warehouses.find(w => w.id === this.state.warehouseIds[0]);
             return wh ? wh.name : "1 kho";
         }
-        return n + " kho đã chọn";
+        return n + " kho \u0111\u00e3 ch\u1ecdn";
     }
 
     isWhSelected(id) {
@@ -123,8 +130,7 @@ export class StockQuickView extends Component {
     async exportExcel() {
         if (!this.state.groupId) return;
         const attId = await this.orm.call(
-            "hlv.stock.quick",
-            "export_excel",
+            "hlv.stock.quick", "export_excel",
             [this.state.groupId, this.state.warehouseIds, this.state.showZero]
         );
         window.location.href = "/web/content/" + attId + "?download=true";

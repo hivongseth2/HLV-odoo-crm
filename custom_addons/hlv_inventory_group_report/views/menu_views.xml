@@ -5,22 +5,18 @@
          MENU – under Inventory > Reporting
     ============================================================ -->
 
-    <!-- Top-level group management entry -->
-    <menuitem id="menu_hlv_inventory_group_report_root"
-              name="Báo cáo tồn kho nhóm SP"
-              parent="stock.menu_warehouse_report"
-              sequence="20"/>
-
+    <!-- Tồn kho theo nhóm - single menu, direct action -->
     <menuitem id="menu_hlv_stock_quick"
-              name="Xem tồn kho"
-              parent="menu_hlv_inventory_group_report_root"
+              name="Kiểm kê tồn kho nhóm SP"
+              parent="stock.menu_warehouse_report"
               action="action_hlv_stock_quick_client"
-              sequence="10"/>
-
-    <menuitem id="menu_hlv_product_report_group"
-              name="Quản lý nhóm sản phẩm"
-              parent="menu_hlv_inventory_group_report_root"
-              action="action_hlv_product_report_group"
               sequence="20"/>
+
+    <!-- Quan ly nhom: giu lai de nguoi dung co the edit nhom -->
+    <menuitem id="menu_hlv_product_report_group"
+              name="Nhóm sản phẩm báo cáo"
+              parent="stock.menu_warehouse_report"
+              action="action_hlv_product_report_group"
+              sequence="21"/>
 
 </odoo>
