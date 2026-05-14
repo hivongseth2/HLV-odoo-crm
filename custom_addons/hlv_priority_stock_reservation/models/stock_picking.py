@@ -13,7 +13,12 @@ class StockPicking(models.Model):
         """
         # 1. Thực hiện dự trữ hàng có sẵn trong kho trước (Standard Odoo)
         res = super(StockPicking, self).action_assign()
-        
+
+        # Sau khi super() chạy, Odoo có thể tăng move_line.quantity mà không update
+        # quant.reserved_quantity nếu dữ liệu quant không nhất quán (inconsistent).
+        # Sync lại quant.reserved để tránh "reservation bay" tích lũy mỗi lần gọi.
+        self._sync_quant_reserved_from_move_lines()
+
         # Nếu được gọi từ wizard hoặc context bỏ qua thì không mở lại wizard
         if self.env.context.get('skip_unreserve_wizard'):
             return res
@@ -102,3 +107,53 @@ class StockPicking(models.Model):
                 processed_move_ids.add(cand.id)
         
         return victim_data
+
+    def _sync_quant_reserved_from_move_lines(self):
+        """
+        Sau khi action_assign, Odoo có thể tăng move_line.quantity nhưng KHÔNG update
+        quant.reserved_quantity nếu quant đang ở trạng thái inconsistent (reserved < actual ML).
+        Method này sync lại quant.reserved = sum(move_lines) tại mỗi location,
+        đảm bảo không có "reservation bay" tích lũy mỗi lần gọi action_assign.
+        """
+        Quant = self.env['stock.quant']
+        affected_product_locs = set()
+
+        for picking in self:
+            for ml in picking.move_line_ids:
+                if ml.state in ('cancel', 'done'):
+                    continue
+                affected_product_locs.add((ml.product_id.id, ml.location_id.id))
+
+        for product_id, location_id in affected_product_locs:
+            # Tổng tất cả move_lines đang claim tại location này
+            mls = self.env['stock.move.line'].search([
+                ('product_id', '=', product_id),
+                ('location_id', '=', location_id),
+                ('state', 'not in', ('cancel', 'done')),
+            ])
+            total_ml_qty = sum(ml.quantity for ml in mls)
+
+            quants = Quant.search([
+                ('product_id', '=', product_id),
+                ('location_id', '=', location_id),
+            ])
+            if not quants:
+                continue
+
+            total_quant_qty = sum(q.quantity for q in quants)
+            # reserved không được vượt quá qty thực tế và không được ít hơn 0
+            correct_reserved = max(0.0, min(total_ml_qty, total_quant_qty))
+
+            for q in quants:
+                if abs(q.reserved_quantity - correct_reserved) > 0.001:
+                    _logger.info(
+                        'Sync quant %d (%s): reserved %s → %s (ml_total=%s, qty=%s)',
+                        q.id, q.location_id.complete_name,
+                        q.reserved_quantity, correct_reserved,
+                        total_ml_qty, total_quant_qty,
+                    )
+                    self.env.cr.execute(
+                        'UPDATE stock_quant SET reserved_quantity = %s WHERE id = %s',
+                        (correct_reserved, q.id),
+                    )
+                    q.invalidate_recordset(['reserved_quantity'])
