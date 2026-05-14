@@ -117,7 +117,7 @@
                                                 <t t-esc="prod['product'].default_code or ''"/>
                                             </td>
                                             <td style="padding: 4px 6px; border: 1px solid #e0e0e0; color: #212121;">
-                                                <t t-esc="prod['product'].display_name"/>
+                                                <t t-esc="prod['product'].name"/>
                                             </td>
                                             <t t-foreach="prod['col_qtys']" t-as="cq">
                                                 <td t-attf-style="

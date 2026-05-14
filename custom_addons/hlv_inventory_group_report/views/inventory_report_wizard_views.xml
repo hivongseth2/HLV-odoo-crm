@@ -9,12 +9,12 @@
         <field name="model">hlv.inventory.report.wizard</field>
         <field name="arch" type="xml">
             <form string="Báo cáo tồn kho theo nhóm sản phẩm">
-                <div class="o_dialog_warning alert alert-info" role="alert"
-                     style="margin: 0 0 12px 0;">
-                    <i class="fa fa-info-circle me-1"/>
-                    Chọn nhóm sản phẩm và kho hàng cần báo cáo.
-                    Để trống <strong>Kho hàng</strong> để hiển thị tất cả kho.
-                </div>
+                <group>
+                    <field name="config_id"
+                           string="Cấu hình đã lưu"
+                           options="{'no_create': True}"
+                           placeholder="(tuỳ chọn)"/>
+                </group>
 
                 <group>
                     <group string="Nhóm sản phẩm" colspan="2">
@@ -27,7 +27,7 @@
                 </group>
 
                 <group>
-                    <group string="Kho hàng" colspan="2">
+                    <group string="Kho hàng (để trống = tất cả kho)" colspan="2">
                         <field name="warehouse_ids"
                                widget="many2many_tags"
                                options="{'no_create_edit': True}"
@@ -44,21 +44,26 @@
                 </group>
 
                 <footer>
+                    <button name="action_view_web"
+                            string="Xem trên web"
+                            type="object"
+                            class="btn-primary"
+                            icon="fa-table"/>
                     <button name="action_print_pdf"
                             string="In PDF"
                             type="object"
-                            class="btn-primary"
-                            icon="fa-print"/>
-                    <button name="action_preview_html"
-                            string="Xem trực tiếp"
-                            type="object"
                             class="btn-secondary"
-                            icon="fa-eye"/>
+                            icon="fa-print"/>
                     <button name="action_export_excel"
                             string="Xuất Excel"
                             type="object"
                             class="btn-success"
                             icon="fa-file-excel-o"/>
+                    <button name="action_save_config"
+                            string="Lưu cấu hình"
+                            type="object"
+                            class="btn-light"
+                            icon="fa-save"/>
                     <button special="cancel" string="Đóng" class="btn-light"/>
                 </footer>
             </form>

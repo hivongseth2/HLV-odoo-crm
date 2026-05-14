@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ============================================================
+         CONFIG LIST VIEW
+    ============================================================ -->
+    <record id="view_hlv_inventory_report_config_list" model="ir.ui.view">
+        <field name="name">hlv.inventory.report.config.list</field>
+        <field name="model">hlv.inventory.report.config</field>
+        <field name="arch" type="xml">
+            <list string="Cấu hình báo cáo tồn kho">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="group_ids" widget="many2many_tags"
+                       options="{'color_field': 'color'}" string="Nhóm SP"/>
+                <field name="warehouse_ids" widget="many2many_tags" string="Kho hàng"
+                       optional="show"/>
+                <field name="show_location_detail" optional="hide"/>
+                <button name="action_open_wizard"
+                        type="object"
+                        icon="fa-play"
+                        string="Chạy báo cáo"
+                        class="btn-link"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ============================================================
+         CONFIG FORM VIEW
+    ============================================================ -->
+    <record id="view_hlv_inventory_report_config_form" model="ir.ui.view">
+        <field name="name">hlv.inventory.report.config.form</field>
+        <field name="model">hlv.inventory.report.config</field>
+        <field name="arch" type="xml">
+            <form string="Cấu hình báo cáo tồn kho">
+                <sheet>
+                    <widget name="web_ribbon" title="Lưu trữ" bg_color="text-bg-danger"
+                            invisible="active"/>
+                    <div class="oe_title">
+                        <label for="name" string="Tên báo cáo"/>
+                        <h1>
+                            <field name="name" placeholder="VD: Tồn kho Milwaukee tháng 5..."/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="sequence"/>
+                            <field name="show_zero" string="Hiển thị SP tồn = 0"/>
+                            <field name="show_location_detail"
+                                   string="Chi tiết theo vị trí"/>
+                            <field name="active" invisible="1"/>
+                        </group>
+                        <group>
+                            <field name="note" placeholder="Ghi chú tuỳ chọn..."/>
+                        </group>
+                    </group>
+
+                    <group string="Nhóm sản phẩm">
+                        <field name="group_ids"
+                               widget="many2many_tags"
+                               options="{'color_field': 'color'}"
+                               nolabel="1"
+                               placeholder="Chọn nhóm sản phẩm..."/>
+                    </group>
+
+                    <group string="Kho hàng (để trống = tất cả kho)">
+                        <field name="warehouse_ids"
+                               widget="many2many_tags"
+                               nolabel="1"
+                               placeholder="Để trống = báo cáo tất cả kho..."/>
+                    </group>
+
+                    <div class="o_row mt-3">
+                        <button name="action_open_wizard"
+                                string="Chạy báo cáo ngay"
+                                type="object"
+                                class="btn btn-primary"
+                                icon="fa-play"/>
+                    </div>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- ============================================================
+         ACTION
+    ============================================================ -->
+    <record id="action_hlv_inventory_report_config" model="ir.actions.act_window">
+        <field name="name">Cấu hình báo cáo tồn kho</field>
+        <field name="res_model">hlv.inventory.report.config</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_active': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Chưa có cấu hình báo cáo nào</p>
+            <p>
+                Tạo cấu hình để lưu lại nhóm sản phẩm, kho và các tùy chọn báo cáo.<br/>
+                Mỗi lần cần báo cáo, chỉ cần bấm "Chạy báo cáo" là xong.
+            </p>
+        </field>
+    </record>
+
+</odoo>

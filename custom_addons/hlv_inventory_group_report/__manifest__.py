@@ -14,7 +14,9 @@
     'data': [
         'security/ir.model.access.csv',
         'views/product_report_group_views.xml',
+        'views/inventory_report_config_views.xml',
         'views/inventory_report_wizard_views.xml',
+        'views/inventory_report_result_views.xml',
         'report/inventory_report_template.xml',
         'views/menu_views.xml',
     ],
