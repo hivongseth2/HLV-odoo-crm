@@ -630,7 +630,10 @@ class DeliveryPlannerController(http.Controller):
         Trả về: đang đóng, đã xong hôm nay, thời gian trung bình.
         """
         try:
-            today_start = fields.Datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            from datetime import timedelta as _td
+            _TZ = _td(hours=7)
+            now_utc = fields.Datetime.now()
+            today_start = (now_utc + _TZ).replace(hour=0, minute=0, second=0, microsecond=0) - _TZ
             Pick = request.env['stock.picking'].sudo()
 
             packing = Pick.search_read(
@@ -655,7 +658,7 @@ class DeliveryPlannerController(http.Controller):
                 packer_map[uid]['packing'].append({
                     'picking_id': p['id'],
                     'picking_name': p['name'],
-                    'print_time': p['x_packing_print_time'].strftime('%H:%M') if p['x_packing_print_time'] else None,
+                    'print_time': (p['x_packing_print_time'] + _TZ).strftime('%H:%M') if p['x_packing_print_time'] else None,
                 })
 
             durations = {}
@@ -669,8 +672,8 @@ class DeliveryPlannerController(http.Controller):
                 packer_map[uid]['packed_today'].append({
                     'picking_id': p['id'],
                     'picking_name': p['name'],
-                    'print_time': start.strftime('%H:%M') if start else None,
-                    'finish_time': finish.strftime('%H:%M') if finish else None,
+                    'print_time': (start + _TZ).strftime('%H:%M') if start else None,
+                    'finish_time': (finish + _TZ).strftime('%H:%M') if finish else None,
                     'duration_min': duration_min,
                 })
                 if duration_min is not None:
@@ -697,19 +700,21 @@ class DeliveryPlannerController(http.Controller):
         """
         try:
             from datetime import datetime, timedelta
+            _TZ = timedelta(hours=7)
             Pick = request.env['stock.picking'].sudo()
 
-            # --- Date range ---
-            now = fields.Datetime.now()
+            # --- Date range (user inputs Vietnam dates → convert to UTC for DB query) ---
+            now_utc = fields.Datetime.now()
             if date_from:
-                dt_from = datetime.strptime(date_from, '%Y-%m-%d')
+                dt_from = datetime.strptime(date_from, '%Y-%m-%d') - _TZ
             else:
-                dt_from = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+                now_vn = now_utc + _TZ
+                dt_from = now_vn.replace(day=1, hour=0, minute=0, second=0, microsecond=0) - _TZ
             if date_to:
                 dt_to = datetime.strptime(date_to, '%Y-%m-%d').replace(
-                    hour=23, minute=59, second=59)
+                    hour=23, minute=59, second=59) - _TZ
             else:
-                dt_to = now
+                dt_to = now_utc
 
             # --- Build domain ---
             domain = [
@@ -783,7 +788,7 @@ class DeliveryPlannerController(http.Controller):
             page_recs = all_recs[offset: offset + page_size]
 
             def fmt_dt(dt):
-                return dt.strftime('%d/%m %H:%M') if dt else None
+                return (dt + _TZ).strftime('%d/%m %H:%M') if dt else None
 
             rows = []
             for r in page_recs:

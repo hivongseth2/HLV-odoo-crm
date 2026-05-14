@@ -55,7 +55,7 @@
                             <i class="fa fa-caret-down ms-1"></i>
                         </button>
                         <div t-if="state.packerDropdownOpen"
-                             class="position-absolute bg-white border rounded shadow-lg p-2 mt-1"
+                             class="position-absolute bg-white border rounded shadow-lg p-3 mt-1"
                              style="z-index:200; min-width:200px; max-height:220px; overflow-y:auto;">
                             <t t-if="!state.allPackers.length">
                                 <div class="text-muted small p-2">Không có dữ liệu</div>
@@ -86,7 +86,7 @@
                             <i class="fa fa-caret-down ms-1"></i>
                         </button>
                         <div t-if="state.statusDropdownOpen"
-                             class="position-absolute bg-white border rounded shadow-lg p-2 mt-1"
+                             class="position-absolute bg-white border rounded shadow-lg p-3 mt-1"
                              style="z-index:200; min-width:180px;">
                             <div class="form-check px-2 py-1">
                                 <input class="form-check-input" type="checkbox" id="status_pending"

@@ -526,6 +526,10 @@ export class DeliveryPlannerDashboard extends Component {
                 "Dữ liệu đã được cập nhật tự động",
                 { type: "info", title: "Cập nhật xong" }
             );
+            // Reload packer stats if panel is open
+            if (this.state.packerPanelOpen) {
+                this.loadPackerStats();
+            }
         }, 800);
     }
 

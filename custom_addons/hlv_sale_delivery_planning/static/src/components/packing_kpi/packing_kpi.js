@@ -1,5 +1,5 @@
 /** @odoo-module **/
-import { Component, useState, onWillStart } from "@odoo/owl";
+import { Component, useState, onWillStart, onWillDestroy } from "@odoo/owl";
 import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 
@@ -8,6 +8,11 @@ export class PackingKpiDashboard extends Component {
 
     setup() {
         this.notification = useService("notification");
+        try {
+            this.busService = useService("bus_service");
+        } catch (e) {
+            this.busService = null;
+        }
 
         // Default date range: current month
         const now = new Date();
@@ -36,6 +41,29 @@ export class PackingKpiDashboard extends Component {
         });
 
         onWillStart(() => this.fetchData());
+
+        // Bus: auto-refresh when packing data changes (same channel as dashboard)
+        if (this.busService) {
+            this.busService.addChannel("delivery_planner_channel");
+            this._onBusPackingChanged = () => {
+                if (this._packingRefreshDebounce) clearTimeout(this._packingRefreshDebounce);
+                this._packingRefreshDebounce = setTimeout(() => {
+                    this._packingRefreshDebounce = null;
+                    this.fetchData();
+                }, 1000);
+            };
+            this.busService.subscribe("delivery_planner_data_changed", this._onBusPackingChanged);
+        }
+
+        onWillDestroy(() => {
+            if (this.busService) {
+                if (this._onBusPackingChanged) {
+                    this.busService.unsubscribe("delivery_planner_data_changed", this._onBusPackingChanged);
+                }
+                this.busService.deleteChannel("delivery_planner_channel");
+            }
+            if (this._packingRefreshDebounce) clearTimeout(this._packingRefreshDebounce);
+        });
     }
 
     // ── Filters ────────────────────────────────────────────────────────────────
