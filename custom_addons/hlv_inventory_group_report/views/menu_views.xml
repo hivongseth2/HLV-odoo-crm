@@ -14,7 +14,7 @@
     <menuitem id="menu_hlv_stock_quick"
               name="Xem tồn kho"
               parent="menu_hlv_inventory_group_report_root"
-              action="action_hlv_stock_quick"
+              action="action_hlv_stock_quick_client"
               sequence="10"/>
 
     <menuitem id="menu_hlv_product_report_group"
