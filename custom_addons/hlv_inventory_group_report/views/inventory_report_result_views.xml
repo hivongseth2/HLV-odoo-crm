@@ -12,8 +12,7 @@
                   create="false" edit="false" delete="false"
                   decoration-muted="qty_total == 0">
                 <field name="group_name" string="Nhóm" optional="hide"/>
-                <field name="product_code" string="Mã SP"
-                       style="font-family: monospace; color: #546e7a;"/>
+                <field name="product_code" string="Mã SP"/>
                 <field name="product_name" string="Tên sản phẩm"/>
                 <field name="qty_details" string="Tồn theo kho/vị trí"/>
                 <field name="qty_total" string="Tổng tồn"
