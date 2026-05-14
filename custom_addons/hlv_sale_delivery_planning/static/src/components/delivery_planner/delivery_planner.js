@@ -2577,6 +2577,11 @@ export class DeliveryPlannerDashboard extends Component {
         }
     }
 
+    refreshPackerStats(ev) {
+        ev.stopPropagation();
+        this.loadPackerStats();
+    }
+
     async loadPackerStats() {
         if (this.state.packerStatsLoading) return;
         this.state.packerStatsLoading = true;

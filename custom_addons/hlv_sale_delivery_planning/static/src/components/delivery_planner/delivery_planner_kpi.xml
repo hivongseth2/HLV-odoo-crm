@@ -137,7 +137,7 @@
                     <t t-esc="state.packerStats.length"/> người
                 </span>
                 <button class="btn btn-sm btn-link p-0 ms-1 text-muted" title="Làm mới"
-                        t-on-click.stop="() => this.loadPackerStats()">
+                        t-on-click.stop="refreshPackerStats">
                     <i class="fa fa-refresh" t-att-class="state.packerStatsLoading ? 'fa-spin' : ''"></i>
                 </button>
                 <i class="fa ms-auto text-muted"
