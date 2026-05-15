@@ -70,6 +70,17 @@
                                 style="background:#217346; color:#fff; border:none; border-radius:7px; padding:7px 16px; font-size:13px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:7px;">
                             <i class="fa fa-file-excel-o"/> Xuất Excel
                         </button>
+                        <button t-on-click="exportAllMoves"
+                                t-att-disabled="state.movesExporting"
+                                t-att-style="'border:none; border-radius:7px; padding:7px 16px; font-size:13px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:7px; ' + (state.movesExporting ? 'background:#90a4ae; color:#fff; cursor:wait;' : 'background:#1565c0; color:#fff;')"
+                                title="Xuất sổ chi tiết nhập/xuất cho tất cả sản phẩm trong nhóm">
+                            <t t-if="state.movesExporting">
+                                <i class="fa fa-spinner fa-spin"/> Đang xuất...
+                            </t>
+                            <t t-else="">
+                                <i class="fa fa-book"/> Xuất sổ chi tiết
+                            </t>
+                        </button>
                     </t>
                     <t t-if="state.groupId and !state.loading">
                         <div style="background:#1a2639; color:#fff; border-radius:8px; padding:7px 16px; font-size:14px; font-weight:700; white-space:nowrap;">
