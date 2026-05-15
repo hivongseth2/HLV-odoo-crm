@@ -167,8 +167,11 @@
                 <div t-else="" class="d-flex gap-4 flex-wrap align-items-start">
                     <t t-foreach="state.packerStats" t-as="packer" t-key="packer.id">
                         <div style="min-width:360px; flex:1;">
-                            <!-- Packer header -->
-                            <div class="d-flex align-items-center gap-2 mb-2">
+                            <!-- Packer header (clickable collapse) -->
+                            <div class="d-flex align-items-center gap-2 mb-2"
+                                 style="cursor:pointer;"
+                                 t-on-click="() => this.togglePackerCollapse(packer.id)">
+                                <i t-att-class="'fa fa-fw ' + (state.packerCollapsed[packer.id] ? 'fa-chevron-right' : 'fa-chevron-down') + ' text-muted'"></i>
                                 <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center fw-bold flex-shrink-0"
                                      style="width:28px;height:28px;font-size:0.75rem;">
                                     <t t-esc="packer.name.charAt(0).toUpperCase()"/>
@@ -193,8 +196,8 @@
                                     PACK: <t t-esc="packer.num_pack"/>
                                 </span>
                             </div>
-                            <!-- Detail table -->
-                            <table class="table table-sm table-bordered mb-0" style="font-size:0.78rem;">
+                            <!-- Detail table (collapsible) -->
+                            <table t-if="!state.packerCollapsed[packer.id]" class="table table-sm table-bordered mb-0" style="font-size:0.78rem;">
                                 <thead class="table-light">
                                     <tr>
                                         <th>Phiếu</th>
@@ -210,6 +213,9 @@
                                         <tr class="table-warning">
                                             <td class="fw-bold">
                                                 <i class="fa fa-barcode me-1 text-muted"></i><t t-esc="pk.picking_name"/>
+                                                <div t-if="pk.pack_name" class="text-muted small fw-normal">
+                                                    <i class="fa fa-cube me-1"></i><t t-esc="pk.pack_name"/>
+                                                </div>
                                                 <div t-if="pk.sale_name" class="text-muted small fw-normal">
                                                     <i class="fa fa-file-text-o me-1"></i><t t-esc="pk.sale_name"/>
                                                 </div>
@@ -225,6 +231,9 @@
                                         <tr>
                                             <td class="fw-bold">
                                                 <i class="fa fa-barcode me-1 text-muted"></i><t t-esc="pk.picking_name"/>
+                                                <div t-if="pk.pack_name" class="text-muted small fw-normal">
+                                                    <i class="fa fa-cube me-1"></i><t t-esc="pk.pack_name"/>
+                                                </div>
                                                 <div t-if="pk.sale_name" class="text-muted small fw-normal">
                                                     <i class="fa fa-file-text-o me-1"></i><t t-esc="pk.sale_name"/>
                                                 </div>

@@ -739,6 +739,36 @@ class DeliveryPlannerController(http.Controller):
                 if mins and uid in packer_map:
                     packer_map[uid]['avg_minutes'] = round(sum(mins) / len(mins))
 
+            # Find PACK picking name for each PICK picking (bulk)
+            _all_pick_ids = [item['picking_id'] for pm in packer_map.values() for item in pm['packing'] + pm['packed_today']]
+            _pack_name_map = {}
+            if _all_pick_ids:
+                _Move = request.env['stock.move'].sudo()
+                _dest_moves = _Move.search_read(
+                    [('move_orig_ids.picking_id', 'in', _all_pick_ids)],
+                    ['picking_id', 'move_orig_ids'],
+                )
+                if _dest_moves:
+                    _orig_ids = list({mid for dm in _dest_moves for mid in dm.get('move_orig_ids', [])})
+                    _orig_map = {
+                        m['id']: m['picking_id'][0]
+                        for m in _Move.search_read(
+                            [('id', 'in', _orig_ids), ('picking_id', 'in', _all_pick_ids)],
+                            ['id', 'picking_id'],
+                        ) if m.get('picking_id')
+                    }
+                    for dm in _dest_moves:
+                        if not dm.get('picking_id'):
+                            continue
+                        _pn = dm['picking_id'][1]
+                        for _mid in dm.get('move_orig_ids', []):
+                            _src = _orig_map.get(_mid)
+                            if _src and _src not in _pack_name_map:
+                                _pack_name_map[_src] = _pn
+            for pm in packer_map.values():
+                for item in pm['packing'] + pm['packed_today']:
+                    item['pack_name'] = _pack_name_map.get(item['picking_id'])
+
             packers = []
             for pm in sorted(packer_map.values(), key=lambda x: (-len(x['packing']), x['name'])):
                 packers.append({
@@ -864,6 +894,33 @@ class DeliveryPlannerController(http.Controller):
             offset = (page - 1) * page_size
             page_recs = all_recs[offset: offset + page_size]
 
+            # Find PACK picking names for page rows (bulk)
+            _page_ids = [r['id'] for r in page_recs]
+            _kpi_pack_map = {}
+            if _page_ids:
+                _Move = request.env['stock.move'].sudo()
+                _dest_moves = _Move.search_read(
+                    [('move_orig_ids.picking_id', 'in', _page_ids)],
+                    ['picking_id', 'move_orig_ids'],
+                )
+                if _dest_moves:
+                    _orig_ids = list({mid for dm in _dest_moves for mid in dm.get('move_orig_ids', [])})
+                    _orig_map = {
+                        m['id']: m['picking_id'][0]
+                        for m in _Move.search_read(
+                            [('id', 'in', _orig_ids), ('picking_id', 'in', _page_ids)],
+                            ['id', 'picking_id'],
+                        ) if m.get('picking_id')
+                    }
+                    for dm in _dest_moves:
+                        if not dm.get('picking_id'):
+                            continue
+                        _pn = dm['picking_id'][1]
+                        for _mid in dm.get('move_orig_ids', []):
+                            _src = _orig_map.get(_mid)
+                            if _src and _src not in _kpi_pack_map:
+                                _kpi_pack_map[_src] = _pn
+
             def fmt_dt(dt):
                 return (dt + _TZ).strftime('%d/%m %H:%M') if dt else None
 
@@ -880,6 +937,7 @@ class DeliveryPlannerController(http.Controller):
                     'id': r['id'],
                     'name': r['name'],
                     'sale_name': r['sale_id'][1] if r.get('sale_id') else None,
+                    'pack_name': _kpi_pack_map.get(r['id']),
                     'state': r['state'],
                     'packer': r['x_packer_id'],
                     'packer_name': kpi_user_display.get(uid, uname) if uid else uname,

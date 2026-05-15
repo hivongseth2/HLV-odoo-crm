@@ -38,6 +38,7 @@ export class PackingKpiDashboard extends Component {
             // UI
             packerDropdownOpen: false,
             statusDropdownOpen: false,
+            collapsedPackers: {},    // {packerId: bool}
         });
 
         onWillStart(() => this.fetchData());
@@ -219,6 +220,10 @@ export class PackingKpiDashboard extends Component {
 
     get hasActiveFilters() {
         return this.state.selectedPackerIds.length > 0 || this.state.selectedStatuses.length > 0;
+    }
+
+    togglePackerCollapse(id) {
+        this.state.collapsedPackers[id] = !this.state.collapsedPackers[id];
     }
 
     get rowsByPacker() {

@@ -168,6 +168,7 @@ export class DeliveryPlannerDashboard extends Component {
             packerPanelOpen: false,
             packerStatsLoading: false,
             packerStats: [],  // [{id, name, packing:[], packed_today:[], avg_minutes}]
+            packerCollapsed: {},  // {packerId: bool}
 
             // Inline editing: Ghi Chú Odoo
             inlineEditSOId: null,     // soId đang edit ghi chu
@@ -2579,6 +2580,10 @@ export class DeliveryPlannerDashboard extends Component {
         if (this.state.packerPanelOpen) {
             this.loadPackerStats();
         }
+    }
+
+    togglePackerCollapse(id) {
+        this.state.packerCollapsed[id] = !this.state.packerCollapsed[id];
     }
 
     refreshPackerStats(ev) {
