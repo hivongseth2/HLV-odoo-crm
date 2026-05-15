@@ -254,10 +254,10 @@
                                                     <td style="padding:8px 12px; color:#212121; vertical-align:middle; border-right:1px solid #f0f0f0;">
                                                         <span t-esc="line.name"/>
                                                         <i class="fa fa-map-marker"
-                                                           t-att-style="'margin-left:8px; font-size:11px; ' + (state.expandedProductId === line.id ? 'color:#0d6efd;' : 'color:#ced4da;')"/>
+                                                           t-att-style="'margin-left:8px; font-size:15px; ' + (state.expandedProductId === line.id ? 'color:#0d6efd;' : 'color:#0c56c482;')"/>
                                                         <i class="fa fa-history"
                                                            t-on-click.stop="() => this.toggleProductMoves(line.id)"
-                                                           t-att-style="'margin-left:6px; font-size:11px; cursor:pointer; ' + (state.expandedMovesId === line.id ? 'color:#198754;' : 'color:#ced4da;')"
+                                                           t-att-style="'margin-left:6px; font-size:15px; cursor:pointer; ' + (state.expandedMovesId === line.id ? 'color:#198754;' : 'color:#2bb87782;')"
                                                            title="Lịch sử nhập/xuất"/>
                                                     </td>
                                                     <td style="padding:8px 10px; text-align:center; vertical-align:middle; font-size:11px; color:#6c757d; border-right:1px solid #f0f0f0; white-space:nowrap;">
