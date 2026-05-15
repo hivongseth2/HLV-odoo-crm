@@ -33,9 +33,21 @@ class HlvStockQuick(models.TransientModel):
         # Pre-compute extra column data
         product_ids_list = [p.id for p in group.product_ids]
         extra_data = {}
-        if "sale_price" in extra_cols:
+        _direct_price_fields = {
+            "sale_price": "lst_price",
+            "price_web": "x_studio_ga_web",
+            "price_listed": "x_studio_ga_hng_nim_yt",
+            "price_tmdt": "x_studio_gia_san_tmdt",
+            "price_commercial": "x_studio_gi_bn_thng_mi",
+        }
+        _direct_keys = [k for k in extra_cols if k in _direct_price_fields]
+        if _direct_keys:
             for product in group.product_ids:
-                extra_data.setdefault(product.id, {})["sale_price"] = product.lst_price
+                tmpl = product.product_tmpl_id
+                d = extra_data.setdefault(product.id, {})
+                for key in _direct_keys:
+                    fname = _direct_price_fields[key]
+                    d[key] = getattr(tmpl, fname, None) or getattr(product, fname, None) or 0.0
         if "purchase_price" in extra_cols:
             po_lines = self.env["purchase.order.line"].search([
                 ("product_id", "in", product_ids_list),
@@ -166,7 +178,15 @@ class HlvStockQuick(models.TransientModel):
                 ws.write(2, 4 + n + 1, "\u0110\u00f3ng g\u00f3i/Out", fh)
         else:
             ws.write(2, 4, "T\u1ed3n kho", fh)
-        _extra_labels = {"sale_price": "Gi\u00e1 b\u00e1n", "purchase_price": "Gi\u00e1 mua", "sales_cycle": "Chu k\u1ef3 b\u00e1n (ng\u00e0y/\u0111\u01a1n)"}
+        _extra_labels = {
+            "sale_price": "Gi\u00e1 b\u00e1n (ch\u01b0a VAT)",
+            "price_web": "Gi\u00e1 Web",
+            "price_listed": "Gi\u00e1 Ni\u00eam Y\u1ebft",
+            "price_tmdt": "Gi\u00e1 S\u00e0n TM\u0110T",
+            "price_commercial": "Gi\u00e1 Th\u01b0\u01a1ng M\u1ea1i",
+            "purchase_price": "Gi\u00e1 mua",
+            "sales_cycle": "Chu k\u1ef3 b\u00e1n (ng\u00e0y/\u0111\u01a1n)",
+        }
         for j, ec in enumerate(extra_cols):
             ws.write(2, extra_col_start + j, _extra_labels.get(ec, ec), fh)
         f_money = wb.add_format({"border": 1, "num_format": "#,##0", "align": "right", "font_color": "#0d47a1"})

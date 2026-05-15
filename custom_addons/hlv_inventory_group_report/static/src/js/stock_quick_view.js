@@ -339,9 +339,13 @@ export class StockQuickView extends Component {
 
     get colOptions() {
         return [
-            { key: "sale_price", label: "Gi\u00e1 b\u00e1n" },
-            { key: "purchase_price", label: "Gi\u00e1 mua" },
-            { key: "sales_cycle", label: "Chu k\u1ef3 b\u00e1n (ng\u00e0y/\u0111\u01a1n)" },
+            { key: "sale_price",       label: "Gi\u00e1 b\u00e1n (ch\u01b0a VAT)" },
+            { key: "price_web",        label: "Gi\u00e1 Web" },
+            { key: "price_listed",     label: "Gi\u00e1 Ni\u00eam Y\u1ebft" },
+            { key: "price_tmdt",       label: "Gi\u00e1 S\u00e0n TM\u0110T" },
+            { key: "price_commercial", label: "Gi\u00e1 Th\u01b0\u01a1ng M\u1ea1i" },
+            { key: "purchase_price",   label: "Gi\u00e1 mua" },
+            { key: "sales_cycle",      label: "Chu k\u1ef3 b\u00e1n (ng\u00e0y/\u0111\u01a1n)" },
         ];
     }
 
@@ -363,6 +367,7 @@ export class StockQuickView extends Component {
         if (key === "sales_cycle") {
             return val.toLocaleString("vi-VN", { maximumFractionDigits: 1 }) + " ng\u00e0y/\u0111\u01a1n";
         }
+        // All price keys
         return val.toLocaleString("vi-VN", { maximumFractionDigits: 0 }) + " \u20ab";
     }
 
