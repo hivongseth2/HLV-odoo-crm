@@ -144,15 +144,32 @@ class HlvStockQuick(models.TransientModel):
 
     @api.model
     def get_product_locations(self, product_id, warehouse_ids):
+        outgoing_loc_ids = set()
         if warehouse_ids:
             warehouses = self.env["stock.warehouse"].browse(warehouse_ids)
             loc_ids = []
             for wh in warehouses:
-                locs = self.env["stock.location"].search([
+                # Khu vuc stock chinh
+                stock_locs = self.env["stock.location"].search([
                     ("id", "child_of", wh.lot_stock_id.id),
                     ("usage", "=", "internal"),
                 ])
-                loc_ids.extend(locs.ids)
+                loc_ids.extend(stock_locs.ids)
+                # Khu vuc dong goi (pack zone) - chuan bi giao
+                if wh.wh_pack_stock_loc_id:
+                    pack_locs = self.env["stock.location"].search([
+                        ("id", "child_of", wh.wh_pack_stock_loc_id.id),
+                    ])
+                    loc_ids.extend(pack_locs.ids)
+                    outgoing_loc_ids.update(pack_locs.ids)
+                # Khu vuc output - chuan bi giao
+                if wh.wh_output_stock_loc_id:
+                    out_locs = self.env["stock.location"].search([
+                        ("id", "child_of", wh.wh_output_stock_loc_id.id),
+                    ])
+                    loc_ids.extend(out_locs.ids)
+                    outgoing_loc_ids.update(out_locs.ids)
+            loc_ids = list(set(loc_ids))
         else:
             locs = self.env["stock.location"].search([("usage", "=", "internal")])
             loc_ids = locs.ids
@@ -168,6 +185,7 @@ class HlvStockQuick(models.TransientModel):
                 "location": q.location_id.display_name,
                 "warehouse": wh.name if wh else "",
                 "qty": q.quantity,
+                "outgoing": q.location_id.id in outgoing_loc_ids,
             })
         return result
 

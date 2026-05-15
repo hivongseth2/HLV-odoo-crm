@@ -250,10 +250,17 @@
                                                                         </thead>
                                                                         <tbody>
                                                                             <t t-foreach="state.locationData[line.id]" t-as="loc" t-key="loc_index">
-                                                                                <tr t-att-style="'border-bottom:1px solid #e0ecff; ' + (loc_index % 2 === 1 ? 'background:#f5f9ff;' : '')">
+                                                                                <tr t-att-style="'border-bottom:1px solid #e0ecff; ' + (loc.outgoing ? 'background:#fff8e1;' : (loc_index % 2 === 1 ? 'background:#f5f9ff;' : ''))">
                                                                                     <td style="padding:5px 12px; color:#546e7a;"><t t-esc="loc.warehouse"/></td>
-                                                                                    <td style="padding:5px 12px; font-family:monospace; font-size:11px; color:#1a2639;"><t t-esc="loc.location"/></td>
-                                                                                    <td style="padding:5px 12px; text-align:right; font-weight:700; color:#198754;"><t t-esc="formatQty(loc.qty)"/></td>
+                                                                                    <td style="padding:5px 12px; font-family:monospace; font-size:11px; color:#1a2639;">
+                                                                                        <t t-esc="loc.location"/>
+                                                                                        <t t-if="loc.outgoing">
+                                                                                            <span style="display:inline-block; margin-left:8px; background:#fd7e14; color:#fff; border-radius:10px; padding:1px 8px; font-size:10px; font-weight:700; font-family:sans-serif; vertical-align:middle; white-space:nowrap;">
+                                                                                                &#128666; Chu\u1ea9n b\u1ecb giao
+                                                                                            </span>
+                                                                                        </t>
+                                                                                    </td>
+                                                                                    <td t-att-style="'padding:5px 12px; text-align:right; font-weight:700; ' + (loc.outgoing ? 'color:#fd7e14;' : 'color:#198754;')"><t t-esc="formatQty(loc.qty)"/></td>
                                                                                 </tr>
                                                                             </t>
                                                                         </tbody>
