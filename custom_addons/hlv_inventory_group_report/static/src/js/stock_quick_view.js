@@ -35,6 +35,8 @@ export class StockQuickView extends Component {
             expandedProductId: false,
             importResults: null,
             importLoading: false,
+            productPage: 0,
+            productTotalCount: 0,
         });
 
         onWillStart(async () => {
@@ -107,6 +109,8 @@ export class StockQuickView extends Component {
         this.state.editingGroupId = false;
         this.state.productQuery = "";
         this.state.productResults = [];
+        this.state.productPage = 0;
+        this.state.productTotalCount = 0;
         this.state.locationData = {};
         this.state.expandedProductId = false;
         this.state.importResults = null;
@@ -201,18 +205,34 @@ export class StockQuickView extends Component {
         if (ev.key === "Enter") { this.searchProducts(); }
     }
 
-    async searchProducts() {
+    async searchProducts(pageOrEvent) {
         const query = this.state.productQuery.trim();
         if (!query) return;
+        const page = (typeof pageOrEvent === "number") ? pageOrEvent : 0;
+        this.state.productPage = page;
         this.state.productLoading = true;
         try {
             const excludeIds = this.state.groupProducts.map(p => p.id);
-            const results = await this.orm.call(
-                "hlv.stock.quick", "search_products", [query, excludeIds]
+            const result = await this.orm.call(
+                "hlv.stock.quick", "search_products", [query, excludeIds, page * 50]
             );
-            this.state.productResults = results;
+            this.state.productResults = result.items;
+            this.state.productTotalCount = result.total;
         } finally {
             this.state.productLoading = false;
+        }
+    }
+
+    searchProductsPrev() {
+        if (this.state.productPage > 0) {
+            this.searchProducts(this.state.productPage - 1);
+        }
+    }
+
+    searchProductsNext() {
+        const maxPage = Math.ceil(this.state.productTotalCount / 50) - 1;
+        if (this.state.productPage < maxPage) {
+            this.searchProducts(this.state.productPage + 1);
         }
     }
 
@@ -222,6 +242,12 @@ export class StockQuickView extends Component {
         });
         await this.loadGroupProducts();
         this.state.productResults = this.state.productResults.filter(p => p.id !== productId);
+        if (this.state.productTotalCount > 0) {
+            this.state.productTotalCount -= 1;
+        }
+        if (this.state.productResults.length === 0 && this.state.productPage > 0) {
+            this.searchProducts(this.state.productPage - 1);
+        }
         this.loadData();
     }
 
@@ -299,7 +325,7 @@ export class StockQuickView extends Component {
     }
 
     get tableColspan() {
-        return this.state.columns.length > 0 ? this.state.columns.length + 4 : 4;
+        return this.state.columns.length > 0 ? this.state.columns.length + 5 : 5;
     }
 
     async toggleProductLocations(productId) {
