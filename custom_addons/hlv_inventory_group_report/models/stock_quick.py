@@ -9,9 +9,10 @@ class HlvStockQuick(models.TransientModel):
     _description = "Xem ton kho theo nhom"
 
     @api.model
-    def get_data(self, group_id, warehouse_ids, show_zero, include_outgoing=True):
+    def get_data(self, group_id, warehouse_ids, show_zero, include_outgoing=True, extra_cols=None):
         if not group_id:
             return {"lines": [], "total": 0.0, "outgoing_total": 0.0, "columns": []}
+        extra_cols = extra_cols or []
         group = self.env["hlv.product.report.group"].browse(group_id)
         if warehouse_ids:
             warehouses = self.env["stock.warehouse"].browse(warehouse_ids)
@@ -29,6 +30,38 @@ class HlvStockQuick(models.TransientModel):
                         children = self.env["stock.location"].search([("id", "child_of", loc.id)])
                         ids.extend(children.ids)
                 wh_outgoing_locs[wh.id] = ids
+        # Pre-compute extra column data
+        product_ids_list = [p.id for p in group.product_ids]
+        extra_data = {}
+        if "sale_price" in extra_cols:
+            for product in group.product_ids:
+                extra_data.setdefault(product.id, {})["sale_price"] = product.lst_price
+        if "purchase_price" in extra_cols:
+            po_lines = self.env["purchase.order.line"].search([
+                ("product_id", "in", product_ids_list),
+                ("order_id.state", "in", ["purchase", "done"]),
+            ], order="id desc")
+            seen_pp = set()
+            for pl in po_lines:
+                pid = pl.product_id.id
+                if pid not in seen_pp:
+                    extra_data.setdefault(pid, {})["purchase_price"] = pl.price_unit
+                    seen_pp.add(pid)
+        if "sales_cycle" in extra_cols:
+            from datetime import datetime, timedelta
+            from collections import defaultdict
+            date_from = (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d %H:%M:%S")
+            so_lines = self.env["sale.order.line"].search([
+                ("product_id", "in", product_ids_list),
+                ("order_id.state", "in", ["sale", "done"]),
+                ("order_id.date_order", ">=", date_from),
+            ])
+            sale_order_sets = defaultdict(set)
+            for sl in so_lines:
+                sale_order_sets[sl.product_id.id].add(sl.order_id.id)
+            for pid in product_ids_list:
+                count = len(sale_order_sets.get(pid, set()))
+                extra_data.setdefault(pid, {})["sales_cycle"] = round(90.0 / count, 1) if count > 0 else None
         lines = []
         total = 0.0
         outgoing_total = 0.0
@@ -59,6 +92,7 @@ class HlvStockQuick(models.TransientModel):
                 continue
             total += prod_total
             outgoing_total += prod_outgoing
+            line_extra = {key: extra_data.get(product.id, {}).get(key) for key in extra_cols}
             lines.append({
                 "id": product.id,
                 "code": product.default_code or "",
@@ -69,16 +103,18 @@ class HlvStockQuick(models.TransientModel):
                 "col_outgoing_qtys": col_outgoing_qtys,
                 "total": prod_total,
                 "outgoing_total": prod_outgoing,
+                "extra": line_extra,
             })
         return {"lines": lines, "total": total, "outgoing_total": outgoing_total, "columns": columns}
 
     @api.model
-    def export_excel(self, group_id, warehouse_ids, show_zero, include_outgoing=True):
+    def export_excel(self, group_id, warehouse_ids, show_zero, include_outgoing=True, extra_cols=None):
         try:
             import xlsxwriter
         except ImportError:
             raise UserError("xlsxwriter chua duoc cai.")
-        data = self.get_data(group_id, warehouse_ids, show_zero, include_outgoing)
+        extra_cols = extra_cols or []
+        data = self.get_data(group_id, warehouse_ids, show_zero, include_outgoing, extra_cols)
         columns = data["columns"]
         lines = data["lines"]
         output = io.BytesIO()
@@ -95,8 +131,15 @@ class HlvStockQuick(models.TransientModel):
         fo = wb.add_format({"border": 1, "num_format": "#,##0.##", "align": "right", "font_color": "#e65100", "bold": True})
         fog = wb.add_format({"bold": True, "bg_color": "#fff8e1", "font_color": "#e65100", "border": 1, "num_format": "#,##0.##", "align": "right", "font_size": 12})
         n = len(columns)
+        n_extra = len(extra_cols)
         has_outgoing = include_outgoing and n > 0
-        last_col = (4 + n + (1 if has_outgoing else 0)) if n else 4
+        extra_col_start = (5 + n + (1 if has_outgoing else 0)) if n else 5
+        if n_extra:
+            last_col = extra_col_start + n_extra - 1
+        elif n:
+            last_col = 4 + n + (1 if has_outgoing else 0)
+        else:
+            last_col = 4
         ws.merge_range(0, 0, 1, last_col, "B\u00c1O C\u00c1O T\u1ed2N KHO", wb.add_format({"bold": True, "font_size": 14, "align": "center", "valign": "vcenter"}))
         ws.set_row(0, 28)
         ws.set_row(1, 8)
@@ -108,6 +151,8 @@ class HlvStockQuick(models.TransientModel):
             ws.set_column(4 + i, 4 + i, 16)
         if has_outgoing:
             ws.set_column(4 + n + 1, 4 + n + 1, 16)
+        for j in range(n_extra):
+            ws.set_column(extra_col_start + j, extra_col_start + j, 18)
         ws.set_row(2, 24)
         ws.write(2, 0, "#", fh)
         ws.write(2, 1, "M\u00e3 SP", fh)
@@ -121,6 +166,12 @@ class HlvStockQuick(models.TransientModel):
                 ws.write(2, 4 + n + 1, "\u0110\u00f3ng g\u00f3i/Out", fh)
         else:
             ws.write(2, 4, "T\u1ed3n kho", fh)
+        _extra_labels = {"sale_price": "Gi\u00e1 b\u00e1n", "purchase_price": "Gi\u00e1 mua", "sales_cycle": "Chu k\u1ef3 b\u00e1n (ng\u00e0y/\u0111\u01a1n)"}
+        for j, ec in enumerate(extra_cols):
+            ws.write(2, extra_col_start + j, _extra_labels.get(ec, ec), fh)
+        f_money = wb.add_format({"border": 1, "num_format": "#,##0", "align": "right", "font_color": "#0d47a1"})
+        f_cycle = wb.add_format({"border": 1, "num_format": "#,##0.0", "align": "right", "font_color": "#7b1fa2"})
+        fl_extra = wb.add_format({"bg_color": "#e8f5e9", "border": 1})
         row = 3
         for idx, line in enumerate(lines):
             ws.write(row, 0, idx + 1, fs)
@@ -136,6 +187,14 @@ class HlvStockQuick(models.TransientModel):
                     ws.write(row, 4 + n + 1, oqt, fo if oqt > 0 else f0)
             else:
                 ws.write(row, 4, line["total"], fn if line["total"] > 0 else f0)
+            for j, ec in enumerate(extra_cols):
+                val = line.get("extra", {}).get(ec)
+                if val is None:
+                    ws.write(row, extra_col_start + j, "-", ft)
+                elif ec == "sales_cycle":
+                    ws.write(row, extra_col_start + j, val, f_cycle)
+                else:
+                    ws.write(row, extra_col_start + j, val, f_money)
             row += 1
         ws.merge_range(row, 0, row, 3, "T\u1ed4NG T\u1ed2N KHO", fl)
         if columns:
@@ -148,6 +207,8 @@ class HlvStockQuick(models.TransientModel):
                 ws.write(row, 4 + n + 1, ogt, fog if ogt > 0 else f0)
         else:
             ws.write(row, 4, data["total"], fg)
+        for j in range(n_extra):
+            ws.write(row, extra_col_start + j, "", fl_extra)
         wb.close()
         output.seek(0)
         att = self.env["ir.attachment"].create({

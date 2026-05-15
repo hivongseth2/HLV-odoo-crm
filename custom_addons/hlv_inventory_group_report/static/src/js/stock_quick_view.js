@@ -39,6 +39,8 @@ export class StockQuickView extends Component {
             productTotalCount: 0,
             includeOutgoing: true,
             outgoingTotal: 0,
+            extraCols: [],
+            colsOpen: false,
         });
 
         onWillStart(async () => {
@@ -93,7 +95,7 @@ export class StockQuickView extends Component {
         try {
             const result = await this.orm.call(
                 "hlv.stock.quick", "get_data",
-                [this.state.groupId, this.state.warehouseIds, this.state.showZero, this.state.includeOutgoing]
+                [this.state.groupId, this.state.warehouseIds, this.state.showZero, this.state.includeOutgoing, this.state.extraCols]
             );
             this.state.lines = result.lines;
             this.state.columns = result.columns;
@@ -303,6 +305,7 @@ export class StockQuickView extends Component {
 
     closeDropdown() {
         this.state.whOpen = false;
+        this.state.colsOpen = false;
     }
 
     getColTotal(index) {
@@ -317,7 +320,7 @@ export class StockQuickView extends Component {
         if (!this.state.groupId) return;
         const attId = await this.orm.call(
             "hlv.stock.quick", "export_excel",
-            [this.state.groupId, this.state.warehouseIds, this.state.showZero, this.state.includeOutgoing]
+            [this.state.groupId, this.state.warehouseIds, this.state.showZero, this.state.includeOutgoing, this.state.extraCols]
         );
         window.location.href = "/web/content/" + attId + "?download=true";
     }
@@ -332,12 +335,44 @@ export class StockQuickView extends Component {
         this.loadData();
     }
 
+    // ── Chon cot ──
+
+    get colOptions() {
+        return [
+            { key: "sale_price", label: "Gi\u00e1 b\u00e1n" },
+            { key: "purchase_price", label: "Gi\u00e1 mua" },
+            { key: "sales_cycle", label: "Chu k\u1ef3 b\u00e1n (ng\u00e0y/\u0111\u01a1n)" },
+        ];
+    }
+
+    toggleColsDropdown() {
+        this.state.colsOpen = !this.state.colsOpen;
+    }
+
+    toggleExtraCol(key) {
+        if (this.state.extraCols.includes(key)) {
+            this.state.extraCols = this.state.extraCols.filter(k => k !== key);
+        } else {
+            this.state.extraCols = [...this.state.extraCols, key];
+        }
+        this.loadData();
+    }
+
+    formatExtraVal(key, val) {
+        if (val === null || val === undefined) return "-";
+        if (key === "sales_cycle") {
+            return val.toLocaleString("vi-VN", { maximumFractionDigits: 1 }) + " ng\u00e0y/\u0111\u01a1n";
+        }
+        return val.toLocaleString("vi-VN", { maximumFractionDigits: 0 }) + " \u20ab";
+    }
+
     formatQty(qty) {
         return qty.toLocaleString("vi-VN", { maximumFractionDigits: 2 });
     }
 
     get tableColspan() {
-        return this.state.columns.length > 0 ? this.state.columns.length + 5 : 5;
+        const base = this.state.columns.length > 0 ? this.state.columns.length + 5 : 5;
+        return base + this.state.extraCols.length;
     }
 
     async toggleProductLocations(productId) {
