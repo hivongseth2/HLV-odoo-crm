@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ============================================================
+         RESULT LIST VIEW
+    ============================================================ -->
+    <record id="view_hlv_inventory_report_line_list" model="ir.ui.view">
+        <field name="name">hlv.inventory.report.line.list</field>
+        <field name="model">hlv.inventory.report.line</field>
+        <field name="arch" type="xml">
+            <list string="Báo cáo tồn kho"
+                  create="false" edit="false" delete="false"
+                  decoration-muted="qty_total == 0">
+                <field name="group_name" string="Nhóm" optional="hide"/>
+                <field name="product_code" string="Mã SP"/>
+                <field name="product_name" string="Tên sản phẩm"/>
+                <field name="qty_details" string="Tồn theo kho/vị trí"/>
+                <field name="qty_total" string="Tổng tồn"
+                       sum="Tổng tồn kho"
+                       decoration-success="qty_total > 0"
+                       decoration-muted="qty_total == 0"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ============================================================
+         RESULT SEARCH VIEW
+    ============================================================ -->
+    <record id="view_hlv_inventory_report_line_search" model="ir.ui.view">
+        <field name="name">hlv.inventory.report.line.search</field>
+        <field name="model">hlv.inventory.report.line</field>
+        <field name="arch" type="xml">
+            <search string="Tìm kiếm">
+                <field name="product_name" string="Tên sản phẩm"/>
+                <field name="product_code" string="Mã SP"/>
+                <field name="group_name" string="Nhóm"/>
+                <separator/>
+                <filter string="Còn tồn" name="has_stock"
+                        domain="[('qty_total', '&gt;', 0)]"/>
+                <filter string="Hết hàng" name="no_stock"
+                        domain="[('qty_total', '=', 0)]"/>
+                <separator/>
+                <group expand="1" string="Nhóm theo">
+                    <filter string="Nhóm sản phẩm" name="groupby_group"
+                            context="{'group_by': 'group_name'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+</odoo>

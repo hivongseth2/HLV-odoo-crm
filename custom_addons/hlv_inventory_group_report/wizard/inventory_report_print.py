@@ -1,0 +1,16 @@
+from odoo import models, api
+
+
+class HlvInventoryGroupReportPrint(models.AbstractModel):
+    """Abstract model that feeds data into the QWeb inventory group report."""
+    _name = 'report.hlv_inventory_group_report.inv_group_rpt'
+    _description = 'Inventory Group Report – QWeb renderer'
+
+    @api.model
+    def _get_report_values(self, docids, data=None):
+        wizards = self.env['hlv.inventory.report.wizard'].browse(docids)
+        return {
+            'doc_ids': docids,
+            'doc_model': 'hlv.inventory.report.wizard',
+            'docs': wizards,
+        }

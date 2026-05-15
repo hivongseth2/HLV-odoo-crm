@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="action_hlv_stock_quick_client" model="ir.actions.client">
+        <field name="name">Xem tồn kho</field>
+        <field name="tag">hlv_stock_quick_action</field>
+    </record>
+</odoo>
