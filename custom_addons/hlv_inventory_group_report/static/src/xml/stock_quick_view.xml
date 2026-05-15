@@ -410,7 +410,22 @@
                                                                                 <td style="padding:5px 10px; font-family:monospace; font-size:11px; color:#0d47a1;"><t t-esc="mv.origin"/></td>
                                                                                 <td style="padding:5px 10px; color:#424242;"><t t-esc="mv.description"/></td>
                                                                                 <td style="padding:5px 8px; text-align:center; color:#6c757d;"><t t-esc="mv.uom"/></td>
-                                                                                <td style="padding:5px 10px; text-align:right; color:#5d4037;"><t t-esc="formatPrice(mv.price)"/></td>
+                                                                                <td style="padding:5px 10px; text-align:right; color:#5d4037;">
+                                                                                    <t t-if="mv.combo_info">
+                                                                                        <span style="background:#f57c00; color:#fff; border-radius:8px; padding:2px 7px; font-size:10px; font-weight:700; white-space:nowrap;" t-att-title="'Combo: ' + mv.combo_info.name">
+                                                                                            📦 Combo
+                                                                                        </span>
+                                                                                        <span style="display:block; font-size:11px; color:#e65100; font-weight:600; margin-top:2px; font-family:monospace;">
+                                                                                            <t t-esc="mv.combo_info.code"/>
+                                                                                        </span>
+                                                                                        <span style="display:block; font-size:11px; color:#5d4037;">
+                                                                                            <t t-esc="formatPrice(mv.combo_info.price)"/>
+                                                                                        </span>
+                                                                                    </t>
+                                                                                    <t t-else="">
+                                                                                        <t t-esc="formatPrice(mv.price)"/>
+                                                                                    </t>
+                                                                                </td>
                                                                                 <td t-att-style="'padding:5px 10px; text-align:right; font-weight:600; ' + (mv.in_qty > 0 ? 'color:#1565c0;' : 'color:#ccc;')">
                                                                                     <t t-if="mv.in_qty > 0"><t t-esc="formatQty(mv.in_qty)"/></t>
                                                                                 </td>

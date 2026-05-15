@@ -348,6 +348,54 @@ class HlvStockQuick(models.TransientModel):
                 added.append({"code": code, "name": product.name})
         return {"added": added, "not_found": not_found, "already_in": already_in, "total": len(codes)}
 
+    def _detect_combo_for_move(self, move, sale_line):
+        """Try to find the combo/kit parent for a sale line with price=0.
+        Returns dict {name, code, price} or None.
+        Strategy:
+        1. Check mrp.bom.line (if mrp installed) for kit BOMs containing this product
+        2. Look for a sale line on the same order whose product has a kit BOM containing this product
+        3. Fallback: look for any other line on the same order with price > 0 and a BOM line matching
+        """
+        try:
+            BomLine = self.env.get("mrp.bom.line")
+            if not BomLine:
+                return None
+            # Find kit BOMs that contain this product
+            bom_lines = BomLine.search([
+                ("product_id", "=", move.product_id.id),
+                ("bom_id.type", "=", "phantom"),
+            ], limit=10)
+            if not bom_lines:
+                return None
+            kit_tmpl_ids = bom_lines.mapped("bom_id.product_tmpl_id").ids
+            # Find the combo parent line in the same SO
+            order = sale_line.order_id
+            parent_line = order.order_line.filtered(
+                lambda l: l.product_id.product_tmpl_id.id in kit_tmpl_ids and l.price_unit > 0
+            )
+            if parent_line:
+                pl = parent_line[0]
+                return {
+                    "name": pl.product_id.name,
+                    "code": pl.product_id.default_code or "",
+                    "price": pl.price_unit,
+                }
+            # Try with product_template_id field name
+            parent_line2 = order.order_line.filtered(
+                lambda l: getattr(l.product_id, "product_tmpl_id", False) and
+                l.product_id.product_tmpl_id.id in kit_tmpl_ids
+            )
+            if parent_line2:
+                pl = parent_line2[0]
+                return {
+                    "name": pl.product_id.name,
+                    "code": pl.product_id.default_code or "",
+                    "price": pl.price_unit,
+                }
+        except Exception:
+            pass
+        return None
+
     @api.model
     def get_product_moves(self, product_id, warehouse_ids, date_from=None, date_to=None):
         from datetime import datetime, timedelta
@@ -455,14 +503,18 @@ class HlvStockQuick(models.TransientModel):
                 in_qty = 0.0
                 out_qty = qty
 
-            # Price
+            # Price + combo detection
             price = 0.0
+            combo_info = None
             purchase_line = getattr(move, "purchase_line_id", False)
             sale_line = getattr(move, "sale_line_id", False)
             if purchase_line:
                 price = purchase_line.price_unit or 0.0
             elif sale_line:
                 price = sale_line.price_unit or 0.0
+                # Detect kit/combo: price=0 on sale line means product was part of a combo kit
+                if price == 0.0 and move_type == "out":
+                    combo_info = self._detect_combo_for_move(move, sale_line)
             else:
                 price = getattr(move, "price_unit", 0.0) or 0.0
 
@@ -477,6 +529,7 @@ class HlvStockQuick(models.TransientModel):
                 "description": ("Nhập kho" if move_type == "in" else "Xuất kho"),
                 "uom": move.product_uom.name or "",
                 "price": price,
+                "combo_info": combo_info,
                 "in_qty": in_qty,
                 "out_qty": out_qty,
                 "balance": round(running, 4),
