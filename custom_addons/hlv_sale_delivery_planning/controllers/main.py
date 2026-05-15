@@ -659,6 +659,18 @@ class DeliveryPlannerController(http.Controller):
                 )
                 pt_seq_map = {pt['id']: (pt['sequence_code'] or '').upper() for pt in pts}
 
+            # Build user_id → display_name (x_packer_name if set, else login name)
+            all_user_ids = list({p['x_packer_id'][0] for p in packing + packed_today if p.get('x_packer_id')})
+            user_display_map = {}
+            if all_user_ids:
+                users = request.env['res.users'].sudo().search_read(
+                    [('id', 'in', all_user_ids)], ['id', 'name', 'x_packer_name']
+                )
+                user_display_map = {
+                    u['id']: (u['x_packer_name'].strip() if u.get('x_packer_name') and u['x_packer_name'].strip() else u['name'])
+                    for u in users
+                }
+
             def _ptype(p):
                 pt_id = p['picking_type_id'][0] if p.get('picking_type_id') else None
                 seq = pt_seq_map.get(pt_id, '')
@@ -669,7 +681,8 @@ class DeliveryPlannerController(http.Controller):
                 return seq or 'OUT'
 
             def _new_packer(uid, uname):
-                return {'id': uid, 'name': uname, 'packing': [], 'packed_today': [],
+                display = user_display_map.get(uid, uname)
+                return {'id': uid, 'name': display, 'packing': [], 'packed_today': [],
                         'avg_minutes': None, 'num_pick': 0, 'num_pack': 0, '_sale_ids': set()}
 
             packer_map = {}
@@ -688,7 +701,7 @@ class DeliveryPlannerController(http.Controller):
                 packer_map[uid]['packing'].append({
                     'picking_id': p['id'],
                     'picking_name': p['name'],
-                    'packer_name': uname,
+                    'packer_name': user_display_map.get(uid, uname),
                     'picking_type': ptype,
                     'print_time': (p['x_packing_print_time'] + _TZ).strftime('%d/%m %H:%M') if p['x_packing_print_time'] else None,
                 })
@@ -711,7 +724,7 @@ class DeliveryPlannerController(http.Controller):
                 packer_map[uid]['packed_today'].append({
                     'picking_id': p['id'],
                     'picking_name': p['name'],
-                    'packer_name': uname,
+                    'packer_name': user_display_map.get(uid, uname),
                     'picking_type': ptype,
                     'print_time': (start + _TZ).strftime('%d/%m %H:%M') if start else None,
                     'finish_time': (finish + _TZ).strftime('%d/%m %H:%M') if finish else None,
