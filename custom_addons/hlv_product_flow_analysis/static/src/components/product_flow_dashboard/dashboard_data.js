@@ -127,7 +127,8 @@ export const dashboardDataMixins = {
     async exportProductExcel() {
         this.state.isExporting = true;
         try {
-            const params = this._getParams();
+            const filteredIds = this.allFilteredProducts.map(p => p.product_id);
+            const params = { ...this._getParams(), product_ids: filteredIds };
             const b64 = await this.orm.call("product.flow.analysis", "export_product_flow_excel", [], params);
             this._downloadBase64("hang_hoa_luu_thong.xlsx", b64);
             this.notification.add("Xuất Excel thành công!", { type: "success" });
@@ -140,7 +141,8 @@ export const dashboardDataMixins = {
     async exportSupplierExcel() {
         this.state.isExporting = true;
         try {
-            const params = this._getParams();
+            const filteredNames = this.allFilteredSuppliers.map(s => s.partner_name);
+            const params = { ...this._getParams(), partner_names: filteredNames };
             const b64 = await this.orm.call("product.flow.analysis", "export_supplier_flow_excel", [], params);
             this._downloadBase64("nha_cung_cap.xlsx", b64);
             this.notification.add("Xuất Excel thành công!", { type: "success" });
