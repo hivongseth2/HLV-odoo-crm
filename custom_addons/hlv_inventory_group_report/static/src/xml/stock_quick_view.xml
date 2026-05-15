@@ -227,7 +227,8 @@
                                         </thead>
                                         <tbody>
                                             <t t-foreach="state.lines" t-as="line" t-key="line_index">
-                                                <tr t-on-click="() => this.toggleProductLocations(line.id)"
+                                                <tr class="hlv-stock-row"
+                                                    t-on-click="() => this.toggleProductLocations(line.id)"
                                                     t-att-style="'border-bottom:1px solid #f0f0f0; cursor:pointer; ' + (state.expandedProductId === line.id ? 'background:#e8f4fd;' : (line_index % 2 === 1 ? 'background:#fafbfc;' : ''))">
                                                     <td style="padding:8px 12px; text-align:center; color:#adb5bd; font-size:11px; vertical-align:middle; border-right:1px solid #f0f0f0;">
                                                         <t t-esc="line_index + 1"/>
@@ -356,6 +357,12 @@
                                                                             style="background:#388e3c; color:#fff; border:none; border-radius:5px; padding:4px 12px; font-size:12px; cursor:pointer; display:flex; align-items:center; gap:5px;">
                                                                         <i class="fa fa-refresh"/> Xem
                                                                     </button>
+                                                                    <t t-if="state.movesData[line.id] and state.movesData[line.id].moves">
+                                                                        <button t-on-click.stop="() => this.exportMoves(line.id)"
+                                                                                style="background:#1565c0; color:#fff; border:none; border-radius:5px; padding:4px 12px; font-size:12px; cursor:pointer; display:flex; align-items:center; gap:5px;">
+                                                                            <i class="fa fa-file-excel-o"/> Xuất Excel
+                                                                        </button>
+                                                                    </t>
                                                                 </div>
                                                             </div>
                                                             <!-- Content -->
@@ -396,7 +403,9 @@
                                                                         </tr>
                                                                         <!-- Move rows -->
                                                                         <t t-foreach="state.movesData[line.id].moves" t-as="mv" t-key="mv_index">
-                                                                            <tr t-att-style="'border-bottom:1px solid #f0f0f0; ' + (mv_index % 2 === 1 ? 'background:#fafff8;' : '')">
+                                                                            <tr class="hlv-move-row"
+                                                                                t-att-class="(mv.type === 'out' ? 'hlv-out-row' : 'hlv-in-row') + (mv_index % 2 === 1 ? ' hlv-stripe' : '')"
+                                                                                t-att-style="'border-bottom:1px solid #eee; ' + (mv.type === 'out' ? (mv_index % 2 === 1 ? '' : 'background:#fff9f0;') : (mv_index % 2 === 1 ? '' : 'background:#f8fff8;'))">
                                                                                 <td style="padding:5px 10px; color:#546e7a;"><t t-esc="mv.date"/></td>
                                                                                 <td style="padding:5px 10px; font-family:monospace; font-size:11px;">
                                                                                     <t t-if="mv.type === 'in'">
