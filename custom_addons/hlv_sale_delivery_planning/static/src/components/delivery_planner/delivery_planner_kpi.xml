@@ -208,7 +208,12 @@
                                 <tbody>
                                     <t t-foreach="packer.packing" t-as="pk" t-key="pk.picking_id">
                                         <tr class="table-warning">
-                                            <td class="fw-bold"><i class="fa fa-barcode me-1 text-muted"></i><t t-esc="pk.picking_name"/></td>
+                                            <td class="fw-bold">
+                                                <i class="fa fa-barcode me-1 text-muted"></i><t t-esc="pk.picking_name"/>
+                                                <div t-if="pk.sale_name" class="text-muted small fw-normal">
+                                                    <i class="fa fa-file-text-o me-1"></i><t t-esc="pk.sale_name"/>
+                                                </div>
+                                            </td>
                                             <td class="text-muted small"><t t-esc="pk.packer_name"/></td>
                                             <td class="text-center"><t t-esc="pk.print_time or '—'"/></td>
                                             <td class="text-center text-muted">—</td>
@@ -218,7 +223,12 @@
                                     </t>
                                     <t t-foreach="packer.packed_today" t-as="pk" t-key="pk.picking_id">
                                         <tr>
-                                            <td class="fw-bold"><i class="fa fa-barcode me-1 text-muted"></i><t t-esc="pk.picking_name"/></td>
+                                            <td class="fw-bold">
+                                                <i class="fa fa-barcode me-1 text-muted"></i><t t-esc="pk.picking_name"/>
+                                                <div t-if="pk.sale_name" class="text-muted small fw-normal">
+                                                    <i class="fa fa-file-text-o me-1"></i><t t-esc="pk.sale_name"/>
+                                                </div>
+                                            </td>
                                             <td class="text-muted small"><t t-esc="pk.packer_name"/></td>
                                             <td class="text-center text-muted"><t t-esc="pk.print_time or '—'"/></td>
                                             <td class="text-center text-success fw-bold"><t t-esc="pk.finish_time or '—'"/></td>

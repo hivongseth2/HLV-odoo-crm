@@ -221,6 +221,32 @@ export class PackingKpiDashboard extends Component {
         return this.state.selectedPackerIds.length > 0 || this.state.selectedStatuses.length > 0;
     }
 
+    get rowsByPacker() {
+        // Group current page rows by packer id, then map onto packerKpi order
+        const groups = {};
+        for (const row of this.state.rows) {
+            const key = row.packer ? row.packer[0] : 0;
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(row);
+        }
+        // Use packerKpi as the authoritative order + stats source
+        const result = this.state.packerKpi.map((pk) => ({
+            ...pk,
+            rows: groups[pk.id] || [],
+        }));
+        // Append any rows whose packer not in packerKpi (edge case)
+        const knownIds = new Set(this.state.packerKpi.map((pk) => pk.id));
+        const orphans = [];
+        for (const [kid, rows] of Object.entries(groups)) {
+            const nid = Number(kid);
+            if (!knownIds.has(nid)) orphans.push(...rows);
+        }
+        if (orphans.length) {
+            result.push({ id: 0, name: 'Khác', total: orphans.length, packed: 0, packing: 0, avg_minutes: null, rows: orphans });
+        }
+        return result;
+    }
+
     get selectedPackerNames() {
         return this.state.selectedPackerIds
             .map((id) => {

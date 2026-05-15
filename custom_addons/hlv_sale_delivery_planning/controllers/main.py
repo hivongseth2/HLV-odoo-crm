@@ -701,6 +701,7 @@ class DeliveryPlannerController(http.Controller):
                 packer_map[uid]['packing'].append({
                     'picking_id': p['id'],
                     'picking_name': p['name'],
+                    'sale_name': p['sale_id'][1] if p.get('sale_id') else None,
                     'packer_name': user_display_map.get(uid, uname),
                     'picking_type': ptype,
                     'print_time': (p['x_packing_print_time'] + _TZ).strftime('%d/%m %H:%M') if p['x_packing_print_time'] else None,
@@ -724,6 +725,7 @@ class DeliveryPlannerController(http.Controller):
                 packer_map[uid]['packed_today'].append({
                     'picking_id': p['id'],
                     'picking_name': p['name'],
+                    'sale_name': p['sale_id'][1] if p.get('sale_id') else None,
                     'packer_name': user_display_map.get(uid, uname),
                     'picking_type': ptype,
                     'print_time': (start + _TZ).strftime('%d/%m %H:%M') if start else None,
@@ -794,10 +796,22 @@ class DeliveryPlannerController(http.Controller):
                 'id', 'name', 'state',
                 'x_packer_id', 'x_packing_status',
                 'x_packing_print_time', 'x_packing_finish_time',
-                'picking_type_id',
+                'picking_type_id', 'sale_id',
             ]
             all_recs = Pick.search_read(domain, fields_to_read,
                                         order='x_packing_print_time desc')
+
+            # Build user display map (x_packer_name → fallback name)
+            all_uid = list({r['x_packer_id'][0] for r in all_recs if r.get('x_packer_id')})
+            kpi_user_display = {}
+            if all_uid:
+                kpi_users = request.env['res.users'].sudo().search_read(
+                    [('id', 'in', all_uid)], ['id', 'name', 'x_packer_name']
+                )
+                kpi_user_display = {
+                    u['id']: (u['x_packer_name'].strip() if u.get('x_packer_name') and u['x_packer_name'].strip() else u['name'])
+                    for u in kpi_users
+                }
 
             # --- Summary stats ---
             total = len(all_recs)
@@ -816,8 +830,9 @@ class DeliveryPlannerController(http.Controller):
             packer_summary = {}
             for r in all_recs:
                 uid, uname = r['x_packer_id']
+                display = kpi_user_display.get(uid, uname)
                 ps = packer_summary.setdefault(uid, {
-                    'id': uid, 'name': uname,
+                    'id': uid, 'name': display,
                     'total': 0, 'packed': 0, 'packing': 0,
                     'durations': [],
                 })
@@ -859,11 +874,15 @@ class DeliveryPlannerController(http.Controller):
                 dur = None
                 if pt and ft:
                     dur = round((ft - pt).total_seconds() / 60)
+                uid = r['x_packer_id'][0] if r.get('x_packer_id') else None
+                uname = r['x_packer_id'][1] if r.get('x_packer_id') else ''
                 rows.append({
                     'id': r['id'],
                     'name': r['name'],
+                    'sale_name': r['sale_id'][1] if r.get('sale_id') else None,
                     'state': r['state'],
                     'packer': r['x_packer_id'],
+                    'packer_name': kpi_user_display.get(uid, uname) if uid else uname,
                     'status': r['x_packing_status'],
                     'print_time': fmt_dt(pt),
                     'finish_time': fmt_dt(ft),
@@ -880,7 +899,7 @@ class DeliveryPlannerController(http.Controller):
             seen = {}
             for r in all_packers_raw:
                 uid, uname = r['x_packer_id']
-                seen[uid] = uname
+                seen[uid] = kpi_user_display.get(uid, uname)
             all_packers = [{'id': k, 'name': v} for k, v in seen.items()]
             all_packers.sort(key=lambda x: x['name'])
 
