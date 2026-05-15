@@ -349,28 +349,145 @@ class HlvStockQuick(models.TransientModel):
         return {"added": added, "not_found": not_found, "already_in": already_in, "total": len(codes)}
 
     @api.model
-    def get_product_moves(self, product_id, warehouse_ids, limit=200):
-        domain = [
+    def get_product_moves(self, product_id, warehouse_ids, date_from=None, date_to=None):
+        from datetime import datetime, timedelta
+        # UTC+7 (Asia/Ho_Chi_Minh)
+        try:
+            import pytz
+            tz_vn = pytz.timezone("Asia/Ho_Chi_Minh")
+            now_local = datetime.now(tz_vn)
+        except ImportError:
+            tz_vn = None
+            now_local = datetime.utcnow() + timedelta(hours=7)
+
+        if not date_from:
+            date_from = now_local.strftime("%Y-%m-01")
+        if not date_to:
+            date_to = now_local.strftime("%Y-%m-%d")
+
+        def local_to_utc_start(d_str):
+            dt = datetime.strptime(d_str, "%Y-%m-%d")
+            if tz_vn:
+                import pytz as _pytz
+                return tz_vn.localize(dt).astimezone(_pytz.utc).replace(tzinfo=None)
+            return dt - timedelta(hours=7)
+
+        def local_to_utc_end(d_str):
+            dt = datetime.strptime(d_str + " 23:59:59", "%Y-%m-%d %H:%M:%S")
+            if tz_vn:
+                import pytz as _pytz
+                return tz_vn.localize(dt).astimezone(_pytz.utc).replace(tzinfo=None)
+            return dt - timedelta(hours=7)
+
+        def utc_to_local_str(dt_utc):
+            if not dt_utc:
+                return ""
+            if tz_vn:
+                import pytz as _pytz
+                dt = _pytz.utc.localize(dt_utc.replace(tzinfo=None)).astimezone(tz_vn)
+            else:
+                dt = dt_utc + timedelta(hours=7)
+            return dt.strftime("%d/%m/%Y")
+
+        date_from_utc = local_to_utc_start(date_from)
+        date_to_utc = local_to_utc_end(date_to)
+        date_from_str = date_from_utc.strftime("%Y-%m-%d %H:%M:%S")
+        date_to_str = date_to_utc.strftime("%Y-%m-%d %H:%M:%S")
+
+        # Warehouse stock locations
+        if warehouse_ids:
+            warehouses = self.env["stock.warehouse"].browse(warehouse_ids)
+            all_loc_ids = []
+            for wh in warehouses:
+                locs = self.env["stock.location"].search([
+                    ("id", "child_of", wh.lot_stock_id.id),
+                    ("usage", "=", "internal"),
+                ])
+                all_loc_ids.extend(locs.ids)
+            all_loc_ids = list(set(all_loc_ids))
+        else:
+            all_loc_ids = self.env["stock.location"].search([("usage", "=", "internal")]).ids
+        all_loc_set = set(all_loc_ids)
+
+        product = self.env["product.product"].browse(product_id)
+
+        # Opening balance using to_date context (tồn đầu kỳ)
+        try:
+            opening = product.with_context(
+                location=all_loc_ids,
+                to_date=date_from_str,
+            ).qty_available
+        except Exception:
+            opening = 0.0
+
+        # Moves in date range
+        moves = self.env["stock.move"].search([
             ("product_id", "=", product_id),
             ("state", "=", "done"),
-            ("picking_id", "!=", False),
-            ("picking_id.picking_type_code", "in", ["incoming", "outgoing"]),
-        ]
-        if warehouse_ids:
-            domain += [("picking_id.picking_type_id.warehouse_id", "in", warehouse_ids)]
-        moves = self.env["stock.move"].search(domain, order="date desc", limit=limit)
-        result = []
+            ("date", ">=", date_from_str),
+            ("date", "<=", date_to_str),
+            "|",
+            ("location_dest_id", "in", all_loc_ids),
+            ("location_id", "in", all_loc_ids),
+        ], order="date asc, id asc")
+
+        result_moves = []
+        running = opening
+
         for move in moves:
+            is_dest = move.location_dest_id.id in all_loc_set
+            is_src = move.location_id.id in all_loc_set
+            if is_dest and is_src:
+                continue  # internal transfer within warehouse
+
+            qty = float(getattr(move, "quantity", 0) or getattr(move, "quantity_done", 0) or 0)
+            if qty <= 0:
+                continue
+
+            if is_dest:
+                move_type = "in"
+                running += qty
+                in_qty = qty
+                out_qty = 0.0
+            else:
+                move_type = "out"
+                running -= qty
+                in_qty = 0.0
+                out_qty = qty
+
+            # Price
+            price = 0.0
+            purchase_line = getattr(move, "purchase_line_id", False)
+            sale_line = getattr(move, "sale_line_id", False)
+            if purchase_line:
+                price = purchase_line.price_unit or 0.0
+            elif sale_line:
+                price = sale_line.price_unit or 0.0
+            else:
+                price = getattr(move, "price_unit", 0.0) or 0.0
+
             picking = move.picking_id
-            ptype = picking.picking_type_code
-            qty = getattr(move, "quantity", 0.0) or getattr(move, "quantity_done", 0.0)
-            result.append({
-                "type": "in" if ptype == "incoming" else "out",
-                "date": move.date.strftime("%d/%m/%Y") if move.date else "",
-                "reference": picking.name or "",
-                "origin": picking.origin or "",
-                "partner": picking.partner_id.name or "",
-                "qty": qty,
+            partner = picking.partner_id if picking else False
+
+            result_moves.append({
+                "type": move_type,
+                "date": utc_to_local_str(move.date),
+                "reference": (picking.name if picking else move.name) or "",
+                "origin": (picking.origin if picking else "") or "",
+                "description": ("Nhập kho" if move_type == "in" else "Xuất kho"),
                 "uom": move.product_uom.name or "",
+                "price": price,
+                "in_qty": in_qty,
+                "out_qty": out_qty,
+                "balance": round(running, 4),
+                "partner_code": (partner.ref or "") if partner else "",
+                "partner_name": (partner.name or "") if partner else "",
             })
-        return result
+
+        return {
+            "opening": opening,
+            "moves": result_moves,
+            "date_from": date_from,
+            "date_to": date_to,
+            "closing": round(running, 4),
+        }
