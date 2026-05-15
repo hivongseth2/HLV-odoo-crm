@@ -26,8 +26,8 @@ class ProductFlowAnalysis(models.AbstractModel):
         # ── Query Purchase Order Lines ──
         po_domain = [
             ('order_id.state', 'in', ('purchase', 'done')),
-            ('order_id.date_order', '>=', fields.Datetime.to_string(date_from)),
-            ('order_id.date_order', '<=', fields.Datetime.to_string(date_to)),
+            ('order_id.date_order', '>=', self._dt_utc(date_from)),
+            ('order_id.date_order', '<=', self._dt_utc(date_to, True)),
             ('product_id.type', '!=', 'service'),
             ('display_type', '=', False),
         ]
@@ -39,8 +39,8 @@ class ProductFlowAnalysis(models.AbstractModel):
         # ── Query Sale Order Lines ──
         so_domain = [
             ('order_id.state', 'in', ('sale', 'done')),
-            ('order_id.date_order', '>=', fields.Datetime.to_string(date_from)),
-            ('order_id.date_order', '<=', fields.Datetime.to_string(date_to)),
+            ('order_id.date_order', '>=', self._dt_utc(date_from)),
+            ('order_id.date_order', '<=', self._dt_utc(date_to, True)),
             ('product_id.type', '!=', 'service'),
             ('display_type', '=', False),
         ]
@@ -115,8 +115,8 @@ class ProductFlowAnalysis(models.AbstractModel):
         if product_data:
             move_domain = [
                 ('state', '=', 'done'),
-                ('date', '>=', fields.Datetime.to_string(date_from)),
-                ('date', '<=', fields.Datetime.to_string(date_to)),
+                ('date', '>=', self._dt_utc(date_from)),
+                ('date', '<=', self._dt_utc(date_to, True)),
                 ('product_id', 'in', list(product_data.keys())),
             ]
             if warehouse_id:
@@ -158,7 +158,7 @@ class ProductFlowAnalysis(models.AbstractModel):
                         ('product_id', '=', pid),
                         ('state', '=', 'done'),
                         ('picking_type_id.code', '=', 'incoming'),
-                        ('date', '<', fields.Datetime.to_string(date_from)),
+                        ('date', '<', self._dt_utc(date_from)),
                     ], order='date desc', limit=1)
                     if pre_incoming:
                         last_in = pre_incoming.date
@@ -187,8 +187,8 @@ class ProductFlowAnalysis(models.AbstractModel):
         po_domain = [
             ('product_id', '=', product_id),
             ('order_id.state', 'in', ('purchase', 'done')),
-            ('order_id.date_order', '>=', fields.Datetime.to_string(date_from)),
-            ('order_id.date_order', '<=', fields.Datetime.to_string(date_to)),
+            ('order_id.date_order', '>=', self._dt_utc(date_from)),
+            ('order_id.date_order', '<=', self._dt_utc(date_to, True)),
             ('display_type', '=', False),
         ]
         if warehouse_id:
@@ -217,8 +217,8 @@ class ProductFlowAnalysis(models.AbstractModel):
         so_domain = [
             ('product_id', '=', product_id),
             ('order_id.state', 'in', ('sale', 'done')),
-            ('order_id.date_order', '>=', fields.Datetime.to_string(date_from)),
-            ('order_id.date_order', '<=', fields.Datetime.to_string(date_to)),
+            ('order_id.date_order', '>=', self._dt_utc(date_from)),
+            ('order_id.date_order', '<=', self._dt_utc(date_to, True)),
             ('display_type', '=', False),
         ]
         if warehouse_id:
@@ -256,8 +256,8 @@ class ProductFlowAnalysis(models.AbstractModel):
         date_from, date_to = self._compute_date_range(period, date_from, date_to)
 
         po_domain = [
-            ('date_order', '>=', fields.Datetime.to_string(date_from)),
-            ('date_order', '<=', fields.Datetime.to_string(date_to)),
+            ('date_order', '>=', self._dt_utc(date_from)),
+            ('date_order', '<=', self._dt_utc(date_to, True)),
             ('state', 'in', ('purchase', 'done')),
         ]
         if warehouse_id:
@@ -388,8 +388,8 @@ class ProductFlowAnalysis(models.AbstractModel):
         # Lấy cả outgoing lẫn incoming moves để tính tần suất tổng
         domain_base = [
             ('state', '=', 'done'),
-            ('date', '>=', fields.Datetime.to_string(date_from)),
-            ('date', '<=', fields.Datetime.to_string(date_to)),
+            ('date', '>=', self._dt_utc(date_from)),
+            ('date', '<=', self._dt_utc(date_to, True)),
             ('product_id.type', '!=', 'service'),
         ]
         if warehouse_id:
@@ -496,8 +496,8 @@ class ProductFlowAnalysis(models.AbstractModel):
 
         domain_base = [
             ('state', '=', 'done'),
-            ('date', '>=', fields.Datetime.to_string(start)),
-            ('date', '<=', fields.Datetime.to_string(end)),
+            ('date', '>=', self._dt_utc(start)),
+            ('date', '<=', self._dt_utc(end, True)),
             ('product_id.type', '!=', 'service'),
         ]
         if warehouse_id:
@@ -558,8 +558,8 @@ class ProductFlowAnalysis(models.AbstractModel):
         # ── Purchase Orders ──
         po_domain = [
             ('state', 'in', ('purchase', 'done')),
-            ('date_order', '>=', fields.Datetime.to_string(date_from)),
-            ('date_order', '<=', fields.Datetime.to_string(date_to)),
+            ('date_order', '>=', self._dt_utc(date_from)),
+            ('date_order', '<=', self._dt_utc(date_to, True)),
         ]
         if warehouse_id:
             po_domain.append(('picking_type_id.warehouse_id', '=', warehouse_id))
@@ -574,8 +574,8 @@ class ProductFlowAnalysis(models.AbstractModel):
         # ── Sale Orders ──
         so_domain = [
             ('state', 'in', ('sale', 'done')),
-            ('date_order', '>=', fields.Datetime.to_string(date_from)),
-            ('date_order', '<=', fields.Datetime.to_string(date_to)),
+            ('date_order', '>=', self._dt_utc(date_from)),
+            ('date_order', '<=', self._dt_utc(date_to, True)),
         ]
         if warehouse_id:
             so_domain.append(('warehouse_id', '=', warehouse_id))
@@ -590,8 +590,8 @@ class ProductFlowAnalysis(models.AbstractModel):
         # ── Internal transfers (vẫn từ stock.move) ──
         move_domain = [
             ('state', '=', 'done'),
-            ('date', '>=', fields.Datetime.to_string(date_from)),
-            ('date', '<=', fields.Datetime.to_string(date_to)),
+            ('date', '>=', self._dt_utc(date_from)),
+            ('date', '<=', self._dt_utc(date_to, True)),
             ('picking_type_id.code', '=', 'internal'),
         ]
         if warehouse_id:
@@ -620,6 +620,21 @@ class ProductFlowAnalysis(models.AbstractModel):
             'date_to': str(date_to),
             'warehouses': warehouse_list,
         }
+
+    @api.model
+    def _dt_utc(self, d, end_of_day=False):
+        """Chuyển đổi date nội địa sang chuỗi UTC datetime để dùng trong domain filter."""
+        import pytz
+        from datetime import datetime as _datetime, time as _time
+        tz_name = (self.env.context.get('tz') or self.env.user.tz or 'Asia/Ho_Chi_Minh')
+        try:
+            tz = pytz.timezone(tz_name)
+        except Exception:
+            tz = pytz.timezone('Asia/Ho_Chi_Minh')
+        t = _time(23, 59, 59) if end_of_day else _time(0, 0, 0)
+        dt_local = _datetime.combine(d, t)
+        dt_utc = tz.localize(dt_local).astimezone(pytz.utc).replace(tzinfo=None)
+        return fields.Datetime.to_string(dt_utc)
 
     @api.model
     def _compute_date_range(self, period, date_from=False, date_to=False):
@@ -666,8 +681,8 @@ class ProductFlowAnalysis(models.AbstractModel):
             domain = [
                 ('state', '=', 'done'),
                 ('product_id', '=', product_id),
-                ('date', '>=', fields.Datetime.to_string(m_start)),
-                ('date', '<=', fields.Datetime.to_string(m_end)),
+                ('date', '>=', self._dt_utc(m_start)),
+                ('date', '<=', self._dt_utc(m_end, True)),
             ]
 
             moves = self.env['stock.move'].search(domain)
@@ -683,8 +698,10 @@ class ProductFlowAnalysis(models.AbstractModel):
         return trends
 
     @api.model
-    def export_product_flow_excel(self, period='month', date_from=False, date_to=False, warehouse_id=False):
-        """Xuất dữ liệu sản phẩm ra Excel, trả về base64."""
+    def export_product_flow_excel(self, period='month', date_from=False, date_to=False, warehouse_id=False, product_ids=None):
+        """Xuất dữ liệu sản phẩm ra Excel, trả về base64.
+        product_ids: nếu cung cấp, chỉ xuất các sản phẩm trong danh sách này (kết quả đã lọc từ UI).
+        """
         import base64
         try:
             import xlsxwriter
@@ -695,6 +712,9 @@ class ProductFlowAnalysis(models.AbstractModel):
             period=period, date_from=date_from, date_to=date_to, warehouse_id=warehouse_id
         )
         products = data.get('products', [])
+        if product_ids:
+            id_set = set(product_ids)
+            products = [p for p in products if p.get('product_id') in id_set]
 
         output = io.BytesIO()
         wb = xlsxwriter.Workbook(output, {'in_memory': True})
@@ -739,8 +759,10 @@ class ProductFlowAnalysis(models.AbstractModel):
         return base64.b64encode(output.read()).decode('utf-8')
 
     @api.model
-    def export_supplier_flow_excel(self, period='month', date_from=False, date_to=False, warehouse_id=False):
-        """Xuất dữ liệu nhà cung cấp ra Excel, trả về base64."""
+    def export_supplier_flow_excel(self, period='month', date_from=False, date_to=False, warehouse_id=False, partner_names=None):
+        """Xuất dữ liệu nhà cung cấp ra Excel với dòng chi tiết sản phẩm, trả về base64.
+        partner_names: nếu cung cấp, chỉ xuất các NCC trong danh sách này (kết quả đã lọc từ UI).
+        """
         import base64
         try:
             import xlsxwriter
@@ -751,38 +773,93 @@ class ProductFlowAnalysis(models.AbstractModel):
             period=period, date_from=date_from, date_to=date_to, warehouse_id=warehouse_id
         )
         suppliers = data.get('suppliers', [])
+        if partner_names:
+            name_set = set(partner_names)
+            suppliers = [s for s in suppliers if s.get('partner_name') in name_set]
 
         output = io.BytesIO()
         wb = xlsxwriter.Workbook(output, {'in_memory': True})
         ws = wb.add_worksheet('Nhà cung cấp')
 
-        header_fmt = wb.add_format({
+        # ── Formats ──
+        supplier_fmt = wb.add_format({
             'bold': True, 'bg_color': '#017e84', 'font_color': 'white',
-            'border': 1, 'align': 'center', 'valign': 'vcenter', 'font_size': 11,
+            'border': 1, 'valign': 'vcenter', 'font_size': 11,
         })
-        num_fmt = wb.add_format({'num_format': '#,##0.##', 'border': 1, 'align': 'right'})
-        money_fmt = wb.add_format({'num_format': '#,##0', 'border': 1, 'align': 'right'})
-        text_fmt = wb.add_format({'border': 1})
+        supplier_num_fmt = wb.add_format({
+            'bold': True, 'bg_color': '#017e84', 'font_color': 'white',
+            'border': 1, 'align': 'right', 'valign': 'vcenter', 'font_size': 11,
+            'num_format': '#,##0.##',
+        })
+        supplier_money_fmt = wb.add_format({
+            'bold': True, 'bg_color': '#017e84', 'font_color': 'white',
+            'border': 1, 'align': 'right', 'valign': 'vcenter', 'font_size': 11,
+            'num_format': '#,##0',
+        })
+        detail_hdr_fmt = wb.add_format({
+            'bold': True, 'bg_color': '#e0f0f0', 'font_color': '#005060',
+            'border': 1, 'align': 'center', 'font_size': 10, 'italic': True,
+        })
+        num_fmt = wb.add_format({'num_format': '#,##0.##', 'border': 1, 'align': 'right', 'font_size': 10})
+        money_fmt = wb.add_format({'num_format': '#,##0', 'border': 1, 'align': 'right', 'font_size': 10})
+        text_fmt = wb.add_format({'border': 1, 'font_size': 10, 'indent': 1})
+        code_fmt = wb.add_format({'border': 1, 'font_size': 10, 'font_color': '#555555'})
         title_fmt = wb.add_format({'bold': True, 'font_size': 14})
+
+        # ── Columns ──
+        # Col  0: # / (product indent)
+        # Col  1: Nhà cung cấp / Mã SP
+        # Col  2: Tên SP
+        # Col  3: SL mua
+        # Col  4: Giá trị
+        # Col  5: Số PO
+        # Col  6: Phiếu nhập
+        # Col  7: PO chờ nhập
+        ws.set_column(0, 0, 5)
+        ws.set_column(1, 1, 18)
+        ws.set_column(2, 2, 40)
+        ws.set_column(3, 3, 14)
+        ws.set_column(4, 4, 18)
+        ws.set_column(5, 5, 14)
+        ws.set_column(6, 6, 20)
+        ws.set_column(7, 7, 20)
 
         ws.write(0, 0, f"Báo cáo nhà cung cấp ({data['date_from']} → {data['date_to']})", title_fmt)
 
-        headers = ['#', 'Nhà cung cấp', 'Tổng SL mua', 'Tổng giá trị', 'Số lần mua (PO)', 'Số SP']
-        for col, h in enumerate(headers):
-            ws.write(2, col, h, header_fmt)
+        # ── Detail header columns ──
+        detail_headers = ['Mã SP', 'Tên sản phẩm', 'SL mua', 'Giá trị', 'Số PO', 'Phiếu nhập', 'PO chờ nhập']
 
+        row = 2
         for idx, s in enumerate(suppliers):
-            row = idx + 3
-            ws.write(row, 0, idx + 1, num_fmt)
-            ws.write(row, 1, s.get('partner_name', ''), text_fmt)
-            ws.write(row, 2, s.get('total_qty', 0), num_fmt)
-            ws.write(row, 3, s.get('total_amount', 0), money_fmt)
-            ws.write(row, 4, s.get('move_count', 0), num_fmt)
-            ws.write(row, 5, s.get('product_count', 0), num_fmt)
+            # ── Supplier summary row ──
+            ws.write(row, 0, idx + 1, supplier_fmt)
+            ws.merge_range(row, 1, row, 2, s.get('partner_name', ''), supplier_fmt)
+            ws.write(row, 3, s.get('total_qty', 0), supplier_num_fmt)
+            ws.write(row, 4, s.get('total_amount', 0), supplier_money_fmt)
+            ws.write(row, 5, s.get('move_count', 0), supplier_num_fmt)
+            ws.write(row, 6, s.get('product_count', 0), supplier_num_fmt)
+            ws.write(row, 7, '', supplier_fmt)
+            row += 1
 
-        ws.set_column(0, 0, 5)
-        ws.set_column(1, 1, 35)
-        ws.set_column(2, 5, 16)
+            products = s.get('products', [])
+            if products:
+                # ── Detail header ──
+                ws.write(row, 0, '', detail_hdr_fmt)
+                for col, h in enumerate(detail_headers):
+                    ws.write(row, col + 1, h, detail_hdr_fmt)
+                row += 1
+
+                # ── Product detail rows ──
+                for p in products:
+                    ws.write(row, 0, '', text_fmt)
+                    ws.write(row, 1, p.get('default_code', ''), code_fmt)
+                    ws.write(row, 2, p.get('product_name', ''), text_fmt)
+                    ws.write(row, 3, p.get('qty', 0), num_fmt)
+                    ws.write(row, 4, p.get('amount', 0), money_fmt)
+                    ws.write(row, 5, len(p.get('po_names', [])), num_fmt)
+                    ws.write(row, 6, ', '.join(p.get('picking_names', [])) or '', text_fmt)
+                    ws.write(row, 7, ', '.join(p.get('pending_po_names', [])) or '', text_fmt)
+                    row += 1
 
         wb.close()
         output.seek(0)
