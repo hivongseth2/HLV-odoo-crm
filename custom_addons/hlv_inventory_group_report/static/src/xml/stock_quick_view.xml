@@ -5,13 +5,11 @@
 
             <!-- Thanh toolbar -->
             <div style="background:#fff; border-bottom:1px solid #dee2e6; padding:10px 20px; display:flex; align-items:center; gap:14px; flex-wrap:wrap; box-shadow:0 1px 4px rgba(0,0,0,0.06); flex-shrink:0;">
-
                 <div style="font-size:15px; font-weight:700; color:#1a2639; display:flex; align-items:center; gap:8px; white-space:nowrap;">
                     <i class="fa fa-cubes" style="color:#6c757d;"/>
                     Tồn kho theo nhóm
                 </div>
 
-                <!-- Chon kho -->
                 <div style="display:flex; align-items:center; gap:6px; position:relative;">
                     <label style="font-size:11px; font-weight:700; color:#8492a6; letter-spacing:.5px; white-space:nowrap;">KHO</label>
                     <div style="position:relative;">
@@ -39,14 +37,12 @@
                     </div>
                 </div>
 
-                <!-- Hien SP het hang -->
                 <label style="display:flex; align-items:center; gap:7px; font-size:13px; cursor:pointer; color:#495057; white-space:nowrap;">
                     <input type="checkbox" style="width:14px; height:14px; cursor:pointer;"
                            t-att-checked="state.showZero" t-on-change="onShowZeroChange"/>
                     Hiện SP hế́t hàng
                 </label>
 
-                <!-- Xuat Excel + Tong ton -->
                 <div style="margin-left:auto; display:flex; align-items:center; gap:10px;">
                     <t t-if="state.groupId and state.lines.length > 0">
                         <button t-on-click="exportExcel"
@@ -65,15 +61,13 @@
             <!-- Body: sidebar + content -->
             <div style="display:flex; flex:1; overflow:hidden;">
 
-                <!-- Sidebar nhom san pham -->
+                <!-- Sidebar -->
                 <div style="width:220px; background:#1a2639; display:flex; flex-direction:column; flex-shrink:0;">
                     <div style="padding:10px 14px 6px; font-size:10px; font-weight:700; color:#8492a6; letter-spacing:.8px; text-transform:uppercase; flex-shrink:0;">
                         Nhóm sản phẩm
                     </div>
-
                     <div style="flex:1; overflow-y:auto;">
                         <t t-foreach="state.groups" t-as="g" t-key="g.id">
-                            <!-- Hien thi binh thuong -->
                             <t t-if="state.editingGroupId !== g.id">
                                 <div t-on-click="() => this.selectGroup(g.id)"
                                      t-att-style="'display:flex; align-items:center; padding:8px 10px 8px 14px; cursor:pointer; font-size:13px; font-weight:500; border-left:3px solid transparent; ' + (state.groupId === g.id ? 'background:rgba(255,255,255,0.12); border-left-color:#4fc3f7; color:#fff;' : 'color:#b0bec5;')">
@@ -88,7 +82,6 @@
                                     </button>
                                 </div>
                             </t>
-                            <!-- Dang sua ten nhom -->
                             <t t-else="">
                                 <div style="padding:8px 10px; background:rgba(255,255,255,0.08);">
                                     <input t-model="state.editGroupName" t-on-keydown="onEditGroupKeydown"
@@ -107,8 +100,6 @@
                             </t>
                         </t>
                     </div>
-
-                    <!-- Them nhom moi -->
                     <div style="border-top:1px solid rgba(255,255,255,0.08); padding:10px; flex-shrink:0;">
                         <t t-if="!state.addingGroup">
                             <button t-on-click="startAddGroup"
@@ -145,7 +136,7 @@
                     </t>
 
                     <t t-else="">
-                        <!-- Tab switcher -->
+                        <!-- Tabs -->
                         <div style="display:flex; gap:4px; margin-bottom:18px; border-bottom:2px solid #e9ecef; padding-bottom:0;">
                             <button t-on-click="() => this.setTab('stock')"
                                     t-att-style="'border:none; cursor:pointer; padding:8px 18px; font-size:13px; font-weight:600; border-bottom:2px solid transparent; margin-bottom:-2px; background:transparent; ' + (state.activeTab === 'stock' ? 'border-bottom-color:#0d6efd; color:#0d6efd;' : 'color:#6c757d;')">
@@ -172,72 +163,123 @@
                                 </div>
                             </t>
                             <t t-else="">
+                                <div style="background:#e8f4fd; border:1px solid #b8daff; border-radius:6px; padding:8px 14px; margin-bottom:12px; font-size:12px; color:#004085; display:flex; align-items:center; gap:8px;">
+                                    <i class="fa fa-info-circle"/> Click vào dòng sản phẩm để xem vị trí tồn kho chi tiết
+                                </div>
                                 <div style="background:#fff; border-radius:10px; box-shadow:0 1px 6px rgba(0,0,0,0.07); overflow:hidden;">
                                     <table style="width:100%; border-collapse:collapse; font-size:13px;">
                                         <thead>
                                             <tr style="background:#1a2639; color:#fff;">
-                                                <th style="padding:10px 14px; width:40px; text-align:center;">#</th>
-                                                <th style="padding:10px 14px; width:130px;">Mã SP</th>
-                                                <th style="padding:10px 14px;">Tên sản phẩm</th>
+                                                <th style="padding:10px 12px; width:36px; text-align:center;">#</th>
+                                                <th style="padding:10px 12px; width:100px; text-align:center;">Ảnh / Mã SP</th>
+                                                <th style="padding:10px 12px;">Tên sản phẩm</th>
                                                 <t t-if="state.columns.length > 0">
                                                     <t t-foreach="state.columns" t-as="col" t-key="col.id">
-                                                        <th style="padding:10px 14px; width:110px; text-align:right;">
+                                                        <th style="padding:10px 12px; width:110px; text-align:right;">
                                                             <t t-esc="col.name"/>
                                                         </th>
                                                     </t>
-                                                    <th style="padding:10px 16px; width:110px; text-align:right; background:#16213a;">TỔNG</th>
+                                                    <th style="padding:10px 14px; width:110px; text-align:right; background:#16213a;">TỔNG</th>
                                                 </t>
                                                 <t t-else="">
-                                                    <th style="padding:10px 16px; width:120px; text-align:right;">Tồn kho</th>
+                                                    <th style="padding:10px 14px; width:120px; text-align:right;">Tồn kho</th>
                                                 </t>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             <t t-foreach="state.lines" t-as="line" t-key="line_index">
-                                                <tr t-att-style="'border-bottom:1px solid #f0f0f0; ' + (line_index % 2 === 1 ? 'background:#fafbfc;' : '')">
-                                                    <td style="padding:8px 14px; text-align:center; color:#adb5bd; font-size:11px;">
+                                                <tr t-on-click="() => this.toggleProductLocations(line.id)"
+                                                    t-att-style="'border-bottom:1px solid #f0f0f0; cursor:pointer; ' + (state.expandedProductId === line.id ? 'background:#e8f4fd;' : (line_index % 2 === 1 ? 'background:#fafbfc;' : ''))">
+                                                    <td style="padding:8px 12px; text-align:center; color:#adb5bd; font-size:11px; vertical-align:middle;">
                                                         <t t-esc="line_index + 1"/>
                                                     </td>
-                                                    <td style="padding:8px 14px; font-family:monospace; font-size:11px; color:#546e7a;">
-                                                        <t t-esc="line.code"/>
+                                                    <td style="padding:6px 12px; text-align:center; vertical-align:middle;">
+                                                        <div style="display:inline-flex; flex-direction:column; align-items:center; gap:3px;">
+                                                            <img t-att-src="line.image_url"
+                                                                 style="width:52px; height:52px; object-fit:contain; border-radius:6px; border:1px solid #e9ecef; background:#fafafa;"/>
+                                                            <span style="font-family:monospace; font-size:10px; color:#546e7a; max-width:90px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><t t-esc="line.code"/></span>
+                                                        </div>
                                                     </td>
-                                                    <td style="padding:8px 14px; color:#212121;">
-                                                        <t t-esc="line.name"/>
+                                                    <td style="padding:8px 12px; color:#212121; vertical-align:middle;">
+                                                        <span t-esc="line.name"/>
+                                                        <i class="fa fa-map-marker"
+                                                           t-att-style="'margin-left:8px; font-size:11px; ' + (state.expandedProductId === line.id ? 'color:#0d6efd;' : 'color:#ced4da;')"/>
                                                     </td>
                                                     <t t-if="state.columns.length > 0">
                                                         <t t-foreach="line.col_qtys" t-as="qty" t-key="qty_index">
-                                                            <td t-att-style="'padding:8px 14px; text-align:right; font-weight:600; ' + (qty > 0 ? 'color:#198754;' : 'color:#ced4da;')">
+                                                            <td t-att-style="'padding:8px 12px; text-align:right; font-weight:600; vertical-align:middle; ' + (qty > 0 ? 'color:#198754;' : 'color:#ced4da;')">
                                                                 <t t-esc="formatQty(qty)"/>
                                                             </td>
                                                         </t>
-                                                        <td t-att-style="'padding:8px 16px; text-align:right; font-weight:700; font-size:14px; background:#f8fff9; ' + (line.total > 0 ? 'color:#198754;' : 'color:#adb5bd;')">
+                                                        <td t-att-style="'padding:8px 14px; text-align:right; font-weight:700; font-size:14px; background:#f8fff9; vertical-align:middle; ' + (line.total > 0 ? 'color:#198754;' : 'color:#adb5bd;')">
                                                             <t t-esc="formatQty(line.total)"/>
                                                         </td>
                                                     </t>
                                                     <t t-else="">
-                                                        <td t-att-style="'padding:8px 16px; text-align:right; font-weight:700; font-size:14px; ' + (line.total > 0 ? 'color:#198754;' : 'color:#adb5bd;')">
+                                                        <td t-att-style="'padding:8px 14px; text-align:right; font-weight:700; font-size:14px; vertical-align:middle; ' + (line.total > 0 ? 'color:#198754;' : 'color:#adb5bd;')">
                                                             <t t-esc="formatQty(line.total)"/>
                                                         </td>
                                                     </t>
                                                 </tr>
+                                                <!-- Vi tri ton kho (expand) -->
+                                                <t t-if="state.expandedProductId === line.id">
+                                                    <tr style="background:#f0f7ff;">
+                                                        <td t-att-colspan="tableColspan" style="padding:12px 20px; border-bottom:2px solid #b8daff;">
+                                                            <t t-if="!state.locationData[line.id]">
+                                                                <div style="color:#6c757d; font-size:12px; padding:4px 0;">
+                                                                    <i class="fa fa-spinner fa-spin"/> Đang tải vị trí...
+                                                                </div>
+                                                            </t>
+                                                            <t t-else="">
+                                                                <div style="font-size:12px; font-weight:700; color:#004085; margin-bottom:8px; display:flex; align-items:center; gap:6px;">
+                                                                    <i class="fa fa-map-marker" style="color:#0d6efd;"/>
+                                                                    Vị trí tồn kho: <span t-esc="line.name"/>
+                                                                </div>
+                                                                <t t-if="state.locationData[line.id].length === 0">
+                                                                    <div style="color:#adb5bd; font-size:12px; font-style:italic;">Không có tồn kho ở vị trí nào trong kho đã chọn.</div>
+                                                                </t>
+                                                                <t t-else="">
+                                                                    <table style="font-size:12px; border-collapse:collapse; min-width:400px;">
+                                                                        <thead>
+                                                                            <tr style="background:#dbeafe; color:#1e3a8a;">
+                                                                                <th style="padding:5px 12px; text-align:left;">Kho</th>
+                                                                                <th style="padding:5px 12px; text-align:left;">Vị trí</th>
+                                                                                <th style="padding:5px 12px; text-align:right;">Số lượng</th>
+                                                                            </tr>
+                                                                        </thead>
+                                                                        <tbody>
+                                                                            <t t-foreach="state.locationData[line.id]" t-as="loc" t-key="loc_index">
+                                                                                <tr t-att-style="'border-bottom:1px solid #e0ecff; ' + (loc_index % 2 === 1 ? 'background:#f5f9ff;' : '')">
+                                                                                    <td style="padding:5px 12px; color:#546e7a;"><t t-esc="loc.warehouse"/></td>
+                                                                                    <td style="padding:5px 12px; font-family:monospace; font-size:11px; color:#1a2639;"><t t-esc="loc.location"/></td>
+                                                                                    <td style="padding:5px 12px; text-align:right; font-weight:700; color:#198754;"><t t-esc="formatQty(loc.qty)"/></td>
+                                                                                </tr>
+                                                                            </t>
+                                                                        </tbody>
+                                                                    </table>
+                                                                </t>
+                                                            </t>
+                                                        </td>
+                                                    </tr>
+                                                </t>
                                             </t>
                                         </tbody>
                                         <tfoot>
                                             <tr style="background:#e8f5e9; border-top:2px solid #198754;">
-                                                <td colspan="3" style="padding:10px 14px; font-weight:700; text-align:right; color:#155724; font-size:12px; letter-spacing:.3px;">
+                                                <td colspan="3" style="padding:10px 12px; font-weight:700; text-align:right; color:#155724; font-size:12px; letter-spacing:.3px;">
                                                     TỔNG TỒN KHO
                                                 </td>
                                                 <t t-if="state.columns.length > 0">
                                                     <td t-foreach="state.columns" t-as="col" t-key="col.id"
-                                                        style="padding:10px 14px; text-align:right; font-weight:700; color:#198754; font-size:13px;">
+                                                        style="padding:10px 12px; text-align:right; font-weight:700; color:#198754; font-size:13px;">
                                                         <t t-esc="formatQty(getColTotal(col_index))"/>
                                                     </td>
-                                                    <td style="padding:10px 16px; font-weight:700; text-align:right; font-size:16px; color:#198754;">
+                                                    <td style="padding:10px 14px; font-weight:700; text-align:right; font-size:16px; color:#198754;">
                                                         <t t-esc="formatQty(state.total)"/>
                                                     </td>
                                                 </t>
                                                 <t t-else="">
-                                                    <td style="padding:10px 16px; font-weight:700; text-align:right; font-size:16px; color:#198754;">
+                                                    <td style="padding:10px 14px; font-weight:700; text-align:right; font-size:16px; color:#198754;">
                                                         <t t-esc="formatQty(state.total)"/>
                                                     </td>
                                                 </t>
@@ -250,7 +292,8 @@
 
                         <!-- TAB: Quan ly san pham -->
                         <t t-elif="state.activeTab === 'manage'">
-                            <!-- Tim san pham de them -->
+
+                            <!-- Search -->
                             <div style="background:#fff; border-radius:10px; padding:18px; margin-bottom:16px; box-shadow:0 1px 6px rgba(0,0,0,0.07);">
                                 <div style="font-size:13px; font-weight:700; color:#1a2639; margin-bottom:12px;">
                                     <i class="fa fa-plus-circle" style="color:#198754; margin-right:6px;"/>
@@ -271,13 +314,17 @@
                                     </div>
                                 </t>
                                 <t t-elif="state.productResults.length > 0">
-                                    <div style="border:1px solid #dee2e6; border-radius:6px; max-height:220px; overflow-y:auto;">
+                                    <div style="border:1px solid #dee2e6; border-radius:8px; max-height:320px; overflow-y:auto;">
                                         <t t-foreach="state.productResults" t-as="p" t-key="p.id">
-                                            <div style="display:flex; align-items:center; padding:7px 12px; border-bottom:1px solid #f5f5f5; gap:8px;">
-                                                <span style="font-family:monospace; font-size:11px; color:#546e7a; width:110px; flex-shrink:0;"><t t-esc="p.code"/></span>
-                                                <span style="flex:1; font-size:12px;"><t t-esc="p.name"/></span>
+                                            <div t-att-style="'display:flex; align-items:center; padding:10px 12px; gap:12px; ' + (p_index > 0 ? 'border-top:1px solid #f5f5f5;' : '')">
+                                                <img t-att-src="p.image_url"
+                                                     style="width:56px; height:56px; object-fit:contain; border-radius:8px; border:1px solid #e9ecef; background:#fafafa; flex-shrink:0;"/>
+                                                <div style="flex:1; min-width:0;">
+                                                    <div style="font-family:monospace; font-size:11px; color:#546e7a; margin-bottom:2px;"><t t-esc="p.code"/></div>
+                                                    <div style="font-size:13px; color:#212121; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"><t t-esc="p.name"/></div>
+                                                </div>
                                                 <button t-on-click="() => this.addProductToGroup(p.id)"
-                                                        style="background:#198754; color:#fff; border:none; border-radius:4px; padding:3px 10px; font-size:11px; cursor:pointer; white-space:nowrap;">
+                                                        style="background:#198754; color:#fff; border:none; border-radius:6px; padding:7px 16px; font-size:12px; cursor:pointer; white-space:nowrap; flex-shrink:0; font-weight:600;">
                                                     + Thêm
                                                 </button>
                                             </div>
@@ -289,8 +336,8 @@
                                 </t>
                             </div>
 
-                            <!-- Danh sach san pham hien co trong nhom -->
-                            <div style="background:#fff; border-radius:10px; overflow:hidden; box-shadow:0 1px 6px rgba(0,0,0,0.07);">
+                            <!-- Danh sach san pham -->
+                            <div style="background:#fff; border-radius:10px; overflow:hidden; box-shadow:0 1px 6px rgba(0,0,0,0.07); margin-bottom:16px;">
                                 <div style="padding:12px 16px; font-size:13px; font-weight:700; color:#1a2639; border-bottom:1px solid #f0f0f0; display:flex; align-items:center; gap:8px;">
                                     <i class="fa fa-list" style="color:#6c757d;"/>
                                     Sản phẩm trong nhóm
@@ -305,17 +352,101 @@
                                 </t>
                                 <t t-else="">
                                     <t t-foreach="state.groupProducts" t-as="p" t-key="p.id">
-                                        <div t-att-style="'display:flex; align-items:center; padding:8px 16px; border-bottom:1px solid #f5f5f5; gap:10px; ' + (p_index % 2 === 1 ? 'background:#fafbfc;' : '')">
-                                            <span style="font-family:monospace; font-size:11px; color:#546e7a; width:110px; flex-shrink:0;"><t t-esc="p.code"/></span>
-                                            <span style="flex:1; font-size:13px; color:#212121;"><t t-esc="p.name"/></span>
+                                        <div t-att-style="'display:flex; align-items:center; padding:10px 16px; gap:14px; ' + (p_index > 0 ? 'border-top:1px solid #f5f5f5;' : '') + (p_index % 2 === 1 ? ' background:#fafbfc;' : '')">
+                                            <img t-att-src="p.image_url"
+                                                 style="width:56px; height:56px; object-fit:contain; border-radius:8px; border:1px solid #e9ecef; background:#fafafa; flex-shrink:0;"/>
+                                            <div style="flex:1; min-width:0;">
+                                                <div style="font-family:monospace; font-size:11px; color:#546e7a; margin-bottom:3px;"><t t-esc="p.code"/></div>
+                                                <div style="font-size:13px; color:#212121;"><t t-esc="p.name"/></div>
+                                            </div>
                                             <button t-on-click="() => this.removeProductFromGroup(p.id)"
-                                                    style="background:none; border:1px solid #dee2e6; color:#dc3545; border-radius:4px; padding:3px 10px; font-size:11px; cursor:pointer; white-space:nowrap;">
+                                                    style="background:none; border:1px solid #dee2e6; color:#dc3545; border-radius:6px; padding:6px 14px; font-size:11px; cursor:pointer; white-space:nowrap; flex-shrink:0;">
                                                 ✕ Xóa
                                             </button>
                                         </div>
                                     </t>
                                 </t>
                             </div>
+
+                            <!-- Import tu Excel -->
+                            <div style="background:#fff; border-radius:10px; padding:18px; box-shadow:0 1px 6px rgba(0,0,0,0.07);">
+                                <div style="font-size:13px; font-weight:700; color:#1a2639; margin-bottom:12px; display:flex; align-items:center; gap:8px;">
+                                    <i class="fa fa-upload" style="color:#0d6efd;"/>
+                                    Import danh sách sản phẩm từ Excel
+                                </div>
+                                <div style="background:#fff8e1; border:1px solid #ffe082; border-radius:6px; padding:10px 14px; margin-bottom:14px; font-size:12px; color:#5d4037; line-height:1.7;">
+                                    <b>Hướng dẫn:</b><br/>
+                                    &#8226; File định dạng <b>.xlsx</b> hoặc <b>.xls</b><br/>
+                                    &#8226; <b>Cột A</b>: Mã sản phẩm (default_code) &#8212; ví dụ: 284606017, 656414001<br/>
+                                    &#8226; Dòng đầu có thể là tiêu đề (Mã SP / default_code) &#8212; tự động bỏ qua<br/>
+                                    &#8226; Mỗi dòng một mã sản phẩm
+                                </div>
+                                <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                                    <input type="file" id="hlv-import-file" accept=".xlsx,.xls" t-on-change="handleImportFile"
+                                           style="flex:1; min-width:200px; padding:7px; border:1px solid #ced4da; border-radius:6px; font-size:13px; cursor:pointer;"/>
+                                    <t t-if="state.importLoading">
+                                        <span style="color:#0d6efd; font-size:13px; display:flex; align-items:center; gap:6px;">
+                                            <i class="fa fa-spinner fa-spin"/> Đang nhập dữ liệu...
+                                        </span>
+                                    </t>
+                                </div>
+                                <!-- Import results -->
+                                <t t-if="state.importResults">
+                                    <div style="margin-top:14px; border:1px solid #dee2e6; border-radius:8px; overflow:hidden;">
+                                        <div style="background:#f8f9fa; padding:10px 16px; display:flex; gap:16px; flex-wrap:wrap; border-bottom:1px solid #dee2e6; align-items:center;">
+                                            <span style="font-size:13px; font-weight:700; color:#1a2639;">Kết quả import (<t t-esc="state.importResults.total"/> mã):</span>
+                                            <span style="color:#198754; font-size:12px; font-weight:600;">
+                                                &#10003; Thêm mới: <t t-esc="state.importResults.added.length"/>
+                                            </span>
+                                            <span style="color:#fd7e14; font-size:12px; font-weight:600;">
+                                                &#9888; Đã có: <t t-esc="state.importResults.already_in.length"/>
+                                            </span>
+                                            <span style="color:#dc3545; font-size:12px; font-weight:600;">
+                                                &#10007; Không tìm thấy: <t t-esc="state.importResults.not_found.length"/>
+                                            </span>
+                                            <button t-on-click="resetImportFile"
+                                                    style="margin-left:auto; background:none; border:1px solid #dee2e6; border-radius:4px; padding:3px 10px; font-size:11px; cursor:pointer; color:#6c757d;">
+                                                Xóa kết quả
+                                            </button>
+                                        </div>
+                                        <t t-if="state.importResults.added.length > 0">
+                                            <div style="padding:10px 16px; border-bottom:1px solid #f0f0f0;">
+                                                <div style="font-size:12px; font-weight:700; color:#198754; margin-bottom:6px;">Đã thêm thành công:</div>
+                                                <t t-foreach="state.importResults.added" t-as="item" t-key="item_index">
+                                                    <div style="font-size:12px; padding:2px 0; display:flex; gap:12px;">
+                                                        <span style="font-family:monospace; color:#546e7a; flex-shrink:0; width:130px;"><t t-esc="item.code"/></span>
+                                                        <span style="color:#212121;"><t t-esc="item.name"/></span>
+                                                    </div>
+                                                </t>
+                                            </div>
+                                        </t>
+                                        <t t-if="state.importResults.not_found.length > 0">
+                                            <div style="padding:10px 16px; border-bottom:1px solid #f0f0f0;">
+                                                <div style="font-size:12px; font-weight:700; color:#dc3545; margin-bottom:6px;">Không tìm thấy mã:</div>
+                                                <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                                                    <t t-foreach="state.importResults.not_found" t-as="code" t-key="code_index">
+                                                        <span style="background:#fff5f5; border:1px solid #fecaca; border-radius:4px; padding:2px 10px; font-family:monospace; font-size:11px; color:#dc3545;">
+                                                            <t t-esc="code"/>
+                                                        </span>
+                                                    </t>
+                                                </div>
+                                            </div>
+                                        </t>
+                                        <t t-if="state.importResults.already_in.length > 0">
+                                            <div style="padding:10px 16px;">
+                                                <div style="font-size:12px; font-weight:700; color:#fd7e14; margin-bottom:6px;">Đã có trong nhóm:</div>
+                                                <t t-foreach="state.importResults.already_in" t-as="item" t-key="item_index">
+                                                    <div style="font-size:12px; padding:2px 0; display:flex; gap:12px;">
+                                                        <span style="font-family:monospace; color:#546e7a; flex-shrink:0; width:130px;"><t t-esc="item.code"/></span>
+                                                        <span style="color:#6c757d;"><t t-esc="item.name"/></span>
+                                                    </div>
+                                                </t>
+                                            </div>
+                                        </t>
+                                    </div>
+                                </t>
+                            </div>
+
                         </t>
 
                     </t>

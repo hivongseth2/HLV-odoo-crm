@@ -31,6 +31,10 @@ export class StockQuickView extends Component {
             productQuery: "",
             productResults: [],
             productLoading: false,
+            locationData: {},
+            expandedProductId: false,
+            importResults: null,
+            importLoading: false,
         });
 
         onWillStart(async () => {
@@ -103,6 +107,9 @@ export class StockQuickView extends Component {
         this.state.editingGroupId = false;
         this.state.productQuery = "";
         this.state.productResults = [];
+        this.state.locationData = {};
+        this.state.expandedProductId = false;
+        this.state.importResults = null;
         this.loadData();
     }
 
@@ -289,6 +296,54 @@ export class StockQuickView extends Component {
 
     formatQty(qty) {
         return qty.toLocaleString("vi-VN", { maximumFractionDigits: 2 });
+    }
+
+    get tableColspan() {
+        return this.state.columns.length > 0 ? this.state.columns.length + 4 : 4;
+    }
+
+    async toggleProductLocations(productId) {
+        if (this.state.expandedProductId === productId) {
+            this.state.expandedProductId = false;
+            return;
+        }
+        this.state.expandedProductId = productId;
+        if (!this.state.locationData[productId]) {
+            const result = await this.orm.call(
+                "hlv.stock.quick", "get_product_locations",
+                [productId, this.state.warehouseIds]
+            );
+            this.state.locationData = Object.assign({}, this.state.locationData, { [productId]: result });
+        }
+    }
+
+    async handleImportFile(ev) {
+        const file = ev.target.files[0];
+        if (!file || !this.state.groupId) return;
+        this.state.importLoading = true;
+        this.state.importResults = null;
+        try {
+            const buffer = await file.arrayBuffer();
+            const bytes = new Uint8Array(buffer);
+            let binary = "";
+            for (let i = 0; i < bytes.length; i++) { binary += String.fromCharCode(bytes[i]); }
+            const b64 = btoa(binary);
+            const result = await this.orm.call(
+                "hlv.stock.quick", "import_products_from_excel",
+                [this.state.groupId, b64]
+            );
+            this.state.importResults = result;
+            await this.loadGroupProducts();
+            this.loadData();
+        } finally {
+            this.state.importLoading = false;
+        }
+    }
+
+    resetImportFile() {
+        this.state.importResults = null;
+        const inp = document.getElementById("hlv-import-file");
+        if (inp) inp.value = "";
     }
 }
 

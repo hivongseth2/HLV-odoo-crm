@@ -35,8 +35,10 @@ class HlvStockQuick(models.TransientModel):
                 continue
             total += prod_total
             lines.append({
+                "id": product.id,
                 "code": product.default_code or "",
                 "name": product.name,
+                "image_url": "/web/image/product.product/%d/image_128" % product.id,
                 "col_qtys": col_qtys,
                 "total": prod_total,
             })
@@ -119,7 +121,7 @@ class HlvStockQuick(models.TransientModel):
         group = self.env["hlv.product.report.group"].browse(group_id)
         result = []
         for p in group.product_ids.sorted("name"):
-            result.append({"id": p.id, "name": p.name, "code": p.default_code or ""})
+            result.append({"id": p.id, "name": p.name, "code": p.default_code or "", "image_url": "/web/image/product.product/%d/image_128" % p.id})
         return result
 
     @api.model
@@ -132,4 +134,71 @@ class HlvStockQuick(models.TransientModel):
             ("id", "not in", exclude_ids or []),
         ]
         products = self.env["product.product"].search(domain, limit=50, order="name")
-        return [{"id": p.id, "name": p.name, "code": p.default_code or ""} for p in products]
+        return [{"id": p.id, "name": p.name, "code": p.default_code or "", "image_url": "/web/image/product.product/%d/image_128" % p.id} for p in products]
+
+    @api.model
+    def get_product_locations(self, product_id, warehouse_ids):
+        if warehouse_ids:
+            warehouses = self.env["stock.warehouse"].browse(warehouse_ids)
+            loc_ids = []
+            for wh in warehouses:
+                locs = self.env["stock.location"].search([
+                    ("id", "child_of", wh.lot_stock_id.id),
+                    ("usage", "=", "internal"),
+                ])
+                loc_ids.extend(locs.ids)
+        else:
+            locs = self.env["stock.location"].search([("usage", "=", "internal")])
+            loc_ids = locs.ids
+        quants = self.env["stock.quant"].search([
+            ("product_id", "=", product_id),
+            ("location_id", "in", loc_ids),
+            ("quantity", ">", 0),
+        ], order="quantity desc")
+        result = []
+        for q in quants:
+            wh = q.location_id.warehouse_id
+            result.append({
+                "location": q.location_id.display_name,
+                "warehouse": wh.name if wh else "",
+                "qty": q.quantity,
+            })
+        return result
+
+    @api.model
+    def import_products_from_excel(self, group_id, b64data):
+        try:
+            import openpyxl
+        except ImportError:
+            raise UserError("openpyxl ch\u01b0a \u0111\u01b0\u1ee3c c\u00e0i \u0111\u1eb7t.")
+        import io as _io, base64 as _b64
+        raw = _b64.b64decode(b64data)
+        try:
+            wb = openpyxl.load_workbook(_io.BytesIO(raw), read_only=True, data_only=True)
+        except Exception as e:
+            raise UserError("Kh\u00f4ng th\u1ec3 \u0111\u1ecdc file Excel: %s" % str(e))
+        ws = wb.active
+        codes = []
+        skip_headers = {"m\u00e3 sp", "default_code", "ma sp", "code", "m\u00e3sp"}
+        for row in ws.iter_rows(min_row=1, values_only=True):
+            if row and row[0] is not None:
+                val = str(row[0]).strip()
+                if val and val.lower() not in skip_headers:
+                    codes.append(val)
+        wb.close()
+        if not codes:
+            return {"added": [], "not_found": [], "already_in": [], "total": 0}
+        group = self.env["hlv.product.report.group"].browse(group_id)
+        existing_ids = set(group.product_ids.ids)
+        added, not_found, already_in = [], [], []
+        for code in codes:
+            product = self.env["product.product"].search([("default_code", "=", code)], limit=1)
+            if not product:
+                not_found.append(code)
+            elif product.id in existing_ids:
+                already_in.append({"code": code, "name": product.name})
+            else:
+                group.write({"product_ids": [(4, product.id)]})
+                existing_ids.add(product.id)
+                added.append({"code": code, "name": product.name})
+        return {"added": added, "not_found": not_found, "already_in": already_in, "total": len(codes)}
