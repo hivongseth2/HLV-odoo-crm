@@ -56,7 +56,7 @@
                         <div style="background:#1a2639; color:#fff; border-radius:8px; padding:7px 16px; font-size:14px; font-weight:700; white-space:nowrap;">
                             Tổng tồn: <t t-esc="formatQty(state.total)"/>
                             <t t-if="state.includeOutgoing and state.outgoingTotal > 0">
-                                <span style="color:#ffcc80; font-size:12px;"> (+<t t-esc="formatQty(state.outgoingTotal)"/> đóng gói)</span>
+                                <span style="color:#ffcc80; font-size:12px;"> (+<t t-esc="formatQty(state.outgoingTotal)"/> sắp giao)</span>
                             </t>
                         </div>
                     </t>
@@ -171,7 +171,7 @@
                                 <div style="background:#e8f4fd; border:1px solid #b8daff; border-radius:6px; padding:8px 14px; margin-bottom:12px; font-size:12px; color:#004085; display:flex; align-items:center; gap:8px;">
                                     <i class="fa fa-info-circle"/> Click vào dòng sản phẩm để xem vị trí tồn kho chi tiết
                                 </div>
-                                <div style="background:#fff; border-radius:10px; box-shadow:0 1px 6px rgba(0,0,0,0.07); overflow:hidden;">
+                                <div style="background:#fff;box-shadow:0 1px 6px rgba(0,0,0,0.07); overflow:hidden;">
                                     <table style="width:100%; border-collapse:collapse; font-size:13px;">
                                         <thead>
                                             <tr style="background:#1a2639; color:#fff;">
@@ -216,7 +216,7 @@
                                                     </td>
                                                     <t t-if="state.columns.length > 0">
                                                         <t t-foreach="line.col_qtys" t-as="qty" t-key="qty_index">
-                                                            <td t-att-style="'padding:8px 12px; text-align:right; font-weight:600; vertical-align:middle; border-right:1px solid #f0f0f0; ' + (qty > 0 ? 'color:#198754;' : 'color:#ced4da;')">
+                                                            <td t-att-style="'padding:8px 14px; text-align:right; font-weight:600; ' + (qty > 0 ? 'color:#198754; background-color:#f0fff4;' : 'color:#ced4da;')">
                                                                 <t t-esc="formatQty(qty)"/>
                                                                 <t t-if="state.includeOutgoing and line.col_outgoing_qtys[qty_index] > 0">
                                                                     <span style="color:#e65100; font-size:11px; font-weight:700;"> (+<t t-esc="formatQty(line.col_outgoing_qtys[qty_index])"/>)</span>
