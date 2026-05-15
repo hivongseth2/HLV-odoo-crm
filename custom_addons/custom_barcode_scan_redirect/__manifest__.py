@@ -9,6 +9,8 @@
         "views/pack_scan_template.xml",
         "views/menu.xml",
         "views/scan_ui_template.xml",
+        "views/res_config_settings_view.xml",
+        "views/access_denied_template.xml",
     ],
     "installable": True,
     "application": False,

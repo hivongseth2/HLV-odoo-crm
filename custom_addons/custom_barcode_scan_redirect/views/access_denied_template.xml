@@ -1,0 +1,21 @@
+<odoo>
+  <template id="access_denied_template" name="Pack View - Access Denied">
+    <t t-call="web.layout">
+      <div style="display:flex; align-items:center; justify-content:center; min-height:100vh; background:#f8f9fa;">
+        <div style="background:white; border-radius:16px; padding:2.5rem 3rem; max-width:440px; text-align:center; box-shadow:0 4px 24px rgba(0,0,0,0.08); border:1px solid #fee2e2;">
+          <div style="font-size:3rem; margin-bottom:1rem;">🔒</div>
+          <h2 style="color:#dc2626; margin:0 0 0.5rem 0; font-size:1.4rem;">Không có quyền truy cập</h2>
+          <p style="color:#6b7280; margin:0 0 1.5rem 0; font-size:0.95rem; line-height:1.6;">
+            Phiếu <strong t-esc="picking_name"/> đã được phân công cho
+            <strong t-esc="packer_name"/>.
+            <br/>Tài khoản của bạn (<t t-esc="current_user_name"/>) không có quyền đóng gói phiếu này.
+          </p>
+          <a href="/custom_barcode_scan/ui"
+             style="display:inline-block; background:#2563eb; color:white; padding:0.65rem 1.75rem; border-radius:8px; text-decoration:none; font-weight:600; font-size:0.95rem;">
+            ← Quay về
+          </a>
+        </div>
+      </div>
+    </t>
+  </template>
+</odoo>

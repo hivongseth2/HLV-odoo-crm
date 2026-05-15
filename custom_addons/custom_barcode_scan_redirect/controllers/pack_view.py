@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """Pack view page route (/custom_barcode_scan/pack_view/<id>)."""
-from odoo import http
+from odoo import http, fields
 from odoo.http import request
 import logging
 
@@ -24,6 +24,29 @@ class PackViewController(http.Controller):
         if picking.state in ('done', 'cancel'):
             _logger.warning(f"[PACK_VIEW] Blocked: picking {picking.name} is {picking.state}")
             return request.redirect('/custom_barcode_scan/ui')
+
+        # --- Kiểm tra quyền đóng gói (cài đặt require_assigned_packer) ---
+        ICP = request.env['ir.config_parameter'].sudo()
+        require_assigned = ICP.get_param('custom_barcode.require_assigned_packer', False)
+        if require_assigned and str(require_assigned).lower() in ('1', 'true'):
+            current_user = request.env.user
+            is_admin = current_user._is_admin()
+            packer = picking.x_packer_id
+            if packer and not is_admin and current_user.id != packer.id:
+                _logger.warning(
+                    "[PACK_VIEW] Access denied: user %s tried to access %s (assigned to %s)",
+                    current_user.name, picking.name, packer.name
+                )
+                return request.render('custom_barcode_scan_redirect.access_denied_template', {
+                    'picking_name': picking.name,
+                    'packer_name': packer.name or packer.x_packer_name or packer.login,
+                    'current_user_name': current_user.name,
+                })
+
+        # --- Ghi nhận thời gian bắt đầu đóng gói (lần đầu vào) ---
+        if not picking.x_pack_start_time:
+            picking.sudo().write({'x_pack_start_time': fields.Datetime.now()})
+            _logger.info(f"[PACK_VIEW] Set x_pack_start_time for {picking.name}")
 
         # Auto-assign: Nếu phiếu PACK chưa được assign, tự động gọi action_assign
         if picking.state in ['confirmed', 'waiting']:
@@ -108,6 +131,8 @@ class PackViewController(http.Controller):
             'picking_packages': picking_packages,
             'has_packed_lines': has_packed_lines,
             'is_repack': is_repack,
+            'packer_name': picking.x_packer_id.name or picking.x_packer_id.login if picking.x_packer_id else '',
+            'pack_start_time': picking.x_pack_start_time,
         })
         response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
         response.headers['Pragma'] = 'no-cache'

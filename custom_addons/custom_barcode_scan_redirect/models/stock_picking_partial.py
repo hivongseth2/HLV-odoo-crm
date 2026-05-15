@@ -27,6 +27,20 @@ class StockPickingPartial(models.Model):
         help="True nếu picking đã được partial pack (hoàn tất một phần)"
     )
 
+    # Thời gian thực tế đóng gói: set khi packer vào giao diện pack_view
+    x_pack_start_time = fields.Datetime(
+        string="TG bắt đầu đóng gói",
+        copy=False,
+        help="Thời điểm người đóng gói mở giao diện đóng gói lần đầu",
+    )
+
+    # Thời lượng thực tế đóng gói (phút), tính khi hoàn tất picking
+    x_pack_actual_duration = fields.Integer(
+        string="Thời lượng thực tế (phút)",
+        copy=False,
+        help="Số phút từ lúc vào giao diện đóng gói tới khi hoàn tất phiếu",
+    )
+
     def create_partial_pack(self, move_line_data, package_name=None):
         """
         Tạo gói hàng (package) từ các move_line hoàn tất

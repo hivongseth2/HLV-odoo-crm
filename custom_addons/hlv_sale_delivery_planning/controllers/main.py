@@ -915,7 +915,8 @@ class DeliveryPlannerController(http.Controller):
                     _pack_pick_ids = [dm['picking_id'][0] for dm in _dest_moves if dm.get('picking_id')]
                     _pack_pick_info = {
                         p['id']: p for p in request.env['stock.picking'].sudo().search_read(
-                            [('id', 'in', _pack_pick_ids)], ['id', 'name', 'state']
+                            [('id', 'in', _pack_pick_ids)],
+                            ['id', 'name', 'state', 'x_pack_actual_duration', 'x_pack_start_time']
                         )
                     }
                     _pack_packages = {}
@@ -941,6 +942,7 @@ class DeliveryPlannerController(http.Controller):
                                     'name': _pp.get('name', ''),
                                     'state': _pp.get('state', ''),
                                     'packages': _pkgs,
+                                    'actual_duration': _pp.get('x_pack_actual_duration') or None,
                                 }
 
             def fmt_dt(dt):
@@ -964,6 +966,7 @@ class DeliveryPlannerController(http.Controller):
                     'pack_name': _pack_info['name'] if _pack_info else None,
                     'pack_state': _pack_info['state'] if _pack_info else None,
                     'pack_packages': _pack_info['packages'] if _pack_info else [],
+                    'pack_actual_duration': _pack_info.get('actual_duration') if _pack_info else None,
                     'state': r['state'],
                     'packer': r['x_packer_id'],
                     'packer_name': kpi_user_display.get(uid, uname) if uid else uname,
@@ -1052,6 +1055,7 @@ class DeliveryPlannerController(http.Controller):
     def get_package_contents(self, package_name=None, picking_id=None, **kwargs):
         """Nội dung sản phẩm trong một gói hàng (stock.quant.package)."""
         try:
+            # --- Thử move lines (in-progress packing) ---
             domain = [('result_package_id.name', '=', package_name)]
             if picking_id:
                 domain.append(('picking_id', '=', int(picking_id)))
@@ -1067,6 +1071,25 @@ class DeliveryPlannerController(http.Controller):
                     'demand': l['product_uom_qty'],
                     'uom': l['product_uom_id'][1] if l.get('product_uom_id') else '',
                 })
+
+            # --- Fallback: lấy từ stock.quant (sau khi picking đã done) ---
+            if not contents:
+                pkg = request.env['stock.quant.package'].sudo().search(
+                    [('name', '=', package_name)], limit=1
+                )
+                if pkg:
+                    quants = request.env['stock.quant'].sudo().search_read(
+                        [('package_id', '=', pkg.id), ('quantity', '!=', 0)],
+                        ['product_id', 'quantity', 'product_uom_id'],
+                    )
+                    for q in quants:
+                        contents.append({
+                            'product_name': q['product_id'][1] if q.get('product_id') else '?',
+                            'qty_done': q['quantity'],
+                            'demand': q['quantity'],
+                            'uom': q['product_uom_id'][1] if q.get('product_uom_id') else '',
+                        })
+
             return {'success': True, 'contents': contents}
         except Exception as e:
             _logger.error("get_package_contents error: %s", e, exc_info=True)
