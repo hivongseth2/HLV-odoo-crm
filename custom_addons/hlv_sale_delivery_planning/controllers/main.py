@@ -1028,3 +1028,67 @@ class DeliveryPlannerController(http.Controller):
         except Exception as e:
             _logger.error("change_packer error: %s", e, exc_info=True)
             return {'success': False, 'message': str(e)}
+
+    @http.route('/hlv_sale_delivery_planning/get_packers', type='json', auth='user', methods=['POST'])
+    def get_packers(self, **kwargs):
+        """Trả về danh sách người dùng nội bộ để chọn làm packer."""
+        try:
+            users = request.env['res.users'].sudo().search_read(
+                [('active', '=', True), ('share', '=', False)],
+                ['id', 'name', 'x_packer_name'],
+                order='name',
+            )
+            result = []
+            for u in users:
+                display = (u.get('x_packer_name') or '').strip() or u['name']
+                result.append({'id': u['id'], 'name': display})
+            result.sort(key=lambda x: x['name'])
+            return {'success': True, 'packers': result}
+        except Exception as e:
+            _logger.error("get_packers error: %s", e, exc_info=True)
+            return {'success': False, 'message': str(e)}
+
+    @http.route('/hlv_sale_delivery_planning/get_package_contents', type='json', auth='user', methods=['POST'])
+    def get_package_contents(self, package_name=None, picking_id=None, **kwargs):
+        """Nội dung sản phẩm trong một gói hàng (stock.quant.package)."""
+        try:
+            domain = [('result_package_id.name', '=', package_name)]
+            if picking_id:
+                domain.append(('picking_id', '=', int(picking_id)))
+            lines = request.env['stock.move.line'].sudo().search_read(
+                domain,
+                ['product_id', 'qty_done', 'product_uom_qty', 'product_uom_id'],
+            )
+            contents = []
+            for l in lines:
+                contents.append({
+                    'product_name': l['product_id'][1] if l.get('product_id') else '?',
+                    'qty_done': l['qty_done'],
+                    'demand': l['product_uom_qty'],
+                    'uom': l['product_uom_id'][1] if l.get('product_uom_id') else '',
+                })
+            return {'success': True, 'contents': contents}
+        except Exception as e:
+            _logger.error("get_package_contents error: %s", e, exc_info=True)
+            return {'success': False, 'message': str(e)}
+
+    @http.route('/hlv_sale_delivery_planning/unpack_package', type='json', auth='user', methods=['POST'])
+    def unpack_package(self, package_name=None, picking_id=None, **kwargs):
+        """Bỏ gói hàng khỏi phiếu (xóa result_package_id trên move lines)."""
+        try:
+            if not package_name or not picking_id:
+                return {'success': False, 'message': 'package_name và picking_id là bắt buộc'}
+            pick = request.env['stock.picking'].sudo().browse(int(picking_id))
+            if not pick.exists():
+                return {'success': False, 'message': 'Không tìm thấy phiếu'}
+            if pick.state == 'done':
+                return {'success': False, 'message': 'Không thể bỏ gói hàng đã hoàn thành'}
+            lines = request.env['stock.move.line'].sudo().search([
+                ('picking_id', '=', int(picking_id)),
+                ('result_package_id.name', '=', package_name),
+            ])
+            lines.write({'result_package_id': False})
+            return {'success': True}
+        except Exception as e:
+            _logger.error("unpack_package error: %s", e, exc_info=True)
+            return {'success': False, 'message': str(e)}

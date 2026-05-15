@@ -220,7 +220,16 @@
                                                     <i class="fa fa-file-text-o me-1"></i><t t-esc="pk.sale_name"/>
                                                 </div>
                                             </td>
-                                            <td class="text-muted small"><t t-esc="pk.packer_name"/></td>
+                                            <td class="text-muted small">
+                                                <t t-esc="pk.packer_name"/>
+                                                <div class="mt-1">
+                                                    <button class="btn btn-outline-secondary"
+                                                            style="font-size:0.65rem;padding:1px 6px;line-height:1.4;"
+                                                            t-on-click="() => this.openDashboardPackerModal(pk)">
+                                                        <i class="fa fa-pencil me-1"></i>Đổi
+                                                    </button>
+                                                </div>
+                                            </td>
                                             <td class="text-center"><t t-esc="pk.print_time or '—'"/></td>
                                             <td class="text-center text-muted">—</td>
                                             <td class="text-center text-muted">—</td>
@@ -238,7 +247,16 @@
                                                     <i class="fa fa-file-text-o me-1"></i><t t-esc="pk.sale_name"/>
                                                 </div>
                                             </td>
-                                            <td class="text-muted small"><t t-esc="pk.packer_name"/></td>
+                                            <td class="text-muted small">
+                                                <t t-esc="pk.packer_name"/>
+                                                <div class="mt-1">
+                                                    <button class="btn btn-outline-secondary"
+                                                            style="font-size:0.65rem;padding:1px 6px;line-height:1.4;"
+                                                            t-on-click="() => this.openDashboardPackerModal(pk)">
+                                                        <i class="fa fa-pencil me-1"></i>Đổi
+                                                    </button>
+                                                </div>
+                                            </td>
                                             <td class="text-center text-muted"><t t-esc="pk.print_time or '—'"/></td>
                                             <td class="text-center text-success fw-bold"><t t-esc="pk.finish_time or '—'"/></td>
                                             <td class="text-center">
@@ -257,6 +275,43 @@
                             </table>
                         </div>
                     </t>
+                </div>
+            </div>
+        </div>
+
+        <!-- Packer change modal -->
+        <div t-if="state.dashboardPackerModal.open"
+             class="modal d-block"
+             style="background:rgba(0,0,0,0.5);z-index:1060;"
+             t-on-click.self="closeDashboardPackerModal">
+            <div class="modal-dialog modal-sm modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header py-2 px-3">
+                        <h6 class="modal-title fw-bold">
+                            <i class="fa fa-user-circle me-2 text-primary"></i>Đổi Người Đóng Gói
+                        </h6>
+                        <button class="btn-close" t-on-click="closeDashboardPackerModal"></button>
+                    </div>
+                    <div class="modal-body px-3 py-3">
+                        <div class="small text-muted mb-3">
+                            Phiếu: <strong><t t-esc="state.dashboardPackerModal.pickingName"/></strong>
+                        </div>
+                        <select class="form-select form-select-sm"
+                                t-on-change="onDashboardPackerChange">
+                            <option value="">— Bỏ assign —</option>
+                            <t t-foreach="state.allPackersList" t-as="p" t-key="p.id">
+                                <option t-att-value="p.id">
+                                    <t t-esc="p.name"/>
+                                </option>
+                            </t>
+                        </select>
+                    </div>
+                    <div class="modal-footer py-2 px-3">
+                        <button class="btn btn-sm btn-secondary" t-on-click="closeDashboardPackerModal">Hủy</button>
+                        <button class="btn btn-sm btn-primary" t-on-click="confirmDashboardChangePacker">
+                            <i class="fa fa-check me-1"></i>Xác nhận
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

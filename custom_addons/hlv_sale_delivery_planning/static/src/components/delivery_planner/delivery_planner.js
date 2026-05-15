@@ -169,6 +169,13 @@ export class DeliveryPlannerDashboard extends Component {
             packerStatsLoading: false,
             packerStats: [],  // [{id, name, packing:[], packed_today:[], avg_minutes}]
             packerCollapsed: {},  // {packerId: bool}
+            allPackersList: [],  // [{id, name}] for packer change modal
+            dashboardPackerModal: {
+                open: false,
+                pickingId: null,
+                pickingName: '',
+                selectedPackerId: null,
+            },
 
             // Inline editing: Ghi Chú Odoo
             inlineEditSOId: null,     // soId đang edit ghi chu
@@ -2579,11 +2586,69 @@ export class DeliveryPlannerDashboard extends Component {
         this.state.packerPanelOpen = !this.state.packerPanelOpen;
         if (this.state.packerPanelOpen) {
             this.loadPackerStats();
+            if (!this.state.allPackersList.length) this.loadAllPackersList();
         }
     }
 
     togglePackerCollapse(id) {
         this.state.packerCollapsed[id] = !this.state.packerCollapsed[id];
+    }
+
+    async loadAllPackersList() {
+        try {
+            const res = await fetch('/hlv_sale_delivery_planning/get_packers', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ jsonrpc: '2.0', method: 'call', params: {} }),
+            }).then(r => r.json());
+            const data = res.result || {};
+            if (data.success !== false) {
+                this.state.allPackersList = data.packers || [];
+            }
+        } catch (e) {
+            console.warn('loadAllPackersList error', e);
+        }
+    }
+
+    openDashboardPackerModal(item) {
+        this.state.dashboardPackerModal = {
+            open: true,
+            pickingId: item.picking_id,
+            pickingName: item.picking_name,
+            selectedPackerId: null,
+        };
+    }
+
+    closeDashboardPackerModal() {
+        this.state.dashboardPackerModal.open = false;
+    }
+
+    onDashboardPackerChange(ev) {
+        this.state.dashboardPackerModal.selectedPackerId = ev.target.value ? parseInt(ev.target.value) : null;
+    }
+
+    async confirmDashboardChangePacker() {
+        const { pickingId, selectedPackerId } = this.state.dashboardPackerModal;
+        try {
+            const res = await fetch('/hlv_sale_delivery_planning/change_packer', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    jsonrpc: '2.0', method: 'call',
+                    params: { picking_id: pickingId, packer_id: selectedPackerId || false },
+                }),
+            }).then(r => r.json());
+            const data = res.result || {};
+            if (data.success) {
+                this.state.dashboardPackerModal.open = false;
+                this.notification.add('Đã đổi người đóng gói', { type: 'success' });
+                this.loadPackerStats();
+            } else {
+                this.notification.add('Lỗi: ' + (data.message || 'unknown'), { type: 'danger' });
+            }
+        } catch (e) {
+            this.notification.add('Không thể đổi người đóng gói', { type: 'danger' });
+        }
     }
 
     refreshPackerStats(ev) {

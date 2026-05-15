@@ -46,6 +46,15 @@ export class PackingKpiDashboard extends Component {
                 pickingName: '',
                 selectedPackerId: null,
             },
+            // Package popup
+            packagePopup: {
+                open: false,
+                pkgName: null,
+                pickId: null,
+                packState: null,
+                loading: false,
+                contents: [],
+            },
         });
 
         onWillStart(() => this.fetchData());
@@ -272,6 +281,54 @@ export class PackingKpiDashboard extends Component {
             }
         } catch (e) {
             this.notification.add('Không thể đổi người đóng gói', { type: 'danger' });
+        }
+    }
+
+    async openPackagePopup(pkgName, pickId, packState) {
+        this.state.packagePopup = { open: true, pkgName, pickId, packState, loading: true, contents: [] };
+        try {
+            const res = await fetch('/hlv_sale_delivery_planning/get_package_contents', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    jsonrpc: '2.0', method: 'call',
+                    params: { package_name: pkgName, picking_id: pickId },
+                }),
+            }).then(r => r.json());
+            const data = res.result || {};
+            this.state.packagePopup.contents = data.contents || [];
+        } catch (e) {
+            this.notification.add('Không thể tải nội dung gói hàng', { type: 'danger' });
+        } finally {
+            this.state.packagePopup.loading = false;
+        }
+    }
+
+    closePackagePopup() {
+        this.state.packagePopup.open = false;
+    }
+
+    async unpackPackage() {
+        const { pkgName, pickId } = this.state.packagePopup;
+        try {
+            const res = await fetch('/hlv_sale_delivery_planning/unpack_package', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    jsonrpc: '2.0', method: 'call',
+                    params: { package_name: pkgName, picking_id: pickId },
+                }),
+            }).then(r => r.json());
+            const data = res.result || {};
+            if (data.success) {
+                this.state.packagePopup.open = false;
+                this.notification.add('Đã bỏ gói hàng', { type: 'success' });
+                this.fetchData();
+            } else {
+                this.notification.add('Lỗi: ' + (data.message || 'unknown'), { type: 'danger' });
+            }
+        } catch (e) {
+            this.notification.add('Không thể bỏ gói hàng', { type: 'danger' });
         }
     }
 
