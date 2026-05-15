@@ -347,3 +347,30 @@ class HlvStockQuick(models.TransientModel):
                 existing_ids.add(product.id)
                 added.append({"code": code, "name": product.name})
         return {"added": added, "not_found": not_found, "already_in": already_in, "total": len(codes)}
+
+    @api.model
+    def get_product_moves(self, product_id, warehouse_ids, limit=200):
+        domain = [
+            ("product_id", "=", product_id),
+            ("state", "=", "done"),
+            ("picking_id", "!=", False),
+            ("picking_id.picking_type_code", "in", ["incoming", "outgoing"]),
+        ]
+        if warehouse_ids:
+            domain += [("picking_id.picking_type_id.warehouse_id", "in", warehouse_ids)]
+        moves = self.env["stock.move"].search(domain, order="date desc", limit=limit)
+        result = []
+        for move in moves:
+            picking = move.picking_id
+            ptype = picking.picking_type_code
+            qty = getattr(move, "quantity", 0.0) or getattr(move, "quantity_done", 0.0)
+            result.append({
+                "type": "in" if ptype == "incoming" else "out",
+                "date": move.date.strftime("%d/%m/%Y") if move.date else "",
+                "reference": picking.name or "",
+                "origin": picking.origin or "",
+                "partner": picking.partner_id.name or "",
+                "qty": qty,
+                "uom": move.product_uom.name or "",
+            })
+        return result

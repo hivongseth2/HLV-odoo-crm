@@ -41,6 +41,8 @@ export class StockQuickView extends Component {
             outgoingTotal: 0,
             extraCols: [],
             colsOpen: false,
+            movesData: {},
+            expandedMovesId: false,
         });
 
         onWillStart(async () => {
@@ -392,6 +394,21 @@ export class StockQuickView extends Component {
                 [productId, this.state.warehouseIds]
             );
             this.state.locationData = Object.assign({}, this.state.locationData, { [productId]: result });
+        }
+    }
+
+    async toggleProductMoves(productId) {
+        if (this.state.expandedMovesId === productId) {
+            this.state.expandedMovesId = false;
+            return;
+        }
+        this.state.expandedMovesId = productId;
+        if (!this.state.movesData[productId]) {
+            const result = await this.orm.call(
+                "hlv.stock.quick", "get_product_moves",
+                [productId, this.state.warehouseIds]
+            );
+            this.state.movesData = Object.assign({}, this.state.movesData, { [productId]: result });
         }
     }
 
