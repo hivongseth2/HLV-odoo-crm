@@ -1,0 +1,28 @@
+/* Hover effect for main stock table rows */
+.hlv-stock-row {
+    transition: background-color 0.1s ease;
+    cursor: pointer;
+}
+.hlv-stock-row:hover > td {
+    background-color: #dbeafe !important;
+}
+
+/* Hover effect for moves ledger rows */
+.hlv-move-row {
+    transition: background-color 0.1s ease;
+    cursor: default;
+}
+.hlv-move-row.hlv-in-row:hover > td {
+    background-color: #e3f2fd !important;
+}
+.hlv-move-row.hlv-out-row:hover > td {
+    background-color: #fce4ec !important;
+}
+
+/* Alternating row colors - stronger contrast */
+.hlv-move-row.hlv-in-row.hlv-stripe > td {
+    background-color: #f0fdf4;
+}
+.hlv-move-row.hlv-out-row.hlv-stripe > td {
+    background-color: #fff8f0;
+}

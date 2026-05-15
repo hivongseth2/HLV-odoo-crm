@@ -422,6 +422,14 @@ export class StockQuickView extends Component {
         this.state.movesData = Object.assign({}, this.state.movesData, { [productId]: result });
     }
 
+    async exportMoves(productId) {
+        const attId = await this.orm.call(
+            "hlv.stock.quick", "export_moves_excel",
+            [productId, this.state.warehouseIds, this.state.movesDateFrom, this.state.movesDateTo]
+        );
+        window.location.href = "/web/content/" + attId + "?download=true";
+    }
+
     async reloadMoves(ev, productId) {
         ev.stopPropagation();
         await this._loadMoves(productId);

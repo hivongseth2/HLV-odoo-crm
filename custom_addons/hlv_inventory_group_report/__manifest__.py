@@ -23,6 +23,7 @@
     ],
     'assets': {
         'web.assets_backend': [
+            'hlv_inventory_group_report/static/src/css/stock_quick_view.css',
             'hlv_inventory_group_report/static/src/xml/stock_quick_view.xml',
             'hlv_inventory_group_report/static/src/js/stock_quick_view.js',
         ],
