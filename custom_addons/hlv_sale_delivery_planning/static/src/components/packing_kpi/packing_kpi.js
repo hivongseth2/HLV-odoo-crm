@@ -39,6 +39,13 @@ export class PackingKpiDashboard extends Component {
             packerDropdownOpen: false,
             statusDropdownOpen: false,
             collapsedPackers: {},    // {packerId: bool}
+            // Packer change modal
+            packerModal: {
+                open: false,
+                pickingId: null,
+                pickingName: '',
+                selectedPackerId: null,
+            },
         });
 
         onWillStart(() => this.fetchData());
@@ -224,6 +231,48 @@ export class PackingKpiDashboard extends Component {
 
     togglePackerCollapse(id) {
         this.state.collapsedPackers[id] = !this.state.collapsedPackers[id];
+    }
+
+    openPackerModal(row) {
+        this.state.packerModal = {
+            open: true,
+            pickingId: row.id,
+            pickingName: row.name,
+            selectedPackerId: row.packer ? row.packer[0] : null,
+        };
+    }
+
+    closePackerModal() {
+        this.state.packerModal.open = false;
+    }
+
+    onModalPackerChange(ev) {
+        this.state.packerModal.selectedPackerId = ev.target.value ? parseInt(ev.target.value) : null;
+    }
+
+    async confirmChangePacker() {
+        const { pickingId, selectedPackerId } = this.state.packerModal;
+        try {
+            const res = await fetch('/hlv_sale_delivery_planning/change_packer', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    jsonrpc: '2.0',
+                    method: 'call',
+                    params: { picking_id: pickingId, packer_id: selectedPackerId || false },
+                }),
+            }).then(r => r.json());
+            const data = res.result || {};
+            if (data.success) {
+                this.state.packerModal.open = false;
+                this.notification.add('Đã đổi người đóng gói', { type: 'success' });
+                this.fetchData();
+            } else {
+                this.notification.add('Lỗi: ' + (data.message || 'unknown'), { type: 'danger' });
+            }
+        } catch (e) {
+            this.notification.add('Không thể đổi người đóng gói', { type: 'danger' });
+        }
     }
 
     get rowsByPacker() {

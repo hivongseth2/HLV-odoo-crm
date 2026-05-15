@@ -896,7 +896,7 @@ class DeliveryPlannerController(http.Controller):
 
             # Find PACK picking names for page rows (bulk)
             _page_ids = [r['id'] for r in page_recs]
-            _kpi_pack_map = {}
+            _kpi_pack_map = {}  # pick_id -> {id, name, state, packages}
             if _page_ids:
                 _Move = request.env['stock.move'].sudo()
                 _dest_moves = _Move.search_read(
@@ -912,14 +912,36 @@ class DeliveryPlannerController(http.Controller):
                             ['id', 'picking_id'],
                         ) if m.get('picking_id')
                     }
+                    _pack_pick_ids = [dm['picking_id'][0] for dm in _dest_moves if dm.get('picking_id')]
+                    _pack_pick_info = {
+                        p['id']: p for p in request.env['stock.picking'].sudo().search_read(
+                            [('id', 'in', _pack_pick_ids)], ['id', 'name', 'state']
+                        )
+                    }
+                    _pack_packages = {}
+                    for ml in request.env['stock.move.line'].sudo().search_read(
+                        [('picking_id', 'in', _pack_pick_ids), ('result_package_id', '!=', False)],
+                        ['picking_id', 'result_package_id'],
+                    ):
+                        _pid = ml['picking_id'][0]
+                        _pkg = ml['result_package_id'][1] if ml.get('result_package_id') else None
+                        if _pkg:
+                            _pack_packages.setdefault(_pid, set()).add(_pkg)
                     for dm in _dest_moves:
                         if not dm.get('picking_id'):
                             continue
-                        _pn = dm['picking_id'][1]
+                        _pack_id = dm['picking_id'][0]
+                        _pp = _pack_pick_info.get(_pack_id, {})
+                        _pkgs = sorted(_pack_packages.get(_pack_id, set()))
                         for _mid in dm.get('move_orig_ids', []):
                             _src = _orig_map.get(_mid)
                             if _src and _src not in _kpi_pack_map:
-                                _kpi_pack_map[_src] = _pn
+                                _kpi_pack_map[_src] = {
+                                    'id': _pack_id,
+                                    'name': _pp.get('name', ''),
+                                    'state': _pp.get('state', ''),
+                                    'packages': _pkgs,
+                                }
 
             def fmt_dt(dt):
                 return (dt + _TZ).strftime('%d/%m %H:%M') if dt else None
@@ -933,11 +955,15 @@ class DeliveryPlannerController(http.Controller):
                     dur = round((ft - pt).total_seconds() / 60)
                 uid = r['x_packer_id'][0] if r.get('x_packer_id') else None
                 uname = r['x_packer_id'][1] if r.get('x_packer_id') else ''
+                _pack_info = _kpi_pack_map.get(r['id'])
                 rows.append({
                     'id': r['id'],
                     'name': r['name'],
                     'sale_name': r['sale_id'][1] if r.get('sale_id') else None,
-                    'pack_name': _kpi_pack_map.get(r['id']),
+                    'pack_id': _pack_info['id'] if _pack_info else None,
+                    'pack_name': _pack_info['name'] if _pack_info else None,
+                    'pack_state': _pack_info['state'] if _pack_info else None,
+                    'pack_packages': _pack_info['packages'] if _pack_info else [],
                     'state': r['state'],
                     'packer': r['x_packer_id'],
                     'packer_name': kpi_user_display.get(uid, uname) if uid else uname,
@@ -984,4 +1010,21 @@ class DeliveryPlannerController(http.Controller):
             }
         except Exception as e:
             _logger.error("packing_kpi_history error: %s", e, exc_info=True)
+            return {'success': False, 'message': str(e)}
+
+    @http.route('/hlv_sale_delivery_planning/change_packer', type='json', auth='user', methods=['POST'])
+    def change_packer(self, picking_id=None, packer_id=None, **kwargs):
+        """Đổi người đóng gói (x_packer_id) cho một phiếu."""
+        try:
+            if not picking_id:
+                return {'success': False, 'message': 'picking_id required'}
+            pick = request.env['stock.picking'].sudo().browse(int(picking_id))
+            if not pick.exists():
+                return {'success': False, 'message': 'Không tìm thấy phiếu'}
+            pick.write({'x_packer_id': int(packer_id) if packer_id else False})
+            if hasattr(pick, '_notify_delivery_planner_changed'):
+                pick._notify_delivery_planner_changed()
+            return {'success': True}
+        except Exception as e:
+            _logger.error("change_packer error: %s", e, exc_info=True)
             return {'success': False, 'message': str(e)}

@@ -237,13 +237,13 @@
                     <table class="table table-sm mb-0">
                         <thead class="table-light sticky-top">
                             <tr>
-                                <th class="ps-3">Phiếu / Đơn hàng</th>
-                                <th>Loại phiếu</th>
-                                <th class="text-center">TG In</th>
-                                <th class="text-center">TG Xong</th>
-                                <th class="text-center">Thời lượng</th>
-                                <th class="text-center">Trạng thái</th>
-                                <th class="text-center">Odoo State</th>
+                                <th class="ps-3" style="width:130px;">Đơn hàng</th>
+                                <th style="min-width:170px;">Phiếu lấy hàng</th>
+                                <th style="min-width:170px;">Phiếu đóng gói</th>
+                                <th class="text-center" style="width:90px;">TG In</th>
+                                <th class="text-center" style="width:90px;">TG Xong</th>
+                                <th class="text-center" style="width:80px;">Thời lượng</th>
+                                <th class="text-center" style="width:120px;">Người đóng</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -288,33 +288,73 @@
                                 <t t-if="!state.collapsedPackers[group.id]">
                                     <t t-foreach="group.rows" t-as="row" t-key="row.id">
                                         <tr t-att-class="row.status === 'packing' ? 'table-warning' : (row.status === 'packed' ? '' : 'table-light')">
-                                            <td class="ps-4 fw-bold">
-                                                <i class="fa fa-barcode me-1 text-muted"></i>
-                                                <t t-esc="row.name"/>
-                                                <div t-if="row.pack_name" class="text-muted small fw-normal">
-                                                    <i class="fa fa-cube me-1"></i><t t-esc="row.pack_name"/>
+                                            <!-- Đơn hàng -->
+                                            <td class="ps-4 align-middle">
+                                                <span t-if="row.sale_name" class="fw-bold small">
+                                                    <i class="fa fa-file-text-o me-1 text-muted"></i>
+                                                    <t t-esc="row.sale_name"/>
+                                                </span>
+                                                <span t-else="" class="text-muted">—</span>
+                                            </td>
+                                            <!-- Phiếu lấy hàng (PICK) -->
+                                            <td class="align-middle">
+                                                <div class="fw-bold small">
+                                                    <i class="fa fa-barcode me-1 text-muted"></i>
+                                                    <t t-esc="row.name"/>
                                                 </div>
-                                                <div t-if="row.sale_name" class="text-muted small fw-normal">
-                                                    <i class="fa fa-file-text-o me-1"></i><t t-esc="row.sale_name"/>
+                                                <div class="mt-1 d-flex flex-wrap gap-1 align-items-center">
+                                                    <span t-att-class="statusBadgeClass(row.status)">
+                                                        <t t-esc="statusLabel(row.status)"/>
+                                                    </span>
+                                                    <span class="badge bg-light text-dark border" style="font-size:0.68rem;">
+                                                        <t t-esc="stateLabel(row.state)"/>
+                                                    </span>
                                                 </div>
                                             </td>
-                                            <td class="small text-muted"><t t-esc="row.picking_type"/></td>
-                                            <td class="text-center small"><t t-esc="row.print_time or '—'"/></td>
-                                            <td class="text-center small text-success fw-bold"><t t-esc="row.finish_time or '—'"/></td>
-                                            <td class="text-center">
+                                            <!-- Phiếu đóng gói (PACK) -->
+                                            <td class="align-middle">
+                                                <t t-if="row.pack_name">
+                                                    <div class="fw-bold small">
+                                                        <i class="fa fa-cube me-1 text-muted"></i>
+                                                        <t t-esc="row.pack_name"/>
+                                                    </div>
+                                                    <div class="mt-1">
+                                                        <span class="badge bg-light text-dark border" style="font-size:0.68rem;">
+                                                            <t t-esc="stateLabel(row.pack_state)"/>
+                                                        </span>
+                                                    </div>
+                                                    <div t-if="row.pack_packages and row.pack_packages.length" class="mt-1 d-flex flex-wrap gap-1">
+                                                        <t t-foreach="row.pack_packages" t-as="pkg" t-key="pkg">
+                                                            <span class="badge bg-light border text-dark" style="font-size:0.68rem;">
+                                                                <i class="fa fa-archive me-1"></i><t t-esc="pkg"/>
+                                                            </span>
+                                                        </t>
+                                                    </div>
+                                                </t>
+                                                <span t-else="" class="text-muted">—</span>
+                                            </td>
+                                            <!-- TG In -->
+                                            <td class="text-center small align-middle"><t t-esc="row.print_time or '—'"/></td>
+                                            <!-- TG Xong -->
+                                            <td class="text-center small text-success fw-bold align-middle"><t t-esc="row.finish_time or '—'"/></td>
+                                            <!-- Thời lượng -->
+                                            <td class="text-center align-middle">
                                                 <span t-if="row.duration_min !== null"
                                                       t-att-class="'badge border ' + (row.duration_min > 30 ? 'bg-danger text-white' : row.duration_min > 15 ? 'bg-warning text-dark' : 'bg-success text-white')">
                                                     <t t-esc="row.duration_min"/> ph
                                                 </span>
                                                 <span t-else="" class="text-muted">—</span>
                                             </td>
-                                            <td class="text-center">
-                                                <span t-att-class="statusBadgeClass(row.status)">
-                                                    <t t-esc="statusLabel(row.status)"/>
-                                                </span>
-                                            </td>
-                                            <td class="text-center small text-muted">
-                                                <t t-esc="stateLabel(row.state)"/>
+                                            <!-- Người đóng -->
+                                            <td class="text-center align-middle">
+                                                <div class="d-flex flex-column align-items-center gap-1">
+                                                    <span class="small"><t t-esc="row.packer_name or '—'"/></span>
+                                                    <button class="btn btn-outline-secondary"
+                                                            style="font-size:0.68rem;padding:1px 7px;line-height:1.4;"
+                                                            t-on-click="() => this.openPackerModal(row)">
+                                                        <i class="fa fa-pencil me-1"></i>Đổi
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     </t>
@@ -356,6 +396,46 @@
         </div>
 
     </div> <!-- /overflow-auto -->
+
+    <!-- ══════════════════════════════════════════════
+         PACKER CHANGE MODAL
+    ═══════════════════════════════════════════════════ -->
+    <div t-if="state.packerModal.open"
+         class="modal d-block"
+         style="background:rgba(0,0,0,0.5);z-index:1055;"
+         t-on-click.self="closePackerModal">
+        <div class="modal-dialog modal-sm modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header py-2 px-3">
+                    <h6 class="modal-title fw-bold">
+                        <i class="fa fa-user-circle me-2 text-primary"></i>Đổi Người Đóng Gói
+                    </h6>
+                    <button class="btn-close" t-on-click="closePackerModal"></button>
+                </div>
+                <div class="modal-body px-3 py-3">
+                    <div class="small text-muted mb-3">
+                        Phiếu: <strong><t t-esc="state.packerModal.pickingName"/></strong>
+                    </div>
+                    <select class="form-select form-select-sm"
+                            t-on-change="onModalPackerChange">
+                        <option value="">— Bỏ assign —</option>
+                        <t t-foreach="state.allPackers" t-as="p" t-key="p.id">
+                            <option t-att-value="p.id"
+                                    t-att-selected="state.packerModal.selectedPackerId === p.id">
+                                <t t-esc="p.name"/>
+                            </option>
+                        </t>
+                    </select>
+                </div>
+                <div class="modal-footer py-2 px-3">
+                    <button class="btn btn-sm btn-secondary" t-on-click="closePackerModal">Hủy</button>
+                    <button class="btn btn-sm btn-primary" t-on-click="confirmChangePacker">
+                        <i class="fa fa-check me-1"></i>Xác nhận
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 </t>
 
