@@ -18,6 +18,12 @@
 .hlv-move-row.hlv-out-row:hover > td {
     background-color: #fce4ec !important;
 }
+.hlv-move-row.hlv-transit-row > td {
+    background-color: #f3e5f5 !important;
+}
+.hlv-move-row.hlv-transit-row:hover > td {
+    background-color: #e1bee7 !important;
+}
 
 /* Alternating row colors - stronger contrast */
 .hlv-move-row.hlv-in-row.hlv-stripe > td {
