@@ -415,11 +415,14 @@
                                                                         <!-- Move rows -->
                                                                         <t t-foreach="state.movesData[line.id].moves" t-as="mv" t-key="mv_index">
                                                                             <tr class="hlv-move-row"
-                                                                                t-att-class="(mv.type === 'out' ? 'hlv-out-row' : 'hlv-in-row') + (mv_index % 2 === 1 ? ' hlv-stripe' : '')"
-                                                                                t-att-style="'border-bottom:1px solid #eee; ' + (mv.type === 'out' ? (mv_index % 2 === 1 ? '' : 'background:#fff9f0;') : (mv_index % 2 === 1 ? '' : 'background:#f8fff8;'))">
+                                                                                t-att-class="(mv.is_transit ? 'hlv-transit-row ' : '') + (mv.type === 'out' ? 'hlv-out-row' : 'hlv-in-row') + (mv_index % 2 === 1 ? ' hlv-stripe' : '')"
+                                                                                t-att-style="'border-bottom:1px solid #eee; ' + (mv.is_transit ? 'background:#f3e5f5 !important;' : (mv.type === 'out' ? (mv_index % 2 === 1 ? '' : 'background:#fff9f0;') : (mv_index % 2 === 1 ? '' : 'background:#f8fff8;')))">
                                                                                 <td style="padding:5px 10px; color:#546e7a;"><t t-esc="mv.date"/></td>
                                                                                 <td style="padding:5px 10px; font-family:monospace; font-size:11px;">
-                                                                                    <t t-if="mv.type === 'in'">
+                                                                                    <t t-if="mv.is_transit">
+                                                                                        <span style="background:#6a1b9a; color:#fff; border-radius:8px; padding:1px 6px; font-size:10px; font-weight:700; margin-right:4px;">⇄ CK</span>
+                                                                                    </t>
+                                                                                    <t t-elif="mv.type === 'in'">
                                                                                         <span style="background:#1565c0; color:#fff; border-radius:8px; padding:1px 6px; font-size:10px; font-weight:700; margin-right:4px;">⬇ NK</span>
                                                                                     </t>
                                                                                     <t t-else="">
@@ -427,7 +430,15 @@
                                                                                     </t>
                                                                                     <t t-esc="mv.reference"/>
                                                                                 </td>
-                                                                                <td style="padding:5px 10px; font-family:monospace; font-size:11px; color:#0d47a1;"><t t-esc="mv.origin"/></td>
+                                                                                <td style="padding:5px 10px; font-family:monospace; font-size:11px;">
+                                                                                    <t t-if="mv.is_transit and mv.origin">
+                                                                                        <span style="color:#6a1b9a; font-weight:700;" t-esc="mv.origin"/>
+                                                                                        <i class="fa fa-exchange" style="margin-left:4px; font-size:10px; color:#ab47bc;"/>
+                                                                                    </t>
+                                                                                    <t t-else="">
+                                                                                        <span style="color:#0d47a1;" t-esc="mv.origin"/>
+                                                                                    </t>
+                                                                                </td>
                                                                                 <td style="padding:5px 10px; color:#424242;"><t t-esc="mv.description"/></td>
                                                                                 <td style="padding:5px 8px; text-align:center; color:#6c757d;"><t t-esc="mv.uom"/></td>
                                                                                 <td style="padding:5px 10px; text-align:right; color:#5d4037;">

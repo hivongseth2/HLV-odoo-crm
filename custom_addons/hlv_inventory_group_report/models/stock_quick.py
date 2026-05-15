@@ -545,12 +545,47 @@ class HlvStockQuick(models.TransientModel):
             picking = move.picking_id
             partner = picking.partner_id if picking else False
 
+            # Transit transfer detection (deltatech_picking_transit)
+            is_transit = False
+            transit_linked = ""  # tên phiếu liên kết bên kia
+            if picking:
+                source_tf = getattr(picking, "source_transfer_id", False)
+                second_created = getattr(picking, "second_transfer_created", False)
+                src_usage = move.location_id.usage
+                dst_usage = move.location_dest_id.usage
+                if source_tf:
+                    # Bước 2: phiếu nhận từ transit
+                    is_transit = True
+                    transit_linked = source_tf.name or ""
+                elif second_created:
+                    # Bước 1: phiếu xuất sang transit, tìm phiếu bước 2
+                    is_transit = True
+                    step2 = self.env["stock.picking"].search(
+                        [("source_transfer_id", "=", picking.id)], limit=1
+                    )
+                    transit_linked = step2.name if step2 else ""
+                elif src_usage == "transit" or dst_usage == "transit":
+                    is_transit = True
+
+            # Build origin: show linked transit picking name if applicable
+            if is_transit and transit_linked:
+                origin = transit_linked
+            else:
+                origin = (picking.origin if picking else "") or ""
+
+            # Description
+            if is_transit:
+                description = "Nhập chuyển kho" if move_type == "in" else "Xuất chuyển kho"
+            else:
+                description = "Nhập kho" if move_type == "in" else "Xuất kho"
+
             result_moves.append({
                 "type": move_type,
+                "is_transit": is_transit,
                 "date": utc_to_local_str(move.date),
                 "reference": (picking.name if picking else move.name) or "",
-                "origin": (picking.origin if picking else "") or "",
-                "description": ("Nhập kho" if move_type == "in" else "Xuất kho"),
+                "origin": origin,
+                "description": description,
                 "uom": move.product_uom.name or "",
                 "price": price,
                 "combo_info": combo_info,
