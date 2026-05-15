@@ -337,54 +337,104 @@
                                                 </t>
                                                 <!-- Lich su nhap/xuat (expand) -->
                                                 <t t-if="state.expandedMovesId === line.id">
-                                                    <tr style="background:#f0fff0;">
-                                                        <td t-att-colspan="tableColspan" style="padding:12px 20px; border-bottom:2px solid #b2dfdb;">
-                                                            <div style="font-size:12px; font-weight:700; color:#1b5e20; margin-bottom:8px; display:flex; align-items:center; gap:6px;">
-                                                                <i class="fa fa-history" style="color:#198754;"/>
-                                                                Lịch sử nhập/xuất: <span t-esc="line.name"/>
+                                                    <tr style="background:#f1f8e9;">
+                                                        <td t-att-colspan="tableColspan" style="padding:14px 20px; border-bottom:2px solid #aed581;">
+                                                            <!-- Header: title + date picker + reload -->
+                                                            <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px; flex-wrap:wrap;">
+                                                                <div style="font-size:12px; font-weight:700; color:#1b5e20; display:flex; align-items:center; gap:6px;">
+                                                                    <i class="fa fa-history" style="color:#388e3c;"/>
+                                                                    Sổ chi tiết nhập/xuất: <span t-esc="line.name"/>
+                                                                </div>
+                                                                <div style="display:flex; align-items:center; gap:6px; margin-left:auto;">
+                                                                    <label style="font-size:11px; color:#555; white-space:nowrap;">Từ ngày:</label>
+                                                                    <input type="date" t-att-value="state.movesDateFrom" t-on-change="onMovesDateFromChange"
+                                                                           style="border:1px solid #ced4da; border-radius:4px; padding:3px 6px; font-size:12px;"/>
+                                                                    <label style="font-size:11px; color:#555; white-space:nowrap;">Đến ngày:</label>
+                                                                    <input type="date" t-att-value="state.movesDateTo" t-on-change="onMovesDateToChange"
+                                                                           style="border:1px solid #ced4da; border-radius:4px; padding:3px 6px; font-size:12px;"/>
+                                                                    <button t-on-click="(ev) => this.reloadMoves(ev, line.id)"
+                                                                            style="background:#388e3c; color:#fff; border:none; border-radius:5px; padding:4px 12px; font-size:12px; cursor:pointer; display:flex; align-items:center; gap:5px;">
+                                                                        <i class="fa fa-refresh"/> Xem
+                                                                    </button>
+                                                                </div>
                                                             </div>
-                                                            <t t-if="!state.movesData[line.id]">
-                                                                <div style="color:#6c757d; font-size:12px; padding:4px 0;">
+                                                            <!-- Content -->
+                                                            <t t-if="state.movesData[line.id] === null or state.movesData[line.id] === undefined">
+                                                                <div style="color:#6c757d; font-size:12px; padding:8px 0;">
                                                                     <i class="fa fa-spinner fa-spin"/> Đang tải...
                                                                 </div>
                                                             </t>
-                                                            <t t-elif="state.movesData[line.id].length === 0">
-                                                                <div style="color:#adb5bd; font-size:12px; font-style:italic;">Không có lịch sử nhập/xuất trong các kho đã chọn.</div>
+                                                            <t t-elif="state.movesData[line.id].moves.length === 0">
+                                                                <div style="color:#adb5bd; font-size:12px; font-style:italic; padding:8px 0;">Không có phát sinh nhập/xuất trong khoảng thời gian này.</div>
                                                             </t>
                                                             <t t-else="">
-                                                                <table style="font-size:12px; border-collapse:collapse; min-width:100%;">
+                                                                <div style="overflow-x:auto;">
+                                                                <table style="font-size:12px; border-collapse:collapse; min-width:100%; white-space:nowrap;">
                                                                     <thead>
-                                                                        <tr style="background:#c8e6c9; color:#1b5e20;">
-                                                                            <th style="padding:5px 10px; text-align:center; width:36px;">Loại</th>
-                                                                            <th style="padding:5px 10px; text-align:left; width:90px;">Ngày</th>
-                                                                            <th style="padding:5px 10px; text-align:left; width:140px;">Phiếu</th>
-                                                                            <th style="padding:5px 10px; text-align:left; width:160px;">Nguồn gốc (SO/PO)</th>
-                                                                            <th style="padding:5px 10px; text-align:left;">Đối tác</th>
-                                                                            <th style="padding:5px 10px; text-align:right; width:100px;">Số lượng</th>
+                                                                        <tr style="background:#33691e; color:#fff;">
+                                                                            <th style="padding:6px 10px; text-align:left; min-width:80px;">Ngày</th>
+                                                                            <th style="padding:6px 10px; text-align:left; min-width:130px;">Số chứng từ</th>
+                                                                            <th style="padding:6px 10px; text-align:left; min-width:130px;">Số HĐ/Nguồn</th>
+                                                                            <th style="padding:6px 10px; text-align:left; min-width:120px;">Diễn giải</th>
+                                                                            <th style="padding:6px 8px; text-align:center; min-width:50px;">ĐVT</th>
+                                                                            <th style="padding:6px 10px; text-align:right; min-width:100px;">Đơn giá</th>
+                                                                            <th style="padding:6px 10px; text-align:right; min-width:80px; background:#1565c0;">Nhập SL</th>
+                                                                            <th style="padding:6px 10px; text-align:right; min-width:80px; background:#b71c1c;">Xuất SL</th>
+                                                                            <th style="padding:6px 10px; text-align:right; min-width:80px; background:#1b5e20;">Tồn</th>
+                                                                            <th style="padding:6px 10px; text-align:left; min-width:60px;">Mã ĐT</th>
+                                                                            <th style="padding:6px 10px; text-align:left; min-width:140px;">Tên đối tác</th>
                                                                         </tr>
                                                                     </thead>
                                                                     <tbody>
-                                                                        <t t-foreach="state.movesData[line.id]" t-as="mv" t-key="mv_index">
-                                                                            <tr t-att-style="'border-bottom:1px solid #e8f5e9; ' + (mv_index % 2 === 1 ? 'background:#f9fff9;' : '')">
-                                                                                <td style="padding:5px 10px; text-align:center;">
+                                                                        <!-- Số dư đầu kỳ -->
+                                                                        <tr style="background:#e8f5e9; font-weight:700;">
+                                                                            <td colspan="8" style="padding:5px 10px; color:#1b5e20; font-style:italic;">Số dư đầu kỳ</td>
+                                                                            <td style="padding:5px 10px; text-align:right; color:#1b5e20; background:#c8e6c9;">
+                                                                                <t t-esc="formatQty(state.movesData[line.id].opening)"/>
+                                                                            </td>
+                                                                            <td colspan="2" style="padding:5px 10px;"></td>
+                                                                        </tr>
+                                                                        <!-- Move rows -->
+                                                                        <t t-foreach="state.movesData[line.id].moves" t-as="mv" t-key="mv_index">
+                                                                            <tr t-att-style="'border-bottom:1px solid #f0f0f0; ' + (mv_index % 2 === 1 ? 'background:#fafff8;' : '')">
+                                                                                <td style="padding:5px 10px; color:#546e7a;"><t t-esc="mv.date"/></td>
+                                                                                <td style="padding:5px 10px; font-family:monospace; font-size:11px;">
                                                                                     <t t-if="mv.type === 'in'">
-                                                                                        <span style="background:#1976d2; color:#fff; border-radius:10px; padding:1px 8px; font-size:10px; font-weight:700; white-space:nowrap;">⬇ Nhập</span>
+                                                                                        <span style="background:#1565c0; color:#fff; border-radius:8px; padding:1px 6px; font-size:10px; font-weight:700; margin-right:4px;">⬇ NK</span>
                                                                                     </t>
                                                                                     <t t-else="">
-                                                                                        <span style="background:#e53935; color:#fff; border-radius:10px; padding:1px 8px; font-size:10px; font-weight:700; white-space:nowrap;">⬆ Xuất</span>
+                                                                                        <span style="background:#b71c1c; color:#fff; border-radius:8px; padding:1px 6px; font-size:10px; font-weight:700; margin-right:4px;">⬆ XK</span>
                                                                                     </t>
+                                                                                    <t t-esc="mv.reference"/>
                                                                                 </td>
-                                                                                <td style="padding:5px 10px; color:#546e7a; white-space:nowrap;"><t t-esc="mv.date"/></td>
-                                                                                <td style="padding:5px 10px; font-family:monospace; font-size:11px; color:#1a2639;"><t t-esc="mv.reference"/></td>
                                                                                 <td style="padding:5px 10px; font-family:monospace; font-size:11px; color:#0d47a1;"><t t-esc="mv.origin"/></td>
-                                                                                <td style="padding:5px 10px; color:#37474f;"><t t-esc="mv.partner"/></td>
-                                                                                <td t-att-style="'padding:5px 10px; text-align:right; font-weight:700; ' + (mv.type === 'in' ? 'color:#1976d2;' : 'color:#e53935;')">
-                                                                                    <t t-esc="formatQty(mv.qty)"/> <span style="font-weight:400; font-size:10px;"><t t-esc="mv.uom"/></span>
+                                                                                <td style="padding:5px 10px; color:#424242;"><t t-esc="mv.description"/></td>
+                                                                                <td style="padding:5px 8px; text-align:center; color:#6c757d;"><t t-esc="mv.uom"/></td>
+                                                                                <td style="padding:5px 10px; text-align:right; color:#5d4037;"><t t-esc="formatPrice(mv.price)"/></td>
+                                                                                <td t-att-style="'padding:5px 10px; text-align:right; font-weight:600; ' + (mv.in_qty > 0 ? 'color:#1565c0;' : 'color:#ccc;')">
+                                                                                    <t t-if="mv.in_qty > 0"><t t-esc="formatQty(mv.in_qty)"/></t>
                                                                                 </td>
+                                                                                <td t-att-style="'padding:5px 10px; text-align:right; font-weight:600; ' + (mv.out_qty > 0 ? 'color:#b71c1c;' : 'color:#ccc;')">
+                                                                                    <t t-if="mv.out_qty > 0"><t t-esc="formatQty(mv.out_qty)"/></t>
+                                                                                </td>
+                                                                                <td t-att-style="'padding:5px 10px; text-align:right; font-weight:700; ' + (mv.balance > 0 ? 'color:#1b5e20;' : 'color:#e53935;')">
+                                                                                    <t t-esc="formatQty(mv.balance)"/>
+                                                                                </td>
+                                                                                <td style="padding:5px 10px; font-family:monospace; font-size:11px; color:#546e7a;"><t t-esc="mv.partner_code"/></td>
+                                                                                <td style="padding:5px 10px; color:#37474f;"><t t-esc="mv.partner_name"/></td>
                                                                             </tr>
                                                                         </t>
+                                                                        <!-- Số dư cuối kỳ -->
+                                                                        <tr style="background:#c8e6c9; font-weight:700; border-top:2px solid #388e3c;">
+                                                                            <td colspan="8" style="padding:6px 10px; color:#1b5e20; font-style:italic;">Số dư cuối kỳ</td>
+                                                                            <td style="padding:6px 10px; text-align:right; color:#1b5e20; font-size:13px;">
+                                                                                <t t-esc="formatQty(state.movesData[line.id].closing)"/>
+                                                                            </td>
+                                                                            <td colspan="2" style="padding:6px 10px;"></td>
+                                                                        </tr>
                                                                     </tbody>
                                                                 </table>
+                                                                </div>
                                                             </t>
                                                         </td>
                                                     </tr>

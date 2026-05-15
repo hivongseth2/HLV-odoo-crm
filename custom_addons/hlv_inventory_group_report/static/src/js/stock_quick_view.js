@@ -9,6 +9,10 @@ export class StockQuickView extends Component {
 
     setup() {
         this.orm = useService("orm");
+        // UTC+7 default dates
+        const _nowUtc7 = new Date(new Date().getTime() + 7 * 3600 * 1000);
+        const _today = _nowUtc7.toISOString().slice(0, 10);
+        const _firstDay = _today.slice(0, 7) + "-01";
         this.state = useState({
             groups: [],
             warehouses: [],
@@ -43,6 +47,8 @@ export class StockQuickView extends Component {
             colsOpen: false,
             movesData: {},
             expandedMovesId: false,
+            movesDateFrom: _firstDay,
+            movesDateTo: _today,
         });
 
         onWillStart(async () => {
@@ -403,13 +409,35 @@ export class StockQuickView extends Component {
             return;
         }
         this.state.expandedMovesId = productId;
-        if (!this.state.movesData[productId]) {
-            const result = await this.orm.call(
-                "hlv.stock.quick", "get_product_moves",
-                [productId, this.state.warehouseIds]
-            );
-            this.state.movesData = Object.assign({}, this.state.movesData, { [productId]: result });
-        }
+        await this._loadMoves(productId);
+    }
+
+    async _loadMoves(productId) {
+        // Set null = loading state
+        this.state.movesData = Object.assign({}, this.state.movesData, { [productId]: null });
+        const result = await this.orm.call(
+            "hlv.stock.quick", "get_product_moves",
+            [productId, this.state.warehouseIds, this.state.movesDateFrom, this.state.movesDateTo]
+        );
+        this.state.movesData = Object.assign({}, this.state.movesData, { [productId]: result });
+    }
+
+    async reloadMoves(ev, productId) {
+        ev.stopPropagation();
+        await this._loadMoves(productId);
+    }
+
+    onMovesDateFromChange(ev) {
+        this.state.movesDateFrom = ev.target.value;
+    }
+
+    onMovesDateToChange(ev) {
+        this.state.movesDateTo = ev.target.value;
+    }
+
+    formatPrice(val) {
+        if (!val || val === 0) return "-";
+        return val.toLocaleString("vi-VN", { maximumFractionDigits: 0 }) + " \u20ab";
     }
 
     async handleImportFile(ev) {
