@@ -636,9 +636,10 @@ class DeliveryPlannerController(http.Controller):
             today_start = (now_utc + _TZ).replace(hour=0, minute=0, second=0, microsecond=0) - _TZ
             Pick = request.env['stock.picking'].sudo()
 
+            _pick_fields = ['id', 'name', 'x_packer_id', 'x_packing_print_time', 'picking_type_id', 'sale_id']
             packing = Pick.search_read(
                 [('x_packing_status', '=', 'packing'), ('x_packer_id', '!=', False)],
-                ['id', 'name', 'x_packer_id', 'x_packing_print_time'],
+                _pick_fields,
             )
             packed_today = Pick.search_read(
                 [
@@ -646,34 +647,74 @@ class DeliveryPlannerController(http.Controller):
                     ('x_packer_id', '!=', False),
                     ('x_packing_finish_time', '>=', today_start),
                 ],
-                ['id', 'name', 'x_packer_id', 'x_packing_print_time', 'x_packing_finish_time'],
+                _pick_fields + ['x_packing_finish_time'],
             )
+
+            # Build picking-type → sequence_code map
+            all_pt_ids = list({p['picking_type_id'][0] for p in packing + packed_today if p.get('picking_type_id')})
+            pt_seq_map = {}
+            if all_pt_ids:
+                pts = request.env['stock.picking.type'].sudo().search_read(
+                    [('id', 'in', all_pt_ids)], ['id', 'sequence_code']
+                )
+                pt_seq_map = {pt['id']: (pt['sequence_code'] or '').upper() for pt in pts}
+
+            def _ptype(p):
+                pt_id = p['picking_type_id'][0] if p.get('picking_type_id') else None
+                seq = pt_seq_map.get(pt_id, '')
+                if 'PICK' in seq:
+                    return 'PICK'
+                if 'PACK' in seq:
+                    return 'PACK'
+                return seq or 'OUT'
+
+            def _new_packer(uid, uname):
+                return {'id': uid, 'name': uname, 'packing': [], 'packed_today': [],
+                        'avg_minutes': None, 'num_pick': 0, 'num_pack': 0, '_sale_ids': set()}
 
             packer_map = {}
 
             for p in packing:
                 uid, uname = p['x_packer_id']
                 if uid not in packer_map:
-                    packer_map[uid] = {'id': uid, 'name': uname, 'packing': [], 'packed_today': [], 'avg_minutes': None}
+                    packer_map[uid] = _new_packer(uid, uname)
+                ptype = _ptype(p)
+                if ptype == 'PICK':
+                    packer_map[uid]['num_pick'] += 1
+                elif ptype == 'PACK':
+                    packer_map[uid]['num_pack'] += 1
+                if p.get('sale_id'):
+                    packer_map[uid]['_sale_ids'].add(p['sale_id'][0])
                 packer_map[uid]['packing'].append({
                     'picking_id': p['id'],
                     'picking_name': p['name'],
-                    'print_time': (p['x_packing_print_time'] + _TZ).strftime('%H:%M') if p['x_packing_print_time'] else None,
+                    'packer_name': uname,
+                    'picking_type': ptype,
+                    'print_time': (p['x_packing_print_time'] + _TZ).strftime('%d/%m %H:%M') if p['x_packing_print_time'] else None,
                 })
 
             durations = {}
             for p in packed_today:
                 uid, uname = p['x_packer_id']
                 if uid not in packer_map:
-                    packer_map[uid] = {'id': uid, 'name': uname, 'packing': [], 'packed_today': [], 'avg_minutes': None}
+                    packer_map[uid] = _new_packer(uid, uname)
                 finish = p['x_packing_finish_time']
                 start = p['x_packing_print_time']
                 duration_min = round((finish - start).total_seconds() / 60) if finish and start else None
+                ptype = _ptype(p)
+                if ptype == 'PICK':
+                    packer_map[uid]['num_pick'] += 1
+                elif ptype == 'PACK':
+                    packer_map[uid]['num_pack'] += 1
+                if p.get('sale_id'):
+                    packer_map[uid]['_sale_ids'].add(p['sale_id'][0])
                 packer_map[uid]['packed_today'].append({
                     'picking_id': p['id'],
                     'picking_name': p['name'],
-                    'print_time': (start + _TZ).strftime('%H:%M') if start else None,
-                    'finish_time': (finish + _TZ).strftime('%H:%M') if finish else None,
+                    'packer_name': uname,
+                    'picking_type': ptype,
+                    'print_time': (start + _TZ).strftime('%d/%m %H:%M') if start else None,
+                    'finish_time': (finish + _TZ).strftime('%d/%m %H:%M') if finish else None,
                     'duration_min': duration_min,
                 })
                 if duration_min is not None:
@@ -683,7 +724,15 @@ class DeliveryPlannerController(http.Controller):
                 if mins and uid in packer_map:
                     packer_map[uid]['avg_minutes'] = round(sum(mins) / len(mins))
 
-            packers = sorted(packer_map.values(), key=lambda x: (-len(x['packing']), x['name']))
+            packers = []
+            for pm in sorted(packer_map.values(), key=lambda x: (-len(x['packing']), x['name'])):
+                packers.append({
+                    'id': pm['id'], 'name': pm['name'],
+                    'packing': pm['packing'], 'packed_today': pm['packed_today'],
+                    'avg_minutes': pm['avg_minutes'],
+                    'num_pick': pm['num_pick'], 'num_pack': pm['num_pack'],
+                    'num_so': len(pm['_sale_ids']),
+                })
             return {'success': True, 'packers': packers}
         except Exception as e:
             _logger.error("packer_stats error: %s", e, exc_info=True)

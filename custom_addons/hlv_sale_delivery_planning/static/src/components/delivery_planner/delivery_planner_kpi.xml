@@ -183,14 +183,24 @@
                                 <span t-if="packer.avg_minutes !== null" class="text-muted small">
                                     <i class="fa fa-clock-o me-1"></i>TB: <t t-esc="packer.avg_minutes"/> phút
                                 </span>
+                                <span t-if="packer.num_so" class="badge bg-light text-dark border" title="Số đơn hàng">
+                                    <i class="fa fa-file-text-o me-1"></i>SO: <t t-esc="packer.num_so"/>
+                                </span>
+                                <span t-if="packer.num_pick" class="badge bg-info text-dark" title="Phiếu PICK">
+                                    PICK: <t t-esc="packer.num_pick"/>
+                                </span>
+                                <span t-if="packer.num_pack" class="badge bg-secondary" title="Phiếu PACK">
+                                    PACK: <t t-esc="packer.num_pack"/>
+                                </span>
                             </div>
                             <!-- Detail table -->
                             <table class="table table-sm table-bordered mb-0" style="font-size:0.78rem;">
                                 <thead class="table-light">
                                     <tr>
                                         <th>Phiếu</th>
-                                        <th class="text-center" style="width:60px;">TG In</th>
-                                        <th class="text-center" style="width:60px;">TG Xong</th>
+                                        <th style="width:80px;">Người đóng</th>
+                                        <th class="text-center" style="width:80px;">TG In</th>
+                                        <th class="text-center" style="width:80px;">TG Xong</th>
                                         <th class="text-center" style="width:55px;">Thời lượng</th>
                                         <th style="width:90px;">Trạng thái</th>
                                     </tr>
@@ -199,6 +209,7 @@
                                     <t t-foreach="packer.packing" t-as="pk" t-key="pk.picking_id">
                                         <tr class="table-warning">
                                             <td class="fw-bold"><i class="fa fa-barcode me-1 text-muted"></i><t t-esc="pk.picking_name"/></td>
+                                            <td class="text-muted small"><t t-esc="pk.packer_name"/></td>
                                             <td class="text-center"><t t-esc="pk.print_time or '—'"/></td>
                                             <td class="text-center text-muted">—</td>
                                             <td class="text-center text-muted">—</td>
@@ -208,6 +219,7 @@
                                     <t t-foreach="packer.packed_today" t-as="pk" t-key="pk.picking_id">
                                         <tr>
                                             <td class="fw-bold"><i class="fa fa-barcode me-1 text-muted"></i><t t-esc="pk.picking_name"/></td>
+                                            <td class="text-muted small"><t t-esc="pk.packer_name"/></td>
                                             <td class="text-center text-muted"><t t-esc="pk.print_time or '—'"/></td>
                                             <td class="text-center text-success fw-bold"><t t-esc="pk.finish_time or '—'"/></td>
                                             <td class="text-center">
@@ -220,7 +232,7 @@
                                         </tr>
                                     </t>
                                     <tr t-if="!packer.packing.length and !packer.packed_today.length">
-                                        <td colspan="5" class="text-center text-muted fst-italic">Chưa có phiếu nào hôm nay</td>
+                                        <td colspan="6" class="text-center text-muted fst-italic">Chưa có phiếu nào hôm nay</td>
                                     </tr>
                                 </tbody>
                             </table>
