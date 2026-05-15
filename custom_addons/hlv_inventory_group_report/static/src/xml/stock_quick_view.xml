@@ -45,6 +45,25 @@
                            t-att-checked="state.includeOutgoing" t-on-change="onIncludeOutgoingChange"/>
                     Hiện đóng gói/out
                 </label>
+                <!-- Chon cot -->
+                <div style="display:flex; align-items:center; gap:6px; position:relative;">
+                    <button t-on-click="toggleColsDropdown"
+                            style="border:1px solid #ced4da; border-radius:6px; padding:5px 10px; font-size:13px; background:#fff; cursor:pointer; display:flex; align-items:center; gap:7px; color:#495057;">
+                        <i class="fa fa-columns" style="color:#6c757d;"/> Chọn cột
+                        <i class="fa fa-chevron-down" style="font-size:10px; color:#8492a6;"/>
+                    </button>
+                    <t t-if="state.colsOpen">
+                        <div style="position:absolute; top:calc(100% + 4px); left:0; background:#fff; border:1px solid #dee2e6; border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,0.14); z-index:9999; min-width:210px; padding:4px 0;">
+                            <t t-foreach="colOptions" t-as="opt" t-key="opt.key">
+                                <div t-on-click="() => this.toggleExtraCol(opt.key)"
+                                     style="padding:8px 14px; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:8px; color:#212121;">
+                                    <input type="checkbox" t-att-checked="state.extraCols.includes(opt.key)" style="cursor:pointer;"/>
+                                    <span t-esc="opt.label"/>
+                                </div>
+                            </t>
+                        </div>
+                    </t>
+                </div>
                 <div style="margin-left:auto; display:flex; align-items:center; gap:10px;">
                     <t t-if="state.groupId and state.lines.length > 0">
                         <button t-on-click="exportExcel"
@@ -186,9 +205,23 @@
                                                         </th>
                                                     </t>
                                                     <th style="padding:10px 14px; width:120px; text-align:right; background:#198754; color:#fff; font-size:14px;">TỔNG</th>
+                                                    <t t-foreach="colOptions" t-as="opt" t-key="opt.key">
+                                                        <t t-if="state.extraCols.includes(opt.key)">
+                                                            <th style="padding:10px 12px; width:110px; text-align:right; border-left:1px solid rgba(255,255,255,0.15); background:#2c3e50; font-size:12px;">
+                                                                <t t-esc="opt.label"/>
+                                                            </th>
+                                                        </t>
+                                                    </t>
                                                 </t>
                                                 <t t-else="">
                                                     <th style="padding:10px 14px; width:120px; text-align:right; background:#198754; color:#fff; font-size:14px;">Tồn kho</th>
+                                                    <t t-foreach="colOptions" t-as="opt" t-key="opt.key">
+                                                        <t t-if="state.extraCols.includes(opt.key)">
+                                                            <th style="padding:10px 12px; width:110px; text-align:right; border-left:1px solid rgba(255,255,255,0.15); background:#2c3e50; font-size:12px;">
+                                                                <t t-esc="opt.label"/>
+                                                            </th>
+                                                        </t>
+                                                    </t>
                                                 </t>
                                             </tr>
                                         </thead>
@@ -229,11 +262,25 @@
                                                                 <span style="color:#e65100; font-size:11px; font-weight:700; display:block;"> (+<t t-esc="formatQty(line.outgoing_total)"/>)</span>
                                                             </t>
                                                         </td>
+                                                        <t t-foreach="colOptions" t-as="opt" t-key="opt.key">
+                                                            <t t-if="state.extraCols.includes(opt.key)">
+                                                                <td style="padding:8px 12px; text-align:right; vertical-align:middle; border-left:1px solid #e0e0e0; background:#f5f0ff; color:#4a148c; font-size:13px; white-space:nowrap;">
+                                                                    <t t-esc="formatExtraVal(opt.key, line.extra[opt.key])"/>
+                                                                </td>
+                                                            </t>
+                                                        </t>
                                                     </t>
                                                     <t t-else="">
                                                         <td t-att-style="'padding:8px 14px; text-align:right; font-weight:800; font-size:15px; vertical-align:middle; border-left:2px solid #198754; ' + (line.total > 0 ? 'background:#f0fff4; color:#198754;' : 'background:#fafafa; color:#adb5bd;')">
                                                             <t t-esc="formatQty(line.total)"/>
                                                         </td>
+                                                        <t t-foreach="colOptions" t-as="opt" t-key="opt.key">
+                                                            <t t-if="state.extraCols.includes(opt.key)">
+                                                                <td style="padding:8px 12px; text-align:right; vertical-align:middle; border-left:1px solid #e0e0e0; background:#f5f0ff; color:#4a148c; font-size:13px; white-space:nowrap;">
+                                                                    <t t-esc="formatExtraVal(opt.key, line.extra[opt.key])"/>
+                                                                </td>
+                                                            </t>
+                                                        </t>
                                                     </t>
                                                 </tr>
                                                 <!-- Vi tri ton kho (expand) -->
@@ -305,11 +352,21 @@
                                                             <span style="color:#ffe0b2; font-size:12px; font-weight:700; display:block;"> (+<t t-esc="formatQty(state.outgoingTotal)"/>)</span>
                                                         </t>
                                                     </td>
+                                                    <t t-foreach="colOptions" t-as="opt" t-key="opt.key">
+                                                        <t t-if="state.extraCols.includes(opt.key)">
+                                                            <td style="padding:10px 12px; border:1px solid #c3e6cb; background:#e8f5e9;"></td>
+                                                        </t>
+                                                    </t>
                                                 </t>
                                                 <t t-else="">
                                                     <td style="padding:10px 14px; font-weight:800; text-align:right; font-size:17px; color:#fff; background:#198754; border-left:2px solid #146c43;">
                                                         <t t-esc="formatQty(state.total)"/>
                                                     </td>
+                                                    <t t-foreach="colOptions" t-as="opt" t-key="opt.key">
+                                                        <t t-if="state.extraCols.includes(opt.key)">
+                                                            <td style="padding:10px 12px; border:1px solid #c3e6cb; background:#e8f5e9;"></td>
+                                                        </t>
+                                                    </t>
                                                 </t>
                                             </tr>
                                         </tfoot>
