@@ -179,7 +179,7 @@ class HlvStockQuick(models.TransientModel):
         else:
             ws.write(2, 4, "T\u1ed3n kho", fh)
         _extra_labels = {
-            "sale_price": "Gi\u00e1 b\u00e1n (ch\u01b0a VAT)",
+            "sale_price": "Gi\u00e1 b\u00e1n ",
             "price_web": "Gi\u00e1 Web",
             "price_listed": "Gi\u00e1 Ni\u00eam Y\u1ebft",
             "price_tmdt": "Gi\u00e1 S\u00e0n TM\u0110T",
