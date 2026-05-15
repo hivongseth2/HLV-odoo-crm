@@ -49,6 +49,7 @@ export class StockQuickView extends Component {
             expandedMovesId: false,
             movesDateFrom: _firstDay,
             movesDateTo: _today,
+            movesExporting: false,
         });
 
         onWillStart(async () => {
@@ -428,6 +429,20 @@ export class StockQuickView extends Component {
             [productId, this.state.warehouseIds, this.state.movesDateFrom, this.state.movesDateTo]
         );
         window.location.href = "/web/content/" + attId + "?download=true";
+    }
+
+    async exportAllMoves() {
+        if (!this.state.groupId || this.state.movesExporting) return;
+        this.state.movesExporting = true;
+        try {
+            const attId = await this.orm.call(
+                "hlv.stock.quick", "export_all_moves_excel",
+                [this.state.groupId, this.state.warehouseIds, this.state.movesDateFrom, this.state.movesDateTo]
+            );
+            window.location.href = "/web/content/" + attId + "?download=true";
+        } finally {
+            this.state.movesExporting = false;
+        }
     }
 
     async reloadMoves(ev, productId) {
