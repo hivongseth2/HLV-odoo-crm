@@ -349,12 +349,9 @@ class HlvStockQuick(models.TransientModel):
         return {"added": added, "not_found": not_found, "already_in": already_in, "total": len(codes)}
 
     def _detect_combo_for_move(self, move, sale_line):
-        """Try to find the combo/kit parent for a sale line with price=0.
+        """Try to find the combo/kit parent for a move with price=0.
         Returns dict {name, code, price} or None.
-        Strategy:
-        1. Check mrp.bom.line (if mrp installed) for kit BOMs containing this product
-        2. Look for a sale line on the same order whose product has a kit BOM containing this product
-        3. Fallback: look for any other line on the same order with price > 0 and a BOM line matching
+        Tries sale_line.order_id first, then picking.sale_id as fallback.
         """
         try:
             BomLine = self.env.get("mrp.bom.line")
@@ -367,31 +364,37 @@ class HlvStockQuick(models.TransientModel):
             ], limit=10)
             if not bom_lines:
                 return None
-            kit_tmpl_ids = bom_lines.mapped("bom_id.product_tmpl_id").ids
-            # Find the combo parent line in the same SO
-            order = sale_line.order_id
-            parent_line = order.order_line.filtered(
-                lambda l: l.product_id.product_tmpl_id.id in kit_tmpl_ids and l.price_unit > 0
-            )
-            if parent_line:
-                pl = parent_line[0]
-                return {
-                    "name": pl.product_id.name,
-                    "code": pl.product_id.default_code or "",
-                    "price": pl.price_unit,
-                }
-            # Try with product_template_id field name
-            parent_line2 = order.order_line.filtered(
-                lambda l: getattr(l.product_id, "product_tmpl_id", False) and
-                l.product_id.product_tmpl_id.id in kit_tmpl_ids
-            )
-            if parent_line2:
-                pl = parent_line2[0]
-                return {
-                    "name": pl.product_id.name,
-                    "code": pl.product_id.default_code or "",
-                    "price": pl.price_unit,
-                }
+            kit_tmpl_ids = set(bom_lines.mapped("bom_id.product_tmpl_id").ids)
+
+            # Resolve sale order: try sale_line first, then picking.sale_id
+            order = False
+            if sale_line:
+                order = sale_line.order_id
+            if not order:
+                picking = move.picking_id
+                if picking:
+                    order = getattr(picking, "sale_id", False)
+
+            if order:
+                parent_line = order.order_line.filtered(
+                    lambda l: l.product_id.product_tmpl_id.id in kit_tmpl_ids
+                    and l.price_unit > 0
+                )
+                if parent_line:
+                    pl = parent_line[0]
+                    return {
+                        "name": pl.product_id.name,
+                        "code": pl.product_id.default_code or "",
+                        "price": pl.price_unit,
+                    }
+
+            # BOM exists but can't find parent line — still mark as combo
+            bom = bom_lines[0].bom_id
+            return {
+                "name": bom.product_tmpl_id.name,
+                "code": bom.product_tmpl_id.default_code or "",
+                "price": 0.0,
+            }
         except Exception:
             pass
         return None
@@ -512,11 +515,11 @@ class HlvStockQuick(models.TransientModel):
                 price = purchase_line.price_unit or 0.0
             elif sale_line:
                 price = sale_line.price_unit or 0.0
-                # Detect kit/combo: price=0 on sale line means product was part of a combo kit
-                if price == 0.0 and move_type == "out":
-                    combo_info = self._detect_combo_for_move(move, sale_line)
             else:
                 price = getattr(move, "price_unit", 0.0) or 0.0
+            # Detect kit/combo: any outgoing move with price=0
+            if price == 0.0 and move_type == "out":
+                combo_info = self._detect_combo_for_move(move, sale_line)
 
             picking = move.picking_id
             partner = picking.partner_id if picking else False
