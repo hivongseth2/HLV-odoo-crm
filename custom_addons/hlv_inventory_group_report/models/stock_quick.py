@@ -445,7 +445,9 @@ class HlvStockQuick(models.TransientModel):
         date_from_str = date_from_utc.strftime("%Y-%m-%d %H:%M:%S")
         date_to_str = date_to_utc.strftime("%Y-%m-%d %H:%M:%S")
 
-        # Warehouse stock locations
+        # Warehouse stock locations — include pack + output zones so that
+        # 3-step delivery moves (PICK stock→pack, PACK pack→output) are treated
+        # as internal (both ends in set) and only OUT (output→customer) is counted.
         if warehouse_ids:
             warehouses = self.env["stock.warehouse"].browse(warehouse_ids)
             all_loc_ids = []
@@ -455,6 +457,16 @@ class HlvStockQuick(models.TransientModel):
                     ("usage", "=", "internal"),
                 ])
                 all_loc_ids.extend(locs.ids)
+                if wh.wh_pack_stock_loc_id:
+                    pack_locs = self.env["stock.location"].search([
+                        ("id", "child_of", wh.wh_pack_stock_loc_id.id),
+                    ])
+                    all_loc_ids.extend(pack_locs.ids)
+                if wh.wh_output_stock_loc_id:
+                    out_locs = self.env["stock.location"].search([
+                        ("id", "child_of", wh.wh_output_stock_loc_id.id),
+                    ])
+                    all_loc_ids.extend(out_locs.ids)
             all_loc_ids = list(set(all_loc_ids))
         else:
             all_loc_ids = self.env["stock.location"].search([("usage", "=", "internal")]).ids
@@ -514,11 +526,20 @@ class HlvStockQuick(models.TransientModel):
             if purchase_line:
                 price = purchase_line.price_unit or 0.0
             elif sale_line:
-                price = sale_line.price_unit or 0.0
+                # Phantom kit: sale_line points to the combo product, not the component
+                if sale_line.product_id.id != move.product_id.id:
+                    price = 0.0
+                    combo_info = {
+                        "name": sale_line.product_id.name,
+                        "code": sale_line.product_id.default_code or "",
+                        "price": sale_line.price_unit,
+                    }
+                else:
+                    price = sale_line.price_unit or 0.0
             else:
                 price = getattr(move, "price_unit", 0.0) or 0.0
-            # Detect kit/combo: any outgoing move with price=0
-            if price == 0.0 and move_type == "out":
+            # Fallback combo detection for moves without sale_line (price still 0)
+            if price == 0.0 and move_type == "out" and not combo_info:
                 combo_info = self._detect_combo_for_move(move, sale_line)
 
             picking = move.picking_id
