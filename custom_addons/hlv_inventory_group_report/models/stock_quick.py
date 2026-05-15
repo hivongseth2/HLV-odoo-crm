@@ -9,9 +9,9 @@ class HlvStockQuick(models.TransientModel):
     _description = "Xem ton kho theo nhom"
 
     @api.model
-    def get_data(self, group_id, warehouse_ids, show_zero):
+    def get_data(self, group_id, warehouse_ids, show_zero, include_outgoing=True):
         if not group_id:
-            return {"lines": [], "total": 0.0, "columns": []}
+            return {"lines": [], "total": 0.0, "outgoing_total": 0.0, "columns": []}
         group = self.env["hlv.product.report.group"].browse(group_id)
         if warehouse_ids:
             warehouses = self.env["stock.warehouse"].browse(warehouse_ids)
@@ -19,21 +19,46 @@ class HlvStockQuick(models.TransientModel):
         else:
             warehouses = []
             columns = []
+        # Pre-compute outgoing location ids per warehouse (pack zone + output zone)
+        wh_outgoing_locs = {}
+        if include_outgoing and warehouses:
+            for wh in warehouses:
+                ids = []
+                for loc in [wh.wh_pack_stock_loc_id, wh.wh_output_stock_loc_id]:
+                    if loc:
+                        children = self.env["stock.location"].search([("id", "child_of", loc.id)])
+                        ids.extend(children.ids)
+                wh_outgoing_locs[wh.id] = ids
         lines = []
         total = 0.0
+        outgoing_total = 0.0
         for product in group.product_ids.sorted("default_code"):
             if warehouses:
-                col_qtys = [
-                    product.with_context(location=wh.lot_stock_id.id).qty_available
-                    for wh in warehouses
-                ]
+                col_qtys = []
+                col_outgoing_qtys = []
+                for wh in warehouses:
+                    sq = product.with_context(location=wh.lot_stock_id.id).qty_available
+                    col_qtys.append(sq)
+                    oq = 0.0
+                    if include_outgoing and wh_outgoing_locs.get(wh.id):
+                        quants = self.env["stock.quant"].search([
+                            ("product_id", "=", product.id),
+                            ("location_id", "in", wh_outgoing_locs[wh.id]),
+                            ("quantity", ">", 0),
+                        ])
+                        oq = sum(q.quantity for q in quants)
+                    col_outgoing_qtys.append(oq)
                 prod_total = sum(col_qtys)
+                prod_outgoing = sum(col_outgoing_qtys)
             else:
                 col_qtys = []
+                col_outgoing_qtys = []
                 prod_total = product.qty_available
-            if not show_zero and prod_total == 0:
+                prod_outgoing = 0.0
+            if not show_zero and prod_total == 0 and prod_outgoing == 0:
                 continue
             total += prod_total
+            outgoing_total += prod_outgoing
             lines.append({
                 "id": product.id,
                 "code": product.default_code or "",
@@ -41,17 +66,19 @@ class HlvStockQuick(models.TransientModel):
                 "uom": product.uom_id.name or "",
                 "image_url": "/web/image/product.product/%d/image_128" % product.id,
                 "col_qtys": col_qtys,
+                "col_outgoing_qtys": col_outgoing_qtys,
                 "total": prod_total,
+                "outgoing_total": prod_outgoing,
             })
-        return {"lines": lines, "total": total, "columns": columns}
+        return {"lines": lines, "total": total, "outgoing_total": outgoing_total, "columns": columns}
 
     @api.model
-    def export_excel(self, group_id, warehouse_ids, show_zero):
+    def export_excel(self, group_id, warehouse_ids, show_zero, include_outgoing=True):
         try:
             import xlsxwriter
         except ImportError:
             raise UserError("xlsxwriter chua duoc cai.")
-        data = self.get_data(group_id, warehouse_ids, show_zero)
+        data = self.get_data(group_id, warehouse_ids, show_zero, include_outgoing)
         columns = data["columns"]
         lines = data["lines"]
         output = io.BytesIO()
@@ -65,8 +92,11 @@ class HlvStockQuick(models.TransientModel):
         fl = wb.add_format({"bold": True, "bg_color": "#e8f5e9", "font_color": "#155724", "border": 1, "align": "right"})
         fg = wb.add_format({"bold": True, "bg_color": "#e8f5e9", "font_color": "#198754", "border": 1, "num_format": "#,##0.##", "align": "right", "font_size": 12})
         fs = wb.add_format({"border": 1, "align": "center", "font_color": "#adb5bd"})
+        fo = wb.add_format({"border": 1, "num_format": "#,##0.##", "align": "right", "font_color": "#e65100", "bold": True})
+        fog = wb.add_format({"bold": True, "bg_color": "#fff8e1", "font_color": "#e65100", "border": 1, "num_format": "#,##0.##", "align": "right", "font_size": 12})
         n = len(columns)
-        last_col = 4 + n if n else 4
+        has_outgoing = include_outgoing and n > 0
+        last_col = (4 + n + (1 if has_outgoing else 0)) if n else 4
         ws.merge_range(0, 0, 1, last_col, "B\u00c1O C\u00c1O T\u1ed2N KHO", wb.add_format({"bold": True, "font_size": 14, "align": "center", "valign": "vcenter"}))
         ws.set_row(0, 28)
         ws.set_row(1, 8)
@@ -76,6 +106,8 @@ class HlvStockQuick(models.TransientModel):
         ws.set_column(3, 3, 10)
         for i in range(n + 1):
             ws.set_column(4 + i, 4 + i, 16)
+        if has_outgoing:
+            ws.set_column(4 + n + 1, 4 + n + 1, 16)
         ws.set_row(2, 24)
         ws.write(2, 0, "#", fh)
         ws.write(2, 1, "M\u00e3 SP", fh)
@@ -85,6 +117,8 @@ class HlvStockQuick(models.TransientModel):
             for i, col in enumerate(columns):
                 ws.write(2, 4 + i, col["name"], fh)
             ws.write(2, 4 + n, "T\u1ed4NG", fh)
+            if has_outgoing:
+                ws.write(2, 4 + n + 1, "\u0110\u00f3ng g\u00f3i/Out", fh)
         else:
             ws.write(2, 4, "T\u1ed3n kho", fh)
         row = 3
@@ -97,6 +131,9 @@ class HlvStockQuick(models.TransientModel):
                 for i, qty in enumerate(line["col_qtys"]):
                     ws.write(row, 4 + i, qty, fn if qty > 0 else f0)
                 ws.write(row, 4 + n, line["total"], fn if line["total"] > 0 else f0)
+                if has_outgoing:
+                    oqt = line.get("outgoing_total", 0)
+                    ws.write(row, 4 + n + 1, oqt, fo if oqt > 0 else f0)
             else:
                 ws.write(row, 4, line["total"], fn if line["total"] > 0 else f0)
             row += 1
@@ -106,6 +143,9 @@ class HlvStockQuick(models.TransientModel):
                 ct = sum(l["col_qtys"][i] for l in lines)
                 ws.write(row, 4 + i, ct, fg)
             ws.write(row, 4 + n, data["total"], fg)
+            if has_outgoing:
+                ogt = data.get("outgoing_total", 0)
+                ws.write(row, 4 + n + 1, ogt, fog if ogt > 0 else f0)
         else:
             ws.write(row, 4, data["total"], fg)
         wb.close()

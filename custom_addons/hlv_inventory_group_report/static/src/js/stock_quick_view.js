@@ -37,6 +37,8 @@ export class StockQuickView extends Component {
             importLoading: false,
             productPage: 0,
             productTotalCount: 0,
+            includeOutgoing: true,
+            outgoingTotal: 0,
         });
 
         onWillStart(async () => {
@@ -91,11 +93,12 @@ export class StockQuickView extends Component {
         try {
             const result = await this.orm.call(
                 "hlv.stock.quick", "get_data",
-                [this.state.groupId, this.state.warehouseIds, this.state.showZero]
+                [this.state.groupId, this.state.warehouseIds, this.state.showZero, this.state.includeOutgoing]
             );
             this.state.lines = result.lines;
             this.state.columns = result.columns;
             this.state.total = result.total;
+            this.state.outgoingTotal = result.outgoing_total || 0;
         } finally {
             this.state.loading = false;
         }
@@ -306,17 +309,26 @@ export class StockQuickView extends Component {
         return this.state.lines.reduce((s, l) => s + (l.col_qtys[index] || 0), 0);
     }
 
+    getColOutgoingTotal(index) {
+        return this.state.lines.reduce((s, l) => s + ((l.col_outgoing_qtys && l.col_outgoing_qtys[index]) || 0), 0);
+    }
+
     async exportExcel() {
         if (!this.state.groupId) return;
         const attId = await this.orm.call(
             "hlv.stock.quick", "export_excel",
-            [this.state.groupId, this.state.warehouseIds, this.state.showZero]
+            [this.state.groupId, this.state.warehouseIds, this.state.showZero, this.state.includeOutgoing]
         );
         window.location.href = "/web/content/" + attId + "?download=true";
     }
 
     onShowZeroChange(ev) {
         this.state.showZero = ev.target.checked;
+        this.loadData();
+    }
+
+    onIncludeOutgoingChange(ev) {
+        this.state.includeOutgoing = ev.target.checked;
         this.loadData();
     }
 

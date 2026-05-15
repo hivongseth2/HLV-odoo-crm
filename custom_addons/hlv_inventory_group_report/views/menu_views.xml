@@ -6,15 +6,15 @@
     ============================================================ -->
 
     <!-- Tồn kho theo nhóm - single menu, direct action -->
-    <menuitem id="menu_hlv_stock_quick"
+    <!-- <menuitem id="menu_hlv_stock_quick"
               name="Kiểm kê tồn kho nhóm SP"
               parent="stock.menu_warehouse_report"
               action="action_hlv_stock_quick_client"
-              sequence="20"/>
+              sequence="20"/> -->
 
     <!-- Quan ly nhom: giu lai de nguoi dung co the edit nhom -->
     <menuitem id="menu_hlv_product_report_group"
-              name="Nhóm sản phẩm báo cáo"
+              name="Báo cáo tồn kho theo nhóm"
               parent="stock.menu_warehouse_report"
               action="action_hlv_product_report_group"
               sequence="21"/>

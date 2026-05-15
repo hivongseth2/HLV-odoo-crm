@@ -40,6 +40,11 @@
                            t-att-checked="state.showZero" t-on-change="onShowZeroChange"/>
                     Hiện SP hết hàng
                 </label>
+                <label style="display:flex; align-items:center; gap:7px; font-size:13px; cursor:pointer; color:#fd7e14; white-space:nowrap;" title="Hiện số lượng SP đang ở khu vực đóng gói và khu xuất hàng">
+                    <input type="checkbox" style="width:14px; height:14px; cursor:pointer;"
+                           t-att-checked="state.includeOutgoing" t-on-change="onIncludeOutgoingChange"/>
+                    Hiện đóng gói/out
+                </label>
                 <div style="margin-left:auto; display:flex; align-items:center; gap:10px;">
                     <t t-if="state.groupId and state.lines.length > 0">
                         <button t-on-click="exportExcel"
@@ -50,6 +55,9 @@
                     <t t-if="state.groupId and !state.loading">
                         <div style="background:#1a2639; color:#fff; border-radius:8px; padding:7px 16px; font-size:14px; font-weight:700; white-space:nowrap;">
                             Tổng tồn: <t t-esc="formatQty(state.total)"/>
+                            <t t-if="state.includeOutgoing and state.outgoingTotal > 0">
+                                <span style="color:#ffcc80; font-size:12px;"> (+<t t-esc="formatQty(state.outgoingTotal)"/> đóng gói)</span>
+                            </t>
                         </div>
                     </t>
                 </div>
@@ -210,10 +218,16 @@
                                                         <t t-foreach="line.col_qtys" t-as="qty" t-key="qty_index">
                                                             <td t-att-style="'padding:8px 12px; text-align:right; font-weight:600; vertical-align:middle; border-right:1px solid #f0f0f0; ' + (qty > 0 ? 'color:#198754;' : 'color:#ced4da;')">
                                                                 <t t-esc="formatQty(qty)"/>
+                                                                <t t-if="state.includeOutgoing and line.col_outgoing_qtys[qty_index] > 0">
+                                                                    <span style="color:#e65100; font-size:11px; font-weight:700;"> (+<t t-esc="formatQty(line.col_outgoing_qtys[qty_index])"/>)</span>
+                                                                </t>
                                                             </td>
                                                         </t>
                                                         <td t-att-style="'padding:8px 14px; text-align:right; font-weight:800; font-size:15px; vertical-align:middle; border-left:2px solid #198754; ' + (line.total > 0 ? 'background:#f0fff4; color:#198754;' : 'background:#fafafa; color:#adb5bd;')">
                                                             <t t-esc="formatQty(line.total)"/>
+                                                            <t t-if="state.includeOutgoing and line.outgoing_total > 0">
+                                                                <span style="color:#e65100; font-size:11px; font-weight:700; display:block;"> (+<t t-esc="formatQty(line.outgoing_total)"/>)</span>
+                                                            </t>
                                                         </td>
                                                     </t>
                                                     <t t-else="">
@@ -256,7 +270,7 @@
                                                                                         <t t-esc="loc.location"/>
                                                                                         <t t-if="loc.outgoing">
                                                                                             <span style="display:inline-block; margin-left:8px; background:#fd7e14; color:#fff; border-radius:10px; padding:1px 8px; font-size:10px; font-weight:700; font-family:sans-serif; vertical-align:middle; white-space:nowrap;">
-                                                                                                &#128666; Chu\u1ea9n b\u1ecb giao
+                                                                                                Khu vực giao hàng
                                                                                             </span>
                                                                                         </t>
                                                                                     </td>
@@ -281,9 +295,15 @@
                                                     <td t-foreach="state.columns" t-as="col" t-key="col.id"
                                                         style="padding:10px 12px; text-align:right; font-weight:700; color:#198754; font-size:13px; border-right:1px solid #c3e6cb;">
                                                         <t t-esc="formatQty(getColTotal(col_index))"/>
+                                                        <t t-if="state.includeOutgoing and getColOutgoingTotal(col_index) > 0">
+                                                            <span style="color:#e65100; font-size:11px; font-weight:700; display:block;"> (+<t t-esc="formatQty(getColOutgoingTotal(col_index))"/>)</span>
+                                                        </t>
                                                     </td>
                                                     <td style="padding:10px 14px; font-weight:800; text-align:right; font-size:17px; color:#fff; background:#198754; border-left:2px solid #146c43;">
                                                         <t t-esc="formatQty(state.total)"/>
+                                                        <t t-if="state.includeOutgoing and state.outgoingTotal > 0">
+                                                            <span style="color:#ffe0b2; font-size:12px; font-weight:700; display:block;"> (+<t t-esc="formatQty(state.outgoingTotal)"/>)</span>
+                                                        </t>
                                                     </td>
                                                 </t>
                                                 <t t-else="">
