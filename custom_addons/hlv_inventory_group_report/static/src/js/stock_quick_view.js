@@ -354,7 +354,10 @@ export class StockQuickView extends Component {
             { key: "price_tmdt",       label: "Gi\u00e1 S\u00e0n TM\u0110T" },
             { key: "price_commercial", label: "Gi\u00e1 Th\u01b0\u01a1ng M\u1ea1i" },
             { key: "purchase_price",   label: "Gi\u00e1 mua" },
+            { key: "avg_cost",         label: "Gi\u00e1 v\u1ed1n TB" },
             { key: "sales_cycle",      label: "Chu k\u1ef3 b\u00e1n (ng\u00e0y/\u0111\u01a1n)" },
+            { key: "incoming_qty",     label: "D\u1ef1 ki\u1ebfn nh\u1eadp" },
+            { key: "reserved_qty",     label: "D\u1ef1 ki\u1ebfn giao" },
         ];
     }
 
@@ -375,6 +378,10 @@ export class StockQuickView extends Component {
         if (val === null || val === undefined) return "-";
         if (key === "sales_cycle") {
             return val.toLocaleString("vi-VN", { maximumFractionDigits: 1 }) + " ng\u00e0y/\u0111\u01a1n";
+        }
+        if (key === "incoming_qty" || key === "reserved_qty") {
+            if (!val || val === 0) return "-";
+            return val.toLocaleString("vi-VN", { maximumFractionDigits: 2 });
         }
         // All price keys
         return val.toLocaleString("vi-VN", { maximumFractionDigits: 0 }) + " \u20ab";
