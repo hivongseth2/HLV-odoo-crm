@@ -284,6 +284,40 @@ class HlvStockQuick(models.TransientModel):
         return att.id
 
     @api.model
+    def get_product_pending_moves(self, product_id, key, warehouse_ids):
+        """Return list of pending stock moves for incoming_qty or reserved_qty panel."""
+        if key == "incoming_qty":
+            domain = [
+                ("product_id", "=", product_id),
+                ("state", "in", ["waiting", "confirmed", "assigned"]),
+                ("location_dest_id.usage", "=", "internal"),
+                ("location_id.usage", "!=", "internal"),
+            ]
+        elif key == "reserved_qty":
+            domain = [
+                ("product_id", "=", product_id),
+                ("state", "in", ["waiting", "confirmed", "assigned"]),
+                ("location_id.usage", "=", "internal"),
+                ("location_dest_id.usage", "!=", "internal"),
+            ]
+        else:
+            return []
+        state_labels = {"waiting": "Đang chờ", "confirmed": "Đã xác nhận", "assigned": "Sẵn sàng"}
+        moves = self.env["stock.move"].search(domain, order="date asc", limit=100)
+        result = []
+        for m in moves:
+            result.append({
+                "picking_name": m.picking_id.name if m.picking_id else (m.name or ""),
+                "origin": (m.picking_id.origin if m.picking_id else None) or m.origin or "",
+                "state": state_labels.get(m.state, m.state),
+                "qty": m.product_uom_qty,
+                "uom": m.product_uom.name if m.product_uom else "",
+                "date": m.date.strftime("%d/%m/%Y") if m.date else "",
+                "partner": (m.picking_id.partner_id.name if m.picking_id and m.picking_id.partner_id else "") or "",
+            })
+        return result
+
+    @api.model
     def get_group_products(self, group_id):
         group = self.env["hlv.product.report.group"].browse(group_id)
         result = []

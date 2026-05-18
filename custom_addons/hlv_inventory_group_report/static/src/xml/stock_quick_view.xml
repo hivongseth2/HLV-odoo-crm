@@ -308,7 +308,8 @@
                                                             </t>
                                                         </t>
                                                         <t t-foreach="fixedColDefs" t-as="fc" t-key="fc.key">
-                                                            <td t-att-style="'padding:8px 12px; text-align:right; vertical-align:middle; border-left:2px solid ' + fc.color + '; font-size:13px; white-space:nowrap; font-weight:700; background:' + fc.bg + '; color:' + fc.color + ';'">
+                                                            <td t-on-click.stop="() => this.toggleCellPanel(line.id, fc.key)"
+                                                                t-att-style="'padding:8px 12px; text-align:right; vertical-align:middle; border-left:2px solid ' + fc.color + '; font-size:13px; white-space:nowrap; font-weight:700; background:' + fc.bg + '; color:' + fc.color + '; ' + (fc.key !== 'avg_cost' ? 'cursor:pointer;' : '')">
                                                                 <t t-esc="formatExtraVal(fc.key, line.extra[fc.key])"/>
                                                             </td>
                                                         </t>
@@ -325,7 +326,8 @@
                                                             </t>
                                                         </t>
                                                         <t t-foreach="fixedColDefs" t-as="fc" t-key="fc.key">
-                                                            <td t-att-style="'padding:8px 12px; text-align:right; vertical-align:middle; border-left:2px solid ' + fc.color + '; font-size:13px; white-space:nowrap; font-weight:700; background:' + fc.bg + '; color:' + fc.color + ';'">
+                                                            <td t-on-click.stop="() => this.toggleCellPanel(line.id, fc.key)"
+                                                                t-att-style="'padding:8px 12px; text-align:right; vertical-align:middle; border-left:2px solid ' + fc.color + '; font-size:13px; white-space:nowrap; font-weight:700; background:' + fc.bg + '; color:' + fc.color + '; ' + (fc.key !== 'avg_cost' ? 'cursor:pointer;' : '')">
                                                                 <t t-esc="formatExtraVal(fc.key, line.extra[fc.key])"/>
                                                             </td>
                                                         </t>
@@ -375,6 +377,65 @@
                                                                         </tbody>
                                                                     </table>
                                                                 </t>
+                                                            </t>
+                                                        </td>
+                                                    </tr>
+                                                </t>
+                                                <!-- Cell panel: pending pickings (du kien nhap/giao) -->
+                                                <t t-if="state.cellPanel and state.cellPanel.productId === line.id">
+                                                    <tr t-att-style="'background:' + (state.cellPanel.key === 'incoming_qty' ? '#dbeafe' : '#fff3e0') + ';'">
+                                                        <td t-att-colspan="tableColspan"
+                                                            t-att-style="'padding:12px 20px; border-bottom:2px solid ' + (state.cellPanel.key === 'incoming_qty' ? '#1565c0' : '#e65100') + ';'">
+                                                            <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+                                                                <i t-att-class="'fa ' + (state.cellPanel.key === 'incoming_qty' ? 'fa-truck' : 'fa-paper-plane')"
+                                                                   t-att-style="'color:' + (state.cellPanel.key === 'incoming_qty' ? '#1565c0' : '#e65100') + '; font-size:14px;'"/>
+                                                                <span t-att-style="'font-size:12px; font-weight:700; ' + (state.cellPanel.key === 'incoming_qty' ? 'color:#1565c0;' : 'color:#e65100;')">
+                                                                    <t t-if="state.cellPanel.key === 'incoming_qty'">Phếu nhập đang chờ: </t>
+                                                                    <t t-else="">Phếu xuất đang chờ: </t>
+                                                                    <t t-esc="line.name"/>
+                                                                </span>
+                                                                <span t-on-click.stop="closeDropdown"
+                                                                      style="margin-left:auto; cursor:pointer; color:#adb5bd; font-size:16px; line-height:1;">&#215;</span>
+                                                            </div>
+                                                            <t t-set="_ck" t-value="line.id + '-' + state.cellPanel.key"/>
+                                                            <t t-if="state.cellPanelData[_ck] === null or state.cellPanelData[_ck] === undefined">
+                                                                <div style="color:#6c757d; font-size:12px;"><i class="fa fa-spinner fa-spin"/> Đang tải...</div>
+                                                            </t>
+                                                            <t t-elif="state.cellPanelData[_ck].length === 0">
+                                                                <div style="color:#adb5bd; font-size:12px; font-style:italic;">Không có phiếu đang chờ.</div>
+                                                            </t>
+                                                            <t t-else="">
+                                                                <table style="font-size:12px; border-collapse:collapse; min-width:55%;">
+                                                                    <thead>
+                                                                        <tr t-att-style="'color:#fff; ' + (state.cellPanel.key === 'incoming_qty' ? 'background:#1565c0;' : 'background:#e65100;')">
+                                                                            <th style="padding:5px 10px; text-align:left;">Số phiếu</th>
+                                                                            <th style="padding:5px 10px; text-align:left;">Nguồn</th>
+                                                                            <th style="padding:5px 10px; text-align:left;">Đối tác</th>
+                                                                            <th style="padding:5px 10px; text-align:left;">Ngày</th>
+                                                                            <th style="padding:5px 10px; text-align:right;">Số lượng</th>
+                                                                            <th style="padding:5px 10px; text-align:center;">Trạng thái</th>
+                                                                        </tr>
+                                                                    </thead>
+                                                                    <tbody>
+                                                                        <t t-foreach="state.cellPanelData[_ck]" t-as="pm" t-key="pm_index">
+                                                                            <tr t-att-style="'border-bottom:1px solid ' + (state.cellPanel.key === 'incoming_qty' ? '#bfdbfe' : '#fed7aa') + '; ' + (pm_index % 2 === 1 ? (state.cellPanel.key === 'incoming_qty' ? 'background:#eff6ff;' : 'background:#fff7ed;') : '')">
+                                                                                <td style="padding:4px 10px; font-family:monospace; font-weight:700;"><t t-esc="pm.picking_name"/></td>
+                                                                                <td style="padding:4px 10px; color:#546e7a; font-size:11px;"><t t-esc="pm.origin"/></td>
+                                                                                <td style="padding:4px 10px;"><t t-esc="pm.partner"/></td>
+                                                                                <td style="padding:4px 10px; color:#6c757d;"><t t-esc="pm.date"/></td>
+                                                                                <td t-att-style="'padding:4px 10px; text-align:right; font-weight:700; ' + (state.cellPanel.key === 'incoming_qty' ? 'color:#1565c0;' : 'color:#e65100;')">
+                                                                                    <t t-esc="formatQty(pm.qty)"/>
+                                                                                    <span style="font-weight:400; color:#888; margin-left:3px;"><t t-esc="pm.uom"/></span>
+                                                                                </td>
+                                                                                <td style="padding:4px 10px; text-align:center;">
+                                                                                    <span t-att-style="'border-radius:10px; padding:2px 8px; font-size:10px; font-weight:700; ' + (pm.state === 'S\u1eb5n s\u00e0ng' ? 'background:#dcfce7; color:#166534;' : 'background:#fef9c3; color:#854d0e;')">
+                                                                                        <t t-esc="pm.state"/>
+                                                                                    </span>
+                                                                                </td>
+                                                                            </tr>
+                                                                        </t>
+                                                                    </tbody>
+                                                                </table>
                                                             </t>
                                                         </td>
                                                     </tr>
