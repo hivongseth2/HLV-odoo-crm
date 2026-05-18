@@ -8,6 +8,7 @@
 var uploadId = null;
 var chunkIndex = 0;
 var finishing = false;
+var _stopResolve = null;  // resolve callback cho stopRecording() Promise
 
 async function startServerUploadSession() {
   const pickingId = parseInt(window.location.pathname.split("/").pop());
@@ -174,6 +175,9 @@ async function startRecording() {
     drawRAF = 0; overlayCtx = null; overlayCanvas = null;
 
     if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+
+    // Báo hiệu cho stopRecording() Promise rằng onstop đã hoàn tất
+    if (_stopResolve) { _stopResolve(); _stopResolve = null; }
   };
 
   try {
@@ -185,7 +189,16 @@ async function startRecording() {
 }
 
 function stopRecording() {
-  if (mediaRecorder && isRecording) { try { mediaRecorder.stop(); } catch { } }
+  // Trả về Promise – resolve khi onstop hoàn tất (bao gồm finishServerUploadSession).
+  // Cho phép caller dùng `await stopRecording()` và đảm bảo video đã được gửi
+  // trước khi chuyển trang.
+  if (!mediaRecorder || !isRecording) return Promise.resolve();
+  return new Promise((resolve) => {
+    _stopResolve = resolve;
+    try { mediaRecorder.stop(); } catch { resolve(); _stopResolve = null; }
+    // Timeout tối đa 30s phòng onstop không bao giờ fire
+    setTimeout(() => { if (_stopResolve) { _stopResolve(); _stopResolve = null; } }, 30000);
+  });
 }
 
 async function diag() {
