@@ -80,13 +80,14 @@ class HlvStockQuick(models.TransientModel):
                 cost = product.with_company(self.env.company).standard_price
                 extra_data.setdefault(product.id, {})["avg_cost"] = cost or 0.0
         if "incoming_qty" in extra_cols:
-            # confirmed/assigned purchase moves not yet done
+            # Only purchase order inbound moves not yet done
             in_moves = self.env["stock.move"].read_group(
                 [
                     ("product_id", "in", product_ids_list),
                     ("state", "in", ["waiting", "confirmed", "assigned"]),
                     ("location_dest_id.usage", "=", "internal"),
                     ("location_id.usage", "!=", "internal"),
+                    ("purchase_line_id", "!=", False),
                 ],
                 ["product_id", "product_qty:sum"],
                 ["product_id"],
@@ -95,13 +96,14 @@ class HlvStockQuick(models.TransientModel):
                 pid = row["product_id"][0]
                 extra_data.setdefault(pid, {})["incoming_qty"] = row["product_qty"]
         if "reserved_qty" in extra_cols:
-            # confirmed/assigned sale moves going out, not yet done
+            # Only sale order outbound moves not yet done
             out_moves = self.env["stock.move"].read_group(
                 [
                     ("product_id", "in", product_ids_list),
                     ("state", "in", ["waiting", "confirmed", "assigned"]),
                     ("location_id.usage", "=", "internal"),
                     ("location_dest_id.usage", "!=", "internal"),
+                    ("sale_line_id", "!=", False),
                 ],
                 ["product_id", "product_qty:sum"],
                 ["product_id"],
@@ -140,6 +142,9 @@ class HlvStockQuick(models.TransientModel):
             total += prod_total
             outgoing_total += prod_outgoing
             line_extra = {key: extra_data.get(product.id, {}).get(key) for key in extra_cols}
+            # incoming_qty column shows on_hand + pending PO qty (projected after receiving)
+            if "incoming_qty" in line_extra and line_extra["incoming_qty"] is not None:
+                line_extra["incoming_qty"] = prod_total + line_extra["incoming_qty"]
             lines.append({
                 "id": product.id,
                 "code": product.default_code or "",
