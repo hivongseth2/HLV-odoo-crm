@@ -276,10 +276,10 @@
                                                     <td style="padding:8px 12px; color:#212121; vertical-align:middle; border-right:1px solid #f0f0f0;">
                                                         <span t-esc="line.name"/>
                                                         <i class="fa fa-map-marker"
-                                                           t-att-style="'margin-left:8px; font-size:15px; ' + (state.expandedProductId === line.id ? 'color:#0d6efd;' : 'color:#0c56c482;')"/>
+                                                           t-att-style="'margin-left:8px; font-size:11px; ' + (state.expandedProductId === line.id ? 'color:#0d6efd;' : 'color:#ced4da;')"/>
                                                         <i class="fa fa-history"
                                                            t-on-click.stop="() => this.toggleProductMoves(line.id)"
-                                                           t-att-style="'margin-left:6px; font-size:15px; cursor:pointer; ' + (state.expandedMovesId === line.id ? 'color:#198754;' : 'color:#2bb87782;')"
+                                                           t-att-style="'margin-left:6px; font-size:11px; cursor:pointer; ' + (state.expandedMovesId === line.id ? 'color:#198754;' : 'color:#ced4da;')"
                                                            title="Lịch sử nhập/xuất"/>
                                                     </td>
                                                     <td style="padding:8px 10px; text-align:center; vertical-align:middle; font-size:11px; color:#6c757d; border-right:1px solid #f0f0f0; white-space:nowrap;">
@@ -311,6 +311,11 @@
                                                             <td t-on-click.stop="() => this.toggleCellPanel(line.id, fc.key)"
                                                                 t-att-style="'padding:8px 12px; text-align:right; vertical-align:middle; border-left:2px solid ' + fc.color + '; font-size:13px; font-weight:700; background:' + fc.bg + '; color:' + fc.color + '; ' + (fc.key !== 'avg_cost' ? 'cursor:pointer;' : '')">
                                                                 <t t-esc="formatExtraVal(fc.key, line.extra[fc.key])"/>
+                                                                <t t-if="fc.key === 'avg_cost' &amp;&amp; line.extra.avg_cost_fallback">
+                                                                    <span style="font-size:10px; color:#adb5bd; font-weight:400; display:block; margin-top:1px; white-space:nowrap;" title="Không có lớp nhập PO — lấy từ trường Giá vốn trong Odoo">
+                                                                        (giá vốn Odoo)
+                                                                    </span>
+                                                                </t>
                                                                 <t t-if="fc.key === 'incoming_qty' &amp;&amp; line.extra.incoming_pending > 0">
                                                                     <span style="font-size:10px; color:#78909c; font-weight:400; display:block; margin-top:1px; white-space:nowrap;">
                                                                         (<t t-esc="formatQty(line.total)"/>+<t t-esc="formatQty(line.extra.incoming_pending)"/>)
@@ -334,6 +339,11 @@
                                                             <td t-on-click.stop="() => this.toggleCellPanel(line.id, fc.key)"
                                                                 t-att-style="'padding:8px 12px; text-align:right; vertical-align:middle; border-left:2px solid ' + fc.color + '; font-size:13px; font-weight:700; background:' + fc.bg + '; color:' + fc.color + '; ' + (fc.key !== 'avg_cost' ? 'cursor:pointer;' : '')">
                                                                 <t t-esc="formatExtraVal(fc.key, line.extra[fc.key])"/>
+                                                                <t t-if="fc.key === 'avg_cost' &amp;&amp; line.extra.avg_cost_fallback">
+                                                                    <span style="font-size:10px; color:#adb5bd; font-weight:400; display:block; margin-top:1px; white-space:nowrap;" title="Không có lớp nhập PO — lấy từ trường Giá vốn trong Odoo">
+                                                                        (giá vốn Odoo)
+                                                                    </span>
+                                                                </t>
                                                                 <t t-if="fc.key === 'incoming_qty' &amp;&amp; line.extra.incoming_pending > 0">
                                                                     <span style="font-size:10px; color:#78909c; font-weight:400; display:block; margin-top:1px; white-space:nowrap;">
                                                                         (<t t-esc="formatQty(line.total)"/>+<t t-esc="formatQty(line.extra.incoming_pending)"/>)
