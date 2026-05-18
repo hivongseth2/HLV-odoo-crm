@@ -543,10 +543,19 @@ export class DeliveryPlannerDashboard extends Component {
             // Truyền filter_kwargs để backend loại các SO không khớp filter
             // hiện tại (vd: bus đẩy đơn kho A nhưng dashboard đang lọc kho B
             // → backend trả về removed_ids → FE skip / remove khỏi state).
+            // Capture filter key BEFORE the async RPC so we can detect stale
+            // responses: if the user changes filter while the request is in
+            // flight, the response belongs to the old filter and must be
+            // discarded — otherwise orders from the wrong warehouse get merged.
+            const filterKeyAtStart = this._buildFilterKey();
             const res = await this.orm.call(
                 "sale.order", "get_delivery_orders_subset", [],
                 { order_ids: soIds, filter_kwargs: this._buildFetchKwargs() }
             );
+            // Drop stale response if filter changed while RPC was in-flight
+            if (this._buildFilterKey() !== filterKeyAtStart) {
+                return;
+            }
             const fresh = (res && res.orders) || [];
             const removed = new Set((res && res.removed_ids) || []);
             this._mergeSubset(fresh, removed);
@@ -776,6 +785,20 @@ export class DeliveryPlannerDashboard extends Component {
 
     async _saveToCache(result) {
         try {
+            // Serialize through JSON to strip OWL reactive Proxy objects —
+            // IndexedDB's structured clone algorithm cannot clone Proxies and
+            // throws DataCloneError when state arrays are passed directly
+            // (e.g. from _refreshSubset or _autoLoadAllRemaining).
+            let orders, dashboardStats, warehouses, tags;
+            try {
+                orders = JSON.parse(JSON.stringify(result.orders || []));
+                dashboardStats = result.dashboard_stats ? JSON.parse(JSON.stringify(result.dashboard_stats)) : undefined;
+                warehouses = result.warehouses ? JSON.parse(JSON.stringify(result.warehouses)) : undefined;
+                tags = result.tags ? JSON.parse(JSON.stringify(result.tags)) : undefined;
+            } catch (serErr) {
+                console.warn('[DP Cache] _saveToCache serialization failed:', serErr);
+                return;
+            }
             const db = await this._openCacheDB();
             const tx = db.transaction(this._CACHE_STORE, 'readwrite');
             tx.objectStore(this._CACHE_STORE).put({
@@ -783,11 +806,11 @@ export class DeliveryPlannerDashboard extends Component {
                 timestamp: Date.now(),
                 kanbanBatchSize: this.state.kanbanBatchSize,
                 data: {
-                    dashboard_stats: result.dashboard_stats,
-                    orders: result.orders,
+                    dashboard_stats: dashboardStats,
+                    orders: orders,
                     total_count: result.total_count,
-                    warehouses: result.warehouses,
-                    tags: result.tags,
+                    warehouses: warehouses,
+                    tags: tags,
                 },
             }, 'latest');
             await new Promise((resolve, reject) => {
@@ -795,7 +818,7 @@ export class DeliveryPlannerDashboard extends Component {
                 tx.onerror = () => reject(tx.error);
             });
             db.close();
-            console.log('[DP Cache] Saved', (result.orders || []).length, 'orders to IndexedDB');
+            console.log('[DP Cache] Saved', orders.length, 'orders to IndexedDB');
         } catch (e) {
             console.warn('[DP Cache] _saveToCache failed:', e);
         }
