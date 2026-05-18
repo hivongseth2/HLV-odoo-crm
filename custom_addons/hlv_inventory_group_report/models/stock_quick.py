@@ -285,11 +285,11 @@ class HlvStockQuick(models.TransientModel):
 
     @api.model
     def get_product_cost_layers(self, product_id):
-        """Return PO-linked valuation layers with remaining_qty > 0 for avg cost formula."""
+        """Return PO-linked inbound valuation layers for avg cost history."""
         layers = self.env["stock.valuation.layer"].search(
             [
                 ("product_id", "=", product_id),
-                ("remaining_qty", ">", 0.001),
+                ("quantity", ">", 0),
                 ("stock_move_id.purchase_line_id", "!=", False),
             ],
             order="create_date asc",
@@ -315,9 +315,9 @@ class HlvStockQuick(models.TransientModel):
                 "date": lyr.create_date.strftime("%d/%m/%Y") if lyr.create_date else "",
                 "reference": picking.name if picking else "",
                 "po_name": po_line.order_id.name if po_line else "",
-                "qty": lyr.remaining_qty,
+                "qty": lyr.quantity,
                 "unit_cost": price_unit,
-                "value": round(lyr.remaining_qty * price_unit, 2),
+                "value": round(lyr.quantity * price_unit, 2),
                 "uom": lyr.uom_id.name if lyr.uom_id else "",
             })
         total_qty = sum(r["qty"] for r in rows)
