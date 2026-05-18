@@ -787,18 +787,60 @@
                 </div>
                 <!-- Body -->
                 <div style="flex:1; overflow-y:auto; padding:20px;">
-                    <!-- avg_cost: show cost prominently -->
+                    <!-- avg_cost: show cost + valuation layers -->
                     <t t-if="state.cellPanel.key === 'avg_cost'">
-                        <div style="text-align:center; padding:28px 16px 20px;">
-                            <div style="font-size:11px; color:#adb5bd; letter-spacing:.5px; text-transform:uppercase; margin-bottom:8px;">Giá vốn hiện tại</div>
-                            <div style="font-size:36px; font-weight:800; color:#880e4f; line-height:1.1;">
+                        <div style="text-align:center; padding:20px 16px 16px;">
+                            <div style="font-size:10px; color:#adb5bd; letter-spacing:.5px; text-transform:uppercase; margin-bottom:6px;">Giá vốn hiện tại</div>
+                            <div style="font-size:34px; font-weight:800; color:#880e4f; line-height:1.1;">
                                 <t t-esc="formatPrice(state.cellPanel.avgCost)"/>
                             </div>
                         </div>
-                        <div style="background:#fce4ec; border-left:4px solid #880e4f; border-radius:6px; padding:12px 16px; font-size:12px; color:#880e4f; line-height:1.8;">
-                            <b>Giá vốn trung bình</b> là chi phí bình quân gia quyền để sở hữu 1 đơn vị sản phẩm, được tính từ tất cả các lần nhập kho.<br/>
-                            Odoo cập nhật tự động sau mỗi lần nhập kho xác nhận.
-                        </div>
+                        <t t-set="_ck" t-value="state.cellPanel.productId + '-avg_cost'"/>
+                        <t t-if="state.cellPanelData[_ck] === null or state.cellPanelData[_ck] === undefined">
+                            <div style="text-align:center; padding:30px; color:#6c757d;">
+                                <i class="fa fa-spinner fa-spin" style="font-size:24px;"/>
+                                <div style="margin-top:10px; font-size:12px;">Đang tải lịch sử nhập...</div>
+                            </div>
+                        </t>
+                        <t t-elif="state.cellPanelData[_ck].length === 0">
+                            <div style="background:#fce4ec; border-left:4px solid #880e4f; border-radius:6px; padding:12px 16px; font-size:12px; color:#880e4f; line-height:1.8; margin-bottom:10px;">
+                                <b>Giá vốn trung bình</b> là chi phí bình quân gia quyền, tính từ tất cả lần nhập kho.<br/>
+                                Chưa có dữ liệu lớp chi phí.
+                            </div>
+                        </t>
+                        <t t-else="">
+                            <div style="font-size:11px; font-weight:700; color:#880e4f; margin-bottom:8px;">
+                                <t t-esc="state.cellPanelData[_ck].length"/> lần nhập gần nhất
+                                <span style="font-weight:400; color:#adb5bd; margin-left:6px;">(mới → cũ)</span>
+                            </div>
+                            <table style="width:100%; font-size:12px; border-collapse:collapse;">
+                                <thead>
+                                    <tr style="background:#880e4f; color:#fff;">
+                                        <th style="padding:6px 8px; text-align:left;">Ngày</th>
+                                        <th style="padding:6px 8px; text-align:left;">Phiếu nhập</th>
+                                        <th style="padding:6px 8px; text-align:left;">Đơn mua (PO)</th>
+                                        <th style="padding:6px 8px; text-align:right;">Số lượng</th>
+                                        <th style="padding:6px 8px; text-align:right;">Đơn giá</th>
+                                        <th style="padding:6px 8px; text-align:right;">Thành tiền</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <t t-foreach="state.cellPanelData[_ck]" t-as="lyr" t-key="lyr_index">
+                                        <tr t-att-style="'border-bottom:1px solid #f8bbd0; ' + (lyr_index % 2 === 1 ? 'background:#fff0f5;' : '')">
+                                            <td style="padding:5px 8px; color:#6c757d; white-space:nowrap; font-size:11px;"><t t-esc="lyr.date"/></td>
+                                            <td style="padding:5px 8px; font-family:monospace; font-size:11px; font-weight:700;"><t t-esc="lyr.reference"/></td>
+                                            <td style="padding:5px 8px; font-size:11px; color:#546e7a;"><t t-esc="lyr.po_ref"/></td>
+                                            <td style="padding:5px 8px; text-align:right; font-weight:600; color:#880e4f;">
+                                                <t t-esc="formatQty(lyr.qty)"/>
+                                                <span style="font-weight:400; color:#adb5bd; margin-left:3px; font-size:10px;"><t t-esc="lyr.uom"/></span>
+                                            </td>
+                                            <td style="padding:5px 8px; text-align:right; font-weight:700; color:#880e4f;"><t t-esc="formatPrice(lyr.unit_cost)"/></td>
+                                            <td style="padding:5px 8px; text-align:right; color:#5d4037;"><t t-esc="formatPrice(lyr.value)"/></td>
+                                        </tr>
+                                    </t>
+                                </tbody>
+                            </table>
+                        </t>
                     </t>
                     <!-- incoming/reserved: show moves list -->
                     <t t-else="">
