@@ -96,14 +96,13 @@ class HlvStockQuick(models.TransientModel):
                 pid = row["product_id"][0]
                 extra_data.setdefault(pid, {})["incoming_qty"] = row["product_qty"]
         if "reserved_qty" in extra_cols:
-            # Only sale order moves — first in chain (no origin) to avoid double-counting multi-step delivery
+            # Count final delivery step only (dest=customer) — correctly handles 1/2/3-step delivery
             out_moves = self.env["stock.move"].read_group(
                 [
                     ("product_id", "in", product_ids_list),
                     ("state", "in", ["waiting", "confirmed", "assigned"]),
-                    ("location_id.usage", "=", "internal"),
+                    ("location_dest_id.usage", "=", "customer"),
                     ("sale_line_id", "!=", False),
-                    ("move_orig_ids", "=", False),
                 ],
                 ["product_id", "product_qty:sum"],
                 ["product_id"],
@@ -144,7 +143,10 @@ class HlvStockQuick(models.TransientModel):
             line_extra = {key: extra_data.get(product.id, {}).get(key) for key in extra_cols}
             # incoming_qty column shows on_hand + pending PO qty (projected after receiving)
             if "incoming_qty" in line_extra and line_extra["incoming_qty"] is not None:
+                line_extra["incoming_pending"] = line_extra["incoming_qty"]  # raw pending for breakdown display
                 line_extra["incoming_qty"] = prod_total + line_extra["incoming_qty"]
+            else:
+                line_extra["incoming_pending"] = 0
             lines.append({
                 "id": product.id,
                 "code": product.default_code or "",
@@ -260,6 +262,12 @@ class HlvStockQuick(models.TransientModel):
                     fq = wb.add_format({"border": 1, "num_format": "#,##0.##", "align": "right",
                                         "font_color": "#1565c0" if ec == "incoming_qty" else "#e65100", "bold": True})
                     ws.write(row, extra_col_start + j, val, fq if val > 0 else f0)
+                    if ec == "incoming_qty":
+                        pending = line.get("extra", {}).get("incoming_pending") or 0
+                        on_hand_val = line.get("total", 0)
+                        if pending > 0:
+                            ws.write_comment(row, extra_col_start + j,
+                                             "Tồn kho: %g + Chờ nhập: %g = %g" % (on_hand_val, pending, val))
                 else:
                     ws.write(row, extra_col_start + j, val, f_money)
             row += 1
@@ -361,9 +369,8 @@ class HlvStockQuick(models.TransientModel):
             domain = [
                 ("product_id", "=", product_id),
                 ("state", "in", ["waiting", "confirmed", "assigned"]),
-                ("location_id.usage", "=", "internal"),
+                ("location_dest_id.usage", "=", "customer"),
                 ("sale_line_id", "!=", False),
-                ("move_orig_ids", "=", False),
             ]
         else:
             return []
