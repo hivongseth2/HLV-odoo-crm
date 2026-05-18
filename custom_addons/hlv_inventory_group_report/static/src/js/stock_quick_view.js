@@ -341,7 +341,8 @@ export class StockQuickView extends Component {
         const line = this.state.lines.find(l => l.id === productId);
         const lineName = line ? line.name : "";
         const avgCost = (line && key === "avg_cost") ? (line.extra && line.extra.avg_cost || 0) : 0;
-        this.state.cellPanel = { productId, key, lineName, avgCost };
+        const onHand = line ? (line.total || 0) : 0;
+        this.state.cellPanel = { productId, key, lineName, avgCost, onHand };
         const cacheKey = productId + "-" + key;
         if (this.state.cellPanelData[cacheKey] !== undefined) return;
         this.state.cellPanelData = Object.assign({}, this.state.cellPanelData, { [cacheKey]: null });
