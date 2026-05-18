@@ -1,4 +1,4 @@
-﻿from odoo import models, api
+﻿from odoo import models, api, fields
 from odoo.exceptions import UserError
 import io
 import base64
@@ -299,15 +299,25 @@ class HlvStockQuick(models.TransientModel):
             move = lyr.stock_move_id
             po_line = move.purchase_line_id if move else None
             picking = move.picking_id if move else None
-            # Unit cost: prefer the SVL unit_cost (already in company currency)
-            unit_cost = lyr.unit_cost
+            # Use price_unit from PO line (purchase price), convert to company currency if needed
+            if po_line:
+                currency = po_line.currency_id
+                company_currency = self.env.company.currency_id
+                price_unit = po_line.price_unit
+                if currency and currency != company_currency:
+                    price_unit = currency._convert(
+                        price_unit, company_currency,
+                        self.env.company, lyr.create_date or fields.Date.today()
+                    )
+            else:
+                price_unit = lyr.unit_cost
             rows.append({
                 "date": lyr.create_date.strftime("%d/%m/%Y") if lyr.create_date else "",
                 "reference": picking.name if picking else "",
                 "po_name": po_line.order_id.name if po_line else "",
                 "qty": lyr.remaining_qty,
-                "unit_cost": unit_cost,
-                "value": round(lyr.remaining_qty * unit_cost, 2),
+                "unit_cost": price_unit,
+                "value": round(lyr.remaining_qty * price_unit, 2),
                 "uom": lyr.uom_id.name if lyr.uom_id else "",
             })
         total_qty = sum(r["qty"] for r in rows)
