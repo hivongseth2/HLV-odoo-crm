@@ -285,24 +285,33 @@ class HlvStockQuick(models.TransientModel):
 
     @api.model
     def get_product_cost_layers(self, product_id):
-        """Return PO-linked inbound valuation layers for avg cost history."""
+        """Return most recent PO-linked inbound layers that account for current on-hand qty."""
+        product = self.env["product.product"].browse(product_id)
+        on_hand_qty = product.qty_available
+
+        # Newest first — accumulate until we reach on_hand_qty
         layers = self.env["stock.valuation.layer"].search(
             [
                 ("product_id", "=", product_id),
                 ("quantity", ">", 0),
                 ("stock_move_id.purchase_line_id", "!=", False),
             ],
-            order="create_date asc",
+            order="create_date desc",
         )
         rows = []
+        remaining = on_hand_qty
+        company_currency = self.env.company.currency_id
         for lyr in layers:
+            if remaining <= 0.001:
+                break
+            qty_take = min(lyr.quantity, remaining)
+            remaining -= qty_take
+
             move = lyr.stock_move_id
             po_line = move.purchase_line_id if move else None
             picking = move.picking_id if move else None
-            # Use price_unit from PO line (purchase price), convert to company currency if needed
             if po_line:
                 currency = po_line.currency_id
-                company_currency = self.env.company.currency_id
                 price_unit = po_line.price_unit
                 if currency and currency != company_currency:
                     price_unit = currency._convert(
@@ -315,11 +324,14 @@ class HlvStockQuick(models.TransientModel):
                 "date": lyr.create_date.strftime("%d/%m/%Y") if lyr.create_date else "",
                 "reference": picking.name if picking else "",
                 "po_name": po_line.order_id.name if po_line else "",
-                "qty": lyr.quantity,
+                "qty": qty_take,
                 "unit_cost": price_unit,
-                "value": round(lyr.quantity * price_unit, 2),
+                "value": round(qty_take * price_unit, 2),
                 "uom": lyr.uom_id.name if lyr.uom_id else "",
             })
+
+        # Reverse to show oldest → newest
+        rows.reverse()
         total_qty = sum(r["qty"] for r in rows)
         total_value = sum(r["value"] for r in rows)
         computed_avg = total_value / total_qty if total_qty else 0.0
