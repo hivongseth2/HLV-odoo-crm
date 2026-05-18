@@ -284,35 +284,41 @@ class HlvStockQuick(models.TransientModel):
         return att.id
 
     @api.model
-    def get_product_cost_layers(self, product_id, limit=60):
-        """Return recent inbound stock valuation layers used to build average cost."""
+    def get_product_cost_layers(self, product_id):
+        """Return PO-linked valuation layers with remaining_qty > 0 for avg cost formula."""
         layers = self.env["stock.valuation.layer"].search(
-            [("product_id", "=", product_id), ("quantity", ">", 0)],
-            order="create_date desc",
-            limit=limit,
+            [
+                ("product_id", "=", product_id),
+                ("remaining_qty", ">", 0.001),
+                ("stock_move_id.purchase_line_id", "!=", False),
+            ],
+            order="create_date asc",
         )
-        result = []
+        rows = []
         for lyr in layers:
             move = lyr.stock_move_id
+            po_line = move.purchase_line_id if move else None
             picking = move.picking_id if move else None
-            # Try to find linked PO reference
-            po_ref = ""
-            if picking and picking.purchase_id:
-                po_ref = picking.purchase_id.name
-            elif picking and picking.origin:
-                po_ref = picking.origin
-            elif move and move.origin:
-                po_ref = move.origin
-            result.append({
+            # Unit cost: prefer the SVL unit_cost (already in company currency)
+            unit_cost = lyr.unit_cost
+            rows.append({
                 "date": lyr.create_date.strftime("%d/%m/%Y") if lyr.create_date else "",
-                "reference": picking.name if picking else (move.reference if move else lyr.description or ""),
-                "po_ref": po_ref,
-                "qty": lyr.quantity,
-                "unit_cost": lyr.unit_cost,
-                "value": lyr.value,
+                "reference": picking.name if picking else "",
+                "po_name": po_line.order_id.name if po_line else "",
+                "qty": lyr.remaining_qty,
+                "unit_cost": unit_cost,
+                "value": round(lyr.remaining_qty * unit_cost, 2),
                 "uom": lyr.uom_id.name if lyr.uom_id else "",
             })
-        return result
+        total_qty = sum(r["qty"] for r in rows)
+        total_value = sum(r["value"] for r in rows)
+        computed_avg = total_value / total_qty if total_qty else 0.0
+        return {
+            "layers": rows,
+            "total_qty": total_qty,
+            "total_value": round(total_value, 2),
+            "computed_avg": round(computed_avg, 2),
+        }
 
     @api.model
     def get_product_pending_moves(self, product_id, key, warehouse_ids):
