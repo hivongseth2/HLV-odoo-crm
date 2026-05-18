@@ -1,22 +1,134 @@
 #!/usr/bin/env python3
 """
-Test tính năng khung giờ phát hành HĐĐT webhook.
+Test gửi 1 HĐĐT nháp lên CQT qua webhook queue (DRY-RUN).
 
 Cách chạy:
     python odoo-bin shell -d <database> --no-http < bin/test_webhook_time_window.py
 
-Script này:
-  1. In giờ hiện tại theo timezone công ty
-  2. In cấu hình khung giờ hiện tại
-  3. Kiểm tra _is_within_publish_window()
-  4. Tạo 2 bản ghi queue test (pending) rồi gọi _process_pending()
-     → Xem chúng thành deferred hay được xử lý
-  5. Dọn dẹp bản ghi test sau khi xong
+Kịch bản:
+  - Lấy đơn SO_NAME, tìm HĐĐT nháp của đơn đó
+  - Tạo 1 queue record → gọi _process_one() trực tiếp
+  - Dry-run được bật tạm thời → KHÔNG gửi CQT thật
+  - Cuối cùng rollback toàn bộ (không commit) để không thay đổi DB
 """
 import pytz
 from datetime import datetime
 
 env = env  # noqa: F821
+
+SO_NAME = 'S03522'   # ← đổi đơn muốn test ở đây
+
+print('\n' + '=' * 70)
+print(f'DRY-RUN TEST: Gửi HĐĐT webhook cho {SO_NAME}')
+print('=' * 70)
+
+# ── Timezone & giờ hiện tại ───────────────────────────────────────────────────
+tz_name = env.company.partner_id.tz or env.user.tz or 'Asia/Ho_Chi_Minh'
+tz = pytz.timezone(tz_name)
+now_local = datetime.now(tz)
+print(f'\nGiờ hiện tại ({tz_name}): {now_local.strftime("%H:%M:%S")}')
+
+# ── Config ───────────────────────────────────────────────────────────────────
+config = env['amis.callback.config'].sudo().search([], limit=1)
+if not config:
+    print('KHÔNG CÓ cấu hình!')
+    raise SystemExit
+
+print(f'\n[CONFIG]')
+print(f'  meinvoice_enabled   = {config.meinvoice_enabled}')
+print(f'  meinvoice_skip_api  = {config.meinvoice_skip_api}  ← cần True để dry-run')
+print(f'  webhook_auto_publish_enabled   = {config.webhook_auto_publish_enabled}')
+
+def fmt(v):
+    h = int(v); m = int(round((v - h) * 60))
+    return '%02d:%02d' % (h, m)
+
+if config.webhook_publish_time_restrict:
+    Queue = env['amis.webhook.queue']
+    within = Queue._is_within_publish_window(config)
+    print(f'  Khung giờ: {fmt(config.webhook_publish_time_from)} – {fmt(config.webhook_publish_time_to)}'
+          f'  → {"TRONG" if within else "NGOÀI"} khung')
+else:
+    print('  Không giới hạn khung giờ')
+
+# ── Tìm SO và HĐĐT nháp ──────────────────────────────────────────────────────
+so = env['sale.order'].sudo().search([('name', '=', SO_NAME)], limit=1)
+if not so:
+    print(f'\nKHÔNG TÌM THẤY SO {SO_NAME}')
+    raise SystemExit
+
+print(f'\n[SO] {so.name}  state={so.state}  amount_total={so.amount_total:,.0f}')
+
+drafts = env['meinvoice.invoice'].sudo().search([
+    ('sale_order_id', '=', so.id),
+    ('state', '=', 'draft'),
+], order='id desc')
+
+if not drafts:
+    print('KHÔNG CÓ HĐĐT nháp trên đơn này!')
+    raise SystemExit
+
+draft = drafts[0]
+print(f'\n[HĐĐT nháp]  id={draft.id}  series={draft.inv_series}  '
+      f'date={draft.inv_date}  total={draft.total_amount:,.0f}')
+print(f'  buyer_legal_name = {draft.buyer_legal_name}')
+print(f'  state            = {draft.state}')
+if len(drafts) > 1:
+    print(f'  ⚠ Có {len(drafts)} nháp — sẽ dùng id={draft.id} (mới nhất)')
+
+# ── Bật dry-run nếu chưa ─────────────────────────────────────────────────────
+orig_skip = config.meinvoice_skip_api
+orig_enabled = config.meinvoice_enabled
+if not orig_skip:
+    config.sudo().write({'meinvoice_skip_api': True})
+    print('\n[*] Đã bật meinvoice_skip_api=True (dry-run)')
+else:
+    print('\n[*] meinvoice_skip_api đã là True (dry-run)')
+
+if not orig_enabled:
+    config.sudo().write({'meinvoice_enabled': True})
+    print('[*] Đã bật meinvoice_enabled=True tạm thời')
+
+# ── Tạo queue record và test _process_one ────────────────────────────────────
+print(f'\n[TEST] Tạo queue record → gọi _process_one()...')
+queue_rec = env['amis.webhook.queue'].sudo().create({
+    'order_ref': so.shopee_order_ref or so.name,
+    'sale_order_id': so.id,
+    'state': 'pending',
+    'trigger_status': 'TEST_DRY_RUN',
+    'push_code': 'TEST',
+})
+print(f'  Queue id={queue_rec.id} created')
+
+try:
+    queue_rec._process_one(config)
+    env.cr.flush()
+    queue_rec.invalidate_recordset()
+    draft.invalidate_recordset()
+
+    print(f'\n[KẾT QUẢ]')
+    print(f'  queue.state     = {queue_rec.state}')
+    print(f'  queue.error_msg = {queue_rec.error_msg or "-"}')
+    print(f'  draft.state     = {draft.state}  (phải là submitted hoặc accepted nếu OK)')
+    print(f'  draft.inv_no    = {draft.inv_no or "-"}')
+    print(f'  draft.inv_code  = {draft.inv_code or "-"}  (trống = CQT chưa cấp mã, bình thường với dry-run)')
+    print(f'  transaction_id  = {draft.transaction_id or "-"}')
+
+    if queue_rec.state == 'done':
+        print('\n  ✓ PASS: queue=done, draft đã được gửi (dry-run, không lên CQT thật)')
+    elif queue_rec.state == 'deferred':
+        print('\n  → DEFERRED: đơn bị gom lại vì ngoài khung giờ (logic đúng nếu đang cấu hình khung giờ)')
+    else:
+        print(f'\n  ✗ FAIL: queue.state={queue_rec.state}')
+
+except Exception as e:
+    print(f'\n  ✗ EXCEPTION: {e}')
+
+# ── Rollback toàn bộ — không commit ──────────────────────────────────────────
+env.cr.rollback()
+print('\n[*] ROLLBACK — không có gì thay đổi trong DB.')
+print('\n' + '=' * 70 + '\nXONG\n' + '=' * 70)
+
 
 print('\n' + '=' * 70)
 print('TEST: Khung giờ phát hành HĐĐT webhook')
