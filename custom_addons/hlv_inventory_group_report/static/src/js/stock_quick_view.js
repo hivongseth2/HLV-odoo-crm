@@ -342,10 +342,16 @@ export class StockQuickView extends Component {
         const lineName = line ? line.name : "";
         const avgCost = (line && key === "avg_cost") ? (line.extra && line.extra.avg_cost || 0) : 0;
         this.state.cellPanel = { productId, key, lineName, avgCost };
-        if (key === "avg_cost") return;
         const cacheKey = productId + "-" + key;
         if (this.state.cellPanelData[cacheKey] !== undefined) return;
         this.state.cellPanelData = Object.assign({}, this.state.cellPanelData, { [cacheKey]: null });
+        if (key === "avg_cost") {
+            const result = await this.orm.call(
+                "hlv.stock.quick", "get_product_cost_layers", [productId]
+            );
+            this.state.cellPanelData = Object.assign({}, this.state.cellPanelData, { [cacheKey]: result });
+            return;
+        }
         const result = await this.orm.call(
             "hlv.stock.quick", "get_product_pending_moves",
             [productId, key, this.state.warehouseIds]

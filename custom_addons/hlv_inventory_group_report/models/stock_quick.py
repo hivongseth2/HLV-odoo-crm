@@ -284,6 +284,37 @@ class HlvStockQuick(models.TransientModel):
         return att.id
 
     @api.model
+    def get_product_cost_layers(self, product_id, limit=60):
+        """Return recent inbound stock valuation layers used to build average cost."""
+        layers = self.env["stock.valuation.layer"].search(
+            [("product_id", "=", product_id), ("quantity", ">", 0)],
+            order="create_date desc",
+            limit=limit,
+        )
+        result = []
+        for lyr in layers:
+            move = lyr.stock_move_id
+            picking = move.picking_id if move else None
+            # Try to find linked PO reference
+            po_ref = ""
+            if picking and picking.purchase_id:
+                po_ref = picking.purchase_id.name
+            elif picking and picking.origin:
+                po_ref = picking.origin
+            elif move and move.origin:
+                po_ref = move.origin
+            result.append({
+                "date": lyr.create_date.strftime("%d/%m/%Y") if lyr.create_date else "",
+                "reference": picking.name if picking else (move.reference if move else lyr.description or ""),
+                "po_ref": po_ref,
+                "qty": lyr.quantity,
+                "unit_cost": lyr.unit_cost,
+                "value": lyr.value,
+                "uom": lyr.uom_id.name if lyr.uom_id else "",
+            })
+        return result
+
+    @api.model
     def get_product_pending_moves(self, product_id, key, warehouse_ids):
         """Return list of pending stock moves for incoming_qty or reserved_qty panel."""
         if key == "incoming_qty":
