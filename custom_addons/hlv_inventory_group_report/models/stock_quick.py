@@ -78,15 +78,8 @@ class HlvStockQuick(models.TransientModel):
             for product in group.product_ids:
                 # Compute avg cost from PO valuation layers (same as drawer)
                 layers_data = self.get_product_cost_layers(product.id)
-                computed_avg = layers_data.get("computed_avg") or 0.0
-                is_fallback = False
-                if not computed_avg:
-                    # Fallback: no PO layers found — use standard_price (Odoo stored field, NOT computed)
-                    computed_avg = product.with_company(self.env.company).standard_price or 0.0
-                    is_fallback = True
-                ed = extra_data.setdefault(product.id, {})
-                ed["avg_cost"] = computed_avg
-                ed["avg_cost_fallback"] = is_fallback
+                computed_avg = layers_data.get("computed_avg") or None
+                extra_data.setdefault(product.id, {})["avg_cost"] = computed_avg
         if "incoming_qty" in extra_cols:
             # Only purchase order inbound moves not yet done
             in_moves = self.env["stock.move"].read_group(
