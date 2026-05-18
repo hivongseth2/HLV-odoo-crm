@@ -1,6 +1,6 @@
 ﻿/** @odoo-module **/
 import { registry } from "@web/core/registry";
-import { Component, useState, onWillStart } from "@odoo/owl";
+import { Component, useState, onWillStart, markup } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
 
 export class StockQuickView extends Component {
@@ -46,6 +46,8 @@ export class StockQuickView extends Component {
             extraCols: [],
             colsOpen: false,
             infoPanel: null,
+            cellPanel: null,
+            cellPanelData: {},
             movesData: {},
             expandedMovesId: false,
             movesDateFrom: _firstDay,
@@ -319,10 +321,30 @@ export class StockQuickView extends Component {
         this.state.whOpen = false;
         this.state.colsOpen = false;
         this.state.infoPanel = null;
+        this.state.cellPanel = null;
     }
 
     toggleInfoPanel(key) {
         this.state.infoPanel = this.state.infoPanel === key ? null : key;
+    }
+
+    async toggleCellPanel(productId, key) {
+        if (key === "avg_cost") return;
+        // Toggle off
+        if (this.state.cellPanel && this.state.cellPanel.productId === productId && this.state.cellPanel.key === key) {
+            this.state.cellPanel = null;
+            return;
+        }
+        this.state.cellPanel = { productId, key };
+        const cacheKey = productId + "-" + key;
+        if (this.state.cellPanelData[cacheKey] !== undefined) return;
+        // Mark as loading
+        this.state.cellPanelData = Object.assign({}, this.state.cellPanelData, { [cacheKey]: null });
+        const result = await this.orm.call(
+            "hlv.stock.quick", "get_product_pending_moves",
+            [productId, key, this.state.warehouseIds]
+        );
+        this.state.cellPanelData = Object.assign({}, this.state.cellPanelData, { [cacheKey]: result });
     }
 
     getColTotal(index) {
@@ -375,21 +397,21 @@ export class StockQuickView extends Component {
                 label: "Gi\u00e1 v\u1ed1n TB",
                 color: "#880e4f",
                 bg: "#fce4ec",
-                info: "<b>Gi\u00e1 v\u1ed1n trung b\u00ecnh</b><br/>= T\u1ed5ng gi\u00e1 tr\u1ecb h\u00e0ng t\u1ed3n \u00f7 S\u1ed1 l\u01b0\u1ee3ng t\u1ed3n kho<br/><br/>Odoo t\u1ef1 \u0111\u1ed9ng c\u1eadp nh\u1eadt m\u1ed7i l\u1ea7n nh\u1eadp h\u00e0ng theo ph\u01b0\u01a1ng ph\u00e1p <b>AVCO</b> (average cost). D\u00f9ng \u0111\u1ec3 x\u00e1c \u0111\u1ecbnh bi\u00ean l\u1ee3i nhu\u1eadn th\u1ef1c t\u1ebf.",
+                info: markup("<b>Gi\u00e1 v\u1ed1n trung b\u00ecnh</b><br/>= T\u1ed5ng gi\u00e1 tr\u1ecb h\u00e0ng t\u1ed3n &divide; S\u1ed1 l\u01b0\u1ee3ng t\u1ed3n kho<br/><br/>Odoo t\u1ef1 \u0111\u1ed9ng c\u1eadp nh\u1eadt m\u1ed7i l\u1ea7n nh\u1eadp h\u00e0ng theo ph\u01b0\u01a1ng ph\u00e1p <b>AVCO</b> (average cost). D\u00f9ng \u0111\u1ec3 x\u00e1c \u0111\u1ecbnh bi\u00ean l\u1ee3i nhu\u1eadn th\u1ef1c t\u1ebf."),
             },
             {
                 key: "incoming_qty",
                 label: "D\u1ef1 ki\u1ebfn nh\u1eadp",
                 color: "#1565c0",
                 bg: "#e3f2fd",
-                info: "<b>H\u00e0ng s\u1eafp v\u1ec1</b> \u2014 T\u1ed5ng s\u1ed1 l\u01b0\u1ee3ng t\u1eeb c\u00e1c phi\u1ebfu nh\u1eadp kho \u0111\u00e3 x\u00e1c nh\u1eadn nh\u01b0ng ch\u01b0a ho\u00e0n th\u00e0nh.<br/><br/>Tr\u1ea1ng th\u00e1i: <b>Waiting / Confirmed / Ready</b><br/>Ngu\u1ed3n: \u0111\u01a1n mua, s\u1ea3n xu\u1ea5t, chuy\u1ec3n kho.<br/><br/>Ch\u01b0a ph\u1ea3n \u00e1nh v\u00e0o t\u1ed3n kho hi\u1ec7n t\u1ea1i.",
+                info: markup("<b>H\u00e0ng s\u1eafp v\u1ec1</b> \u2014 T\u1ed5ng s\u1ed1 l\u01b0\u1ee3ng t\u1eeb c\u00e1c phi\u1ebfu nh\u1eadp kho \u0111\u00e3 x\u00e1c nh\u1eadn nh\u01b0ng ch\u01b0a ho\u00e0n th\u00e0nh.<br/><br/>Tr\u1ea1ng th\u00e1i: <b>Waiting / Confirmed / Ready</b><br/>Ngu\u1ed3n: \u0111\u01a1n mua, s\u1ea3n xu\u1ea5t, chuy\u1ec3n kho.<br/><br/>Ch\u01b0a ph\u1ea3n \u00e1nh v\u00e0o t\u1ed3n kho hi\u1ec7n t\u1ea1i."),
             },
             {
                 key: "reserved_qty",
                 label: "D\u1ef1 ki\u1ebfn giao",
                 color: "#e65100",
                 bg: "#fff3e0",
-                info: "<b>H\u00e0ng \u0111\u00e3 gi\u1eef cho \u0111\u01a1n</b> \u2014 T\u1ed5ng s\u1ed1 l\u01b0\u1ee3ng t\u1eeb c\u00e1c phi\u1ebfu xu\u1ea5t kho \u0111\u00e3 x\u00e1c nh\u1eadn nh\u01b0ng ch\u01b0a ho\u00e0n th\u00e0nh.<br/><br/>Tr\u1ea1ng th\u00e1i: <b>Waiting / Confirmed / Ready</b><br/>Bao g\u1ed3m: \u0111\u01a1n b\u00e1n, xu\u1ea5t kho, chuy\u1ec3n \u0111i.<br/><br/>T\u1ed3n kho th\u1ef1c s\u1ef1 kh\u1ea3 d\u1ee5ng = T\u1ed3n hi\u1ec7n t\u1ea1i - D\u1ef1 ki\u1ebfn giao.",
+                info: markup("<b>H\u00e0ng \u0111\u00e3 gi\u1eef cho \u0111\u01a1n</b> \u2014 T\u1ed5ng s\u1ed1 l\u01b0\u1ee3ng t\u1eeb c\u00e1c phi\u1ebfu xu\u1ea5t kho \u0111\u00e3 x\u00e1c nh\u1eadn nh\u01b0ng ch\u01b0a ho\u00e0n th\u00e0nh.<br/><br/>Tr\u1ea1ng th\u00e1i: <b>Waiting / Confirmed / Ready</b><br/>Bao g\u1ed3m: \u0111\u01a1n b\u00e1n, xu\u1ea5t kho, chuy\u1ec3n \u0111i.<br/><br/>T\u1ed3n kho kh\u1ea3 d\u1ee5ng = T\u1ed3n hi\u1ec7n t\u1ea1i \u2212 D\u1ef1 ki\u1ebfn giao."),
             },
         ];
     }
