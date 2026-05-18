@@ -96,20 +96,37 @@ class HlvStockQuick(models.TransientModel):
                 pid = row["product_id"][0]
                 extra_data.setdefault(pid, {})["incoming_qty"] = row["product_qty"]
         if "reserved_qty" in extra_cols:
-            # Count final delivery step only (dest=customer) — correctly handles 1/2/3-step delivery
-            out_moves = self.env["stock.move"].read_group(
+            # Set 1: final ship step going to customer (1-step or completed pick/pack chain)
+            out1 = self.env["stock.move"].read_group(
                 [
                     ("product_id", "in", product_ids_list),
                     ("state", "in", ["waiting", "confirmed", "assigned"]),
                     ("location_dest_id.usage", "=", "customer"),
                     ("sale_line_id", "!=", False),
                 ],
-                ["product_id", "product_qty:sum"],
-                ["product_id"],
+                ["product_id", "product_qty:sum"], ["product_id"],
             )
-            for row in out_moves:
+            # Set 2: orphan internal pick — sale-linked, no origin and no downstream move yet
+            # (e.g. KBC/PICK going to staging area but ship move not yet created/linked)
+            out2 = self.env["stock.move"].read_group(
+                [
+                    ("product_id", "in", product_ids_list),
+                    ("state", "in", ["waiting", "confirmed", "assigned"]),
+                    ("location_id.usage", "=", "internal"),
+                    ("location_dest_id.usage", "=", "internal"),
+                    ("sale_line_id", "!=", False),
+                    ("move_orig_ids", "=", False),
+                    ("move_dest_ids", "=", False),
+                ],
+                ["product_id", "product_qty:sum"], ["product_id"],
+            )
+            for row in out1:
                 pid = row["product_id"][0]
                 extra_data.setdefault(pid, {})["reserved_qty"] = row["product_qty"]
+            for row in out2:
+                pid = row["product_id"][0]
+                ed = extra_data.setdefault(pid, {})
+                ed["reserved_qty"] = ed.get("reserved_qty", 0) + row["product_qty"]
         lines = []
         total = 0.0
         outgoing_total = 0.0
@@ -366,16 +383,32 @@ class HlvStockQuick(models.TransientModel):
                 ("purchase_line_id", "!=", False),
             ]
         elif key == "reserved_qty":
-            domain = [
+            # Set 1: final ship to customer
+            domain_r1 = [
                 ("product_id", "=", product_id),
                 ("state", "in", ["waiting", "confirmed", "assigned"]),
                 ("location_dest_id.usage", "=", "customer"),
                 ("sale_line_id", "!=", False),
             ]
+            # Set 2: orphan internal pick (no origin, no destination move)
+            domain_r2 = [
+                ("product_id", "=", product_id),
+                ("state", "in", ["waiting", "confirmed", "assigned"]),
+                ("location_id.usage", "=", "internal"),
+                ("location_dest_id.usage", "=", "internal"),
+                ("sale_line_id", "!=", False),
+                ("move_orig_ids", "=", False),
+                ("move_dest_ids", "=", False),
+            ]
+            moves = (
+                self.env["stock.move"].search(domain_r1, order="date asc", limit=100)
+                | self.env["stock.move"].search(domain_r2, order="date asc", limit=100)
+            ).sorted("date")
         else:
             return []
         state_labels = {"waiting": "Đang chờ", "confirmed": "Đã xác nhận", "assigned": "Sẵn sàng"}
-        moves = self.env["stock.move"].search(domain, order="date asc", limit=100)
+        if key != "reserved_qty":
+            moves = self.env["stock.move"].search(domain, order="date asc", limit=100)
         result = []
         for m in moves:
             result.append({
