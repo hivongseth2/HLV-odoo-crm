@@ -305,6 +305,35 @@ class AmisCallbackConfig(models.Model):
              ' Thường chọn: Hoàn thành, Đã nhận hàng.',
     )
 
+    # ── Khung giờ phát hành HĐĐT ─────────────────────────────────────────────
+    webhook_publish_time_restrict = fields.Boolean(
+        string='Giới hạn khung giờ phát hành HĐĐT',
+        default=False,
+        help='Bật để chỉ phát hành HĐĐT tự động trong khung giờ quy định.\n'
+             'Các đơn nhận ngoài khung giờ sẽ được gom lại theo cấu hình bên dưới.',
+    )
+    webhook_publish_time_from = fields.Float(
+        string='Từ giờ',
+        default=7.0,
+        help='Giờ bắt đầu cho phép phát hành HĐĐT tự động. Ví dụ: 7.0 = 07:00, 7.5 = 07:30.',
+    )
+    webhook_publish_time_to = fields.Float(
+        string='Đến giờ',
+        default=16.5,
+        help='Giờ kết thúc cho phép phát hành HĐĐT tự động. Ví dụ: 16.5 = 16:30, 17.0 = 17:00.',
+    )
+    webhook_publish_deferred_action = fields.Selection(
+        [
+            ('notify', 'Gom lại — người dùng gửi thủ công'),
+            ('auto', 'Tự động gửi khi vào khung giờ hôm sau'),
+        ],
+        string='Xử lý đơn ngoài khung giờ',
+        default='auto',
+        help='• Gom lại: đơn ngoài giờ được đánh dấu "Ngoài khung giờ", không tự xử lý.\n'
+             '  Người dùng vào hàng đợi bấm "Thử lại" khi cần.\n'
+             '• Tự động gửi: khi cron chạy trong khung giờ, tự reset và gửi những đơn đang chờ.',
+    )
+
     def get_webhook_trigger_statuses(self):
         """Trả về set tên trạng thái kích hoạt."""
         return set(self.webhook_trigger_status_ids.mapped('name'))

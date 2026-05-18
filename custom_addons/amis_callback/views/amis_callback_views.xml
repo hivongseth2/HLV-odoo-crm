@@ -229,6 +229,19 @@
                                    invisible="not webhook_auto_publish_enabled"
                                    options="{'no_create': True}"/>
                         </group>
+                        <group invisible="not webhook_auto_publish_enabled">
+                            <field name="webhook_publish_time_restrict"/>
+                            <field name="webhook_publish_time_from"
+                                   widget="float_time"
+                                   invisible="not webhook_publish_time_restrict"
+                                   string="Từ giờ (VD: 07:00)"/>
+                            <field name="webhook_publish_time_to"
+                                   widget="float_time"
+                                   invisible="not webhook_publish_time_restrict"
+                                   string="Đến giờ (VD: 16:30)"/>
+                            <field name="webhook_publish_deferred_action"
+                                   invisible="not webhook_publish_time_restrict"/>
+                        </group>
                     </group>
                     <group>
                         <field name="note" nolabel="1"/>

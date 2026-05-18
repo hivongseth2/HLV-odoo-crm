@@ -10,6 +10,7 @@
                   decoration-success="state == 'done'"
                   decoration-danger="state == 'error'"
                   decoration-warning="state == 'processing'"
+                  decoration-info="state == 'deferred'"
                   decoration-muted="state in ('skipped',)">
                 <field name="create_date" string="Thời điểm nhận" optional="show"/>
                 <field name="order_ref" string="Mã đơn Shopee"/>
@@ -19,6 +20,7 @@
                        decoration-success="state == 'done'"
                        decoration-danger="state == 'error'"
                        decoration-warning="state in ('pending', 'processing')"
+                       decoration-info="state == 'deferred'"
                        decoration-muted="state == 'skipped'"/>
                 <field name="attempts" string="Số lần thử"/>
                 <field name="meinvoice_invoice_id" optional="show"/>
@@ -26,7 +28,7 @@
                 <field name="error_msg" optional="hide"/>
                 <button name="action_retry" string="Thử lại" type="object"
                         icon="fa-refresh"
-                        invisible="state not in ('error', 'skipped')"/>
+                        invisible="state not in ('error', 'skipped', 'deferred')"/>
                 <button name="action_skip" string="Bỏ qua" type="object"
                         icon="fa-ban"
                         invisible="state not in ('pending', 'error')"/>
@@ -42,10 +44,10 @@
             <form string="Chi tiết Webhook Queue">
                 <header>
                     <field name="state" widget="statusbar"
-                           statusbar_visible="pending,processing,done,error,skipped"/>
+                           statusbar_visible="pending,deferred,processing,done,error,skipped"/>
                     <button name="action_retry" string="Thử lại" type="object"
                             class="btn-primary"
-                            invisible="state not in ('error', 'skipped')"/>
+                            invisible="state not in ('error', 'skipped', 'deferred')"/>
                     <button name="action_skip" string="Bỏ qua" type="object"
                             invisible="state not in ('pending', 'error')"/>
                 </header>
@@ -85,6 +87,7 @@
                 <field name="order_ref" string="Mã đơn Shopee"/>
                 <field name="sale_order_id"/>
                 <filter string="Chờ xử lý" name="pending" domain="[('state','=','pending')]"/>
+                <filter string="Ngoài khung giờ" name="deferred" domain="[('state','=','deferred')]"/>
                 <filter string="Lỗi" name="error" domain="[('state','=','error')]"/>
                 <filter string="Hoàn thành" name="done" domain="[('state','=','done')]"/>
                 <filter string="Bỏ qua" name="skipped" domain="[('state','=','skipped')]"/>

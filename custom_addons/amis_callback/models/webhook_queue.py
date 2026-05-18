@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
+import pytz
+from datetime import datetime
 
 from odoo import api, fields, models
 
@@ -42,6 +44,7 @@ class AmisWebhookQueue(models.Model):
         [
             ('pending', 'Chờ xử lý'),
             ('processing', 'Đang xử lý'),
+            ('deferred', 'Ngoài khung giờ'),
             ('done', 'Hoàn thành'),
             ('error', 'Lỗi'),
             ('skipped', 'Bỏ qua'),
@@ -57,15 +60,72 @@ class AmisWebhookQueue(models.Model):
 
     # ── Cron entry point ─────────────────────────────────────────────────────
 
+    # ── Helpers ──────────────────────────────────────────────────────────────
+
+    @api.model
+    def _format_float_time(self, value):
+        """Chuyển 16.5 → '16:30' để hiển thị trong thông báo."""
+        hours = int(value)
+        minutes = int(round((value - hours) * 60))
+        return '%02d:%02d' % (hours, minutes)
+
+    @api.model
+    def _is_within_publish_window(self, config):
+        """Kiểm tra giờ hiện tại (timezone công ty) có trong khung giờ cấu hình không."""
+        if not config.webhook_publish_time_restrict:
+            return True
+        tz_name = (self.env.company.partner_id.tz
+                   or self.env.user.tz
+                   or 'Asia/Ho_Chi_Minh')
+        tz = pytz.timezone(tz_name)
+        now_local = datetime.now(tz)
+        current_hour = now_local.hour + now_local.minute / 60.0
+        return config.webhook_publish_time_from <= current_hour < config.webhook_publish_time_to
+
+    # ── Cron entry point ─────────────────────────────────────────────────────
+
     @api.model
     def _process_pending(self):
         """
         Xử lý tối đa 20 bản ghi pending/error (còn dưới MAX_ATTEMPTS lần thử).
+        Nếu bật giới hạn khung giờ và hiện đang ngoài khung:
+          - Chuyển tất cả pending → deferred.
+        Nếu đang trong khung giờ:
+          - Nếu action=auto: reset deferred → pending rồi xử lý.
         Gọi bởi ir.cron.
         """
         config = self.env['amis.callback.config'].sudo().search([], limit=1)
         if not config or not config.webhook_auto_publish_enabled:
             return
+
+        within_window = self._is_within_publish_window(config)
+
+        if config.webhook_publish_time_restrict and not within_window:
+            # Ngoài khung giờ: chuyển tất cả pending → deferred
+            pending = self.sudo().search([('state', '=', 'pending')])
+            if pending:
+                time_from = self._format_float_time(config.webhook_publish_time_from)
+                time_to = self._format_float_time(config.webhook_publish_time_to)
+                msg = 'Ngoài khung giờ phát hành (%s – %s). ' % (time_from, time_to)
+                if config.webhook_publish_deferred_action == 'auto':
+                    msg += 'Sẽ tự động xử lý khi vào khung giờ.'
+                else:
+                    msg += 'Vui lòng bấm Thử lại thủ công khi sẵn sàng.'
+                pending.sudo().write({'state': 'deferred', 'error_msg': msg})
+                _logger.info(
+                    'WebhookQueue: Ngoài khung giờ — %d đơn chuyển sang deferred.', len(pending)
+                )
+            return
+
+        # Đang trong khung giờ (hoặc không giới hạn)
+        if config.webhook_publish_time_restrict and config.webhook_publish_deferred_action == 'auto':
+            # Reset các đơn deferred về pending để xử lý
+            deferred = self.sudo().search([('state', '=', 'deferred')])
+            if deferred:
+                deferred.sudo().write({'state': 'pending', 'error_msg': False})
+                _logger.info(
+                    'WebhookQueue: Vào khung giờ — reset %d đơn deferred về pending.', len(deferred)
+                )
 
         pending = self.sudo().search([
             ('state', 'in', ('pending', 'error')),
@@ -170,7 +230,7 @@ class AmisWebhookQueue(models.Model):
     # ── Manual actions ────────────────────────────────────────────────────────
 
     def action_retry(self):
-        """Thử lại thủ công."""
+        """Thử lại thủ công (kể cả đơn deferred)."""
         for rec in self:
             rec.sudo().write({'state': 'pending', 'attempts': 0, 'error_msg': False})
 

@@ -169,7 +169,6 @@ class StockPickingAmisSync(models.Model):
 
         purchase_order = self._get_related_purchase_order()
         if not purchase_order:
-            _logger.info('Skip incoming sync for %s: không tìm được đơn mua hàng.', self.name)
             return
 
         config = self.env['amis.callback.config'].sudo().ensure_singleton()
@@ -182,21 +181,9 @@ class StockPickingAmisSync(models.Model):
         voucher_payload, dictionary_items = self._prepare_misa_inward_payload(config, purchase_order)
         org_refid = voucher_payload.get('org_refid')
 
-        import json as _json
-        _logger.info(
-            'INInward payload for %s (PO %s):\n%s',
-            self.name, purchase_order.name,
-            _json.dumps(voucher_payload, ensure_ascii=False, default=str, indent=2),
-        )
-
-        result = config.push_inward_voucher(voucher_payload, dictionary_items=[])
-        _logger.info(
-            'INInward MISA response for %s: Success=%s ErrorCode=%s ErrorMessage=%s',
-            self.name,
-            result.get('Success') if isinstance(result, dict) else result,
-            (result or {}).get('ErrorCode', ''),
-            (result or {}).get('ErrorMessage', ''),
-        )
+        # Nghiep vu hien tai uu tien map theo ma (code), tranh dung cac GUID tu sinh de khong lech du lieu MISA.
+        # Neu danh muc da co san ben MISA, khong can goi save_dictionary.
+        config.push_inward_voucher(voucher_payload, dictionary_items=[])
 
         self.sudo().write({
             'misa_inward_synced': True,
@@ -638,23 +625,27 @@ class StockPickingAmisSync(models.Model):
         self.ensure_one()
         partner = self.partner_id or purchase_order.partner_id
 
-        # Tự sinh refid ổn định từ picking.id (idempotent, không cần nhập tay)
         refid = (self.misa_inward_org_refid or '').strip()
         if not refid:
-            refid = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'inward|%d' % self.id))
-            self.sudo().write({'misa_inward_org_refid': refid})
+            raise UserError('Thiếu MISA org_refid phiếu nhập. Vui lòng điền trường "MISA org_refid phiếu nhập" trên phiếu nhập trước khi đồng bộ.')
 
         branch_id = (config.misa_branch_id or '').strip()
         stock_id = (config.misa_stock_id or '').strip()
 
-        if not branch_id:
-            raise UserError('Thiếu MISA Branch ID trong cấu hình.')
-        if not stock_id:
-            raise UserError('Thiếu MISA Stock ID trong cấu hình.')
+        # Auto-lookup account_object_id nếu chưa có trên partner
+        account_object_id = (partner.misa_account_object_id or '').strip() if partner else ''
+        if not account_object_id and partner:
+            account_object_id = self._misa_lookup_account_object(config, partner)
 
-        # Dùng resolve chung (cùng logic với SAVoucher/SAInvoice)
-        account_object_id, account_object_code, account_object_name = \
-            config.resolve_misa_account_object(partner)
+        missing_header = []
+        if not branch_id:
+            missing_header.append('MISA Branch ID (cấu hình)')
+        if not stock_id:
+            missing_header.append('MISA Stock ID (cấu hình)')
+        if not account_object_id:
+            missing_header.append('MISA Account Object ID (nhà cung cấp: %s)' % (partner.name if partner else '?'))
+        if missing_header:
+            raise UserError('Thiếu mapping ID MISA ở phần đầu chứng từ: %s' % ', '.join(missing_header))
 
         # Kho MISA co dinh: HLV
         misa_warehouse_code = 'HLV'
@@ -736,8 +727,8 @@ class StockPickingAmisSync(models.Model):
                 'debit_account': debit_account,
                 'credit_account': credit_account,
                 'exchange_rate_operator': '*',
-                'account_object_name': account_object_name,
-                'account_object_code': account_object_code,
+                'account_object_name': partner.display_name if partner else '',
+                'account_object_code': partner.ref or (partner.name if partner else ''),
                 'inventory_item_code': product.default_code or str(product.id),
                 'inventory_item_type': 0,
                 'unit_name': move.product_uom.name,
@@ -755,16 +746,12 @@ class StockPickingAmisSync(models.Model):
                 'state': 0,
             })
 
-        total_amount = round(total_amount, 2)
-        po_date = self._to_misa_date(purchase_order.date_order or self.date_done)
-
         voucher = {
             'voucher_type': 7,
             'is_get_new_id': True,
             'org_refid': refid,
             'is_allow_group': False,
-            # org_refno = tên đơn mua để MISA tự link về Purchase Order
-            'org_refno': purchase_order.name,
+            'org_refno': self.name,
             'org_reftype': 2014,
             'org_reftype_name': 'Phieu nhap kho',
             'refid': refid,
@@ -778,8 +765,6 @@ class StockPickingAmisSync(models.Model):
             'reforder': int(datetime.utcnow().timestamp() * 1000),
             'refdate': self._to_misa_date(self.date_done),
             'posted_date': self._to_misa_date(self.date_done),
-            # Ngày đặt hàng của PO (ngày tham chiếu đơn mua)
-            'in_reforder': po_date + 'T00:00:00.000+07:00',
             'is_posted_finance': False,
             'is_posted_management': False,
             'is_posted_inventory_book_finance': False,
@@ -792,12 +777,11 @@ class StockPickingAmisSync(models.Model):
             'exchange_rate': 1.0,
             'refno_finance': '',
             'refno_management': '',
-            'account_object_id': account_object_id,
-            'account_object_code': account_object_code,
-            'account_object_name': account_object_name,
+            'account_object_name': partner.display_name if partner else '',
             'account_object_address': partner.contact_address_complete if partner else '',
             'journal_memo': 'Nhap kho tu don mua %s (Odoo: %s)' % (purchase_order.name, self.name),
             'currency_id': (purchase_order.currency_id.name or 'VND'),
+            'account_object_code': partner.ref or (partner.name if partner else ''),
             'is_executed': False,
             'is_adjust_value': False,
             'state': 0,
