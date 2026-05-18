@@ -96,14 +96,14 @@ class HlvStockQuick(models.TransientModel):
                 pid = row["product_id"][0]
                 extra_data.setdefault(pid, {})["incoming_qty"] = row["product_qty"]
         if "reserved_qty" in extra_cols:
-            # Only sale order outbound moves not yet done
+            # Only sale order moves — first in chain (no origin) to avoid double-counting multi-step delivery
             out_moves = self.env["stock.move"].read_group(
                 [
                     ("product_id", "in", product_ids_list),
                     ("state", "in", ["waiting", "confirmed", "assigned"]),
                     ("location_id.usage", "=", "internal"),
-                    ("location_dest_id.usage", "!=", "internal"),
                     ("sale_line_id", "!=", False),
+                    ("move_orig_ids", "=", False),
                 ],
                 ["product_id", "product_qty:sum"],
                 ["product_id"],
@@ -362,8 +362,8 @@ class HlvStockQuick(models.TransientModel):
                 ("product_id", "=", product_id),
                 ("state", "in", ["waiting", "confirmed", "assigned"]),
                 ("location_id.usage", "=", "internal"),
-                ("location_dest_id.usage", "!=", "internal"),
                 ("sale_line_id", "!=", False),
+                ("move_orig_ids", "=", False),
             ]
         else:
             return []
