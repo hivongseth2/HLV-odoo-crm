@@ -280,7 +280,7 @@
                                                         </td>
                                                         <t t-foreach="colOptions" t-as="opt" t-key="opt.key">
                                                             <t t-if="state.extraCols.includes(opt.key)">
-                                                                <td style="padding:8px 12px; text-align:right; vertical-align:middle; border-left:1px solid #e0e0e0; background:#f5f0ff; color:#4a148c; font-size:13px; white-space:nowrap;">
+                                                                <td t-att-style="'padding:8px 12px; text-align:right; vertical-align:middle; border-left:1px solid #e0e0e0; font-size:13px; white-space:nowrap; ' + (opt.key === 'incoming_qty' ? 'background:#e3f2fd; color:#1565c0; font-weight:700;' : opt.key === 'reserved_qty' ? 'background:#fff3e0; color:#e65100; font-weight:700;' : 'background:#f5f0ff; color:#4a148c;')">
                                                                     <t t-esc="formatExtraVal(opt.key, line.extra[opt.key])"/>
                                                                 </td>
                                                             </t>
@@ -292,7 +292,7 @@
                                                         </td>
                                                         <t t-foreach="colOptions" t-as="opt" t-key="opt.key">
                                                             <t t-if="state.extraCols.includes(opt.key)">
-                                                                <td style="padding:8px 12px; text-align:right; vertical-align:middle; border-left:1px solid #e0e0e0; background:#f5f0ff; color:#4a148c; font-size:13px; white-space:nowrap;">
+                                                                <td t-att-style="'padding:8px 12px; text-align:right; vertical-align:middle; border-left:1px solid #e0e0e0; font-size:13px; white-space:nowrap; ' + (opt.key === 'incoming_qty' ? 'background:#e3f2fd; color:#1565c0; font-weight:700;' : opt.key === 'reserved_qty' ? 'background:#fff3e0; color:#e65100; font-weight:700;' : 'background:#f5f0ff; color:#4a148c;')">
                                                                     <t t-esc="formatExtraVal(opt.key, line.extra[opt.key])"/>
                                                                 </td>
                                                             </t>

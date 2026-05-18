@@ -74,6 +74,41 @@ class HlvStockQuick(models.TransientModel):
             for pid in product_ids_list:
                 count = len(sale_order_sets.get(pid, set()))
                 extra_data.setdefault(pid, {})["sales_cycle"] = round(90.0 / count, 1) if count > 0 else None
+        if "avg_cost" in extra_cols:
+            for product in group.product_ids:
+                # standard_price is AVCO / manual cost on product.product (company-dependent)
+                cost = product.with_company(self.env.company).standard_price
+                extra_data.setdefault(product.id, {})["avg_cost"] = cost or 0.0
+        if "incoming_qty" in extra_cols:
+            # confirmed/assigned purchase moves not yet done
+            in_moves = self.env["stock.move"].read_group(
+                [
+                    ("product_id", "in", product_ids_list),
+                    ("state", "in", ["waiting", "confirmed", "assigned"]),
+                    ("location_dest_id.usage", "=", "internal"),
+                    ("location_id.usage", "!=", "internal"),
+                ],
+                ["product_id", "product_qty:sum"],
+                ["product_id"],
+            )
+            for row in in_moves:
+                pid = row["product_id"][0]
+                extra_data.setdefault(pid, {})["incoming_qty"] = row["product_qty"]
+        if "reserved_qty" in extra_cols:
+            # confirmed/assigned sale moves going out, not yet done
+            out_moves = self.env["stock.move"].read_group(
+                [
+                    ("product_id", "in", product_ids_list),
+                    ("state", "in", ["waiting", "confirmed", "assigned"]),
+                    ("location_id.usage", "=", "internal"),
+                    ("location_dest_id.usage", "!=", "internal"),
+                ],
+                ["product_id", "product_qty:sum"],
+                ["product_id"],
+            )
+            for row in out_moves:
+                pid = row["product_id"][0]
+                extra_data.setdefault(pid, {})["reserved_qty"] = row["product_qty"]
         lines = []
         total = 0.0
         outgoing_total = 0.0
@@ -186,6 +221,9 @@ class HlvStockQuick(models.TransientModel):
             "price_commercial": "Gi\u00e1 Th\u01b0\u01a1ng M\u1ea1i",
             "purchase_price": "Gi\u00e1 mua",
             "sales_cycle": "Chu k\u1ef3 b\u00e1n (ng\u00e0y/\u0111\u01a1n)",
+            "avg_cost": "Gi\u00e1 v\u1ed1n TB",
+            "incoming_qty": "D\u1ef1 ki\u1ebfn nh\u1eadp",
+            "reserved_qty": "D\u1ef1 ki\u1ebfn giao",
         }
         for j, ec in enumerate(extra_cols):
             ws.write(2, extra_col_start + j, _extra_labels.get(ec, ec), fh)
@@ -213,6 +251,10 @@ class HlvStockQuick(models.TransientModel):
                     ws.write(row, extra_col_start + j, "-", ft)
                 elif ec == "sales_cycle":
                     ws.write(row, extra_col_start + j, val, f_cycle)
+                elif ec in ("incoming_qty", "reserved_qty"):
+                    fq = wb.add_format({"border": 1, "num_format": "#,##0.##", "align": "right",
+                                        "font_color": "#1565c0" if ec == "incoming_qty" else "#e65100", "bold": True})
+                    ws.write(row, extra_col_start + j, val, fq if val > 0 else f0)
                 else:
                     ws.write(row, extra_col_start + j, val, f_money)
             row += 1
