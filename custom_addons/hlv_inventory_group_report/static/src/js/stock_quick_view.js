@@ -328,17 +328,23 @@ export class StockQuickView extends Component {
         this.state.infoPanel = this.state.infoPanel === key ? null : key;
     }
 
+    closeDrawer() {
+        this.state.cellPanel = null;
+    }
+
     async toggleCellPanel(productId, key) {
-        if (key === "avg_cost") return;
-        // Toggle off
+        // Toggle off if same cell
         if (this.state.cellPanel && this.state.cellPanel.productId === productId && this.state.cellPanel.key === key) {
             this.state.cellPanel = null;
             return;
         }
-        this.state.cellPanel = { productId, key };
+        const line = this.state.lines.find(l => l.id === productId);
+        const lineName = line ? line.name : "";
+        const avgCost = (line && key === "avg_cost") ? (line.extra && line.extra.avg_cost || 0) : 0;
+        this.state.cellPanel = { productId, key, lineName, avgCost };
+        if (key === "avg_cost") return;
         const cacheKey = productId + "-" + key;
         if (this.state.cellPanelData[cacheKey] !== undefined) return;
-        // Mark as loading
         this.state.cellPanelData = Object.assign({}, this.state.cellPanelData, { [cacheKey]: null });
         const result = await this.orm.call(
             "hlv.stock.quick", "get_product_pending_moves",

@@ -381,65 +381,6 @@
                                                         </td>
                                                     </tr>
                                                 </t>
-                                                <!-- Cell panel: pending pickings (du kien nhap/giao) -->
-                                                <t t-if="state.cellPanel and state.cellPanel.productId === line.id">
-                                                    <tr t-att-style="'background:' + (state.cellPanel.key === 'incoming_qty' ? '#dbeafe' : '#fff3e0') + ';'">
-                                                        <td t-att-colspan="tableColspan"
-                                                            t-att-style="'padding:12px 20px; border-bottom:2px solid ' + (state.cellPanel.key === 'incoming_qty' ? '#1565c0' : '#e65100') + ';'">
-                                                            <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
-                                                                <i t-att-class="'fa ' + (state.cellPanel.key === 'incoming_qty' ? 'fa-truck' : 'fa-paper-plane')"
-                                                                   t-att-style="'color:' + (state.cellPanel.key === 'incoming_qty' ? '#1565c0' : '#e65100') + '; font-size:14px;'"/>
-                                                                <span t-att-style="'font-size:12px; font-weight:700; ' + (state.cellPanel.key === 'incoming_qty' ? 'color:#1565c0;' : 'color:#e65100;')">
-                                                                    <t t-if="state.cellPanel.key === 'incoming_qty'">Phếu nhập đang chờ: </t>
-                                                                    <t t-else="">Phếu xuất đang chờ: </t>
-                                                                    <t t-esc="line.name"/>
-                                                                </span>
-                                                                <span t-on-click.stop="closeDropdown"
-                                                                      style="margin-left:auto; cursor:pointer; color:#adb5bd; font-size:16px; line-height:1;">&#215;</span>
-                                                            </div>
-                                                            <t t-set="_ck" t-value="line.id + '-' + state.cellPanel.key"/>
-                                                            <t t-if="state.cellPanelData[_ck] === null or state.cellPanelData[_ck] === undefined">
-                                                                <div style="color:#6c757d; font-size:12px;"><i class="fa fa-spinner fa-spin"/> Đang tải...</div>
-                                                            </t>
-                                                            <t t-elif="state.cellPanelData[_ck].length === 0">
-                                                                <div style="color:#adb5bd; font-size:12px; font-style:italic;">Không có phiếu đang chờ.</div>
-                                                            </t>
-                                                            <t t-else="">
-                                                                <table style="font-size:12px; border-collapse:collapse; min-width:55%;">
-                                                                    <thead>
-                                                                        <tr t-att-style="'color:#fff; ' + (state.cellPanel.key === 'incoming_qty' ? 'background:#1565c0;' : 'background:#e65100;')">
-                                                                            <th style="padding:5px 10px; text-align:left;">Số phiếu</th>
-                                                                            <th style="padding:5px 10px; text-align:left;">Nguồn</th>
-                                                                            <th style="padding:5px 10px; text-align:left;">Đối tác</th>
-                                                                            <th style="padding:5px 10px; text-align:left;">Ngày</th>
-                                                                            <th style="padding:5px 10px; text-align:right;">Số lượng</th>
-                                                                            <th style="padding:5px 10px; text-align:center;">Trạng thái</th>
-                                                                        </tr>
-                                                                    </thead>
-                                                                    <tbody>
-                                                                        <t t-foreach="state.cellPanelData[_ck]" t-as="pm" t-key="pm_index">
-                                                                            <tr t-att-style="'border-bottom:1px solid ' + (state.cellPanel.key === 'incoming_qty' ? '#bfdbfe' : '#fed7aa') + '; ' + (pm_index % 2 === 1 ? (state.cellPanel.key === 'incoming_qty' ? 'background:#eff6ff;' : 'background:#fff7ed;') : '')">
-                                                                                <td style="padding:4px 10px; font-family:monospace; font-weight:700;"><t t-esc="pm.picking_name"/></td>
-                                                                                <td style="padding:4px 10px; color:#546e7a; font-size:11px;"><t t-esc="pm.origin"/></td>
-                                                                                <td style="padding:4px 10px;"><t t-esc="pm.partner"/></td>
-                                                                                <td style="padding:4px 10px; color:#6c757d;"><t t-esc="pm.date"/></td>
-                                                                                <td t-att-style="'padding:4px 10px; text-align:right; font-weight:700; ' + (state.cellPanel.key === 'incoming_qty' ? 'color:#1565c0;' : 'color:#e65100;')">
-                                                                                    <t t-esc="formatQty(pm.qty)"/>
-                                                                                    <span style="font-weight:400; color:#888; margin-left:3px;"><t t-esc="pm.uom"/></span>
-                                                                                </td>
-                                                                                <td style="padding:4px 10px; text-align:center;">
-                                                                                    <span t-att-style="'border-radius:10px; padding:2px 8px; font-size:10px; font-weight:700; ' + (pm.state === 'S\u1eb5n s\u00e0ng' ? 'background:#dcfce7; color:#166534;' : 'background:#fef9c3; color:#854d0e;')">
-                                                                                        <t t-esc="pm.state"/>
-                                                                                    </span>
-                                                                                </td>
-                                                                            </tr>
-                                                                        </t>
-                                                                    </tbody>
-                                                                </table>
-                                                            </t>
-                                                        </td>
-                                                    </tr>
-                                                </t>
                                                 <!-- Lich su nhap/xuat (expand) -->
                                                 <t t-if="state.expandedMovesId === line.id">
                                                     <tr style="background:#f1f8e9;">
@@ -818,5 +759,110 @@
             </div>
 
         </div>
+
+        <!-- ===== RIGHT DRAWER: fixed col detail ===== -->
+        <t t-if="state.cellPanel">
+            <!-- Backdrop -->
+            <div t-on-click="closeDrawer"
+                 style="position:fixed; inset:0; background:rgba(0,0,0,0.22); z-index:9998;"/>
+            <!-- Drawer panel -->
+            <div style="position:fixed; top:0; right:0; bottom:0; width:480px; max-width:95vw; background:#fff; z-index:9999; display:flex; flex-direction:column; box-shadow:-6px 0 32px rgba(0,0,0,0.18);">
+                <!-- Header -->
+                <div t-att-style="'padding:16px 20px; color:#fff; display:flex; align-items:center; gap:12px; flex-shrink:0; ' + (state.cellPanel.key === 'avg_cost' ? 'background:#880e4f;' : state.cellPanel.key === 'incoming_qty' ? 'background:#1565c0;' : 'background:#e65100;')">
+                    <i t-att-class="'fa fa-fw ' + (state.cellPanel.key === 'avg_cost' ? 'fa-balance-scale' : state.cellPanel.key === 'incoming_qty' ? 'fa-truck' : 'fa-paper-plane')"
+                       style="font-size:18px; opacity:0.9; flex-shrink:0;"/>
+                    <div style="flex:1; min-width:0;">
+                        <div style="font-size:11px; opacity:0.75; margin-bottom:2px;">
+                            <t t-if="state.cellPanel.key === 'avg_cost'">Giá vốn trung bình</t>
+                            <t t-elif="state.cellPanel.key === 'incoming_qty'">Dự kiến nhập — phiếu đang chờ</t>
+                            <t t-else="">Dự kiến giao — phiếu đang chờ</t>
+                        </div>
+                        <div style="font-size:14px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"
+                             t-esc="state.cellPanel.lineName"/>
+                    </div>
+                    <button t-on-click="closeDrawer"
+                            style="background:rgba(255,255,255,0.18); border:none; color:#fff; border-radius:6px; width:30px; height:30px; cursor:pointer; font-size:16px; display:flex; align-items:center; justify-content:center; flex-shrink:0; line-height:1;">
+                        ✕
+                    </button>
+                </div>
+                <!-- Body -->
+                <div style="flex:1; overflow-y:auto; padding:20px;">
+                    <!-- avg_cost: show cost prominently -->
+                    <t t-if="state.cellPanel.key === 'avg_cost'">
+                        <div style="text-align:center; padding:28px 16px 20px;">
+                            <div style="font-size:11px; color:#adb5bd; letter-spacing:.5px; text-transform:uppercase; margin-bottom:8px;">Giá vốn hiện tại</div>
+                            <div style="font-size:36px; font-weight:800; color:#880e4f; line-height:1.1;">
+                                <t t-esc="formatPrice(state.cellPanel.avgCost)"/>
+                            </div>
+                        </div>
+                        <div style="background:#fce4ec; border-left:4px solid #880e4f; border-radius:6px; padding:12px 16px; font-size:12px; color:#880e4f; line-height:1.8;">
+                            <b>Giá vốn trung bình</b> là chi phí bình quân gia quyền để sở hữu 1 đơn vị sản phẩm, được tính từ tất cả các lần nhập kho.<br/>
+                            Odoo cập nhật tự động sau mỗi lần nhập kho xác nhận.
+                        </div>
+                    </t>
+                    <!-- incoming/reserved: show moves list -->
+                    <t t-else="">
+                        <t t-set="_ck" t-value="state.cellPanel.productId + '-' + state.cellPanel.key"/>
+                        <t t-if="state.cellPanelData[_ck] === null or state.cellPanelData[_ck] === undefined">
+                            <div style="text-align:center; padding:50px 20px; color:#6c757d;">
+                                <i class="fa fa-spinner fa-spin" style="font-size:28px;"/>
+                                <div style="margin-top:12px; font-size:13px;">Đang tải...</div>
+                            </div>
+                        </t>
+                        <t t-elif="state.cellPanelData[_ck].length === 0">
+                            <div style="text-align:center; padding:50px 20px; color:#adb5bd;">
+                                <i class="fa fa-inbox" style="font-size:36px; display:block; margin-bottom:12px;"/>
+                                <div style="font-size:13px; font-style:italic;">Không có phiếu đang chờ.</div>
+                            </div>
+                        </t>
+                        <t t-else="">
+                            <div t-att-style="'font-size:11px; font-weight:700; margin-bottom:10px; ' + (state.cellPanel.key === 'incoming_qty' ? 'color:#1565c0;' : 'color:#e65100;')">
+                                <t t-esc="state.cellPanelData[_ck].length"/> phiếu đang chờ xử lý
+                            </div>
+                            <table style="width:100%; font-size:12px; border-collapse:collapse;">
+                                <thead>
+                                    <tr t-att-style="'color:#fff; ' + (state.cellPanel.key === 'incoming_qty' ? 'background:#1565c0;' : 'background:#e65100;')">
+                                        <th style="padding:6px 10px; text-align:left; border-radius:4px 0 0 0;">Số phiếu</th>
+                                        <th style="padding:6px 8px; text-align:left;">Nguồn</th>
+                                        <th style="padding:6px 8px; text-align:left;">Đối tác</th>
+                                        <th style="padding:6px 8px; text-align:left; white-space:nowrap;">Ngày</th>
+                                        <th style="padding:6px 8px; text-align:right;">SL</th>
+                                        <th style="padding:6px 8px; text-align:center; border-radius:0 4px 0 0;">TT</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <t t-foreach="state.cellPanelData[_ck]" t-as="pm" t-key="pm_index">
+                                        <tr t-att-style="'border-bottom:1px solid ' + (state.cellPanel.key === 'incoming_qty' ? '#bfdbfe' : '#fed7aa') + '; ' + (pm_index % 2 === 1 ? (state.cellPanel.key === 'incoming_qty' ? 'background:#eff6ff;' : 'background:#fff7ed;') : '')">
+                                            <td style="padding:6px 10px; font-family:monospace; font-size:11px; font-weight:700;">
+                                                <t t-esc="pm.picking_name"/>
+                                            </td>
+                                            <td style="padding:6px 8px; color:#546e7a; font-size:11px; max-width:90px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                                                <t t-esc="pm.origin"/>
+                                            </td>
+                                            <td style="padding:6px 8px; font-size:11px; max-width:100px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                                                <t t-esc="pm.partner"/>
+                                            </td>
+                                            <td style="padding:6px 8px; color:#6c757d; white-space:nowrap; font-size:11px;">
+                                                <t t-esc="pm.date"/>
+                                            </td>
+                                            <td t-att-style="'padding:6px 8px; text-align:right; font-weight:700; white-space:nowrap; ' + (state.cellPanel.key === 'incoming_qty' ? 'color:#1565c0;' : 'color:#e65100;')">
+                                                <t t-esc="formatQty(pm.qty)"/>
+                                                <span style="font-weight:400; color:#adb5bd; margin-left:3px; font-size:10px;"><t t-esc="pm.uom"/></span>
+                                            </td>
+                                            <td style="padding:6px 8px; text-align:center;">
+                                                <span t-att-style="'border-radius:10px; padding:2px 8px; font-size:10px; font-weight:700; white-space:nowrap; ' + (pm.state === 'S\u1eb5n s\u00e0ng' ? 'background:#dcfce7; color:#166534;' : 'background:#fef9c3; color:#854d0e;')">
+                                                    <t t-esc="pm.state"/>
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    </t>
+                                </tbody>
+                            </table>
+                        </t>
+                    </t>
+                </div>
+            </div>
+        </t>
+
     </t>
 </templates>
