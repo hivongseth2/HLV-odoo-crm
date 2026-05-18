@@ -330,8 +330,7 @@ class HlvStockQuick(models.TransientModel):
                 "uom": lyr.uom_id.name if lyr.uom_id else "",
             })
 
-        # Reverse to show oldest → newest
-        rows.reverse()
+        # Show newest first (already newest-first from the loop)
         total_qty = sum(r["qty"] for r in rows)
         total_value = sum(r["value"] for r in rows)
         computed_avg = total_value / total_qty if total_qty else 0.0
@@ -351,6 +350,7 @@ class HlvStockQuick(models.TransientModel):
                 ("state", "in", ["waiting", "confirmed", "assigned"]),
                 ("location_dest_id.usage", "=", "internal"),
                 ("location_id.usage", "!=", "internal"),
+                ("purchase_line_id", "!=", False),
             ]
         elif key == "reserved_qty":
             domain = [
@@ -358,6 +358,7 @@ class HlvStockQuick(models.TransientModel):
                 ("state", "in", ["waiting", "confirmed", "assigned"]),
                 ("location_id.usage", "=", "internal"),
                 ("location_dest_id.usage", "!=", "internal"),
+                ("sale_line_id", "!=", False),
             ]
         else:
             return []
