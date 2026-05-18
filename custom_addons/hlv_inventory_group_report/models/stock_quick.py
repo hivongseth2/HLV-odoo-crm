@@ -76,9 +76,13 @@ class HlvStockQuick(models.TransientModel):
                 extra_data.setdefault(pid, {})["sales_cycle"] = round(90.0 / count, 1) if count > 0 else None
         if "avg_cost" in extra_cols:
             for product in group.product_ids:
-                # standard_price is AVCO / manual cost on product.product (company-dependent)
-                cost = product.with_company(self.env.company).standard_price
-                extra_data.setdefault(product.id, {})["avg_cost"] = cost or 0.0
+                # Compute avg cost from PO valuation layers (same as drawer)
+                layers_data = self.get_product_cost_layers(product.id)
+                computed_avg = layers_data.get("computed_avg") or 0.0
+                # Fallback to standard_price if no PO-linked layers (manufactured / adjusted)
+                if not computed_avg:
+                    computed_avg = product.with_company(self.env.company).standard_price or 0.0
+                extra_data.setdefault(product.id, {})["avg_cost"] = computed_avg
         if "incoming_qty" in extra_cols:
             # Only purchase order inbound moves not yet done
             in_moves = self.env["stock.move"].read_group(
