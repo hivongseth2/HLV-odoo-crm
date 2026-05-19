@@ -1958,13 +1958,35 @@ class SalePlanPublicController(http.Controller):
                     headers=[('Content-Type', 'text/plain; charset=utf-8')],
                 )
 
-            # Truy vấn phiếu xuất kho (OUT) đã hoàn thành của các đơn hàng này
+            # Truy vấn phiếu xuất kho (OUT) đã hoàn thành của các đơn hàng này.
+            # Nếu người dùng chọn "Hoàn thành từ/đến", filter thêm trực tiếp
+            # trên date_done của picking (input là giờ VN UTC+7 → chuyển sang UTC).
             Picking = request.env['stock.picking'].sudo()
-            pickings = Picking.search([
+            picking_domain = [
                 ('sale_id', 'in', so_ids),
                 ('picking_type_code', '=', 'outgoing'),
                 ('state', '=', 'done'),
-            ], order='sale_id, name')
+            ]
+            done_from_raw = kwargs.get('filter_done_date_from', '') or ''
+            done_to_raw = kwargs.get('filter_done_date_to', '') or ''
+            if done_from_raw or done_to_raw:
+                try:
+                    import pytz as _pytz2
+                    from datetime import datetime as _dt
+                    _vn_tz = _pytz2.timezone('Asia/Ho_Chi_Minh')
+                    if done_from_raw:
+                        # VN 00:00:00 → UTC (trừ 7 tiếng)
+                        _from_local = _vn_tz.localize(_dt.strptime(done_from_raw, '%Y-%m-%d'))
+                        _from_utc = _from_local.astimezone(_pytz2.UTC)
+                        picking_domain.append(('date_done', '>=', _from_utc.strftime('%Y-%m-%d %H:%M:%S')))
+                    if done_to_raw:
+                        # VN 23:59:59 → UTC (trừ 7 tiếng)
+                        _to_local = _vn_tz.localize(_dt.strptime(done_to_raw + ' 23:59:59', '%Y-%m-%d %H:%M:%S'))
+                        _to_utc = _to_local.astimezone(_pytz2.UTC)
+                        picking_domain.append(('date_done', '<=', _to_utc.strftime('%Y-%m-%d %H:%M:%S')))
+                except Exception as _tz_err:
+                    _logger.warning('export_picking_excel: lỗi chuyển đổi timezone date_done: %s', _tz_err)
+            pickings = Picking.search(picking_domain, order='date_done, sale_id, name')
 
             output = io.BytesIO()
             workbook = xlsxwriter.Workbook(output, {'in_memory': True})
