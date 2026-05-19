@@ -188,13 +188,20 @@ class ShopeeWebhookController(http.Controller):
                     # Auto-cancel order when Shopee status is CANCELLED (code 3)
                     if str(push_code) == '3' and status in ['CANCELLED', 'Đã hủy', 'Đã Hủy']:
                         if order.state not in ('cancel', 'done'):
-                            try:
-                                order._action_cancel()
-                                _logger.info("Shopee Webhook: Auto-cancelled Order %s due to Shopee CANCELLED status", order.name)
-                                _log_to_file(data, result=f"Auto-cancelled {order.name}")
-                            except Exception as cancel_err:
-                                _logger.error("Shopee Webhook: Failed to cancel Order %s: %s", order.name, str(cancel_err))
-                                _log_to_file(data, result=f"Cancel FAILED for {order.name}: {str(cancel_err)}")
+                            if order.delivery_status == 'full':
+                                _logger.warning(
+                                    "Shopee Webhook: BLOCKED auto-cancel for Order %s — delivery_status=full (đã giao hết).",
+                                    order.name,
+                                )
+                                _log_to_file(data, result=f"BLOCKED cancel {order.name}: delivery_status=full")
+                            else:
+                                try:
+                                    order._action_cancel()
+                                    _logger.info("Shopee Webhook: Auto-cancelled Order %s due to Shopee CANCELLED status", order.name)
+                                    _log_to_file(data, result=f"Auto-cancelled {order.name}")
+                                except Exception as cancel_err:
+                                    _logger.error("Shopee Webhook: Failed to cancel Order %s: %s", order.name, str(cancel_err))
+                                    _log_to_file(data, result=f"Cancel FAILED for {order.name}: {str(cancel_err)}")
                 else:
                     _logger.info("Shopee Webhook: No status update found in payload for Order %s", order.name)
 
