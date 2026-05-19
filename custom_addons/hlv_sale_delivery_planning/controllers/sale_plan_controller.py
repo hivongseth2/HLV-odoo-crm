@@ -298,8 +298,8 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
     <div class="col-md-2"><label class="form-label small fw-semibold text-muted mb-1">Kho Cung Cấp</label><select id="f-wh" class="form-select form-select-sm"><option value="all">Tất cả</option></select></div>
     <div class="col-md-2"><label class="form-label small fw-semibold text-muted mb-1">Tiến Độ Giao</label>
       <select id="f-del" class="form-select form-select-sm">
-        <option value="pending_partial" selected>Chưa giao &amp; Giao 1 phần</option>
-        <option value="all">Tất cả</option><option value="pending">Chưa giao</option>
+        <option value="pending_partial">Chưa giao &amp; Giao 1 phần</option>
+        <option value="all" selected>Tất cả</option><option value="pending">Chưa giao</option>
         <option value="partial">Giao 1 phần</option><option value="full">Đã giao đủ</option>
       </select></div>
     <div class="col-md-2"><label class="form-label small fw-semibold text-muted mb-1">Tình Trạng Kho</label>
@@ -354,11 +354,15 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
       <label class="form-check-label small fw-bold" for="f-need-transfer"><i class="fa fa-exchange text-danger me-1"></i>Cần chuyển kho</label>
     </div>
     <div class="form-check form-switch">
-      <input class="form-check-input" type="checkbox" id="f-show-completed">
+      <input class="form-check-input" type="checkbox" id="f-show-completed" checked>
       <label class="form-check-label small fw-bold" for="f-show-completed"><i class="fa fa-check-circle text-success me-1"></i>Hiện đơn đã giao</label>
     </div>
   </div>
-</div></div>
+</div>
+  <small class="text-muted" style="font-size:.72rem;line-height:1.3"><i class="fa fa-info-circle text-warning me-1"></i>Giao diện ẩn đơn bán trạng thái đã hủy, nhưng file xuất kho vẫn bao gồm phiếu OUT của các đơn đó nếu đã xác nhận (cột Trạng thái ĐH ghi rõ Đã hủy)</small>
+
+
+</div>
 <!-- View toggle -->
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
   <div class="d-flex gap-1 flex-wrap align-items-center">
@@ -370,7 +374,6 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
   <div class="d-flex align-items-center gap-2">
     <button id="btn-export-excel" class="btn btn-sm btn-success" title="Xuất Excel"><i class="fa fa-file-excel-o"></i> Xuất Excel</button>
     <button id="btn-export-picking-excel" class="btn btn-sm btn-warning" title="Xuất phiếu xuất kho (OUT đã xong)"><i class="fa fa-truck"></i> Xuất phiếu XK</button>
-    <small class="text-muted" style="font-size:.72rem;max-width:200px;line-height:1.3"><i class="fa fa-info-circle text-warning me-1"></i>Giao diện ẩn đơn đã hủy, nhưng file XK vẫn bao gồm phiếu OUT của các đơn đó (cột Trạng thái ĐH ghi rõ Đã hủy)</small>
     <button id="btn-kanban" class="btn btn-sm btn-primary"><i class="fa fa-th"></i> Kanban</button>
     <button id="btn-list" class="btn btn-sm btn-outline-secondary"><i class="fa fa-list"></i> Danh sách</button>
     <span class="vr"></span>
@@ -1193,9 +1196,9 @@ document.addEventListener('click',function(e){
 function clearAll(){
   ['f-q','f-date-from','f-date-to','f-po-date-from','f-po-date-to','f-saler','f-htgh','f-done-from','f-done-to'].forEach(function(id){var e=$(id);if(e)e.value='';});
   ['f-wh','f-stk','f-pack','f-po-status','f-dtype'].forEach(function(id){var e=$(id);if(e)e.value='all';});
-  $('f-del').value='pending_partial';
+  $('f-del').value='all';
   var ft=$('f-tag');if(ft){Array.from(ft.options).forEach(function(o){o.selected=false;});}
-  $('f-show-completed').checked=false;
+  $('f-show-completed').checked=true;
   S.kanbanColPageSize={};
   load(false);
 }
