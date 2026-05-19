@@ -369,6 +369,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
   </div>
   <div class="d-flex align-items-center gap-2">
     <button id="btn-export-excel" class="btn btn-sm btn-success" title="Xuất Excel"><i class="fa fa-file-excel-o"></i> Xuất Excel</button>
+    <button id="btn-export-picking-excel" class="btn btn-sm btn-warning" title="Xuất phiếu xuất kho (OUT đã xong)"><i class="fa fa-truck"></i> Xuất phiếu XK</button>
     <button id="btn-kanban" class="btn btn-sm btn-primary"><i class="fa fa-th"></i> Kanban</button>
     <button id="btn-list" class="btn btn-sm btn-outline-secondary"><i class="fa fa-list"></i> Danh sách</button>
     <span class="vr"></span>
@@ -1234,6 +1235,19 @@ $('btn-export-excel').addEventListener('click',function(){
   });
   window.open('/api/sale_plan/export_excel?'+params.toString(),'_blank');
 });
+$('btn-export-picking-excel').addEventListener('click',function(){
+  var params=new URLSearchParams({
+    search_query:gv('f-q'),filter_warehouse_id:gv('f-wh'),filter_delivery_status:gv('f-del'),
+    filter_stock_status:gv('f-stk'),filter_packing_status:gv('f-pack'),
+    filter_date_from:gv('f-date-from'),filter_date_to:gv('f-date-to'),
+    filter_po_date_from:gv('f-po-date-from'),filter_po_date_to:gv('f-po-date-to'),
+    filter_done_date_from:gv('f-done-from'),filter_done_date_to:gv('f-done-to'),
+    filter_po_status:gv('f-po-status'),filter_saler_code:gv('f-saler'),
+    filter_htgh:gv('f-htgh'),filter_delivery_type:gv('f-dtype'),filter_tag_ids:getTagIds(),
+    show_completed:$('f-show-completed').checked?'1':''
+  });
+  window.open('/api/sale_plan/export_picking_excel?'+params.toString(),'_blank');
+});
 
 $('btn-kanban').addEventListener('click',function(){
   S.viewMode='kanban';
@@ -1883,5 +1897,182 @@ class SalePlanPublicController(http.Controller):
             _logger.exception('sale_plan export_excel error')
             return request.make_response(
                 f'Lỗi khi xuất Excel: {str(e)}',
+                headers=[('Content-Type', 'text/plain; charset=utf-8')],
+            )
+
+    @http.route('/api/sale_plan/export_picking_excel', type='http', auth='public', methods=['GET'], csrf=False)
+    def api_export_picking_excel(self, **kwargs):
+        """Export OUT pickings (state=done) of the filtered sale orders.
+        Bao gồm phiếu đã xuất kho hoàn toàn hoặc xuất kho 1 phần (tạo backorder)
+        — tức là tất cả stock.picking có picking_type_code='outgoing' và state='done'
+        thuộc các đơn hàng trong bộ lọc hiện tại.
+        """
+        if not request.session.get(SESSION_KEY_OK):
+            return request.redirect('/sale_plan')
+
+        import io
+        try:
+            import xlsxwriter
+        except ImportError:
+            from odoo.tools.misc import xlsxwriter
+
+        try:
+            # Lấy danh sách đơn hàng theo bộ lọc (dùng lại service hiện có)
+            result = request.env['hlv.delivery.planner.service'].sudo().get_dashboard_data(
+                search_query=kwargs.get('search_query', ''),
+                filter_warehouse_id=kwargs.get('filter_warehouse_id', 'all'),
+                filter_delivery_status=kwargs.get('filter_delivery_status', 'all'),
+                filter_stock_status=kwargs.get('filter_stock_status', 'all'),
+                filter_packing_status=kwargs.get('filter_packing_status', 'all'),
+                filter_date_from=kwargs.get('filter_date_from', ''),
+                filter_date_to=kwargs.get('filter_date_to', ''),
+                filter_po_date_from=kwargs.get('filter_po_date_from', ''),
+                filter_po_date_to=kwargs.get('filter_po_date_to', ''),
+                filter_po_status=kwargs.get('filter_po_status', 'all'),
+                filter_done_date_from=kwargs.get('filter_done_date_from', ''),
+                filter_done_date_to=kwargs.get('filter_done_date_to', ''),
+                filter_saler_code=kwargs.get('filter_saler_code', ''),
+                filter_htgh=kwargs.get('filter_htgh', ''),
+                filter_delivery_type=kwargs.get('filter_delivery_type', 'all'),
+                filter_tag_ids=kwargs.get('filter_tag_ids', ''),
+                show_completed=bool(kwargs.get('show_completed', '')),
+                limit=100000,
+                offset=0,
+            )
+
+            orders = result.get('orders', [])
+            so_ids = [o['id'] for o in orders if o.get('id')]
+            so_name_map = {o['id']: o.get('name', '') for o in orders}
+            so_partner_map = {
+                o['id']: (o['partner_id'][1] if o.get('partner_id') else '')
+                for o in orders
+            }
+
+            if not so_ids:
+                return request.make_response(
+                    'Không có đơn hàng nào phù hợp bộ lọc.',
+                    headers=[('Content-Type', 'text/plain; charset=utf-8')],
+                )
+
+            # Truy vấn phiếu xuất kho (OUT) đã hoàn thành của các đơn hàng này
+            Picking = request.env['stock.picking'].sudo()
+            pickings = Picking.search([
+                ('sale_id', 'in', so_ids),
+                ('picking_type_code', '=', 'outgoing'),
+                ('state', '=', 'done'),
+            ], order='sale_id, name')
+
+            output = io.BytesIO()
+            workbook = xlsxwriter.Workbook(output, {'in_memory': True})
+            sheet = workbook.add_worksheet('Phiếu xuất kho')
+
+            # Formats
+            header_fmt = workbook.add_format({
+                'bold': True, 'bg_color': '#C55A11', 'font_color': '#FFFFFF',
+                'border': 1, 'align': 'center', 'valign': 'vcenter',
+                'font_size': 11, 'text_wrap': True,
+            })
+            picking_hdr_fmt = workbook.add_format({
+                'bold': True, 'bg_color': '#FFF2CC', 'font_color': '#7F6000',
+                'border': 1, 'valign': 'vcenter', 'font_size': 10,
+            })
+            cell_fmt = workbook.add_format({'border': 1, 'valign': 'vcenter', 'font_size': 10})
+            num_fmt = workbook.add_format({'border': 1, 'valign': 'vcenter', 'font_size': 10, 'num_format': '#,##0.##'})
+            date_fmt = workbook.add_format({'border': 1, 'valign': 'vcenter', 'font_size': 10, 'num_format': 'dd/mm/yyyy hh:mm'})
+            date_only_fmt = workbook.add_format({'border': 1, 'valign': 'vcenter', 'font_size': 10, 'num_format': 'dd/mm/yyyy'})
+
+            col_headers = [
+                ('STT', 5),
+                ('Mã phiếu XK', 16),
+                ('Đơn hàng', 15),
+                ('Khách hàng', 25),
+                ('Kho', 15),
+                ('Ngày hoàn thành', 17),
+                ('Sản phẩm', 35),
+                ('Mã sản phẩm', 16),
+                ('ĐVT', 8),
+                ('SL yêu cầu', 12),
+                ('SL thực xuất', 12),
+                ('Ghi chú phiếu', 25),
+            ]
+
+            for col_idx, (name, width) in enumerate(col_headers):
+                sheet.write(0, col_idx, name, header_fmt)
+                sheet.set_column(col_idx, col_idx, width)
+            sheet.freeze_panes(1, 0)
+
+            row = 1
+            stt = 0
+
+            try:
+                user_tz = __import__('pytz').timezone('Asia/Ho_Chi_Minh')
+                import pytz as _pytz
+                utc_tz = _pytz.UTC
+            except Exception:
+                user_tz = None
+                utc_tz = None
+
+            for picking in pickings:
+                # Lấy move lines đã done
+                done_moves = picking.move_ids.filtered(lambda m: m.state == 'done')
+                if not done_moves:
+                    continue
+
+                # Ngày hoàn thành picking
+                date_done = picking.date_done
+                date_done_str = ''
+                if date_done:
+                    try:
+                        local_dt = date_done.replace(tzinfo=utc_tz).astimezone(user_tz)
+                        date_done_str = local_dt.strftime('%d/%m/%Y %H:%M')
+                    except Exception:
+                        date_done_str = str(date_done)
+
+                so_id = picking.sale_id.id if picking.sale_id else False
+                so_name = so_name_map.get(so_id, picking.sale_id.name if picking.sale_id else '')
+                partner_name = so_partner_map.get(so_id, '')
+                wh_name = picking.location_id.warehouse_id.name if picking.location_id.warehouse_id else ''
+                note = picking.note or ''
+
+                for move in done_moves:
+                    stt += 1
+                    product = move.product_id
+                    product_name = product.name if product else ''
+                    product_code = product.default_code or '' if product else ''
+                    uom_name = move.product_uom.name if move.product_uom else ''
+                    qty_demand = move.product_uom_qty or 0
+                    qty_done = move.quantity_done or 0
+
+                    c = 0
+                    sheet.write(row, c, stt, cell_fmt); c += 1
+                    sheet.write(row, c, picking.name or '', cell_fmt); c += 1
+                    sheet.write(row, c, so_name, cell_fmt); c += 1
+                    sheet.write(row, c, partner_name, cell_fmt); c += 1
+                    sheet.write(row, c, wh_name, cell_fmt); c += 1
+                    sheet.write(row, c, date_done_str, cell_fmt); c += 1
+                    sheet.write(row, c, product_name, cell_fmt); c += 1
+                    sheet.write(row, c, product_code, cell_fmt); c += 1
+                    sheet.write(row, c, uom_name, cell_fmt); c += 1
+                    sheet.write(row, c, qty_demand, num_fmt); c += 1
+                    sheet.write(row, c, qty_done, num_fmt); c += 1
+                    sheet.write(row, c, note, cell_fmt)
+                    row += 1
+
+            workbook.close()
+            output.seek(0)
+            xlsx_data = output.read()
+
+            return request.make_response(
+                xlsx_data,
+                headers=[
+                    ('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
+                    ('Content-Disposition', 'attachment; filename="Phieu_xuat_kho.xlsx"'),
+                    ('Content-Length', len(xlsx_data)),
+                ],
+            )
+        except Exception as e:
+            _logger.exception('sale_plan export_picking_excel error')
+            return request.make_response(
+                f'Lỗi khi xuất phiếu xuất kho: {str(e)}',
                 headers=[('Content-Type', 'text/plain; charset=utf-8')],
             )
