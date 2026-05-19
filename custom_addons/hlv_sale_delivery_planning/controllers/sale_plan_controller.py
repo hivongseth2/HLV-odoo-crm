@@ -359,7 +359,6 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
     </div>
   </div>
 </div>
-  <small class="text-muted" style="font-size:.72rem;line-height:1.3"><i class="fa fa-info-circle text-warning me-1"></i>Giao diện ẩn đơn bán trạng thái đã hủy, nhưng file xuất kho vẫn bao gồm phiếu OUT của các đơn đó nếu đã xác nhận (cột Trạng thái ĐH ghi rõ Đã hủy)</small>
 
 
 </div>
@@ -1951,6 +1950,7 @@ class SalePlanPublicController(http.Controller):
                 o['id']: (o['partner_id'][1] if o.get('partner_id') else '')
                 for o in orders
             }
+            so_delivery_map = {o['id']: (o.get('real_delivery_status') or o.get('delivery_status') or '') for o in orders}
 
             if not so_ids:
                 return request.make_response(
@@ -2014,6 +2014,13 @@ class SalePlanPublicController(http.Controller):
                 'done': 'Đã khóa',
                 'cancel': 'Đã hủy',
             }
+            DELIVERY_STATUS_LABELS = {
+                'pending': 'Chưa giao',
+                'unshipped': 'Chưa giao',
+                'started': 'Đã bắt đầu',
+                'partial': 'Giao 1 phần',
+                'full': 'Đã giao đủ',
+            }
             cancelled_fmt = workbook.add_format({
                 'border': 1, 'valign': 'vcenter', 'font_size': 10,
                 'font_color': '#C00000', 'bold': True,
@@ -2024,13 +2031,13 @@ class SalePlanPublicController(http.Controller):
                 ('Mã phiếu XK', 16),
                 ('Đơn hàng', 15),
                 ('Trạng thái ĐH', 14),
+                ('Tiến độ giao', 16),
                 ('Khách hàng', 25),
                 ('Kho', 15),
                 ('Ngày hoàn thành', 17),
                 ('Sản phẩm', 35),
                 ('Mã sản phẩm', 16),
                 ('ĐVT', 8),
-                ('SL yêu cầu', 12),
                 ('SL thực xuất', 12),
                 ('Ghi chú phiếu', 25),
             ]
@@ -2071,6 +2078,8 @@ class SalePlanPublicController(http.Controller):
                 so_name = so_name_map.get(so_id, picking.sale_id.name if picking.sale_id else '')
                 so_state_raw = picking.sale_id.state if picking.sale_id else ''
                 so_state_label = SO_STATE_LABELS.get(so_state_raw, so_state_raw)
+                del_status_raw = so_delivery_map.get(so_id, '')
+                del_status_label = DELIVERY_STATUS_LABELS.get(del_status_raw, del_status_raw)
                 partner_name = so_partner_map.get(so_id, '')
                 wh_name = picking.location_id.warehouse_id.name if picking.location_id.warehouse_id else ''
                 note = picking.note or ''
@@ -2090,13 +2099,13 @@ class SalePlanPublicController(http.Controller):
                     sheet.write(row, c, so_name, cell_fmt); c += 1
                     _state_fmt = cancelled_fmt if so_state_raw == 'cancel' else cell_fmt
                     sheet.write(row, c, so_state_label, _state_fmt); c += 1
+                    sheet.write(row, c, del_status_label, cell_fmt); c += 1
                     sheet.write(row, c, partner_name, cell_fmt); c += 1
                     sheet.write(row, c, wh_name, cell_fmt); c += 1
                     sheet.write(row, c, date_done_str, cell_fmt); c += 1
                     sheet.write(row, c, product_name, cell_fmt); c += 1
                     sheet.write(row, c, product_code, cell_fmt); c += 1
                     sheet.write(row, c, uom_name, cell_fmt); c += 1
-                    sheet.write(row, c, qty_demand, num_fmt); c += 1
                     sheet.write(row, c, qty_done, num_fmt); c += 1
                     sheet.write(row, c, note, cell_fmt)
                     row += 1
