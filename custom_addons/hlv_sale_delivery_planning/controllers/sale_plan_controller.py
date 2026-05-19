@@ -370,6 +370,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
   <div class="d-flex align-items-center gap-2">
     <button id="btn-export-excel" class="btn btn-sm btn-success" title="Xuất Excel"><i class="fa fa-file-excel-o"></i> Xuất Excel</button>
     <button id="btn-export-picking-excel" class="btn btn-sm btn-warning" title="Xuất phiếu xuất kho (OUT đã xong)"><i class="fa fa-truck"></i> Xuất phiếu XK</button>
+    <small class="text-muted" style="font-size:.72rem;max-width:200px;line-height:1.3"><i class="fa fa-info-circle text-warning me-1"></i>Giao diện ẩn đơn đã hủy, nhưng file XK vẫn bao gồm phiếu OUT của các đơn đó (cột Trạng thái ĐH ghi rõ Đã hủy)</small>
     <button id="btn-kanban" class="btn btn-sm btn-primary"><i class="fa fa-th"></i> Kanban</button>
     <button id="btn-list" class="btn btn-sm btn-outline-secondary"><i class="fa fa-list"></i> Danh sách</button>
     <span class="vr"></span>
@@ -2013,10 +2014,23 @@ class SalePlanPublicController(http.Controller):
             date_fmt = workbook.add_format({'border': 1, 'valign': 'vcenter', 'font_size': 10, 'num_format': 'dd/mm/yyyy hh:mm'})
             date_only_fmt = workbook.add_format({'border': 1, 'valign': 'vcenter', 'font_size': 10, 'num_format': 'dd/mm/yyyy'})
 
+            SO_STATE_LABELS = {
+                'draft': 'Nháp',
+                'sent': 'Đã gửi báo giá',
+                'sale': 'Đơn hàng',
+                'done': 'Đã khóa',
+                'cancel': 'Đã hủy',
+            }
+            cancelled_fmt = workbook.add_format({
+                'border': 1, 'valign': 'vcenter', 'font_size': 10,
+                'font_color': '#C00000', 'bold': True,
+            })
+
             col_headers = [
                 ('STT', 5),
                 ('Mã phiếu XK', 16),
                 ('Đơn hàng', 15),
+                ('Trạng thái ĐH', 14),
                 ('Khách hàng', 25),
                 ('Kho', 15),
                 ('Ngày hoàn thành', 17),
@@ -2062,6 +2076,8 @@ class SalePlanPublicController(http.Controller):
 
                 so_id = picking.sale_id.id if picking.sale_id else False
                 so_name = so_name_map.get(so_id, picking.sale_id.name if picking.sale_id else '')
+                so_state_raw = picking.sale_id.state if picking.sale_id else ''
+                so_state_label = SO_STATE_LABELS.get(so_state_raw, so_state_raw)
                 partner_name = so_partner_map.get(so_id, '')
                 wh_name = picking.location_id.warehouse_id.name if picking.location_id.warehouse_id else ''
                 note = picking.note or ''
@@ -2079,6 +2095,8 @@ class SalePlanPublicController(http.Controller):
                     sheet.write(row, c, stt, cell_fmt); c += 1
                     sheet.write(row, c, picking.name or '', cell_fmt); c += 1
                     sheet.write(row, c, so_name, cell_fmt); c += 1
+                    _state_fmt = cancelled_fmt if so_state_raw == 'cancel' else cell_fmt
+                    sheet.write(row, c, so_state_label, _state_fmt); c += 1
                     sheet.write(row, c, partner_name, cell_fmt); c += 1
                     sheet.write(row, c, wh_name, cell_fmt); c += 1
                     sheet.write(row, c, date_done_str, cell_fmt); c += 1
