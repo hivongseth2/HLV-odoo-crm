@@ -2041,7 +2041,7 @@ class SalePlanPublicController(http.Controller):
                     product_code = product.default_code or '' if product else ''
                     uom_name = move.product_uom.name if move.product_uom else ''
                     qty_demand = move.product_uom_qty or 0
-                    qty_done = move.quantity_done or 0
+                    qty_done = getattr(move, 'quantity', None) or getattr(move, 'quantity_done', None) or 0
 
                     c = 0
                     sheet.write(row, c, stt, cell_fmt); c += 1
