@@ -8,6 +8,7 @@ from collections import defaultdict
 from markupsafe import Markup
 from odoo import http
 from odoo.http import request
+from .picking_export_helper import build_picking_summary_xlsx
 
 _SKIP_MSG_RE = re.compile(
     r'Lệnh chuyển hàng được tạo'
@@ -373,6 +374,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
   <div class="d-flex align-items-center gap-2">
     <button id="btn-export-excel" class="btn btn-sm btn-success" title="Xuất Excel"><i class="fa fa-file-excel-o"></i> Xuất Excel</button>
     <button id="btn-export-picking-excel" class="btn btn-sm btn-warning" title="Xuất phiếu xuất kho (OUT đã xong)"><i class="fa fa-truck"></i> Xuất phiếu XK</button>
+    <button id="btn-export-picking-simple-excel" class="btn btn-sm btn-info" title="Xuất phiếu XK giản lược (không in dòng sản phẩm)"><i class="fa fa-file-text-o"></i> Xuất phiếu XK (tóm tắt)</button>
     <button id="btn-kanban" class="btn btn-sm btn-primary"><i class="fa fa-th"></i> Kanban</button>
     <button id="btn-list" class="btn btn-sm btn-outline-secondary"><i class="fa fa-list"></i> Danh sách</button>
     <span class="vr"></span>
@@ -1251,6 +1253,19 @@ $('btn-export-picking-excel').addEventListener('click',function(){
   });
   window.open('/api/sale_plan/export_picking_excel?'+params.toString(),'_blank');
 });
+$('btn-export-picking-simple-excel').addEventListener('click',function(){
+  var params=new URLSearchParams({
+    search_query:gv('f-q'),filter_warehouse_id:gv('f-wh'),filter_delivery_status:gv('f-del'),
+    filter_stock_status:gv('f-stk'),filter_packing_status:gv('f-pack'),
+    filter_date_from:gv('f-date-from'),filter_date_to:gv('f-date-to'),
+    filter_po_date_from:gv('f-po-date-from'),filter_po_date_to:gv('f-po-date-to'),
+    filter_done_date_from:gv('f-done-from'),filter_done_date_to:gv('f-done-to'),
+    filter_po_status:gv('f-po-status'),filter_saler_code:gv('f-saler'),
+    filter_htgh:gv('f-htgh'),filter_delivery_type:gv('f-dtype'),filter_tag_ids:getTagIds(),
+    show_completed:$('f-show-completed').checked?'1':''
+  });
+  window.open('/api/sale_plan/export_picking_simple_excel?'+params.toString(),'_blank');
+});
 
 $('btn-kanban').addEventListener('click',function(){
   S.viewMode='kanban';
@@ -2126,5 +2141,92 @@ class SalePlanPublicController(http.Controller):
             _logger.exception('sale_plan export_picking_excel error')
             return request.make_response(
                 f'Lỗi khi xuất phiếu xuất kho: {str(e)}',
+                headers=[('Content-Type', 'text/plain; charset=utf-8')],
+            )
+
+    @http.route('/api/sale_plan/export_picking_simple_excel', type='http', auth='public', methods=['GET'], csrf=False)
+    def api_export_picking_simple_excel(self, **kwargs):
+        """Export giản lược OUT pickings (state=done) — mỗi hàng = 1 phiếu, không có dòng sản phẩm.
+        Columns: Mã phiếu XK, Đơn hàng, Trạng thái phiếu, Trạng thái ĐH,
+                 Kho, Ngày hoàn thành, Tổng tiền trước thuế, Tổng tiền sau thuế.
+        """
+        if not request.session.get(SESSION_KEY_OK):
+            return request.redirect('/sale_plan')
+
+        try:
+            result = request.env['hlv.delivery.planner.service'].sudo().get_dashboard_data(
+                search_query=kwargs.get('search_query', ''),
+                filter_warehouse_id=kwargs.get('filter_warehouse_id', 'all'),
+                filter_delivery_status=kwargs.get('filter_delivery_status', 'all'),
+                filter_stock_status=kwargs.get('filter_stock_status', 'all'),
+                filter_packing_status=kwargs.get('filter_packing_status', 'all'),
+                filter_date_from=kwargs.get('filter_date_from', ''),
+                filter_date_to=kwargs.get('filter_date_to', ''),
+                filter_po_date_from=kwargs.get('filter_po_date_from', ''),
+                filter_po_date_to=kwargs.get('filter_po_date_to', ''),
+                filter_po_status=kwargs.get('filter_po_status', 'all'),
+                filter_done_date_from=kwargs.get('filter_done_date_from', ''),
+                filter_done_date_to=kwargs.get('filter_done_date_to', ''),
+                filter_saler_code=kwargs.get('filter_saler_code', ''),
+                filter_htgh=kwargs.get('filter_htgh', ''),
+                filter_delivery_type=kwargs.get('filter_delivery_type', 'all'),
+                filter_tag_ids=kwargs.get('filter_tag_ids', ''),
+                show_completed=bool(kwargs.get('show_completed', '')),
+                limit=100000,
+                offset=0,
+            )
+
+            orders = result.get('orders', [])
+            so_ids = [o['id'] for o in orders if o.get('id')]
+            so_name_map = {o['id']: o.get('name', '') for o in orders}
+            so_state_map = {o['id']: o.get('state', '') for o in orders}
+
+            if not so_ids:
+                return request.make_response(
+                    'Không có đơn hàng nào phù hợp bộ lọc.',
+                    headers=[('Content-Type', 'text/plain; charset=utf-8')],
+                )
+
+            picking_domain = [
+                ('sale_id', 'in', so_ids),
+                ('picking_type_code', '=', 'outgoing'),
+                ('state', '=', 'done'),
+            ]
+            done_from_raw = kwargs.get('filter_done_date_from', '') or ''
+            done_to_raw = kwargs.get('filter_done_date_to', '') or ''
+            if done_from_raw or done_to_raw:
+                try:
+                    import pytz as _pytz2
+                    from datetime import datetime as _dt
+                    _vn_tz = _pytz2.timezone('Asia/Ho_Chi_Minh')
+                    if done_from_raw:
+                        _from_local = _vn_tz.localize(_dt.strptime(done_from_raw, '%Y-%m-%d'))
+                        _from_utc = _from_local.astimezone(_pytz2.UTC)
+                        picking_domain.append(('date_done', '>=', _from_utc.strftime('%Y-%m-%d %H:%M:%S')))
+                    if done_to_raw:
+                        _to_local = _vn_tz.localize(_dt.strptime(done_to_raw + ' 23:59:59', '%Y-%m-%d %H:%M:%S'))
+                        _to_utc = _to_local.astimezone(_pytz2.UTC)
+                        picking_domain.append(('date_done', '<=', _to_utc.strftime('%Y-%m-%d %H:%M:%S')))
+                except Exception as _tz_err:
+                    _logger.warning('export_picking_simple_excel: lỗi chuyển đổi timezone: %s', _tz_err)
+
+            pickings = request.env['stock.picking'].sudo().search(
+                picking_domain, order='date_done, sale_id, name'
+            )
+
+            xlsx_data = build_picking_summary_xlsx(pickings, so_name_map, so_state_map)
+
+            return request.make_response(
+                xlsx_data,
+                headers=[
+                    ('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
+                    ('Content-Disposition', 'attachment; filename="Phieu_xuat_kho_tom_tat.xlsx"'),
+                    ('Content-Length', len(xlsx_data)),
+                ],
+            )
+        except Exception as e:
+            _logger.exception('sale_plan export_picking_simple_excel error')
+            return request.make_response(
+                f'Lỗi khi xuất phiếu xuất kho (tóm tắt): {str(e)}',
                 headers=[('Content-Type', 'text/plain; charset=utf-8')],
             )
