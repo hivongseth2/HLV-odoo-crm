@@ -1321,6 +1321,9 @@ class SaleApiImportWizard(models.TransientModel):
                         self.env['sale.order.line'].create(safe_vals_line)
 
                     # Confirm để tạo picking
+                    # Invalidate ORM cache để mrp thấy được phantom BOM vừa tạo trong cùng transaction
+                    self.env.flush_all()
+                    self.env.invalidate_all()
                     sale_order.action_confirm()
 
                     # Đặt tên picking giữ nguyên logic cũ
@@ -1570,6 +1573,9 @@ class SaleApiImportWizard(models.TransientModel):
                             self.env['sale.order.line'].create(safe_line_vals)
 
                         # Confirm -> tạo picking theo từng SO/warehouse
+                        # Invalidate ORM cache để mrp thấy được phantom BOM vừa tạo trong cùng transaction
+                        self.env.flush_all()
+                        self.env.invalidate_all()
                         sale_order.action_confirm()
 
                         # Đặt tên picking: base_pick + hậu tố kho để unique

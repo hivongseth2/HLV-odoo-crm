@@ -918,6 +918,8 @@ class SaleOrder(models.Model):
         # ===== 9) Confirm & đặt tên picking theo MISA =====
         if new_so.state in ('draft', 'sent'):
             env.flush_all()
+            # Invalidate ORM cache để mrp thấy được phantom BOM vừa tạo trong cùng transaction
+            env.invalidate_all()
             new_so.action_confirm()
         if new_so.picking_ids:
             picking = new_so.picking_ids[0]
@@ -1432,11 +1434,37 @@ class SaleOrder(models.Model):
             except Exception:
                 return dv
 
+        # Build combo_codes_with_bom: combo parent có phantom BOM → Odoo tự explode via BOM Kit
+        # → SKIP children khỏi misa_total (nếu tính children thì delivered=0 → needed > 0 → trigger
+        #   procurement thừa, hoặc code cũ sẽ tạo manual moves bypass BOM explosion)
+        combo_codes_with_bom_step2 = set()
+        for ln in (lines or []):
+            if ln.get("IsSetProduct"):
+                combo_code = (ln.get("ProductIDText") or "").strip()
+                if combo_code:
+                    prod_check = env['product.product'].search([('default_code', '=', combo_code)], limit=1)
+                    if prod_check and env['mrp.bom'].search_count([
+                        ('product_tmpl_id', '=', prod_check.product_tmpl_id.id),
+                        ('type', '=', 'phantom'),
+                        ('active', '=', True),
+                    ]) > 0:
+                        combo_codes_with_bom_step2.add(combo_code)
+
         misa_total_by_product = {}
+        current_parent_code_step2 = None
         for ln in (lines or []):
             product_code = ln.get("ProductIDText")
             if not product_code:
                 continue
+
+            if ln.get("IsSetProduct"):
+                current_parent_code_step2 = product_code
+
+            # Skip combo children nếu parent có phantom BOM — delivery tracking qua parent SOL
+            if ln.get("IsChildProduct"):
+                if current_parent_code_step2 and current_parent_code_step2 in combo_codes_with_bom_step2:
+                    _logger.debug("Step2: skip child '%s' (parent '%s' có BoM Kit)", product_code, current_parent_code_step2)
+                    continue
 
             desc     = ln.get("Description") or product_code
             qty      = _flt(ln.get("Amount"), 0.0)
