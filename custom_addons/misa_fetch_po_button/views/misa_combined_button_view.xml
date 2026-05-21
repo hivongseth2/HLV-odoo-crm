@@ -134,11 +134,12 @@
                 </form>
             </field>
             </record>
-    <!-- Menu cha (dropdown) -->
+    <!-- Menu cha (dropdown) — đã ẩn, không sử dụng nữa -->
     <menuitem id="menu_misa_import_root"
               name="Nhập dữ liệu từ MISA"
               parent="stock.menu_stock_root"
-              sequence="99"/>
+              sequence="99"
+              active="False"/>
 
     <!-- Menu con cho PO -->
     <menuitem id="menu_import_misa_po"
