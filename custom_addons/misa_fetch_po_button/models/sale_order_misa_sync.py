@@ -928,7 +928,12 @@ class SaleOrder(models.Model):
 
         # ===== 9) Confirm & đặt tên picking theo MISA =====
         if new_so.state in ('draft', 'sent'):
+            # Flush + invalidate để đảm bảo BOM mới tạo ở bước 8.0b
+            # được nhìn thấy bởi mrp.bom._bom_find() khi action_confirm() chạy.
+            # Nếu không invalidate, ORM cache có thể giữ kết quả "no BOM"
+            # → phantom BOM explosion không trigger → has_kits=False.
             env.flush_all()
+            env.invalidate_all()
             new_so.action_confirm()
         if new_so.picking_ids:
             picking = new_so.picking_ids[0]
