@@ -1089,6 +1089,10 @@ class BarcodeShipper {
     }
 
     async _startPhotoCamera() {
+        // Dừng barcode camera nếu đang chạy trước khi mở photo camera
+        await this.stopCamera();
+        // Đợi một chút để browser release camera hardware
+        await new Promise(r => setTimeout(r, 300));
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
