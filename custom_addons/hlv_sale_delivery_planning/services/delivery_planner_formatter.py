@@ -200,9 +200,10 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             combo_old_tmpl_ids = page_combo_old_tmpl_ids
         else:
             all_tmpl = so.order_line.mapped('product_id.product_tmpl_id')
+            # Bao gồm sản phẩm có phantom BOM: fallback khi BOM explosion thất bại
             combo_old_tmpl_ids = set(
                 t.id for t in all_tmpl
-                if getattr(t, 'is_combo', False) and t.id not in kit_tmpl_ids
+                if getattr(t, 'is_combo', False)
             )
 
         # Build combo_items_map: {tmpl_id: [(component_product_id, qty_per_combo), ...]}
@@ -274,6 +275,15 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             is_kit = line.product_id.product_tmpl_id.id in kit_tmpl_ids
             is_combo_old = (
                 not is_kit
+                and bool(line.product_id)
+                and line.product_id.product_tmpl_id.id in combo_old_tmpl_ids
+            )
+            # Fallback: kit product có phantom BOM nhưng BOM explosion thất bại
+            # (bom_line_id=NULL trên moves) → qty_delivered=0 dù linh kiện đã giao.
+            # Chỉ kích hoạt khi qty_delivered=0 (tiết kiệm tài nguyên).
+            kit_fallback = (
+                is_kit
+                and line.qty_delivered == 0
                 and bool(line.product_id)
                 and line.product_id.product_tmpl_id.id in combo_old_tmpl_ids
             )
@@ -357,14 +367,15 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                 'product_type': p_type,
                 'is_kit': is_kit,
                 'is_combo_old': is_combo_old,
+                'kit_combo_fallback': kit_fallback,
             })
 
-            if p_type != 'service' and not is_kit:
-                # Tính effective_qty_delivered cho combo kiểu cũ:
+            if p_type != 'service' and (not is_kit or kit_fallback):
+                # Tính effective_qty_delivered cho combo (kiểu cũ hoặc kit fallback):
                 # combo parent không có stock move riêng → qty_delivered=0,
                 # nhưng linh kiện được giao dưới dạng SOL độc lập.
                 # effective = min(ratio giao của từng linh kiện) * qty_ordered.
-                if is_combo_old:
+                if is_combo_old or kit_fallback:
                     combo_items = combo_items_map.get(line.product_id.product_tmpl_id.id, [])
                     if combo_items and line.product_uom_qty > 0:
                         min_ratio = float('inf')

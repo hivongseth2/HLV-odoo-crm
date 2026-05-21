@@ -100,7 +100,8 @@ class DeliveryPlannerService(models.AbstractModel):
             _combo_recs = self.env['product.template'].sudo().search_read(
                 [('id', 'in', page_tmpl_ids), ('is_combo', '=', True)], ['id']
             )
-            page_combo_old_tmpl_ids = {r['id'] for r in _combo_recs} - page_kit_tmpl_ids
+            # Bao gồm sản phẩm có phantom BOM để fallback khi BOM explosion thất bại
+            page_combo_old_tmpl_ids = {r['id'] for r in _combo_recs}
         else:
             page_combo_old_tmpl_ids = set()
 
@@ -302,7 +303,8 @@ class DeliveryPlannerService(models.AbstractModel):
             _combo_recs = self.env['product.template'].sudo().search_read(
                 [('id', 'in', page_tmpl_ids), ('is_combo', '=', True)], ['id']
             )
-            page_combo_old_tmpl_ids = {r['id'] for r in _combo_recs} - page_kit_tmpl_ids
+            # Bao gồm sản phẩm có phantom BOM để fallback khi BOM explosion thất bại
+            page_combo_old_tmpl_ids = {r['id'] for r in _combo_recs}
         else:
             page_combo_old_tmpl_ids = set()
 

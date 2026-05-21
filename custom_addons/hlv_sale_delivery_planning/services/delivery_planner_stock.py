@@ -101,7 +101,9 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             _combo_recs = self.env['product.template'].sudo().search_read(
                 [('id', 'in', all_tmpl_ids), ('is_combo', '=', True)], ['id'],
             )
-            combo_old_tmpl_ids = {r['id'] for r in _combo_recs} - kit_tmpl_ids
+            # Bao gồm cả sản phẩm có phantom BOM: nếu BOM explosion thất bại
+            # (bom_line_id=NULL trên moves) thì qty_delivered=0 và cần fallback combo.
+            combo_old_tmpl_ids = {r['id'] for r in _combo_recs}
         if combo_old_tmpl_ids:
             _cp_recs = self.env['combo.product'].sudo().search_read(
                 [('product_template_id', 'in', list(combo_old_tmpl_ids))],
@@ -308,21 +310,22 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 )
                 qty_del = line.get('qty_delivered') or 0
                 qty_ord = line.get('product_uom_qty') or 0
-                # Combo kiểu cũ: qty_delivered trên SOL parent = 0 nhưng linh kiện
-                # đã được giao dưới dạng SOL độc lập. Tính effective từ min delivery ratio.
-                if is_combo_old:
-                    combo_items = combo_items_map.get(p_tmpl_id, [])
-                    if combo_items and qty_ord > 0:
-                        min_ratio = float('inf')
-                        for item_pid, item_qty_per in combo_items:
-                            needed = item_qty_per * qty_ord
-                            if needed > 0:
-                                delivered_comp = sol_delivered_by_product.get(item_pid, 0.0)
-                                min_ratio = min(min_ratio, delivered_comp / needed)
-                        qty_del = (
-                            min(min_ratio, 1.0) * qty_ord
-                            if min_ratio != float('inf') else 0.0
-                        )
+
+                if is_combo_old or (is_kit and qty_del == 0 and p_tmpl_id in combo_old_tmpl_ids):
+                    # Combo kiểu cũ hoặc kit với BOM explosion thất bại:
+                    # tính effective qty_delivered từ min ratio giao linh kiện.
+                    # Chỉ kích hoạt fallback kit khi qty_del=0 (tiết kiệm tài nguyên).
+                    _items = combo_items_map.get(p_tmpl_id, [])
+                    if _items and qty_ord > 0:
+                        _mr = float('inf')
+                        for _i_pid, _i_qty in _items:
+                            _needed = _i_qty * qty_ord
+                            if _needed > 0:
+                                _mr = min(_mr, sol_delivered_by_product.get(_i_pid, 0.0) / _needed)
+                        if _mr != float('inf'):
+                            qty_del = min(_mr, 1.0) * qty_ord
+                            if is_kit:
+                                is_kit = False  # treat as non-kit cho has_pending/has_delivered
                 if qty_del > 0:
                     has_delivered = True
                 pending_qty = qty_ord - qty_del
