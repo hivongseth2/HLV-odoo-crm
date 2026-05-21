@@ -25,6 +25,7 @@ export class BarcodeApp extends Component {
             recordId: null,
             lookupTitle: "",
             showCamera: false,
+            cameraFallback: false,
         });
         
         this.barcodeBuffer = "";
@@ -165,11 +166,27 @@ export class BarcodeApp extends Component {
         } catch (err) {
             const errStr = String(err).toLowerCase();
             if (errStr.includes("notallowederror") || errStr.includes("permission")) {
-                this.notification.add("Vui lòng cấp quyền Camera trên trình duyệt để sử dụng tính năng này.", { type: "warning" });
+                this.notification.add("Trình duyệt từ chối quyền Camera. Đã chuyển sang chế độ chụp ảnh/chọn file.", { type: "info" });
+                this.state.cameraFallback = true;
             } else {
                 this.notification.add("Không thể mở Camera. Lỗi: " + err, { type: "warning" });
+                this.closeCamera();
             }
+        }
+    }
+
+    async onFileSelected(ev) {
+        if (!ev.target.files || ev.target.files.length === 0) return;
+        const file = ev.target.files[0];
+        try {
+            if (!this.html5Qrcode) {
+                this.html5Qrcode = new window.Html5Qrcode("reader");
+            }
+            const decodedText = await this.html5Qrcode.scanFile(file, true);
             this.closeCamera();
+            this.processBarcode(decodedText);
+        } catch (err) {
+            this.notification.add("Không tìm thấy mã vạch hợp lệ trong ảnh này.", { type: "danger" });
         }
     }
 
@@ -181,11 +198,23 @@ export class BarcodeApp extends Component {
             this.html5Qrcode = null;
         }
         this.state.showCamera = false;
+        this.state.cameraFallback = false;
     }
 
     exitApp() {
         // Thoát ứng dụng Barcode, quay về màn hình chính Odoo
         window.location.href = "/web";
+    }
+
+    openSettings() {
+        this.action.doAction({
+            type: 'ir.actions.act_window',
+            name: 'Settings',
+            res_model: 'res.config.settings',
+            views: [[false, 'form']],
+            target: 'current',
+            context: { module: 'hlv_mobile_barcode' }
+        });
     }
 }
 

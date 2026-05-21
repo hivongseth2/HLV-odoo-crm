@@ -31,10 +31,12 @@
     to { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes pulseLaser {
-    0% { opacity: 0.6; box-shadow: 0 0 5px #ff3b3b; }
-    50% { opacity: 1; box-shadow: 0 0 15px #ff3b3b, 0 0 30px #ff3b3b; }
-    100% { opacity: 0.6; box-shadow: 0 0 5px #ff3b3b; }
+@keyframes scanLaser {
+    0% { top: -5%; opacity: 0; }
+    15% { opacity: 1; }
+    50% { top: 105%; opacity: 1; }
+    85% { opacity: 1; }
+    100% { top: -5%; opacity: 0; }
 }
 
 /* Header */
@@ -136,13 +138,12 @@
 
 .o_barcode_laser {
     position: absolute;
-    top: 50%;
     left: -15%;
     width: 130%;
     height: 3px;
     background-color: #ff3b3b;
     border-radius: 3px;
-    animation: pulseLaser 2s infinite;
+    animation: scanLaser 2.5s ease-in-out infinite;
 }
 
 .o_barcode_subtitle {

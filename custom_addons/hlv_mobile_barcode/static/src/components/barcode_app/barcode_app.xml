@@ -20,7 +20,7 @@
                                 <i class="fa fa-th" style="cursor: pointer; padding-right: 8px;" t-on-click="exitApp"/> 
                                 Máy quét mã vạch
                             </div>
-                            <button class="btn btn-light btn-sm o_barcode_settings_btn" disabled="1">Cài đặt</button>
+                            <button class="btn btn-light btn-sm o_barcode_settings_btn" t-on-click="openSettings">Cài đặt</button>
                         </div>
                         
                         <div class="o_barcode_card_body" t-on-click="openCamera">
@@ -80,9 +80,23 @@
                 <!-- Camera Overlay -->
                 <div t-if="state.showCamera" class="camera-modal" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: black; z-index: 9999; display: flex; flex-direction: column;">
                     <div style="padding: 15px; text-align: right; background: #333;">
-                        <button class="btn btn-danger btn-lg" t-on-click="closeCamera"><i class="fa fa-times"/> Close Camera</button>
+                        <button class="btn btn-danger btn-lg" t-on-click="closeCamera"><i class="fa fa-times"/> Đóng Camera</button>
                     </div>
-                    <div id="reader" style="width: 100%; flex: 1; background: black;"></div>
+                    
+                    <!-- Fallback if camera permission denied -->
+                    <div t-if="state.cameraFallback" style="padding: 20px; text-align: center; color: white;">
+                        <h4 class="mb-3">Không có quyền truy cập máy ảnh</h4>
+                        <p>Trình duyệt đã bị từ chối quyền truy cập máy ảnh. Thay vì phải vào cài đặt cấp quyền lại, bạn có thể bấm nút bên dưới để sử dụng App Máy Ảnh mặc định của điện thoại để chụp mã vạch.</p>
+                        <div class="mt-4">
+                            <input type="file" accept="image/*" capture="environment" id="cameraFileInput" style="display: none;" t-on-change="onFileSelected"/>
+                            <label for="cameraFileInput" class="btn btn-primary btn-lg" style="padding: 15px 30px; font-size: 18px; border-radius: 50px;">
+                                <i class="fa fa-camera"/> Bật máy ảnh &amp; Chụp
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Live Reader -->
+                    <div id="reader" style="width: 100%; flex: 1; background: black;" t-show="!state.cameraFallback"></div>
                 </div>
             </div>
         </div>
