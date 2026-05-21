@@ -7,10 +7,10 @@
         <field name="target">fullscreen</field>
     </record>
 
-    <!-- Menu Item under Inventory -->
-    <menuitem id="menu_hlv_mobile_barcode"
+    <!-- Menu Item on the Main App Switcher (Root) -->
+    <menuitem id="menu_hlv_mobile_barcode_root"
               name="Mobile Barcode"
-              parent="stock.menu_stock_root"
               action="action_hlv_mobile_barcode"
-              sequence="1"/>
+              web_icon="stock,static/description/icon.png"
+              sequence="10"/>
 </odoo>
