@@ -227,6 +227,13 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
         so_lines_data = []
         remaining_free_by_product = {}
 
+        # Pre-build delivered qty per product để dùng trong kit_fallback bên dưới
+        _sol_del_by_prod = {}
+        for _sl in so.order_line:
+            if not _sl.display_type and _sl.product_id:
+                _pid = _sl.product_id.id
+                _sol_del_by_prod[_pid] = _sol_del_by_prod.get(_pid, 0.0) + (_sl.qty_delivered or 0.0)
+
         for line in so.order_line:
             if line.display_type:
                 continue
@@ -302,11 +309,29 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                 raw_free = 0.0
                 reserved_line = 0.0
 
+            # Kit Fallback: nếu BOM explosion thất bại (qty_delivered=0 trên combo cha)
+            # nhưng linh kiện đã giao dưới dạng SOL riêng → hiển thị qty_delivered hiệu quả
+            eff_qty_del = line.qty_delivered
+            if is_kit and line.qty_delivered == 0 and line.product_id:
+                _fb_bom = kit_bom_map.get(line.product_id.product_tmpl_id.id)
+                if _fb_bom:
+                    _bom_qty = _fb_bom.product_qty or 1.0
+                    _kits_ratio = float('inf')
+                    for _comp in _fb_bom.bom_line_ids:
+                        _qty_per_kit = (_comp.product_qty or 0.0) / _bom_qty
+                        if _qty_per_kit > 0 and _comp.product_id:
+                            _kits_ratio = min(
+                                _kits_ratio,
+                                _sol_del_by_prod.get(_comp.product_id.id, 0.0) / _qty_per_kit,
+                            )
+                    if _kits_ratio != float('inf') and _kits_ratio > 0:
+                        eff_qty_del = min(_kits_ratio, line.product_uom_qty)
+
             so_lines_data.append({
                 'id': line.id,
                 'product_id': [line.product_id.id, p_name] if line.product_id else False,
                 'product_uom_qty': line.product_uom_qty,
-                'qty_delivered': line.qty_delivered,
+                'qty_delivered': eff_qty_del,
                 'qty_packed': qty_packed,
                 'qty_available': qty_avail,
                 'qty_warehouse_free': raw_free,

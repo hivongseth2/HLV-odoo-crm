@@ -94,6 +94,25 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
         ]) if all_tmpl_ids else self.env['mrp.bom']
         kit_tmpl_ids = set(kits.mapped('product_tmpl_id').ids)
 
+        # [D2] Kit BOM components — 1 query (kit_fallback: nếu BOM explosion thất bại,
+        # linh kiện được bán dưới dạng SOL riêng → detect từ BOM lines)
+        kit_comp_map = {}  # {kit_tmpl_id: [(comp_pid, qty_per_kit), ...]}
+        if kits:
+            _bom_line_recs = self.env['mrp.bom.line'].sudo().search_read(
+                [('bom_id', 'in', kits.ids)],
+                ['bom_id', 'product_id', 'product_qty'],
+            )
+            _bom_id_to_tmpl = {bom.id: bom.product_tmpl_id.id for bom in kits}
+            _bom_prod_qty = {bom.id: bom.product_qty or 1.0 for bom in kits}
+            for _bl in _bom_line_recs:
+                _bid = _bl['bom_id'][0] if isinstance(_bl['bom_id'], (list, tuple)) else _bl['bom_id']
+                _cpid = _bl['product_id'][0] if isinstance(_bl['product_id'], (list, tuple)) else _bl['product_id']
+                _tmpl = _bom_id_to_tmpl.get(_bid)
+                if _tmpl and _cpid:
+                    _qty_per_kit = (_bl.get('product_qty') or 0.0) / _bom_prod_qty.get(_bid, 1.0)
+                    if _qty_per_kit > 0:
+                        kit_comp_map.setdefault(_tmpl, []).append((_cpid, _qty_per_kit))
+
         # [E] Active moves per sale line — 1 query
         move_recs = self.env['stock.move'].sudo().search_read(
             [('sale_line_id', 'in', all_line_ids), ('state', 'not in', ('cancel', 'done'))],
@@ -270,6 +289,22 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 is_kit = bool(p_tmpl_id and p_tmpl_id in kit_tmpl_ids)
                 qty_del = line.get('qty_delivered') or 0
                 qty_ord = line.get('product_uom_qty') or 0
+                # Kit Fallback: nếu BOM explosion thất bại (qty_delivered=0 trên combo cha)
+                # nhưng linh kiện đã giao dưới dạng SOL riêng trong cùng đơn hàng.
+                if is_kit and qty_del == 0 and p_tmpl_id:
+                    _comp_defs = kit_comp_map.get(p_tmpl_id, [])
+                    if _comp_defs:
+                        _sol_del = {}
+                        for _l in lines:
+                            _lpid = _l['product_id'][0] if _l.get('product_id') else None
+                            if _lpid:
+                                _sol_del[_lpid] = _sol_del.get(_lpid, 0.0) + (_l.get('qty_delivered') or 0.0)
+                        _kits_ratio = float('inf')
+                        for _cpid, _qty_per_kit in _comp_defs:
+                            _kits_ratio = min(_kits_ratio, _sol_del.get(_cpid, 0.0) / _qty_per_kit)
+                        if _kits_ratio != float('inf') and _kits_ratio > 0:
+                            qty_del = min(_kits_ratio, qty_ord)
+                            is_kit = False  # Treat as non-kit: dùng pending_qty thay vì cmp_moves
                 if qty_del > 0:
                     has_delivered = True
                 pending_qty = qty_ord - qty_del
