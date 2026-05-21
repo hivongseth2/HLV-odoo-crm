@@ -94,9 +94,9 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
         ]) if all_tmpl_ids else self.env['mrp.bom']
         kit_tmpl_ids = set(kits.mapped('product_tmpl_id').ids)
 
-        # [D2] Kit BOM components — 1 query (kit_fallback: nếu BOM explosion thất bại,
-        # linh kiện được bán dưới dạng SOL riêng → detect từ BOM lines)
-        kit_comp_map = {}  # {kit_tmpl_id: [(comp_pid, qty_per_kit), ...]}
+        # [D2] Kit BOM components — 1 query
+        # Xây kit_comp_map: {kit_tmpl_id: [(comp_pid, qty_per_kit), ...]}
+        kit_comp_map = {}
         if kits:
             _bom_line_recs = self.env['mrp.bom.line'].sudo().search_read(
                 [('bom_id', 'in', kits.ids)],
@@ -112,6 +112,35 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                     _qty_per_kit = (_bl.get('product_qty') or 0.0) / _bom_prod_qty.get(_bid, 1.0)
                     if _qty_per_kit > 0:
                         kit_comp_map.setdefault(_tmpl, []).append((_cpid, _qty_per_kit))
+
+        # [D3] Done outgoing moves cho kit SOLs có qty_delivered=0
+        # Trường hợp BOM explosion thành công nhưng bom_line_id=NULL →
+        # Odoo MRP không tính được qty_delivered → dùng done moves trực tiếp
+        kit_sol_id_set = set()
+        for _r in line_recs:
+            _pid_raw = _r.get('product_id')
+            _pid = _pid_raw[0] if isinstance(_pid_raw, (list, tuple)) else _pid_raw
+            if not _pid or (_r.get('qty_delivered') or 0) > 0:
+                continue
+            _tmpl_raw = product_map.get(_pid, {}).get('product_tmpl_id')
+            _tmpl_id = _tmpl_raw[0] if isinstance(_tmpl_raw, (list, tuple)) else _tmpl_raw
+            if _tmpl_id and _tmpl_id in kit_tmpl_ids:
+                kit_sol_id_set.add(_r['id'])
+        done_moves_by_kit_sol = {}  # {sol_id: {prod_id: total_done_qty}}
+        if kit_sol_id_set:
+            _done_mvs = self.env['stock.move'].sudo().search_read(
+                [
+                    ('sale_line_id', 'in', list(kit_sol_id_set)),
+                    ('state', '=', 'done'),
+                    ('picking_id.picking_type_code', '=', 'outgoing'),
+                ],
+                ['sale_line_id', 'product_id', 'quantity'],
+            )
+            for _mv in _done_mvs:
+                _sol_id = _mv['sale_line_id'][0] if isinstance(_mv['sale_line_id'], (list, tuple)) else _mv['sale_line_id']
+                _cpid = _mv['product_id'][0] if isinstance(_mv['product_id'], (list, tuple)) else _mv['product_id']
+                _done_map = done_moves_by_kit_sol.setdefault(_sol_id, {})
+                _done_map[_cpid] = _done_map.get(_cpid, 0.0) + (_mv.get('quantity') or 0.0)
 
         # [E] Active moves per sale line — 1 query
         move_recs = self.env['stock.move'].sudo().search_read(
@@ -289,22 +318,18 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 is_kit = bool(p_tmpl_id and p_tmpl_id in kit_tmpl_ids)
                 qty_del = line.get('qty_delivered') or 0
                 qty_ord = line.get('product_uom_qty') or 0
-                # Kit Fallback: nếu BOM explosion thất bại (qty_delivered=0 trên combo cha)
-                # nhưng linh kiện đã giao dưới dạng SOL riêng trong cùng đơn hàng.
+                # Kit Fallback: BOM explosion xảy ra nhưng bom_line_id=NULL →
+                # Odoo không tính qty_delivered. Dùng done outgoing moves trực tiếp.
                 if is_kit and qty_del == 0 and p_tmpl_id:
                     _comp_defs = kit_comp_map.get(p_tmpl_id, [])
-                    if _comp_defs:
-                        _sol_del = {}
-                        for _l in lines:
-                            _lpid = _l['product_id'][0] if _l.get('product_id') else None
-                            if _lpid:
-                                _sol_del[_lpid] = _sol_del.get(_lpid, 0.0) + (_l.get('qty_delivered') or 0.0)
+                    _done_by_prod = done_moves_by_kit_sol.get(line['id'], {})
+                    if _comp_defs and _done_by_prod:
                         _kits_ratio = float('inf')
                         for _cpid, _qty_per_kit in _comp_defs:
-                            _kits_ratio = min(_kits_ratio, _sol_del.get(_cpid, 0.0) / _qty_per_kit)
+                            _kits_ratio = min(_kits_ratio, _done_by_prod.get(_cpid, 0.0) / _qty_per_kit)
                         if _kits_ratio != float('inf') and _kits_ratio > 0:
                             qty_del = min(_kits_ratio, qty_ord)
-                            is_kit = False  # Treat as non-kit: dùng pending_qty thay vì cmp_moves
+                            is_kit = False  # Treat as non-kit: pending_qty sẽ xử lý đúng
                 if qty_del > 0:
                     has_delivered = True
                 pending_qty = qty_ord - qty_del

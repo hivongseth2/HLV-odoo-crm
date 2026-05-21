@@ -227,13 +227,6 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
         so_lines_data = []
         remaining_free_by_product = {}
 
-        # Pre-build delivered qty per product để dùng trong kit_fallback bên dưới
-        _sol_del_by_prod = {}
-        for _sl in so.order_line:
-            if not _sl.display_type and _sl.product_id:
-                _pid = _sl.product_id.id
-                _sol_del_by_prod[_pid] = _sol_del_by_prod.get(_pid, 0.0) + (_sl.qty_delivered or 0.0)
-
         for line in so.order_line:
             if line.display_type:
                 continue
@@ -309,23 +302,37 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                 raw_free = 0.0
                 reserved_line = 0.0
 
-            # Kit Fallback: nếu BOM explosion thất bại (qty_delivered=0 trên combo cha)
-            # nhưng linh kiện đã giao dưới dạng SOL riêng → hiển thị qty_delivered hiệu quả
+            # Kit Fallback: BOM explosion xảy ra nhưng bom_line_id=NULL →
+            # Odoo không tính qty_delivered. Dùng done outgoing moves của kit SOL.
             eff_qty_del = line.qty_delivered
             if is_kit and line.qty_delivered == 0 and line.product_id:
                 _fb_bom = kit_bom_map.get(line.product_id.product_tmpl_id.id)
                 if _fb_bom:
-                    _bom_qty = _fb_bom.product_qty or 1.0
-                    _kits_ratio = float('inf')
-                    for _comp in _fb_bom.bom_line_ids:
-                        _qty_per_kit = (_comp.product_qty or 0.0) / _bom_qty
-                        if _qty_per_kit > 0 and _comp.product_id:
-                            _kits_ratio = min(
-                                _kits_ratio,
-                                _sol_del_by_prod.get(_comp.product_id.id, 0.0) / _qty_per_kit,
-                            )
-                    if _kits_ratio != float('inf') and _kits_ratio > 0:
-                        eff_qty_del = min(_kits_ratio, line.product_uom_qty)
+                    _done_out_mvs = self.env['stock.move'].sudo().search_read(
+                        [
+                            ('sale_line_id', '=', line.id),
+                            ('state', '=', 'done'),
+                            ('picking_id.picking_type_code', '=', 'outgoing'),
+                        ],
+                        ['product_id', 'quantity'],
+                    )
+                    _done_by_prod = {}
+                    for _m in _done_out_mvs:
+                        _mpid = _m['product_id'][0] if isinstance(_m.get('product_id'), (list, tuple)) else _m.get('product_id')
+                        if _mpid:
+                            _done_by_prod[_mpid] = _done_by_prod.get(_mpid, 0.0) + (_m.get('quantity') or 0.0)
+                    if _done_by_prod:
+                        _bom_qty = _fb_bom.product_qty or 1.0
+                        _kits_ratio = float('inf')
+                        for _comp in _fb_bom.bom_line_ids:
+                            _qty_per_kit = (_comp.product_qty or 0.0) / _bom_qty
+                            if _qty_per_kit > 0 and _comp.product_id:
+                                _kits_ratio = min(
+                                    _kits_ratio,
+                                    _done_by_prod.get(_comp.product_id.id, 0.0) / _qty_per_kit,
+                                )
+                        if _kits_ratio != float('inf') and _kits_ratio > 0:
+                            eff_qty_del = min(_kits_ratio, line.product_uom_qty)
 
             so_lines_data.append({
                 'id': line.id,
