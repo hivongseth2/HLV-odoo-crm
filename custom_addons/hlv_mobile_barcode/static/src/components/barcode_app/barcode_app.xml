@@ -96,7 +96,7 @@
                     </div>
 
                     <!-- Live Reader -->
-                    <div id="reader" style="width: 100%; flex: 1; background: black;" t-show="!state.cameraFallback"></div>
+                    <div id="reader" style="width: 100%; flex: 1; background: black;" t-att-class="state.cameraFallback ? 'd-none' : ''"></div>
                 </div>
             </div>
         </div>
