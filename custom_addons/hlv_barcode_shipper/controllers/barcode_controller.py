@@ -6,6 +6,7 @@ import json
 import logging
 from datetime import timedelta
 
+from markupsafe import Markup, escape
 from odoo import http, fields
 from odoo.http import request
 from odoo.exceptions import UserError
@@ -1072,7 +1073,7 @@ class BarcodeShipperController(http.Controller):
             photo_b64 = base64.b64encode(photo_data).decode("utf-8")
             photo_name = photo_file.filename or "delivery_photo.jpg"
             mimetype = photo_file.content_type or "image/jpeg"
-            shipper_name = request.env.user.name
+            shipper_name = request.env.user.shipper_name or request.env.user.name
 
             pickings = request.env["stock.picking"].sudo().browse(
                 [int(pid) for pid in picking_ids]
@@ -1089,10 +1090,10 @@ class BarcodeShipperController(http.Controller):
                     "mimetype": mimetype,
                 })
                 picking.message_post(
-                    body=(
-                        f"<p><i class='fa fa-camera'></i> Shipper <b>{shipper_name}</b> "
-                        f"đã chụp ảnh phiếu giao hàng.</p>"
-                    ),
+                    body=Markup(
+                        "<p><i class='fa fa-camera'></i> Shipper <b>{}</b> "
+                        "đã chụp ảnh phiếu giao hàng.</p>"
+                    ).format(escape(shipper_name)),
                     message_type="comment",
                     subtype_xmlid="mail.mt_note",
                     attachment_ids=[attachment.id],

@@ -1061,8 +1061,6 @@ class BarcodeShipper {
         const pickingIds = Object.keys(this.pickingDataMap).map(id => parseInt(id));
         if (pickingIds.length === 0) return;
 
-        if (!confirm(`Bạn có chắc muốn hoàn tất ${pickingIds.length} đơn hàng?`)) return;
-
         // Store picking IDs for photo step
         this._photoPickingIds = pickingIds;
 
@@ -1197,6 +1195,7 @@ class BarcodeShipper {
     }
 
     async _doCompleteOut(pickingIds) {
+        if (!confirm(`Xác nhận hoàn tất ${pickingIds.length} đơn hàng?`)) return;
         try {
             const res = await this.apiCall('/api/barcode/complete_out', { picking_ids: pickingIds });
             if (res.success) {
