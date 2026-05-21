@@ -23,6 +23,7 @@ export class BarcodeApp extends Component {
             lookupType: null, // 'product', 'location', 'package'
             recordId: null,
             lookupTitle: "",
+            showCamera: false,
         });
         
         this.barcodeBuffer = "";
@@ -122,8 +123,60 @@ export class BarcodeApp extends Component {
         this.state.currentView = 'move';
     }
 
-    openCamera() {
-        this.notification.add("Camera integration requires HTTPS and WebRTC support.", { type: "info" });
+    async openCamera() {
+        this.state.showCamera = true;
+        
+        // Chờ DOM render the div 'reader'
+        await new Promise(r => setTimeout(r, 100));
+
+        if (!window.Html5Qrcode) {
+            this.notification.add("Downloading camera library...", { type: "info" });
+            try {
+                await new Promise((resolve, reject) => {
+                    const script = document.createElement("script");
+                    script.src = "https://unpkg.com/html5-qrcode";
+                    script.onload = resolve;
+                    script.onerror = reject;
+                    document.head.appendChild(script);
+                });
+            } catch (e) {
+                this.notification.add("Cannot load camera library. Need internet.", { type: "danger" });
+                this.state.showCamera = false;
+                return;
+            }
+        }
+        
+        try {
+            this.html5Qrcode = new window.Html5Qrcode("reader");
+            const config = { fps: 10, qrbox: { width: 250, height: 150 } };
+            
+            await this.html5Qrcode.start(
+                { facingMode: "environment" }, 
+                config,
+                (decodedText, decodedResult) => {
+                    // Success callback
+                    this.closeCamera();
+                    // Optional: play beep sound here if needed
+                    this.processBarcode(decodedText);
+                },
+                (errorMessage) => {
+                    // ignore parse errors
+                }
+            );
+        } catch (err) {
+            this.notification.add("Could not start camera. Please ensure HTTPS and give permission.", { type: "danger" });
+            this.closeCamera();
+        }
+    }
+
+    closeCamera() {
+        if (this.html5Qrcode) {
+            try {
+                this.html5Qrcode.stop().catch(e => console.error(e));
+            } catch (e) {}
+            this.html5Qrcode = null;
+        }
+        this.state.showCamera = false;
     }
 }
 
