@@ -103,10 +103,23 @@ export class BarcodeApp extends Component {
                 this.state.pickingName = result.name;
                 this.state.currentView = 'picking';
             } else if (['product', 'location', 'package'].includes(result.type)) {
-                this.state.lookupType = result.type;
-                this.state.recordId = result.id;
-                this.state.lookupTitle = result.name;
-                this.state.currentView = 'lookup';
+                let domain = [];
+                if (result.type === 'product') {
+                    domain = [['product_id', '=', result.id], ['location_id.usage', '=', 'internal']];
+                } else if (result.type === 'location') {
+                    domain = [['location_id', '=', result.id]];
+                } else if (result.type === 'package') {
+                    domain = [['package_id', '=', result.id]];
+                }
+                
+                this.action.doAction({
+                    type: 'ir.actions.act_window',
+                    name: result.name,
+                    res_model: 'stock.quant',
+                    views: [[false, 'list'], [false, 'form']],
+                    domain: domain,
+                    target: 'current',
+                });
             }
         } catch (error) {
             this.notification.add("Server error", { type: "danger" });
