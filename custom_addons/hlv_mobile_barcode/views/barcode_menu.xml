@@ -11,6 +11,7 @@
     <menuitem id="menu_hlv_mobile_barcode_root"
               name="Mobile Barcode"
               action="action_hlv_mobile_barcode"
-              web_icon="stock,static/description/icon.png"
+              groups="base.group_user,stock.group_stock_user"
+              web_icon="hlv_mobile_barcode,static/description/icon.png"
               sequence="10"/>
 </odoo>
