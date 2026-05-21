@@ -162,7 +162,7 @@ export class BarcodeApp extends Component {
             // Xoá qrbox để thuật toán quét toàn bộ khung hình thay vì ép người dùng phải căn chuẩn vào ô nhỏ
             
             await this.html5Qrcode.start(
-                { facingMode: "environment", advanced: [{ focusMode: "continuous" }] }, 
+                { facingMode: "environment" }, 
                 config,
                 (decodedText, decodedResult) => {
                     this.closeCamera();
