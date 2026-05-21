@@ -1,6 +1,7 @@
 # hlv_barcode_shipper/controllers/barcode_controller.py
 # -*- coding: utf-8 -*-
 
+import base64
 import json
 import logging
 from datetime import timedelta
@@ -1023,3 +1024,98 @@ class BarcodeShipperController(http.Controller):
         except Exception as e:
             _logger.exception("Error in scan_pick_for_return")
             return {"success": False, "error": "Đã xảy ra lỗi hệ thống"}
+
+    # ===== API: upload delivery photo to chatter =====
+    @http.route(
+        "/api/barcode/upload_delivery_photo",
+        type="http",
+        auth="user",
+        methods=["POST"],
+        csrf=False,
+    )
+    def upload_delivery_photo(self, **kwargs):
+        """Receive a delivery photo and post it to the chatter of each picking."""
+        try:
+            access = self._check_shipper_access()
+            if not access["success"]:
+                return request.make_response(
+                    json.dumps(access),
+                    headers=[("Content-Type", "application/json")],
+                )
+
+            picking_ids_str = request.httprequest.form.get("picking_ids", "[]")
+            try:
+                picking_ids = json.loads(picking_ids_str)
+            except Exception:
+                picking_ids = []
+
+            photo_file = request.httprequest.files.get("photo")
+
+            if not picking_ids:
+                return request.make_response(
+                    json.dumps({"success": False, "error": "Thiếu Picking ID"}),
+                    headers=[("Content-Type", "application/json")],
+                )
+            if not photo_file:
+                return request.make_response(
+                    json.dumps({"success": False, "error": "Không có ảnh được gửi"}),
+                    headers=[("Content-Type", "application/json")],
+                )
+
+            photo_data = photo_file.read()
+            if len(photo_data) > 10 * 1024 * 1024:
+                return request.make_response(
+                    json.dumps({"success": False, "error": "Ảnh quá lớn (tối đa 10MB)"}),
+                    headers=[("Content-Type", "application/json")],
+                )
+
+            photo_b64 = base64.b64encode(photo_data).decode("utf-8")
+            photo_name = photo_file.filename or "delivery_photo.jpg"
+            mimetype = photo_file.content_type or "image/jpeg"
+            shipper_name = request.env.user.name
+
+            pickings = request.env["stock.picking"].sudo().browse(
+                [int(pid) for pid in picking_ids]
+            )
+            posted = []
+            for picking in pickings:
+                if not picking.exists():
+                    continue
+                attachment = request.env["ir.attachment"].sudo().create({
+                    "name": photo_name,
+                    "datas": photo_b64,
+                    "res_model": "stock.picking",
+                    "res_id": picking.id,
+                    "mimetype": mimetype,
+                })
+                picking.message_post(
+                    body=(
+                        f"<p><i class='fa fa-camera'></i> Shipper <b>{shipper_name}</b> "
+                        f"đã chụp ảnh phiếu giao hàng.</p>"
+                    ),
+                    message_type="comment",
+                    subtype_xmlid="mail.mt_note",
+                    attachment_ids=[attachment.id],
+                )
+                posted.append(picking.name)
+                self._log_scan(
+                    barcode=picking.name,
+                    scan_type="complete",
+                    picking_id=picking.id,
+                    status="success",
+                    message=f"Shipper {shipper_name} gửi ảnh phiếu giao hàng",
+                )
+
+            return request.make_response(
+                json.dumps({
+                    "success": True,
+                    "message": f"Đã gửi ảnh vào {len(posted)} đơn hàng thành công!",
+                }),
+                headers=[("Content-Type", "application/json")],
+            )
+        except Exception as e:
+            _logger.exception("Error in upload_delivery_photo")
+            return request.make_response(
+                json.dumps({"success": False, "error": "Đã xảy ra lỗi hệ thống"}),
+                headers=[("Content-Type", "application/json")],
+            )

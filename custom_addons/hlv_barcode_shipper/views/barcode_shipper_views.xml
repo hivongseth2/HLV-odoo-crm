@@ -306,7 +306,64 @@
                                 </div>
                             </div>
 
-                            <!-- Deliver Step 3: Complete -->
+                            <!-- Deliver Step 3: Chụp ảnh phiếu giao hàng -->
+                            <div id="step-photo" class="scan-step">
+                                <div class="card-box">
+                                    <div class="step-header">
+                                        <div class="step-icon"><i class="fa fa-camera"></i></div>
+                                        <div class="step-info">
+                                            <div class="step-title">Chụp phiếu giao hàng</div>
+                                            <p class="step-desc">Chụp ảnh phiếu giao hàng để gửi vào đơn hàng.</p>
+                                        </div>
+                                    </div>
+
+                                    <div id="photo-result" class="alert"></div>
+
+                                    <!-- Camera live preview -->
+                                    <div id="photo-camera-section" class="photo-camera-section" style="display:none;">
+                                        <video id="photo-video" autoplay="autoplay" playsinline="playsinline" muted="muted" style="width:100%;border-radius:8px;background:#000;display:block;"></video>
+                                        <div style="display:flex;gap:8px;margin-top:8px;">
+                                            <button id="photo-capture-btn" class="btn btn-success btn-lg" style="flex:1;">
+                                                <i class="fa fa-circle"></i> Chụp ảnh
+                                            </button>
+                                            <button id="photo-close-camera-btn" class="btn btn-secondary">
+                                                <i class="fa fa-times"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Photo preview after capture -->
+                                    <div id="photo-preview-section" style="display:none;">
+                                        <canvas id="photo-canvas" style="display:none;"></canvas>
+                                        <img id="photo-preview-img" style="width:100%;border-radius:8px;border:2px solid var(--success-color);" alt="Ảnh phiếu"/>
+                                        <button id="photo-retake-btn" class="btn btn-outline btn-block mt-2">
+                                            <i class="fa fa-redo"></i> Chụp lại
+                                        </button>
+                                    </div>
+
+                                    <!-- Open camera / choose file buttons -->
+                                    <div id="photo-open-section">
+                                        <button id="photo-open-camera-btn" class="btn btn-primary btn-lg btn-block mb-3">
+                                            <i class="fa fa-camera"></i> Mở Camera Chụp Ảnh
+                                        </button>
+                                        <label class="btn btn-outline btn-block" style="cursor:pointer;">
+                                            <i class="fa fa-image"></i> Chọn ảnh từ thư viện
+                                            <input type="file" id="photo-file-input" accept="image/*" style="display:none;"/>
+                                        </label>
+                                    </div>
+
+                                    <div style="margin-top:16px;">
+                                        <button id="photo-send-btn" class="btn btn-success btn-lg btn-block" style="display:none;">
+                                            <i class="fa fa-paper-plane"></i> Gửi ảnh &amp; Hoàn tất
+                                        </button>
+                                        <button id="photo-skip-btn" class="btn btn-outline btn-block mt-2">
+                                            <i class="fa fa-forward"></i> Bỏ qua, hoàn tất không ảnh
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Deliver Step 4: Complete -->
                             <div id="step-complete" class="scan-step">
                                 <div class="card-box text-center success-card">
                                     <div class="success-icon"><i class="fa fa-check-circle"></i></div>

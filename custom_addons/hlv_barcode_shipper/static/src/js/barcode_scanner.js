@@ -44,6 +44,11 @@ class BarcodeShipper {
         this._lastScanResult = '';
         this._lastScanTime = 0;
 
+        // ---- Photo camera state ----
+        this._photoCameraStream = null;
+        this._photoBlob = null;
+        this._photoPickingIds = [];
+
         // ---- Settings ----
         this.settings = {
             skip_package_scan: false,
@@ -117,6 +122,7 @@ class BarcodeShipper {
 
     switchTab(tabName) {
         this.stopCamera();
+        this._stopPhotoCamera();
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.classList.toggle('active', btn.dataset.tab === tabName);
         });
@@ -172,6 +178,26 @@ class BarcodeShipper {
         document.getElementById('new-delivery-btn')?.addEventListener('click', () => this.startNewDelivery());
         document.getElementById('btn-open-camera-pick')?.addEventListener('click', () => this.startCamera('camera-pick', 'reader-pick', 'pick'));
         document.getElementById('btn-open-camera-item')?.addEventListener('click', () => this.startCamera('camera-item', 'reader-item', 'item'));
+
+        // === PHOTO STEP ===
+        document.getElementById('photo-open-camera-btn')?.addEventListener('click', () => this._startPhotoCamera());
+        document.getElementById('photo-capture-btn')?.addEventListener('click', () => this._capturePhoto());
+        document.getElementById('photo-close-camera-btn')?.addEventListener('click', () => {
+            this._stopPhotoCamera();
+            document.getElementById('photo-open-section').style.display = 'block';
+        });
+        document.getElementById('photo-retake-btn')?.addEventListener('click', () => {
+            this._photoBlob = null;
+            document.getElementById('photo-preview-section').style.display = 'none';
+            document.getElementById('photo-send-btn').style.display = 'none';
+            document.getElementById('photo-open-section').style.display = 'block';
+        });
+        document.getElementById('photo-file-input')?.addEventListener('change', (e) => {
+            const file = e.target.files && e.target.files[0];
+            if (file) this._handlePhotoFile(file);
+        });
+        document.getElementById('photo-send-btn')?.addEventListener('click', () => this.sendPhotoAndComplete());
+        document.getElementById('photo-skip-btn')?.addEventListener('click', () => this.skipPhotoAndComplete());
 
         // === RECEIVE TAB ===
         document.getElementById('receive-scan-btn')?.addEventListener('click', () => {
@@ -1037,25 +1063,157 @@ class BarcodeShipper {
 
         if (!confirm(`Bạn có chắc muốn hoàn tất ${pickingIds.length} đơn hàng?`)) return;
 
-        this.showMessage('item-result', 'Đang xử lý hoàn tất...', 'warning');
-        try {
-            const res = await this.apiCall('/api/barcode/complete_out', {
-                picking_ids: pickingIds
-            });
+        // Store picking IDs for photo step
+        this._photoPickingIds = pickingIds;
 
+        // Go to photo capture step instead of completing directly
+        this._photoBlob = null;
+        this._resetPhotoUI();
+        this.showDeliverStep('step-photo');
+    }
+
+    _resetPhotoUI() {
+        this._stopPhotoCamera();
+        this._photoBlob = null;
+
+        const openSection = document.getElementById('photo-open-section');
+        const previewSection = document.getElementById('photo-preview-section');
+        const cameraSection = document.getElementById('photo-camera-section');
+        const sendBtn = document.getElementById('photo-send-btn');
+        const fileInput = document.getElementById('photo-file-input');
+
+        if (openSection) openSection.style.display = 'block';
+        if (previewSection) previewSection.style.display = 'none';
+        if (cameraSection) cameraSection.style.display = 'none';
+        if (sendBtn) { sendBtn.style.display = 'none'; sendBtn.disabled = false; }
+        if (fileInput) fileInput.value = '';
+        this.clearMessage('photo-result');
+    }
+
+    async _startPhotoCamera() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+                audio: false,
+            });
+            this._photoCameraStream = stream;
+            const video = document.getElementById('photo-video');
+            if (video) {
+                video.srcObject = stream;
+                await video.play();
+            }
+            document.getElementById('photo-camera-section').style.display = 'block';
+            document.getElementById('photo-open-section').style.display = 'none';
+        } catch (err) {
+            console.error('[Photo] Camera error:', err);
+            this.showMessage('photo-result', 'Không thể mở camera. Vui lòng chọn ảnh từ thư viện.', 'danger');
+        }
+    }
+
+    _stopPhotoCamera() {
+        if (this._photoCameraStream) {
+            this._photoCameraStream.getTracks().forEach(t => t.stop());
+            this._photoCameraStream = null;
+        }
+        const video = document.getElementById('photo-video');
+        if (video) video.srcObject = null;
+        const cameraSection = document.getElementById('photo-camera-section');
+        if (cameraSection) cameraSection.style.display = 'none';
+    }
+
+    _capturePhoto() {
+        const video = document.getElementById('photo-video');
+        const canvas = document.getElementById('photo-canvas');
+        if (!video || !canvas) return;
+
+        canvas.width = video.videoWidth || 1280;
+        canvas.height = video.videoHeight || 720;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        canvas.toBlob((blob) => {
+            this._photoBlob = blob;
+            const url = URL.createObjectURL(blob);
+            const img = document.getElementById('photo-preview-img');
+            if (img) img.src = url;
+            document.getElementById('photo-preview-section').style.display = 'block';
+            document.getElementById('photo-send-btn').style.display = 'flex';
+            this._stopPhotoCamera();
+            document.getElementById('photo-open-section').style.display = 'none';
+        }, 'image/jpeg', 0.85);
+    }
+
+    _handlePhotoFile(file) {
+        if (!file) return;
+        this._photoBlob = file;
+        const url = URL.createObjectURL(file);
+        const img = document.getElementById('photo-preview-img');
+        if (img) img.src = url;
+        document.getElementById('photo-preview-section').style.display = 'block';
+        document.getElementById('photo-send-btn').style.display = 'flex';
+        document.getElementById('photo-open-section').style.display = 'none';
+        this._stopPhotoCamera();
+    }
+
+    async sendPhotoAndComplete() {
+        if (!this._photoBlob || !this._photoPickingIds || this._photoPickingIds.length === 0) return;
+
+        const sendBtn = document.getElementById('photo-send-btn');
+        if (sendBtn) { sendBtn.disabled = true; sendBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Đang gửi...'; }
+        this.showMessage('photo-result', 'Đang tải ảnh lên...', 'warning');
+
+        try {
+            const formData = new FormData();
+            formData.append('picking_ids', JSON.stringify(this._photoPickingIds));
+            formData.append('photo', this._photoBlob, 'delivery_photo.jpg');
+
+            const uploadRes = await fetch('/api/barcode/upload_delivery_photo', {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                body: formData,
+            });
+            const uploadJson = await uploadRes.json();
+
+            if (!uploadJson.success) {
+                this.showMessage('photo-result', uploadJson.error || 'Lỗi tải ảnh', 'danger');
+                if (sendBtn) { sendBtn.disabled = false; sendBtn.innerHTML = '<i class="fa fa-paper-plane"></i> Gửi ảnh & Hoàn tất'; }
+                return;
+            }
+
+            this.showMessage('photo-result', 'Ảnh đã gửi! Đang hoàn tất đơn hàng...', 'success');
+            await this._doCompleteOut(this._photoPickingIds);
+        } catch (e) {
+            console.error(e);
+            this.showMessage('photo-result', 'Lỗi kết nối khi gửi ảnh', 'danger');
+            if (sendBtn) { sendBtn.disabled = false; sendBtn.innerHTML = '<i class="fa fa-paper-plane"></i> Gửi ảnh & Hoàn tất'; }
+        }
+    }
+
+    async skipPhotoAndComplete() {
+        if (!this._photoPickingIds || this._photoPickingIds.length === 0) return;
+        this._stopPhotoCamera();
+        this.showMessage('photo-result', 'Đang hoàn tất đơn hàng...', 'warning');
+        await this._doCompleteOut(this._photoPickingIds);
+    }
+
+    async _doCompleteOut(pickingIds) {
+        try {
+            const res = await this.apiCall('/api/barcode/complete_out', { picking_ids: pickingIds });
             if (res.success) {
-                // Show success screen
                 document.getElementById('completion-result').textContent = res.message;
+                this._stopPhotoCamera();
                 this.showDeliverStep('step-complete');
                 this.playSound('success');
-                this.pickingDataMap = {}; // clear
+                this.pickingDataMap = {};
             } else {
-                this.showMessage('item-result', res.error || 'Có lỗi xảy ra', 'danger');
+                this.showMessage('photo-result', res.error || 'Có lỗi xảy ra', 'danger');
                 this.playSound('error');
+                const sendBtn = document.getElementById('photo-send-btn');
+                if (sendBtn) { sendBtn.disabled = false; sendBtn.innerHTML = '<i class="fa fa-paper-plane"></i> Gửi ảnh & Hoàn tất'; }
             }
         } catch (e) {
             console.error(e);
-            this.showMessage('item-result', 'Lỗi kết nối', 'danger');
+            this.showMessage('photo-result', 'Lỗi kết nối', 'danger');
             this.playSound('error');
         }
     }
