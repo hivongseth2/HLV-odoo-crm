@@ -51,13 +51,7 @@
                         </ul>
                         
                         <div class="o_barcode_card_footer">
-                            <div class="input-group mb-3">
-                                <input type="text" class="form-control" t-model="state.manualBarcode" placeholder="Nhập mã vạch thủ công..." t-on-keyup="onManualBarcodeKeyup"/>
-                                <button class="btn o_btn_purple" t-on-click="processManualBarcode">
-                                    <i class="fa fa-arrow-right"/>
-                                </button>
-                            </div>
-                            <button class="btn o_btn_purple w-100" t-on-click="openCamera">Hoạt động (Camera)</button>
+                            <button class="btn o_btn_purple w-100" t-on-click="openCamera">Hoạt động</button>
                         </div>
                     </div>
                 </div>
@@ -77,26 +71,43 @@
                     <LocationMove productId="state.recordId" onBack="() => this.goToMain()"/>
                 </div>
 
-                <!-- Camera Overlay -->
-                <div t-if="state.showCamera" class="camera-modal" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: black; z-index: 9999; display: flex; flex-direction: column;">
-                    <div style="padding: 15px; text-align: right; background: #333;">
-                        <button class="btn btn-danger btn-lg" t-on-click="closeCamera"><i class="fa fa-times"/> Đóng Camera</button>
-                    </div>
-                    
-                    <!-- Fallback if camera permission denied -->
-                    <div t-if="state.cameraFallback" style="padding: 20px; text-align: center; color: white;">
-                        <h4 class="mb-3">Không có quyền truy cập máy ảnh</h4>
-                        <p>Trình duyệt đã bị từ chối quyền truy cập máy ảnh. Thay vì phải vào cài đặt cấp quyền lại, bạn có thể bấm nút bên dưới để sử dụng App Máy Ảnh mặc định của điện thoại để chụp mã vạch.</p>
-                        <div class="mt-4">
-                            <input type="file" accept="image/*" capture="environment" id="cameraFileInput" style="display: none;" t-on-change="onFileSelected"/>
-                            <label for="cameraFileInput" class="btn btn-primary btn-lg" style="padding: 15px 30px; font-size: 18px; border-radius: 50px;">
-                                <i class="fa fa-camera"/> Bật máy ảnh &amp; Chụp
-                            </label>
+                <!-- Camera Modal (Odoo Style) -->
+                <div t-if="state.showCamera" class="o_barcode_camera_modal_backdrop" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); z-index: 9999; display: flex; justify-content: center; align-items: center; padding: 15px;">
+                    <div class="o_barcode_camera_modal" style="background: white; width: 100%; max-width: 650px; border-radius: 4px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); display: flex; flex-direction: column; overflow: hidden; animation: fadeInSlideUp 0.3s ease-out;">
+                        <!-- Header -->
+                        <div style="padding: 16px 20px; border-bottom: 1px solid #f0f0f0; display: flex; align-items: center; font-weight: 600; font-size: 16px; color: #333;">
+                            <i class="fa fa-arrow-left" style="cursor: pointer; margin-right: 15px; color: #444;" t-on-click="closeCamera"/> Máy quét mã vạch
+                        </div>
+                        
+                        <!-- Body -->
+                        <div style="padding: 30px 20px; text-align: center; min-height: 250px; display: flex; flex-direction: column; justify-content: center; align-items: center; background: #fff;">
+                            
+                            <!-- Fallback UI when permission is denied -->
+                            <t t-if="state.cameraFallback">
+                                <i class="fa fa-camera" style="font-size: 48px; color: #6c757d; margin-bottom: 15px; opacity: 0.8;"/>
+                                <h5 style="font-weight: 600; margin-bottom: 8px; color: #333; font-size: 16px;">Không thể truy cập camera</h5>
+                                <p style="color: #6c757d; font-size: 14px; margin-bottom: 25px; line-height: 1.5;">Không thể bắt đầu quét. Trình duyệt chưa cấp quyền cho trang web này.<br/>Hoặc bấm nút dưới để chụp 1 tấm ảnh chứa mã vạch.</p>
+                                
+                                <div>
+                                    <input type="file" accept="image/*" capture="environment" id="cameraFileInput" style="display: none;" t-on-change="onFileSelected"/>
+                                    <label for="cameraFileInput" class="btn btn-secondary" style="font-weight: 500;">
+                                        <i class="fa fa-image"/> Chọn Ảnh / Chụp Ảnh
+                                    </label>
+                                </div>
+                            </t>
+                            
+                            <!-- Live Camera Feed -->
+                            <div id="reader" style="width: 100%; max-width: 500px; margin: 0 auto; overflow: hidden; border-radius: 8px; background: #000;" t-att-class="state.cameraFallback ? 'd-none' : ''"></div>
+                        </div>
+
+                        <!-- Footer: Manual Barcode Input -->
+                        <div style="padding: 15px 20px; border-top: 1px solid #f0f0f0; background: #fff;">
+                            <div class="input-group" style="border: 1px solid #ced4da; border-radius: 4px; overflow: hidden;">
+                                <input type="text" class="form-control" t-model="state.manualBarcode" placeholder="Nhập một mã vạch..." t-on-keyup="onManualBarcodeKeyup" style="border: none; box-shadow: none; font-size: 14px;"/>
+                                <button class="btn btn-light" style="border: none; border-left: 1px solid #ced4da; background: #f8f9fa; color: #495057; font-size: 14px; font-weight: 500;" t-on-click="processManualBarcode">Áp dụng</button>
+                            </div>
                         </div>
                     </div>
-
-                    <!-- Live Reader -->
-                    <div id="reader" style="width: 100%; flex: 1; background: black;" t-att-class="state.cameraFallback ? 'd-none' : ''"></div>
                 </div>
             </div>
         </div>
