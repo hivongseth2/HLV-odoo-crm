@@ -94,6 +94,25 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
         ]) if all_tmpl_ids else self.env['mrp.bom']
         kit_tmpl_ids = set(kits.mapped('product_tmpl_id').ids)
 
+        # [D2] Old-style Combo (is_combo=True) — 1 query mỗi loại
+        combo_old_tmpl_ids = set()
+        combo_items_map = {}  # {tmpl_id: [(component_product_id, qty_per_combo), ...]}
+        if all_tmpl_ids:
+            _combo_recs = self.env['product.template'].sudo().search_read(
+                [('id', 'in', all_tmpl_ids), ('is_combo', '=', True)], ['id'],
+            )
+            combo_old_tmpl_ids = {r['id'] for r in _combo_recs} - kit_tmpl_ids
+        if combo_old_tmpl_ids:
+            _cp_recs = self.env['combo.product'].sudo().search_read(
+                [('product_template_id', 'in', list(combo_old_tmpl_ids))],
+                ['product_template_id', 'product_id', 'product_quantity'],
+            )
+            for cp in _cp_recs:
+                tmpl_id = cp['product_template_id'][0]
+                combo_items_map.setdefault(tmpl_id, []).append(
+                    (cp['product_id'][0], cp['product_quantity'])
+                )
+
         # [E] Active moves per sale line — 1 query
         move_recs = self.env['stock.move'].sudo().search_read(
             [('sale_line_id', 'in', all_line_ids), ('state', 'not in', ('cancel', 'done'))],
@@ -260,6 +279,17 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             is_fully_ready = True
             total_pending, total_avail = 0, 0
 
+            # Pre-build delivered qty map per product cho combo_old computation
+            sol_delivered_by_product = {}
+            if combo_old_tmpl_ids:
+                for _l in lines:
+                    _pid = _l['product_id'][0] if _l.get('product_id') else None
+                    if _pid:
+                        sol_delivered_by_product[_pid] = (
+                            sol_delivered_by_product.get(_pid, 0.0)
+                            + (_l.get('qty_delivered') or 0.0)
+                        )
+
             for line in lines:
                 pid = line['product_id'][0] if line.get('product_id') else None
                 if not pid:
@@ -271,8 +301,28 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 tmpl_raw = pdata.get('product_tmpl_id')
                 p_tmpl_id = tmpl_raw[0] if isinstance(tmpl_raw, (list, tuple)) else tmpl_raw
                 is_kit = bool(p_tmpl_id and p_tmpl_id in kit_tmpl_ids)
+                is_combo_old = (
+                    not is_kit
+                    and bool(p_tmpl_id)
+                    and p_tmpl_id in combo_old_tmpl_ids
+                )
                 qty_del = line.get('qty_delivered') or 0
                 qty_ord = line.get('product_uom_qty') or 0
+                # Combo kiểu cũ: qty_delivered trên SOL parent = 0 nhưng linh kiện
+                # đã được giao dưới dạng SOL độc lập. Tính effective từ min delivery ratio.
+                if is_combo_old:
+                    combo_items = combo_items_map.get(p_tmpl_id, [])
+                    if combo_items and qty_ord > 0:
+                        min_ratio = float('inf')
+                        for item_pid, item_qty_per in combo_items:
+                            needed = item_qty_per * qty_ord
+                            if needed > 0:
+                                delivered_comp = sol_delivered_by_product.get(item_pid, 0.0)
+                                min_ratio = min(min_ratio, delivered_comp / needed)
+                        qty_del = (
+                            min(min_ratio, 1.0) * qty_ord
+                            if min_ratio != float('inf') else 0.0
+                        )
                 if qty_del > 0:
                     has_delivered = True
                 pending_qty = qty_ord - qty_del
