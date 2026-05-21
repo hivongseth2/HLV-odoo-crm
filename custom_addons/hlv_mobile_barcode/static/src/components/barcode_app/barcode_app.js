@@ -103,22 +103,21 @@ export class BarcodeApp extends Component {
                 this.state.pickingName = result.name;
                 this.state.currentView = 'picking';
             } else if (['product', 'location', 'package'].includes(result.type)) {
-                let domain = [];
+                let context = {};
                 if (result.type === 'product') {
-                    domain = [['product_id', '=', result.id], ['location_id.usage', '=', 'internal']];
+                    context.search_default_product_id = result.id;
                 } else if (result.type === 'location') {
-                    domain = [['location_id', '=', result.id]];
+                    context.search_default_location_id = result.id;
                 } else if (result.type === 'package') {
-                    domain = [['package_id', '=', result.id]];
+                    context.search_default_package_id = result.id;
                 }
                 
-                this.action.doAction({
-                    type: 'ir.actions.act_window',
-                    name: result.name,
-                    res_model: 'stock.quant',
-                    views: [[false, 'list'], [false, 'form']],
-                    domain: domain,
-                    target: 'current',
+                // Gọi thẳng Action "Điều chỉnh Tồn kho" (Inventory Adjustments) của Odoo
+                // Action này dùng giao diện List View dạng Editable (sửa trực tiếp trên dòng)
+                // Giúp người dùng không bị click nhầm văng sang trang Form View (Settings) nữa.
+                this.action.doAction('stock.action_view_inventory', {
+                    additionalContext: context,
+                    clearBreadcrumbs: false
                 });
             }
         } catch (error) {
