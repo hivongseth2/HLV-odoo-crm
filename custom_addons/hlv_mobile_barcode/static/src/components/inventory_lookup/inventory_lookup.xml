@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="hlv_mobile_barcode.InventoryLookup">
+        <div style="padding-bottom: 80px;">
+            <div t-if="state.loading" class="text-center mt-5">
+                <i class="fa fa-spin fa-spinner fa-3x"/>
+            </div>
+            <div t-else="">
+                <h4 class="mb-3">Results for: <t t-esc="state.title"/></h4>
+                <t t-if="state.results.length === 0">
+                    <div class="alert alert-info">No stock found.</div>
+                </t>
+                <t t-foreach="state.results" t-as="res" t-key="res_index">
+                    <div class="lookup-result-item">
+                        <t t-if="props.lookupType === 'product'">
+                            <strong>Location: </strong> <t t-esc="res.location_name"/><br/>
+                            <t t-if="res.package_name">
+                                <strong>Package: </strong> <t t-esc="res.package_name"/><br/>
+                            </t>
+                            <strong>Qty: </strong> <t t-esc="res.quantity"/>
+                        </t>
+                        <t t-elif="props.lookupType === 'location' or props.lookupType === 'package'">
+                            <strong>Product: </strong> <t t-esc="res.product_name"/><br/>
+                            <strong>Qty: </strong> <t t-esc="res.quantity"/>
+                        </t>
+                    </div>
+                </t>
+            </div>
+            <div class="hlv-barcode-footer" style="position: fixed; bottom: 0; width: 100%; left: 0; box-sizing: border-box;">
+                <button class="btn btn-secondary btn-mobile-large w-100" t-on-click="props.onBack">Back</button>
+                <button t-if="props.lookupType === 'product'" class="btn btn-primary btn-mobile-large w-100" t-on-click="() => props.onMove(props.recordId)">Move</button>
+            </div>
+        </div>
+    </t>
+</templates>

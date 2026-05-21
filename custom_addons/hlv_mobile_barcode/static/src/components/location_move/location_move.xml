@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="hlv_mobile_barcode.LocationMove">
+        <div style="padding-bottom: 80px;">
+            <h4 class="mb-3">Move Product</h4>
+            
+            <div class="form-group mb-3">
+                <label>Source Location Barcode</label>
+                <input type="text" class="form-control form-control-lg" t-model="state.sourceLocationBarcode"/>
+            </div>
+            
+            <div class="form-group mb-3">
+                <label>Destination Location Barcode</label>
+                <input type="text" class="form-control form-control-lg" t-model="state.destLocationBarcode"/>
+            </div>
+            
+            <div class="form-group mb-3">
+                <label>Quantity</label>
+                <input type="number" class="form-control form-control-lg" t-model="state.qty"/>
+            </div>
+            
+            <div class="hlv-barcode-footer" style="position: fixed; bottom: 0; width: 100%; left: 0; box-sizing: border-box;">
+                <button class="btn btn-secondary btn-mobile-large" t-on-click="props.onBack">Cancel</button>
+                <button class="btn btn-primary btn-mobile-large" t-on-click="doMove" t-att-disabled="state.loading">
+                    Move <i t-if="state.loading" class="fa fa-spin fa-spinner ml-2"/>
+                </button>
+            </div>
+        </div>
+    </t>
+</templates>

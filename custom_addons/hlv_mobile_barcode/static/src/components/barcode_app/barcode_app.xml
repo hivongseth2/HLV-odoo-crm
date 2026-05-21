@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="hlv_mobile_barcode.BarcodeApp">
+        <div class="hlv-barcode-app" t-ref="app-container">
+            <div class="hlv-barcode-header">
+                <span t-if="state.currentView === 'main'">Smart Barcode Scanner</span>
+                <span t-elif="state.currentView === 'picking'">Picking: <t t-esc="state.pickingName"/></span>
+                <span t-elif="state.currentView === 'lookup'">Lookup: <t t-esc="state.lookupTitle"/></span>
+                
+                <button t-if="state.currentView !== 'main'" class="btn btn-sm btn-light" t-on-click="goToMain">
+                    <i class="fa fa-home"/> Home
+                </button>
+            </div>
+            
+            <div class="hlv-barcode-content">
+                <!-- Main Screen -->
+                <div t-if="state.currentView === 'main'" class="scanner-overlay">
+                    <div class="scanner-box" t-on-click="openCamera">
+                        <i class="fa fa-camera"/>
+                    </div>
+                    <div class="scan-instruction">
+                        Scan any barcode<br/>
+                        <small>(Picking / Product / Location / Package)</small>
+                    </div>
+                    <!-- Manual input for testing -->
+                    <div class="input-group mt-4">
+                        <input type="text" class="form-control form-control-lg" t-model="state.manualBarcode" placeholder="Enter barcode..." t-on-keyup="onManualBarcodeKeyup"/>
+                        <button class="btn btn-primary btn-lg" t-on-click="processManualBarcode">
+                            <i class="fa fa-arrow-right"/>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Picking View Placeholder -->
+                <div t-elif="state.currentView === 'picking'">
+                    <PickingScanner pickingId="state.pickingId" onBack="() => this.goToMain()" lastScannedProduct="state.lastScannedProduct"/>
+                </div>
+                
+                <!-- Lookup View Placeholder -->
+                <div t-elif="state.currentView === 'lookup'">
+                    <InventoryLookup lookupType="state.lookupType" recordId="state.recordId" onBack="() => this.goToMain()" onMove="(productId) => this.goToMove(productId)"/>
+                </div>
+                
+                <!-- Move View Placeholder -->
+                <div t-elif="state.currentView === 'move'">
+                    <LocationMove productId="state.recordId" onBack="() => this.goToMain()"/>
+                </div>
+            </div>
+        </div>
+    </t>
+</templates>

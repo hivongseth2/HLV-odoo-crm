@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- OWL Client Action for Barcode App -->
+    <record id="action_hlv_mobile_barcode" model="ir.actions.client">
+        <field name="name">Barcode Scanner</field>
+        <field name="tag">hlv_mobile_barcode.BarcodeApp</field>
+        <field name="target">fullscreen</field>
+    </record>
+
+    <!-- Menu Item under Inventory -->
+    <menuitem id="menu_hlv_mobile_barcode"
+              name="Mobile Barcode"
+              parent="stock.menu_stock_root"
+              action="action_hlv_mobile_barcode"
+              sequence="1"/>
+</odoo>

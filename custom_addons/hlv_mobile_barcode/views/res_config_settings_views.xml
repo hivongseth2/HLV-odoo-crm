@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form_barcode" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.hlv_barcode</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="stock.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//form" position="inside">
+                <app data-string="Inventory" string="Inventory" name="stock">
+                    <block title="HLV Mobile Barcode" name="hlv_mobile_barcode_setting_container">
+                        <setting string="Allowed Picking Types" help="Select which operations can be processed via Mobile Barcode App">
+                            <field name="hlv_barcode_picking_type_ids" widget="many2many_tags"/>
+                        </setting>
+                        <setting string="Print after Packing" help="Enable option to print label after Put in Pack">
+                            <field name="hlv_barcode_print_after_pack"/>
+                        </setting>
+                    </block>
+                </app>
+            </xpath>
+        </field>
+    </record>
+</odoo>
