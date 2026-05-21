@@ -14,6 +14,7 @@ export class BarcodeApp extends Component {
 
     setup() {
         this.notification = useService("notification");
+        this.action = useService("action");
         
         this.state = useState({
             currentView: "main", // 'main', 'picking', 'lookup'
@@ -154,9 +155,7 @@ export class BarcodeApp extends Component {
                 { facingMode: "environment" }, 
                 config,
                 (decodedText, decodedResult) => {
-                    // Success callback
                     this.closeCamera();
-                    // Optional: play beep sound here if needed
                     this.processBarcode(decodedText);
                 },
                 (errorMessage) => {
@@ -164,7 +163,12 @@ export class BarcodeApp extends Component {
                 }
             );
         } catch (err) {
-            this.notification.add("Could not start camera. Please ensure HTTPS and give permission.", { type: "danger" });
+            const errStr = String(err).toLowerCase();
+            if (errStr.includes("notallowederror") || errStr.includes("permission")) {
+                this.notification.add("Vui lòng cấp quyền Camera trên trình duyệt để sử dụng tính năng này.", { type: "warning" });
+            } else {
+                this.notification.add("Không thể mở Camera. Lỗi: " + err, { type: "warning" });
+            }
             this.closeCamera();
         }
     }
@@ -177,6 +181,11 @@ export class BarcodeApp extends Component {
             this.html5Qrcode = null;
         }
         this.state.showCamera = false;
+    }
+
+    exitApp() {
+        // Thoát ứng dụng Barcode, quay về màn hình chính Odoo
+        window.location.href = "/web";
     }
 }
 

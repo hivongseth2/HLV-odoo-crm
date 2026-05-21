@@ -16,13 +16,27 @@
                 <div t-if="state.currentView === 'main'" class="o_barcode_main_menu">
                     <div class="o_barcode_card">
                         <div class="o_barcode_card_header">
-                            <div><i class="fa fa-th"/> Máy quét mã vạch</div>
+                            <div>
+                                <i class="fa fa-th" style="cursor: pointer; padding-right: 8px;" t-on-click="exitApp"/> 
+                                Máy quét mã vạch
+                            </div>
                             <button class="btn btn-light btn-sm o_barcode_settings_btn" disabled="1">Cài đặt</button>
                         </div>
                         
                         <div class="o_barcode_card_body" t-on-click="openCamera">
                             <div class="o_barcode_icon_container">
-                                <i class="fa fa-barcode o_barcode_icon"/>
+                                <svg width="140" height="90" viewBox="0 0 140 90" fill="currentColor" xmlns="http://www.w3.org/2000/svg" class="o_barcode_icon">
+                                    <rect x="0" y="0" width="8" height="90" rx="2"/>
+                                    <rect x="14" y="0" width="4" height="90" rx="1"/>
+                                    <rect x="24" y="0" width="12" height="90" rx="2"/>
+                                    <rect x="42" y="0" width="6" height="90" rx="2"/>
+                                    <rect x="54" y="0" width="14" height="90" rx="2"/>
+                                    <rect x="74" y="0" width="4" height="90" rx="1"/>
+                                    <rect x="84" y="0" width="8" height="90" rx="2"/>
+                                    <rect x="98" y="0" width="16" height="90" rx="2"/>
+                                    <rect x="120" y="0" width="4" height="90" rx="1"/>
+                                    <rect x="130" y="0" width="10" height="90" rx="2"/>
+                                </svg>
                                 <div class="o_barcode_laser"></div>
                             </div>
                             <div class="o_barcode_subtitle">Quét hoặc chạm</div>
