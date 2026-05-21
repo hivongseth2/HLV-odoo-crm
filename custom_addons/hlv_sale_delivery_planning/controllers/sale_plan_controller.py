@@ -373,8 +373,14 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
   </div>
   <div class="d-flex align-items-center gap-2">
     <button id="btn-export-excel" class="btn btn-sm btn-success" title="Xuất Excel"><i class="fa fa-file-excel-o"></i> Xuất Excel</button>
-    <button id="btn-export-picking-excel" class="btn btn-sm btn-warning" title="Xuất phiếu xuất kho (OUT đã xong)"><i class="fa fa-truck"></i> Xuất phiếu XK</button>
-    <button id="btn-export-picking-simple-excel" class="btn btn-sm btn-info" title="Xuất phiếu XK giản lược (không in dòng sản phẩm)"><i class="fa fa-file-text-o"></i> Xuất phiếu XK (tóm tắt)</button>
+    <div class="btn-group">
+      <button id="btn-export-picking-excel" class="btn btn-sm btn-warning"><i class="fa fa-truck"></i> Xuất phiếu XK</button>
+      <button type="button" class="btn btn-sm btn-warning dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false"><span class="visually-hidden">Toggle</span></button>
+      <ul class="dropdown-menu">
+        <li><a class="dropdown-item" id="btn-export-picking-excel-dd" href="#"><i class="fa fa-list-alt me-1"></i> Chi tiết (có dòng SP)</a></li>
+        <li><a class="dropdown-item" id="btn-export-picking-simple-excel-dd" href="#"><i class="fa fa-file-text-o me-1"></i> Tóm tắt (không dòng SP)</a></li>
+      </ul>
+    </div>
     <button id="btn-kanban" class="btn btn-sm btn-primary"><i class="fa fa-th"></i> Kanban</button>
     <button id="btn-list" class="btn btn-sm btn-outline-secondary"><i class="fa fa-list"></i> Danh sách</button>
     <span class="vr"></span>
@@ -1272,6 +1278,20 @@ $('btn-export-excel').addEventListener('click',function(){
   });
   window.open('/api/sale_plan/export_excel?'+params.toString(),'_blank');
 });
+$('btn-export-picking-excel-dd').addEventListener('click',function(e){
+  e.preventDefault();
+  var params=new URLSearchParams({
+    search_query:gv('f-q'),filter_warehouse_id:gv('f-wh'),filter_delivery_status:gv('f-del'),
+    filter_stock_status:gv('f-stk'),filter_packing_status:gv('f-pack'),
+    filter_date_from:gv('f-date-from'),filter_date_to:gv('f-date-to'),
+    filter_po_date_from:gv('f-po-date-from'),filter_po_date_to:gv('f-po-date-to'),
+    filter_done_date_from:gv('f-done-from'),filter_done_date_to:gv('f-done-to'),
+    filter_po_status:gv('f-po-status'),filter_saler_code:gv('f-saler'),
+    filter_htgh:gv('f-htgh'),filter_delivery_type:gv('f-dtype'),filter_tag_ids:getTagIds(),
+    show_completed:$('f-show-completed').checked?'1':''
+  });
+  window.open('/api/sale_plan/export_picking_excel?'+params.toString(),'_blank');
+});
 $('btn-export-picking-excel').addEventListener('click',function(){
   var params=new URLSearchParams({
     search_query:gv('f-q'),filter_warehouse_id:gv('f-wh'),filter_delivery_status:gv('f-del'),
@@ -1285,7 +1305,8 @@ $('btn-export-picking-excel').addEventListener('click',function(){
   });
   window.open('/api/sale_plan/export_picking_excel?'+params.toString(),'_blank');
 });
-$('btn-export-picking-simple-excel').addEventListener('click',function(){
+$('btn-export-picking-simple-excel-dd').addEventListener('click',function(e){
+  e.preventDefault();
   var params=new URLSearchParams({
     search_query:gv('f-q'),filter_warehouse_id:gv('f-wh'),filter_delivery_status:gv('f-del'),
     filter_stock_status:gv('f-stk'),filter_packing_status:gv('f-pack'),
