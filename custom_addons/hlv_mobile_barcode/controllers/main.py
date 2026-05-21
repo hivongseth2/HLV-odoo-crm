@@ -140,6 +140,7 @@ class HLVMobileBarcodeController(http.Controller):
         quants = request.env['stock.quant']
         title = ""
         results = []
+        reservations = []
         
         if lookup_type == 'product':
             product = request.env['product.product'].browse(record_id)
@@ -152,6 +153,22 @@ class HLVMobileBarcodeController(http.Controller):
                     'quantity': q.quantity,
                     'package_name': q.package_id.name if q.package_id else '',
                 })
+                
+            # Fetch reservations (picking holding this product)
+            moves = request.env['stock.move'].search([
+                ('product_id', '=', product.id),
+                ('state', 'not in', ['done', 'cancel', 'draft']),
+                ('picking_id', '!=', False)
+            ])
+            for m in moves:
+                reservations.append({
+                    'picking': m.picking_id.name,
+                    'partner': m.picking_id.partner_id.name or '',
+                    'demand': getattr(m, 'product_uom_qty', 0.0),
+                    'reserved': getattr(m, 'quantity', getattr(m, 'reserved_availability', 0.0)),
+                    'state_desc': dict(m._fields['state'].selection).get(m.state, m.state)
+                })
+                
         elif lookup_type == 'location':
             location = request.env['stock.location'].browse(record_id)
             title = location.display_name
@@ -173,7 +190,7 @@ class HLVMobileBarcodeController(http.Controller):
                     'location_name': q.location_id.display_name,
                 })
                 
-        return {'title': title, 'results': results}
+        return {'title': title, 'results': results, 'reservations': reservations}
 
     @http.route('/hlv_mobile_barcode/move_location', type='json', auth='user')
     def move_location(self, product_id, source_barcode, dest_barcode, qty):

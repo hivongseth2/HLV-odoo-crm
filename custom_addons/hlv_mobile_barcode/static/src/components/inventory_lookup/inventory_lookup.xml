@@ -1,34 +1,83 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
     <t t-name="hlv_mobile_barcode.InventoryLookup">
-        <div style="padding-bottom: 80px;">
-            <div t-if="state.loading" class="text-center mt-5">
-                <i class="fa fa-spin fa-spinner fa-3x"/>
+        <div class="lookup-container h-100 d-flex flex-column" style="background: #f5f7fa; animation: fadeInSlideUp 0.3s ease-out; min-height: 100vh;">
+            <div class="lookup-header p-3 bg-white shadow-sm" style="position: sticky; top: 0; z-index: 10; border-bottom: 1px solid #eee;">
+                <h5 class="mb-0 text-truncate" style="font-weight: 600; color: #714B67;">
+                    <i class="fa fa-search me-2"/> Tra cứu: <t t-esc="state.title"/>
+                </h5>
             </div>
-            <div t-else="">
-                <h4 class="mb-3">Results for: <t t-esc="state.title"/></h4>
-                <t t-if="state.results.length === 0">
-                    <div class="alert alert-info">No stock found.</div>
-                </t>
-                <t t-foreach="state.results" t-as="res" t-key="res_index">
-                    <div class="lookup-result-item">
-                        <t t-if="props.lookupType === 'product'">
-                            <strong>Location: </strong> <t t-esc="res.location_name"/><br/>
-                            <t t-if="res.package_name">
-                                <strong>Package: </strong> <t t-esc="res.package_name"/><br/>
-                            </t>
-                            <strong>Qty: </strong> <t t-esc="res.quantity"/>
+            
+            <div class="lookup-body flex-grow-1 p-3 overflow-auto" style="padding-bottom: 90px !important;">
+                <div t-if="state.loading" class="text-center mt-5">
+                    <i class="fa fa-spin fa-spinner fa-3x" style="color: #714B67;"/>
+                </div>
+                
+                <div t-else="">
+                    <!-- Stock Locations Section -->
+                    <h6 class="text-muted fw-bold mb-3 text-uppercase" style="font-size: 13px; letter-spacing: 1px;">Tồn kho tại vị trí</h6>
+                    <t t-if="state.results.length === 0">
+                        <div class="alert alert-light text-center border rounded-3">Không tìm thấy tồn kho.</div>
+                    </t>
+                    <t t-foreach="state.results" t-as="res" t-key="res_index">
+                        <div class="card border-0 shadow-sm mb-3" style="border-radius: 12px; overflow: hidden;">
+                            <div class="card-body p-3">
+                                <t t-if="props.lookupType === 'product'">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <div class="fw-bold text-dark"><i class="fa fa-map-marker text-danger me-2"/> <t t-esc="res.location_name"/></div>
+                                        <div style="background: #e6f4ea; color: #1e8e3e; font-weight: bold; padding: 4px 12px; border-radius: 50px; font-size: 15px;">
+                                            <t t-esc="res.quantity"/>
+                                        </div>
+                                    </div>
+                                    <div t-if="res.package_name" class="text-muted small mt-2">
+                                        <i class="fa fa-box me-1"/> <t t-esc="res.package_name"/>
+                                    </div>
+                                </t>
+                                <t t-elif="props.lookupType === 'location' or props.lookupType === 'package'">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <div class="fw-bold text-dark"><i class="fa fa-cube text-primary me-2"/> <t t-esc="res.product_name"/></div>
+                                        <div style="background: #e6f4ea; color: #1e8e3e; font-weight: bold; padding: 4px 12px; border-radius: 50px; font-size: 15px;">
+                                            <t t-esc="res.quantity"/>
+                                        </div>
+                                    </div>
+                                </t>
+                            </div>
+                        </div>
+                    </t>
+                    
+                    <!-- Reservations Section (Only for products) -->
+                    <t t-if="props.lookupType === 'product' and state.reservations and state.reservations.length > 0">
+                        <h6 class="text-muted fw-bold mb-3 mt-4 text-uppercase" style="font-size: 13px; letter-spacing: 1px;">Đang được giữ (Reserved)</h6>
+                        <t t-foreach="state.reservations" t-as="r" t-key="r_index">
+                            <div class="card border-0 shadow-sm mb-3" style="border-radius: 12px; border-left: 4px solid #f59e0b !important;">
+                                <div class="card-body p-3">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <div class="fw-bold text-dark"><i class="fa fa-file-text-o text-warning me-2"/> <t t-esc="r.picking"/></div>
+                                        <div style="background: #fef3c7; color: #b45309; font-weight: 600; font-size: 12px; padding: 3px 10px; border-radius: 50px;">
+                                            <t t-esc="r.state_desc"/>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex justify-content-between text-muted" style="font-size: 13px;">
+                                        <div><i class="fa fa-user me-1"/> <t t-esc="r.partner or 'N/A'"/></div>
+                                        <div><strong class="text-dark"><t t-esc="r.reserved"/> / <t t-esc="r.demand"/></strong> đang giữ</div>
+                                    </div>
+                                </div>
+                            </div>
                         </t>
-                        <t t-elif="props.lookupType === 'location' or props.lookupType === 'package'">
-                            <strong>Product: </strong> <t t-esc="res.product_name"/><br/>
-                            <strong>Qty: </strong> <t t-esc="res.quantity"/>
-                        </t>
-                    </div>
-                </t>
+                    </t>
+                </div>
             </div>
-            <div class="hlv-barcode-footer" style="position: fixed; bottom: 0; width: 100%; left: 0; box-sizing: border-box;">
-                <button class="btn btn-secondary btn-mobile-large w-100" t-on-click="props.onBack">Back</button>
-                <button t-if="props.lookupType === 'product'" class="btn btn-primary btn-mobile-large w-100" t-on-click="() => props.onMove(props.recordId)">Move</button>
+            
+            <!-- Footer fixed actions -->
+            <div class="lookup-footer bg-white p-3 border-top shadow-sm" style="position: fixed; bottom: 0; width: 100%; left: 0; z-index: 10;">
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-light btn-lg" style="flex: 1; border-radius: 12px; font-weight: 600; color: #475569; background: #f1f5f9; border: none;" t-on-click="props.onBack">
+                        <i class="fa fa-arrow-left me-1"/> Quay lại
+                    </button>
+                    <button t-if="props.lookupType === 'product'" class="btn o_btn_purple btn-lg" style="flex: 1; border-radius: 12px; font-weight: 600;" t-on-click="() => props.onMove(props.recordId)">
+                        <i class="fa fa-exchange me-1"/> Chuyển vị trí
+                    </button>
+                </div>
             </div>
         </div>
     </t>

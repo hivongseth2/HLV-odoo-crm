@@ -17,6 +17,7 @@ export class InventoryLookup extends Component {
         this.state = useState({
             title: "",
             results: [],
+            reservations: [],
             loading: true,
         });
 
@@ -34,6 +35,7 @@ export class InventoryLookup extends Component {
             });
             this.state.title = data.title;
             this.state.results = data.results;
+            this.state.reservations = data.reservations || [];
         } catch (e) {
             console.error(e);
         }
