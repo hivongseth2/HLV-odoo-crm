@@ -9,9 +9,15 @@
 
     <!-- Menu Item on the Main App Switcher (Root) -->
     <menuitem id="menu_hlv_mobile_barcode_root"
-              name="Mobile Barcode"
+              name="Mobile Barcode Scanner"
               action="action_hlv_mobile_barcode"
-              groups="base.group_user,stock.group_stock_user"
               web_icon="hlv_mobile_barcode,static/description/icon.png"
-              sequence="10"/>
+              sequence="1"/>
+
+    <!-- Menu Item under Inventory (Backup) -->
+    <menuitem id="menu_hlv_mobile_barcode_sub"
+              name="Mobile Barcode"
+              parent="stock.menu_stock_root"
+              action="action_hlv_mobile_barcode"
+              sequence="1"/>
 </odoo>
