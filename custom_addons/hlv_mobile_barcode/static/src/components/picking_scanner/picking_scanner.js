@@ -2,6 +2,7 @@
 
 import { Component, useState, onWillStart, onWillUpdateProps } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
+import { rpc } from "@web/core/network/rpc";
 
 export class PickingScanner extends Component {
     static template = "hlv_mobile_barcode.PickingScanner";
@@ -12,7 +13,6 @@ export class PickingScanner extends Component {
     };
 
     setup() {
-        this.rpc = useService("rpc");
         this.notification = useService("notification");
         this.actionService = useService("action");
         
@@ -35,7 +35,7 @@ export class PickingScanner extends Component {
     async loadPicking() {
         this.state.loading = true;
         try {
-            const data = await this.rpc("/hlv_mobile_barcode/get_picking_data", { picking_id: this.props.pickingId });
+            const data = await rpc("/hlv_mobile_barcode/get_picking_data", { picking_id: this.props.pickingId });
             if (data.error) {
                 this.notification.add(data.error, { type: "danger" });
             } else {
@@ -49,7 +49,7 @@ export class PickingScanner extends Component {
 
     async doPack() {
         try {
-            const res = await this.rpc("/hlv_mobile_barcode/put_in_pack", { picking_id: this.props.pickingId });
+            const res = await rpc("/hlv_mobile_barcode/put_in_pack", { picking_id: this.props.pickingId });
             if (res.error) {
                 this.notification.add(res.error, { type: "danger" });
             } else if (res.success) {
@@ -74,7 +74,7 @@ export class PickingScanner extends Component {
 
     async doValidate() {
         try {
-            const res = await this.rpc("/hlv_mobile_barcode/validate_picking", { picking_id: this.props.pickingId });
+            const res = await rpc("/hlv_mobile_barcode/validate_picking", { picking_id: this.props.pickingId });
             if (res.error) {
                 this.notification.add(res.error, { type: "danger" });
             } else if (res.success) {

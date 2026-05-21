@@ -2,6 +2,7 @@
 
 import { Component, useState, onWillStart } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
+import { rpc } from "@web/core/network/rpc";
 
 export class InventoryLookup extends Component {
     static template = "hlv_mobile_barcode.InventoryLookup";
@@ -13,7 +14,6 @@ export class InventoryLookup extends Component {
     };
 
     setup() {
-        this.rpc = useService("rpc");
         this.state = useState({
             title: "",
             results: [],
@@ -28,7 +28,7 @@ export class InventoryLookup extends Component {
     async loadData() {
         this.state.loading = true;
         try {
-            const data = await this.rpc("/hlv_mobile_barcode/get_inventory_lookup", { 
+            const data = await rpc("/hlv_mobile_barcode/get_inventory_lookup", { 
                 lookup_type: this.props.lookupType,
                 record_id: this.props.recordId
             });

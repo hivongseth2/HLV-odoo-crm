@@ -3,6 +3,7 @@
 import { Component, useState, onMounted } from "@odoo/owl";
 import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
+import { rpc } from "@web/core/network/rpc";
 import { PickingScanner } from "../picking_scanner/picking_scanner";
 import { InventoryLookup } from "../inventory_lookup/inventory_lookup";
 import { LocationMove } from "../location_move/location_move";
@@ -12,7 +13,6 @@ export class BarcodeApp extends Component {
     static components = { PickingScanner, InventoryLookup, LocationMove };
 
     setup() {
-        this.rpc = useService("rpc");
         this.notification = useService("notification");
         
         this.state = useState({
@@ -68,7 +68,7 @@ export class BarcodeApp extends Component {
         if (this.state.currentView === 'picking') {
             // Check if it's a product to process in picking
             try {
-                const res = await this.rpc("/hlv_mobile_barcode/process_barcode", { 
+                const res = await rpc("/hlv_mobile_barcode/process_barcode", { 
                     picking_id: this.state.pickingId, 
                     barcode: barcode 
                 });
@@ -89,7 +89,7 @@ export class BarcodeApp extends Component {
         }
         
         try {
-            const result = await this.rpc("/hlv_mobile_barcode/smart_scan", { barcode });
+            const result = await rpc("/hlv_mobile_barcode/smart_scan", { barcode });
             if (result.error) {
                 this.notification.add(result.error, { type: "danger" });
                 return;
