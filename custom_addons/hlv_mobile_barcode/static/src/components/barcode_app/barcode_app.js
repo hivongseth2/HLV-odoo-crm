@@ -132,7 +132,6 @@ export class BarcodeApp extends Component {
         await new Promise(r => setTimeout(r, 100));
 
         if (!window.Html5Qrcode) {
-            this.notification.add("Downloading camera library...", { type: "info" });
             try {
                 await new Promise((resolve, reject) => {
                     const script = document.createElement("script");
@@ -150,10 +149,20 @@ export class BarcodeApp extends Component {
         
         try {
             this.html5Qrcode = new window.Html5Qrcode("reader");
-            const config = { fps: 10, qrbox: { width: 250, height: 150 } };
+            
+            // Tối ưu hoá đặc biệt cho quét mã vạch 1D trên Mobile
+            const config = { 
+                fps: 20,               // Tăng tốc độ khung hình để quét mượt hơn
+                disableFlip: false,    // Hỗ trợ lật hình
+                aspectRatio: 1.0,      // Tỉ lệ khung hình
+                experimentalFeatures: {
+                    useBarCodeDetectorIfSupported: true // CỰC KỲ QUAN TRỌNG: Dùng API quét mã vạch native của Android/iOS nếu có, tốc độ x10 lần
+                }
+            };
+            // Xoá qrbox để thuật toán quét toàn bộ khung hình thay vì ép người dùng phải căn chuẩn vào ô nhỏ
             
             await this.html5Qrcode.start(
-                { facingMode: "environment" }, 
+                { facingMode: "environment", advanced: [{ focusMode: "continuous" }] }, 
                 config,
                 (decodedText, decodedResult) => {
                     this.closeCamera();
