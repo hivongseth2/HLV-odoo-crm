@@ -81,7 +81,29 @@ class HLVMobileBarcodeController(http.Controller):
         if not transit_loc:
             return {'error': _('Không tìm thấy kho trung chuyển (Transit Location)')}
             
-        picking_type_int = request.env['stock.picking.type'].search([('code', '=', 'internal'), ('company_id', '=', company_id)], limit=1)
+        warehouse = source_loc.warehouse_id
+        if not warehouse:
+            warehouse = request.env['stock.warehouse'].search([('view_location_id', 'parent_of', source_loc.id)], limit=1)
+            
+        picking_type_int = request.env['stock.picking.type'].search([
+            ('code', '=', 'internal'),
+            ('sequence_code', '=', 'INT'),
+            ('company_id', '=', company_id),
+            ('warehouse_id', '=', warehouse.id if warehouse else False)
+        ], limit=1)
+        
+        if not picking_type_int and warehouse and warehouse.int_type_id:
+            picking_type_int = warehouse.int_type_id
+            
+        if not picking_type_int:
+            picking_type_int = request.env['stock.picking.type'].search([
+                ('code', '=', 'internal'), 
+                ('company_id', '=', company_id),
+                ('warehouse_id', '=', warehouse.id if warehouse else False)
+            ], limit=1)
+            if not picking_type_int:
+                picking_type_int = request.env['stock.picking.type'].search([('code', '=', 'internal'), ('company_id', '=', company_id)], limit=1)
+            
         if not picking_type_int:
             return {'error': _('Chưa cấu hình Operation Types (INT)')}
 
@@ -334,9 +356,13 @@ class HLVMobileBarcodeController(http.Controller):
         if not transit_loc:
             return {'error': _('Không tìm thấy kho trung chuyển (Transit Location)')}
             
-        # Get Picking Types
-        picking_type_int = request.env['stock.picking.type'].search([('code', '=', 'internal'), ('company_id', '=', company_id)], limit=1)
-        picking_type_in = request.env['stock.picking.type'].search([('code', '=', 'incoming'), ('company_id', '=', company_id)], limit=1)
+        warehouse = source_loc.warehouse_id
+        if warehouse and warehouse.int_type_id and warehouse.in_type_id:
+            picking_type_int = warehouse.int_type_id
+            picking_type_in = warehouse.in_type_id
+        else:
+            picking_type_int = request.env['stock.picking.type'].search([('code', '=', 'internal'), ('company_id', '=', company_id)], limit=1)
+            picking_type_in = request.env['stock.picking.type'].search([('code', '=', 'incoming'), ('company_id', '=', company_id)], limit=1)
         
         if not picking_type_int or not picking_type_in:
             return {'error': _('Chưa cấu hình Operation Types (INT, IN)')}
@@ -406,9 +432,13 @@ class HLVMobileBarcodeController(http.Controller):
         if not transit_loc:
             return {'error': _('Không tìm thấy kho trung chuyển (Transit Location)')}
             
-        # Get Picking Types
-        picking_type_int = request.env['stock.picking.type'].search([('code', '=', 'internal'), ('company_id', '=', company_id)], limit=1)
-        picking_type_in = request.env['stock.picking.type'].search([('code', '=', 'incoming'), ('company_id', '=', company_id)], limit=1)
+        warehouse = source_loc.warehouse_id
+        if warehouse and warehouse.int_type_id and warehouse.in_type_id:
+            picking_type_int = warehouse.int_type_id
+            picking_type_in = warehouse.in_type_id
+        else:
+            picking_type_int = request.env['stock.picking.type'].search([('code', '=', 'internal'), ('company_id', '=', company_id)], limit=1)
+            picking_type_in = request.env['stock.picking.type'].search([('code', '=', 'incoming'), ('company_id', '=', company_id)], limit=1)
         
         if not picking_type_int or not picking_type_in:
             return {'error': _('Chưa cấu hình Operation Types (INT, IN)')}
