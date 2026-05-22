@@ -16,7 +16,7 @@
                             <i class="fa fa-boxes"></i> Tạo lệnh chuyển hàng
                         </button>
                         <button class="btn btn-outline" style="padding: 6px 12px; font-size: 0.85rem;" t-on-click="props.onBack">
-                            Đóng
+                            <i class="fa fa-arrow-left"></i> Quay lại
                         </button>
                     </div>
                 </div>

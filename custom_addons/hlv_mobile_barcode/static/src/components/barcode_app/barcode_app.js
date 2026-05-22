@@ -18,12 +18,16 @@ export class BarcodeApp extends Component {
         this.action = useService("action");
         
         let savedState = {};
+        let savedHistory = [];
         try {
             const stored = sessionStorage.getItem('hlv_barcode_state');
             if (stored) {
                 savedState = JSON.parse(stored);
+                savedHistory = savedState.history || [];
             }
         } catch (e) {}
+        
+        this.history = savedHistory;
 
         this.state = useState({
             currentView: savedState.currentView || "main", 
@@ -33,6 +37,8 @@ export class BarcodeApp extends Component {
             lookupType: savedState.lookupType || null,
             recordId: savedState.recordId || null,
             lookupTitle: savedState.lookupTitle || "",
+            prefillLocationBarcode: savedState.prefillLocationBarcode || null,
+            prefillLocationName: savedState.prefillLocationName || null,
             showCamera: false,
             cameraFallback: false,
         });
@@ -45,6 +51,9 @@ export class BarcodeApp extends Component {
                 lookupType: this.state.lookupType,
                 recordId: this.state.recordId,
                 lookupTitle: this.state.lookupTitle,
+                prefillLocationBarcode: this.state.prefillLocationBarcode,
+                prefillLocationName: this.state.prefillLocationName,
+                history: this.history
             }));
         }, () => [
             this.state.currentView,
@@ -52,7 +61,9 @@ export class BarcodeApp extends Component {
             this.state.pickingName,
             this.state.lookupType,
             this.state.recordId,
-            this.state.lookupTitle
+            this.state.lookupTitle,
+            this.state.prefillLocationBarcode,
+            this.state.prefillLocationName
         ]);
 
         this.barcodeBuffer = "";
@@ -145,10 +156,12 @@ export class BarcodeApp extends Component {
             await this.closeCamera();
             
             if (result.type === 'picking') {
+                this.pushHistory();
                 this.state.pickingId = result.id;
                 this.state.pickingName = result.name;
                 this.state.currentView = 'picking';
             } else if (['product', 'location', 'package'].includes(result.type)) {
+                this.pushHistory();
                 this.state.lookupType = result.type;
                 this.state.recordId = result.id;
                 this.state.lookupTitle = result.name;
@@ -171,15 +184,50 @@ export class BarcodeApp extends Component {
         } catch (e) {}
     }
 
+    pushHistory() {
+        if (!this.history) this.history = [];
+        this.history.push({
+            currentView: this.state.currentView,
+            pickingId: this.state.pickingId,
+            pickingName: this.state.pickingName,
+            lookupType: this.state.lookupType,
+            recordId: this.state.recordId,
+            lookupTitle: this.state.lookupTitle,
+            prefillLocationBarcode: this.state.prefillLocationBarcode,
+            prefillLocationName: this.state.prefillLocationName,
+        });
+    }
+
+    goBack() {
+        if (this.history && this.history.length > 0) {
+            const prevState = this.history.pop();
+            this.state.currentView = prevState.currentView;
+            this.state.pickingId = prevState.pickingId;
+            this.state.pickingName = prevState.pickingName;
+            this.state.lookupType = prevState.lookupType;
+            this.state.recordId = prevState.recordId;
+            this.state.lookupTitle = prevState.lookupTitle;
+            this.state.prefillLocationBarcode = prevState.prefillLocationBarcode;
+            this.state.prefillLocationName = prevState.prefillLocationName;
+            this.viewScannerCallback = null;
+        } else {
+            this.goToMain();
+        }
+    }
+
     goToMain() {
+        this.history = [];
         this.state.currentView = 'main';
         this.state.pickingId = null;
         this.state.lookupType = null;
         this.state.recordId = null;
+        this.state.prefillLocationBarcode = null;
+        this.state.prefillLocationName = null;
         this.viewScannerCallback = null;
     }
 
     goToMove(productId, locationBarcode = null, locationName = null) {
+        this.pushHistory();
         this.state.recordId = productId;
         this.state.prefillLocationBarcode = locationBarcode;
         this.state.prefillLocationName = locationName;
@@ -187,12 +235,14 @@ export class BarcodeApp extends Component {
     }
 
     goToBatchMove(locationBarcode, locationName) {
+        this.pushHistory();
         this.state.prefillLocationBarcode = locationBarcode;
         this.state.prefillLocationName = locationName;
         this.state.currentView = 'batch_move';
     }
 
     goToProductLookup(productId, productName) {
+        this.pushHistory();
         this.state.lookupType = 'product';
         this.state.recordId = productId;
         this.state.lookupTitle = productName;

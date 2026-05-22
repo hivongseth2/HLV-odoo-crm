@@ -52,7 +52,7 @@
                 <!-- Fixed Footer -->
                 <div style="position: fixed; bottom: 0; left: 0; width: 100%; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border-top: 1px solid var(--border-color); padding: 15px; box-sizing: border-box; display: flex; gap: 10px; z-index: 100; padding-bottom: env(safe-area-inset-bottom, 15px);">
                     <button class="btn btn-outline" style="flex: 1; padding: 12px;" t-on-click="props.onBack">
-                        <i class="fa fa-arrow-left"></i> Đóng
+                        <i class="fa fa-arrow-left"></i> Quay lại
                     </button>
                     <button class="btn btn-primary" style="flex: 1; padding: 12px; background-color: var(--info-color);" t-on-click="doPack">
                         <i class="fa fa-box"></i> Đóng gói

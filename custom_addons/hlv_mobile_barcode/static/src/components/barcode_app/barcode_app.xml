@@ -41,17 +41,17 @@
                     
                     <!-- Picking View Placeholder -->
                     <div t-elif="state.currentView === 'picking'">
-                        <PickingScanner pickingId="state.pickingId" onBack="() => this.goToMain()" lastScannedProduct="state.lastScannedProduct"/>
+                        <PickingScanner pickingId="state.pickingId" onBack="() => this.goBack()" lastScannedProduct="state.lastScannedProduct"/>
                     </div>
                     
                     <!-- Move Component -->
-                    <LocationMove t-if="state.currentView === 'move'" productId="state.recordId" prefillLocationBarcode="state.prefillLocationBarcode" prefillLocationName="state.prefillLocationName" onBack="() => this.goToMain()" registerScanner="(cb) => this.registerScanner(cb)"/>
+                    <LocationMove t-if="state.currentView === 'move'" productId="state.recordId" prefillLocationBarcode="state.prefillLocationBarcode" prefillLocationName="state.prefillLocationName" onBack="() => this.goBack()" registerScanner="(cb) => this.registerScanner(cb)"/>
                     
                     <!-- Batch Move Component -->
-                    <BatchLocationMove t-if="state.currentView === 'batch_move'" sourceLocationBarcode="state.prefillLocationBarcode" sourceLocationName="state.prefillLocationName" onBack="() => this.goToMain()" registerScanner="(cb) => this.registerScanner(cb)"/>
+                    <BatchLocationMove t-if="state.currentView === 'batch_move'" sourceLocationBarcode="state.prefillLocationBarcode" sourceLocationName="state.prefillLocationName" onBack="() => this.goBack()" registerScanner="(cb) => this.registerScanner(cb)"/>
                     
                     <!-- Lookup Component -->
-                    <InventoryLookup t-if="state.currentView === 'lookup'" t-key="state.lookupType + '_' + state.recordId" lookupType="state.lookupType" recordId="state.recordId" onBack="() => this.goToMain()" onMove="(productId, locBarcode, locName) => this.goToMove(productId, locBarcode, locName)" onBatchMove="(locBarcode, locName) => this.goToBatchMove(locBarcode, locName)" onProductSelect="(productId, productName) => this.goToProductLookup(productId, productName)"/>
+                    <InventoryLookup t-if="state.currentView === 'lookup'" t-key="state.lookupType + '_' + state.recordId" lookupType="state.lookupType" recordId="state.recordId" onBack="() => this.goBack()" onMove="(productId, locBarcode, locName) => this.goToMove(productId, locBarcode, locName)" onBatchMove="(locBarcode, locName) => this.goToBatchMove(locBarcode, locName)" onProductSelect="(productId, productName) => this.goToProductLookup(productId, productName)"/>
                 </div>
             </div>
 
