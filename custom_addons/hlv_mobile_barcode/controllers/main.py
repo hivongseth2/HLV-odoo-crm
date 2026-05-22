@@ -150,6 +150,7 @@ class HLVMobileBarcodeController(http.Controller):
             for q in quants:
                 results.append({
                     'location_id': q.location_id.id,
+                    'quant_id': q.id,
                     'location_name': q.location_id.display_name,
                     'quantity': q.quantity,
                     'package_name': q.package_id.name if q.package_id else '',

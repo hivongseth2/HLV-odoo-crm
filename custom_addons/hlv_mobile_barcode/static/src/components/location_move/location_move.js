@@ -1,6 +1,6 @@
 /** @odoo-module **/
 
-import { Component, useState } from "@odoo/owl";
+import { Component, useState, onWillStart } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
 import { rpc } from "@web/core/network/rpc";
 
@@ -9,17 +9,57 @@ export class LocationMove extends Component {
     static props = {
         productId: Number,
         onBack: Function,
+        openCameraForInput: { type: Function, optional: true },
     };
 
     setup() {
         this.notification = useService("notification");
         
         this.state = useState({
+            productName: "Loading...",
             sourceLocationBarcode: "",
             destLocationBarcode: "",
             qty: 1,
             loading: false,
         });
+
+        onWillStart(async () => {
+            try {
+                // Fetch product info quickly so user knows what they are moving
+                const res = await rpc("/hlv_mobile_barcode/smart_scan", { barcode: `product_${this.props.productId}` });
+                // Note: smart_scan expects a barcode, but we only have ID. We can use a different endpoint or just let the backend handle id if we change it.
+                // Actually, let's just make a simple RPC call to read product name:
+                const product = await rpc("/web/dataset/call_kw/product.product/read", {
+                    model: 'product.product',
+                    method: 'read',
+                    args: [[this.props.productId], ['display_name']],
+                    kwargs: {}
+                });
+                if (product && product.length) {
+                    this.state.productName = product[0].display_name;
+                } else {
+                    this.state.productName = "Unknown Product";
+                }
+            } catch(e) {
+                this.state.productName = "Product #" + this.props.productId;
+            }
+        });
+    }
+
+    scanSource() {
+        if (this.props.openCameraForInput) {
+            this.props.openCameraForInput((text) => {
+                this.state.sourceLocationBarcode = text;
+            });
+        }
+    }
+
+    scanDest() {
+        if (this.props.openCameraForInput) {
+            this.props.openCameraForInput((text) => {
+                this.state.destLocationBarcode = text;
+            });
+        }
     }
 
     async doMove() {

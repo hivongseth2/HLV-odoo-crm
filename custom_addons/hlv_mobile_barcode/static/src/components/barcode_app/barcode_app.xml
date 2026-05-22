@@ -66,9 +66,13 @@
                     <InventoryLookup lookupType="state.lookupType" recordId="state.recordId" onBack="() => this.goToMain()" onMove="(productId) => this.goToMove(productId)"/>
                 </div>
                 
-                <!-- Move View Placeholder -->
-                <div t-elif="state.currentView === 'move'">
-                    <LocationMove productId="state.recordId" onBack="() => this.goToMain()"/>
+                <!-- Move Product View -->
+                <div t-elif="state.currentView === 'move'" class="h-100 position-relative">
+                    <LocationMove 
+                        productId="state.recordId" 
+                        onBack="() => this.goToMain()"
+                        openCameraForInput="(cb) => this.openCameraForInput(cb)"
+                    />
                 </div>
 
                 <!-- Camera Modal (Odoo Style) -->

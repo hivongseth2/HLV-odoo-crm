@@ -91,11 +91,25 @@ export class BarcodeApp extends Component {
         }
     }
 
+    async openCameraForInput(callback) {
+        this.cameraCallback = callback;
+        await this.openCamera();
+    }
+
     async processBarcode(barcode) {
         if (!barcode) return;
         
         this.state.showCamera = false;
         
+        if (this.cameraCallback) {
+            this.playSound('success');
+            const cb = this.cameraCallback;
+            this.cameraCallback = null;
+            await this.closeCamera();
+            cb(barcode);
+            return;
+        }
+
         if (this.state.currentView === 'picking') {
             try {
                 const res = await rpc("/hlv_mobile_barcode/process_barcode", { 

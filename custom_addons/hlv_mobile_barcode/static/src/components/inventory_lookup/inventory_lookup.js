@@ -43,12 +43,12 @@ export class InventoryLookup extends Component {
         this.state.loading = false;
     }
 
-    openLocation(locationId) {
-        if (!locationId) return;
+    openLocation(quantId) {
+        if (!quantId) return;
         this.action.doAction({
             type: 'ir.actions.act_window',
-            res_model: 'stock.location',
-            res_id: locationId,
+            res_model: 'stock.quant',
+            res_id: quantId,
             views: [[false, 'form']],
             target: 'current',
         });
