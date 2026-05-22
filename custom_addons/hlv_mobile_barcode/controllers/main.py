@@ -175,13 +175,17 @@ class HLVMobileBarcodeController(http.Controller):
         elif lookup_type == 'location':
             location = request.env['stock.location'].browse(record_id)
             title = location.display_name
+            location_barcode = location.barcode or location.name
             quants = quants.search([('location_id', '=', location.id)])
             for q in quants:
                 results.append({
+                    'product_id': q.product_id.id,
                     'product_name': q.product_id.display_name,
                     'quantity': q.quantity,
                     'package_name': q.package_id.name if q.package_id else '',
+                    'quant_id': q.id,
                 })
+            return {'title': title, 'location_barcode': location_barcode, 'location_name': title, 'results': results, 'reservations': reservations}
         elif lookup_type == 'package':
             package = request.env['stock.quant.package'].browse(record_id)
             title = package.name

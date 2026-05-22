@@ -174,8 +174,10 @@ export class BarcodeApp extends Component {
         this.viewScannerCallback = null;
     }
 
-    goToMove(productId) {
+    goToMove(productId, locationBarcode = null, locationName = null) {
         this.state.recordId = productId;
+        this.state.prefillLocationBarcode = locationBarcode;
+        this.state.prefillLocationName = locationName;
         this.state.currentView = 'move';
     }
 

@@ -44,15 +44,11 @@
                         <PickingScanner pickingId="state.pickingId" onBack="() => this.goToMain()" lastScannedProduct="state.lastScannedProduct"/>
                     </div>
                     
-                    <!-- Lookup View Placeholder -->
-                    <div t-elif="state.currentView === 'lookup'">
-                        <InventoryLookup lookupType="state.lookupType" recordId="state.recordId" onBack="() => this.goToMain()" onMove="(productId) => this.goToMove(productId)"/>
-                    </div>
+                    <!-- Move Component -->
+                    <LocationMove t-if="state.currentView === 'move'" productId="state.recordId" prefillLocationBarcode="state.prefillLocationBarcode" prefillLocationName="state.prefillLocationName" onBack="() => this.goToMain()" registerScanner="(cb) => this.registerScanner(cb)"/>
                     
-                    <!-- Move Product View -->
-                    <div t-elif="state.currentView === 'move'">
-                        <LocationMove productId="state.recordId" onBack="() => this.goToMain()" registerScanner="(cb) => this.registerScanner(cb)"/>
-                    </div>
+                    <!-- Lookup Component -->
+                    <InventoryLookup t-if="state.currentView === 'lookup'" lookupType="state.lookupType" recordId="state.recordId" onBack="() => this.goToMain()" onMove="(productId, locBarcode, locName) => this.goToMove(productId, locBarcode, locName)"/>
                 </div>
             </div>
 

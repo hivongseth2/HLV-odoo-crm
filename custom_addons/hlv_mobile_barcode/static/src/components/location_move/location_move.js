@@ -8,18 +8,21 @@ export class LocationMove extends Component {
     static template = "hlv_mobile_barcode.LocationMove";
     static props = {
         productId: Number,
+        prefillLocationBarcode: { type: String, optional: true },
+        prefillLocationName: { type: String, optional: true },
         onBack: Function,
-        openCameraForInput: { type: Function, optional: true },
+        registerScanner: { type: Function, optional: true },
     };
 
     setup() {
+        this.action = useService("action");
         this.notification = useService("notification");
         
         this.state = useState({
             productName: "Loading...",
             productBarcode: "",
-            sourceLocationBarcode: "",
-            sourceLocationName: "",
+            sourceLocationBarcode: this.props.prefillLocationBarcode || "",
+            sourceLocationName: this.props.prefillLocationName || "",
             locationInput: "",
             qty: 0,
             loading: false,

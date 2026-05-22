@@ -17,6 +17,8 @@ export class InventoryLookup extends Component {
         this.action = useService("action");
         this.state = useState({
             title: "",
+            location_barcode: "",
+            location_name: "",
             results: [],
             reservations: [],
             loading: true,
@@ -35,6 +37,8 @@ export class InventoryLookup extends Component {
                 record_id: this.props.recordId
             });
             this.state.title = data.title;
+            this.state.location_barcode = data.location_barcode || "";
+            this.state.location_name = data.location_name || "";
             this.state.results = data.results;
             this.state.reservations = data.reservations || [];
         } catch (e) {
