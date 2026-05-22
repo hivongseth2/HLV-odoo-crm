@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
     <t t-name="hlv_mobile_barcode.LocationMove">
-        <div class="hlv-barcode-app">
+        <div>
             <div class="shipper-container">
                 <!-- Header -->
                 <div class="shipper-header">
@@ -25,12 +25,17 @@
                     </div>
 
                     <div style="margin-bottom: 20px;">
-                        <label style="font-size: 0.9rem; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; display: block;">Vị trí lấy hàng (Mã vạch)</label>
+                        <label style="font-size: 0.9rem; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; display: block;">
+                            Vị trí lấy hàng (Mã vạch)
+                            <t t-if="state.sourceLocationName">
+                                : <span style="color: var(--primary-color); font-weight: 700;"><t t-esc="state.sourceLocationName || state.sourceLocationBarcode"/></span>
+                            </t>
+                        </label>
                         
                         <!-- Inline Camera -->
                         <div t-if="state.showLocalCamera" class="camera-section active">
                             <div id="location-move-camera-reader" class="camera-reader"></div>
-                            <div class="camera-controls">
+                            <div class="camera-controls" style="padding: 10px; background: var(--light-bg); border-top: 1px solid var(--border-color); text-align: center;">
                                 <button type="button" class="btn btn-secondary btn-sm" t-on-click="closeLocalCamera">
                                     <i class="fa fa-times me-1"/> Đóng Camera
                                 </button>
@@ -42,14 +47,6 @@
                             <button class="btn btn-primary" type="button" t-on-click="openLocalCamera">
                                 <i class="fa fa-camera"/>
                             </button>
-                        </div>
-                        
-                        <div t-if="state.sourceLocationBarcode" style="margin-top: 10px; padding: 10px; background-color: #e8f5e9; border: 1px solid #c3e6cb; border-radius: 8px; display: flex; align-items: center;">
-                            <i class="fa fa-map-marker-alt" style="color: var(--success-color); margin-right: 10px; font-size: 1.2rem;"></i>
-                            <div>
-                                <div style="font-size: 0.8rem; color: var(--text-muted);">Đang lấy hàng tại:</div>
-                                <div style="font-weight: bold; color: var(--success-color); font-size: 1rem;"><t t-esc="state.sourceLocationName || state.sourceLocationBarcode"/></div>
-                            </div>
                         </div>
                     </div>
                     

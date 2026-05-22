@@ -21,7 +21,7 @@ export class LocationMove extends Component {
             sourceLocationBarcode: "",
             sourceLocationName: "",
             locationInput: "",
-            qty: 1,
+            qty: 0,
             loading: false,
             inPickingName: "",
             showLocalCamera: false,
