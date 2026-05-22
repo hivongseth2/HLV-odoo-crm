@@ -11,31 +11,58 @@ class OdooUtils(models.AbstractModel):
     def _get_or_create_partner(self, name, misa_code=None):
         """Tìm hoặc tạo mới đối tác (partner) dựa trên tên.
 
-        misa_code: mã KH từ CRM (account_number hoặc id). Nếu truyền vào:
-          - Tìm theo tên trước.
-          - Nếu partner tìm được đã có ref/company_registry khác misa_code
-            → tạo liên hệ mới (tránh ghi đè KH khác cùng tên).
-          - Nếu chưa có mã → dùng liên hệ cũ bình thường.
+        Thứ tự tìm kiếm:
+          1. Tìm root company (parent_id=False) theo misa_code (ref hoặc company_registry).
+          2. Tìm root company theo tên chính xác.
+          3. Nếu không tìm được → tạo mới root company.
+
+        Không bao giờ tạo partner con (parent_id set) để tránh gây duplicate
+        là_company=True dưới một công ty khác.
         """
         name = name.strip()
-        partner = self.env["res.partner"].search([
+        Partner = self.env["res.partner"]
+
+        # Bước 1: Tìm theo mã MISA (ref hoặc company_registry) nếu có
+        if misa_code:
+            partner = Partner.search([
+                ("parent_id", "=", False),
+                "|",
+                ("ref", "=", misa_code),
+                ("company_registry", "=", misa_code),
+            ], limit=1)
+            if partner:
+                _logger.info("Dùng liên hệ có sẵn (theo mã %s): %s", misa_code, partner.name)
+                return partner
+
+        # Bước 2: Tìm theo tên, chỉ lấy root company
+        partner = Partner.search([
             ("name", "=", name),
             ("parent_id", "=", False),
+            ("is_company", "=", True),
         ], limit=1)
-        if partner and misa_code:
-            existing_code = partner.ref or partner.company_registry
-            if existing_code and existing_code != misa_code:
-                # Tên trùng nhưng mã khác → đây là KH khác, tạo mới
-                _logger.info(
-                    "Tên '%s' trùng nhưng mã CRM khác (%s vs %s) → tạo liên hệ mới",
-                    name, existing_code, misa_code,
-                )
-                partner = self.env["res.partner"].browse()  # empty recordset
+
         if not partner:
-            partner = self.env["res.partner"].create({"name": name, "customer_rank": 1})
-            _logger.info("Tạo liên hệ mới: %s", name)
-        else:
-            _logger.info("Dùng liên hệ có sẵn: %s", name)
+            # Fallback: tìm partner bất kỳ (kể cả không is_company) cùng tên + root
+            partner = Partner.search([
+                ("name", "=", name),
+                ("parent_id", "=", False),
+            ], limit=1)
+
+        if partner:
+            # Gán mã MISA nếu partner chưa có
+            if misa_code and not partner.ref and not partner.company_registry:
+                partner.write({"ref": misa_code})
+                _logger.info("Gán mã MISA %s cho liên hệ: %s", misa_code, partner.name)
+            else:
+                _logger.info("Dùng liên hệ có sẵn (theo tên): %s", partner.name)
+            return partner
+
+        # Bước 3: Tạo mới
+        vals = {"name": name, "customer_rank": 1, "is_company": True}
+        if misa_code:
+            vals["ref"] = misa_code
+        partner = Partner.create(vals)
+        _logger.info("Tạo liên hệ mới: %s (mã=%s)", name, misa_code or "-")
         return partner
 
     def _get_or_create_uom(self, name):
