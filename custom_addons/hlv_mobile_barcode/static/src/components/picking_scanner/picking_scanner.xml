@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
     <t t-name="hlv_mobile_barcode.PickingScanner">
-        <div class="hlv-barcode-app">
+        <div>
             <div class="shipper-container" style="padding-bottom: 80px;">
                 <div t-if="state.loading" style="text-align: center; padding: 50px;">
                     <i class="fa fa-spin fa-spinner fa-3x" style="color: var(--secondary-color);"></i>
