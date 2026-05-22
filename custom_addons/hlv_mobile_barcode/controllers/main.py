@@ -195,6 +195,16 @@ class HLVMobileBarcodeController(http.Controller):
                 
         return {'title': title, 'results': results, 'reservations': reservations}
 
+    @http.route('/hlv_mobile_barcode/validate_location', type='json', auth='user')
+    def validate_location(self, barcode):
+        location = request.env['stock.location'].search([('barcode', '=', barcode)], limit=1)
+        if not location:
+            location = request.env['stock.location'].search([('name', '=', barcode)], limit=1)
+        
+        if location:
+            return {'success': True, 'location_name': location.display_name, 'location_barcode': location.barcode or location.name}
+        return {'error': _('Không tìm thấy vị trí lấy hàng hợp lệ.')}
+
     @http.route('/hlv_mobile_barcode/move_location', type='json', auth='user')
     def move_location(self, product_id, source_barcode, qty):
         product = request.env['product.product'].browse(product_id)

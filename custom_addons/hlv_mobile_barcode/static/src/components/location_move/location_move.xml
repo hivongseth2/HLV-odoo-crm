@@ -38,10 +38,18 @@
                         </div>
 
                         <div class="input-group-row">
-                            <input type="text" class="form-control" t-model="state.sourceLocationBarcode" placeholder="Quét hoặc nhập mã..."/>
+                            <input type="text" class="form-control" t-model="state.locationInput" t-on-keyup="onLocationInputKeyup" placeholder="Quét hoặc nhập mã..."/>
                             <button class="btn btn-primary" type="button" t-on-click="openLocalCamera">
                                 <i class="fa fa-camera"/>
                             </button>
+                        </div>
+                        
+                        <div t-if="state.sourceLocationBarcode" style="margin-top: 10px; padding: 10px; background-color: #e8f5e9; border: 1px solid #c3e6cb; border-radius: 8px; display: flex; align-items: center;">
+                            <i class="fa fa-map-marker-alt" style="color: var(--success-color); margin-right: 10px; font-size: 1.2rem;"></i>
+                            <div>
+                                <div style="font-size: 0.8rem; color: var(--text-muted);">Đang lấy hàng tại:</div>
+                                <div style="font-weight: bold; color: var(--success-color); font-size: 1rem;"><t t-esc="state.sourceLocationName || state.sourceLocationBarcode"/></div>
+                            </div>
                         </div>
                     </div>
                     

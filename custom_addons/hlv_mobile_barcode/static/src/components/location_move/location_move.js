@@ -19,6 +19,8 @@ export class LocationMove extends Component {
             productName: "Loading...",
             productBarcode: "",
             sourceLocationBarcode: "",
+            sourceLocationName: "",
+            locationInput: "",
             qty: 1,
             loading: false,
             inPickingName: "",
@@ -51,15 +53,34 @@ export class LocationMove extends Component {
         });
     }
 
-    handleScannedBarcode(decodedText) {
+    onLocationInputKeyup(ev) {
+        if (ev.key === 'Enter' && this.state.locationInput) {
+            this.handleScannedBarcode(this.state.locationInput);
+            this.state.locationInput = "";
+        }
+    }
+
+    async handleScannedBarcode(decodedText) {
         if (!this.state.sourceLocationBarcode) {
             if (this.state.productBarcode && decodedText === this.state.productBarcode) {
                 this.playSound('error');
                 this.notification.add("Vui lòng quét vị trí lấy hàng trước khi quét sản phẩm", { type: "danger" });
             } else {
-                this.state.sourceLocationBarcode = decodedText;
-                this.playSound('success');
-                this.notification.add("Đã nhận vị trí: " + decodedText, { type: "success" });
+                try {
+                    const res = await rpc("/hlv_mobile_barcode/validate_location", { barcode: decodedText });
+                    if (res.error) {
+                        this.playSound('error');
+                        this.notification.add(res.error, { type: "danger" });
+                    } else {
+                        this.state.sourceLocationBarcode = res.location_barcode;
+                        this.state.sourceLocationName = res.location_name;
+                        this.playSound('success');
+                        this.notification.add("Đã nhận vị trí: " + res.location_name, { type: "success" });
+                    }
+                } catch (e) {
+                    this.playSound('error');
+                    this.notification.add("Lỗi kết nối", { type: "danger" });
+                }
             }
         } else {
             if (this.state.productBarcode && decodedText === this.state.productBarcode) {
@@ -67,9 +88,21 @@ export class LocationMove extends Component {
                 this.playSound('success');
                 this.notification.add("Đã tăng số lượng lên " + this.state.qty, { type: "success" });
             } else {
-                this.state.sourceLocationBarcode = decodedText;
-                this.playSound('success');
-                this.notification.add("Đã đổi vị trí thành: " + decodedText, { type: "success" });
+                try {
+                    const res = await rpc("/hlv_mobile_barcode/validate_location", { barcode: decodedText });
+                    if (res.error) {
+                        this.playSound('error');
+                        this.notification.add(res.error, { type: "danger" });
+                    } else {
+                        this.state.sourceLocationBarcode = res.location_barcode;
+                        this.state.sourceLocationName = res.location_name;
+                        this.playSound('success');
+                        this.notification.add("Đã đổi vị trí thành: " + res.location_name, { type: "success" });
+                    }
+                } catch (e) {
+                    this.playSound('error');
+                    this.notification.add("Lỗi kết nối", { type: "danger" });
+                }
             }
         }
     }
@@ -133,8 +166,14 @@ export class LocationMove extends Component {
 
     async doMove() {
         if (!this.state.sourceLocationBarcode) {
-            this.notification.add("Yêu cầu nhập vị trí lấy hàng", { type: "danger" });
-            return;
+            if (this.state.locationInput) {
+                await this.handleScannedBarcode(this.state.locationInput);
+                this.state.locationInput = "";
+                if (!this.state.sourceLocationBarcode) return;
+            } else {
+                this.notification.add("Yêu cầu nhập vị trí lấy hàng", { type: "danger" });
+                return;
+            }
         }
         
         this.state.loading = true;
