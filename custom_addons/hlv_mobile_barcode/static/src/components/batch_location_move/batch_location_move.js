@@ -155,7 +155,7 @@ export class BatchLocationMove extends Component {
         } catch (e) {}
     }
 
-    async doMove() {
+    async doMove(pack = false) {
         const validLines = this.state.lines.filter(l => l.qty > 0);
         if (validLines.length === 0) {
             this.notification.add("Vui lòng quét ít nhất 1 sản phẩm với số lượng > 0", { type: "danger" });
@@ -172,14 +172,17 @@ export class BatchLocationMove extends Component {
             
             const res = await rpc("/hlv_mobile_barcode/move_location_batch", {
                 source_barcode: this.props.sourceLocationBarcode,
-                lines: linesPayload
+                lines: linesPayload,
+                pack: pack
             });
             
             if (res.error) {
                 this.notification.add(res.error, { type: "danger" });
             } else {
                 this.notification.add("Tạo lệnh chuyển hàng loạt thành công", { type: "success" });
-                if (res.in_picking_name) {
+                if (pack && res.package_name) {
+                    this.state.inPickingName = `${res.in_picking_name} (Kiện: ${res.package_name})`;
+                } else if (res.in_picking_name) {
                     this.state.inPickingName = res.in_picking_name;
                 } else {
                     this.props.onBack();

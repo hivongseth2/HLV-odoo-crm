@@ -283,7 +283,7 @@ class HLVMobileBarcodeController(http.Controller):
         return {'success': True, 'in_picking_name': picking_in.name}
 
     @http.route('/hlv_mobile_barcode/move_location_batch', type='json', auth='user')
-    def move_location_batch(self, source_barcode, lines):
+    def move_location_batch(self, source_barcode, lines, pack=False):
         if not lines:
             return {'error': _('Không có sản phẩm nào để chuyển')}
             
@@ -331,6 +331,24 @@ class HLVMobileBarcodeController(http.Controller):
             })
         
         picking_int.action_confirm()
+        
+        package_name = False
+        if pack:
+            # Set quantity so put_in_pack knows what to pack
+            for move in picking_int.move_ids_without_package:
+                move.quantity = move.product_uom_qty
+            
+            try:
+                res = picking_int.action_put_in_pack()
+                if isinstance(res, dict) and res.get('res_model') == 'stock.quant.package':
+                    package_id = res.get('res_id')
+                    package = request.env['stock.quant.package'].browse(package_id)
+                    package_name = package.name
+                elif getattr(res, 'id', False):
+                    package_name = res.name
+            except Exception as e:
+                return {'error': _('Lỗi khi đóng gói: %s', str(e))}
+                
         picking_int.button_validate()
         
         # 2. Create IN picking (Transit -> Destination)
@@ -360,4 +378,4 @@ class HLVMobileBarcodeController(http.Controller):
         
         picking_in.action_confirm()
         
-        return {'success': True, 'in_picking_name': picking_in.name}
+        return {'success': True, 'in_picking_name': picking_in.name, 'package_name': package_name}

@@ -99,9 +99,13 @@
                     <button class="btn btn-outline btn-lg" style="flex: 1;" t-on-click="props.onBack" t-att-disabled="state.loading">
                         <i class="fa fa-times"/> Hủy
                     </button>
-                    <button class="btn btn-primary btn-lg" style="flex: 1;" t-on-click="doMove" t-att-disabled="state.loading or state.lines.length === 0">
-                        <t t-if="!state.loading"><i class="fa fa-check"/> Chuyển Tất Cả</t>
-                        <t t-else=""><i class="fa fa-spin fa-spinner"/> Đang xử lý</t>
+                    <button class="btn btn-primary btn-lg" style="flex: 1; background-color: var(--info-color);" t-on-click="() => this.doMove(true)" t-att-disabled="state.loading or state.lines.length === 0">
+                        <t t-if="!state.loading"><i class="fa fa-box"/> Đóng thành kiện</t>
+                        <t t-else=""><i class="fa fa-spin fa-spinner"/></t>
+                    </button>
+                    <button class="btn btn-primary btn-lg" style="flex: 1;" t-on-click="() => this.doMove(false)" t-att-disabled="state.loading or state.lines.length === 0">
+                        <t t-if="!state.loading"><i class="fa fa-check"/> Xác nhận</t>
+                        <t t-else=""><i class="fa fa-spin fa-spinner"/></t>
                     </button>
                 </div>
             </div>
