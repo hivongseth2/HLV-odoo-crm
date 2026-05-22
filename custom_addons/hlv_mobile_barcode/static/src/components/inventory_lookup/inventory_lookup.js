@@ -12,6 +12,7 @@ export class InventoryLookup extends Component {
         onBack: Function,
         onMove: { type: Function, optional: true },
         onBatchMove: { type: Function, optional: true },
+        onProductSelect: { type: Function, optional: true },
     };
 
     setup() {

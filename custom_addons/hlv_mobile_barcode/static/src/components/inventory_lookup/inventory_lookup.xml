@@ -39,7 +39,7 @@
                                 Tồn kho hiện tại
                             </div>
                             <div class="items-list" style="margin-top: 0; margin-bottom: 20px;">
-                                <div t-foreach="state.results" t-as="res" t-key="res_index" class="item-card" t-on-click="props.lookupType === 'location' ? () => props.onMove(res.product_id, state.location_barcode, state.location_name) : () => this.openLocation(res.quant_id)" style="cursor: pointer; border: 1px solid var(--border-color);">
+                                <div t-foreach="state.results" t-as="res" t-key="res_index" class="item-card" t-on-click="props.lookupType === 'location' ? () => props.onProductSelect(res.product_id, res.product_name) : () => this.openLocation(res.quant_id)" style="cursor: pointer; border: 1px solid var(--border-color);">
                                     <div class="item-info">
                                         <div class="item-name" style="font-size: 1rem;">
                                             <t t-if="props.lookupType === 'product'"><t t-esc="res.location_name"/></t>

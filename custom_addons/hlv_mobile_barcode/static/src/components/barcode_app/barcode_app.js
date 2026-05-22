@@ -188,6 +188,13 @@ export class BarcodeApp extends Component {
         this.state.currentView = 'batch_move';
     }
 
+    goToProductLookup(productId, productName) {
+        this.state.lookupType = 'product';
+        this.state.recordId = productId;
+        this.state.lookupTitle = productName;
+        this.state.currentView = 'lookup';
+    }
+
     async openCamera() {
         this.state.showCamera = true;
         
