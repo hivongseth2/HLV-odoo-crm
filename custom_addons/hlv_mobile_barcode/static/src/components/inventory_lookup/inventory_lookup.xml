@@ -1,76 +1,82 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
     <t t-name="hlv_mobile_barcode.InventoryLookup">
-        <div class="lookup-container h-100 d-flex flex-column" style="background: #fff; height: 100vh; overflow: hidden;">
-            <div class="lookup-header p-2 bg-white border-bottom" style="z-index: 10; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between;">
-                <h4 class="mb-0 text-truncate" style="color: #011627; font-weight: 500; font-size: 16px;">
-                    <i class="fa fa-search me-1"/> <t t-esc="state.title"/>
-                </h4>
-                <div class="d-flex gap-1">
-                    <button t-if="props.lookupType === 'product'" class="btn btn-primary btn-sm px-3" t-on-click="() => props.onMove(props.recordId)">
-                        Chuyển
-                    </button>
-                    <button class="btn btn-secondary btn-sm px-3" t-on-click="props.onBack">
-                        Đóng
-                    </button>
-                </div>
-            </div>
-            
-            <div class="lookup-body flex-grow-1 overflow-auto" style="padding: 0;">
-                <div t-if="state.loading" class="text-center mt-5">
-                    <i class="fa fa-spin fa-spinner fa-2x text-muted"/>
+        <div class="hlv-barcode-app">
+            <div class="shipper-container">
+                <!-- Header -->
+                <div class="shipper-header">
+                    <div class="header-title" style="font-size: 1rem;">
+                        <i class="fa fa-search"></i> <t t-esc="state.title"/>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button t-if="props.lookupType === 'product'" class="btn btn-primary" style="padding: 6px 12px; font-size: 0.85rem;" t-on-click="() => props.onMove(props.recordId)">
+                            <i class="fa fa-exchange-alt"></i> Chuyển
+                        </button>
+                        <button class="btn btn-outline" style="padding: 6px 12px; font-size: 0.85rem;" t-on-click="props.onBack">
+                            Đóng
+                        </button>
+                    </div>
                 </div>
                 
-                <div t-else="">
-                    <t t-if="state.results.length === 0 and (!state.reservations or state.reservations.length === 0)">
-                        <div class="p-4 text-center text-muted">Không tìm thấy dữ liệu tồn kho.</div>
-                    </t>
+                <div class="card-box" style="margin-top: 10px; padding: 15px;">
+                    <div t-if="state.loading" style="text-align: center; padding: 30px;">
+                        <i class="fa fa-spin fa-spinner fa-2x" style="color: var(--secondary-color);"></i>
+                    </div>
+                    
+                    <div t-else="">
+                        <t t-if="state.results.length === 0 and (!state.reservations or state.reservations.length === 0)">
+                            <div style="text-align: center; padding: 30px; color: var(--text-muted);">
+                                <i class="fa fa-box-open fa-3x" style="opacity: 0.2; margin-bottom: 10px;"></i>
+                                <div>Không tìm thấy dữ liệu tồn kho.</div>
+                            </div>
+                        </t>
 
-                    <t t-if="state.results.length > 0">
-                        <div class="bg-light p-2 border-bottom fw-bold text-uppercase" style="font-size: 12px; color: #495057;">
-                            Tồn kho hiện tại
-                        </div>
-                        <table class="table table-striped table-hover o_list_table mb-0">
-                            <tbody>
-                                <tr t-foreach="state.results" t-as="res" t-key="res_index" t-on-click="() => this.openLocation(res.quant_id)" style="cursor: pointer;">
-                                    <td class="p-3">
-                                        <div class="fw-bold text-dark" style="font-size: 14px;">
+                        <t t-if="state.results.length > 0">
+                            <div style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px;">
+                                Tồn kho hiện tại
+                            </div>
+                            <div class="items-list" style="margin-top: 0; margin-bottom: 20px;">
+                                <div t-foreach="state.results" t-as="res" t-key="res_index" class="item-card" t-on-click="() => this.openLocation(res.quant_id)" style="cursor: pointer; border: 1px solid var(--border-color);">
+                                    <div class="item-info">
+                                        <div class="item-name" style="font-size: 1rem;">
                                             <t t-if="props.lookupType === 'product'"><t t-esc="res.location_name"/></t>
                                             <t t-else=""><t t-esc="res.product_name"/></t>
                                         </div>
-                                        <div t-if="res.package_name" class="text-muted mt-1" style="font-size: 12px;">
+                                        <div t-if="res.package_name" class="item-barcode" style="margin-top: 4px;">
                                             <i class="fa fa-box me-1"/> <t t-esc="res.package_name"/>
                                         </div>
-                                    </td>
-                                    <td class="p-3 text-end align-middle fw-bold text-success" style="font-size: 16px;">
+                                    </div>
+                                    <div style="font-weight: 700; font-size: 1.2rem; color: var(--success-color);">
                                         <t t-esc="res.quantity"/>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </t>
-                    
-                    <t t-if="props.lookupType === 'product' and state.reservations and state.reservations.length > 0">
-                        <div class="bg-light p-2 border-bottom border-top fw-bold text-uppercase mt-2" style="font-size: 12px; color: #495057;">
-                            Đang được giữ (Reserved)
-                        </div>
-                        <table class="table table-striped table-hover o_list_table mb-0">
-                            <tbody>
-                                <tr t-foreach="state.reservations" t-as="r" t-key="r_index" t-on-click="() => this.openPicking(r.picking_id)" style="cursor: pointer;">
-                                    <td class="p-3">
-                                        <div class="text-primary fw-bold" style="font-size: 14px;"><t t-esc="r.picking"/></div>
-                                        <div class="text-muted text-truncate mt-1" style="max-width: 200px; font-size: 12px;"><t t-esc="r.partner or ''"/></div>
-                                    </td>
-                                    <td class="p-3 text-end align-middle">
-                                        <div class="mb-1"><span class="badge rounded-pill bg-info text-dark"><t t-esc="r.state_desc"/></span></div>
-                                        <div style="font-size: 13px;">
-                                            <strong><t t-esc="r.reserved"/></strong> / <t t-esc="r.demand"/>
+                                    </div>
+                                    <i class="fa fa-chevron-right" style="color: #ccc; margin-left: 10px; font-size: 0.8rem;"></i>
+                                </div>
+                            </div>
+                        </t>
+                        
+                        <t t-if="props.lookupType === 'product' and state.reservations and state.reservations.length > 0">
+                            <div style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px;">
+                                Đang được giữ (Reserved)
+                            </div>
+                            <div class="items-list" style="margin-top: 0;">
+                                <div t-foreach="state.reservations" t-as="r" t-key="r_index" class="item-card" t-on-click="() => this.openPicking(r.picking_id)" style="cursor: pointer; border: 1px solid var(--border-color);">
+                                    <div class="item-info">
+                                        <div class="item-name" style="color: var(--info-color);"><t t-esc="r.picking"/></div>
+                                        <div class="item-barcode" style="margin-top: 2px;"><t t-esc="r.partner or ''"/></div>
+                                    </div>
+                                    <div style="text-align: right;">
+                                        <div style="font-size: 0.75rem; background: var(--light-bg); padding: 2px 6px; border-radius: 4px; display: inline-block; margin-bottom: 4px; font-weight: 600; color: var(--text-color);">
+                                            <t t-esc="r.state_desc"/>
                                         </div>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </t>
+                                        <div style="font-size: 0.9rem; color: var(--text-muted);">
+                                            <strong style="color: var(--text-color);"><t t-esc="r.reserved"/></strong> / <t t-esc="r.demand"/>
+                                        </div>
+                                    </div>
+                                    <i class="fa fa-chevron-right" style="color: #ccc; margin-left: 10px; font-size: 0.8rem;"></i>
+                                </div>
+                            </div>
+                        </t>
+                    </div>
                 </div>
             </div>
         </div>

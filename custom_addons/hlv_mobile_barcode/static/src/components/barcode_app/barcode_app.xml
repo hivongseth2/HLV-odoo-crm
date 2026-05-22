@@ -2,114 +2,96 @@
 <templates xml:space="preserve">
     <t t-name="hlv_mobile_barcode.BarcodeApp">
         <div class="hlv-barcode-app" t-ref="app-container">
-            <div class="hlv-barcode-header" t-if="state.currentView !== 'main'">
-                <span t-if="state.currentView === 'picking'">Picking: <t t-esc="state.pickingName"/></span>
-                <span t-elif="state.currentView === 'lookup'">Lookup: <t t-esc="state.lookupTitle"/></span>
-                
-                <button class="btn btn-sm btn-light" t-on-click="goToMain">
-                    <i class="fa fa-home"/> Home
-                </button>
-            </div>
-            
-            <div class="hlv-barcode-content">
-                <!-- Main Screen -->
-                <div t-if="state.currentView === 'main'" class="o_barcode_main_menu">
-                    <div class="o_barcode_card">
-                        <div class="o_barcode_card_header">
-                            <div>
-                                <i class="fa fa-th" style="cursor: pointer; padding-right: 8px;" t-on-click="exitApp"/> 
-                                Máy quét mã vạch
-                            </div>
-                            <button class="btn btn-light btn-sm o_barcode_settings_btn" t-on-click="openSettings">Cài đặt</button>
-                        </div>
-                        
-                        <div class="o_barcode_card_body" t-on-click="openCamera">
-                            <div class="o_barcode_icon_container">
-                                <svg width="140" height="90" viewBox="0 0 140 90" fill="currentColor" xmlns="http://www.w3.org/2000/svg" class="o_barcode_icon">
-                                    <rect x="0" y="0" width="8" height="90" rx="2"/>
-                                    <rect x="14" y="0" width="4" height="90" rx="1"/>
-                                    <rect x="24" y="0" width="12" height="90" rx="2"/>
-                                    <rect x="42" y="0" width="6" height="90" rx="2"/>
-                                    <rect x="54" y="0" width="14" height="90" rx="2"/>
-                                    <rect x="74" y="0" width="4" height="90" rx="1"/>
-                                    <rect x="84" y="0" width="8" height="90" rx="2"/>
-                                    <rect x="98" y="0" width="16" height="90" rx="2"/>
-                                    <rect x="120" y="0" width="4" height="90" rx="1"/>
-                                    <rect x="130" y="0" width="10" height="90" rx="2"/>
-                                </svg>
-                                <div class="o_barcode_laser"></div>
-                            </div>
-                            <div class="o_barcode_subtitle">Quét hoặc chạm</div>
-                        </div>
-                        
-                        <ul class="o_barcode_instructions">
-                            <li>Quét một <strong>sản phẩm</strong> để định vị</li>
-                            <li>Quét một <strong>kiện hàng</strong> để mở</li>
-                            <li>Quét một <strong>phiếu xuất kho</strong> để mở</li>
-                            <li>Quét một <strong>vị trí</strong> để tiến hành một lệnh chuyển hàng</li>
-                            <li>Quét một <strong>loại hoạt động</strong> để bắt đầu</li>
-                        </ul>
-                        
-                        <div class="o_barcode_card_footer">
-                            <button class="btn o_btn_purple w-100" t-on-click="openCamera">Hoạt động</button>
-                        </div>
+            <div class="shipper-container">
+                <!-- Header -->
+                <div class="shipper-header" t-if="state.currentView !== 'main'">
+                    <div class="header-title">
+                        <i class="fa fa-boxes"></i> Kho HLV
+                    </div>
+                    <div class="user-info" t-on-click="goToMain">
+                        <i class="fa fa-home"></i> Trang chủ
                     </div>
                 </div>
-                
-                <!-- Picking View Placeholder -->
-                <div t-elif="state.currentView === 'picking'">
-                    <PickingScanner pickingId="state.pickingId" onBack="() => this.goToMain()" lastScannedProduct="state.lastScannedProduct"/>
-                </div>
-                
-                <!-- Lookup View Placeholder -->
-                <div t-elif="state.currentView === 'lookup'">
-                    <InventoryLookup lookupType="state.lookupType" recordId="state.recordId" onBack="() => this.goToMain()" onMove="(productId) => this.goToMove(productId)"/>
-                </div>
-                
-                <!-- Move Product View -->
-                <div t-elif="state.currentView === 'move'" class="h-100 position-relative">
-                    <LocationMove 
-                        productId="state.recordId" 
-                        onBack="() => this.goToMain()"
-                        openCameraForInput="(cb) => this.openCameraForInput(cb)"
-                    />
-                </div>
 
-                <!-- Camera Modal (Odoo Style) -->
-                <div t-if="state.showCamera" class="o_barcode_camera_modal_backdrop" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); z-index: 9999; display: flex; justify-content: center; align-items: center; padding: 15px;">
-                    <div class="o_barcode_camera_modal" style="background: white; width: 100%; max-width: 650px; border-radius: 4px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); display: flex; flex-direction: column; overflow: hidden; animation: fadeInSlideUp 0.3s ease-out;">
-                        <!-- Header -->
-                        <div style="padding: 16px 20px; border-bottom: 1px solid #f0f0f0; display: flex; align-items: center; font-weight: 600; font-size: 16px; color: #333;">
-                            <i class="fa fa-arrow-left" style="cursor: pointer; margin-right: 15px; color: #444;" t-on-click="closeCamera"/> Máy quét mã vạch
-                        </div>
-                        
-                        <!-- Body -->
-                        <div style="padding: 30px 20px; text-align: center; min-height: 250px; display: flex; flex-direction: column; justify-content: center; align-items: center; background: #fff;">
-                            
-                            <!-- Fallback UI when permission is denied -->
-                            <t t-if="state.cameraFallback">
-                                <i class="fa fa-camera" style="font-size: 48px; color: #6c757d; margin-bottom: 15px; opacity: 0.8;"/>
-                                <h5 style="font-weight: 600; margin-bottom: 8px; color: #333; font-size: 16px;">Không thể truy cập camera</h5>
-                                <p style="color: #6c757d; font-size: 14px; margin-bottom: 25px; line-height: 1.5;">Không thể bắt đầu quét. Trình duyệt chưa cấp quyền cho trang web này.<br/>Hoặc bấm nút dưới để chụp 1 tấm ảnh chứa mã vạch.</p>
-                                
-                                <div>
-                                    <input type="file" accept="image/*" capture="environment" id="cameraFileInput" style="display: none;" t-on-change="onFileSelected"/>
-                                    <label for="cameraFileInput" class="btn btn-secondary" style="font-weight: 500;">
-                                        <i class="fa fa-image"/> Chọn Ảnh / Chụp Ảnh
-                                    </label>
-                                </div>
-                            </t>
-                            
-                            <!-- Live Camera Feed -->
-                            <div id="reader" style="width: 100%; max-width: 500px; margin: 0 auto; overflow: hidden; border-radius: 8px; background: #000;" t-att-class="state.cameraFallback ? 'd-none' : ''"></div>
-                        </div>
-
-                        <!-- Footer: Manual Barcode Input -->
-                        <div style="padding: 15px 20px; border-top: 1px solid #f0f0f0; background: #fff;">
-                            <div class="input-group" style="border: 1px solid #ced4da; border-radius: 4px; overflow: hidden;">
-                                <input type="text" class="form-control" t-model="state.manualBarcode" placeholder="Nhập một mã vạch..." t-on-keyup="onManualBarcodeKeyup" style="border: none; box-shadow: none; font-size: 14px;"/>
-                                <button class="btn btn-light" style="border: none; border-left: 1px solid #ced4da; background: #f8f9fa; color: #495057; font-size: 14px; font-weight: 500;" t-on-click="processManualBarcode">Áp dụng</button>
+                <div class="hlv-barcode-content">
+                    <!-- Main Screen -->
+                    <div t-if="state.currentView === 'main'">
+                        <div class="shipper-header">
+                            <div class="header-title">
+                                <i class="fa fa-barcode"></i> Máy quét mã vạch
                             </div>
+                            <div class="user-info" t-on-click="openSettings">
+                                <i class="fa fa-cog"></i> Cài đặt
+                            </div>
+                        </div>
+
+                        <div class="card-box" style="text-align: center; padding-top: 40px; padding-bottom: 40px;" t-on-click="openCamera">
+                            <i class="fa fa-barcode" style="font-size: 80px; color: var(--primary-color); margin-bottom: 20px;"></i>
+                            <h3 style="color: var(--primary-color); margin-bottom: 10px;">Quét hoặc chạm</h3>
+                            <p class="text-muted" style="margin-bottom: 30px;">Nhấn vào đây để mở Camera và quét</p>
+                            
+                            <div style="text-align: left; background: var(--light-bg); padding: 15px; border-radius: 8px;">
+                                <div style="margin-bottom: 8px;"><i class="fa fa-check-circle" style="color: var(--success-color); margin-right: 8px;"></i> Quét <strong>sản phẩm</strong> để định vị</div>
+                                <div style="margin-bottom: 8px;"><i class="fa fa-check-circle" style="color: var(--success-color); margin-right: 8px;"></i> Quét <strong>kiện hàng</strong> để mở</div>
+                                <div style="margin-bottom: 8px;"><i class="fa fa-check-circle" style="color: var(--success-color); margin-right: 8px;"></i> Quét <strong>phiếu kho</strong> để xử lý</div>
+                                <div><i class="fa fa-check-circle" style="color: var(--success-color); margin-right: 8px;"></i> Quét <strong>vị trí</strong> để chuyển hàng</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Picking View Placeholder -->
+                    <div t-elif="state.currentView === 'picking'">
+                        <PickingScanner pickingId="state.pickingId" onBack="() => this.goToMain()" lastScannedProduct="state.lastScannedProduct"/>
+                    </div>
+                    
+                    <!-- Lookup View Placeholder -->
+                    <div t-elif="state.currentView === 'lookup'">
+                        <InventoryLookup lookupType="state.lookupType" recordId="state.recordId" onBack="() => this.goToMain()" onMove="(productId) => this.goToMove(productId)"/>
+                    </div>
+                    
+                    <!-- Move Product View -->
+                    <div t-elif="state.currentView === 'move'">
+                        <LocationMove productId="state.recordId" onBack="() => this.goToMain()"/>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Camera Modal (Shipper Style) -->
+            <div t-if="state.showCamera" class="modal-overlay show">
+                <div class="modal-content">
+                    <!-- Header -->
+                    <div class="modal-header">
+                        <div class="modal-title"><i class="fa fa-camera"></i> Máy quét mã vạch</div>
+                        <button class="modal-close" t-on-click="closeCamera"><i class="fa fa-times"></i></button>
+                    </div>
+                    
+                    <!-- Body -->
+                    <div class="modal-body" style="padding: 15px; background: #000; text-align: center;">
+                        <!-- Fallback UI when permission is denied -->
+                        <t t-if="state.cameraFallback">
+                            <div style="background: white; padding: 30px 15px; border-radius: 8px;">
+                                <i class="fa fa-camera-slash" style="font-size: 48px; color: var(--danger-color); margin-bottom: 15px;"/>
+                                <h5 style="font-weight: 600; margin-bottom: 8px; color: var(--primary-color);">Không thể truy cập camera</h5>
+                                <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 25px;">Trình duyệt chưa cấp quyền cho trang web này. Vui lòng cấp quyền hoặc tải ảnh lên.</p>
+                                
+                                <input type="file" accept="image/*" capture="environment" id="cameraFileInput" style="display: none;" t-on-change="onFileSelected"/>
+                                <label for="cameraFileInput" class="btn btn-primary">
+                                    <i class="fa fa-image"/> Chọn Ảnh / Chụp Ảnh
+                                </label>
+                            </div>
+                        </t>
+                        
+                        <!-- Live Camera Feed -->
+                        <div id="reader" style="width: 100%; border-radius: 8px; overflow: hidden;" t-att-class="state.cameraFallback ? 'd-none' : ''"></div>
+                    </div>
+
+                    <!-- Footer: Manual Barcode Input -->
+                    <div style="padding: 15px;">
+                        <div class="input-group-row" style="margin-bottom: 0;">
+                            <input type="text" class="form-control" t-model="state.manualBarcode" placeholder="Nhập mã thủ công..." t-on-keyup="onManualBarcodeKeyup"/>
+                            <button class="btn btn-secondary" t-on-click="processManualBarcode">
+                                <i class="fa fa-arrow-right"></i>
+                            </button>
                         </div>
                     </div>
                 </div>

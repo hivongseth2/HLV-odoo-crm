@@ -1,30 +1,66 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
     <t t-name="hlv_mobile_barcode.PickingScanner">
-        <div class="picking-scanner-container" style="padding-bottom: 80px;">
-            <div t-if="state.loading" class="text-center mt-5">
-                <i class="fa fa-spin fa-spinner fa-3x"/>
-            </div>
-            <div t-elif="state.picking">
-                <t t-foreach="state.picking.lines" t-as="line" t-key="line.move_id">
-                    <div t-attf-class="picking-line #{line.qty_done >= line.product_uom_qty ? 'done' : ''}">
-                        <div class="picking-line-title">
-                            <t t-esc="line.product_name"/><br/>
-                            <small class="text-muted"><t t-esc="line.product_barcode"/></small>
-                        </div>
-                        <div class="picking-line-qty">
-                            <span t-attf-class="#{line.qty_done >= line.product_uom_qty ? 'done' : ''}">
-                                <t t-esc="line.qty_done"/>
-                            </span> / <t t-esc="line.product_uom_qty"/>
+        <div class="hlv-barcode-app">
+            <div class="shipper-container" style="padding-bottom: 80px;">
+                <div t-if="state.loading" style="text-align: center; padding: 50px;">
+                    <i class="fa fa-spin fa-spinner fa-3x" style="color: var(--secondary-color);"></i>
+                </div>
+                
+                <div t-elif="state.picking">
+                    <!-- Step Header representing the picking -->
+                    <div class="card-box" style="padding: 15px; margin-bottom: 15px;">
+                        <div class="step-header" style="margin-bottom: 0; padding-bottom: 0; border-bottom: none;">
+                            <div class="step-icon">
+                                <i class="fa fa-clipboard-list"></i>
+                            </div>
+                            <div class="step-info">
+                                <div class="step-title">Phiếu xuất/nhập</div>
+                                <div class="step-desc" style="font-weight: 600; color: var(--text-color);"><t t-esc="state.picking.name"/></div>
+                            </div>
                         </div>
                     </div>
-                </t>
-            </div>
-            
-            <div class="hlv-barcode-footer" style="position: fixed; bottom: 0; width: 100%; left: 0; box-sizing: border-box;">
-                <button class="btn btn-secondary btn-mobile-large" t-on-click="props.onBack">Back</button>
-                <button class="btn btn-info btn-mobile-large" t-on-click="doPack">Pack</button>
-                <button class="btn btn-success btn-mobile-large" t-on-click="doValidate">Validate</button>
+                
+                    <div class="card-box" style="padding: 15px;">
+                        <div style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px;">
+                            Danh sách sản phẩm
+                        </div>
+                        <div class="items-list" style="margin-top: 0;">
+                            <t t-foreach="state.picking.lines" t-as="line" t-key="line.move_id">
+                                <div t-attf-class="item-card #{line.qty_done >= line.product_uom_qty ? 'scanned' : ''}" style="border: 1px solid var(--border-color);">
+                                    <div class="item-info">
+                                        <div class="item-name"><t t-esc="line.product_name"/></div>
+                                        <div class="item-barcode"><t t-esc="line.product_barcode"/></div>
+                                    </div>
+                                    <div style="display: flex; align-items: center;">
+                                        <div style="text-align: right; margin-right: 5px;">
+                                            <div style="font-size: 1.1rem; font-weight: 700;">
+                                                <span t-attf-style="color: #{line.qty_done >= line.product_uom_qty ? 'var(--success-color)' : 'var(--text-color)'}">
+                                                    <t t-esc="line.qty_done"/>
+                                                </span> 
+                                                <span style="color: var(--text-muted); font-size: 0.9rem;">/ <t t-esc="line.product_uom_qty"/></span>
+                                            </div>
+                                        </div>
+                                        <i t-if="line.qty_done >= line.product_uom_qty" class="fa fa-check-circle item-status-icon"></i>
+                                    </div>
+                                </div>
+                            </t>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Fixed Footer -->
+                <div style="position: fixed; bottom: 0; left: 0; width: 100%; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border-top: 1px solid var(--border-color); padding: 15px; box-sizing: border-box; display: flex; gap: 10px; z-index: 100; padding-bottom: env(safe-area-inset-bottom, 15px);">
+                    <button class="btn btn-outline" style="flex: 1; padding: 12px;" t-on-click="props.onBack">
+                        <i class="fa fa-arrow-left"></i> Đóng
+                    </button>
+                    <button class="btn btn-primary" style="flex: 1; padding: 12px; background-color: var(--info-color);" t-on-click="doPack">
+                        <i class="fa fa-box"></i> Đóng gói
+                    </button>
+                    <button class="btn btn-success" style="flex: 1; padding: 12px;" t-on-click="doValidate">
+                        <i class="fa fa-check"></i> Xác nhận
+                    </button>
+                </div>
             </div>
         </div>
     </t>
