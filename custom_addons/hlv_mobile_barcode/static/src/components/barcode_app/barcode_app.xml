@@ -41,7 +41,7 @@
                     
                     <!-- Picking View Placeholder -->
                     <div t-elif="state.currentView === 'picking'">
-                        <PickingScanner pickingId="state.pickingId" onBack="() => this.goBack()" lastScannedProduct="state.lastScannedProduct"/>
+                        <PickingScanner pickingId="state.pickingId" onBack="() => this.goBack()" lastScannedProduct="state.lastScannedProduct" scannedLocationName="state.scannedLocationName"/>
                     </div>
                     
                     <!-- Move Component -->

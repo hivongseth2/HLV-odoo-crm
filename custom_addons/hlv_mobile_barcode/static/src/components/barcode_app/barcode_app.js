@@ -125,11 +125,24 @@ export class BarcodeApp extends Component {
             try {
                 const res = await rpc("/hlv_mobile_barcode/process_barcode", { 
                     picking_id: this.state.pickingId, 
-                    barcode: barcode 
+                    barcode: barcode,
+                    destination_location_id: this.state.scannedLocationId,
+                    last_product_id: this.state.lastScannedProduct
                 });
                 if (res.error) {
                     this.playSound('error');
                     this.notification.add(res.error, { type: "danger" });
+                } else if (res.type === 'location') {
+                    this.playSound('success');
+                    this.state.scannedLocationId = res.location_id;
+                    this.state.scannedLocationName = res.location_name;
+                    this.notification.add(`Đã chọn vị trí: ${res.location_name}`, { type: "success" });
+                    
+                    if (res.updated_product_id) {
+                        this.state.lastScannedProduct = res.updated_product_id;
+                        // Reload picking data since we updated the line's location
+                        // We can just rely on the component reloading when props change, or since we pass scannedLocationName, it will trigger an update.
+                    }
                 } else {
                     this.playSound('success');
                     this.notification.add(`Scanned ${res.product_name}`, { type: "success" });

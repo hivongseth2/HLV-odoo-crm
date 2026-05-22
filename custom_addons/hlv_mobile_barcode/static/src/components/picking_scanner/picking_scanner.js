@@ -10,6 +10,7 @@ export class PickingScanner extends Component {
         pickingId: Number,
         onBack: Function,
         lastScannedProduct: { type: Number, optional: true },
+        scannedLocationName: { type: String, optional: true },
     };
 
     setup() {
@@ -27,7 +28,7 @@ export class PickingScanner extends Component {
         });
 
         onWillUpdateProps(async (nextProps) => {
-            if (nextProps.lastScannedProduct !== this.props.lastScannedProduct) {
+            if (nextProps.lastScannedProduct !== this.props.lastScannedProduct || nextProps.scannedLocationName !== this.props.scannedLocationName) {
                 await this.loadPicking();
             }
         });

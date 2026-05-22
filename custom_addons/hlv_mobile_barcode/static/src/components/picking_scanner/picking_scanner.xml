@@ -22,6 +22,11 @@
                     </div>
                 
                     <div class="card-box" style="padding: 15px;">
+                        <!-- Active Location Banner -->
+                        <div t-if="props.scannedLocationName" class="alert alert-info" style="margin-bottom: 15px; padding: 10px; border-radius: 8px; font-weight: 600; display: flex; align-items: center; gap: 8px; border-left: 4px solid var(--info-color);">
+                            <i class="fa fa-map-marker-alt"></i> Vị trí quét tiếp theo: <t t-esc="props.scannedLocationName"/>
+                        </div>
+                        
                         <div style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px;">
                             Danh sách sản phẩm
                         </div>
@@ -31,7 +36,12 @@
                                     <div t-attf-class="item-card #{line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0 ? 'scanned' : ''}" style="border: none; margin-bottom: 0;">
                                         <div class="item-info">
                                             <div class="item-name"><t t-esc="line.product_name"/></div>
-                                            <div class="item-barcode"><t t-esc="line.product_barcode"/></div>
+                                            <div style="font-size: 0.85rem; margin-top: 4px; color: var(--text-muted); display: flex; align-items: center; gap: 4px;">
+                                                <i class="fa fa-barcode"></i> <t t-esc="line.product_barcode"/>
+                                                <span t-if="line.location_name" style="margin-left: 8px; color: var(--info-color); font-weight: 500;">
+                                                    <i class="fa fa-map-marker-alt"></i> <t t-esc="line.location_name"/>
+                                                </span>
+                                            </div>
                                         </div>
                                         <div style="display: flex; align-items: center;">
                                             <div style="text-align: right; margin-right: 10px;">

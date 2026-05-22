@@ -47,6 +47,16 @@ class HLVMobileBarcodeController(http.Controller):
         for move in picking.move_ids_without_package:
             # Compute total quantity for this move from move_line_ids (Odoo 18 uses quantity)
             qty_done = sum(line.quantity for line in move.move_line_ids)
+            
+            # Determine location name
+            last_ml = move.move_line_ids and move.move_line_ids[-1] or False
+            loc_name = False
+            if last_ml:
+                if picking.picking_type_id.code in ['incoming', 'internal']:
+                    loc_name = last_ml.location_dest_id.display_name
+                else:
+                    loc_name = last_ml.location_id.display_name
+                    
             lines.append({
                 'move_id': move.id,
                 'product_id': move.product_id.id,
@@ -56,6 +66,7 @@ class HLVMobileBarcodeController(http.Controller):
                 'qty_done': qty_done,
                 'uom_name': move.product_uom.name,
                 'state': move.state,
+                'location_name': loc_name,
             })
             
         return {
@@ -117,14 +128,32 @@ class HLVMobileBarcodeController(http.Controller):
         return {'success': True, 'picking_id': picking_int.id, 'picking_name': picking_int.name}
 
     @http.route('/hlv_mobile_barcode/process_barcode', type='json', auth='user')
-    def process_barcode(self, picking_id, barcode):
+    def process_barcode(self, picking_id, barcode, destination_location_id=None, last_product_id=None):
         picking = request.env['stock.picking'].browse(picking_id)
         if not picking.exists() or picking.state not in ['draft', 'confirmed', 'assigned']:
             return {'error': _('Phiếu này không thể xử lý thêm sản phẩm.')}
 
+        is_putaway = picking.picking_type_id.code in ['incoming', 'internal']
+        
+        # 1. Try to find location first
+        location = request.env['stock.location'].search(['|', ('barcode', '=', barcode), ('name', '=', barcode)], limit=1)
+        if location:
+            res = {'type': 'location', 'location_id': location.id, 'location_name': location.display_name, 'is_putaway': is_putaway}
+            if last_product_id:
+                move = picking.move_ids_without_package.filtered(lambda m: m.product_id.id == last_product_id and m.state not in ['done', 'cancel'])
+                if move:
+                    move_line = move.move_line_ids.filtered(lambda ml: not ml.result_package_id)
+                    if move_line:
+                        if is_putaway:
+                            move_line[-1].location_dest_id = location.id
+                        else:
+                            move_line[-1].location_id = location.id
+                        res['updated_product_id'] = last_product_id
+            return res
+
         product = request.env['product.product'].search([('barcode', '=', barcode)], limit=1)
         if not product:
-            return {'error': _('Không tìm thấy mã vạch sản phẩm.')}
+            return {'error': _('Không tìm thấy mã vạch hợp lệ (Sản phẩm hoặc Vị trí).')}
 
         # Find the move for this product
         move = picking.move_ids_without_package.filtered(lambda m: m.product_id == product and m.state not in ['done', 'cancel'])
@@ -156,8 +185,27 @@ class HLVMobileBarcodeController(http.Controller):
 
         # In Odoo 17/18, qty_done is replaced by quantity
         move_line = move.move_line_ids.filtered(lambda ml: ml.quantity < ml.quantity_product_uom and not ml.result_package_id)
+        
+        ml_dest_id = destination_location_id if (destination_location_id and is_putaway) else picking.location_dest_id.id
+        ml_src_id = destination_location_id if (destination_location_id and not is_putaway) else picking.location_id.id
+        
         if move_line:
-            move_line[0].quantity += 1
+            # Check if location matches, otherwise we might need a new move line
+            last_ml = move_line[-1]
+            if (is_putaway and destination_location_id and last_ml.location_dest_id.id != destination_location_id) or \
+               (not is_putaway and destination_location_id and last_ml.location_id.id != destination_location_id):
+                # Locations differ, create a new move line
+                request.env['stock.move.line'].create({
+                    'move_id': move.id,
+                    'picking_id': picking.id,
+                    'product_id': product.id,
+                    'product_uom_id': product.uom_id.id,
+                    'location_id': ml_src_id,
+                    'location_dest_id': ml_dest_id,
+                    'quantity': 1,
+                })
+            else:
+                last_ml.quantity += 1
         else:
             # Create a new move line if none exists or all are full
             request.env['stock.move.line'].create({
@@ -165,12 +213,12 @@ class HLVMobileBarcodeController(http.Controller):
                 'picking_id': picking.id,
                 'product_id': product.id,
                 'product_uom_id': product.uom_id.id,
-                'location_id': move.location_id.id,
-                'location_dest_id': move.location_dest_id.id,
+                'location_id': ml_src_id,
+                'location_dest_id': ml_dest_id,
                 'quantity': 1,
             })
             
-        return {'success': True, 'product_id': product.id, 'product_name': product.display_name}
+        return {'success': True, 'type': 'product', 'product_id': product.id, 'product_name': product.display_name}
 
     @http.route('/hlv_mobile_barcode/update_move_line_qty', type='json', auth='user')
     def update_move_line_qty(self, move_id, qty_change=None, new_qty=None):
