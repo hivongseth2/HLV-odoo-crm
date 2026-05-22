@@ -1213,6 +1213,28 @@ body {
   color: #fff;
 }
 
+/* ===== PHOTO CAPTURE STEP ===== */
+.photo-camera-section video {
+  width: 100%;
+  border-radius: 8px;
+  background: #000;
+  display: block;
+  max-height: 60vh;
+  object-fit: cover;
+}
+
+#photo-preview-img {
+  border: 2px solid var(--success-color);
+  border-radius: 8px;
+  width: 100%;
+  display: block;
+}
+
+#photo-send-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* ========================= DELIVERED TAB ========================= */
 .delivered-card {
   border: 1.5px solid var(--border-color);

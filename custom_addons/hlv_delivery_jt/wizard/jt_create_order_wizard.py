@@ -2,6 +2,7 @@
 from odoo import fields, models, api, _
 from odoo.exceptions import UserError, ValidationError
 from ..utils.jt_api_utils import JTApiUtils
+from markupsafe import Markup
 import hashlib
 import logging
 
@@ -834,6 +835,46 @@ class JTCreateOrderWizard(models.TransientModel):
                 'jt_total_fee': data.get('inquiryFee', 0.0),
                 'jt_order_status': 'Created'
             })
+            
+            
+            # Map display values for pay_type and service_type
+            pay_type_labels = {
+                'PP_PM': 'Thanh toán cuối tháng',
+                'PP_CASH': 'Người gửi thanh toán',
+                'CC_CASH': 'Người nhận thanh toán',
+            }
+            service_type_labels = {
+                '1': 'Lấy hàng tận nơi (Pickup)',
+                '6': 'Gửi hàng tại bưu cục (Drop off)',
+            }
+
+            bill_code = data.get('billCode', '')
+            shipping_fee = data.get('inquiryFee', 0.0)
+            cod_fee = data.get('codFee', 0.0)
+            insurance_fee = data.get('insuranceFee', 0.0)
+            sort_line = data.get('sortLine', '')
+
+            msg_body = f"""
+                <p><strong>🚚 Đã tạo đơn J&amp;T Express thành công!</strong></p>
+                <table class="table table-sm" style="width:100%">
+                <tbody>
+                    <tr><td><strong>Mã vận đơn (Bill Code)</strong></td><td>{bill_code}</td></tr>
+                    <tr><td><strong>Tuyến phân loại</strong></td><td>{sort_line}</td></tr>
+                    <tr><td><strong>Dịch vụ</strong></td><td>{service_type_labels.get(self.service_type, self.service_type)}</td></tr>
+                    <tr><td><strong>Phương thức thanh toán</strong></td><td>{pay_type_labels.get(self.pay_type, self.pay_type)}</td></tr>
+                    <tr><td><strong>Người nhận</strong></td><td>{self.receiver_name} — {self.receiver_mobile}</td></tr>
+                    <tr><td><strong>Địa chỉ nhận</strong></td><td>{self.receiver_address}, {self.receiver_area_id.name or ''}, {self.receiver_city_id.name or ''}, {self.receiver_prov_id.name or ''}</td></tr>
+                    <tr><td><strong>Tiền thu hộ (COD)</strong></td><td>{'{:,.0f}'.format(self.cod_money)} VNĐ</td></tr>
+                    <tr><td><strong>Giá trị hàng hóa</strong></td><td>{'{:,.0f}'.format(self.goods_value)} VNĐ</td></tr>
+                    <tr><td><strong>Trọng lượng</strong></td><td>{self.weight} kg</td></tr>
+                    <tr><td><strong>Phí vận chuyển</strong></td><td>{'{:,.0f}'.format(shipping_fee)} VNĐ</td></tr>
+                    <tr><td><strong>Phí COD</strong></td><td>{'{:,.0f}'.format(cod_fee)} VNĐ</td></tr>
+                    <tr><td><strong>Phí bảo hiểm</strong></td><td>{'{:,.0f}'.format(insurance_fee)} VNĐ</td></tr>
+                </tbody>
+                </table>
+                """
+            self.picking_id.message_post(body=Markup(msg_body), subtype_xmlid='mail.mt_note')
+
             return {
                 'type': 'ir.actions.client',
                 'tag': 'display_notification',
