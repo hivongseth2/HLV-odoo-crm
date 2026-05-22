@@ -115,7 +115,7 @@ export class BarcodeApp extends Component {
                 // Gọi thẳng Action "Điều chỉnh Tồn kho" (Inventory Adjustments) của Odoo
                 // Action này dùng giao diện List View dạng Editable (sửa trực tiếp trên dòng)
                 // Giúp người dùng không bị click nhầm văng sang trang Form View (Settings) nữa.
-                this.action.doAction('stock.action_view_inventory', {
+                this.action.doAction('stock.action_view_quants', {
                     additionalContext: context,
                     clearBreadcrumbs: false
                 });
