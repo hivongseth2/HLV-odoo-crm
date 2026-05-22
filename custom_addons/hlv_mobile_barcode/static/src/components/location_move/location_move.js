@@ -21,7 +21,10 @@ export class LocationMove extends Component {
             qty: 1,
             loading: false,
             inPickingName: "",
+            showLocalCamera: false,
         });
+
+        this.localScanner = null;
 
         onWillStart(async () => {
             try {
@@ -42,12 +45,63 @@ export class LocationMove extends Component {
         });
     }
 
-    scanSource() {
-        if (this.props.openCameraForInput) {
-            this.props.openCameraForInput((text) => {
-                this.state.sourceLocationBarcode = text;
-            });
+    async openLocalCamera() {
+        this.state.showLocalCamera = true;
+        await new Promise(r => setTimeout(r, 100)); // wait for DOM element
+
+        if (!window.Html5Qrcode) {
+            try {
+                await new Promise((resolve, reject) => {
+                    const script = document.createElement("script");
+                    script.src = "https://unpkg.com/html5-qrcode";
+                    script.onload = resolve;
+                    script.onerror = reject;
+                    document.head.appendChild(script);
+                });
+            } catch (e) {
+                this.notification.add("Không thể tải thư viện camera.", { type: "danger" });
+                this.state.showLocalCamera = false;
+                return;
+            }
         }
+
+        try {
+            this.localScanner = new window.Html5Qrcode("location-move-camera-reader");
+            await this.localScanner.start(
+                { facingMode: "environment" },
+                { fps: 15, disableFlip: false, aspectRatio: 1.0 },
+                async (decodedText) => {
+                    this.state.sourceLocationBarcode = decodedText;
+                    this.playSound('success');
+                    await this.closeLocalCamera();
+                },
+                (errorMessage) => {}
+            );
+        } catch (err) {
+            this.notification.add("Lỗi mở Camera: " + err, { type: "warning" });
+            this.closeLocalCamera();
+        }
+    }
+
+    async closeLocalCamera() {
+        if (this.localScanner) {
+            try {
+                await this.localScanner.stop();
+                this.localScanner.clear();
+            } catch(e) {}
+            this.localScanner = null;
+        }
+        this.state.showLocalCamera = false;
+    }
+
+    playSound(type) {
+        try {
+            const audioPath = type === 'success' 
+                ? '/custom_barcode_scan_redirect/static/src/sound/success.mp3' 
+                : '/custom_barcode_scan_redirect/static/src/sound/error.mp3';
+            const audio = new Audio(audioPath);
+            audio.play().catch(e => console.error("Audio error:", e));
+        } catch (e) {}
     }
 
     async doMove() {

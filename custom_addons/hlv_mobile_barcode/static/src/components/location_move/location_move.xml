@@ -20,10 +20,19 @@
 
                         <div class="form-group mb-3">
                             <label class="text-muted small fw-bold text-uppercase mb-1">Vị trí lấy hàng (Mã vạch)</label>
+                            
+                            <!-- Inline Camera -->
+                            <div t-if="state.showLocalCamera" class="mb-2 position-relative" style="border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                                <div id="location-move-camera-reader" style="width: 100%;"></div>
+                                <button type="button" class="btn btn-secondary btn-sm position-absolute" style="bottom: 10px; left: 50%; transform: translateX(-50%); z-index: 10;" t-on-click="closeLocalCamera">
+                                    <i class="fa fa-times me-1"/> Đóng Camera
+                                </button>
+                            </div>
+
                             <div class="input-group input-group-lg">
                                 <input type="text" class="form-control bg-light" t-model="state.sourceLocationBarcode" placeholder="Quét hoặc nhập mã..."/>
-                                <button class="btn btn-outline-secondary bg-white" type="button" t-on-click="scanSource" t-if="props.openCameraForInput">
-                                    Quét
+                                <button class="btn" style="background-color: #4a5568; color: white;" type="button" t-on-click="openLocalCamera">
+                                    <i class="fa fa-camera"/>
                                 </button>
                             </div>
                         </div>
