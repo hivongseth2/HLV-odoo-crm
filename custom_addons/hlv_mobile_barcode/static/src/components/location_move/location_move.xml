@@ -4,7 +4,7 @@
         <div class="d-flex flex-column h-100" style="background: #f5f7fa; animation: fadeInSlideUp 0.3s ease-out;">
             <div class="p-3 bg-white shadow-sm border-bottom" style="z-index: 10;">
                 <h5 class="mb-0 text-truncate" style="font-weight: 600; color: #714B67;">
-                    <i class="fa fa-exchange me-2"/> Chuyển vị trí
+                    Chuyển vị trí
                 </h5>
             </div>
             
@@ -19,21 +19,11 @@
                         </div>
 
                         <div class="form-group mb-3">
-                            <label class="text-muted small fw-bold text-uppercase mb-1">Từ vị trí (Mã vạch)</label>
+                            <label class="text-muted small fw-bold text-uppercase mb-1">Vị trí lấy hàng (Mã vạch)</label>
                             <div class="input-group input-group-lg">
                                 <input type="text" class="form-control bg-light" t-model="state.sourceLocationBarcode" placeholder="Quét hoặc nhập mã..."/>
                                 <button class="btn btn-outline-secondary bg-white" type="button" t-on-click="scanSource" t-if="props.openCameraForInput">
-                                    <i class="fa fa-camera text-primary"/>
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <div class="form-group mb-3">
-                            <label class="text-muted small fw-bold text-uppercase mb-1">Đến vị trí (Mã vạch)</label>
-                            <div class="input-group input-group-lg">
-                                <input type="text" class="form-control bg-light" t-model="state.destLocationBarcode" placeholder="Quét hoặc nhập mã..."/>
-                                <button class="btn btn-outline-secondary bg-white" type="button" t-on-click="scanDest" t-if="props.openCameraForInput">
-                                    <i class="fa fa-camera text-primary"/>
+                                    Quét
                                 </button>
                             </div>
                         </div>
@@ -43,6 +33,12 @@
                             <input type="number" class="form-control form-control-lg bg-light fw-bold" t-model="state.qty" min="0.01" step="0.01"/>
                         </div>
                     </div>
+                </div>
+                
+                <div t-if="state.inPickingName" class="alert alert-success mt-3 shadow-sm" style="border-radius: 12px;">
+                    <div class="fw-bold mb-1">Đã lấy hàng thành công!</div>
+                    <div>Mã phiếu nhập: <strong><t t-esc="state.inPickingName"/></strong></div>
+                    <div class="small mt-2">Vui lòng quét mã trên bằng công cụ Quét Phiếu khi đến vị trí đích để hoàn thành.</div>
                 </div>
             </div>
             

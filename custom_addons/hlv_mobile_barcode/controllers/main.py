@@ -196,40 +196,74 @@ class HLVMobileBarcodeController(http.Controller):
         return {'title': title, 'results': results, 'reservations': reservations}
 
     @http.route('/hlv_mobile_barcode/move_location', type='json', auth='user')
-    def move_location(self, product_id, source_barcode, dest_barcode, qty):
+    def move_location(self, product_id, source_barcode, qty):
         product = request.env['product.product'].browse(product_id)
         if not product.exists():
-            return {'error': _('Product not found')}
+            return {'error': _('Không tìm thấy sản phẩm')}
             
         source_loc = request.env['stock.location'].search([('barcode', '=', source_barcode)], limit=1)
         if not source_loc:
-            return {'error': _('Source location not found')}
+            return {'error': _('Không tìm thấy vị trí nguồn')}
             
-        dest_loc = request.env['stock.location'].search([('barcode', '=', dest_barcode)], limit=1)
-        if not dest_loc:
-            return {'error': _('Destination location not found')}
+        company_id = request.env.company.id
+        
+        # Get Transit Location
+        transit_loc = request.env['stock.location'].search([
+            ('usage', '=', 'transit'), 
+            ('company_id', 'in', [False, company_id])
+        ], limit=1)
+        
+        if not transit_loc:
+            return {'error': _('Không tìm thấy kho trung chuyển (Transit Location)')}
             
-        picking_type = request.env['stock.picking.type'].search([('code', '=', 'internal'), ('company_id', '=', request.env.company.id)], limit=1)
-        if not picking_type:
-            return {'error': _('Internal transfer picking type not found')}
+        # Get Picking Types
+        picking_type_int = request.env['stock.picking.type'].search([('code', '=', 'internal'), ('company_id', '=', company_id)], limit=1)
+        picking_type_in = request.env['stock.picking.type'].search([('code', '=', 'incoming'), ('company_id', '=', company_id)], limit=1)
+        
+        if not picking_type_int or not picking_type_in:
+            return {'error': _('Chưa cấu hình Operation Types (INT, IN)')}
 
-        picking = request.env['stock.picking'].create({
-            'picking_type_id': picking_type.id,
+        # 1. Create and Validate INT picking (Source -> Transit)
+        picking_int = request.env['stock.picking'].create({
+            'picking_type_id': picking_type_int.id,
             'location_id': source_loc.id,
-            'location_dest_id': dest_loc.id,
+            'location_dest_id': transit_loc.id,
         })
         
-        move = request.env['stock.move'].create({
-            'name': _('Mobile Move'),
-            'picking_id': picking.id,
+        request.env['stock.move'].create({
+            'name': _('Mobile Move OUT'),
+            'picking_id': picking_int.id,
             'product_id': product.id,
             'product_uom_qty': qty,
             'product_uom': product.uom_id.id,
             'location_id': source_loc.id,
+            'location_dest_id': transit_loc.id,
+        })
+        
+        picking_int.action_confirm()
+        picking_int.button_validate()
+        
+        # 2. Create IN picking (Transit -> Destination)
+        dest_loc = picking_type_in.default_location_dest_id
+        if not dest_loc:
+            dest_loc = request.env['stock.location'].search([('usage', '=', 'internal'), ('company_id', '=', company_id)], limit=1)
+            
+        picking_in = request.env['stock.picking'].create({
+            'picking_type_id': picking_type_in.id,
+            'location_id': transit_loc.id,
             'location_dest_id': dest_loc.id,
         })
         
-        picking.action_confirm()
-        picking.button_validate()
+        request.env['stock.move'].create({
+            'name': _('Mobile Move IN'),
+            'picking_id': picking_in.id,
+            'product_id': product.id,
+            'product_uom_qty': qty,
+            'product_uom': product.uom_id.id,
+            'location_id': transit_loc.id,
+            'location_dest_id': dest_loc.id,
+        })
         
-        return {'success': True}
+        picking_in.action_confirm()
+        
+        return {'success': True, 'in_picking_name': picking_in.name}

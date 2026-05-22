@@ -18,17 +18,13 @@ export class LocationMove extends Component {
         this.state = useState({
             productName: "Loading...",
             sourceLocationBarcode: "",
-            destLocationBarcode: "",
             qty: 1,
             loading: false,
+            inPickingName: "",
         });
 
         onWillStart(async () => {
             try {
-                // Fetch product info quickly so user knows what they are moving
-                const res = await rpc("/hlv_mobile_barcode/smart_scan", { barcode: `product_${this.props.productId}` });
-                // Note: smart_scan expects a barcode, but we only have ID. We can use a different endpoint or just let the backend handle id if we change it.
-                // Actually, let's just make a simple RPC call to read product name:
                 const product = await rpc("/web/dataset/call_kw/product.product/read", {
                     model: 'product.product',
                     method: 'read',
@@ -54,37 +50,33 @@ export class LocationMove extends Component {
         }
     }
 
-    scanDest() {
-        if (this.props.openCameraForInput) {
-            this.props.openCameraForInput((text) => {
-                this.state.destLocationBarcode = text;
-            });
-        }
-    }
-
     async doMove() {
-        if (!this.state.sourceLocationBarcode || !this.state.destLocationBarcode) {
-            this.notification.add("Source and Destination locations are required", { type: "danger" });
+        if (!this.state.sourceLocationBarcode) {
+            this.notification.add("Yêu cầu nhập vị trí lấy hàng", { type: "danger" });
             return;
         }
         
         this.state.loading = true;
+        this.state.inPickingName = "";
         try {
             const res = await rpc("/hlv_mobile_barcode/move_location", {
                 product_id: this.props.productId,
                 source_barcode: this.state.sourceLocationBarcode,
-                dest_barcode: this.state.destLocationBarcode,
                 qty: this.state.qty
             });
             
             if (res.error) {
                 this.notification.add(res.error, { type: "danger" });
             } else {
-                this.notification.add("Moved successfully", { type: "success" });
-                this.props.onBack();
+                this.notification.add("Tạo lệnh chuyển thành công", { type: "success" });
+                if (res.in_picking_name) {
+                    this.state.inPickingName = res.in_picking_name;
+                } else {
+                    this.props.onBack();
+                }
             }
         } catch (e) {
-            this.notification.add("Server error", { type: "danger" });
+            this.notification.add("Lỗi kết nối máy chủ", { type: "danger" });
         }
         this.state.loading = false;
     }
