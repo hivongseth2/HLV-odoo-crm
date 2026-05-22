@@ -8,8 +8,13 @@
                     <div class="header-title">
                         <i class="fa fa-boxes"></i> Kho HLV
                     </div>
-                    <div class="user-info" t-on-click="goToMain">
-                        <i class="fa fa-home"></i> Trang chủ
+                    <div style="display: flex; gap: 10px;">
+                        <div class="user-info" style="background: var(--primary-color); color: white;" t-on-click="openCamera">
+                            <i class="fa fa-camera"></i> Quét mã
+                        </div>
+                        <div class="user-info" t-on-click="goToMain">
+                            <i class="fa fa-home"></i> Trang chủ
+                        </div>
                     </div>
                 </div>
 
