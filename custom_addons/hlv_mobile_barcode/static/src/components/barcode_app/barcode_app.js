@@ -68,35 +68,41 @@ export class BarcodeApp extends Component {
     async processBarcode(barcode) {
         if (!barcode) return;
         
+        this.state.showCamera = false;
+        
         if (this.state.currentView === 'picking') {
-            // Check if it's a product to process in picking
             try {
                 const res = await rpc("/hlv_mobile_barcode/process_barcode", { 
                     picking_id: this.state.pickingId, 
                     barcode: barcode 
                 });
                 if (res.error) {
-                    // It might not be a product, maybe it's another picking or something else.
-                    // For now, if it's not a product in picking, we show error.
+                    this.playSound('error');
                     this.notification.add(res.error, { type: "danger" });
                 } else {
+                    this.playSound('success');
                     this.notification.add(`Scanned ${res.product_name}`, { type: "success" });
-                    // Force re-render of picking scanner by toggling state or calling a method
-                    // A simple way is to pass a prop that changes
                     this.state.lastScannedProduct = res.product_id;
                 }
             } catch (e) {
+                this.playSound('error');
                 this.notification.add("Server error", { type: "danger" });
             }
+            await this.closeCamera();
             return;
         }
         
         try {
             const result = await rpc("/hlv_mobile_barcode/smart_scan", { barcode });
             if (result.error) {
+                this.playSound('error');
                 this.notification.add(result.error, { type: "danger" });
+                await this.closeCamera();
                 return;
             }
+            
+            this.playSound('success');
+            await this.closeCamera();
             
             if (result.type === 'picking') {
                 this.state.pickingId = result.id;
@@ -109,8 +115,20 @@ export class BarcodeApp extends Component {
                 this.state.currentView = 'lookup';
             }
         } catch (error) {
+            this.playSound('error');
             this.notification.add("Server error", { type: "danger" });
+            await this.closeCamera();
         }
+    }
+
+    playSound(type) {
+        try {
+            const audioPath = type === 'success' 
+                ? '/custom_barcode_scan_redirect/static/src/sound/success.mp3' 
+                : '/custom_barcode_scan_redirect/static/src/sound/error.mp3';
+            const audio = new Audio(audioPath);
+            audio.play().catch(e => console.error("Audio error:", e));
+        } catch (e) {}
     }
 
     goToMain() {
@@ -128,7 +146,6 @@ export class BarcodeApp extends Component {
     async openCamera() {
         this.state.showCamera = true;
         
-        // Chờ DOM render the div 'reader'
         await new Promise(r => setTimeout(r, 100));
 
         if (!window.Html5Qrcode) {
@@ -150,23 +167,23 @@ export class BarcodeApp extends Component {
         try {
             this.html5Qrcode = new window.Html5Qrcode("reader");
             
-            // Tối ưu hoá đặc biệt cho quét mã vạch 1D trên Mobile
             const config = { 
-                fps: 20,               // Tăng tốc độ khung hình để quét mượt hơn
-                disableFlip: false,    // Hỗ trợ lật hình
-                aspectRatio: 1.0,      // Tỉ lệ khung hình
+                fps: 20,               
+                disableFlip: false,    
+                aspectRatio: 1.0,      
                 experimentalFeatures: {
-                    useBarCodeDetectorIfSupported: true // CỰC KỲ QUAN TRỌNG: Dùng API quét mã vạch native của Android/iOS nếu có, tốc độ x10 lần
+                    useBarCodeDetectorIfSupported: true 
                 }
             };
-            // Xoá qrbox để thuật toán quét toàn bộ khung hình thay vì ép người dùng phải căn chuẩn vào ô nhỏ
             
             await this.html5Qrcode.start(
                 { facingMode: "environment" }, 
                 config,
-                (decodedText, decodedResult) => {
-                    this.closeCamera();
-                    this.processBarcode(decodedText);
+                async (decodedText, decodedResult) => {
+                    if (this.html5Qrcode) {
+                        try { this.html5Qrcode.pause(); } catch(e) {}
+                    }
+                    await this.processBarcode(decodedText);
                 },
                 (errorMessage) => {
                     // ignore parse errors
@@ -179,7 +196,7 @@ export class BarcodeApp extends Component {
                 this.state.cameraFallback = true;
             } else {
                 this.notification.add("Không thể mở Camera. Lỗi: " + err, { type: "warning" });
-                this.closeCamera();
+                await this.closeCamera();
             }
         }
     }
@@ -192,22 +209,26 @@ export class BarcodeApp extends Component {
                 this.html5Qrcode = new window.Html5Qrcode("reader");
             }
             const decodedText = await this.html5Qrcode.scanFile(file, true);
-            this.closeCamera();
-            this.processBarcode(decodedText);
+            await this.processBarcode(decodedText);
         } catch (err) {
+            this.playSound('error');
             this.notification.add("Không tìm thấy mã vạch hợp lệ trong ảnh này.", { type: "danger" });
+            await this.closeCamera();
         }
     }
 
-    closeCamera() {
+    async closeCamera() {
+        this.state.showCamera = false;
+        this.state.cameraFallback = false;
         if (this.html5Qrcode) {
             try {
-                this.html5Qrcode.stop().catch(e => console.error(e));
+                await this.html5Qrcode.stop();
+            } catch (e) {}
+            try {
+                this.html5Qrcode.clear();
             } catch (e) {}
             this.html5Qrcode = null;
         }
-        this.state.showCamera = false;
-        this.state.cameraFallback = false;
     }
 
     exitApp() {
