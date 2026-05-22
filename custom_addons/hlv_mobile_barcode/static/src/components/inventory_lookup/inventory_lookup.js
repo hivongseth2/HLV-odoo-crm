@@ -11,6 +11,7 @@ export class InventoryLookup extends Component {
         recordId: Number,
         onBack: Function,
         onMove: { type: Function, optional: true },
+        onBatchMove: { type: Function, optional: true },
     };
 
     setup() {

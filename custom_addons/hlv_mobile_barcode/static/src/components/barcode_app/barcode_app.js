@@ -7,10 +7,11 @@ import { rpc } from "@web/core/network/rpc";
 import { PickingScanner } from "../picking_scanner/picking_scanner";
 import { InventoryLookup } from "../inventory_lookup/inventory_lookup";
 import { LocationMove } from "../location_move/location_move";
+import { BatchLocationMove } from "../batch_location_move/batch_location_move";
 
 export class BarcodeApp extends Component {
     static template = "hlv_mobile_barcode.BarcodeApp";
-    static components = { PickingScanner, InventoryLookup, LocationMove };
+    static components = { PickingScanner, InventoryLookup, LocationMove, BatchLocationMove };
 
     setup() {
         this.notification = useService("notification");
@@ -179,6 +180,12 @@ export class BarcodeApp extends Component {
         this.state.prefillLocationBarcode = locationBarcode;
         this.state.prefillLocationName = locationName;
         this.state.currentView = 'move';
+    }
+
+    goToBatchMove(locationBarcode, locationName) {
+        this.state.prefillLocationBarcode = locationBarcode;
+        this.state.prefillLocationName = locationName;
+        this.state.currentView = 'batch_move';
     }
 
     async openCamera() {

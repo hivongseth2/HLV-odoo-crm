@@ -47,8 +47,11 @@
                     <!-- Move Component -->
                     <LocationMove t-if="state.currentView === 'move'" productId="state.recordId" prefillLocationBarcode="state.prefillLocationBarcode" prefillLocationName="state.prefillLocationName" onBack="() => this.goToMain()" registerScanner="(cb) => this.registerScanner(cb)"/>
                     
+                    <!-- Batch Move Component -->
+                    <BatchLocationMove t-if="state.currentView === 'batch_move'" sourceLocationBarcode="state.prefillLocationBarcode" sourceLocationName="state.prefillLocationName" onBack="() => this.goToMain()" registerScanner="(cb) => this.registerScanner(cb)"/>
+                    
                     <!-- Lookup Component -->
-                    <InventoryLookup t-if="state.currentView === 'lookup'" lookupType="state.lookupType" recordId="state.recordId" onBack="() => this.goToMain()" onMove="(productId, locBarcode, locName) => this.goToMove(productId, locBarcode, locName)"/>
+                    <InventoryLookup t-if="state.currentView === 'lookup'" lookupType="state.lookupType" recordId="state.recordId" onBack="() => this.goToMain()" onMove="(productId, locBarcode, locName) => this.goToMove(productId, locBarcode, locName)" onBatchMove="(locBarcode, locName) => this.goToBatchMove(locBarcode, locName)"/>
                 </div>
             </div>
 
