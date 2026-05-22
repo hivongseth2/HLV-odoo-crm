@@ -149,6 +149,7 @@ class HLVMobileBarcodeController(http.Controller):
             quants = quants.search([('product_id', '=', product.id), ('location_id.usage', '=', 'internal')])
             for q in quants:
                 results.append({
+                    'location_id': q.location_id.id,
                     'location_name': q.location_id.display_name,
                     'quantity': q.quantity,
                     'package_name': q.package_id.name if q.package_id else '',
@@ -163,6 +164,7 @@ class HLVMobileBarcodeController(http.Controller):
             for m in moves:
                 reservations.append({
                     'picking': m.picking_id.name,
+                    'picking_id': m.picking_id.id,
                     'partner': m.picking_id.partner_id.name or '',
                     'demand': getattr(m, 'product_uom_qty', 0.0),
                     'reserved': getattr(m, 'quantity', getattr(m, 'reserved_availability', 0.0)),

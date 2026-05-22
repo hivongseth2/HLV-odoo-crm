@@ -14,6 +14,7 @@ export class InventoryLookup extends Component {
     };
 
     setup() {
+        this.action = useService("action");
         this.state = useState({
             title: "",
             results: [],
@@ -40,5 +41,27 @@ export class InventoryLookup extends Component {
             console.error(e);
         }
         this.state.loading = false;
+    }
+
+    openLocation(locationId) {
+        if (!locationId) return;
+        this.action.doAction({
+            type: 'ir.actions.act_window',
+            res_model: 'stock.location',
+            res_id: locationId,
+            views: [[false, 'form']],
+            target: 'current',
+        });
+    }
+
+    openPicking(pickingId) {
+        if (!pickingId) return;
+        this.action.doAction({
+            type: 'ir.actions.act_window',
+            res_model: 'stock.picking',
+            res_id: pickingId,
+            views: [[false, 'form']],
+            target: 'current',
+        });
     }
 }
