@@ -91,9 +91,8 @@ export class BarcodeApp extends Component {
         }
     }
 
-    async openCameraForInput(callback) {
-        this.cameraCallback = callback;
-        await this.openCamera();
+    registerScanner(cb) {
+        this.viewScannerCallback = cb;
     }
 
     async processBarcode(barcode) {
@@ -101,12 +100,8 @@ export class BarcodeApp extends Component {
         
         this.state.showCamera = false;
         
-        if (this.cameraCallback) {
-            this.playSound('success');
-            const cb = this.cameraCallback;
-            this.cameraCallback = null;
-            await this.closeCamera();
-            cb(barcode);
+        if (this.viewScannerCallback) {
+            this.viewScannerCallback(barcode);
             return;
         }
 
@@ -176,6 +171,7 @@ export class BarcodeApp extends Component {
         this.state.pickingId = null;
         this.state.lookupType = null;
         this.state.recordId = null;
+        this.viewScannerCallback = null;
     }
 
     goToMove(productId) {

@@ -18,6 +18,9 @@
                         <div class="step-info">
                             <div class="step-title">Sản phẩm</div>
                             <div class="step-desc" style="font-weight: 600; color: var(--text-color);"><t t-esc="state.productName"/></div>
+                            <div style="font-size: 0.8rem; color: var(--info-color); margin-top: 4px;">
+                                <i class="fa fa-info-circle"></i> Quét mã sản phẩm để tăng số lượng
+                            </div>
                         </div>
                     </div>
 

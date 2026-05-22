@@ -17,6 +17,7 @@ export class LocationMove extends Component {
         
         this.state = useState({
             productName: "Loading...",
+            productBarcode: "",
             sourceLocationBarcode: "",
             qty: 1,
             loading: false,
@@ -31,18 +32,46 @@ export class LocationMove extends Component {
                 const product = await rpc("/web/dataset/call_kw/product.product/read", {
                     model: 'product.product',
                     method: 'read',
-                    args: [[this.props.productId], ['display_name']],
+                    args: [[this.props.productId], ['display_name', 'barcode']],
                     kwargs: {}
                 });
                 if (product && product.length) {
                     this.state.productName = product[0].display_name;
+                    this.state.productBarcode = product[0].barcode || "";
                 } else {
                     this.state.productName = "Unknown Product";
                 }
             } catch(e) {
                 this.state.productName = "Product #" + this.props.productId;
             }
+            
+            if (this.props.registerScanner) {
+                this.props.registerScanner(this.handleScannedBarcode.bind(this));
+            }
         });
+    }
+
+    handleScannedBarcode(decodedText) {
+        if (!this.state.sourceLocationBarcode) {
+            if (this.state.productBarcode && decodedText === this.state.productBarcode) {
+                this.playSound('error');
+                this.notification.add("Vui lòng quét vị trí lấy hàng trước khi quét sản phẩm", { type: "danger" });
+            } else {
+                this.state.sourceLocationBarcode = decodedText;
+                this.playSound('success');
+                this.notification.add("Đã nhận vị trí: " + decodedText, { type: "success" });
+            }
+        } else {
+            if (this.state.productBarcode && decodedText === this.state.productBarcode) {
+                this.state.qty += 1;
+                this.playSound('success');
+                this.notification.add("Đã tăng số lượng lên " + this.state.qty, { type: "success" });
+            } else {
+                this.state.sourceLocationBarcode = decodedText;
+                this.playSound('success');
+                this.notification.add("Đã đổi vị trí thành: " + decodedText, { type: "success" });
+            }
+        }
     }
 
     async openLocalCamera() {
@@ -71,9 +100,7 @@ export class LocationMove extends Component {
                 { facingMode: "environment" },
                 { fps: 15, disableFlip: false, aspectRatio: 1.0 },
                 async (decodedText) => {
-                    this.state.sourceLocationBarcode = decodedText;
-                    this.playSound('success');
-                    await this.closeLocalCamera();
+                    this.handleScannedBarcode(decodedText);
                 },
                 (errorMessage) => {}
             );

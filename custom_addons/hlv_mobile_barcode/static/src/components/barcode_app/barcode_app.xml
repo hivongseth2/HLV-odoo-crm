@@ -51,7 +51,7 @@
                     
                     <!-- Move Product View -->
                     <div t-elif="state.currentView === 'move'">
-                        <LocationMove productId="state.recordId" onBack="() => this.goToMain()"/>
+                        <LocationMove productId="state.recordId" onBack="() => this.goToMain()" registerScanner="(cb) => this.registerScanner(cb)"/>
                     </div>
                 </div>
             </div>

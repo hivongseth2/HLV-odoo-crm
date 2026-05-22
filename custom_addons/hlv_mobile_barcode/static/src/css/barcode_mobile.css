@@ -27,7 +27,7 @@
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
-.shipper-container {
+.hlv-barcode-app .shipper-container {
   max-width: 600px;
   margin: 0 auto;
   padding: 15px;
@@ -39,7 +39,7 @@
 }
 
 /* Header */
-.shipper-header {
+.hlv-barcode-app .shipper-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -47,7 +47,7 @@
   margin-bottom: 10px;
 }
 
-.header-title {
+.hlv-barcode-app .header-title {
   font-size: 1.25rem;
   font-weight: 700;
   color: var(--primary-color);
@@ -56,7 +56,7 @@
   gap: 8px;
 }
 
-.user-info {
+.hlv-barcode-app .user-info {
   font-size: 0.9rem;
   color: var(--text-muted);
   background: #fff;
@@ -67,7 +67,7 @@
 }
 
 /* Cards */
-.card-box {
+.hlv-barcode-app .card-box {
   background: var(--white);
   border-radius: 12px;
   box-shadow: var(--shadow-md);
@@ -77,7 +77,7 @@
 }
 
 /* Step Header */
-.step-header {
+.hlv-barcode-app .step-header {
   display: flex;
   align-items: flex-start;
   gap: 15px;
@@ -86,7 +86,7 @@
   border-bottom: 1px solid var(--border-color);
 }
 
-.step-icon {
+.hlv-barcode-app .step-icon {
   width: 40px;
   height: 40px;
   background: var(--light-bg);
@@ -99,18 +99,18 @@
   flex-shrink: 0;
 }
 
-.step-info {
+.hlv-barcode-app .step-info {
   flex: 1;
 }
 
-.step-title {
+.hlv-barcode-app .step-title {
   font-size: 1.1rem;
   font-weight: 600;
   color: var(--primary-color);
   margin-bottom: 4px;
 }
 
-.step-desc {
+.hlv-barcode-app .step-desc {
   font-size: 0.9rem;
   color: var(--text-muted);
   margin: 0;
@@ -118,14 +118,14 @@
 }
 
 /* Input Group Row */
-.input-group-row {
+.hlv-barcode-app .input-group-row {
   display: flex;
   gap: 8px;
   margin-bottom: 15px;
   align-items: stretch;
 }
 
-.form-control {
+.hlv-barcode-app .form-control {
   flex: 1;
   min-width: 0;
   padding: 12px 15px;
@@ -136,12 +136,12 @@
   outline: none;
 }
 
-.form-control:focus {
+.hlv-barcode-app .form-control:focus {
   border-color: var(--primary-color);
 }
 
 /* Buttons */
-.btn {
+.hlv-barcode-app .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -160,49 +160,49 @@
   flex-shrink: 0;
 }
 
-.btn-lg {
+.hlv-barcode-app .btn-lg {
   padding: 14px 20px;
   font-size: 1.1rem;
 }
 
-.btn-block {
+.hlv-barcode-app .btn-block {
   width: 100%;
   display: flex;
 }
 
-.btn-primary {
+.hlv-barcode-app .btn-primary {
   background-color: var(--primary-color);
   color: var(--white);
 }
 
-.btn-primary:hover {
+.hlv-barcode-app .btn-primary:hover {
   background-color: #1a252f;
 }
 
-.btn-success {
+.hlv-barcode-app .btn-success {
   background-color: var(--success-color);
   color: var(--white);
 }
 
-.btn-secondary {
+.hlv-barcode-app .btn-secondary {
   background-color: var(--secondary-color);
   color: var(--white);
 }
 
-.btn-outline {
+.hlv-barcode-app .btn-outline {
   background-color: transparent;
   border: 2px solid var(--border-color);
   color: var(--text-muted);
 }
 
-.btn-text {
+.hlv-barcode-app .btn-text {
   background: none;
   color: var(--text-muted);
   font-weight: 500;
 }
 
 /* Separator */
-.separator {
+.hlv-barcode-app .separator {
   display: flex;
   align-items: center;
   text-align: center;
@@ -211,17 +211,17 @@
   margin: 15px 0;
 }
 
-.separator::before,
-.separator::after {
+.hlv-barcode-app .separator::before,
+.hlv-barcode-app .separator::after {
   content: '';
   flex: 1;
   border-bottom: 1px solid var(--border-color);
 }
-.separator::before { margin-right: 10px; }
-.separator::after { margin-left: 10px; }
+.hlv-barcode-app .separator::before { margin-right: 10px; }
+.hlv-barcode-app .separator::after { margin-left: 10px; }
 
 /* Camera Section */
-.camera-section {
+.hlv-barcode-app .camera-section {
   margin-bottom: 12px;
   border-radius: 12px;
   overflow: hidden;
@@ -229,7 +229,7 @@
   box-shadow: var(--shadow-md);
 }
 
-.camera-reader {
+.hlv-barcode-app .camera-reader {
   width: 100%;
   height: 250px;
   background: #000;
@@ -237,7 +237,7 @@
   overflow: hidden;
 }
 
-.camera-reader video {
+.hlv-barcode-app .camera-reader video {
   position: absolute;
   top: 0;
   left: 0;
@@ -248,14 +248,14 @@
 }
 
 /* Items List */
-.items-list {
+.hlv-barcode-app .items-list {
   display: flex;
   flex-direction: column;
   gap: 10px;
   margin-top: 15px;
 }
 
-.item-card {
+.hlv-barcode-app .item-card {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -266,34 +266,34 @@
   transition: all 0.2s;
 }
 
-.item-card.scanned {
+.hlv-barcode-app .item-card.scanned {
   background-color: #e8f5e9;
   border-color: #c3e6cb;
 }
 
-.item-info {
+.hlv-barcode-app .item-info {
   flex: 1;
 }
 
-.item-name {
+.hlv-barcode-app .item-name {
   font-weight: 600;
   color: var(--primary-color);
   font-size: 0.95rem;
   margin-bottom: 2px;
 }
 
-.item-barcode {
+.hlv-barcode-app .item-barcode {
   font-size: 0.8rem;
   color: var(--text-muted);
   font-family: monospace;
 }
 
-.item-status-icon {
+.hlv-barcode-app .item-status-icon {
   font-size: 1.2rem;
   margin-left: 10px;
   color: var(--text-muted);
 }
-.item-card.scanned .item-status-icon {
+.hlv-barcode-app .item-card.scanned .item-status-icon {
   color: var(--success-color);
 }
 
@@ -309,7 +309,7 @@
 }
 
 /* Override existing classes */
-.hlv-barcode-content {
+.hlv-barcode-app .hlv-barcode-content {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -317,10 +317,10 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
-.hlv-barcode-content::-webkit-scrollbar { display: none; }
+.hlv-barcode-app .hlv-barcode-content::-webkit-scrollbar { display: none; }
 
 /* Camera Modal Redesign */
-.modal-overlay {
+.hlv-barcode-app .modal-overlay {
   position: fixed;
   top: 0; left: 0; width: 100%; height: 100%;
   background: rgba(0, 0, 0, 0.6);
@@ -331,7 +331,7 @@
   backdrop-filter: blur(2px);
 }
 
-.modal-content {
+.hlv-barcode-app .modal-content {
   background: var(--white);
   border-radius: 12px;
   width: 90%;
@@ -343,7 +343,7 @@
   animation: slideUp 0.3s ease-out;
 }
 
-.modal-header {
+.hlv-barcode-app .modal-header {
   padding: 15px 20px;
   border-bottom: 1px solid var(--border-color);
   display: flex;
@@ -351,7 +351,7 @@
   align-items: center;
 }
 
-.modal-title {
+.hlv-barcode-app .modal-title {
   font-size: 1.1rem;
   font-weight: 600;
   color: var(--primary-color);
@@ -360,7 +360,7 @@
   gap: 8px;
 }
 
-.modal-close {
+.hlv-barcode-app .modal-close {
   background: none;
   border: none;
   font-size: 1.2rem;
@@ -369,29 +369,29 @@
   padding: 5px;
 }
 
-.modal-body {
+.hlv-barcode-app .modal-body {
   padding: 20px;
   overflow-y: auto;
 }
 
 /* Progress */
-.global-progress-wrapper {
+.hlv-barcode-app .global-progress-wrapper {
   margin-top: 15px;
 }
-.progress-stats {
+.hlv-barcode-app .progress-stats {
   display: flex;
   justify-content: space-between;
   font-size: 0.85rem;
   color: var(--text-muted);
   margin-bottom: 5px;
 }
-.progress {
+.hlv-barcode-app .progress {
   height: 8px;
   background-color: #e9ecef;
   border-radius: 4px;
   overflow: hidden;
 }
-.progress-bar {
+.hlv-barcode-app .progress-bar {
   height: 100%;
   background-color: var(--success-color);
   width: 0;
