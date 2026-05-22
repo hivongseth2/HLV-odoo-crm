@@ -1,6 +1,6 @@
 /** @odoo-module **/
 
-import { Component, useState, onMounted } from "@odoo/owl";
+import { Component, useState, onMounted, useEffect } from "@odoo/owl";
 import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 import { rpc } from "@web/core/network/rpc";
@@ -16,18 +16,44 @@ export class BarcodeApp extends Component {
         this.notification = useService("notification");
         this.action = useService("action");
         
+        let savedState = {};
+        try {
+            const stored = sessionStorage.getItem('hlv_barcode_state');
+            if (stored) {
+                savedState = JSON.parse(stored);
+            }
+        } catch (e) {}
+
         this.state = useState({
-            currentView: "main", // 'main', 'picking', 'lookup'
+            currentView: savedState.currentView || "main", 
             manualBarcode: "",
-            pickingId: null,
-            pickingName: "",
-            lookupType: null, // 'product', 'location', 'package'
-            recordId: null,
-            lookupTitle: "",
+            pickingId: savedState.pickingId || null,
+            pickingName: savedState.pickingName || "",
+            lookupType: savedState.lookupType || null,
+            recordId: savedState.recordId || null,
+            lookupTitle: savedState.lookupTitle || "",
             showCamera: false,
             cameraFallback: false,
         });
         
+        useEffect(() => {
+            sessionStorage.setItem('hlv_barcode_state', JSON.stringify({
+                currentView: this.state.currentView,
+                pickingId: this.state.pickingId,
+                pickingName: this.state.pickingName,
+                lookupType: this.state.lookupType,
+                recordId: this.state.recordId,
+                lookupTitle: this.state.lookupTitle,
+            }));
+        }, () => [
+            this.state.currentView,
+            this.state.pickingId,
+            this.state.pickingName,
+            this.state.lookupType,
+            this.state.recordId,
+            this.state.lookupTitle
+        ]);
+
         this.barcodeBuffer = "";
         this.barcodeTimeout = null;
         
