@@ -45,8 +45,8 @@ class HLVMobileBarcodeController(http.Controller):
         lines = []
         # Group by move_id to show products
         for move in picking.move_ids_without_package:
-            # Compute total qty_done for this move from move_line_ids
-            qty_done = sum(line.qty_done for line in move.move_line_ids)
+            # Compute total quantity for this move from move_line_ids (Odoo 18 uses quantity)
+            qty_done = sum(line.quantity for line in move.move_line_ids)
             lines.append({
                 'move_id': move.id,
                 'product_id': move.product_id.id,
@@ -66,27 +66,76 @@ class HLVMobileBarcodeController(http.Controller):
             'lines': lines,
         }
 
+    @http.route('/hlv_mobile_barcode/create_empty_int', type='json', auth='user')
+    def create_empty_int(self, location_id):
+        source_loc = request.env['stock.location'].browse(location_id)
+        if not source_loc.exists():
+            return {'error': _('Không tìm thấy vị trí nguồn')}
+            
+        company_id = request.env.company.id
+        transit_loc = request.env['stock.location'].search([
+            ('usage', '=', 'transit'), 
+            ('company_id', 'in', [False, company_id])
+        ], limit=1)
+        
+        if not transit_loc:
+            return {'error': _('Không tìm thấy kho trung chuyển (Transit Location)')}
+            
+        picking_type_int = request.env['stock.picking.type'].search([('code', '=', 'internal'), ('company_id', '=', company_id)], limit=1)
+        if not picking_type_int:
+            return {'error': _('Chưa cấu hình Operation Types (INT)')}
+
+        picking_int = request.env['stock.picking'].create({
+            'picking_type_id': picking_type_int.id,
+            'location_id': source_loc.id,
+            'location_dest_id': transit_loc.id,
+        })
+        
+        # Keep it in draft so user can add lines
+        return {'success': True, 'picking_id': picking_int.id, 'picking_name': picking_int.name}
+
     @http.route('/hlv_mobile_barcode/process_barcode', type='json', auth='user')
     def process_barcode(self, picking_id, barcode):
         picking = request.env['stock.picking'].browse(picking_id)
-        if not picking.exists() or picking.state not in ['confirmed', 'assigned']:
-            return {'error': _('Picking is not ready to process.')}
+        if not picking.exists() or picking.state not in ['draft', 'confirmed', 'assigned']:
+            return {'error': _('Phiếu này không thể xử lý thêm sản phẩm.')}
 
         product = request.env['product.product'].search([('barcode', '=', barcode)], limit=1)
         if not product:
-            return {'error': _('Product barcode not found.')}
+            return {'error': _('Không tìm thấy mã vạch sản phẩm.')}
 
         # Find the move for this product
         move = picking.move_ids_without_package.filtered(lambda m: m.product_id == product and m.state not in ['done', 'cancel'])
-        if not move:
-            return {'error': _('This product is not required in this picking, or already completed.')}
         
-        move = move[0]
-        # In Odoo, we typically increase qty_done on the move_line
-        # If there's an existing move_line without package that is not fully done, use it
-        move_line = move.move_line_ids.filtered(lambda ml: ml.qty_done < ml.quantity and not ml.result_package_id)
+        if not move:
+            # Create a new move on the fly
+            move = request.env['stock.move'].create({
+                'name': product.display_name,
+                'picking_id': picking.id,
+                'product_id': product.id,
+                'product_uom_qty': 0.0,
+                'product_uom': product.uom_id.id,
+                'location_id': picking.location_id.id,
+                'location_dest_id': picking.location_dest_id.id,
+            })
+            
+            # If picking was draft, maybe we need to confirm it so it gets move_line_ids?
+            # Or we can just create the move_line manually. In Odoo 17+, moves usually get confirmed later.
+            # But let's confirm the picking if it's draft so Odoo's internal state is happy.
+            if picking.state == 'draft':
+                picking.action_confirm()
+                # Re-fetch move as action_confirm might replace/merge it
+                move = picking.move_ids_without_package.filtered(lambda m: m.product_id == product and m.state not in ['done', 'cancel'])
+                if not move:
+                    return {'error': _('Lỗi hệ thống khi tạo sản phẩm mới.')}
+                move = move[0]
+        else:
+            move = move[0]
+
+        # In Odoo 17/18, qty_done is replaced by quantity
+        move_line = move.move_line_ids.filtered(lambda ml: ml.quantity < ml.quantity_product_uom and not ml.result_package_id)
         if move_line:
-            move_line[0].qty_done += 1
+            move_line[0].quantity += 1
         else:
             # Create a new move line if none exists or all are full
             request.env['stock.move.line'].create({
@@ -96,10 +145,65 @@ class HLVMobileBarcodeController(http.Controller):
                 'product_uom_id': product.uom_id.id,
                 'location_id': move.location_id.id,
                 'location_dest_id': move.location_dest_id.id,
-                'qty_done': 1,
+                'quantity': 1,
             })
             
         return {'success': True, 'product_id': product.id, 'product_name': product.display_name}
+
+    @http.route('/hlv_mobile_barcode/update_move_line_qty', type='json', auth='user')
+    def update_move_line_qty(self, move_id, qty_change=None, new_qty=None):
+        move = request.env['stock.move'].browse(move_id)
+        if not move.exists():
+            return {'error': _('Không tìm thấy dòng sản phẩm')}
+            
+        if move.picking_id.state not in ['draft', 'confirmed', 'assigned']:
+            return {'error': _('Phiếu không ở trạng thái cho phép sửa số lượng')}
+
+        # Odoo 18 uses quantity on move_line
+        # Find or create a move_line
+        move_line = move.move_line_ids.filtered(lambda ml: not ml.result_package_id)
+        if not move_line:
+            move_line = request.env['stock.move.line'].create({
+                'move_id': move.id,
+                'picking_id': move.picking_id.id,
+                'product_id': move.product_id.id,
+                'product_uom_id': move.product_uom.id,
+                'location_id': move.location_id.id,
+                'location_dest_id': move.location_dest_id.id,
+                'quantity': 0,
+            })
+        else:
+            move_line = move_line[0]
+
+        if new_qty is not None:
+            new_val = float(new_qty)
+        elif qty_change is not None:
+            new_val = move_line.quantity + float(qty_change)
+        else:
+            return {'error': _('Thiếu tham số số lượng')}
+
+        if new_val < 0:
+            new_val = 0
+
+        move_line.quantity = new_val
+        
+        return {'success': True, 'new_qty': move_line.quantity}
+
+    @http.route('/hlv_mobile_barcode/delete_move', type='json', auth='user')
+    def delete_move(self, move_id):
+        move = request.env['stock.move'].browse(move_id)
+        if not move.exists():
+            return {'success': True} # Already deleted
+            
+        if move.picking_id.state not in ['draft', 'confirmed', 'assigned']:
+            return {'error': _('Phiếu không ở trạng thái cho phép xóa sản phẩm')}
+            
+        try:
+            move._action_cancel()
+            move.unlink()
+            return {'success': True}
+        except Exception as e:
+            return {'error': _('Lỗi khi xóa: %s', str(e))}
 
     @http.route('/hlv_mobile_barcode/put_in_pack', type='json', auth='user')
     def put_in_pack(self, picking_id):

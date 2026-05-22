@@ -27,21 +27,42 @@
                         </div>
                         <div class="items-list" style="margin-top: 0;">
                             <t t-foreach="state.picking.lines" t-as="line" t-key="line.move_id">
-                                <div t-attf-class="item-card #{line.qty_done >= line.product_uom_qty ? 'scanned' : ''}" style="border: 1px solid var(--border-color);">
-                                    <div class="item-info">
-                                        <div class="item-name"><t t-esc="line.product_name"/></div>
-                                        <div class="item-barcode"><t t-esc="line.product_barcode"/></div>
-                                    </div>
-                                    <div style="display: flex; align-items: center;">
-                                        <div style="text-align: right; margin-right: 5px;">
-                                            <div style="font-size: 1.1rem; font-weight: 700;">
-                                                <span t-attf-style="color: #{line.qty_done >= line.product_uom_qty ? 'var(--success-color)' : 'var(--text-color)'}">
-                                                    <t t-esc="line.qty_done"/>
-                                                </span> 
-                                                <span style="color: var(--text-muted); font-size: 0.9rem;">/ <t t-esc="line.product_uom_qty"/></span>
-                                            </div>
+                                <div class="item-card-wrapper" style="border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 10px; overflow: hidden;">
+                                    <div t-attf-class="item-card #{line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0 ? 'scanned' : ''}" style="border: none; margin-bottom: 0;">
+                                        <div class="item-info">
+                                            <div class="item-name"><t t-esc="line.product_name"/></div>
+                                            <div class="item-barcode"><t t-esc="line.product_barcode"/></div>
                                         </div>
-                                        <i t-if="line.qty_done >= line.product_uom_qty" class="fa fa-check-circle item-status-icon"></i>
+                                        <div style="display: flex; align-items: center;">
+                                            <div style="text-align: right; margin-right: 10px;">
+                                                <div style="font-size: 1.1rem; font-weight: 700;">
+                                                    <span t-attf-style="color: #{line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0 ? 'var(--success-color)' : 'var(--text-color)'}">
+                                                        <t t-esc="line.qty_done"/>
+                                                    </span> 
+                                                    <span style="color: var(--text-muted); font-size: 0.9rem;">/ <t t-esc="line.product_uom_qty"/></span>
+                                                </div>
+                                            </div>
+                                            <i t-if="line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0" class="fa fa-check-circle item-status-icon" style="margin-right: 10px;"></i>
+                                            <button class="btn btn-outline btn-sm" style="padding: 4px 8px; color: var(--text-muted);" t-on-click="() => this.toggleEditLine(line.move_id)">
+                                                <i class="fa fa-pencil-alt"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div t-if="state.editingLineId === line.move_id" style="background-color: var(--light-bg); padding: 10px; border-top: 1px solid var(--border-color);">
+                                        <div style="display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; margin-bottom: 10px;">
+                                            <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 40px;" t-on-click="() => this.adjustQty(line, -10)">-10</button>
+                                            <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 40px;" t-on-click="() => this.adjustQty(line, -1)">-1</button>
+                                            <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 40px;" t-on-click="() => this.adjustQty(line, -0.1)">-0.1</button>
+                                            <input type="number" class="form-control" style="width: 70px; text-align: center; font-weight: bold; padding: 4px;" t-model="line.qty_done" t-on-change="(ev) => this.saveQty(line, ev)" min="0" step="any"/>
+                                            <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 40px;" t-on-click="() => this.adjustQty(line, 0.1)">+0.1</button>
+                                            <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 40px;" t-on-click="() => this.adjustQty(line, 1)">+1</button>
+                                            <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 40px;" t-on-click="() => this.adjustQty(line, 10)">+10</button>
+                                        </div>
+                                        <div style="text-align: right;">
+                                            <button class="btn btn-danger btn-sm" t-on-click="() => this.deleteLine(line)">
+                                                <i class="fa fa-trash"></i> Xóa
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </t>

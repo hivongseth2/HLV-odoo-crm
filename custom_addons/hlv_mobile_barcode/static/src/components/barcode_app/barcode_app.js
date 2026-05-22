@@ -234,11 +234,30 @@ export class BarcodeApp extends Component {
         this.state.currentView = 'move';
     }
 
-    goToBatchMove(locationBarcode, locationName) {
+    async goToBatchMove(locationBarcode, locationName) {
+        // Now redirects to a newly created empty INT picking
         this.pushHistory();
-        this.state.prefillLocationBarcode = locationBarcode;
-        this.state.prefillLocationName = locationName;
-        this.state.currentView = 'batch_move';
+        try {
+            this.notification.add("Đang tạo phiếu xuất...", { type: "info" });
+            // For create_empty_int, we pass the location record id. 
+            // Wait, InventoryLookup state.location_barcode is just the barcode. We need the record_id.
+            // Let's pass the recordId which we have in this.state.recordId!
+            const res = await rpc("/hlv_mobile_barcode/create_empty_int", {
+                location_id: this.state.recordId
+            });
+            
+            if (res.error) {
+                this.notification.add(res.error, { type: "danger" });
+                this.goBack();
+            } else {
+                this.state.pickingId = res.picking_id;
+                this.state.pickingName = res.picking_name;
+                this.state.currentView = 'picking';
+            }
+        } catch (e) {
+            this.notification.add("Lỗi kết nối máy chủ", { type: "danger" });
+            this.goBack();
+        }
     }
 
     goToProductLookup(productId, productName) {
