@@ -64,6 +64,10 @@ export class BarcodeApp extends Component {
     }
 
     handleKeyDown(e) {
+        if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) {
+            return;
+        }
+
         if (e.key === 'Enter' && this.barcodeBuffer.length > 2) {
             this.processBarcode(this.barcodeBuffer);
             this.barcodeBuffer = "";

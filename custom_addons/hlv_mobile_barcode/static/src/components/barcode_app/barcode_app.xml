@@ -28,7 +28,7 @@
                         <div class="card-box" style="text-align: center; padding-top: 40px; padding-bottom: 40px;" t-on-click="openCamera">
                             <i class="fa fa-barcode" style="font-size: 80px; color: var(--primary-color); margin-bottom: 20px;"></i>
                             <h3 style="color: var(--primary-color); margin-bottom: 10px;">Quét hoặc chạm</h3>
-                            <p class="text-muted" style="margin-bottom: 30px;">Nhấn vào đây để mở Camera và quét</p>
+                            <p class="text-muted" style="margin-bottom: 30px;">Dùng máy quét hoặc nhấn để mở Camera</p>
                             
                             <div style="text-align: left; background: var(--light-bg); padding: 15px; border-radius: 8px;">
                                 <div style="margin-bottom: 8px;"><i class="fa fa-check-circle" style="color: var(--success-color); margin-right: 8px;"></i> Quét <strong>sản phẩm</strong> để định vị</div>
