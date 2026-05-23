@@ -35,6 +35,7 @@ window.addEventListener('beforeunload', () => {
 async function startServerUploadSession() {
   // Use global pickingId injected by pack_scan_template.xml (server-rendered, always correct).
   // Do NOT re-parse the URL — trailing slashes or redirects make that unreliable.
+  
   const _pickingId = (typeof pickingId !== 'undefined' && pickingId > 0)
     ? pickingId
     : parseInt(window.location.pathname.split('/').filter(Boolean).pop()) || 0;
