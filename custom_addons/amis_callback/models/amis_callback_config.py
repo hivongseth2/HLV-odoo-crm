@@ -825,14 +825,21 @@ class AmisCallbackConfig(models.Model):
         }
 
     def _ensure_meinvoice_token(self):
-        """Tự động refresh token meInvoice nếu đã quá 13 ngày."""
+        """Tự động refresh token meInvoice nếu chưa có hoặc đã quá 13 ngày.
+
+        Bọc trong try/except để lỗi refresh không làm fail cả luồng gọi API.
+        Nếu refresh thất bại, log cảnh báo và tiếp tục dùng token cũ (nếu còn).
+        """
         self.ensure_one()
         if not self.meinvoice_enabled:
             return
         if not self.meinvoice_token or not self.meinvoice_token_acquired:
             if self.meinvoice_username and self.meinvoice_password:
                 _logger.info('meInvoice: token chưa có, tự động lấy mới...')
-                self.action_connect_meinvoice()
+                try:
+                    self.action_connect_meinvoice()
+                except Exception as exc:
+                    _logger.warning('meInvoice: tự động lấy token thất bại: %s', exc)
             return
         from datetime import datetime as _dt, timedelta as _td
         acquired = self.meinvoice_token_acquired
@@ -843,7 +850,12 @@ class AmisCallbackConfig(models.Model):
                 return
         if (_dt.utcnow() - acquired) >= _td(days=13):
             _logger.info('meInvoice: token hết hạn (>13 ngày), tự động refresh...')
-            self.action_connect_meinvoice()
+            try:
+                self.action_connect_meinvoice()
+            except Exception as exc:
+                _logger.warning(
+                    'meInvoice: refresh token thất bại, tiếp tục dùng token cũ: %s', exc
+                )
 
     def _get_meinvoice_headers(self):
         """Build Authorization header cho meInvoice API."""
