@@ -202,8 +202,13 @@ def _bg_upload_to_drive(dbname, picking_id, filepath, mimetype):
             _logger.info("✅ BG_UPLOAD ok: %s (%s) %s", safe_title, fid, link)
 
     except Exception:
-        _logger.exception("BG_UPLOAD fatal")
-    finally:
+        _logger.exception("BG_UPLOAD fatal – giữ lại file tạm để retry: %s", filepath)
+        # KHÔNG xóa filepath khi lỗi → retry_stuck_uploads.py có thể xử lý sau
+        if set_path:
+            try: os.remove(set_path)
+            except: pass
+    else:
+        # Chỉ xóa file khi upload thực sự thành công (không có exception)
         try: os.remove(filepath)
         except: pass
         if set_path:
@@ -1051,6 +1056,10 @@ class CustomBarcodeScanController(http.Controller):
         meta = json.loads(open(meta_file, 'r', encoding='utf-8').read())
         filepath = meta['path']
         mimetype = meta.get('mimetype') or 'video/webm'
+
+        # Prefer meta's picking_id (saved at start_upload when URL is guaranteed correct).
+        # Fall back to params only when meta has no valid id (legacy sessions).
+        picking_id = int(meta.get('picking_id') or 0) or picking_id
 
         _logger.info("FINISH_UPLOAD id=%s pick=%s file=%s size=%s",
                     upload_id, picking_id, filepath,
