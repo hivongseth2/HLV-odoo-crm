@@ -6,7 +6,7 @@
 # Chạy: python odoo-bin shell -d <TEN_DATABASE> < fill_shopee_order_status.py
 
 # --- CẤU HÌNH ---
-DRY_RUN   = False    # True = chỉ in, KHÔNG ghi | False = ghi thật vào spreadsheet
+DRY_RUN   = True    # True = chỉ in, KHÔNG ghi | False = ghi thật vào spreadsheet
 ROW_LIMIT = 0       # Số dòng dữ liệu thử (0 = toàn bộ)
 # ----------------
 
@@ -46,6 +46,125 @@ try:
 except Exception:
     data = json.loads(decoded)
     _compressed = False
+
+# ── 2b. Apply revisions lên snapshot để có dữ liệu mới nhất ─────────────────
+import re as _re
+
+def _col_letter(idx):
+    result = ""
+    idx += 1
+    while idx:
+        idx, r = divmod(idx - 1, 26)
+        result = chr(65 + r) + result
+    return result
+
+def _parse_cell_key(key):
+    """'A1' → (col0, row0) 0-based. Returns (None,None) on error."""
+    m = _re.match(r'^([A-Z]+)(\d+)$', key)
+    if not m:
+        return None, None
+    col0 = 0
+    for ch in m.group(1):
+        col0 = col0 * 26 + (ord(ch) - ord('A') + 1)
+    return col0 - 1, int(m.group(2)) - 1
+
+def _apply_revisions_to_cells(cells_dict, all_cmds):
+    """
+    Áp dụng danh sách o-spreadsheet commands lên cells_dict.
+    Xử lý: UPDATE_CELL, CLEAR_CELL, ADD_COLUMNS_ROWS, REMOVE_COLUMNS_ROWS.
+    Trả về cells_dict mới phản ánh trạng thái hiện tại.
+    """
+    # Nội bộ: {(col0, row0): content_str}  — chỉ lưu cell có nội dung
+    internal = {}
+    for key, val in cells_dict.items():
+        c, r = _parse_cell_key(key)
+        if c is None:
+            continue
+        content = (val.get("content") or val.get("value") or "") if isinstance(val, dict) else str(val)
+        if content:
+            internal[(c, r)] = str(content)
+
+    for cmd in all_cmds:
+        ctype = cmd.get("type", "")
+        if ctype == "UPDATE_CELL":
+            if "col" not in cmd or "row" not in cmd:
+                continue
+            c, r = cmd["col"], cmd["row"]
+            content = cmd.get("content", "")
+            if content:
+                internal[(c, r)] = content
+            else:
+                internal.pop((c, r), None)
+        elif ctype in ("CLEAR_CELL", "DELETE_CONTENT"):
+            if "col" not in cmd or "row" not in cmd:
+                continue
+            internal.pop((cmd["col"], cmd["row"]), None)
+        elif ctype == "ADD_COLUMNS_ROWS" and cmd.get("dimension") == "ROW":
+            base      = cmd.get("base", 0)       # 0-based row index
+            quantity  = cmd.get("quantity", 1)
+            position  = cmd.get("position", "after")
+            insert_at = base + 1 if position == "after" else base
+            internal  = {
+                (c, r + quantity if r >= insert_at else r): v
+                for (c, r), v in internal.items()
+            }
+        elif ctype == "REMOVE_COLUMNS_ROWS" and cmd.get("dimension") == "ROW":
+            remove_set    = set(cmd.get("elements", []))
+            survivors     = {(c, r): v for (c, r), v in internal.items() if r not in remove_set}
+            sorted_removed = sorted(remove_set)
+            internal = {
+                (c, r - sum(1 for x in sorted_removed if x < r)): v
+                for (c, r), v in survivors.items()
+            }
+
+    return {
+        _col_letter(c) + str(r + 1): {"content": v}
+        for (c, r), v in internal.items()
+    }
+
+# Thu thập commands từ tất cả revisions, nhóm theo sheetId
+_revisions = doc.sudo().spreadsheet_revision_ids
+print(f"[INFO] Tổng revision chờ apply: {len(_revisions)}")
+_cmds_by_sheet = {}
+_type_summary  = {}
+for _rev in _revisions.sorted("id"):
+    _raw = getattr(_rev, "commands", "") or ""
+    try:
+        _msg = json.loads(_raw)
+    except Exception:
+        continue
+    _cmds = _msg if isinstance(_msg, list) else _msg.get("commands", [])
+    for _cmd in _cmds:
+        _sid = _cmd.get("sheetId", "")
+        _cmds_by_sheet.setdefault(_sid, []).append(_cmd)
+        _t = _cmd.get("type", "?")
+        if _t not in _type_summary:
+            _type_summary[_t] = {"count": 0, "sample": str(_cmd)[:200]}
+        _type_summary[_t]["count"] += 1
+
+print("[DEBUG] Command types trong revisions:")
+for _t, _info in sorted(_type_summary.items(), key=lambda x: -x[1]["count"]):
+    print(f"  {_t}: {_info['count']}x  | sample: {_info['sample']}")
+
+# In toàn bộ ADD_COLUMNS_ROWS và DELETE_CONTENT để trace row-shift
+print("\n[DEBUG] Tất cả ADD_COLUMNS_ROWS:")
+for _rev in _revisions.sorted("id"):
+    _raw = getattr(_rev, "commands", "") or ""
+    try:
+        _msg = json.loads(_raw)
+    except Exception:
+        continue
+    for _cmd in (_msg if isinstance(_msg, list) else _msg.get("commands", [])):
+        if _cmd.get("type") in ("ADD_COLUMNS_ROWS", "DELETE_CONTENT", "REMOVE_COLUMNS_ROWS"):
+            print(f"  {_cmd}")
+
+# Apply cho từng sheet
+for _sh in data.get("sheets", []):
+    _sid  = _sh.get("id", "")
+    _cmds = _cmds_by_sheet.get(_sid, [])
+    if _cmds:
+        _sh["cells"] = _apply_revisions_to_cells(_sh.get("cells", {}), _cmds)
+print(f"[INFO] Đã apply xong revisions — dữ liệu đọc là mới nhất.")
 
 # ── 3. Tìm đúng sheet theo tên ───────────────────────────────────────────────
 target_sheet = None
