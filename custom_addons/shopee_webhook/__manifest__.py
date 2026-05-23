@@ -13,6 +13,7 @@
     'version': '0.1',
     'depends': ['sale', 'hlv_zalo_zns', 'shopee_order_fetch'],
     'data': [
+        'data/cron_data.xml',
         'views/sale_order_views.xml',
     ],
     'installable': True,

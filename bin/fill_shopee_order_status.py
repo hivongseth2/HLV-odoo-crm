@@ -6,7 +6,7 @@
 # Chạy: python odoo-bin shell -d <TEN_DATABASE> < fill_shopee_order_status.py
 
 # --- CẤU HÌNH ---
-DRY_RUN   = True    # True = chỉ in, KHÔNG ghi | False = ghi thật vào spreadsheet
+DRY_RUN   = False    # True = chỉ in, KHÔNG ghi | False = ghi thật vào spreadsheet
 ROW_LIMIT = 0       # Số dòng dữ liệu thử (0 = toàn bộ)
 # ----------------
 

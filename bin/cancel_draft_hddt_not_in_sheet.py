@@ -9,7 +9,7 @@
 # Chạy: python odoo-bin shell -d <TEN_DATABASE> < cancel_draft_hddt_not_in_sheet.py
 
 # --- CẤU HÌNH ---
-DRY_RUN        = True   # True = chỉ in | False = hủy thật
+DRY_RUN        = False   # True = chỉ in | False = hủy thật
 SHEET_DOC_NAME = "order_shopee_220526"
 # ----------------
 
