@@ -10,12 +10,38 @@ var chunkIndex = 0;
 var finishing = false;
 var _stopResolve = null;  // resolve callback cho stopRecording() Promise
 
+// Bảo vệ khi user đóng tab / bấm Back trong lúc đang quay:
+// gọi finishServerUploadSession() với keepalive=true để browser gửi request
+// ngay cả khi trang đang bị unload.
+window.addEventListener('beforeunload', () => {
+  if (uploadId && !finishing) {
+    const _pickingId = (typeof pickingId !== 'undefined' && pickingId > 0)
+      ? pickingId
+      : parseInt(window.location.pathname.split('/').filter(Boolean).pop()) || 0;
+    // fetch với keepalive=true – browser giữ request sống dù trang unload
+    navigator.sendBeacon
+      ? navigator.sendBeacon('/pack_scan/finish_upload',
+          new Blob([JSON.stringify({ upload_id: uploadId, picking_id: _pickingId })],
+                   { type: 'application/json' }))
+      : fetch('/pack_scan/finish_upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          keepalive: true,
+          body: JSON.stringify({ upload_id: uploadId, picking_id: _pickingId }),
+        });
+  }
+});
+
 async function startServerUploadSession() {
-  const pickingId = parseInt(window.location.pathname.split("/").pop());
+  // Use global pickingId injected by pack_scan_template.xml (server-rendered, always correct).
+  // Do NOT re-parse the URL — trailing slashes or redirects make that unreliable.
+  const _pickingId = (typeof pickingId !== 'undefined' && pickingId > 0)
+    ? pickingId
+    : parseInt(window.location.pathname.split('/').filter(Boolean).pop()) || 0;
   const resp = await fetch('/pack_scan/start_upload', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-    body: JSON.stringify({ picking_id: pickingId, ext: 'webm', mimetype: 'video/webm' })
+    body: JSON.stringify({ picking_id: _pickingId, ext: 'webm', mimetype: 'video/webm' })
   }).then(r => r.json());
   const r = resp.result || resp;
   if (!r || !r.upload_id) throw new Error('Không khởi tạo phiên upload được');
@@ -41,13 +67,16 @@ async function finishServerUploadSession() {
   try { await chunkBusy; } catch { }
   if (!uploadId) return;
 
-  const pickingId = parseInt(window.location.pathname.split("/").pop());
+  // Use global pickingId from template, same as startServerUploadSession.
+  const _pickingId = (typeof pickingId !== 'undefined' && pickingId > 0)
+    ? pickingId
+    : parseInt(window.location.pathname.split('/').filter(Boolean).pop()) || 0;
   try {
     await fetch('/pack_scan/finish_upload', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
       keepalive: true,
-      body: JSON.stringify({ upload_id: uploadId, picking_id: pickingId })
+      body: JSON.stringify({ upload_id: uploadId, picking_id: _pickingId })
     });
   } finally {
     uploadId = null;
@@ -196,8 +225,8 @@ function stopRecording() {
   return new Promise((resolve) => {
     _stopResolve = resolve;
     try { mediaRecorder.stop(); } catch { resolve(); _stopResolve = null; }
-    // Timeout tối đa 30s phòng onstop không bao giờ fire
-    setTimeout(() => { if (_stopResolve) { _stopResolve(); _stopResolve = null; } }, 30000);
+    // Timeout tối đa 90s (tăng từ 30s) – video lớn + mạng chậm cần thêm thời gian
+    setTimeout(() => { if (_stopResolve) { _stopResolve(); _stopResolve = null; } }, 90000);
   });
 }
 
