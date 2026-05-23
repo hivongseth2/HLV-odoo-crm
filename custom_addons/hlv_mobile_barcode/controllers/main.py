@@ -45,8 +45,18 @@ class HLVMobileBarcodeController(http.Controller):
         lines = []
         # Group by move_id to show products
         for move in picking.move_ids_without_package:
-            # Compute total qty_done for this move from move_line_ids
-            qty_done = sum(line.qty_done for line in move.move_line_ids)
+            # Compute total quantity for this move from move_line_ids (Odoo 18 uses quantity)
+            qty_done = sum(line.quantity for line in move.move_line_ids)
+            
+            # Determine location name
+            last_ml = move.move_line_ids and move.move_line_ids[-1] or False
+            loc_name = False
+            if last_ml:
+                if picking.picking_type_id.code in ['incoming', 'internal']:
+                    loc_name = last_ml.location_dest_id.display_name
+                else:
+                    loc_name = last_ml.location_id.display_name
+                    
             lines.append({
                 'move_id': move.id,
                 'product_id': move.product_id.id,
@@ -56,6 +66,7 @@ class HLVMobileBarcodeController(http.Controller):
                 'qty_done': qty_done,
                 'uom_name': move.product_uom.name,
                 'state': move.state,
+                'location_name': loc_name,
             })
             
         return {
@@ -66,27 +77,135 @@ class HLVMobileBarcodeController(http.Controller):
             'lines': lines,
         }
 
+    @http.route('/hlv_mobile_barcode/create_empty_int', type='json', auth='user')
+    def create_empty_int(self, location_id):
+        source_loc = request.env['stock.location'].browse(location_id)
+        if not source_loc.exists():
+            return {'error': _('Không tìm thấy vị trí nguồn')}
+            
+        company_id = request.env.company.id
+        transit_loc = request.env['stock.location'].search([
+            ('usage', '=', 'transit'), 
+            ('company_id', 'in', [False, company_id])
+        ], limit=1)
+        
+        if not transit_loc:
+            return {'error': _('Không tìm thấy kho trung chuyển (Transit Location)')}
+            
+        warehouse = source_loc.warehouse_id
+        if not warehouse:
+            warehouse = request.env['stock.warehouse'].search([('view_location_id', 'parent_of', source_loc.id)], limit=1)
+            
+        picking_type_int = request.env['stock.picking.type'].search([
+            ('code', '=', 'internal'),
+            ('sequence_code', '=', 'INT'),
+            ('company_id', '=', company_id),
+            ('warehouse_id', '=', warehouse.id if warehouse else False)
+        ], limit=1)
+        
+        if not picking_type_int and warehouse and warehouse.int_type_id:
+            picking_type_int = warehouse.int_type_id
+            
+        if not picking_type_int:
+            picking_type_int = request.env['stock.picking.type'].search([
+                ('code', '=', 'internal'), 
+                ('company_id', '=', company_id),
+                ('warehouse_id', '=', warehouse.id if warehouse else False)
+            ], limit=1)
+            if not picking_type_int:
+                picking_type_int = request.env['stock.picking.type'].search([('code', '=', 'internal'), ('company_id', '=', company_id)], limit=1)
+            
+        if not picking_type_int:
+            return {'error': _('Chưa cấu hình Operation Types (INT)')}
+
+        picking_int = request.env['stock.picking'].create({
+            'picking_type_id': picking_type_int.id,
+            'location_id': source_loc.id,
+            'location_dest_id': transit_loc.id,
+        })
+        
+        # Keep it in draft so user can add lines
+        return {'success': True, 'picking_id': picking_int.id, 'picking_name': picking_int.name}
+
     @http.route('/hlv_mobile_barcode/process_barcode', type='json', auth='user')
-    def process_barcode(self, picking_id, barcode):
+    def process_barcode(self, picking_id, barcode, destination_location_id=None, last_product_id=None):
         picking = request.env['stock.picking'].browse(picking_id)
-        if not picking.exists() or picking.state not in ['confirmed', 'assigned']:
-            return {'error': _('Picking is not ready to process.')}
+        if not picking.exists() or picking.state not in ['draft', 'confirmed', 'assigned']:
+            return {'error': _('Phiếu này không thể xử lý thêm sản phẩm.')}
+
+        is_putaway = picking.picking_type_id.code in ['incoming', 'internal']
+        
+        # 1. Try to find location first
+        location = request.env['stock.location'].search(['|', ('barcode', '=', barcode), ('name', '=', barcode)], limit=1)
+        if location:
+            res = {'type': 'location', 'location_id': location.id, 'location_name': location.display_name, 'is_putaway': is_putaway}
+            if last_product_id:
+                move = picking.move_ids_without_package.filtered(lambda m: m.product_id.id == last_product_id and m.state not in ['done', 'cancel'])
+                if move:
+                    move_line = move.move_line_ids.filtered(lambda ml: not ml.result_package_id)
+                    if move_line:
+                        if is_putaway:
+                            move_line[-1].location_dest_id = location.id
+                        else:
+                            move_line[-1].location_id = location.id
+                        res['updated_product_id'] = last_product_id
+            return res
 
         product = request.env['product.product'].search([('barcode', '=', barcode)], limit=1)
         if not product:
-            return {'error': _('Product barcode not found.')}
+            return {'error': _('Không tìm thấy mã vạch hợp lệ (Sản phẩm hoặc Vị trí).')}
 
         # Find the move for this product
         move = picking.move_ids_without_package.filtered(lambda m: m.product_id == product and m.state not in ['done', 'cancel'])
-        if not move:
-            return {'error': _('This product is not required in this picking, or already completed.')}
         
-        move = move[0]
-        # In Odoo, we typically increase qty_done on the move_line
-        # If there's an existing move_line without package that is not fully done, use it
-        move_line = move.move_line_ids.filtered(lambda ml: ml.qty_done < ml.quantity and not ml.result_package_id)
+        if not move:
+            # Create a new move on the fly
+            move = request.env['stock.move'].create({
+                'name': product.display_name,
+                'picking_id': picking.id,
+                'product_id': product.id,
+                'product_uom_qty': 0.0,
+                'product_uom': product.uom_id.id,
+                'location_id': picking.location_id.id,
+                'location_dest_id': picking.location_dest_id.id,
+            })
+            
+            # If picking was draft, maybe we need to confirm it so it gets move_line_ids?
+            # Or we can just create the move_line manually. In Odoo 17+, moves usually get confirmed later.
+            # But let's confirm the picking if it's draft so Odoo's internal state is happy.
+            if picking.state == 'draft':
+                picking.action_confirm()
+                # Re-fetch move as action_confirm might replace/merge it
+                move = picking.move_ids_without_package.filtered(lambda m: m.product_id == product and m.state not in ['done', 'cancel'])
+                if not move:
+                    return {'error': _('Lỗi hệ thống khi tạo sản phẩm mới.')}
+                move = move[0]
+        else:
+            move = move[0]
+
+        # In Odoo 17/18, qty_done is replaced by quantity
+        move_line = move.move_line_ids.filtered(lambda ml: ml.quantity < ml.quantity_product_uom and not ml.result_package_id)
+        
+        ml_dest_id = destination_location_id if (destination_location_id and is_putaway) else picking.location_dest_id.id
+        ml_src_id = destination_location_id if (destination_location_id and not is_putaway) else picking.location_id.id
+        
         if move_line:
-            move_line[0].qty_done += 1
+            # Check if location matches, otherwise we might need a new move line
+            last_ml = move_line[-1]
+            if (is_putaway and destination_location_id and last_ml.location_dest_id.id != destination_location_id) or \
+               (not is_putaway and destination_location_id and last_ml.location_id.id != destination_location_id):
+                # Locations differ, create a new move line
+                request.env['stock.move.line'].create({
+                    'move_id': move.id,
+                    'picking_id': picking.id,
+                    'product_id': product.id,
+                    'product_uom_id': product.uom_id.id,
+                    'location_id': ml_src_id,
+                    'location_dest_id': ml_dest_id,
+                    'quantity': 1,
+                })
+            else:
+                last_ml.quantity += 1
         else:
             # Create a new move line if none exists or all are full
             request.env['stock.move.line'].create({
@@ -94,12 +213,67 @@ class HLVMobileBarcodeController(http.Controller):
                 'picking_id': picking.id,
                 'product_id': product.id,
                 'product_uom_id': product.uom_id.id,
-                'location_id': move.location_id.id,
-                'location_dest_id': move.location_dest_id.id,
-                'qty_done': 1,
+                'location_id': ml_src_id,
+                'location_dest_id': ml_dest_id,
+                'quantity': 1,
             })
             
-        return {'success': True, 'product_id': product.id, 'product_name': product.display_name}
+        return {'success': True, 'type': 'product', 'product_id': product.id, 'product_name': product.display_name}
+
+    @http.route('/hlv_mobile_barcode/update_move_line_qty', type='json', auth='user')
+    def update_move_line_qty(self, move_id, qty_change=None, new_qty=None):
+        move = request.env['stock.move'].browse(move_id)
+        if not move.exists():
+            return {'error': _('Không tìm thấy dòng sản phẩm')}
+            
+        if move.picking_id.state not in ['draft', 'confirmed', 'assigned']:
+            return {'error': _('Phiếu không ở trạng thái cho phép sửa số lượng')}
+
+        # Odoo 18 uses quantity on move_line
+        # Find or create a move_line
+        move_line = move.move_line_ids.filtered(lambda ml: not ml.result_package_id)
+        if not move_line:
+            move_line = request.env['stock.move.line'].create({
+                'move_id': move.id,
+                'picking_id': move.picking_id.id,
+                'product_id': move.product_id.id,
+                'product_uom_id': move.product_uom.id,
+                'location_id': move.location_id.id,
+                'location_dest_id': move.location_dest_id.id,
+                'quantity': 0,
+            })
+        else:
+            move_line = move_line[0]
+
+        if new_qty is not None:
+            new_val = float(new_qty)
+        elif qty_change is not None:
+            new_val = move_line.quantity + float(qty_change)
+        else:
+            return {'error': _('Thiếu tham số số lượng')}
+
+        if new_val < 0:
+            new_val = 0
+
+        move_line.quantity = new_val
+        
+        return {'success': True, 'new_qty': move_line.quantity}
+
+    @http.route('/hlv_mobile_barcode/delete_move', type='json', auth='user')
+    def delete_move(self, move_id):
+        move = request.env['stock.move'].browse(move_id)
+        if not move.exists():
+            return {'success': True} # Already deleted
+            
+        if move.picking_id.state not in ['draft', 'confirmed', 'assigned']:
+            return {'error': _('Phiếu không ở trạng thái cho phép xóa sản phẩm')}
+            
+        try:
+            move._action_cancel()
+            move.unlink()
+            return {'success': True}
+        except Exception as e:
+            return {'error': _('Lỗi khi xóa: %s', str(e))}
 
     @http.route('/hlv_mobile_barcode/put_in_pack', type='json', auth='user')
     def put_in_pack(self, picking_id):
@@ -230,9 +404,13 @@ class HLVMobileBarcodeController(http.Controller):
         if not transit_loc:
             return {'error': _('Không tìm thấy kho trung chuyển (Transit Location)')}
             
-        # Get Picking Types
-        picking_type_int = request.env['stock.picking.type'].search([('code', '=', 'internal'), ('company_id', '=', company_id)], limit=1)
-        picking_type_in = request.env['stock.picking.type'].search([('code', '=', 'incoming'), ('company_id', '=', company_id)], limit=1)
+        warehouse = source_loc.warehouse_id
+        if warehouse and warehouse.int_type_id and warehouse.in_type_id:
+            picking_type_int = warehouse.int_type_id
+            picking_type_in = warehouse.in_type_id
+        else:
+            picking_type_int = request.env['stock.picking.type'].search([('code', '=', 'internal'), ('company_id', '=', company_id)], limit=1)
+            picking_type_in = request.env['stock.picking.type'].search([('code', '=', 'incoming'), ('company_id', '=', company_id)], limit=1)
         
         if not picking_type_int or not picking_type_in:
             return {'error': _('Chưa cấu hình Operation Types (INT, IN)')}
@@ -283,7 +461,7 @@ class HLVMobileBarcodeController(http.Controller):
         return {'success': True, 'in_picking_name': picking_in.name}
 
     @http.route('/hlv_mobile_barcode/move_location_batch', type='json', auth='user')
-    def move_location_batch(self, source_barcode, lines):
+    def move_location_batch(self, source_barcode, lines, pack=False):
         if not lines:
             return {'error': _('Không có sản phẩm nào để chuyển')}
             
@@ -302,9 +480,13 @@ class HLVMobileBarcodeController(http.Controller):
         if not transit_loc:
             return {'error': _('Không tìm thấy kho trung chuyển (Transit Location)')}
             
-        # Get Picking Types
-        picking_type_int = request.env['stock.picking.type'].search([('code', '=', 'internal'), ('company_id', '=', company_id)], limit=1)
-        picking_type_in = request.env['stock.picking.type'].search([('code', '=', 'incoming'), ('company_id', '=', company_id)], limit=1)
+        warehouse = source_loc.warehouse_id
+        if warehouse and warehouse.int_type_id and warehouse.in_type_id:
+            picking_type_int = warehouse.int_type_id
+            picking_type_in = warehouse.in_type_id
+        else:
+            picking_type_int = request.env['stock.picking.type'].search([('code', '=', 'internal'), ('company_id', '=', company_id)], limit=1)
+            picking_type_in = request.env['stock.picking.type'].search([('code', '=', 'incoming'), ('company_id', '=', company_id)], limit=1)
         
         if not picking_type_int or not picking_type_in:
             return {'error': _('Chưa cấu hình Operation Types (INT, IN)')}
@@ -331,6 +513,24 @@ class HLVMobileBarcodeController(http.Controller):
             })
         
         picking_int.action_confirm()
+        
+        package_name = False
+        if pack:
+            # Set quantity so put_in_pack knows what to pack
+            for move in picking_int.move_ids_without_package:
+                move.quantity = move.product_uom_qty
+            
+            try:
+                res = picking_int.action_put_in_pack()
+                if isinstance(res, dict) and res.get('res_model') == 'stock.quant.package':
+                    package_id = res.get('res_id')
+                    package = request.env['stock.quant.package'].browse(package_id)
+                    package_name = package.name
+                elif getattr(res, 'id', False):
+                    package_name = res.name
+            except Exception as e:
+                return {'error': _('Lỗi khi đóng gói: %s', str(e))}
+                
         picking_int.button_validate()
         
         # 2. Create IN picking (Transit -> Destination)
@@ -360,4 +560,4 @@ class HLVMobileBarcodeController(http.Controller):
         
         picking_in.action_confirm()
         
-        return {'success': True, 'in_picking_name': picking_in.name}
+        return {'success': True, 'in_picking_name': picking_in.name, 'package_name': package_name}

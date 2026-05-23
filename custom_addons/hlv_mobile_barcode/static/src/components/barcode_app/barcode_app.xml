@@ -8,8 +8,13 @@
                     <div class="header-title">
                         <i class="fa fa-boxes"></i> Kho HLV
                     </div>
-                    <div class="user-info" t-on-click="goToMain">
-                        <i class="fa fa-home"></i> Trang chủ
+                    <div style="display: flex; gap: 10px;">
+                        <div class="user-info" style="background: var(--primary-color); color: white;" t-on-click="openCamera">
+                            <i class="fa fa-camera"></i> Quét mã
+                        </div>
+                        <div class="user-info" t-on-click="goToMain">
+                            <i class="fa fa-home"></i> Trang chủ
+                        </div>
                     </div>
                 </div>
 
@@ -28,7 +33,7 @@
                         <div class="card-box" style="text-align: center; padding-top: 40px; padding-bottom: 40px;" t-on-click="openCamera">
                             <i class="fa fa-barcode" style="font-size: 80px; color: var(--primary-color); margin-bottom: 20px;"></i>
                             <h3 style="color: var(--primary-color); margin-bottom: 10px;">Quét hoặc chạm</h3>
-                            <p class="text-muted" style="margin-bottom: 30px;">Nhấn vào đây để mở Camera và quét</p>
+                            <p class="text-muted" style="margin-bottom: 30px;">Dùng máy quét hoặc nhấn để mở Camera</p>
                             
                             <div style="text-align: left; background: var(--light-bg); padding: 15px; border-radius: 8px;">
                                 <div style="margin-bottom: 8px;"><i class="fa fa-check-circle" style="color: var(--success-color); margin-right: 8px;"></i> Quét <strong>sản phẩm</strong> để định vị</div>
@@ -41,17 +46,17 @@
                     
                     <!-- Picking View Placeholder -->
                     <div t-elif="state.currentView === 'picking'">
-                        <PickingScanner pickingId="state.pickingId" onBack="() => this.goToMain()" lastScannedProduct="state.lastScannedProduct"/>
+                        <PickingScanner pickingId="state.pickingId" onBack="() => this.goBack()" lastScannedProduct="state.lastScannedProduct" scannedLocationName="state.scannedLocationName"/>
                     </div>
                     
                     <!-- Move Component -->
-                    <LocationMove t-if="state.currentView === 'move'" productId="state.recordId" prefillLocationBarcode="state.prefillLocationBarcode" prefillLocationName="state.prefillLocationName" onBack="() => this.goToMain()" registerScanner="(cb) => this.registerScanner(cb)"/>
+                    <LocationMove t-if="state.currentView === 'move'" productId="state.recordId" prefillLocationBarcode="state.prefillLocationBarcode" prefillLocationName="state.prefillLocationName" onBack="() => this.goBack()" registerScanner="(cb) => this.registerScanner(cb)"/>
                     
                     <!-- Batch Move Component -->
-                    <BatchLocationMove t-if="state.currentView === 'batch_move'" sourceLocationBarcode="state.prefillLocationBarcode" sourceLocationName="state.prefillLocationName" onBack="() => this.goToMain()" registerScanner="(cb) => this.registerScanner(cb)"/>
+                    <BatchLocationMove t-if="state.currentView === 'batch_move'" sourceLocationBarcode="state.prefillLocationBarcode" sourceLocationName="state.prefillLocationName" onBack="() => this.goBack()" registerScanner="(cb) => this.registerScanner(cb)"/>
                     
                     <!-- Lookup Component -->
-                    <InventoryLookup t-if="state.currentView === 'lookup'" t-key="state.lookupType + '_' + state.recordId" lookupType="state.lookupType" recordId="state.recordId" onBack="() => this.goToMain()" onMove="(productId, locBarcode, locName) => this.goToMove(productId, locBarcode, locName)" onBatchMove="(locBarcode, locName) => this.goToBatchMove(locBarcode, locName)" onProductSelect="(productId, productName) => this.goToProductLookup(productId, productName)"/>
+                    <InventoryLookup t-if="state.currentView === 'lookup'" t-key="state.lookupType + '_' + state.recordId" lookupType="state.lookupType" recordId="state.recordId" onBack="() => this.goBack()" onMove="(productId, locBarcode, locName) => this.goToMove(productId, locBarcode, locName)" onBatchMove="(locBarcode, locName) => this.goToBatchMove(locBarcode, locName)" onProductSelect="(productId, productName) => this.goToProductLookup(productId, productName)"/>
                 </div>
             </div>
 

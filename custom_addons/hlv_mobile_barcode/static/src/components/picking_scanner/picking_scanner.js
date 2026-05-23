@@ -10,6 +10,7 @@ export class PickingScanner extends Component {
         pickingId: Number,
         onBack: Function,
         lastScannedProduct: { type: Number, optional: true },
+        scannedLocationName: { type: String, optional: true },
     };
 
     setup() {
@@ -19,6 +20,7 @@ export class PickingScanner extends Component {
         this.state = useState({
             picking: null,
             loading: true,
+            editingLineId: null,
         });
 
         onWillStart(async () => {
@@ -26,7 +28,7 @@ export class PickingScanner extends Component {
         });
 
         onWillUpdateProps(async (nextProps) => {
-            if (nextProps.lastScannedProduct !== this.props.lastScannedProduct) {
+            if (nextProps.lastScannedProduct !== this.props.lastScannedProduct || nextProps.scannedLocationName !== this.props.scannedLocationName) {
                 await this.loadPicking();
             }
         });
@@ -45,6 +47,65 @@ export class PickingScanner extends Component {
             this.notification.add("Failed to load picking", { type: "danger" });
         }
         this.state.loading = false;
+    }
+
+    toggleEditLine(moveId) {
+        if (this.state.editingLineId === moveId) {
+            this.state.editingLineId = null;
+        } else {
+            this.state.editingLineId = moveId;
+        }
+    }
+
+    async adjustQty(line, change) {
+        try {
+            const res = await rpc("/hlv_mobile_barcode/update_move_line_qty", {
+                move_id: line.move_id,
+                qty_change: change
+            });
+            if (res.error) {
+                this.notification.add(res.error, { type: "danger" });
+            } else {
+                line.qty_done = res.new_qty;
+            }
+        } catch (e) {
+            this.notification.add("Lỗi kết nối", { type: "danger" });
+        }
+    }
+
+    async saveQty(line, ev) {
+        const newVal = parseFloat(ev.target.value);
+        if (isNaN(newVal)) return;
+        try {
+            const res = await rpc("/hlv_mobile_barcode/update_move_line_qty", {
+                move_id: line.move_id,
+                new_qty: newVal
+            });
+            if (res.error) {
+                this.notification.add(res.error, { type: "danger" });
+            } else {
+                line.qty_done = res.new_qty;
+            }
+        } catch (e) {
+            this.notification.add("Lỗi kết nối", { type: "danger" });
+        }
+    }
+
+    async deleteLine(line) {
+        if (!confirm(`Bạn có chắc muốn xóa sản phẩm ${line.product_name}?`)) return;
+        try {
+            const res = await rpc("/hlv_mobile_barcode/delete_move", {
+                move_id: line.move_id
+            });
+            if (res.error) {
+                this.notification.add(res.error, { type: "danger" });
+            } else {
+                this.notification.add("Đã xóa", { type: "success" });
+                await this.loadPicking();
+            }
+        } catch (e) {
+            this.notification.add("Lỗi kết nối", { type: "danger" });
+        }
     }
 
     async doPack() {
