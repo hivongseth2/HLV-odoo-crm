@@ -242,8 +242,11 @@ class AmisWebhookQueue(models.Model):
                 'WebhookQueue [%d]: error publishing for order_ref=%s: %s',
                 self.id, self.order_ref, err,
             )
-            new_state = 'error' if self.attempts < MAX_ATTEMPTS else 'error'
-            self.sudo().write({'state': new_state, 'error_msg': err})
+            self.sudo().write({
+                'state': 'error',
+                'error_msg': err,
+                'processed_at': fields.Datetime.now(),
+            })
 
     # ── Manual actions ────────────────────────────────────────────────────────
 

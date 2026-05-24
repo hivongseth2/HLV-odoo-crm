@@ -36,8 +36,8 @@ if config.webhook_publish_time_restrict:
 
 # ── Kiểm tra từng SO ─────────────────────────────────────────────────────────
 print(f'\n[QUEUE RECORDS]')
-print(f'  {"SO":<10} {"Nhận lúc (local)":<22} {"Giờ":>6} {"Trong window?":>14} {"State":<12} {"Attempts":>8}  Lỗi')
-print(f'  {"─" * 100}')
+print(f'  {"SO":<10} {"Nhận lúc (local)":<22} {"Gửi lúc (local)":<18} {"Trong window?":>14} {"State":<12} {"Attempts":>8}  Lỗi')
+print(f'  {"─" * 115}')
 
 for so_name in CHECK_SOS:
     so = env['sale.order'].sudo().search([('name', '=', so_name)], limit=1)
