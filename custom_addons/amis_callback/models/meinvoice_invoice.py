@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import json
 import logging
+import uuid
 
 from odoo import api, fields, models
 from odoo.exceptions import UserError
@@ -155,7 +156,16 @@ class MeinvoiceInvoice(models.Model):
                     pass
             err_code = first.get('ErrorCode') or ''
             if err_code:
-                raise UserError('meInvoice phát hành lỗi: %s' % err_code)
+                err_desc = first.get('DescriptionErrorCode') or ''
+                if err_code == 'DuplicateInvoiceRefID':
+                    raise UserError(
+                        'meInvoice: RefID hóa đơn bị trùng (%s).\n\n'
+                        'Hóa đơn %s %s đã tồn tại trên hệ thống với TransactionID: %s.\n\n'
+                        'Nếu bạn muốn gửi lại sau khi điều chỉnh/hủy, '
+                        'hãy nhấn nút "Gửi lại" (biểu tượng undo) để đặt hóa đơn về Nháp với RefID mới.'
+                        % (err_desc, inv_series_result or '', inv_no, transaction_id)
+                    )
+                raise UserError('meInvoice phát hành lỗi: %s — %s' % (err_code, err_desc))
 
         # Nếu InvCode trả về ngay → CQT đã cấp mã, không cần chờ
         new_state = 'accepted' if inv_code else 'submitted'
@@ -381,6 +391,52 @@ class MeinvoiceInvoice(models.Model):
             if rec.state in ('accepted',):
                 raise UserError('Không thể hủy hóa đơn đã được CQT chấp nhận.')
             rec.write({'state': 'cancelled', 'cqt_check_queued': False})
+        return True
+
+    def action_reset_to_draft(self):
+        """Đặt lại hóa đơn về Nháp với RefID mới để gửi lại sau khi điều chỉnh/hủy.
+
+        - Sinh UUID mới cho RefID trong invoice_data_json
+        - Xóa misa_meinvoice_ref_id trên SO để lần gửi tiếp theo cũng dùng RefID mới
+        - Xóa các kết quả cũ (transaction_id, inv_no, inv_code, ...)
+        """
+        for rec in self:
+            # Sinh RefID mới
+            new_ref_id = str(uuid.uuid4())
+
+            # Cập nhật RefID trong invoice_data_json
+            try:
+                inv_data = json.loads(rec.invoice_data_json or '{}')
+            except Exception:
+                inv_data = {}
+            inv_data['RefID'] = new_ref_id
+            new_json = json.dumps(inv_data, ensure_ascii=False)
+
+            rec.write({
+                'state': 'draft',
+                'invoice_data_json': new_json,
+                'transaction_id': False,
+                'inv_no': False,
+                'inv_code': False,
+                'inv_series_result': False,
+                'inv_date_result': False,
+                'cqt_status_code': False,
+                'cqt_status_desc': False,
+                'cqt_checked_at': False,
+                'cqt_check_queued': False,
+            })
+
+            # Xóa misa_meinvoice_ref_id trên SO để SO-level sync cũng dùng RefID mới
+            if rec.sale_order_id:
+                rec.sale_order_id.sudo().write({
+                    'misa_meinvoice_ref_id': new_ref_id,
+                })
+
+            _logger.info(
+                'meInvoice reset to draft for SO %s: new RefID=%s',
+                rec.sale_order_id.name if rec.sale_order_id else '?',
+                new_ref_id,
+            )
         return True
 
 
