@@ -25,16 +25,17 @@
    ========================================================================== */
 
 .hlv-barcode-app {
-  height: 100vh !important;
-  height: 100dvh !important;
-  max-height: 100vh !important;
-  max-height: 100dvh !important;
-  display: flex;
-  flex-direction: column;
+  position: absolute !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
   background-color: var(--light-bg);
   color: var(--text-color);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  overflow: hidden;
+  overflow: hidden !important;
 }
 
 .hlv-barcode-app .shipper-container {
@@ -48,6 +49,8 @@
   flex: 1;
   min-height: 0;        /* KEY: allows flex children to shrink below content size */
   overflow: hidden;
+  height: 100% !important;
+  max-height: 100% !important;
 }
 
 @media (min-width: 768px) {
@@ -635,84 +638,4 @@
   background-color: var(--success-color);
   width: 0;
   transition: width 0.4s ease;
-}
-
-/* ==========================================================================
-   DESKTOP RESPONSIVE LAYOUT (Min width 992px)
-   ========================================================================== */
-@media (min-width: 992px) {
-  /* Enforce parent full height display */
-  .hlv-barcode-app .shipper-container {
-    height: 100% !important;
-    max-height: 100% !important;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-
-  /* Grid 2 Column layout inside sub-view (picking, move, lookup...) */
-  .hlv-barcode-app .shipper-container.sub-view {
-    display: grid !important;
-    grid-template-columns: 400px 1fr !important;
-    grid-template-rows: auto 1fr !important;
-    column-gap: 24px;
-    row-gap: 12px;
-  }
-
-  /* Span the header across all columns */
-  .hlv-barcode-app .shipper-container.sub-view .shipper-header {
-    grid-column: 1 / -1;
-    border-bottom: 1px solid var(--border-color);
-    padding-bottom: 12px;
-  }
-
-  /* Left Column: Persistent Camera */
-  .hlv-barcode-app .persistent-camera-wrapper {
-    grid-column: 1;
-    width: 400px !important;
-    border-bottom: none !important;
-    border-right: 1px solid var(--border-color);
-    padding-right: 20px;
-    background: transparent !important;
-    align-self: start;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .hlv-barcode-app .persistent-camera-wrapper .camera-container {
-    max-width: 100% !important;
-    height: 280px !important;
-    border-radius: 12px;
-    box-shadow: var(--shadow-md);
-    border: 2px solid var(--primary-color);
-  }
-
-  .hlv-barcode-app .persistent-camera-wrapper #reader,
-  .hlv-barcode-app .persistent-camera-wrapper #reader video {
-    height: 280px !important;
-  }
-
-  /* Right Column: Main subview content area */
-  .hlv-barcode-app .hlv-barcode-content {
-    grid-column: 2;
-    height: 100%;
-    min-height: 0;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-  }
-
-  /* Home Dashboard Grid Layout (2 columns) */
-  .hlv-barcode-app .home-grid-layout {
-    display: grid !important;
-    grid-template-columns: 1fr 1fr !important;
-    gap: 24px !important;
-    align-items: stretch;
-  }
-
-  /* Make the Guide box span across both columns to look beautifully balanced */
-  .hlv-barcode-app .home-grid-layout > :nth-child(3) {
-    grid-column: 1 / -1;
-  }
 }
