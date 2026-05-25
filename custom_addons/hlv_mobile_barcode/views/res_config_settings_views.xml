@@ -6,7 +6,7 @@
         <field name="inherit_id" ref="stock.res_config_settings_view_form"/>
         <field name="arch" type="xml">
             <xpath expr="//form" position="inside">
-                <app data-string="Inventory" string="Inventory" name="stock">
+                <app data-string="HLV Mobile Barcode" string="HLV Mobile Barcode" name="hlv_mobile_barcode">
                     <block title="HLV Mobile Barcode" name="hlv_mobile_barcode_setting_container">
                         <setting string="Allowed Picking Types" help="Select which operations can be processed via Mobile Barcode App">
                             <field name="hlv_barcode_picking_type_ids" widget="many2many_tags"/>

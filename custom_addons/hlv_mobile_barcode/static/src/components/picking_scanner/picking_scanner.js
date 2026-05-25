@@ -11,11 +11,13 @@ export class PickingScanner extends Component {
         onBack: Function,
         lastScannedProduct: { type: Number, optional: true },
         scannedLocationName: { type: String, optional: true },
+        refreshTick: { type: Number, optional: true },
     };
 
     setup() {
         this.notification = useService("notification");
         this.actionService = useService("action");
+        this.isProcessingQty = false;
         
         this.state = useState({
             picking: null,
@@ -28,7 +30,9 @@ export class PickingScanner extends Component {
         });
 
         onWillUpdateProps(async (nextProps) => {
-            if (nextProps.lastScannedProduct !== this.props.lastScannedProduct || nextProps.scannedLocationName !== this.props.scannedLocationName) {
+            if (nextProps.lastScannedProduct !== this.props.lastScannedProduct 
+                || nextProps.scannedLocationName !== this.props.scannedLocationName
+                || nextProps.refreshTick !== this.props.refreshTick) {
                 await this.loadPicking();
             }
         });
@@ -41,6 +45,32 @@ export class PickingScanner extends Component {
             if (data.error) {
                 this.notification.add(data.error, { type: "danger" });
             } else {
+                if (['draft', 'confirmed', 'assigned'].includes(data.state)) {
+                    const storageKey = 'hlv_opened_pickings';
+                    let openedPickings = [];
+                    try {
+                        openedPickings = JSON.parse(localStorage.getItem(storageKey) || '[]');
+                    } catch (e) {
+                        openedPickings = [];
+                    }
+                    
+                    if (!openedPickings.includes(this.props.pickingId)) {
+                        const clearRes = await rpc("/hlv_mobile_barcode/clear_quantities", { picking_id: this.props.pickingId });
+                        if (!clearRes.error) {
+                            openedPickings.push(this.props.pickingId);
+                            if (openedPickings.length > 200) openedPickings = openedPickings.slice(openedPickings.length - 200);
+                            localStorage.setItem(storageKey, JSON.stringify(openedPickings));
+                            
+                            // Re-fetch data after clearing
+                            const newData = await rpc("/hlv_mobile_barcode/get_picking_data", { picking_id: this.props.pickingId });
+                            if (!newData.error) {
+                                this.state.picking = newData;
+                                this.state.loading = false;
+                                return;
+                            }
+                        }
+                    }
+                }
                 this.state.picking = data;
             }
         } catch (e) {
@@ -77,6 +107,8 @@ export class PickingScanner extends Component {
     }
 
     async adjustQty(line, change) {
+        if (this.isProcessingQty) return;
+        this.isProcessingQty = true;
         try {
             const res = await rpc("/hlv_mobile_barcode/update_move_line_qty", {
                 move_id: line.move_id,
@@ -89,12 +121,16 @@ export class PickingScanner extends Component {
             }
         } catch (e) {
             this.notification.add("Lỗi kết nối", { type: "danger" });
+        } finally {
+            this.isProcessingQty = false;
         }
     }
 
     async saveQty(line, ev) {
         const newVal = parseFloat(ev.target.value);
         if (isNaN(newVal)) return;
+        if (this.isProcessingQty) return;
+        this.isProcessingQty = true;
         try {
             const res = await rpc("/hlv_mobile_barcode/update_move_line_qty", {
                 move_id: line.move_id,
@@ -107,6 +143,8 @@ export class PickingScanner extends Component {
             }
         } catch (e) {
             this.notification.add("Lỗi kết nối", { type: "danger" });
+        } finally {
+            this.isProcessingQty = false;
         }
     }
 

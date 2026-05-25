@@ -1,103 +1,83 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
     <t t-name="hlv_mobile_barcode.PickingScanner">
-        <div>
-            <div class="shipper-container" style="padding-bottom: 80px;">
-                <div t-if="state.loading" style="text-align: center; padding: 50px;">
-                    <i class="fa fa-spin fa-spinner fa-3x" style="color: var(--secondary-color);"></i>
+        <div class="picking-scanner-root">
+            <div t-if="state.loading" style="text-align: center; padding: 50px;">
+                <i class="fa fa-spin fa-spinner fa-3x" style="color: var(--secondary-color);"></i>
+            </div>
+            
+            <t t-elif="state.picking">
+                <!-- Compact picking label: left-aligned, small, gray -->
+                <div class="picking-label">
+                    <i class="fa fa-clipboard-list"></i>
+                    Phiếu xuất/nhập <t t-esc="state.picking.name"/>
                 </div>
-                
-                <div t-elif="state.picking">
-                    <!-- Step Header representing the picking -->
-                    <div class="card-box" style="padding: 15px; margin-bottom: 15px;">
-                        <div class="step-header" style="margin-bottom: 0; padding-bottom: 0; border-bottom: none; display: flex; justify-content: space-between; align-items: center;">
-                            <div style="display: flex; align-items: center;">
-                                <div class="step-icon">
-                                    <i class="fa fa-clipboard-list"></i>
+            
+                <!-- Scrollable product list area -->
+                <div class="picking-scroll-area">
+                    <!-- Active Location Banner -->
+                    <div t-if="props.scannedLocationName" class="alert alert-info" style="margin-bottom: 10px; padding: 8px 10px; border-radius: 8px; font-weight: 600; display: flex; align-items: center; gap: 8px; border-left: 4px solid var(--info-color);">
+                        <i class="fa fa-map-marker-alt"></i> Vị trí quét tiếp theo: <t t-esc="props.scannedLocationName"/>
+                    </div>
+                    
+                    <div style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 4px;">
+                        Danh sách sản phẩm
+                    </div>
+                    <div class="items-list" style="margin-top: 0;">
+                        <t t-foreach="state.picking.lines" t-as="line" t-key="line.move_id">
+                            <div style="border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 8px; overflow: hidden;">
+                                <div t-attf-class="item-card #{line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0 ? 'scanned' : ''}" style="border: none; margin-bottom: 0;">
+                                    <div class="item-info">
+                                        <div class="item-name"><t t-esc="line.product_name"/></div>
+                                        <div style="font-size: 0.8rem; margin-top: 3px; color: var(--text-muted); display: flex; align-items: center; gap: 4px;">
+                                            <i class="fa fa-barcode"></i> <t t-esc="line.product_barcode"/>
+                                            <span t-if="line.location_name" style="margin-left: 6px; color: var(--info-color); font-weight: 500;">
+                                                <i class="fa fa-map-marker-alt"></i> <t t-esc="line.location_name"/>
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div style="display: flex; align-items: center;">
+                                        <div style="text-align: right; margin-right: 8px;">
+                                            <div style="font-size: 1rem; font-weight: 700;">
+                                                <span t-attf-style="color: #{line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0 ? 'var(--success-color)' : 'var(--text-color)'}">
+                                                    <t t-esc="line.qty_done"/>
+                                                </span> 
+                                                <span style="color: var(--text-muted); font-size: 0.85rem;">/ <t t-esc="line.product_uom_qty"/></span>
+                                            </div>
+                                        </div>
+                                        <i t-if="line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0" class="fa fa-check-circle item-status-icon" style="margin-right: 8px;"></i>
+                                    </div>
                                 </div>
-                                <div class="step-info">
-                                    <div class="step-title">Phiếu xuất/nhập</div>
-                                    <div class="step-desc" style="font-weight: 600; color: var(--text-color);"><t t-esc="state.picking.name"/></div>
+                                <div style="background-color: var(--light-bg); padding: 6px; border-top: 1px solid var(--border-color); display: flex; gap: 4px; align-items: center; justify-content: center;">
+                                    <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, -10)">-10</button>
+                                    <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 24px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, -1)">-1</button>
+                                    <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, -0.1)">-0.1</button>
+                                    <input type="number" class="form-control" style="width: 48px; text-align: center; font-weight: bold; padding: 4px 2px; font-size: 0.85rem;" t-model="line.qty_done" t-on-change="(ev) => this.saveQty(line, ev)" min="0" step="any"/>
+                                    <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, 0.1)">+0.1</button>
+                                    <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 24px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, 1)">+1</button>
+                                    <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, 10)">+10</button>
+                                    <button class="btn btn-danger btn-sm" style="padding: 4px 8px; font-size: 0.78rem; min-width: 28px;" t-on-click="() => this.deleteLine(line)">
+                                        <i class="fa fa-trash"></i>
+                                    </button>
                                 </div>
                             </div>
-                            <button t-if="state.picking.state !== 'done' and state.picking.state !== 'cancel'" class="btn btn-outline btn-sm" style="color: var(--danger-color); border: 1px solid var(--danger-color); border-radius: 6px; padding: 5px 10px;" t-on-click="clearQuantities">
-                                <i class="fa fa-undo"></i> Làm lại
-                            </button>
-                        </div>
-                    </div>
-                
-                    <div class="card-box" style="padding: 15px;">
-                        <!-- Active Location Banner -->
-                        <div t-if="props.scannedLocationName" class="alert alert-info" style="margin-bottom: 15px; padding: 10px; border-radius: 8px; font-weight: 600; display: flex; align-items: center; gap: 8px; border-left: 4px solid var(--info-color);">
-                            <i class="fa fa-map-marker-alt"></i> Vị trí quét tiếp theo: <t t-esc="props.scannedLocationName"/>
-                        </div>
-                        
-                        <div style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px;">
-                            Danh sách sản phẩm
-                        </div>
-                        <div class="items-list" style="margin-top: 0;">
-                            <t t-foreach="state.picking.lines" t-as="line" t-key="line.move_id">
-                                <div class="item-card-wrapper" style="border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 10px; overflow: hidden;">
-                                    <div t-attf-class="item-card #{line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0 ? 'scanned' : ''}" style="border: none; margin-bottom: 0;">
-                                        <div class="item-info">
-                                            <div class="item-name"><t t-esc="line.product_name"/></div>
-                                            <div style="font-size: 0.85rem; margin-top: 4px; color: var(--text-muted); display: flex; align-items: center; gap: 4px;">
-                                                <i class="fa fa-barcode"></i> <t t-esc="line.product_barcode"/>
-                                                <span t-if="line.location_name" style="margin-left: 8px; color: var(--info-color); font-weight: 500;">
-                                                    <i class="fa fa-map-marker-alt"></i> <t t-esc="line.location_name"/>
-                                                </span>
-                                            </div>
-                                        </div>
-                                        <div style="display: flex; align-items: center;">
-                                            <div style="text-align: right; margin-right: 10px;">
-                                                <div style="font-size: 1.1rem; font-weight: 700;">
-                                                    <span t-attf-style="color: #{line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0 ? 'var(--success-color)' : 'var(--text-color)'}">
-                                                        <t t-esc="line.qty_done"/>
-                                                    </span> 
-                                                    <span style="color: var(--text-muted); font-size: 0.9rem;">/ <t t-esc="line.product_uom_qty"/></span>
-                                                </div>
-                                            </div>
-                                            <i t-if="line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0" class="fa fa-check-circle item-status-icon" style="margin-right: 10px;"></i>
-                                            <button class="btn btn-outline btn-sm" style="padding: 4px 8px; color: var(--text-muted);" t-on-click="() => this.toggleEditLine(line.move_id)">
-                                                <i class="fa fa-pencil-alt"></i>
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <div t-if="state.editingLineId === line.move_id" style="background-color: var(--light-bg); padding: 10px; border-top: 1px solid var(--border-color);">
-                                        <div style="display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; margin-bottom: 10px;">
-                                            <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 40px;" t-on-click="() => this.adjustQty(line, -10)">-10</button>
-                                            <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 40px;" t-on-click="() => this.adjustQty(line, -1)">-1</button>
-                                            <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 40px;" t-on-click="() => this.adjustQty(line, -0.1)">-0.1</button>
-                                            <input type="number" class="form-control" style="width: 70px; text-align: center; font-weight: bold; padding: 4px;" t-model="line.qty_done" t-on-change="(ev) => this.saveQty(line, ev)" min="0" step="any"/>
-                                            <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 40px;" t-on-click="() => this.adjustQty(line, 0.1)">+0.1</button>
-                                            <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 40px;" t-on-click="() => this.adjustQty(line, 1)">+1</button>
-                                            <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 40px;" t-on-click="() => this.adjustQty(line, 10)">+10</button>
-                                        </div>
-                                        <div style="text-align: right;">
-                                            <button class="btn btn-danger btn-sm" t-on-click="() => this.deleteLine(line)">
-                                                <i class="fa fa-trash"></i> Xóa
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </t>
-                        </div>
+                        </t>
                     </div>
                 </div>
                 
                 <!-- Fixed Footer -->
-                <div style="position: fixed; bottom: 0; left: 0; width: 100%; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border-top: 1px solid var(--border-color); padding: 15px; box-sizing: border-box; display: flex; gap: 10px; z-index: 100; padding-bottom: env(safe-area-inset-bottom, 15px);">
-                    <button class="btn btn-outline" style="flex: 1; padding: 12px;" t-on-click="props.onBack">
+                <div class="picking-footer">
+                    <button class="btn btn-outline" style="flex: 1; padding: 10px;" t-on-click="props.onBack">
                         <i class="fa fa-arrow-left"></i> Quay lại
                     </button>
-                    <button class="btn btn-primary" style="flex: 1; padding: 12px; background-color: var(--info-color);" t-on-click="doPack">
+                    <button class="btn btn-primary" style="flex: 1; padding: 10px; background-color: var(--info-color);" t-on-click="doPack">
                         <i class="fa fa-box"></i> Đóng gói
                     </button>
-                    <button class="btn btn-success" style="flex: 1; padding: 12px;" t-on-click="doValidate">
+                    <button class="btn btn-success" style="flex: 1; padding: 10px;" t-on-click="doValidate">
                         <i class="fa fa-check"></i> Xác nhận
                     </button>
                 </div>
-            </div>
+            </t>
         </div>
     </t>
 </templates>

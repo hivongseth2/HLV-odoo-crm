@@ -1,6 +1,6 @@
 /** @odoo-module **/
 
-import { Component, useState, onMounted, useEffect } from "@odoo/owl";
+import { Component, useState, onMounted, useEffect, useRef, onWillUnmount } from "@odoo/owl";
 import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 import { rpc } from "@web/core/network/rpc";
@@ -29,18 +29,26 @@ export class BarcodeApp extends Component {
         
         this.history = savedHistory;
 
+        this.hiddenInputRef = useRef("hiddenInput");
+
         this.state = useState({
             currentView: savedState.currentView || "main", 
             manualBarcode: "",
+            hiddenBarcode: "",
+            isProcessing: false,
             pickingId: savedState.pickingId || null,
             pickingName: savedState.pickingName || "",
+            warehouseCode: savedState.warehouseCode || "",
             lookupType: savedState.lookupType || null,
             recordId: savedState.recordId || null,
             lookupTitle: savedState.lookupTitle || "",
             prefillLocationBarcode: savedState.prefillLocationBarcode || null,
             prefillLocationName: savedState.prefillLocationName || null,
-            showCamera: false,
             cameraFallback: false,
+            cameraNeedsActivation: false,
+            cameraErrorMessage: "",
+            showCameraPopup: false,
+            pickingRefreshTick: 0,
         });
         
         useEffect(() => {
@@ -48,6 +56,7 @@ export class BarcodeApp extends Component {
                 currentView: this.state.currentView,
                 pickingId: this.state.pickingId,
                 pickingName: this.state.pickingName,
+                warehouseCode: this.state.warehouseCode,
                 lookupType: this.state.lookupType,
                 recordId: this.state.recordId,
                 lookupTitle: this.state.lookupTitle,
@@ -59,6 +68,7 @@ export class BarcodeApp extends Component {
             this.state.currentView,
             this.state.pickingId,
             this.state.pickingName,
+            this.state.warehouseCode,
             this.state.lookupType,
             this.state.recordId,
             this.state.lookupTitle,
@@ -68,9 +78,54 @@ export class BarcodeApp extends Component {
 
         this.barcodeBuffer = "";
         this.barcodeTimeout = null;
+
+        this.keepFocusOnHiddenInput = () => {
+            const active = document.activeElement;
+            if (active && ['INPUT', 'TEXTAREA'].includes(active.tagName) && !active.classList.contains('hidden-barcode-input')) {
+                return;
+            }
+            const inputEl = this.hiddenInputRef?.el;
+            if (inputEl) {
+                inputEl.focus();
+            }
+        };
+
+        this.boundKeepFocus = this.keepFocusOnHiddenInput.bind(this);
+        
+        this.boundPreventCopy = (e) => {
+            e.preventDefault();
+            this.notification.add("Không được phép sao chép thông tin trên trang này!", { type: "warning" });
+        };
+        
+        this.boundPreventContextMenu = (e) => {
+            const active = e.target;
+            if (active && ['INPUT', 'TEXTAREA'].includes(active.tagName) && !active.classList.contains('hidden-barcode-input')) {
+                return;
+            }
+            e.preventDefault();
+        };
         
         onMounted(() => {
             document.addEventListener('keydown', this.handleKeyDown.bind(this));
+            document.addEventListener('click', this.boundKeepFocus);
+            document.addEventListener('copy', this.boundPreventCopy);
+            document.addEventListener('contextmenu', this.boundPreventContextMenu);
+            
+            this.focusInterval = setInterval(this.boundKeepFocus, 2000);
+            setTimeout(this.boundKeepFocus, 500);
+
+            if (this.state.currentView !== 'main') {
+                this.startPersistentCamera();
+            }
+        });
+
+        onWillUnmount(() => {
+            document.removeEventListener('click', this.boundKeepFocus);
+            document.removeEventListener('copy', this.boundPreventCopy);
+            document.removeEventListener('contextmenu', this.boundPreventContextMenu);
+            if (this.focusInterval) {
+                clearInterval(this.focusInterval);
+            }
         });
     }
 
@@ -100,6 +155,17 @@ export class BarcodeApp extends Component {
         }
     }
 
+    async onHiddenInputKeyup(ev) {
+        if (ev.key === 'Enter') {
+            const barcode = this.state.hiddenBarcode ? this.state.hiddenBarcode.trim() : "";
+            if (barcode) {
+                await this.processBarcode(barcode);
+            }
+            this.state.hiddenBarcode = "";
+            setTimeout(() => this.keepFocusOnHiddenInput(), 50);
+        }
+    }
+
     async processManualBarcode() {
         if (this.state.manualBarcode) {
             await this.processBarcode(this.state.manualBarcode);
@@ -114,10 +180,19 @@ export class BarcodeApp extends Component {
     async processBarcode(barcode) {
         if (!barcode) return;
         
-        this.state.showCamera = false;
+        if (this.state.isProcessing) {
+            this.playSound('error');
+            this.notification.add("Hệ thống đang bận xử lý, vui lòng quét lại sau giây lát...", { type: "warning" });
+            return;
+        }
+
+        this.state.isProcessing = true;
         
         if (this.viewScannerCallback) {
-            this.viewScannerCallback(barcode);
+            try {
+                await this.viewScannerCallback(barcode);
+            } catch (e) {}
+            this.state.isProcessing = false;
             return;
         }
 
@@ -140,19 +215,20 @@ export class BarcodeApp extends Component {
                     
                     if (res.updated_product_id) {
                         this.state.lastScannedProduct = res.updated_product_id;
-                        // Reload picking data since we updated the line's location
-                        // We can just rely on the component reloading when props change, or since we pass scannedLocationName, it will trigger an update.
                     }
+                    this.state.pickingRefreshTick += 1;
                 } else {
                     this.playSound('success');
                     this.notification.add(`Scanned ${res.product_name}`, { type: "success" });
                     this.state.lastScannedProduct = res.product_id;
+                    this.state.pickingRefreshTick += 1;
                 }
             } catch (e) {
                 this.playSound('error');
                 this.notification.add("Server error", { type: "danger" });
+            } finally {
+                this.state.isProcessing = false;
             }
-            await this.closeCamera();
             return;
         }
         
@@ -161,29 +237,39 @@ export class BarcodeApp extends Component {
             if (result.error) {
                 this.playSound('error');
                 this.notification.add(result.error, { type: "danger" });
-                await this.closeCamera();
                 return;
             }
             
             this.playSound('success');
-            await this.closeCamera();
             
-            if (result.type === 'picking') {
+            if (result.type === 'picking' || ['product', 'location', 'package'].includes(result.type)) {
+                // Close the popup camera if it's currently open
+                await this.closeCamera();
+                this.state.showCameraPopup = false;
+
                 this.pushHistory();
-                this.state.pickingId = result.id;
-                this.state.pickingName = result.name;
-                this.state.currentView = 'picking';
-            } else if (['product', 'location', 'package'].includes(result.type)) {
-                this.pushHistory();
-                this.state.lookupType = result.type;
-                this.state.recordId = result.id;
-                this.state.lookupTitle = result.name;
-                this.state.currentView = 'lookup';
+                this.state.warehouseCode = result.warehouse_code || "HLV";
+                if (result.type === 'picking') {
+                    this.state.pickingId = result.id;
+                    this.state.pickingName = result.name;
+                    this.state.currentView = 'picking';
+                } else {
+                    this.state.lookupType = result.type;
+                    this.state.recordId = result.id;
+                    this.state.lookupTitle = result.name;
+                    this.state.currentView = 'lookup';
+                }
+
+                // Start persistent inline camera on the newly loaded view
+                setTimeout(async () => {
+                    await this.startPersistentCamera(false);
+                }, 200);
             }
         } catch (error) {
             this.playSound('error');
             this.notification.add("Server error", { type: "danger" });
-            await this.closeCamera();
+        } finally {
+            this.state.isProcessing = false;
         }
     }
 
@@ -203,6 +289,7 @@ export class BarcodeApp extends Component {
             currentView: this.state.currentView,
             pickingId: this.state.pickingId,
             pickingName: this.state.pickingName,
+            warehouseCode: this.state.warehouseCode,
             lookupType: this.state.lookupType,
             recordId: this.state.recordId,
             lookupTitle: this.state.lookupTitle,
@@ -211,27 +298,67 @@ export class BarcodeApp extends Component {
         });
     }
 
-    goBack() {
+    async goBack() {
+        await this.closeCamera();
+        this.state.showCameraPopup = false;
+        
+        const currentPickingId = this.state.pickingId;
+        const currentView = this.state.currentView;
+
         if (this.history && this.history.length > 0) {
             const prevState = this.history.pop();
+            
+            if (currentView === 'picking' && prevState.currentView !== 'picking' && currentPickingId) {
+                rpc("/hlv_mobile_barcode/clear_quantities", { picking_id: currentPickingId }).catch(e => {});
+                const storageKey = 'hlv_opened_pickings';
+                try {
+                    let opened = JSON.parse(localStorage.getItem(storageKey) || '[]');
+                    opened = opened.filter(id => id !== currentPickingId);
+                    localStorage.setItem(storageKey, JSON.stringify(opened));
+                } catch (e) {}
+            }
+
             this.state.currentView = prevState.currentView;
             this.state.pickingId = prevState.pickingId;
             this.state.pickingName = prevState.pickingName;
+            this.state.warehouseCode = prevState.warehouseCode || "";
             this.state.lookupType = prevState.lookupType;
             this.state.recordId = prevState.recordId;
             this.state.lookupTitle = prevState.lookupTitle;
             this.state.prefillLocationBarcode = prevState.prefillLocationBarcode;
             this.state.prefillLocationName = prevState.prefillLocationName;
             this.viewScannerCallback = null;
+
+            // If the restored view is not main, start the inline camera
+            if (this.state.currentView !== 'main') {
+                setTimeout(async () => {
+                    await this.startPersistentCamera(false);
+                }, 150);
+            }
         } else {
-            this.goToMain();
+            await this.goToMain();
         }
     }
 
-    goToMain() {
+    async goToMain() {
+        await this.closeCamera();
+        this.state.showCameraPopup = false;
+
+        const currentPickingId = this.state.pickingId;
+        if (this.state.currentView === 'picking' && currentPickingId) {
+            rpc("/hlv_mobile_barcode/clear_quantities", { picking_id: currentPickingId }).catch(e => {});
+            const storageKey = 'hlv_opened_pickings';
+            try {
+                let opened = JSON.parse(localStorage.getItem(storageKey) || '[]');
+                opened = opened.filter(id => id !== currentPickingId);
+                localStorage.setItem(storageKey, JSON.stringify(opened));
+            } catch (e) {}
+        }
+
         this.history = [];
         this.state.currentView = 'main';
         this.state.pickingId = null;
+        this.state.warehouseCode = "";
         this.state.lookupType = null;
         this.state.recordId = null;
         this.state.prefillLocationBarcode = null;
@@ -265,6 +392,7 @@ export class BarcodeApp extends Component {
             } else {
                 this.state.pickingId = res.picking_id;
                 this.state.pickingName = res.picking_name;
+                this.state.warehouseCode = res.warehouse_code || "HLV";
                 this.state.currentView = 'picking';
             }
         } catch (e) {
@@ -281,10 +409,28 @@ export class BarcodeApp extends Component {
         this.state.currentView = 'lookup';
     }
 
-    async openCamera() {
-        this.state.showCamera = true;
-        
-        await new Promise(r => setTimeout(r, 100));
+    openPopupCamera() {
+        this.state.showCameraPopup = true;
+        setTimeout(() => {
+            this.startPersistentCamera(false);
+        }, 150);
+    }
+
+    async closePopupCamera() {
+        await this.closeCamera();
+        this.state.showCameraPopup = false;
+    }
+
+    async startPersistentCamera(isUserGesture = false) {
+        // Check if page is served securely (HTTPS or localhost)
+        if (window.isSecureContext === false && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+            this.state.cameraFallback = true;
+            this.state.cameraErrorMessage = "HTTPS_REQUIRED";
+            return;
+        }
+
+        this.state.cameraNeedsActivation = false;
+        this.state.cameraErrorMessage = "";
 
         if (!window.Html5Qrcode) {
             try {
@@ -297,18 +443,20 @@ export class BarcodeApp extends Component {
                 });
             } catch (e) {
                 this.notification.add("Cannot load camera library. Need internet.", { type: "danger" });
-                this.state.showCamera = false;
+                this.state.cameraFallback = true;
                 return;
             }
         }
         
         try {
+            await this.closeCamera();
+
             this.html5Qrcode = new window.Html5Qrcode("reader");
             
             const config = { 
                 fps: 20,               
                 disableFlip: false,    
-                aspectRatio: 1.0,      
+                aspectRatio: 1.333334,      
                 experimentalFeatures: {
                     useBarCodeDetectorIfSupported: true 
                 }
@@ -322,19 +470,44 @@ export class BarcodeApp extends Component {
                         try { this.html5Qrcode.pause(); } catch(e) {}
                     }
                     await this.processBarcode(decodedText);
+                    
+                    setTimeout(() => {
+                        if (this.html5Qrcode) {
+                            const state = this.html5Qrcode.getState();
+                            // 3 is PAUSED in Html5QrcodeScannerState
+                            if (state === 3 || (window.Html5QrcodeScannerState && state === window.Html5QrcodeScannerState.PAUSED)) {
+                                try { this.html5Qrcode.resume(); } catch(e) {}
+                            }
+                        }
+                    }, 1500);
                 },
                 (errorMessage) => {
                     // ignore parse errors
                 }
             );
+
+            this.state.cameraNeedsActivation = false;
+            this.state.cameraErrorMessage = "";
+            this.state.cameraFallback = false;
         } catch (err) {
             const errStr = String(err).toLowerCase();
+            console.error("Camera start error:", err);
+            
             if (errStr.includes("notallowederror") || errStr.includes("permission")) {
-                this.notification.add("Trình duyệt từ chối quyền Camera. Đã chuyển sang chế độ chụp ảnh/chọn file.", { type: "info" });
-                this.state.cameraFallback = true;
+                if (!isUserGesture) {
+                    // Fail on load (possibly iOS user-gesture requirement or first time permission prompt block)
+                    // We show the "Activate" overlay to let user click and trigger it via active gesture.
+                    this.state.cameraNeedsActivation = true;
+                    this.state.cameraErrorMessage = "PERMISSION_DENIED";
+                } else {
+                    // Real refusal or permission disabled globally
+                    this.state.cameraFallback = true;
+                    this.state.cameraErrorMessage = "PERMISSION_DENIED";
+                    this.notification.add("Không thể mở Camera. Hãy cấp quyền Camera cho Chrome trong Cài đặt iPhone.", { type: "danger" });
+                }
             } else {
                 this.notification.add("Không thể mở Camera. Lỗi: " + err, { type: "warning" });
-                await this.closeCamera();
+                this.state.cameraFallback = true;
             }
         }
     }
@@ -351,21 +524,25 @@ export class BarcodeApp extends Component {
         } catch (err) {
             this.playSound('error');
             this.notification.add("Không tìm thấy mã vạch hợp lệ trong ảnh này.", { type: "danger" });
-            await this.closeCamera();
         }
     }
 
     async closeCamera() {
         this.state.showCamera = false;
         this.state.cameraFallback = false;
-        if (this.html5Qrcode) {
+        this.state.cameraNeedsActivation = false;
+        this.state.cameraErrorMessage = "";
+        
+        const qrcode = this.html5Qrcode;
+        this.html5Qrcode = null; // Immediately nullify to prevent concurrent access
+        
+        if (qrcode) {
             try {
-                await this.html5Qrcode.stop();
+                await qrcode.stop();
             } catch (e) {}
             try {
-                this.html5Qrcode.clear();
+                qrcode.clear();
             } catch (e) {}
-            this.html5Qrcode = null;
         }
     }
 
@@ -383,6 +560,37 @@ export class BarcodeApp extends Component {
             target: 'current',
             context: { module: 'hlv_mobile_barcode' }
         });
+    }
+
+    async clearPicking() {
+        if (!confirm("Bạn có chắc muốn xoá toàn bộ số lượng đã quét để quét lại từ đầu không?")) {
+            return;
+        }
+        
+        this.state.isProcessing = true;
+        try {
+            const res = await rpc("/hlv_mobile_barcode/clear_quantities", {
+                picking_id: this.state.pickingId,
+            });
+            if (res.error) {
+                this.notification.add(res.error, { type: "danger" });
+            } else {
+                // Remove from localStorage opened pickings to ensure clean re-load
+                const storageKey = 'hlv_opened_pickings';
+                try {
+                    let opened = JSON.parse(localStorage.getItem(storageKey) || '[]');
+                    opened = opened.filter(id => id !== this.state.pickingId);
+                    localStorage.setItem(storageKey, JSON.stringify(opened));
+                } catch (e) {}
+                
+                this.notification.add("Đã làm mới số lượng", { type: "success" });
+                this.state.pickingRefreshTick += 1;
+            }
+        } catch (e) {
+            this.notification.add("Lỗi kết nối", { type: "danger" });
+        } finally {
+            this.state.isProcessing = false;
+        }
     }
 }
 

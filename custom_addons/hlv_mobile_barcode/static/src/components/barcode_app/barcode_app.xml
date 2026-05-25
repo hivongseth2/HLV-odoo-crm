@@ -2,15 +2,17 @@
 <templates xml:space="preserve">
     <t t-name="hlv_mobile_barcode.BarcodeApp">
         <div class="hlv-barcode-app" t-ref="app-container">
-            <div class="shipper-container">
-                <!-- Header -->
+            <!-- Hidden input for Ctrl+V and USB barcode scanner test integration -->
+            <input type="text" class="hidden-barcode-input" t-ref="hiddenInput" t-model="state.hiddenBarcode" t-on-keyup="onHiddenInputKeyup" style="position: absolute; opacity: 0; pointer-events: none; width: 1px; height: 1px; left: -9999px; z-index: -9999;"/>
+            <div t-attf-class="shipper-container #{state.currentView === 'main' ? 'main-view' : 'sub-view'}">
+                <!-- Header (hidden on main screen) -->
                 <div class="shipper-header" t-if="state.currentView !== 'main'">
                     <div class="header-title">
-                        <i class="fa fa-boxes"></i> Kho HLV
+                        <i class="fa fa-boxes"></i> Kho <t t-esc="state.warehouseCode || 'HLV'"/>
                     </div>
-                    <div style="display: flex; gap: 10px;">
-                        <div class="user-info" style="background: var(--primary-color); color: white;" t-on-click="openCamera">
-                            <i class="fa fa-camera"></i> Quét mã
+                    <div style="display: flex; gap: 8px;">
+                        <div class="user-info" t-if="state.currentView === 'picking' and state.pickingId" t-on-click="clearPicking" style="background: var(--danger-color); color: white;">
+                            <i class="fa fa-undo"></i> Làm lại
                         </div>
                         <div class="user-info" t-on-click="goToMain">
                             <i class="fa fa-home"></i> Trang chủ
@@ -18,9 +20,57 @@
                     </div>
                 </div>
 
+                <!-- Persistent Camera Section (Only when NOT on main home screen) -->
+                <t t-if="state.currentView !== 'main'">
+                    <div class="persistent-camera-wrapper">
+                        <!-- Error Banners -->
+                        <t t-if="state.cameraErrorMessage">
+                            <div t-if="state.cameraErrorMessage === 'HTTPS_REQUIRED'" class="camera-error-banner">
+                                <i class="fa fa-shield-alt"></i>
+                                <div>
+                                    <strong>Yêu cầu bảo mật (HTTPS):</strong> Trình duyệt bắt buộc kết nối HTTPS bảo mật để mở Camera trực tiếp. Vui lòng truy cập lại bằng địa chỉ <code>https://...</code> để Camera hoạt động và lưu quyền nhớ mãi mãi.
+                                </div>
+                            </div>
+                            <div t-if="state.cameraErrorMessage === 'PERMISSION_DENIED'" class="camera-error-banner">
+                                <i class="fa fa-exclamation-triangle"></i>
+                                <div>
+                                    <strong>Quyền Camera:</strong> Chưa được cấp quyền truy cập Camera.
+                                    <br/>• Nhấp nút <strong>Kích hoạt Camera</strong> bên dưới &gt; Chọn <strong>Cho phép (Allow)</strong>.
+                                    <br/>• <strong>Bắt buộc dùng HTTPS:</strong> Trình duyệt chỉ cho phép nhớ quyền Camera khi dùng địa chỉ <code>https://...</code>. Địa chỉ <code>http://...</code> sẽ luôn bắt hỏi lại mỗi lần tải trang.
+                                    <br/>• <strong>Trên iPhone (Safari):</strong> Nhấp vào chữ <code>aA</code> ở thanh địa chỉ &gt; chọn <strong>Cài đặt trang web (Website Settings)</strong> &gt; chuyển Camera thành <strong>Cho phép (Allow)</strong> để nhớ quyền vĩnh viễn.
+                                </div>
+                            </div>
+                        </t>
+
+                        <t t-if="state.cameraFallback">
+                            <div style="padding: 10px; width: 100%; text-align: center;">
+                                <input type="file" accept="image/*" capture="environment" id="cameraFileInput" style="display: none;" t-on-change="onFileSelected"/>
+                                <label for="cameraFileInput" class="btn btn-primary btn-sm">
+                                    <i class="fa fa-image"/> Chọn Ảnh / Chụp Ảnh
+                                </label>
+                            </div>
+                        </t>
+                        
+                        <div t-att-class="'camera-container ' + (state.cameraFallback ? 'd-none' : '')">
+                            <div id="reader"></div>
+                            
+                            <!-- Camera Activation Overlay -->
+                            <div t-if="state.cameraNeedsActivation" class="camera-activation-overlay" t-on-click="() => this.startPersistentCamera(true)">
+                                <div class="activation-btn">
+                                    <i class="fa fa-camera"></i> Kích hoạt Camera
+                                </div>
+                                <div class="activation-hint">
+                                    Nhấp để cấp quyền và mở Camera trực tiếp.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </t>
+
+                <!-- Content area — fills remaining space -->
                 <div class="hlv-barcode-content">
                     <!-- Main Screen -->
-                    <div t-if="state.currentView === 'main'">
+                    <div t-if="state.currentView === 'main'" class="scrollable-body" style="padding: 15px 4px;">
                         <div class="shipper-header">
                             <div class="header-title">
                                 <i class="fa fa-barcode"></i> Máy quét mã vạch
@@ -30,24 +80,57 @@
                             </div>
                         </div>
 
-                        <div class="card-box" style="text-align: center; padding-top: 40px; padding-bottom: 40px;" t-on-click="openCamera">
-                            <i class="fa fa-barcode" style="font-size: 80px; color: var(--primary-color); margin-bottom: 20px;"></i>
-                            <h3 style="color: var(--primary-color); margin-bottom: 10px;">Quét hoặc chạm</h3>
-                            <p class="text-muted" style="margin-bottom: 30px;">Dùng máy quét hoặc nhấn để mở Camera</p>
+                        <div class="home-grid-layout">
+                            <!-- Home View Camera Button Popup Trigger -->
+                            <div class="card-box" style="text-align: center; padding: 40px 15px; cursor: pointer; border: 2px dashed var(--primary-color); background: rgba(44, 62, 80, 0.02); transition: background-color 0.2s;" t-on-click="openPopupCamera">
+                                <i class="fa fa-camera" style="font-size: 60px; color: var(--primary-color); margin-bottom: 20px;"></i>
+                                <h3 style="color: var(--primary-color); margin-bottom: 8px; font-size: 1.15rem; font-weight: 700;">Quét mã vạch bằng Camera</h3>
+                                <p class="text-muted" style="margin-bottom: 20px; font-size: 0.9rem;">Nhấn vào đây để bật Camera và quét phiếu kho, sản phẩm hoặc vị trí</p>
+                                <div class="btn btn-primary btn-lg" style="border-radius: 30px; font-weight: bold; box-shadow: 0 4px 10px rgba(0,0,0,0.15);">
+                                    <i class="fa fa-qrcode" style="font-size: 1.05rem;"></i> Mở máy quét
+                                </div>
+                            </div>
+
+                            <!-- Manual Barcode Input Card -->
+                            <div class="card-box" style="padding: 15px;">
+                                <div style="font-weight: 700; margin-bottom: 10px; font-size: 0.92rem; color: var(--primary-color);"><i class="fa fa-keyboard"></i> Nhập mã thủ công</div>
+                                <div class="input-group-row" style="margin-bottom: 0;">
+                                    <input type="text" class="form-control" placeholder="Nhập mã sản phẩm, vị trí hoặc số phiếu..." t-model="state.manualBarcode" t-on-keyup="onManualBarcodeKeyup"/>
+                                    <button class="btn btn-primary" t-on-click="processManualBarcode" style="font-weight: bold;">
+                                        <i class="fa fa-arrow-right"></i> Đi tiếp
+                                    </button>
+                                </div>
+                            </div>
                             
-                            <div style="text-align: left; background: var(--light-bg); padding: 15px; border-radius: 8px;">
-                                <div style="margin-bottom: 8px;"><i class="fa fa-check-circle" style="color: var(--success-color); margin-right: 8px;"></i> Quét <strong>sản phẩm</strong> để định vị</div>
-                                <div style="margin-bottom: 8px;"><i class="fa fa-check-circle" style="color: var(--success-color); margin-right: 8px;"></i> Quét <strong>kiện hàng</strong> để mở</div>
-                                <div style="margin-bottom: 8px;"><i class="fa fa-check-circle" style="color: var(--success-color); margin-right: 8px;"></i> Quét <strong>phiếu kho</strong> để xử lý</div>
-                                <div><i class="fa fa-check-circle" style="color: var(--success-color); margin-right: 8px;"></i> Quét <strong>vị trí</strong> để chuyển hàng</div>
+                            <div class="card-box" style="padding: 15px; margin-bottom: 0;">
+                                <div style="font-weight: 700; margin-bottom: 12px; font-size: 0.92rem; color: var(--primary-color);">Hướng dẫn quét nhanh:</div>
+                                <div style="text-align: left; background: var(--light-bg); padding: 12px; border-radius: 8px; font-size: 0.88rem; line-height: 1.55;">
+                                    <div style="margin-bottom: 8px;"><i class="fa fa-check-circle" style="color: var(--success-color); margin-right: 6px;"></i> Quét <strong>sản phẩm</strong> để tra cứu và định vị</div>
+                                    <div style="margin-bottom: 8px;"><i class="fa fa-check-circle" style="color: var(--success-color); margin-right: 6px;"></i> Quét <strong>kiện hàng</strong> để mở chi tiết</div>
+                                    <div style="margin-bottom: 8px;"><i class="fa fa-check-circle" style="color: var(--success-color); margin-right: 6px;"></i> Quét <strong>phiếu kho</strong> để xử lý dịch chuyển</div>
+                                    <div><i class="fa fa-check-circle" style="color: var(--success-color); margin-right: 6px;"></i> Quét <strong>vị trí</strong> để chuyển hàng hàng loạt</div>
+                                </div>
+                            </div>
+
+                            <!-- Camera Permission Persistence Guide Card -->
+                            <div class="card-box" style="padding: 15px; margin-bottom: 0; border-left: 4px solid var(--primary-color); background: rgba(59, 130, 246, 0.05);">
+                                <div style="font-weight: 700; font-size: 0.9rem; color: var(--primary-color); display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
+                                    <i class="fa fa-key"></i> Mẹo: Chỉ cấp quyền Camera 1 lần duy nhất
+                                </div>
+                                <div style="text-align: left; font-size: 0.82rem; color: var(--text-color); line-height: 1.55;">
+                                    <div>Để tránh bị hỏi lại quyền Camera mỗi lần mở lại trang hoặc vào phiếu:</div>
+                                    <div style="margin-top: 6px; padding-left: 10px;">
+                                        <strong>1. Bắt buộc kết nối HTTPS:</strong> Trình duyệt di động (Chrome/Safari) chỉ cho phép lưu trạng thái cấp quyền cho địa chỉ bảo mật dạng <code>https://...</code>. Kết nối <code>http://...</code> thông thường sẽ luôn luôn hỏi lại vì lý do an ninh.
+                                        <br/><strong style="margin-top: 5px; display: inline-block;">2. Trên iPhone / Safari:</strong> Nhấp vào biểu tượng <code>aA</code> ở thanh địa chỉ web &gt; chọn <strong>Cài đặt trang web (Website Settings)</strong> &gt; thay đổi quyền Camera từ <strong>Hỏi (Ask)</strong> thành <strong>Cho phép (Allow)</strong>.
+                                        <br/><strong style="margin-top: 5px; display: inline-block;">3. Trên Android / Chrome:</strong> Không sử dụng chế độ ẩn danh (Incognito). Khi Chrome hiện hộp thoại cấp quyền, chọn "Luôn cho phép cho trang web này".
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
                     
-                    <!-- Picking View Placeholder -->
-                    <div t-elif="state.currentView === 'picking'">
-                        <PickingScanner pickingId="state.pickingId" onBack="() => this.goBack()" lastScannedProduct="state.lastScannedProduct" scannedLocationName="state.scannedLocationName"/>
-                    </div>
+                    <!-- Picking View -->
+                    <PickingScanner t-if="state.currentView === 'picking'" pickingId="state.pickingId" onBack="() => this.goBack()" lastScannedProduct="state.lastScannedProduct" scannedLocationName="state.scannedLocationName" refreshTick="state.pickingRefreshTick"/>
                     
                     <!-- Move Component -->
                     <LocationMove t-if="state.currentView === 'move'" productId="state.recordId" prefillLocationBarcode="state.prefillLocationBarcode" prefillLocationName="state.prefillLocationName" onBack="() => this.goBack()" registerScanner="(cb) => this.registerScanner(cb)"/>
@@ -60,42 +143,65 @@
                 </div>
             </div>
 
-            <!-- Camera Modal (Shipper Style) -->
-            <div t-if="state.showCamera" class="modal-overlay show">
-                <div class="modal-content">
-                    <!-- Header -->
+            <!-- POPUP CAMERA MODAL (Only active on Home Page) -->
+            <div class="modal-overlay" t-if="state.currentView === 'main' and state.showCameraPopup">
+                <div class="modal-content" style="max-width: 480px; width: 92%;">
                     <div class="modal-header">
-                        <div class="modal-title"><i class="fa fa-camera"></i> Máy quét mã vạch</div>
-                        <button class="modal-close" t-on-click="closeCamera"><i class="fa fa-times"></i></button>
+                        <div class="modal-title">
+                            <i class="fa fa-camera"></i> Máy quét mã vạch
+                        </div>
+                        <button class="modal-close" t-on-click="closePopupCamera">
+                            <i class="fa fa-times"></i>
+                        </button>
                     </div>
-                    
-                    <!-- Body -->
-                    <div class="modal-body" style="padding: 15px; background: #000; text-align: center;">
-                        <!-- Fallback UI when permission is denied -->
+                    <div class="modal-body" style="padding: 15px; display: flex; flex-direction: column; align-items: center; background: var(--light-bg);">
+                        
+                        <!-- Error Banners for Popup -->
+                        <t t-if="state.cameraErrorMessage">
+                            <div t-if="state.cameraErrorMessage === 'HTTPS_REQUIRED'" class="camera-error-banner" style="width: 100%; margin: 0 0 12px 0;">
+                                <i class="fa fa-shield-alt"></i>
+                                <div>
+                                    <strong>Yêu cầu bảo mật (HTTPS):</strong> Trình duyệt bắt buộc kết nối HTTPS bảo mật để mở Camera trực tiếp. Vui lòng truy cập lại bằng địa chỉ <code>https://...</code> để hệ thống ghi nhớ quyền cấp camera.
+                                </div>
+                            </div>
+                            <div t-if="state.cameraErrorMessage === 'PERMISSION_DENIED'" class="camera-error-banner" style="width: 100%; margin: 0 0 12px 0;">
+                                <i class="fa fa-exclamation-triangle"></i>
+                                <div>
+                                    <strong>Quyền Camera:</strong> Chưa được cấp quyền truy cập Camera.
+                                    <br/>• Nhấp nút <strong>Kích hoạt Camera</strong> bên dưới &gt; Chọn <strong>Cho phép (Allow)</strong>.
+                                    <br/>• <strong>Bắt buộc dùng HTTPS:</strong> Trình duyệt chỉ cho phép nhớ quyền Camera khi dùng địa chỉ <code>https://...</code>. Địa chỉ <code>http://...</code> sẽ luôn bắt hỏi lại mỗi lần tải trang.
+                                    <br/>• <strong>Trên iPhone (Safari):</strong> Nhấp vào chữ <code>aA</code> ở thanh địa chỉ &gt; chọn <strong>Cài đặt trang web (Website Settings)</strong> &gt; chuyển Camera thành <strong>Cho phép (Allow)</strong> để nhớ quyền vĩnh viễn.
+                                </div>
+                            </div>
+                        </t>
+
+                        <!-- Camera Fallback for Popup -->
                         <t t-if="state.cameraFallback">
-                            <div style="background: white; padding: 30px 15px; border-radius: 8px;">
-                                <i class="fa fa-camera-slash" style="font-size: 48px; color: var(--danger-color); margin-bottom: 15px;"/>
-                                <h5 style="font-weight: 600; margin-bottom: 8px; color: var(--primary-color);">Không thể truy cập camera</h5>
-                                <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 25px;">Trình duyệt chưa cấp quyền cho trang web này. Vui lòng cấp quyền hoặc tải ảnh lên.</p>
+                            <div style="padding: 20px 10px; width: 100%; text-align: center; background: white; border-radius: 8px; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm);">
+                                <i class="fa fa-camera-slash" style="font-size: 40px; color: var(--danger-color); margin-bottom: 12px;"/>
+                                <h5 style="font-weight: 600; margin-bottom: 8px; color: var(--primary-color);">Không thể sử dụng Live Camera</h5>
+                                <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 20px;">Vui lòng chụp hoặc tải ảnh chứa mã vạch lên để hệ thống nhận diện:</p>
                                 
-                                <input type="file" accept="image/*" capture="environment" id="cameraFileInput" style="display: none;" t-on-change="onFileSelected"/>
-                                <label for="cameraFileInput" class="btn btn-primary">
+                                <input type="file" accept="image/*" capture="environment" id="cameraFileInputPopup" style="display: none;" t-on-change="onFileSelected"/>
+                                <label for="cameraFileInputPopup" class="btn btn-primary">
                                     <i class="fa fa-image"/> Chọn Ảnh / Chụp Ảnh
                                 </label>
                             </div>
                         </t>
                         
-                        <!-- Live Camera Feed -->
-                        <div id="reader" style="width: 100%; border-radius: 8px; overflow: hidden;" t-att-class="state.cameraFallback ? 'd-none' : ''"></div>
-                    </div>
-
-                    <!-- Footer: Manual Barcode Input -->
-                    <div style="padding: 15px;">
-                        <div class="input-group-row" style="margin-bottom: 0;">
-                            <input type="text" class="form-control" t-model="state.manualBarcode" placeholder="Nhập mã thủ công..." t-on-keyup="onManualBarcodeKeyup"/>
-                            <button class="btn btn-secondary" t-on-click="processManualBarcode">
-                                <i class="fa fa-arrow-right"></i>
-                            </button>
+                        <!-- Camera Feed inside Popup -->
+                        <div t-att-class="state.cameraFallback ? 'd-none' : ''" style="width: 100%; background: #000; overflow: hidden; position: relative; min-height: 240px; border-radius: 8px; box-shadow: var(--shadow-md);">
+                            <div id="reader" style="width: 100%;"></div>
+                            
+                            <!-- Camera Activation Overlay -->
+                            <div t-if="state.cameraNeedsActivation" class="camera-activation-overlay" t-on-click="() => this.startPersistentCamera(true)">
+                                <div class="activation-btn">
+                                    <i class="fa fa-camera"></i> Kích hoạt Camera
+                                </div>
+                                <div class="activation-hint">
+                                    Nhấp để cấp quyền và mở Camera trực tiếp.
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -1,16 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
     <t t-name="hlv_mobile_barcode.LocationMove">
-        <div>
-            <div class="shipper-container">
-                <!-- Header -->
-                <div class="shipper-header">
-                    <div class="header-title">
-                        <i class="fa fa-exchange-alt"></i> Chuyển vị trí
-                    </div>
-                </div>
-                
-                <div class="card-box" style="margin-top: 15px;">
+        <div class="subview-root">
+            <div class="subview-scroll-area">
+                <div class="card-box" style="margin-top: 10px;">
                     <div class="step-header">
                         <div class="step-icon">
                             <i class="fa fa-box"></i>
@@ -31,23 +24,6 @@
                                 : <span style="color: var(--primary-color); font-weight: 700;"><t t-esc="state.sourceLocationName || state.sourceLocationBarcode"/></span>
                             </t>
                         </label>
-                        
-                        <!-- Inline Camera -->
-                        <div t-if="state.showLocalCamera" class="camera-section active">
-                            <div id="location-move-camera-reader" class="camera-reader"></div>
-                            <div class="camera-controls" style="padding: 10px; background: var(--light-bg); border-top: 1px solid var(--border-color); text-align: center;">
-                                <button type="button" class="btn btn-secondary btn-sm" t-on-click="closeLocalCamera">
-                                    <i class="fa fa-times me-1"/> Đóng Camera
-                                </button>
-                            </div>
-                        </div>
-
-                        <div class="input-group-row">
-                            <input type="text" class="form-control" t-model="state.locationInput" t-on-keyup="onLocationInputKeyup" placeholder="Quét hoặc nhập mã..."/>
-                            <button class="btn btn-primary" type="button" t-on-click="openLocalCamera">
-                                <i class="fa fa-camera"/>
-                            </button>
-                        </div>
                     </div>
                     
                     <div style="margin-bottom: 20px;">
@@ -64,16 +40,17 @@
                         <div style="font-size: 0.85rem; margin-top: 5px; opacity: 0.9;">Vui lòng quét mã trên bằng công cụ Quét Phiếu khi đến vị trí đích.</div>
                     </div>
                 </div>
-                
-                <div style="display: flex; gap: 15px; margin-top: auto; padding-top: 20px;">
-                    <button class="btn btn-outline btn-lg" style="flex: 1;" t-on-click="props.onBack" t-att-disabled="state.loading">
-                        <i class="fa fa-times"/> Hủy
-                    </button>
-                    <button class="btn btn-primary btn-lg" style="flex: 1;" t-on-click="doMove" t-att-disabled="state.loading">
-                        <t t-if="!state.loading"><i class="fa fa-check"/> Chuyển</t>
-                        <t t-else=""><i class="fa fa-spin fa-spinner"/> Đang xử lý</t>
-                    </button>
-                </div>
+            </div>
+            
+            <!-- Fixed Footer -->
+            <div class="subview-footer">
+                <button class="btn btn-outline btn-lg" style="flex: 1;" t-on-click="props.onBack" t-att-disabled="state.loading">
+                    <i class="fa fa-times"/> Hủy
+                </button>
+                <button class="btn btn-primary btn-lg" style="flex: 1;" t-on-click="doMove" t-att-disabled="state.loading">
+                    <t t-if="!state.loading"><i class="fa fa-check"/> Chuyển</t>
+                    <t t-else=""><i class="fa fa-spin fa-spinner"/> Đang xử lý</t>
+                </button>
             </div>
         </div>
     </t>
