@@ -134,8 +134,26 @@ class MeinvoiceInvoice(models.Model):
             len(new_series) >= 5 and new_series[4].upper() == 'M'
         )
 
+        # Lưu lại invoice_data đã patched để invoice_data_json luôn phản ánh đúng
+        # những gì thực sự được gửi lên meInvoice
+        self.write({'invoice_data_json': json.dumps(invoice_data, ensure_ascii=False)})
+
         config = self.env['amis.callback.config'].sudo().ensure_singleton()
         results = config.push_meinvoice_invoice([invoice_data])
+
+        # Nếu DuplicateInvoiceRefID → tự sinh RefID mới và retry 1 lần
+        if results and isinstance(results, list):
+            first_check = results[0] if results else {}
+            if (first_check.get('ErrorCode') or '') == 'DuplicateInvoiceRefID':
+                new_ref_id = str(uuid.uuid4())
+                invoice_data['RefID'] = new_ref_id
+                self.write({'invoice_data_json': json.dumps(invoice_data, ensure_ascii=False)})
+                if self.sale_order_id:
+                    self.sale_order_id.sudo().write({'misa_meinvoice_ref_id': new_ref_id})
+                _logger.info(
+                    'meInvoice DuplicateInvoiceRefID — auto-retry với RefID mới: %s', new_ref_id,
+                )
+                results = config.push_meinvoice_invoice([invoice_data])
 
         transaction_id = ''
         inv_no = ''
@@ -157,14 +175,6 @@ class MeinvoiceInvoice(models.Model):
             err_code = first.get('ErrorCode') or ''
             if err_code:
                 err_desc = first.get('DescriptionErrorCode') or ''
-                if err_code == 'DuplicateInvoiceRefID':
-                    raise UserError(
-                        'meInvoice: RefID hóa đơn bị trùng (%s).\n\n'
-                        'Hóa đơn %s %s đã tồn tại trên hệ thống với TransactionID: %s.\n\n'
-                        'Nếu bạn muốn gửi lại sau khi điều chỉnh/hủy, '
-                        'hãy nhấn nút "Gửi lại" (biểu tượng undo) để đặt hóa đơn về Nháp với RefID mới.'
-                        % (err_desc, inv_series_result or '', inv_no, transaction_id)
-                    )
                 raise UserError('meInvoice phát hành lỗi: %s — %s' % (err_code, err_desc))
 
         # Nếu InvCode trả về ngay → CQT đã cấp mã, không cần chờ
