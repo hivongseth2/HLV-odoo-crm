@@ -256,6 +256,74 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
 .msg-compose-file{display:inline-flex;align-items:center;gap:6px;padding:3px 8px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:4px;font-size:.72rem;color:#4b5563}
 .msg-compose-file button{border:none;background:transparent;color:#dc2626;padding:0;line-height:1}
 #report-modal .rmod-card{background:#fff;max-width:440px;width:90%;border-radius:8px;padding:24px;box-shadow:0 8px 24px rgba(0,0,0,.12)}
+/* ========================================================
+   DRAWER HEADER — remove solid blue, premium white panel
+   ======================================================== */
+#drawer .bg-primary{background:#fff!important}
+#drawer .bg-primary.text-white{color:#0f172a!important}
+#drawer .bg-primary *{color:#0f172a!important}
+#drawer #dr-title{font-size:1rem;font-weight:700;letter-spacing:-.02em;color:#0f172a!important}
+#drawer .bg-primary .btn-light{background:#f1f5f9!important;border:1px solid #e2e8f0!important;color:#475569!important}
+#drawer .bg-primary .btn-light:hover{background:#e2e8f0!important}
+/* Drawer footer strip */
+#dr-footer{background:#f8fafc!important;border-color:#e2e8f0!important;font-size:.88rem;color:#374151}
+/* ========================================================
+   TABLE — strip yellow/green Bootstrap contextual colors
+   ======================================================== */
+.table-lines tr.table-warning,.table-lines tr.table-success{
+  --bs-table-bg:#fff;--bs-table-color:#0f172a;--bs-table-striped-bg:#fff;background-color:#fff!important}
+.table-lines tr.table-warning>*,.table-lines tr.table-success>*{
+  background-color:#fff!important;color:#0f172a}
+/* ========================================================
+   TABLE — remove all vertical borders, hairline rows only
+   ======================================================== */
+.table-lines.table-bordered{border:0!important}
+.table-lines.table-bordered>:not(caption)>*{border-width:0!important}
+.table-lines>:not(caption)>*>*{
+  border-bottom:1px solid #e2e8f0!important;border-top:0!important;
+  border-left:0!important;border-right:0!important}
+.table-lines>:not(:first-child){border-top:0!important}
+/* ========================================================
+   TABLE HEADER — clean SaaS-style <thead>
+   ======================================================== */
+.table-lines thead.table-light>tr>th,.table-lines .table-light th{
+  background:#f8fafc!important;color:#64748b!important;
+  font-size:.72rem!important;text-transform:uppercase!important;
+  font-weight:600!important;letter-spacing:.5px!important;
+  border-bottom:1px solid #e2e8f0!important}
+/* ========================================================
+   TABLE CELLS — Tailwind-calibrated semantic colors
+   ======================================================== */
+.table-lines td{color:#0f172a}
+/* Subtotal col (text-success fw-bold) → emerald-600 */
+.table-lines td.text-success{color:#059669!important}
+/* VAT col (text-warning) → amber-700 */
+.table-lines td.text-warning{color:#b45309!important}
+/* Total+VAT col (text-primary fw-bold) → indigo-600 */
+.table-lines td.text-primary{color:#4f46e5!important}
+/* Delivered qty (cell-delivered) → indigo-500 */
+.table-lines .cell-delivered{color:#6366f1!important}
+/* Stock ok → emerald; zero → rose */
+.table-lines .cell-stock-ok{color:#059669!important}
+.table-lines .cell-stock-zero{color:#e11d48!important}
+/* Shortage → rose-600 */
+.table-lines .cell-shortage{color:#e11d48!important;font-weight:700}
+/* Packed full → emerald; partial → sky */
+.table-lines .cell-packed-full{color:#059669!important}
+.table-lines .cell-packed-partial{color:#0284c7!important}
+/* Muted text in table */
+.table-lines td.text-muted,.table-lines .text-muted.small{color:#64748b!important}
+/* ========================================================
+   MISC — count badge, alert strip, transfer table
+   ======================================================== */
+#count-info{background:#1e293b!important;font-size:.72rem!important;padding:5px 12px!important;font-weight:500!important;border-radius:20px!important}
+.alert-warning{background:rgba(245,158,11,.05)!important;border:1px solid #fde68a!important;color:#92400e!important}
+.alert-warning h6{color:#92400e!important;font-size:.75rem}
+.table-lines .badge.bg-warning.text-dark{background:rgba(245,158,11,.12)!important;color:#b45309!important;border:1px solid #fde68a!important;font-weight:600}
+.table-lines .badge.bg-info.bg-opacity-25.text-dark{background:rgba(14,165,233,.1)!important;color:#075985!important;border:1px solid #bae6fd!important}
+/* Second table (transfer suggestions) */
+.table-bordered:not(.table-lines){border:1px solid #e2e8f0!important}
+.table-bordered:not(.table-lines) thead.table-light th{background:#f8fafc!important;color:#64748b!important;font-size:.72rem!important;text-transform:uppercase!important;font-weight:600!important;border-color:#e2e8f0!important}
 </style>
 </head><body>
 <div id="loading" class="loading-overlay d-none"><div class="spinner-border text-primary"></div></div>
