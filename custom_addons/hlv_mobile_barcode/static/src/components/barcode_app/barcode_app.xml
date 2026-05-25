@@ -28,15 +28,16 @@
                             <div t-if="state.cameraErrorMessage === 'HTTPS_REQUIRED'" class="camera-error-banner">
                                 <i class="fa fa-shield-alt"></i>
                                 <div>
-                                    <strong>Yêu cầu bảo mật (HTTPS):</strong> Trình duyệt yêu cầu kết nối HTTPS để mở Camera trực tiếp. Vui lòng truy cập lại qua địa chỉ <code>https://...</code> hoặc dùng tính năng Chọn ảnh/Chụp ảnh bên dưới.
+                                    <strong>Yêu cầu bảo mật (HTTPS):</strong> Trình duyệt bắt buộc kết nối HTTPS bảo mật để mở Camera trực tiếp. Vui lòng truy cập lại bằng địa chỉ <code>https://...</code> để Camera hoạt động và lưu quyền nhớ mãi mãi.
                                 </div>
                             </div>
                             <div t-if="state.cameraErrorMessage === 'PERMISSION_DENIED'" class="camera-error-banner">
                                 <i class="fa fa-exclamation-triangle"></i>
                                 <div>
-                                    <strong>Quyền Camera:</strong> Trình duyệt không thể truy cập camera.
-                                    <br/>• Hãy nhấp nút <strong>Kích hoạt Camera</strong> dưới đây để cấp quyền.
-                                    <br/>• Đảm bảo bạn đã cho phép Camera cho ứng dụng <strong>Chrome</strong> trong <strong>Cài đặt iPhone</strong> (Cài đặt &gt; Chrome &gt; Camera).
+                                    <strong>Quyền Camera:</strong> Chưa được cấp quyền truy cập Camera.
+                                    <br/>• Nhấp nút <strong>Kích hoạt Camera</strong> bên dưới &gt; Chọn <strong>Cho phép (Allow)</strong>.
+                                    <br/>• <strong>Bắt buộc dùng HTTPS:</strong> Trình duyệt chỉ cho phép nhớ quyền Camera khi dùng địa chỉ <code>https://...</code>. Địa chỉ <code>http://...</code> sẽ luôn bắt hỏi lại mỗi lần tải trang.
+                                    <br/>• <strong>Trên iPhone (Safari):</strong> Nhấp vào chữ <code>aA</code> ở thanh địa chỉ &gt; chọn <strong>Cài đặt trang web (Website Settings)</strong> &gt; chuyển Camera thành <strong>Cho phép (Allow)</strong> để nhớ quyền vĩnh viễn.
                                 </div>
                             </div>
                         </t>
@@ -110,6 +111,21 @@
                                     <div><i class="fa fa-check-circle" style="color: var(--success-color); margin-right: 6px;"></i> Quét <strong>vị trí</strong> để chuyển hàng hàng loạt</div>
                                 </div>
                             </div>
+
+                            <!-- Camera Permission Persistence Guide Card -->
+                            <div class="card-box" style="padding: 15px; margin-bottom: 0; border-left: 4px solid var(--primary-color); background: rgba(59, 130, 246, 0.05);">
+                                <div style="font-weight: 700; font-size: 0.9rem; color: var(--primary-color); display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
+                                    <i class="fa fa-key"></i> Mẹo: Chỉ cấp quyền Camera 1 lần duy nhất
+                                </div>
+                                <div style="text-align: left; font-size: 0.82rem; color: var(--text-color); line-height: 1.55;">
+                                    <div>Để tránh bị hỏi lại quyền Camera mỗi lần mở lại trang hoặc vào phiếu:</div>
+                                    <div style="margin-top: 6px; padding-left: 10px;">
+                                        <strong>1. Bắt buộc kết nối HTTPS:</strong> Trình duyệt di động (Chrome/Safari) chỉ cho phép lưu trạng thái cấp quyền cho địa chỉ bảo mật dạng <code>https://...</code>. Kết nối <code>http://...</code> thông thường sẽ luôn luôn hỏi lại vì lý do an ninh.
+                                        <br/><strong style="margin-top: 5px; display: inline-block;">2. Trên iPhone / Safari:</strong> Nhấp vào biểu tượng <code>aA</code> ở thanh địa chỉ web &gt; chọn <strong>Cài đặt trang web (Website Settings)</strong> &gt; thay đổi quyền Camera từ <strong>Hỏi (Ask)</strong> thành <strong>Cho phép (Allow)</strong>.
+                                        <br/><strong style="margin-top: 5px; display: inline-block;">3. Trên Android / Chrome:</strong> Không sử dụng chế độ ẩn danh (Incognito). Khi Chrome hiện hộp thoại cấp quyền, chọn "Luôn cho phép cho trang web này".
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     
@@ -145,15 +161,16 @@
                             <div t-if="state.cameraErrorMessage === 'HTTPS_REQUIRED'" class="camera-error-banner" style="width: 100%; margin: 0 0 12px 0;">
                                 <i class="fa fa-shield-alt"></i>
                                 <div>
-                                    <strong>Yêu cầu bảo mật (HTTPS):</strong> Trình duyệt yêu cầu kết nối HTTPS để mở Camera trực tiếp. Vui lòng truy cập lại qua địa chỉ <code>https://...</code> hoặc dùng tính năng Chọn ảnh/Chụp ảnh bên dưới.
+                                    <strong>Yêu cầu bảo mật (HTTPS):</strong> Trình duyệt bắt buộc kết nối HTTPS bảo mật để mở Camera trực tiếp. Vui lòng truy cập lại bằng địa chỉ <code>https://...</code> để hệ thống ghi nhớ quyền cấp camera.
                                 </div>
                             </div>
                             <div t-if="state.cameraErrorMessage === 'PERMISSION_DENIED'" class="camera-error-banner" style="width: 100%; margin: 0 0 12px 0;">
                                 <i class="fa fa-exclamation-triangle"></i>
                                 <div>
-                                    <strong>Quyền Camera:</strong> Trình duyệt không thể truy cập camera.
-                                    <br/>• Hãy nhấp nút <strong>Kích hoạt Camera</strong> dưới đây để cấp quyền.
-                                    <br/>• Đảm bảo bạn đã cho phép Camera cho ứng dụng <strong>Chrome</strong> trong <strong>Cài đặt iPhone</strong> (Cài đặt &gt; Chrome &gt; Camera).
+                                    <strong>Quyền Camera:</strong> Chưa được cấp quyền truy cập Camera.
+                                    <br/>• Nhấp nút <strong>Kích hoạt Camera</strong> bên dưới &gt; Chọn <strong>Cho phép (Allow)</strong>.
+                                    <br/>• <strong>Bắt buộc dùng HTTPS:</strong> Trình duyệt chỉ cho phép nhớ quyền Camera khi dùng địa chỉ <code>https://...</code>. Địa chỉ <code>http://...</code> sẽ luôn bắt hỏi lại mỗi lần tải trang.
+                                    <br/>• <strong>Trên iPhone (Safari):</strong> Nhấp vào chữ <code>aA</code> ở thanh địa chỉ &gt; chọn <strong>Cài đặt trang web (Website Settings)</strong> &gt; chuyển Camera thành <strong>Cho phép (Allow)</strong> để nhớ quyền vĩnh viễn.
                                 </div>
                             </div>
                         </t>
