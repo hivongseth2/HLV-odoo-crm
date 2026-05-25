@@ -91,9 +91,24 @@ export class BarcodeApp extends Component {
 
         this.boundKeepFocus = this.keepFocusOnHiddenInput.bind(this);
         
+        this.boundPreventCopy = (e) => {
+            e.preventDefault();
+            this.notification.add("Không được phép sao chép thông tin trên trang này!", { type: "warning" });
+        };
+        
+        this.boundPreventContextMenu = (e) => {
+            const active = e.target;
+            if (active && ['INPUT', 'TEXTAREA'].includes(active.tagName) && !active.classList.contains('hidden-barcode-input')) {
+                return;
+            }
+            e.preventDefault();
+        };
+        
         onMounted(() => {
             document.addEventListener('keydown', this.handleKeyDown.bind(this));
             document.addEventListener('click', this.boundKeepFocus);
+            document.addEventListener('copy', this.boundPreventCopy);
+            document.addEventListener('contextmenu', this.boundPreventContextMenu);
             
             this.focusInterval = setInterval(this.boundKeepFocus, 2000);
             setTimeout(this.boundKeepFocus, 500);
@@ -105,6 +120,8 @@ export class BarcodeApp extends Component {
 
         onWillUnmount(() => {
             document.removeEventListener('click', this.boundKeepFocus);
+            document.removeEventListener('copy', this.boundPreventCopy);
+            document.removeEventListener('contextmenu', this.boundPreventContextMenu);
             if (this.focusInterval) {
                 clearInterval(this.focusInterval);
             }

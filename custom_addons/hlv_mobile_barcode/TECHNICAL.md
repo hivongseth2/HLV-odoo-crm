@@ -37,6 +37,10 @@ hlv_mobile_barcode/
 - **Bố cục 1 cột tối ưu hợp nhất (Unified 1-Column Layout)**: Giữ nguyên giao diện 1 cột đứng thẳng cực kỳ gọn gàng và đồng bộ cho cả Mobile lẫn Desktop. Dải camera nằm ngang được cấu hình cao `160px` trên Mobile.
 - **Desktop Camera Expander**: Trên Desktop (màn hình ≥ 992px), camera container tự động mở rộng tối đa `100%` chiều ngang (bám dọc theo container 1200px) và nâng chiều cao lên **`240px`** giúp tăng diện tích quan sát và quét mã cực kỳ trực quan, lấp đầy 2 bên màn hình như yêu cầu.
 - **Invisible Keyboard/Scanner Input (Tính năng ẩn)**: Tích hợp một ô input ẩn hoàn toàn nhận tiêu điểm (`focus`) tự động thông qua sự kiện `click` và cơ chế kiểm tra định kỳ (ngoại trừ khi người dùng focus các ô nhập liệu số lượng thực tế khác). Cho phép nhà phát triển hoặc người kiểm thử dán mã vạch (`Ctrl + V`) hoặc quét bằng súng quét USB cầm tay trực tiếp từ bàn phím ở bất kỳ màn hình nào rồi nhấn `Enter` để xử lý và tăng số lượng sản phẩm ngay lập tức (không cần hiển thị ô nhập liệu ra màn hình để tránh người dùng đi tắt dễ sai).
+- **Anti-Cheat Copy Blocker (Bảo mật 2 lớp chống đi tắt)**: Ngăn chặn tuyệt đối việc người dùng bôi đen, sao chép mã vạch hiển thị trên giao diện rồi dán (Ctrl+V) để "hoàn thành phiếu khống":
+  * *CSS Layer*: Thiết lập `user-select: none !important` trên `.hlv-barcode-app` (ngoại trừ các ô input thực tế có `user-select: text`) để triệt tiêu khả năng bôi đen hay giữ ngón tay lựa chọn văn bản.
+  * *JS Event Layer*: Chặn sự kiện sao chép `copy` trên toàn ứng dụng và hiển thị cảnh báo *"Không được phép sao chép thông tin trên trang này!"*.
+  * *Context Menu Layer*: Chặn menu chuột phải `contextmenu` trên máy tính tại các vùng tĩnh để ngăn việc kích hoạt menu Copy.
 - **Dynamic Warehouse Header**: API tự động trả về `warehouse_code` thực tế của phiếu kho (`picking.picking_type_id.warehouse_id.code` hoặc `location.warehouse_id.code`), hiển thị động lên Header dạng "Kho KBC", "Kho TSN"... thay vì "Kho HLV" tĩnh.
 
 ## API / Controllers
