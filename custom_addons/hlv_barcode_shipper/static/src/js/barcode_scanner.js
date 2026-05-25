@@ -48,6 +48,11 @@ class BarcodeShipper {
         this._photoCameraStream = null;
         this._photoBlob = null;
         this._photoPickingIds = [];
+        this._capturedPhotos = [];      // [{pickingId, pickingName, blob}]
+        this._photoNameToId = {};       // {so_name(origin) → picking_id}
+        this._photoDetectedPickingId = null;
+        this._photoQrLoopTimer = null;
+        this._photoQrDetectedAt = 0;    // timestamp để debounce reset detected ID
 
         // ---- Settings ----
         this.settings = {
@@ -188,10 +193,13 @@ class BarcodeShipper {
         });
         document.getElementById('photo-retake-btn')?.addEventListener('click', () => {
             this._photoBlob = null;
+            this._photoDetectedPickingId = null;
             document.getElementById('photo-preview-section').style.display = 'none';
             document.getElementById('photo-send-btn').style.display = 'none';
             document.getElementById('photo-open-section').style.display = 'block';
+            this.clearMessage('photo-result');
         });
+        document.getElementById('photo-confirm-btn')?.addEventListener('click', () => this._confirmCapturedPhoto());
         document.getElementById('photo-file-input')?.addEventListener('change', (e) => {
             const file = e.target.files && e.target.files[0];
             if (file) this._handlePhotoFile(file);
@@ -1064,7 +1072,18 @@ class BarcodeShipper {
         // Store picking IDs for photo step
         this._photoPickingIds = pickingIds;
 
-        // Go to photo capture step instead of completing directly
+        // Build so_name→id map cho QR matching (QR trên phiếu = tên sale order)
+        this._photoNameToId = {};
+        pickingIds.forEach(id => {
+            const soName = this.pickingDataMap[id]?.so_name;
+            if (soName && soName !== 'Khác') this._photoNameToId[soName] = id;
+        });
+
+        // Reset captured photos list
+        this._capturedPhotos = [];
+        this._photoDetectedPickingId = null;
+
+        // Go to photo capture step
         this._photoBlob = null;
         this._resetPhotoUI();
         this.showDeliverStep('step-photo');
@@ -1073,19 +1092,27 @@ class BarcodeShipper {
     _resetPhotoUI() {
         this._stopPhotoCamera();
         this._photoBlob = null;
+        this._photoDetectedPickingId = null;
 
         const openSection = document.getElementById('photo-open-section');
         const previewSection = document.getElementById('photo-preview-section');
         const cameraSection = document.getElementById('photo-camera-section');
         const sendBtn = document.getElementById('photo-send-btn');
         const fileInput = document.getElementById('photo-file-input');
+        const qrResult = document.getElementById('photo-qr-result');
+        const capturedList = document.getElementById('photo-captured-list');
 
         if (openSection) openSection.style.display = 'block';
         if (previewSection) previewSection.style.display = 'none';
         if (cameraSection) cameraSection.style.display = 'none';
-        if (sendBtn) { sendBtn.style.display = 'none'; sendBtn.disabled = false; }
+        if (sendBtn) { sendBtn.style.display = 'none'; sendBtn.disabled = false; sendBtn.innerHTML = '<i class="fa fa-paper-plane"></i> Gửi ảnh &amp; Hoàn tất'; }
         if (fileInput) fileInput.value = '';
+        if (qrResult) qrResult.innerHTML = '';
+        if (capturedList) capturedList.innerHTML = '';
         this.clearMessage('photo-result');
+
+        this._updatePhotoProgress();
+        this._renderPendingList();
     }
 
     async _startPhotoCamera() {
@@ -1106,6 +1133,17 @@ class BarcodeShipper {
             }
             document.getElementById('photo-camera-section').style.display = 'block';
             document.getElementById('photo-open-section').style.display = 'none';
+            // Với nhiều đơn: disable capture cho đến khi QR được nhận diện
+            const isMulti = this._photoPickingIds && this._photoPickingIds.length > 1;
+            const captureBtn = document.getElementById('photo-capture-btn');
+            if (captureBtn) {
+                captureBtn.disabled = isMulti;
+                captureBtn.innerHTML = isMulti
+                    ? '<i class="fa fa-qrcode"></i> Hướng vào mã QR phiếu bàn giao...'
+                    : '<i class="fa fa-circle"></i> Chụp ảnh';
+            }
+            // Bắt đầu scan QR trên camera photo
+            this._startPhotoQrLoop();
         } catch (err) {
             console.error('[Photo] Camera error:', err);
             this.showMessage('photo-result', 'Không thể mở camera. Vui lòng chọn ảnh từ thư viện.', 'danger');
@@ -1113,6 +1151,11 @@ class BarcodeShipper {
     }
 
     _stopPhotoCamera() {
+        // Dừng QR detection loop
+        if (this._photoQrLoopTimer) {
+            clearTimeout(this._photoQrLoopTimer);
+            this._photoQrLoopTimer = null;
+        }
         if (this._photoCameraStream) {
             this._photoCameraStream.getTracks().forEach(t => t.stop());
             this._photoCameraStream = null;
@@ -1121,6 +1164,8 @@ class BarcodeShipper {
         if (video) video.srcObject = null;
         const cameraSection = document.getElementById('photo-camera-section');
         if (cameraSection) cameraSection.style.display = 'none';
+        const qrOverlay = document.getElementById('photo-qr-overlay');
+        if (qrOverlay) qrOverlay.style.display = 'none';
     }
 
     _capturePhoto() {
@@ -1133,15 +1178,51 @@ class BarcodeShipper {
         const ctx = canvas.getContext('2d');
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-        canvas.toBlob((blob) => {
+        // Giữ lại detected picking từ live QR scan trước khi stop camera
+        const liveDetectedId = this._photoDetectedPickingId;
+
+        canvas.toBlob(async (blob) => {
             this._photoBlob = blob;
             const url = URL.createObjectURL(blob);
             const img = document.getElementById('photo-preview-img');
             if (img) img.src = url;
+
+            // Dùng live-detected ID, hoặc re-detect từ canvas nếu chưa có
+            let detectedId = liveDetectedId;
+            if (!detectedId && this._barcodeDetector && this._photoNameToId && Object.keys(this._photoNameToId).length > 0) {
+                try {
+                    const barcodes = await this._barcodeDetector.detect(canvas);
+                    for (const b of barcodes) {
+                        const pid = this._photoNameToId[b.rawValue];
+                        if (pid !== undefined) { detectedId = pid; break; }
+                    }
+                } catch (e) { /* ignore */ }
+            }
+            this._photoDetectedPickingId = detectedId;
+
+            // Hiển kết quả QR
+            const qrResult = document.getElementById('photo-qr-result');
+            if (qrResult) {
+                if (detectedId) {
+                    const pickingName = this.pickingDataMap[detectedId]?.info?.name || '';
+                    const soName = this.pickingDataMap[detectedId]?.so_name || '';
+                    qrResult.innerHTML = `<div style="background:#e8f5e9;color:#2e7d32;padding:6px 12px;border-radius:6px;font-size:13px;font-weight:600;"><i class="fa fa-check-circle"></i> Phiếu: ${pickingName}${soName ? ` (${soName})` : ''}</div>`;
+                    if (img) img.style.borderColor = 'var(--success-color)';
+                } else if (Object.keys(this._photoNameToId || {}).length > 0) {
+                    // Nhiều đơn nhưng không detect được QR — lỗi
+                    qrResult.innerHTML = `<div style="background:#ffebee;color:#c62828;padding:6px 12px;border-radius:6px;font-size:13px;"><i class="fa fa-times-circle"></i> Không nhận diện được mã QR. Vui lòng chụp lại.</div>`;
+                    if (img) img.style.borderColor = '#e53935';
+                } else {
+                    qrResult.innerHTML = '';
+                    if (img) img.style.borderColor = 'var(--success-color)';
+                }
+            }
+
             document.getElementById('photo-preview-section').style.display = 'block';
-            document.getElementById('photo-send-btn').style.display = 'flex';
             this._stopPhotoCamera();
             document.getElementById('photo-open-section').style.display = 'none';
+            this._renderCapturedList();
+            this._showPhotoPreviewButtons();
         }, 'image/jpeg', 0.85);
     }
 
@@ -1150,44 +1231,81 @@ class BarcodeShipper {
         this._photoBlob = file;
         const url = URL.createObjectURL(file);
         const img = document.getElementById('photo-preview-img');
-        if (img) img.src = url;
+        if (img) {
+            img.src = url;
+            img.onload = async () => {
+                this._photoDetectedPickingId = null;
+                // Detect QR từ file ảnh
+                if (this._barcodeDetector && this._photoNameToId && Object.keys(this._photoNameToId).length > 0) {
+                    try {
+                        const barcodes = await this._barcodeDetector.detect(img);
+                        for (const b of barcodes) {
+                            const pid = this._photoNameToId[b.rawValue];
+                            if (pid !== undefined) { this._photoDetectedPickingId = pid; break; }
+                        }
+                    } catch (e) { /* ignore */ }
+                }
+                const qrResult = document.getElementById('photo-qr-result');
+                if (qrResult) {
+                    if (this._photoDetectedPickingId) {
+                        const name = this.pickingDataMap[this._photoDetectedPickingId]?.info?.name || '';
+                        qrResult.innerHTML = `<div style="background:#e8f5e9;color:#2e7d32;padding:6px 12px;border-radius:6px;font-size:13px;font-weight:600;"><i class="fa fa-check-circle"></i> Nhận diện: ${name}</div>`;
+                        if (img) img.style.borderColor = 'var(--success-color)';
+                    } else if (Object.keys(this._photoNameToId || {}).length > 0) {
+                        qrResult.innerHTML = `<div style="background:#fff3e0;color:#e65100;padding:6px 12px;border-radius:6px;font-size:13px;"><i class="fa fa-exclamation-triangle"></i> Không nhận diện mã QR</div>`;
+                        if (img) img.style.borderColor = '#ffa726';
+                    }
+                }
+                this._renderCapturedList();
+                this._showPhotoPreviewButtons();
+            };
+        }
         document.getElementById('photo-preview-section').style.display = 'block';
-        document.getElementById('photo-send-btn').style.display = 'flex';
         document.getElementById('photo-open-section').style.display = 'none';
         this._stopPhotoCamera();
     }
 
     async sendPhotoAndComplete() {
-        if (!this._photoBlob || !this._photoPickingIds || this._photoPickingIds.length === 0) return;
+        // Build danh sách ảnh cần upload
+        const photosToUpload = [];
+        if (this._capturedPhotos && this._capturedPhotos.length > 0) {
+            photosToUpload.push(...this._capturedPhotos);
+        } else if (this._photoBlob) {
+            photosToUpload.push({ pickingId: null, pickingName: 'Tất cả', blob: this._photoBlob });
+        }
+        if (photosToUpload.length === 0 || !this._photoPickingIds || this._photoPickingIds.length === 0) return;
 
         const sendBtn = document.getElementById('photo-send-btn');
-        if (sendBtn) { sendBtn.disabled = true; sendBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Đang gửi...'; }
-        this.showMessage('photo-result', 'Đang tải ảnh lên...', 'warning');
+        if (sendBtn) {
+            sendBtn.disabled = true;
+            sendBtn.innerHTML = `<i class="fa fa-spinner fa-spin"></i> Đang gửi ${photosToUpload.length} ảnh...`;
+        }
+        this.showMessage('photo-result', `Đang tải ${photosToUpload.length} ảnh lên...`, 'warning');
 
         try {
-            const formData = new FormData();
-            formData.append('picking_ids', JSON.stringify(this._photoPickingIds));
-            formData.append('photo', this._photoBlob, 'delivery_photo.jpg');
-
-            const uploadRes = await fetch('/api/barcode/upload_delivery_photo', {
-                method: 'POST',
-                headers: { 'X-Requested-With': 'XMLHttpRequest' },
-                body: formData,
-            });
-            const uploadJson = await uploadRes.json();
-
-            if (!uploadJson.success) {
-                this.showMessage('photo-result', uploadJson.error || 'Lỗi tải ảnh', 'danger');
-                if (sendBtn) { sendBtn.disabled = false; sendBtn.innerHTML = '<i class="fa fa-paper-plane"></i> Gửi ảnh & Hoàn tất'; }
-                return;
+            for (let i = 0; i < photosToUpload.length; i++) {
+                const photo = photosToUpload[i];
+                // Nếu biết picking cụ thể thì upload riêng, không biết thì gắn tất cả
+                const ids = photo.pickingId ? [photo.pickingId] : this._photoPickingIds;
+                const formData = new FormData();
+                formData.append('picking_ids', JSON.stringify(ids));
+                formData.append('photo', photo.blob, `delivery_photo_${i + 1}.jpg`);
+                const uploadRes = await fetch('/api/barcode/upload_delivery_photo', {
+                    method: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    body: formData,
+                });
+                const uploadJson = await uploadRes.json();
+                if (!uploadJson.success) {
+                    console.warn(`[Photo] Upload failed for ${photo.pickingName}:`, uploadJson.error);
+                }
             }
-
             this.showMessage('photo-result', 'Ảnh đã gửi! Đang hoàn tất đơn hàng...', 'success');
             await this._doCompleteOut(this._photoPickingIds);
         } catch (e) {
             console.error(e);
             this.showMessage('photo-result', 'Lỗi kết nối khi gửi ảnh', 'danger');
-            if (sendBtn) { sendBtn.disabled = false; sendBtn.innerHTML = '<i class="fa fa-paper-plane"></i> Gửi ảnh & Hoàn tất'; }
+            if (sendBtn) { sendBtn.disabled = false; sendBtn.innerHTML = '<i class="fa fa-paper-plane"></i> Gửi ảnh &amp; Hoàn tất'; }
         }
     }
 
@@ -1196,6 +1314,185 @@ class BarcodeShipper {
         this._stopPhotoCamera();
         this.showMessage('photo-result', 'Đang hoàn tất đơn hàng...', 'warning');
         await this._doCompleteOut(this._photoPickingIds);
+    }
+
+    // === Hiển thị đúng button sau khi chụp (single vs multi picking) ===
+    _showPhotoPreviewButtons() {
+        const isSingle = !this._photoPickingIds || this._photoPickingIds.length <= 1;
+        const confirmBtn = document.getElementById('photo-confirm-btn');
+        const sendBtn = document.getElementById('photo-send-btn');
+        if (isSingle) {
+            if (confirmBtn) confirmBtn.style.display = 'none';
+            if (sendBtn) { sendBtn.style.display = 'flex'; sendBtn.disabled = false; }
+        } else {
+            // Multi: chỉ cho confirm nếu đã detect được QR
+            if (this._photoDetectedPickingId) {
+                if (confirmBtn) confirmBtn.style.display = 'flex';
+                if (sendBtn) sendBtn.style.display = 'none';
+            } else {
+                // Không detect QR: không cho lưu, bắt buộc chụp lại
+                if (confirmBtn) confirmBtn.style.display = 'none';
+                if (sendBtn) sendBtn.style.display = 'none';
+                this.showMessage('photo-result', 'Không phát hiện mã QR. Vui lòng chụp lại, đảm bảo mã QR trên phiếu bàn giao rõ ràng.', 'danger');
+            }
+        }
+    }
+
+    // === Lưu ảnh hiện tại vào danh sách, cập nhật tiến độ ===
+    _confirmCapturedPhoto() {
+        if (!this._photoBlob || !this._photoDetectedPickingId) return;  // Phải có QR detected
+        const pickingId = this._photoDetectedPickingId;
+        const pickingName = this.pickingDataMap[pickingId]?.info?.name || `#${pickingId}`;
+
+        const existing = this._capturedPhotos.findIndex(p => p.pickingId === pickingId);
+        if (existing >= 0) {
+            this._capturedPhotos[existing].blob = this._photoBlob;
+        } else {
+            this._capturedPhotos.push({ pickingId, pickingName, blob: this._photoBlob });
+        }
+
+        this._photoBlob = null;
+        this._photoDetectedPickingId = null;
+        this._updatePhotoProgress();
+        this._renderPendingList();
+
+        // Kiểm tra tất cả phiếu đã có ảnh chưa
+        const capturedIds = new Set(this._capturedPhotos.map(p => p.pickingId));
+        const allCovered = this._photoPickingIds.every(id => capturedIds.has(id));
+
+        document.getElementById('photo-preview-section').style.display = 'none';
+        const qrResult = document.getElementById('photo-qr-result');
+        if (qrResult) qrResult.innerHTML = '';
+
+        if (allCovered) {
+            document.getElementById('photo-open-section').style.display = 'none';
+            const sendBtn = document.getElementById('photo-send-btn');
+            if (sendBtn) {
+                sendBtn.style.display = 'flex';
+                sendBtn.disabled = false;
+                sendBtn.innerHTML = `<i class="fa fa-paper-plane"></i> Gửi ${this._capturedPhotos.length} ảnh &amp; Hoàn tất`;
+            }
+            this.showMessage('photo-result', `✓ Đã chụp đủ ${this._capturedPhotos.length} ảnh. Nhấn gửi để hoàn tất.`, 'success');
+        } else {
+            document.getElementById('photo-open-section').style.display = 'block';
+            const remaining = this._photoPickingIds.filter(id => !capturedIds.has(id));
+            const nextSoName = this.pickingDataMap[remaining[0]]?.so_name || '';
+            this.showMessage('photo-result', `✓ Đã lưu "${pickingName}". Còn ${remaining.length} phiếu${nextSoName ? ` — tiếp theo: QR "${nextSoName}"` : ''}.`, 'success');
+        }
+    }
+
+    // === Cập nhật thanh tiến độ ===
+    _updatePhotoProgress() {
+        const total = this._photoPickingIds?.length || 0;
+        const capturedIds = new Set((this._capturedPhotos || []).map(p => p.pickingId).filter(Boolean));
+        const hasCatchAll = false;  // Không còn catch-all
+        const doneCount = capturedIds.size;
+        const progressWrap = document.getElementById('photo-progress-wrap');
+        const progressText = document.getElementById('photo-progress-text');
+        const progressFill = document.getElementById('photo-progress-fill');
+        if (total <= 1) {
+            if (progressWrap) progressWrap.style.display = 'none';
+            return;
+        }
+        if (progressWrap) progressWrap.style.display = 'block';
+        if (progressText) progressText.textContent = `${doneCount}/${total} phiếu`;
+        if (progressFill) progressFill.style.width = `${total > 0 ? Math.round(doneCount / total * 100) : 0}%`;
+    }
+
+    // === Render danh sách phiếu cần chụp ===
+    _renderPendingList() {
+        const container = document.getElementById('photo-pending-list');
+        if (!container || !this._photoPickingIds || this._photoPickingIds.length <= 1) {
+            if (container) container.innerHTML = '';
+            return;
+        }
+        const capturedIds = new Set((this._capturedPhotos || []).map(p => p.pickingId).filter(Boolean));
+        const rows = this._photoPickingIds.map(id => {
+            const pickingName = this.pickingDataMap[id]?.info?.name || `#${id}`;
+            const soName = this.pickingDataMap[id]?.so_name || '';
+            const done = capturedIds.has(id);
+            return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #f5f5f5;font-size:13px;">
+                <i class="fa ${done ? 'fa-check-circle' : 'fa-circle-o'}" style="color:${done ? '#4caf50' : '#bbb'};font-size:15px;min-width:16px;"></i>
+                <div style="flex:1;">
+                    <div style="${done ? 'color:#aaa;text-decoration:line-through;' : 'font-weight:600;'}">${pickingName}</div>
+                    ${soName ? `<div style="font-size:11px;color:#888;">Đơn hàng: ${soName}</div>` : ''}
+                </div>
+            </div>`;
+        }).join('');
+        container.innerHTML = `<div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Danh sách phiếu (QR = tên đơn hàng)</div>${rows}`;
+    }
+
+    // === Render danh sách ảnh đã lưu (hiển thị trong preview) ===
+    _renderCapturedList() {
+        const container = document.getElementById('photo-captured-list');
+        if (!container) return;
+        const photos = this._capturedPhotos || [];
+        if (photos.length === 0 || (this._photoPickingIds?.length || 0) <= 1) {
+            container.innerHTML = '';
+            return;
+        }
+        const tags = photos.map(p =>
+            `<span style="display:inline-flex;align-items:center;gap:4px;background:#e8f5e9;color:#2e7d32;padding:2px 10px;border-radius:12px;margin:2px;font-size:12px;font-weight:600;">
+                <i class="fa fa-check"></i> ${p.pickingName}
+            </span>`
+        ).join('');
+        container.innerHTML = `<div style="font-size:11px;color:#888;margin-bottom:4px;">Đã lưu:</div><div>${tags}</div>`;
+    }
+
+    // === QR detection loop khi camera photo đang mở ===
+    _startPhotoQrLoop() {
+        if (!this._barcodeDetector || !this._photoNameToId || Object.keys(this._photoNameToId).length === 0) return;
+        const loop = async () => {
+            if (!this._photoCameraStream) return;
+            const video = document.getElementById('photo-video');
+            if (video && video.readyState >= video.HAVE_ENOUGH_DATA) {
+                try {
+                    const barcodes = await this._barcodeDetector.detect(video);
+                    const qrOverlay = document.getElementById('photo-qr-overlay');
+                    const qrText = document.getElementById('photo-qr-text');
+                    const qrBadge = document.getElementById('photo-qr-badge');
+                    const captureBtn = document.getElementById('photo-capture-btn');
+                    let matched = null;
+                    for (const b of barcodes) {
+                        const pid = this._photoNameToId[b.rawValue];
+                        if (pid !== undefined) { matched = { soName: b.rawValue, id: pid }; break; }
+                    }
+                    if (matched) {
+                        this._photoDetectedPickingId = matched.id;
+                        this._photoQrDetectedAt = Date.now();
+                        // Hiển tên phiếu xuất (không phải tên SO) trên overlay
+                        const pickingName = this.pickingDataMap[matched.id]?.info?.name || matched.soName;
+                        if (qrOverlay) qrOverlay.style.display = 'block';
+                        if (qrText) qrText.textContent = `✓ ${pickingName}`;
+                        if (qrBadge) qrBadge.style.background = 'rgba(46,125,50,0.9)';
+                        // Enable capture button
+                        if (captureBtn) {
+                            captureBtn.disabled = false;
+                            captureBtn.innerHTML = '<i class="fa fa-circle"></i> Chụp ảnh';
+                        }
+                    } else {
+                        // Debounce: chỉ clear detected ID sau 1.5s QR vắng
+                        const age = Date.now() - (this._photoQrDetectedAt || 0);
+                        if (age > 1500) {
+                            this._photoDetectedPickingId = null;
+                            if (captureBtn) {
+                                captureBtn.disabled = true;
+                                captureBtn.innerHTML = '<i class="fa fa-qrcode"></i> Hướng vào mã QR phiếu bàn giao...';
+                            }
+                        }
+                        if (barcodes.length > 0) {
+                            if (qrOverlay) qrOverlay.style.display = 'block';
+                            if (qrText) qrText.textContent = 'QR không khớp đơn hàng';
+                            if (qrBadge) qrBadge.style.background = 'rgba(198,40,40,0.9)';
+                        } else if (age > 1500) {
+                            if (qrOverlay) qrOverlay.style.display = 'none';
+                        }
+                    }
+                } catch (e) { /* ignore */ }
+            }
+            this._photoQrLoopTimer = setTimeout(loop, 350);
+        };
+        this._photoQrLoopTimer = setTimeout(loop, 600);
     }
 
     async _doCompleteOut(pickingIds) {
