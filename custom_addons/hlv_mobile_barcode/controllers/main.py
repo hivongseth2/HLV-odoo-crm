@@ -17,7 +17,8 @@ class HLVMobileBarcodeController(http.Controller):
             allowed_types = request.env.company.hlv_barcode_picking_type_ids
             if allowed_types and picking.picking_type_id not in allowed_types:
                 return {'error': _('This picking type is not allowed to be processed via Mobile Barcode.')}
-            return {'type': 'picking', 'id': picking.id, 'name': picking.name, 'state': picking.state}
+            warehouse_code = picking.picking_type_id.warehouse_id.code or 'HLV'
+            return {'type': 'picking', 'id': picking.id, 'name': picking.name, 'state': picking.state, 'warehouse_code': warehouse_code}
 
         # 2. Check if it's a Product
         product = request.env['product.product'].search([('barcode', '=', barcode)], limit=1)
@@ -27,7 +28,8 @@ class HLVMobileBarcodeController(http.Controller):
         # 3. Check if it's a Location
         location = request.env['stock.location'].search([('barcode', '=', barcode)], limit=1)
         if location:
-            return {'type': 'location', 'id': location.id, 'name': location.display_name}
+            warehouse_code = location.warehouse_id.code or 'HLV'
+            return {'type': 'location', 'id': location.id, 'name': location.display_name, 'warehouse_code': warehouse_code}
 
         # 4. Check if it's a Package
         package = request.env['stock.quant.package'].search([('name', '=', barcode)], limit=1)
@@ -74,6 +76,7 @@ class HLVMobileBarcodeController(http.Controller):
             'name': picking.name,
             'state': picking.state,
             'picking_type_code': picking.picking_type_id.code,
+            'warehouse_code': picking.picking_type_id.warehouse_id.code or 'HLV',
             'lines': lines,
         }
 
@@ -125,7 +128,7 @@ class HLVMobileBarcodeController(http.Controller):
         })
         
         # Keep it in draft so user can add lines
-        return {'success': True, 'picking_id': picking_int.id, 'picking_name': picking_int.name}
+        return {'success': True, 'picking_id': picking_int.id, 'picking_name': picking_int.name, 'warehouse_code': picking_int.picking_type_id.warehouse_id.code or 'HLV'}
 
     @http.route('/hlv_mobile_barcode/process_barcode', type='json', auth='user')
     def process_barcode(self, picking_id, barcode, destination_location_id=None, last_product_id=None):
@@ -359,6 +362,7 @@ class HLVMobileBarcodeController(http.Controller):
             location = request.env['stock.location'].browse(record_id)
             title = location.display_name
             location_barcode = location.barcode or location.name
+            warehouse_code = location.warehouse_id.code or 'HLV'
             quants = quants.search([('location_id', '=', location.id)])
             for q in quants:
                 results.append({
@@ -368,7 +372,7 @@ class HLVMobileBarcodeController(http.Controller):
                     'package_name': q.package_id.name if q.package_id else '',
                     'quant_id': q.id,
                 })
-            return {'title': title, 'location_barcode': location_barcode, 'location_name': title, 'results': results, 'reservations': reservations}
+            return {'title': title, 'location_barcode': location_barcode, 'location_name': title, 'results': results, 'reservations': reservations, 'warehouse_code': warehouse_code}
         elif lookup_type == 'package':
             package = request.env['stock.quant.package'].browse(record_id)
             title = package.name

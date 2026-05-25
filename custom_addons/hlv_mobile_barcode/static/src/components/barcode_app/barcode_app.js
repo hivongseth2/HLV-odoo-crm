@@ -34,6 +34,7 @@ export class BarcodeApp extends Component {
             manualBarcode: "",
             pickingId: savedState.pickingId || null,
             pickingName: savedState.pickingName || "",
+            warehouseCode: savedState.warehouseCode || "",
             lookupType: savedState.lookupType || null,
             recordId: savedState.recordId || null,
             lookupTitle: savedState.lookupTitle || "",
@@ -51,6 +52,7 @@ export class BarcodeApp extends Component {
                 currentView: this.state.currentView,
                 pickingId: this.state.pickingId,
                 pickingName: this.state.pickingName,
+                warehouseCode: this.state.warehouseCode,
                 lookupType: this.state.lookupType,
                 recordId: this.state.recordId,
                 lookupTitle: this.state.lookupTitle,
@@ -62,6 +64,7 @@ export class BarcodeApp extends Component {
             this.state.currentView,
             this.state.pickingId,
             this.state.pickingName,
+            this.state.warehouseCode,
             this.state.lookupType,
             this.state.recordId,
             this.state.lookupTitle,
@@ -175,6 +178,7 @@ export class BarcodeApp extends Component {
                 this.state.showCameraPopup = false;
 
                 this.pushHistory();
+                this.state.warehouseCode = result.warehouse_code || "HLV";
                 if (result.type === 'picking') {
                     this.state.pickingId = result.id;
                     this.state.pickingName = result.name;
@@ -213,6 +217,7 @@ export class BarcodeApp extends Component {
             currentView: this.state.currentView,
             pickingId: this.state.pickingId,
             pickingName: this.state.pickingName,
+            warehouseCode: this.state.warehouseCode,
             lookupType: this.state.lookupType,
             recordId: this.state.recordId,
             lookupTitle: this.state.lookupTitle,
@@ -229,6 +234,7 @@ export class BarcodeApp extends Component {
             this.state.currentView = prevState.currentView;
             this.state.pickingId = prevState.pickingId;
             this.state.pickingName = prevState.pickingName;
+            this.state.warehouseCode = prevState.warehouseCode || "";
             this.state.lookupType = prevState.lookupType;
             this.state.recordId = prevState.recordId;
             this.state.lookupTitle = prevState.lookupTitle;
@@ -253,6 +259,7 @@ export class BarcodeApp extends Component {
         this.history = [];
         this.state.currentView = 'main';
         this.state.pickingId = null;
+        this.state.warehouseCode = "";
         this.state.lookupType = null;
         this.state.recordId = null;
         this.state.prefillLocationBarcode = null;
@@ -286,6 +293,7 @@ export class BarcodeApp extends Component {
             } else {
                 this.state.pickingId = res.picking_id;
                 this.state.pickingName = res.picking_name;
+                this.state.warehouseCode = res.warehouse_code || "HLV";
                 this.state.currentView = 'picking';
             }
         } catch (e) {

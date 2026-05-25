@@ -2,11 +2,11 @@
 <templates xml:space="preserve">
     <t t-name="hlv_mobile_barcode.BarcodeApp">
         <div class="hlv-barcode-app" t-ref="app-container">
-            <div class="shipper-container">
+            <div t-attf-class="shipper-container #{state.currentView === 'main' ? 'main-view' : 'sub-view'}">
                 <!-- Header (hidden on main screen) -->
                 <div class="shipper-header" t-if="state.currentView !== 'main'">
                     <div class="header-title">
-                        <i class="fa fa-boxes"></i> Kho HLV
+                        <i class="fa fa-boxes"></i> Kho <t t-esc="state.warehouseCode || 'HLV'"/>
                     </div>
                     <div style="display: flex; gap: 8px;">
                         <div class="user-info" t-if="state.currentView === 'picking' and state.pickingId" t-on-click="clearPicking" style="background: var(--danger-color); color: white;">
@@ -77,34 +77,36 @@
                             </div>
                         </div>
 
-                        <!-- Home View Camera Button Popup Trigger -->
-                        <div class="card-box" style="text-align: center; padding: 40px 15px; cursor: pointer; border: 2px dashed var(--primary-color); background: rgba(44, 62, 80, 0.02); transition: background-color 0.2s;" t-on-click="openPopupCamera">
-                            <i class="fa fa-camera" style="font-size: 60px; color: var(--primary-color); margin-bottom: 20px;"></i>
-                            <h3 style="color: var(--primary-color); margin-bottom: 8px; font-size: 1.15rem; font-weight: 700;">Quét mã vạch bằng Camera</h3>
-                            <p class="text-muted" style="margin-bottom: 20px; font-size: 0.9rem;">Nhấn vào đây để bật Camera và quét phiếu kho, sản phẩm hoặc vị trí</p>
-                            <div class="btn btn-primary btn-lg" style="border-radius: 30px; font-weight: bold; box-shadow: 0 4px 10px rgba(0,0,0,0.15);">
-                                <i class="fa fa-qrcode" style="font-size: 1.05rem;"></i> Mở máy quét
+                        <div class="home-grid-layout">
+                            <!-- Home View Camera Button Popup Trigger -->
+                            <div class="card-box" style="text-align: center; padding: 40px 15px; cursor: pointer; border: 2px dashed var(--primary-color); background: rgba(44, 62, 80, 0.02); transition: background-color 0.2s;" t-on-click="openPopupCamera">
+                                <i class="fa fa-camera" style="font-size: 60px; color: var(--primary-color); margin-bottom: 20px;"></i>
+                                <h3 style="color: var(--primary-color); margin-bottom: 8px; font-size: 1.15rem; font-weight: 700;">Quét mã vạch bằng Camera</h3>
+                                <p class="text-muted" style="margin-bottom: 20px; font-size: 0.9rem;">Nhấn vào đây để bật Camera và quét phiếu kho, sản phẩm hoặc vị trí</p>
+                                <div class="btn btn-primary btn-lg" style="border-radius: 30px; font-weight: bold; box-shadow: 0 4px 10px rgba(0,0,0,0.15);">
+                                    <i class="fa fa-qrcode" style="font-size: 1.05rem;"></i> Mở máy quét
+                                </div>
                             </div>
-                        </div>
 
-                        <!-- Manual Barcode Input Card -->
-                        <div class="card-box" style="padding: 15px;">
-                            <div style="font-weight: 700; margin-bottom: 10px; font-size: 0.92rem; color: var(--primary-color);"><i class="fa fa-keyboard"></i> Nhập mã thủ công</div>
-                            <div class="input-group-row" style="margin-bottom: 0;">
-                                <input type="text" class="form-control" placeholder="Nhập mã sản phẩm, vị trí hoặc số phiếu..." t-model="state.manualBarcode" t-on-keyup="onManualBarcodeKeyup"/>
-                                <button class="btn btn-primary" t-on-click="processManualBarcode" style="font-weight: bold;">
-                                    <i class="fa fa-arrow-right"></i> Đi tiếp
-                                </button>
+                            <!-- Manual Barcode Input Card -->
+                            <div class="card-box" style="padding: 15px;">
+                                <div style="font-weight: 700; margin-bottom: 10px; font-size: 0.92rem; color: var(--primary-color);"><i class="fa fa-keyboard"></i> Nhập mã thủ công</div>
+                                <div class="input-group-row" style="margin-bottom: 0;">
+                                    <input type="text" class="form-control" placeholder="Nhập mã sản phẩm, vị trí hoặc số phiếu..." t-model="state.manualBarcode" t-on-keyup="onManualBarcodeKeyup"/>
+                                    <button class="btn btn-primary" t-on-click="processManualBarcode" style="font-weight: bold;">
+                                        <i class="fa fa-arrow-right"></i> Đi tiếp
+                                    </button>
+                                </div>
                             </div>
-                        </div>
-                        
-                        <div class="card-box" style="padding: 15px;">
-                            <div style="font-weight: 700; margin-bottom: 12px; font-size: 0.92rem; color: var(--primary-color);">Hướng dẫn quét nhanh:</div>
-                            <div style="text-align: left; background: var(--light-bg); padding: 12px; border-radius: 8px; font-size: 0.88rem; line-height: 1.55;">
-                                <div style="margin-bottom: 8px;"><i class="fa fa-check-circle" style="color: var(--success-color); margin-right: 6px;"></i> Quét <strong>sản phẩm</strong> để tra cứu và định vị</div>
-                                <div style="margin-bottom: 8px;"><i class="fa fa-check-circle" style="color: var(--success-color); margin-right: 6px;"></i> Quét <strong>kiện hàng</strong> để mở chi tiết</div>
-                                <div style="margin-bottom: 8px;"><i class="fa fa-check-circle" style="color: var(--success-color); margin-right: 6px;"></i> Quét <strong>phiếu kho</strong> để xử lý dịch chuyển</div>
-                                <div><i class="fa fa-check-circle" style="color: var(--success-color); margin-right: 6px;"></i> Quét <strong>vị trí</strong> để chuyển hàng hàng loạt</div>
+                            
+                            <div class="card-box" style="padding: 15px; margin-bottom: 0;">
+                                <div style="font-weight: 700; margin-bottom: 12px; font-size: 0.92rem; color: var(--primary-color);">Hướng dẫn quét nhanh:</div>
+                                <div style="text-align: left; background: var(--light-bg); padding: 12px; border-radius: 8px; font-size: 0.88rem; line-height: 1.55;">
+                                    <div style="margin-bottom: 8px;"><i class="fa fa-check-circle" style="color: var(--success-color); margin-right: 6px;"></i> Quét <strong>sản phẩm</strong> để tra cứu và định vị</div>
+                                    <div style="margin-bottom: 8px;"><i class="fa fa-check-circle" style="color: var(--success-color); margin-right: 6px;"></i> Quét <strong>kiện hàng</strong> để mở chi tiết</div>
+                                    <div style="margin-bottom: 8px;"><i class="fa fa-check-circle" style="color: var(--success-color); margin-right: 6px;"></i> Quét <strong>phiếu kho</strong> để xử lý dịch chuyển</div>
+                                    <div><i class="fa fa-check-circle" style="color: var(--success-color); margin-right: 6px;"></i> Quét <strong>vị trí</strong> để chuyển hàng hàng loạt</div>
+                                </div>
                             </div>
                         </div>
                     </div>
