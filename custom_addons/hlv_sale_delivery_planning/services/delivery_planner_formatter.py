@@ -369,8 +369,6 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                 'qty_reserved_here': reserved_line,
                 'product_type': p_type,
                 'is_kit': is_kit,
-                'is_combo_old': is_combo_old,
-                'kit_combo_fallback': kit_fallback,
                 'price_unit': price_unit,
                 'discount': discount,
                 'delivered_subtotal': round(delivered_subtotal, 0),
