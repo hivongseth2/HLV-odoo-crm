@@ -2,7 +2,8 @@
 <templates xml:space="preserve">
     <t t-name="hlv_mobile_barcode.BarcodeApp">
         <div class="hlv-barcode-app" t-ref="app-container">
-            <div class="shipper-container">
+            <!-- Regular App Views -->
+            <div class="shipper-container" t-if="!state.showCamera">
                 <!-- Header -->
                 <div class="shipper-header" t-if="state.currentView !== 'main'">
                     <div class="header-title">
@@ -60,43 +61,43 @@
                 </div>
             </div>
 
-            <!-- Camera Modal (Shipper Style) -->
-            <div t-if="state.showCamera" class="modal-overlay show">
-                <div class="modal-content">
-                    <!-- Header -->
-                    <div class="modal-header">
-                        <div class="modal-title"><i class="fa fa-camera"></i> Máy quét mã vạch</div>
-                        <button class="modal-close" t-on-click="closeCamera"><i class="fa fa-times"></i></button>
+            <!-- Inline Camera View (replaces modal) -->
+            <div class="shipper-container" t-if="state.showCamera" style="background: #f4f6f8; min-height: 100vh; display: flex; flex-direction: column;">
+                <!-- Header -->
+                <div class="shipper-header" style="background: #222; color: white;">
+                    <div class="header-title"><i class="fa fa-camera"></i> Máy quét mã vạch</div>
+                    <div class="user-info" t-on-click="closeCamera" style="background: var(--danger-color); color: white;">
+                        <i class="fa fa-times"></i> Đóng
                     </div>
-                    
-                    <!-- Body -->
-                    <div class="modal-body" style="padding: 15px; background: #000; text-align: center;">
-                        <!-- Fallback UI when permission is denied -->
-                        <t t-if="state.cameraFallback">
-                            <div style="background: white; padding: 30px 15px; border-radius: 8px;">
-                                <i class="fa fa-camera-slash" style="font-size: 48px; color: var(--danger-color); margin-bottom: 15px;"/>
-                                <h5 style="font-weight: 600; margin-bottom: 8px; color: var(--primary-color);">Không thể truy cập camera</h5>
-                                <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 25px;">Trình duyệt chưa cấp quyền cho trang web này. Vui lòng cấp quyền hoặc tải ảnh lên.</p>
-                                
-                                <input type="file" accept="image/*" capture="environment" id="cameraFileInput" style="display: none;" t-on-change="onFileSelected"/>
-                                <label for="cameraFileInput" class="btn btn-primary">
-                                    <i class="fa fa-image"/> Chọn Ảnh / Chụp Ảnh
-                                </label>
-                            </div>
-                        </t>
-                        
-                        <!-- Live Camera Feed -->
-                        <div id="reader" style="width: 100%; border-radius: 8px; overflow: hidden;" t-att-class="state.cameraFallback ? 'd-none' : ''"></div>
-                    </div>
-
-                    <!-- Footer: Manual Barcode Input -->
-                    <div style="padding: 15px;">
-                        <div class="input-group-row" style="margin-bottom: 0;">
-                            <input type="text" class="form-control" t-model="state.manualBarcode" placeholder="Nhập mã thủ công..." t-on-keyup="onManualBarcodeKeyup"/>
-                            <button class="btn btn-secondary" t-on-click="processManualBarcode">
-                                <i class="fa fa-arrow-right"></i>
-                            </button>
+                </div>
+                
+                <!-- Body -->
+                <div style="flex: 1; padding: 15px; display: flex; flex-direction: column; justify-content: center; background: #000;">
+                    <!-- Fallback UI when permission is denied -->
+                    <t t-if="state.cameraFallback">
+                        <div style="background: white; padding: 30px 15px; border-radius: 8px; text-align: center;">
+                            <i class="fa fa-camera-slash" style="font-size: 48px; color: var(--danger-color); margin-bottom: 15px;"/>
+                            <h5 style="font-weight: 600; margin-bottom: 8px; color: var(--primary-color);">Không thể truy cập camera</h5>
+                            <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 25px;">Trình duyệt chưa cấp quyền cho trang web này. Vui lòng cấp quyền hoặc tải ảnh lên.</p>
+                            
+                            <input type="file" accept="image/*" capture="environment" id="cameraFileInput" style="display: none;" t-on-change="onFileSelected"/>
+                            <label for="cameraFileInput" class="btn btn-primary">
+                                <i class="fa fa-image"/> Chọn Ảnh / Chụp Ảnh
+                            </label>
                         </div>
+                    </t>
+                    
+                    <!-- Live Camera Feed -->
+                    <div id="reader" style="width: 100%; border-radius: 8px; overflow: hidden; background: #000;" t-att-class="state.cameraFallback ? 'd-none' : ''"></div>
+                </div>
+
+                <!-- Footer: Manual Barcode Input -->
+                <div style="padding: 15px; background: white; border-top: 1px solid #ddd;">
+                    <div class="input-group-row" style="margin-bottom: 0;">
+                        <input type="text" class="form-control" t-model="state.manualBarcode" placeholder="Nhập mã thủ công..." t-on-keyup="onManualBarcodeKeyup"/>
+                        <button class="btn btn-secondary" t-on-click="processManualBarcode">
+                            <i class="fa fa-arrow-right"></i>
+                        </button>
                     </div>
                 </div>
             </div>
