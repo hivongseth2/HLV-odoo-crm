@@ -46,26 +46,19 @@
                                             </div>
                                         </div>
                                         <i t-if="line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0" class="fa fa-check-circle item-status-icon" style="margin-right: 8px;"></i>
-                                        <button class="btn btn-outline btn-sm" style="padding: 3px 6px; color: var(--text-muted);" t-on-click="() => this.toggleEditLine(line.move_id)">
-                                            <i class="fa fa-pencil-alt"></i>
-                                        </button>
                                     </div>
                                 </div>
-                                <div t-if="state.editingLineId === line.move_id" style="background-color: var(--light-bg); padding: 8px; border-top: 1px solid var(--border-color);">
-                                    <div style="display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; margin-bottom: 8px;">
-                                        <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 36px; padding: 4px;" t-on-click="() => this.adjustQty(line, -10)">-10</button>
-                                        <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 36px; padding: 4px;" t-on-click="() => this.adjustQty(line, -1)">-1</button>
-                                        <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 36px; padding: 4px;" t-on-click="() => this.adjustQty(line, -0.1)">-0.1</button>
-                                        <input type="number" class="form-control" style="width: 60px; text-align: center; font-weight: bold; padding: 4px;" t-model="line.qty_done" t-on-change="(ev) => this.saveQty(line, ev)" min="0" step="any"/>
-                                        <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 36px; padding: 4px;" t-on-click="() => this.adjustQty(line, 0.1)">+0.1</button>
-                                        <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 36px; padding: 4px;" t-on-click="() => this.adjustQty(line, 1)">+1</button>
-                                        <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 36px; padding: 4px;" t-on-click="() => this.adjustQty(line, 10)">+10</button>
-                                    </div>
-                                    <div style="text-align: right;">
-                                        <button class="btn btn-danger btn-sm" t-on-click="() => this.deleteLine(line)">
-                                            <i class="fa fa-trash"></i> Xóa
-                                        </button>
-                                    </div>
+                                <div style="background-color: var(--light-bg); padding: 6px; border-top: 1px solid var(--border-color); display: flex; gap: 4px; align-items: center; justify-content: center;">
+                                    <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, -10)">-10</button>
+                                    <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 24px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, -1)">-1</button>
+                                    <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, -0.1)">-0.1</button>
+                                    <input type="number" class="form-control" style="width: 48px; text-align: center; font-weight: bold; padding: 4px 2px; font-size: 0.85rem;" t-model="line.qty_done" t-on-change="(ev) => this.saveQty(line, ev)" min="0" step="any"/>
+                                    <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, 0.1)">+0.1</button>
+                                    <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 24px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, 1)">+1</button>
+                                    <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, 10)">+10</button>
+                                    <button class="btn btn-danger btn-sm" style="padding: 4px 8px; font-size: 0.78rem; min-width: 28px;" t-on-click="() => this.deleteLine(line)">
+                                        <i class="fa fa-trash"></i>
+                                    </button>
                                 </div>
                             </div>
                         </t>
