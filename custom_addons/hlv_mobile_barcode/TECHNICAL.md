@@ -56,6 +56,7 @@ hlv_mobile_barcode/
   * Áp dụng phương thức `.sudo()` cho toàn bộ các truy vấn `.search()` và `.browse()` liên quan đến Sản phẩm, Vị trí kho, Phiếu kho, và Gói hàng trong tất cả các API đầu cuối của Mobile Barcode để giải quyết triệt để lỗi "Không tìm thấy" do multi-company hoặc record rules của Odoo ORM chặn ngầm.
   * Quét sản phẩm trong `smart_scan` và `process_barcode` hỗ trợ khớp đồng thời cả trường **Mã vạch (`barcode`)** lẫn **Mã SKU/Tham chiếu nội bộ (`default_code`)** của sản phẩm.
   * Quét/Dán vị trí trong `smart_scan` hỗ trợ khớp cả **Mã vạch vị trí (`barcode`)** lẫn **Tên vị trí (`name`)**.
+  * Quét hoặc tra cứu Kiện hàng/Gói hàng (`stock.quant.package`) tự động phân tích vị trí hiện tại của gói hoặc các `stock.quant` chứa bên trong để truy xuất đúng mã kho thực tế (`warehouse_code`), cập nhật tiêu đề Header thay vì hiển thị "Kho HLV" tĩnh.
   * Tự động cắt bỏ các khoảng trắng thừa (`.strip()`) ở hai đầu chuỗi quét ở tất cả các router backend, ngăn lỗi do máy quét cầm tay tự động nối thêm phím Enter/Tab.
 - **Dynamic Warehouse Header**: API tự động trả về `warehouse_code` thực tế của phiếu kho (`picking.picking_type_id.warehouse_id.code` hoặc `location.warehouse_id.code`), hiển thị động lên Header dạng "Kho KBC", "Kho TSN"... thay vì "Kho HLV" tĩnh.
 

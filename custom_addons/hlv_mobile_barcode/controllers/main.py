@@ -38,7 +38,15 @@ class HLVMobileBarcodeController(http.Controller):
         # 4. Check if it's a Package
         package = request.env['stock.quant.package'].sudo().search([('name', '=', barcode)], limit=1)
         if package:
-            return {'type': 'package', 'id': package.id, 'name': package.name}
+            warehouse_code = 'HLV'
+            location = package.location_id
+            if not location:
+                quant = request.env['stock.quant'].sudo().search([('package_id', '=', package.id)], limit=1)
+                if quant:
+                    location = quant.location_id
+            if location:
+                warehouse_code = location.warehouse_id.code or 'HLV'
+            return {'type': 'package', 'id': package.id, 'name': package.name, 'warehouse_code': warehouse_code}
 
         return {'error': _('Mã vạch hoặc mã SKU "%s" không tồn tại trên hệ thống.', barcode)}
 
@@ -388,6 +396,8 @@ class HLVMobileBarcodeController(http.Controller):
         elif lookup_type == 'package':
             package = request.env['stock.quant.package'].sudo().browse(record_id)
             title = package.name
+            warehouse_code = 'HLV'
+            location = package.location_id
             # Use sudo() to bypass company constraints on packages
             quants = quants.sudo().search([('package_id', '=', package.id), ('quantity', '>', 0.0)])
             for q in quants:
@@ -396,6 +406,11 @@ class HLVMobileBarcodeController(http.Controller):
                     'quantity': q.quantity,
                     'location_name': q.location_id.display_name,
                 })
+                if not location and q.location_id:
+                    location = q.location_id
+            if location:
+                warehouse_code = location.warehouse_id.code or 'HLV'
+            return {'title': title, 'results': results, 'reservations': reservations, 'warehouse_code': warehouse_code}
                 
         return {'title': title, 'results': results, 'reservations': reservations}
 
