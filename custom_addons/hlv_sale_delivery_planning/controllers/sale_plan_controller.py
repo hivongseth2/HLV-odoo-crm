@@ -455,11 +455,18 @@ function groupLines(lines){
       map[pid].qty_delivered+=l.qty_delivered||0;
       map[pid].qty_reserved_here+=(l.qty_reserved_here||0); // sum reservations across lines
       // qty_warehouse_free: keep first (product-level, same for all lines of same product/wh)
+      map[pid].delivered_subtotal+=(l.delivered_subtotal||0);
+      map[pid].delivered_tax+=(l.delivered_tax||0);
+      map[pid].delivered_total+=(l.delivered_total||0);
     } else {
       map[pid]={product_id:l.product_id,product_uom_qty:l.product_uom_qty||0,
         qty_delivered:l.qty_delivered||0,qty_packed:l.qty_packed||0,
         qty_available:l.qty_available||0,qty_warehouse_free:l.qty_warehouse_free||0,
-        qty_reserved_here:l.qty_reserved_here||0,is_kit:l.is_kit||false};
+        qty_reserved_here:l.qty_reserved_here||0,is_kit:l.is_kit||false,
+        price_unit:l.price_unit||0,discount:l.discount||0,
+        delivered_subtotal:l.delivered_subtotal||0,
+        delivered_tax:l.delivered_tax||0,
+        delivered_total:l.delivered_total||0};
       order.push(pid);
     }
   });
@@ -980,7 +987,9 @@ function openDrawer(id){
     +'</div>';
   h+='<table class="table table-sm table-bordered table-lines"><thead class="table-light"><tr>'
     +'<th>Sản phẩm</th><th class="text-end">Chốt Bán</th><th class="text-end">Đóng Gói</th>'
-    +'<th class="text-end">Tồn Kho</th><th class="text-end">Đã Giao</th><th class="text-end">Thiếu</th></tr></thead><tbody>';
+    +'<th class="text-end">Tồn Kho</th><th class="text-end">Đã Giao</th>'
+    +'<th class="text-end">Đơn Giá</th><th class="text-end">TT Thực Xuất</th><th class="text-end">VAT</th>'
+    +'<th class="text-end">Thiếu</th></tr></thead><tbody>';
   var grouped=groupLines(o.lines||[]);
   grouped.forEach(function(l){
     var pname=l.product_id?l.product_id[1]:'Unknown';
@@ -996,6 +1005,9 @@ function openDrawer(id){
       +'<td class="text-end '+packCls+'">'+packHtml+'</td>'
       +'<td class="text-end '+stkCls+'">'+fq(wfree)+'</td>'
       +'<td class="text-end cell-delivered">'+fq(l.qty_delivered)+'</td>'
+      +'<td class="text-end text-muted small">'+fm(l.price_unit||0)+(l.discount?'<div class="text-danger" style="font-size:0.7rem">-'+l.discount+'%</div>':'')+'</td>'
+      +'<td class="text-end fw-bold text-success">'+fm(l.delivered_subtotal||0)+'</td>'
+      +'<td class="text-end text-warning" style="font-size:0.82rem">'+fm(l.delivered_tax||0)+'</td>'
       +'<td class="text-end '+(shortage>0?'cell-shortage':'text-muted opacity-50')+'">'+fq(shortage)+'</td></tr>';
   });
   h+='</tbody></table>';
