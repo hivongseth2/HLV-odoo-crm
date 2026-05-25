@@ -48,8 +48,8 @@
                             </div>
                         </t>
                         
-                        <div t-att-class="state.cameraFallback ? 'd-none' : ''" style="width: 100%; max-width: 450px; background: #000; overflow: hidden; position: relative; min-height: 200px;">
-                            <div id="reader" style="width: 100%;"></div>
+                        <div t-att-class="'camera-container ' + (state.cameraFallback ? 'd-none' : '')">
+                            <div id="reader"></div>
                             
                             <!-- Camera Activation Overlay -->
                             <div t-if="state.cameraNeedsActivation" class="camera-activation-overlay" t-on-click="() => this.startPersistentCamera(true)">
