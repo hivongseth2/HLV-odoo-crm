@@ -35,6 +35,7 @@ export class BarcodeApp extends Component {
             currentView: savedState.currentView || "main", 
             manualBarcode: "",
             hiddenBarcode: "",
+            isProcessing: false,
             pickingId: savedState.pickingId || null,
             pickingName: savedState.pickingName || "",
             warehouseCode: savedState.warehouseCode || "",
@@ -179,8 +180,19 @@ export class BarcodeApp extends Component {
     async processBarcode(barcode) {
         if (!barcode) return;
         
+        if (this.state.isProcessing) {
+            this.playSound('error');
+            this.notification.add("Hệ thống đang bận xử lý, vui lòng quét lại sau giây lát...", { type: "warning" });
+            return;
+        }
+
+        this.state.isProcessing = true;
+        
         if (this.viewScannerCallback) {
-            this.viewScannerCallback(barcode);
+            try {
+                await this.viewScannerCallback(barcode);
+            } catch (e) {}
+            this.state.isProcessing = false;
             return;
         }
 
@@ -214,6 +226,8 @@ export class BarcodeApp extends Component {
             } catch (e) {
                 this.playSound('error');
                 this.notification.add("Server error", { type: "danger" });
+            } finally {
+                this.state.isProcessing = false;
             }
             return;
         }
@@ -254,6 +268,8 @@ export class BarcodeApp extends Component {
         } catch (error) {
             this.playSound('error');
             this.notification.add("Server error", { type: "danger" });
+        } finally {
+            this.state.isProcessing = false;
         }
     }
 
@@ -285,8 +301,23 @@ export class BarcodeApp extends Component {
     async goBack() {
         await this.closeCamera();
         this.state.showCameraPopup = false;
+        
+        const currentPickingId = this.state.pickingId;
+        const currentView = this.state.currentView;
+
         if (this.history && this.history.length > 0) {
             const prevState = this.history.pop();
+            
+            if (currentView === 'picking' && prevState.currentView !== 'picking' && currentPickingId) {
+                rpc("/hlv_mobile_barcode/clear_quantities", { picking_id: currentPickingId }).catch(e => {});
+                const storageKey = 'hlv_opened_pickings';
+                try {
+                    let opened = JSON.parse(localStorage.getItem(storageKey) || '[]');
+                    opened = opened.filter(id => id !== currentPickingId);
+                    localStorage.setItem(storageKey, JSON.stringify(opened));
+                } catch (e) {}
+            }
+
             this.state.currentView = prevState.currentView;
             this.state.pickingId = prevState.pickingId;
             this.state.pickingName = prevState.pickingName;
@@ -312,6 +343,18 @@ export class BarcodeApp extends Component {
     async goToMain() {
         await this.closeCamera();
         this.state.showCameraPopup = false;
+
+        const currentPickingId = this.state.pickingId;
+        if (this.state.currentView === 'picking' && currentPickingId) {
+            rpc("/hlv_mobile_barcode/clear_quantities", { picking_id: currentPickingId }).catch(e => {});
+            const storageKey = 'hlv_opened_pickings';
+            try {
+                let opened = JSON.parse(localStorage.getItem(storageKey) || '[]');
+                opened = opened.filter(id => id !== currentPickingId);
+                localStorage.setItem(storageKey, JSON.stringify(opened));
+            } catch (e) {}
+        }
+
         this.history = [];
         this.state.currentView = 'main';
         this.state.pickingId = null;
@@ -523,6 +566,8 @@ export class BarcodeApp extends Component {
         if (!confirm("Bạn có chắc muốn xoá toàn bộ số lượng đã quét để quét lại từ đầu không?")) {
             return;
         }
+        
+        this.state.isProcessing = true;
         try {
             const res = await rpc("/hlv_mobile_barcode/clear_quantities", {
                 picking_id: this.state.pickingId,
@@ -530,11 +575,21 @@ export class BarcodeApp extends Component {
             if (res.error) {
                 this.notification.add(res.error, { type: "danger" });
             } else {
+                // Remove from localStorage opened pickings to ensure clean re-load
+                const storageKey = 'hlv_opened_pickings';
+                try {
+                    let opened = JSON.parse(localStorage.getItem(storageKey) || '[]');
+                    opened = opened.filter(id => id !== this.state.pickingId);
+                    localStorage.setItem(storageKey, JSON.stringify(opened));
+                } catch (e) {}
+                
                 this.notification.add("Đã làm mới số lượng", { type: "success" });
                 this.state.pickingRefreshTick += 1;
             }
         } catch (e) {
             this.notification.add("Lỗi kết nối", { type: "danger" });
+        } finally {
+            this.state.isProcessing = false;
         }
     }
 }

@@ -32,7 +32,7 @@ hlv_mobile_barcode/
 - **Xử lý Quyền & Bảo mật Camera di động**:
   - *HTTPS Context*: Kiểm tra `window.isSecureContext`. Nếu truy cập qua HTTP (không bảo mật), hệ thống tự động tắt camera trực tiếp và hiển thị thông báo yêu cầu HTTPS, đồng thời kích hoạt fallback (chụp ảnh bằng file input).
   - *iOS / Safari / Chrome User Gesture*: Để tránh việc hệ thống iOS (WKWebView) tự động từ chối (`NotAllowedError`) khi gọi camera tự động lúc tải trang (`onMounted`), component sẽ hiển thị một lớp phủ "Kích hoạt Camera". Khi người dùng chạm vào lớp phủ này (sự kiện click/tap), camera được khởi tạo thông qua user gesture hợp lệ, giúp kích hoạt hộp thoại xin quyền của iOS và khởi chạy camera thành công.
-- UI/UX: Các component dùng CSS custom trong `barcode_mobile.css` để đảm bảo bố cục co giãn tốt (flex layout), nút bấm to, rõ, phù hợp thao tác bằng một tay. Danh sách sản phẩm cuộn độc lập, đầu trang và chân trang được giữ cố định để tránh tràn màn hình.
+- **UI/UX & Viewport Constraints**: Các component dùng CSS custom trong `barcode_mobile.css` để đảm bảo bố cục co giãn tốt (flex layout), nút bấm to, rõ, phù hợp thao tác bằng một tay. Danh sách sản phẩm cuộn độc lập, đầu trang và chân trang được giữ cố định để tránh tràn màn hình.
 - **Triệt tiêu lỗi kẹt cuộn và tràn footer (Absolute & Flex Constraint)**: Do Odoo Web Client có thanh Navbar ở trên cùng, việc sử dụng chiều cao 100vh thông thường sẽ làm lệch và đẩy chân trang (footer) ra ngoài viewport. Ứng dụng giải quyết triệt để lỗi này bằng cách thiết lập `.hlv-barcode-app` định vị tuyệt đối `position: absolute !important` bám khít vào container nội dung `.o_content` của Odoo. Kết hợp với `height: 100% !important` trên `.shipper-container`, mọi flexbox con được khống chế chiều cao nghiêm ngặt. Cho phép danh sách sản phẩm cuộn nội bộ trơn tru, đồng thời ghim chân trang `.picking-footer` và `.subview-footer` cố định ở đáy màn hình.
 - **Bố cục 1 cột tối ưu hợp nhất (Unified 1-Column Layout)**: Giữ nguyên giao diện 1 cột đứng thẳng cực kỳ gọn gàng và đồng bộ cho cả Mobile lẫn Desktop. Dải camera nằm ngang được cấu hình cao `160px` trên Mobile.
 - **Desktop Camera Expander**: Trên Desktop (màn hình ≥ 992px), camera container tự động mở rộng tối đa `100%` chiều ngang (bám dọc theo container 1200px) và nâng chiều cao lên **`240px`** giúp tăng diện tích quan sát và quét mã cực kỳ trực quan, lấp đầy 2 bên màn hình như yêu cầu.
@@ -41,6 +41,12 @@ hlv_mobile_barcode/
   * *CSS Layer*: Thiết lập `user-select: none !important` trên `.hlv-barcode-app` (ngoại trừ các ô input thực tế có `user-select: text`) để triệt tiêu khả năng bôi đen hay giữ ngón tay lựa chọn văn bản.
   * *JS Event Layer*: Chặn sự kiện sao chép `copy` trên toàn ứng dụng và hiển thị cảnh báo *"Không được phép sao chép thông tin trên trang này!"*.
   * *Context Menu Layer*: Chặn menu chuột phải `contextmenu` trên máy tính tại các vùng tĩnh để ngăn việc kích hoạt menu Copy.
+- **Data Sync & Network Fault Tolerance (Chống lệch số lượng do rớt mạng/mạng yếu)**:
+  * *Single-Request Processing Lock (isProcessing)*: Khóa hoàn toàn khả năng nhận mã vạch mới hoặc điều hướng khi RPC cũ đang chạy dở dang, tránh Race Condition khi người dùng thao tác quá nhanh lúc mạng chập chờn.
+  * *Single-Request Quantity Lock (isProcessingQty)*: Khóa thao tác nút chỉnh nhanh hoặc ô nhập số lượng thủ công trên Picking card trong khi đợi backend phản hồi thành công, ngăn xung đột chèn dữ liệu song song.
+  * *F5/Reload vs Exit/Reset Sync*:
+    - Khi F5/Reload trang: `localStorage` vẫn lưu giữ `hlv_opened_pickings` giúp số lượng quét hiện tại được giữ nguyên và tải lại an toàn từ backend.
+    - Khi Quay lại (`goBack()`), về trang chủ (`goToMain()`), hoặc Làm lại (`clearPicking()`): Xóa `pickingId` khỏi `localStorage` và tự động gửi RPC `/hlv_mobile_barcode/clear_quantities` để reset sạch sẽ số lượng quét về 0 trên backend, đảm bảo tính nhất quán của cơ sở dữ liệu.
 - **Dynamic Warehouse Header**: API tự động trả về `warehouse_code` thực tế của phiếu kho (`picking.picking_type_id.warehouse_id.code` hoặc `location.warehouse_id.code`), hiển thị động lên Header dạng "Kho KBC", "Kho TSN"... thay vì "Kho HLV" tĩnh.
 
 ## API / Controllers

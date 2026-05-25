@@ -17,6 +17,7 @@ export class PickingScanner extends Component {
     setup() {
         this.notification = useService("notification");
         this.actionService = useService("action");
+        this.isProcessingQty = false;
         
         this.state = useState({
             picking: null,
@@ -106,6 +107,8 @@ export class PickingScanner extends Component {
     }
 
     async adjustQty(line, change) {
+        if (this.isProcessingQty) return;
+        this.isProcessingQty = true;
         try {
             const res = await rpc("/hlv_mobile_barcode/update_move_line_qty", {
                 move_id: line.move_id,
@@ -118,12 +121,16 @@ export class PickingScanner extends Component {
             }
         } catch (e) {
             this.notification.add("Lỗi kết nối", { type: "danger" });
+        } finally {
+            this.isProcessingQty = false;
         }
     }
 
     async saveQty(line, ev) {
         const newVal = parseFloat(ev.target.value);
         if (isNaN(newVal)) return;
+        if (this.isProcessingQty) return;
+        this.isProcessingQty = true;
         try {
             const res = await rpc("/hlv_mobile_barcode/update_move_line_qty", {
                 move_id: line.move_id,
@@ -136,6 +143,8 @@ export class PickingScanner extends Component {
             }
         } catch (e) {
             this.notification.add("Lỗi kết nối", { type: "danger" });
+        } finally {
+            this.isProcessingQty = false;
         }
     }
 
