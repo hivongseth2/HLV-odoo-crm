@@ -144,13 +144,13 @@ export class BarcodeApp extends Component {
                     
                     if (res.updated_product_id) {
                         this.state.lastScannedProduct = res.updated_product_id;
-                        // Reload picking data since we updated the line's location
-                        // We can just rely on the component reloading when props change, or since we pass scannedLocationName, it will trigger an update.
                     }
+                    this.state.pickingRefreshTick += 1;
                 } else {
                     this.playSound('success');
                     this.notification.add(`Scanned ${res.product_name}`, { type: "success" });
                     this.state.lastScannedProduct = res.product_id;
+                    this.state.pickingRefreshTick += 1;
                 }
             } catch (e) {
                 this.playSound('error');
@@ -369,8 +369,12 @@ export class BarcodeApp extends Component {
                     await this.processBarcode(decodedText);
                     
                     setTimeout(() => {
-                        if (this.html5Qrcode && this.html5Qrcode.getState() === 2 /* PAUSED */) {
-                            try { this.html5Qrcode.resume(); } catch(e) {}
+                        if (this.html5Qrcode) {
+                            const state = this.html5Qrcode.getState();
+                            // 3 is PAUSED in Html5QrcodeScannerState
+                            if (state === 3 || (window.Html5QrcodeScannerState && state === window.Html5QrcodeScannerState.PAUSED)) {
+                                try { this.html5Qrcode.resume(); } catch(e) {}
+                            }
                         }
                     }, 1500);
                 },
