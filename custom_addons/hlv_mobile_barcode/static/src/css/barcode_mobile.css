@@ -18,6 +18,12 @@
   --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
+/* ==========================================================================
+   CORE LAYOUT — the single source of truth for viewport fitting
+   Root -> shipper-container -> [camera | hlv-barcode-content -> subview]
+   Everything uses flex column + min-height:0 to prevent overflow.
+   ========================================================================== */
+
 .hlv-barcode-app {
   height: 100%;
   display: flex;
@@ -31,33 +37,108 @@
 .hlv-barcode-app .shipper-container {
   max-width: 100%;
   margin: 0 auto;
-  padding: 15px;
+  padding: 0 12px;
   width: 100%;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   flex: 1;
+  min-height: 0;        /* KEY: allows flex children to shrink below content size */
   overflow: hidden;
 }
 
 @media (min-width: 768px) {
   .hlv-barcode-app .shipper-container {
     max-width: 1200px;
-    padding: 30px;
+    padding: 0 30px;
   }
 }
 
-/* Header */
+/* The main content region below camera */
+.hlv-barcode-app .hlv-barcode-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;        /* KEY */
+  overflow: hidden;
+}
+
+/* Generic scrollable area */
+.hlv-barcode-app .scrollable-body {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ==========================================================================
+   SUBVIEW LAYOUT — used by PickingScanner, LocationMove, BatchLocationMove,
+   InventoryLookup so they fill exactly the remaining space and never overflow.
+   ========================================================================== */
+
+.hlv-barcode-app .picking-scanner-root,
+.hlv-barcode-app .subview-root {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  height: 100%;
+}
+
+/* Picking compact label */
+.hlv-barcode-app .picking-label {
+  padding: 6px 4px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hlv-barcode-app .picking-label i {
+  margin-right: 4px;
+}
+
+/* Scrollable area in subviews */
+.hlv-barcode-app .picking-scroll-area,
+.hlv-barcode-app .subview-scroll-area {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 2px 8px 2px;
+}
+
+/* Fixed footer in subviews */
+.hlv-barcode-app .picking-footer,
+.hlv-barcode-app .subview-footer {
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.97);
+  border-top: 1px solid var(--border-color);
+  padding: 10px 4px;
+  box-sizing: border-box;
+  display: flex;
+  gap: 8px;
+}
+
+/* ==========================================================================
+   HEADER
+   ========================================================================== */
+
 .hlv-barcode-app .shipper-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 15px 0;
-  margin-bottom: 10px;
+  padding: 10px 0;
+  flex-shrink: 0;
 }
 
 .hlv-barcode-app .header-title {
-  font-size: 1.25rem;
+  font-size: 1.15rem;
   font-weight: 700;
   color: var(--primary-color);
   display: flex;
@@ -66,22 +147,25 @@
 }
 
 .hlv-barcode-app .user-info {
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   color: var(--text-muted);
   background: #fff;
-  padding: 6px 12px;
+  padding: 5px 10px;
   border-radius: 20px;
   box-shadow: var(--shadow-sm);
   cursor: pointer;
 }
 
-/* Cards */
+/* ==========================================================================
+   CARDS
+   ========================================================================== */
+
 .hlv-barcode-app .card-box {
   background: var(--white);
-  border-radius: 12px;
+  border-radius: 10px;
   box-shadow: var(--shadow-md);
-  padding: 20px;
-  margin-bottom: 20px;
+  padding: 15px;
+  margin-bottom: 15px;
   border: 1px solid var(--border-color);
 }
 
@@ -89,56 +173,60 @@
 .hlv-barcode-app .step-header {
   display: flex;
   align-items: flex-start;
-  gap: 15px;
-  margin-bottom: 20px;
-  padding-bottom: 15px;
+  gap: 12px;
+  margin-bottom: 15px;
+  padding-bottom: 12px;
   border-bottom: 1px solid var(--border-color);
 }
 
 .hlv-barcode-app .step-icon {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   background: var(--light-bg);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.2rem;
+  font-size: 1rem;
   color: var(--primary-color);
   flex-shrink: 0;
 }
 
 .hlv-barcode-app .step-info {
   flex: 1;
+  min-width: 0;
 }
 
 .hlv-barcode-app .step-title {
-  font-size: 1.1rem;
+  font-size: 1rem;
   font-weight: 600;
   color: var(--primary-color);
-  margin-bottom: 4px;
+  margin-bottom: 3px;
 }
 
 .hlv-barcode-app .step-desc {
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   color: var(--text-muted);
   margin: 0;
   line-height: 1.4;
 }
 
-/* Input Group Row */
+/* ==========================================================================
+   FORM CONTROLS
+   ========================================================================== */
+
 .hlv-barcode-app .input-group-row {
   display: flex;
   gap: 8px;
-  margin-bottom: 15px;
+  margin-bottom: 12px;
   align-items: stretch;
 }
 
 .hlv-barcode-app .form-control {
   flex: 1;
   min-width: 0;
-  padding: 12px 15px;
-  font-size: 1rem;
+  padding: 10px 12px;
+  font-size: 0.95rem;
   border: 2px solid var(--border-color);
   border-radius: 8px;
   transition: border-color 0.2s;
@@ -149,19 +237,22 @@
   border-color: var(--primary-color);
 }
 
-/* Buttons */
+/* ==========================================================================
+   BUTTONS
+   ========================================================================== */
+
 .hlv-barcode-app .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 6px;
   font-weight: 600;
   text-align: center;
   vertical-align: middle;
   user-select: none;
-  padding: 10px 16px;
-  font-size: 0.95rem;
-  line-height: 1.5;
+  padding: 8px 14px;
+  font-size: 0.9rem;
+  line-height: 1.4;
   border-radius: 8px;
   transition: all 0.2s;
   border: none;
@@ -170,8 +261,8 @@
 }
 
 .hlv-barcode-app .btn-lg {
-  padding: 14px 20px;
-  font-size: 1.1rem;
+  padding: 10px 16px;
+  font-size: 0.95rem;
 }
 
 .hlv-barcode-app .btn-block {
@@ -210,14 +301,17 @@
   font-weight: 500;
 }
 
-/* Separator */
+/* ==========================================================================
+   SEPARATOR
+   ========================================================================== */
+
 .hlv-barcode-app .separator {
   display: flex;
   align-items: center;
   text-align: center;
   color: var(--text-muted);
   font-size: 0.85rem;
-  margin: 15px 0;
+  margin: 12px 0;
 }
 
 .hlv-barcode-app .separator::before,
@@ -229,10 +323,22 @@
 .hlv-barcode-app .separator::before { margin-right: 10px; }
 .hlv-barcode-app .separator::after { margin-left: 10px; }
 
-/* Camera Section */
+/* ==========================================================================
+   CAMERA
+   ========================================================================== */
+
+.hlv-barcode-app .persistent-camera-wrapper {
+  flex-shrink: 0;
+  background: var(--light-bg);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
 .hlv-barcode-app .camera-section {
-  margin-bottom: 12px;
-  border-radius: 12px;
+  margin-bottom: 10px;
+  border-radius: 10px;
   overflow: hidden;
   position: relative;
   box-shadow: var(--shadow-md);
@@ -240,7 +346,7 @@
 
 .hlv-barcode-app .camera-reader {
   width: 100%;
-  height: 250px;
+  height: 220px;
   background: #000;
   position: relative;
   overflow: hidden;
@@ -256,19 +362,22 @@
   display: block;
 }
 
-/* Items List */
+/* ==========================================================================
+   ITEMS LIST
+   ========================================================================== */
+
 .hlv-barcode-app .items-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-top: 15px;
+  gap: 8px;
+  margin-top: 10px;
 }
 
 .hlv-barcode-app .item-card {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 15px;
+  padding: 10px 12px;
   background: var(--light-bg);
   border: 1px solid transparent;
   border-radius: 8px;
@@ -282,31 +391,37 @@
 
 .hlv-barcode-app .item-info {
   flex: 1;
+  min-width: 0;
 }
 
 .hlv-barcode-app .item-name {
   font-weight: 600;
   color: var(--primary-color);
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   margin-bottom: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .hlv-barcode-app .item-barcode {
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   color: var(--text-muted);
   font-family: monospace;
 }
 
 .hlv-barcode-app .item-status-icon {
-  font-size: 1.2rem;
-  margin-left: 10px;
+  font-size: 1.1rem;
+  margin-left: 8px;
   color: var(--text-muted);
 }
 .hlv-barcode-app .item-card.scanned .item-status-icon {
   color: var(--success-color);
 }
 
-/* Animations */
+/* ==========================================================================
+   ANIMATIONS
+   ========================================================================== */
+
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -317,22 +432,10 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Override existing classes */
-.hlv-barcode-app .hlv-barcode-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
+/* ==========================================================================
+   MODAL (camera fallback)
+   ========================================================================== */
 
-.hlv-barcode-app .scrollable-body {
-  flex: 1;
-  overflow-y: auto;
-  min-height: 0;
-  -webkit-overflow-scrolling: touch;
-}
-
-/* Camera Modal Redesign */
 .hlv-barcode-app .modal-overlay {
   position: fixed;
   top: 0; left: 0; width: 100%; height: 100%;
@@ -357,7 +460,7 @@
 }
 
 .hlv-barcode-app .modal-header {
-  padding: 15px 20px;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--border-color);
   display: flex;
   justify-content: space-between;
@@ -365,7 +468,7 @@
 }
 
 .hlv-barcode-app .modal-title {
-  font-size: 1.1rem;
+  font-size: 1rem;
   font-weight: 600;
   color: var(--primary-color);
   display: flex;
@@ -383,20 +486,23 @@
 }
 
 .hlv-barcode-app .modal-body {
-  padding: 20px;
+  padding: 16px;
   overflow-y: auto;
 }
 
-/* Progress */
+/* ==========================================================================
+   PROGRESS BAR
+   ========================================================================== */
+
 .hlv-barcode-app .global-progress-wrapper {
-  margin-top: 15px;
+  margin-top: 12px;
 }
 .hlv-barcode-app .progress-stats {
   display: flex;
   justify-content: space-between;
   font-size: 0.85rem;
   color: var(--text-muted);
-  margin-bottom: 5px;
+  margin-bottom: 4px;
 }
 .hlv-barcode-app .progress {
   height: 8px;

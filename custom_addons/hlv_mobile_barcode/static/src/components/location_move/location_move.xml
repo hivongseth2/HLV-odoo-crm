@@ -1,69 +1,56 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
     <t t-name="hlv_mobile_barcode.LocationMove">
-        <div style="display: flex; flex-direction: column; height: 100%;">
-            <div class="shipper-container" style="flex: 1; padding-bottom: 0;">
-                <!-- Header -->
-                <div class="shipper-header" style="flex-shrink: 0;">
-                    <div class="header-title">
-                        <i class="fa fa-exchange-alt"></i> Chuyển vị trí
+        <div class="subview-root">
+            <div class="subview-scroll-area">
+                <div class="card-box" style="margin-top: 10px;">
+                    <div class="step-header">
+                        <div class="step-icon">
+                            <i class="fa fa-box"></i>
+                        </div>
+                        <div class="step-info">
+                            <div class="step-title">Sản phẩm</div>
+                            <div class="step-desc" style="font-weight: 600; color: var(--text-color);"><t t-esc="state.productName"/></div>
+                            <div style="font-size: 0.8rem; color: var(--info-color); margin-top: 4px;">
+                                <i class="fa fa-info-circle"></i> Quét mã sản phẩm để tăng số lượng
+                            </div>
+                        </div>
                     </div>
-                </div>
-                
-                <div class="scrollable-body" style="padding-right: 5px;">
-                    <div class="card-box" style="margin-top: 15px;">
-                        <div class="step-header">
-                            <div class="step-icon">
-                                <i class="fa fa-box"></i>
-                            </div>
-                            <div class="step-info">
-                                <div class="step-title">Sản phẩm</div>
-                                <div class="step-desc" style="font-weight: 600; color: var(--text-color);"><t t-esc="state.productName"/></div>
-                                <div style="font-size: 0.8rem; color: var(--info-color); margin-top: 4px;">
-                                    <i class="fa fa-info-circle"></i> Quét mã sản phẩm để tăng số lượng
-                                </div>
-                            </div>
-                        </div>
 
-                        <div style="margin-bottom: 20px;">
-                            <label style="font-size: 0.9rem; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; display: block;">
-                                Vị trí lấy hàng (Mã vạch)
-                                <t t-if="state.sourceLocationName">
-                                    : <span style="color: var(--primary-color); font-weight: 700;"><t t-esc="state.sourceLocationName || state.sourceLocationBarcode"/></span>
-                                </t>
-                            </label>
-                            
-
-
-
-                        </div>
-                        
-                        <div style="margin-bottom: 20px;">
-                            <label style="font-size: 0.9rem; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; display: block;">Số lượng</label>
-                            <input type="number" class="form-control" style="font-weight: bold; font-size: 1.1rem;" t-model="state.qty" min="0.01" step="0.01"/>
-                        </div>
+                    <div style="margin-bottom: 20px;">
+                        <label style="font-size: 0.9rem; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; display: block;">
+                            Vị trí lấy hàng (Mã vạch)
+                            <t t-if="state.sourceLocationName">
+                                : <span style="color: var(--primary-color); font-weight: 700;"><t t-esc="state.sourceLocationName || state.sourceLocationBarcode"/></span>
+                            </t>
+                        </label>
                     </div>
                     
-                    <div t-if="state.inPickingName" class="alert alert-success show">
-                        <i class="fa fa-check-circle" style="font-size: 1.5rem;"></i>
-                        <div>
-                            <div style="font-weight: bold; margin-bottom: 4px;">Đã lấy hàng thành công!</div>
-                            <div style="font-size: 0.9rem;">Mã phiếu nhập: <strong><t t-esc="state.inPickingName"/></strong></div>
-                            <div style="font-size: 0.85rem; margin-top: 5px; opacity: 0.9;">Vui lòng quét mã trên bằng công cụ Quét Phiếu khi đến vị trí đích.</div>
-                        </div>
+                    <div style="margin-bottom: 20px;">
+                        <label style="font-size: 0.9rem; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; display: block;">Số lượng</label>
+                        <input type="number" class="form-control" style="font-weight: bold; font-size: 1.1rem;" t-model="state.qty" min="0.01" step="0.01"/>
                     </div>
                 </div>
                 
-                <!-- Fixed Footer -->
-                <div style="background: rgba(255, 255, 255, 0.95); border-top: 1px solid var(--border-color); padding: 15px; box-sizing: border-box; display: flex; gap: 10px; flex-shrink: 0;">
-                    <button class="btn btn-outline btn-lg" style="flex: 1;" t-on-click="props.onBack" t-att-disabled="state.loading">
-                        <i class="fa fa-times"/> Hủy
-                    </button>
-                    <button class="btn btn-primary btn-lg" style="flex: 1;" t-on-click="doMove" t-att-disabled="state.loading">
-                        <t t-if="!state.loading"><i class="fa fa-check"/> Chuyển</t>
-                        <t t-else=""><i class="fa fa-spin fa-spinner"/> Đang xử lý</t>
-                    </button>
+                <div t-if="state.inPickingName" class="alert alert-success show">
+                    <i class="fa fa-check-circle" style="font-size: 1.5rem;"></i>
+                    <div>
+                        <div style="font-weight: bold; margin-bottom: 4px;">Đã lấy hàng thành công!</div>
+                        <div style="font-size: 0.9rem;">Mã phiếu nhập: <strong><t t-esc="state.inPickingName"/></strong></div>
+                        <div style="font-size: 0.85rem; margin-top: 5px; opacity: 0.9;">Vui lòng quét mã trên bằng công cụ Quét Phiếu khi đến vị trí đích.</div>
+                    </div>
                 </div>
+            </div>
+            
+            <!-- Fixed Footer -->
+            <div class="subview-footer">
+                <button class="btn btn-outline btn-lg" style="flex: 1;" t-on-click="props.onBack" t-att-disabled="state.loading">
+                    <i class="fa fa-times"/> Hủy
+                </button>
+                <button class="btn btn-primary btn-lg" style="flex: 1;" t-on-click="doMove" t-att-disabled="state.loading">
+                    <t t-if="!state.loading"><i class="fa fa-check"/> Chuyển</t>
+                    <t t-else=""><i class="fa fa-spin fa-spinner"/> Đang xử lý</t>
+                </button>
             </div>
         </div>
     </t>

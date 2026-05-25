@@ -2,13 +2,13 @@
 <templates xml:space="preserve">
     <t t-name="hlv_mobile_barcode.BarcodeApp">
         <div class="hlv-barcode-app" t-ref="app-container">
-            <div class="shipper-container" style="flex: 1; padding-bottom: 0;">
-                <!-- Header -->
+            <div class="shipper-container">
+                <!-- Header (hidden on main screen) -->
                 <div class="shipper-header" t-if="state.currentView !== 'main'">
                     <div class="header-title">
                         <i class="fa fa-boxes"></i> Kho HLV
                     </div>
-                    <div style="display: flex; gap: 10px;">
+                    <div style="display: flex; gap: 8px;">
                         <div class="user-info" t-if="state.currentView === 'picking' and state.pickingId" t-on-click="clearPicking" style="background: var(--danger-color); color: white;">
                             <i class="fa fa-undo"></i> Làm lại
                         </div>
@@ -19,7 +19,7 @@
                 </div>
 
                 <!-- Persistent Camera Section -->
-                <div class="persistent-camera-wrapper" style="flex-shrink: 0; background: var(--light-bg); border-bottom: 1px solid var(--border-color); display: flex; flex-direction: column; align-items: center;">
+                <div class="persistent-camera-wrapper">
                     <t t-if="state.cameraFallback">
                         <div style="padding: 10px; width: 100%; text-align: center;">
                             <input type="file" accept="image/*" capture="environment" id="cameraFileInput" style="display: none;" t-on-change="onFileSelected"/>
@@ -29,14 +29,15 @@
                         </div>
                     </t>
                     
-                    <div t-att-class="state.cameraFallback ? 'd-none' : ''" style="width: 100%; max-width: 450px; background: #000; display: flex; justify-content: center; overflow: hidden;">
+                    <div t-att-class="state.cameraFallback ? 'd-none' : ''" style="width: 100%; max-width: 450px; background: #000; overflow: hidden;">
                         <div id="reader" style="width: 100%;"></div>
                     </div>
                 </div>
 
-                <div class="hlv-barcode-content" style="flex: 1; overflow: hidden; display: flex; flex-direction: column;">
+                <!-- Content area — fills remaining space -->
+                <div class="hlv-barcode-content">
                     <!-- Main Screen -->
-                    <div t-if="state.currentView === 'main'" class="scrollable-body" style="padding-top: 20px;">
+                    <div t-if="state.currentView === 'main'" class="scrollable-body" style="padding: 15px 4px;">
                         <div class="shipper-header">
                             <div class="header-title">
                                 <i class="fa fa-barcode"></i> Máy quét mã vạch
@@ -46,24 +47,22 @@
                             </div>
                         </div>
 
-                        <div class="card-box" style="text-align: center; padding-top: 40px; padding-bottom: 40px;">
-                            <i class="fa fa-barcode" style="font-size: 80px; color: var(--primary-color); margin-bottom: 20px;"></i>
-                            <h3 style="color: var(--primary-color); margin-bottom: 10px;">Camera đã được mở</h3>
-                            <p class="text-muted" style="margin-bottom: 30px;">Đưa mã vạch vào khung hình phía trên để quét</p>
+                        <div class="card-box" style="text-align: center; padding: 30px 15px;">
+                            <i class="fa fa-barcode" style="font-size: 60px; color: var(--primary-color); margin-bottom: 15px;"></i>
+                            <h3 style="color: var(--primary-color); margin-bottom: 8px; font-size: 1.1rem;">Camera đã được mở</h3>
+                            <p class="text-muted" style="margin-bottom: 20px; font-size: 0.9rem;">Đưa mã vạch vào khung hình phía trên để quét</p>
                             
-                            <div style="text-align: left; background: var(--light-bg); padding: 15px; border-radius: 8px;">
-                                <div style="margin-bottom: 8px;"><i class="fa fa-check-circle" style="color: var(--success-color); margin-right: 8px;"></i> Quét <strong>sản phẩm</strong> để định vị</div>
-                                <div style="margin-bottom: 8px;"><i class="fa fa-check-circle" style="color: var(--success-color); margin-right: 8px;"></i> Quét <strong>kiện hàng</strong> để mở</div>
-                                <div style="margin-bottom: 8px;"><i class="fa fa-check-circle" style="color: var(--success-color); margin-right: 8px;"></i> Quét <strong>phiếu kho</strong> để xử lý</div>
-                                <div><i class="fa fa-check-circle" style="color: var(--success-color); margin-right: 8px;"></i> Quét <strong>vị trí</strong> để chuyển hàng</div>
+                            <div style="text-align: left; background: var(--light-bg); padding: 12px; border-radius: 8px; font-size: 0.9rem;">
+                                <div style="margin-bottom: 6px;"><i class="fa fa-check-circle" style="color: var(--success-color); margin-right: 6px;"></i> Quét <strong>sản phẩm</strong> để định vị</div>
+                                <div style="margin-bottom: 6px;"><i class="fa fa-check-circle" style="color: var(--success-color); margin-right: 6px;"></i> Quét <strong>kiện hàng</strong> để mở</div>
+                                <div style="margin-bottom: 6px;"><i class="fa fa-check-circle" style="color: var(--success-color); margin-right: 6px;"></i> Quét <strong>phiếu kho</strong> để xử lý</div>
+                                <div><i class="fa fa-check-circle" style="color: var(--success-color); margin-right: 6px;"></i> Quét <strong>vị trí</strong> để chuyển hàng</div>
                             </div>
                         </div>
                     </div>
                     
-                    <!-- Picking View Placeholder -->
-                    <div t-elif="state.currentView === 'picking'" style="display: flex; flex-direction: column; height: 100%;">
-                        <PickingScanner pickingId="state.pickingId" onBack="() => this.goBack()" lastScannedProduct="state.lastScannedProduct" scannedLocationName="state.scannedLocationName" refreshTick="state.pickingRefreshTick"/>
-                    </div>
+                    <!-- Picking View -->
+                    <PickingScanner t-if="state.currentView === 'picking'" pickingId="state.pickingId" onBack="() => this.goBack()" lastScannedProduct="state.lastScannedProduct" scannedLocationName="state.scannedLocationName" refreshTick="state.pickingRefreshTick"/>
                     
                     <!-- Move Component -->
                     <LocationMove t-if="state.currentView === 'move'" productId="state.recordId" prefillLocationBarcode="state.prefillLocationBarcode" prefillLocationName="state.prefillLocationName" onBack="() => this.goBack()" registerScanner="(cb) => this.registerScanner(cb)"/>
