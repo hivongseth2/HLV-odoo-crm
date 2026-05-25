@@ -308,7 +308,7 @@ export class BarcodeApp extends Component {
             const config = { 
                 fps: 20,               
                 disableFlip: false,    
-                aspectRatio: 1.0,      
+                aspectRatio: 1.333334,      
                 experimentalFeatures: {
                     useBarCodeDetectorIfSupported: true 
                 }

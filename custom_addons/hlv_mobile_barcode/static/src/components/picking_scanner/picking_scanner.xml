@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
     <t t-name="hlv_mobile_barcode.PickingScanner">
-        <div>
-            <div class="shipper-container" style="padding-bottom: 80px;">
-                <div t-if="state.loading" style="text-align: center; padding: 50px;">
-                    <i class="fa fa-spin fa-spinner fa-3x" style="color: var(--secondary-color);"></i>
-                </div>
-                
-                <div t-elif="state.picking">
+        <div style="display: flex; flex-direction: column; height: 100%;">
+            <div t-if="state.loading" style="text-align: center; padding: 50px;">
+                <i class="fa fa-spin fa-spinner fa-3x" style="color: var(--secondary-color);"></i>
+            </div>
+            
+            <t t-elif="state.picking">
+                <div class="shipper-container" style="flex: 1; padding-bottom: 0;">
                     <!-- Step Header representing the picking -->
-                    <div class="card-box" style="padding: 15px; margin-bottom: 15px;">
+                    <div class="card-box" style="padding: 15px; margin-bottom: 15px; flex-shrink: 0;">
                         <div class="step-header" style="margin-bottom: 0; padding-bottom: 0; border-bottom: none; display: flex; justify-content: space-between; align-items: center;">
                             <div style="display: flex; align-items: center;">
                                 <div class="step-icon">
@@ -26,16 +26,16 @@
                         </div>
                     </div>
                 
-                    <div class="card-box" style="padding: 15px;">
+                    <div class="card-box" style="padding: 15px; display: flex; flex-direction: column; flex: 1; overflow: hidden; margin-bottom: 0;">
                         <!-- Active Location Banner -->
-                        <div t-if="props.scannedLocationName" class="alert alert-info" style="margin-bottom: 15px; padding: 10px; border-radius: 8px; font-weight: 600; display: flex; align-items: center; gap: 8px; border-left: 4px solid var(--info-color);">
+                        <div t-if="props.scannedLocationName" class="alert alert-info" style="margin-bottom: 15px; padding: 10px; border-radius: 8px; font-weight: 600; display: flex; align-items: center; gap: 8px; border-left: 4px solid var(--info-color); flex-shrink: 0;">
                             <i class="fa fa-map-marker-alt"></i> Vị trí quét tiếp theo: <t t-esc="props.scannedLocationName"/>
                         </div>
                         
-                        <div style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px;">
+                        <div style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px; flex-shrink: 0;">
                             Danh sách sản phẩm
                         </div>
-                        <div class="items-list" style="margin-top: 0;">
+                        <div class="items-list scrollable-body" style="margin-top: 0; padding-right: 5px;">
                             <t t-foreach="state.picking.lines" t-as="line" t-key="line.move_id">
                                 <div class="item-card-wrapper" style="border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 10px; overflow: hidden;">
                                     <div t-attf-class="item-card #{line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0 ? 'scanned' : ''}" style="border: none; margin-bottom: 0;">
@@ -85,8 +85,8 @@
                     </div>
                 </div>
                 
-                <!-- Fixed Footer -->
-                <div style="position: fixed; bottom: 0; left: 0; width: 100%; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border-top: 1px solid var(--border-color); padding: 15px; box-sizing: border-box; display: flex; gap: 10px; z-index: 100; padding-bottom: env(safe-area-inset-bottom, 15px);">
+                <!-- Fixed Footer (Flex instead of fixed) -->
+                <div style="background: rgba(255, 255, 255, 0.95); border-top: 1px solid var(--border-color); padding: 15px; box-sizing: border-box; display: flex; gap: 10px; flex-shrink: 0;">
                     <button class="btn btn-outline" style="flex: 1; padding: 12px;" t-on-click="props.onBack">
                         <i class="fa fa-arrow-left"></i> Quay lại
                     </button>
@@ -97,7 +97,7 @@
                         <i class="fa fa-check"></i> Xác nhận
                     </button>
                 </div>
-            </div>
+            </t>
         </div>
     </t>
 </templates>

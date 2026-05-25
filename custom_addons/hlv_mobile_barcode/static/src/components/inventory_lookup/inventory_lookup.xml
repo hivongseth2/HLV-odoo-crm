@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
     <t t-name="hlv_mobile_barcode.InventoryLookup">
-        <div>
-            <div class="shipper-container">
+        <div style="display: flex; flex-direction: column; height: 100%;">
+            <div class="shipper-container" style="flex: 1; padding-bottom: 15px;">
                 <!-- Header -->
-                <div class="shipper-header">
+                <div class="shipper-header" style="flex-shrink: 0;">
                     <div class="header-title" style="font-size: 1rem;">
                         <i class="fa fa-search"></i> <t t-esc="state.title"/>
                     </div>
@@ -21,12 +21,12 @@
                     </div>
                 </div>
                 
-                <div class="card-box" style="margin-top: 10px; padding: 15px;">
+                <div class="card-box" style="margin-top: 10px; padding: 15px; display: flex; flex-direction: column; flex: 1; overflow: hidden; margin-bottom: 0;">
                     <div t-if="state.loading" style="text-align: center; padding: 30px;">
                         <i class="fa fa-spin fa-spinner fa-2x" style="color: var(--secondary-color);"></i>
                     </div>
                     
-                    <div t-else="">
+                    <div t-else="" class="scrollable-body" style="padding-right: 5px;">
                         <t t-if="state.results.length === 0 and (!state.reservations or state.reservations.length === 0)">
                             <div style="text-align: center; padding: 30px; color: var(--text-muted);">
                                 <i class="fa fa-box-open fa-3x" style="opacity: 0.2; margin-bottom: 10px;"></i>
