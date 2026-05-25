@@ -67,6 +67,28 @@ class SaleOrder(models.Model):
         sanitize=False
     )
 
+    shopee_cost_of_goods_sold = fields.Float(
+        string='Shopee COGS (Giá trị hàng)',
+        compute='_compute_shopee_escrow_amounts',
+        store=True,
+        digits=(16, 0),
+        help='cost_of_goods_sold từ Shopee Escrow — tổng giá bán thực tế các sản phẩm (trước phí sàn).',
+    )
+    shopee_escrow_amount = fields.Float(
+        string='Shopee Thực Nhận (Escrow)',
+        compute='_compute_shopee_escrow_amounts',
+        store=True,
+        digits=(16, 0),
+        help='escrow_amount từ Shopee Escrow — số tiền thực nhận về ví sau khi trừ toàn bộ phí sàn.',
+    )
+
+    @api.depends('shopee_escrow_data')
+    def _compute_shopee_escrow_amounts(self):
+        for order in self:
+            income = (order.shopee_escrow_data or {}).get('order_income', {})
+            order.shopee_cost_of_goods_sold = income.get('cost_of_goods_sold', 0.0)
+            order.shopee_escrow_amount = income.get('escrow_amount', 0.0)
+
     @api.depends('shopee_escrow_data')
     def _compute_shopee_escrow_html(self):
         for order in self:
