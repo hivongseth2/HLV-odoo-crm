@@ -29,7 +29,12 @@ class SaleOrderWebhookEnqueue(models.Model):
         return result
 
     def _maybe_enqueue_webhook(self, new_status):
-        """Enqueue nếu config bật và status khớp."""
+        """Enqueue nếu config bật và status khớp.
+
+        Dùng savepoint để cách ly: nếu Queue.create() fail ở tầng DB,
+        savepoint rollback nhưng transaction chính (đã write shopee_order_status)
+        vẫn được commit bình thường.
+        """
         try:
             config = self.env['amis.callback.config'].sudo().search([], limit=1)
             if not config or not config.webhook_auto_publish_enabled:
@@ -56,15 +61,21 @@ class SaleOrderWebhookEnqueue(models.Model):
                     )
                     continue
 
-                Queue.create({
-                    'order_ref': so.shopee_order_ref,
-                    'sale_order_id': so.id,
-                    'trigger_status': new_status,
-                    'state': 'pending',
-                })
-                _logger.info(
-                    'WebhookQueue: Enqueued meInvoice publish for SO %s (ref=%s, status=%s)',
-                    so.name, so.shopee_order_ref, new_status,
-                )
+                try:
+                    with self.env.cr.savepoint():
+                        Queue.create({
+                            'order_ref': so.shopee_order_ref,
+                            'sale_order_id': so.id,
+                            'trigger_status': new_status,
+                            'state': 'pending',
+                        })
+                    _logger.info(
+                        'WebhookQueue: Enqueued meInvoice publish for SO %s (ref=%s, status=%s)',
+                        so.name, so.shopee_order_ref, new_status,
+                    )
+                except Exception as create_err:
+                    _logger.error(
+                        'WebhookQueue: Queue.create thất bại SO %s: %s', so.name, create_err
+                    )
         except Exception as e:
             _logger.error('WebhookQueue: _maybe_enqueue_webhook error: %s', e)

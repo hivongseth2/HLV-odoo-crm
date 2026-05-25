@@ -13,8 +13,10 @@
     'version': '0.1',
     'depends': ['sale', 'hlv_zalo_zns', 'shopee_order_fetch'],
     'data': [
+        'security/ir.model.access.csv',
         'data/cron_data.xml',
         'views/sale_order_views.xml',
+        'views/shopee_poll_log_views.xml',
     ],
     'installable': True,
     'application': False,

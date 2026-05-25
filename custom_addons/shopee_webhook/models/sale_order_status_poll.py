@@ -57,6 +57,7 @@ class SaleOrderStatusPoll(models.Model):
         2. Group theo shopee_shop_id.
         3. Với mỗi shop, gọi Shopee API get_order_detail theo batch 50 đơn.
         4. Cập nhật shopee_order_status → kích hoạt _maybe_enqueue_webhook.
+        5. Ghi log vào shopee.poll.log để theo dõi.
         """
         cutoff = fields.Datetime.now() - timedelta(days=_MAX_AGE_DAYS)
         orders = self.sudo().search([
@@ -66,6 +67,16 @@ class SaleOrderStatusPoll(models.Model):
             ('state', '!=', 'cancel'),
             ('create_date', '>=', cutoff),
         ])
+
+        # Tạo log record ngay từ đầu để track kể cả khi không có gì thay đổi
+        PollLog = self.env['shopee.poll.log'].sudo()
+        log = PollLog.create({
+            'polled_at': fields.Datetime.now(),
+            'total_polled': len(orders),
+            'changed_count': 0,
+            'state': 'done',
+        })
+
         if not orders:
             _logger.info('ShopeeStatusPoll: không có đơn nào cần poll.')
             return
@@ -80,16 +91,21 @@ class SaleOrderStatusPoll(models.Model):
             by_shop[shop.id]['orders'].append(so)
 
         total_updated = 0
+        has_error = False
+        log_lines = []  # collect rồi bulk-create cuối
+
         for shop_id, data in by_shop.items():
             shop = data['shop']
             shop_orders = data['orders']
+            shop_name = shop.display_name or str(shop_id)
             try:
                 creds = shopee_api.get_credentials_from_shop(shop)
             except Exception as exc:
                 _logger.warning(
                     'ShopeeStatusPoll: không lấy được credentials cho shop %s: %s',
-                    shop.display_name, exc,
+                    shop_name, exc,
                 )
+                has_error = True
                 continue
 
             # Batch theo 50
@@ -104,15 +120,17 @@ class SaleOrderStatusPoll(models.Model):
                 except Exception as exc:
                     _logger.warning(
                         'ShopeeStatusPoll: call_order_detail lỗi shop=%s batch=%d: %s',
-                        shop.display_name, i // _BATCH_SIZE + 1, exc,
+                        shop_name, i // _BATCH_SIZE + 1, exc,
                     )
+                    has_error = True
                     continue
 
                 if status_code != 200 or body.get('error'):
                     _logger.warning(
                         'ShopeeStatusPoll: Shopee trả lỗi shop=%s: %s',
-                        shop.display_name, body.get('error') or status_code,
+                        shop_name, body.get('error') or status_code,
                     )
+                    has_error = True
                     continue
 
                 order_list = body.get('response', {}).get('order_list') or []
@@ -131,6 +149,8 @@ class SaleOrderStatusPoll(models.Model):
                     old_status = so.shopee_order_status or ''
                     if new_status == old_status:
                         continue
+                    write_ok = True
+                    note = ''
                     try:
                         so.sudo().write({'shopee_order_status': new_status})
                         total_updated += 1
@@ -139,8 +159,28 @@ class SaleOrderStatusPoll(models.Model):
                             so.name, old_status or '(trống)', new_status,
                         )
                     except Exception as exc:
+                        write_ok = False
+                        note = str(exc)[:255]
+                        has_error = True
                         _logger.warning(
                             'ShopeeStatusPoll: write thất bại SO %s: %s', so.name, exc
                         )
+                    log_lines.append({
+                        'log_id': log.id,
+                        'sale_order_id': so.id,
+                        'order_ref': so.shopee_order_ref,
+                        'shop_name': shop_name,
+                        'old_status': old_status or '(trống)',
+                        'new_status': new_status,
+                        'changed': write_ok,
+                        'note': note,
+                    })
 
+        # Bulk-create lines và cập nhật tổng kết
+        if log_lines:
+            self.env['shopee.poll.log.line'].sudo().create(log_lines)
+        log.sudo().write({
+            'changed_count': total_updated,
+            'state': 'partial' if has_error else 'done',
+        })
         _logger.info('ShopeeStatusPoll: hoàn thành — cập nhật %d đơn.', total_updated)

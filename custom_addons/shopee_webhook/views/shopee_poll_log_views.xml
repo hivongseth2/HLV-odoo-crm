@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- ─── shopee.poll.log — List ─── -->
+    <record id="view_shopee_poll_log_list" model="ir.ui.view">
+        <field name="name">shopee.poll.log.list</field>
+        <field name="model">shopee.poll.log</field>
+        <field name="arch" type="xml">
+            <list string="Lịch sử Poll Trạng Thái Shopee"
+                  default_order="polled_at desc"
+                  decoration-danger="state == 'error'"
+                  decoration-warning="state == 'partial'"
+                  decoration-success="state == 'done'">
+                <field name="polled_at" string="Thời điểm"/>
+                <field name="total_polled" string="Đơn kiểm tra"/>
+                <field name="changed_count" string="Đơn thay đổi"/>
+                <field name="state" string="Kết quả" widget="badge"
+                       decoration-danger="state == 'error'"
+                       decoration-warning="state == 'partial'"
+                       decoration-success="state == 'done'"/>
+                <field name="error_msg" string="Lỗi" optional="show"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ─── shopee.poll.log — Form ─── -->
+    <record id="view_shopee_poll_log_form" model="ir.ui.view">
+        <field name="name">shopee.poll.log.form</field>
+        <field name="model">shopee.poll.log</field>
+        <field name="arch" type="xml">
+            <form string="Chi tiết Poll Trạng Thái Shopee" create="false">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="polled_at" string="Thời điểm poll"/>
+                            <field name="state" string="Kết quả" widget="badge"
+                                   decoration-danger="state == 'error'"
+                                   decoration-warning="state == 'partial'"
+                                   decoration-success="state == 'done'"/>
+                        </group>
+                        <group>
+                            <field name="total_polled" string="Tổng đơn kiểm tra"/>
+                            <field name="changed_count" string="Đơn thay đổi trạng thái"/>
+                        </group>
+                    </group>
+                    <group invisible="not error_msg">
+                        <field name="error_msg" string="Lỗi" nolabel="1"/>
+                    </group>
+                    <notebook>
+                        <page string="Đơn thay đổi trạng thái" name="lines">
+                            <field name="line_ids" nolabel="1">
+                                <list string="Chi tiết thay đổi"
+                                      decoration-danger="not changed"
+                                      create="false" delete="false">
+                                    <field name="sale_order_id" string="Đơn hàng"/>
+                                    <field name="order_ref" string="Mã Shopee"/>
+                                    <field name="shop_name" string="Cửa hàng"/>
+                                    <field name="old_status" string="Trạng thái cũ"/>
+                                    <field name="new_status" string="Trạng thái mới" widget="badge"
+                                           decoration-danger="new_status in ('Đã hủy', 'CANCELLED')"
+                                           decoration-success="new_status in ('Hoàn thành', 'COMPLETED', 'Đã nhận hàng')"
+                                           decoration-info="new_status in ('Đang giao', 'Chờ lấy hàng', 'Đã xử lý')"
+                                           decoration-warning="new_status in ('Giao lại', 'Chờ xác nhận hủy')"/>
+                                    <field name="changed" string="Lưu OK" widget="boolean"/>
+                                    <field name="note" string="Lỗi" optional="show"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- ─── Action ─── -->
+    <record id="action_shopee_poll_log" model="ir.actions.act_window">
+        <field name="name">Lịch sử Poll Trạng Thái Shopee</field>
+        <field name="res_model">shopee.poll.log</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Chưa có lần poll nào.</p>
+            <p>Cron tự động chạy mỗi 3 tiếng để hỏi lại trạng thái các đơn Shopee chưa kết thúc.</p>
+        </field>
+    </record>
+
+    <!-- ─── Menu ─── -->
+    <menuitem id="menu_shopee_root"
+              name="Shopee"
+              sequence="55"
+              web_icon="shopee_webhook,static/description/icon.png"
+              groups="sales_team.group_sale_salesman"/>
+    <menuitem id="menu_shopee_poll_log"
+              name="Lịch sử Poll Trạng Thái"
+              parent="menu_shopee_root"
+              action="action_shopee_poll_log"
+              sequence="10"
+              groups="sales_team.group_sale_manager"/>
+</odoo>

@@ -2,3 +2,4 @@
 
 from . import sale_order
 from . import sale_order_status_poll
+from . import shopee_poll_log
