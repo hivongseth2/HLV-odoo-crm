@@ -41,6 +41,32 @@ export class PickingScanner extends Component {
             if (data.error) {
                 this.notification.add(data.error, { type: "danger" });
             } else {
+                if (['draft', 'confirmed', 'assigned'].includes(data.state)) {
+                    const storageKey = 'hlv_opened_pickings';
+                    let openedPickings = [];
+                    try {
+                        openedPickings = JSON.parse(localStorage.getItem(storageKey) || '[]');
+                    } catch (e) {
+                        openedPickings = [];
+                    }
+                    
+                    if (!openedPickings.includes(this.props.pickingId)) {
+                        const clearRes = await rpc("/hlv_mobile_barcode/clear_quantities", { picking_id: this.props.pickingId });
+                        if (!clearRes.error) {
+                            openedPickings.push(this.props.pickingId);
+                            if (openedPickings.length > 200) openedPickings = openedPickings.slice(openedPickings.length - 200);
+                            localStorage.setItem(storageKey, JSON.stringify(openedPickings));
+                            
+                            // Re-fetch data after clearing
+                            const newData = await rpc("/hlv_mobile_barcode/get_picking_data", { picking_id: this.props.pickingId });
+                            if (!newData.error) {
+                                this.state.picking = newData;
+                                this.state.loading = false;
+                                return;
+                            }
+                        }
+                    }
+                }
                 this.state.picking = data;
             }
         } catch (e) {
