@@ -563,8 +563,11 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
   <div class="d-flex align-items-center gap-2">
     <div class="btn-group btn-group-sm" role="group">
       <button id="btn-export-excel" class="btn btn-sm btn-success" title="Xuất Excel"><i class="fa fa-file-excel-o"></i> Xuất Excel</button>
-      <button id="btn-export-picking-excel" class="btn btn-sm btn-warning" title="Xuất phiếu xuất kho (OUT đã xong)"><i class="fa fa-truck"></i> Xuất phiếu XK</button>
-      <button id="btn-export-picking-simple-excel" class="btn btn-sm btn-info" title="Xuất phiếu XK giản lược (không in dòng sản phẩm)"><i class="fa fa-file-text-o"></i> Xuất phiếu XK (tóm tắt)</button>
+      <button type="button" class="btn btn-sm btn-success dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false"><span class="visually-hidden">Mở rộng</span></button>
+      <ul class="dropdown-menu">
+        <li><a class="dropdown-item" id="btn-export-picking-excel" href="#" title="Xuất phiếu xuất kho (OUT đã xong)"><i class="fa fa-truck me-2"></i> Xuất phiếu XK</a></li>
+        <li><a class="dropdown-item" id="btn-export-picking-simple-excel" href="#" title="Xuất phiếu XK giản lược (không in dòng sản phẩm)"><i class="fa fa-file-text-o me-2"></i> Xuất phiếu XK (tóm tắt)</a></li>
+      </ul>
     </div>
     <div class="btn-group btn-group-sm" role="group">
       <button id="btn-kanban" class="btn btn-sm btn-primary"><i class="fa fa-th"></i> Kanban</button>
@@ -1216,6 +1219,7 @@ function openDrawer(id){
     +'<th class="text-end">Đơn Giá</th><th class="text-end">TT Thực Xuất</th><th class="text-end">VAT</th><th class="text-end">TT + VAT</th>'
     +'<th class="text-end">Thiếu</th></tr></thead><tbody>';
   var grouped=groupLines(o.lines||[]);
+  var totalSubtotal=0,totalTax=0,totalTotal=0;
   grouped.forEach(function(l){
     var pname=l.product_id?l.product_id[1]:'Unknown';
     var wfree=(l.qty_warehouse_free||0)+(l.qty_reserved_here||0);
@@ -1235,8 +1239,18 @@ function openDrawer(id){
       +'<td class="text-end text-warning" style="font-size:0.82rem">'+fm(l.delivered_tax||0)+'</td>'
       +'<td class="text-end fw-bold text-primary">'+fm(l.delivered_total||0)+'</td>'
       +'<td class="text-end '+(shortage>0?'cell-shortage':'text-muted opacity-50')+'">'+fq(shortage)+'</td></tr>';
+    totalSubtotal+=(l.delivered_subtotal||0);
+    totalTax+=(l.delivered_tax||0);
+    totalTotal+=(l.delivered_total||0);
   });
-  h+='</tbody></table>';
+  h+='</tbody>'
+    +'<tfoot><tr style="background:#f8fafc;border-top:2px solid #e2e8f0">'
+    +'<td colspan="6" class="text-end text-muted small fw-semibold py-2">Tổng</td>'
+    +'<td class="text-end fw-bold text-success py-2">'+fm(totalSubtotal)+'</td>'
+    +'<td class="text-end fw-bold py-2" style="color:#b45309">'+fm(totalTax)+'</td>'
+    +'<td class="text-end fw-bold text-primary py-2">'+fm(totalTotal)+'</td>'
+    +'<td></td>'
+    +'</tr></tfoot></table>';
   // Đề xuất chuyển kho
   if(o.transfer_suggestions&&o.transfer_suggestions.length){
     h+='<div class="alert alert-warning border-warning mt-3 p-3" style="background:rgba(255,193,7,.08)">'

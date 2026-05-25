@@ -8,7 +8,7 @@
     <t t-name="hlv_sale_delivery_planning.Drawer">
         <div t-if="state.isDrawerOpen"
              class="offcanvas offcanvas-end show shadow-lg" tabindex="-1"
-             style="visibility: visible; width: 860px; z-index: 1050; position: fixed; top: 0; bottom: 0; right: 0; background: white;"
+             style="visibility: visible; width: 1000px; z-index: 1050; position: fixed; top: 0; bottom: 0; right: 0; background: white;"
              t-on-click="() => { state.printMenuPickingId = null; }">
 
             <!-- Dropdown in phiếu (fixed, thoát khỏi overflow-auto) -->
@@ -207,16 +207,16 @@
                 <table class="table table-bordered table-sm table-hover text-center align-middle bg-white shadow-sm mb-4">
                     <thead class="table-light">
                         <tr>
-                            <th class="text-start">Sản phẩm</th>
-                            <th width="70">Chốt Bán</th>
-                            <th width="70">Đóng Gói</th>
-                            <th width="70">Tồn Kho</th>
-                            <th width="70">Đã Giao</th>
-                            <th width="90" class="text-end">Đơn Giá</th>
-                            <th width="110" class="text-end">TT Thực Xuất</th>
-                            <th width="90" class="text-end">VAT</th>
-                            <th width="110" class="text-end">TT + VAT</th>
-                            <th width="70">Thiếu</th>
+                            <th class="text-center">Sản phẩm</th>
+                            <th width="70" class="text-center">Chốt Bán</th>
+                            <th width="70" class="text-center">Đóng Gói</th>
+                            <th width="70" class="text-center">Tồn Kho</th>
+                            <th width="70" class="text-center">Đã Giao</th>
+                            <th width="90" class="text-center">Đơn Giá</th>
+                            <th width="110" class="text-center">TT Thực Xuất</th>
+                            <th width="90" class="text-center">VAT</th>
+                            <th width="110" class="text-center">TT + VAT</th>
+                            <th width="70" class="text-center">Thiếu</th>
                         </tr>
                     </thead>
                     <tbody>
