@@ -42,6 +42,7 @@ export class BarcodeApp extends Component {
             cameraFallback: false,
             cameraNeedsActivation: false,
             cameraErrorMessage: "",
+            showCameraPopup: false,
             pickingRefreshTick: 0,
         });
         
@@ -73,7 +74,9 @@ export class BarcodeApp extends Component {
         
         onMounted(() => {
             document.addEventListener('keydown', this.handleKeyDown.bind(this));
-            this.startPersistentCamera();
+            if (this.state.currentView !== 'main') {
+                this.startPersistentCamera();
+            }
         });
     }
 
@@ -166,17 +169,27 @@ export class BarcodeApp extends Component {
             
             this.playSound('success');
             
-            if (result.type === 'picking') {
+            if (result.type === 'picking' || ['product', 'location', 'package'].includes(result.type)) {
+                // Close the popup camera if it's currently open
+                this.closeCamera();
+                this.state.showCameraPopup = false;
+
                 this.pushHistory();
-                this.state.pickingId = result.id;
-                this.state.pickingName = result.name;
-                this.state.currentView = 'picking';
-            } else if (['product', 'location', 'package'].includes(result.type)) {
-                this.pushHistory();
-                this.state.lookupType = result.type;
-                this.state.recordId = result.id;
-                this.state.lookupTitle = result.name;
-                this.state.currentView = 'lookup';
+                if (result.type === 'picking') {
+                    this.state.pickingId = result.id;
+                    this.state.pickingName = result.name;
+                    this.state.currentView = 'picking';
+                } else {
+                    this.state.lookupType = result.type;
+                    this.state.recordId = result.id;
+                    this.state.lookupTitle = result.name;
+                    this.state.currentView = 'lookup';
+                }
+
+                // Start persistent inline camera on the newly loaded view
+                setTimeout(() => {
+                    this.startPersistentCamera(false);
+                }, 200);
             }
         } catch (error) {
             this.playSound('error');
@@ -209,6 +222,8 @@ export class BarcodeApp extends Component {
     }
 
     goBack() {
+        this.closeCamera();
+        this.state.showCameraPopup = false;
         if (this.history && this.history.length > 0) {
             const prevState = this.history.pop();
             this.state.currentView = prevState.currentView;
@@ -220,12 +235,21 @@ export class BarcodeApp extends Component {
             this.state.prefillLocationBarcode = prevState.prefillLocationBarcode;
             this.state.prefillLocationName = prevState.prefillLocationName;
             this.viewScannerCallback = null;
+
+            // If the restored view is not main, start the inline camera
+            if (this.state.currentView !== 'main') {
+                setTimeout(() => {
+                    this.startPersistentCamera(false);
+                }, 150);
+            }
         } else {
             this.goToMain();
         }
     }
 
     goToMain() {
+        this.closeCamera();
+        this.state.showCameraPopup = false;
         this.history = [];
         this.state.currentView = 'main';
         this.state.pickingId = null;
@@ -276,6 +300,18 @@ export class BarcodeApp extends Component {
         this.state.recordId = productId;
         this.state.lookupTitle = productName;
         this.state.currentView = 'lookup';
+    }
+
+    openPopupCamera() {
+        this.state.showCameraPopup = true;
+        setTimeout(() => {
+            this.startPersistentCamera(false);
+        }, 150);
+    }
+
+    closePopupCamera() {
+        this.closeCamera();
+        this.state.showCameraPopup = false;
     }
 
     async startPersistentCamera(isUserGesture = false) {
