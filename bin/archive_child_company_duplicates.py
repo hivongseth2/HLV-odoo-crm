@@ -21,49 +21,19 @@ Cách chạy (DRY RUN mặc định):
 
 from datetime import datetime, timedelta
 
-DRY_RUN     = True    # ← đổi False để chạy thật
+DRY_RUN     = False   # ← đổi False để chạy thật
 RECENT_DAYS = 90      # Đơn trong vòng N ngày → skip (không archive)
 
 # ─── helpers ──────────────────────────────────────────────────────────────────
 SEP = "=" * 90
 def section(t): print(f"\n{SEP}\n  {t}\n{SEP}")
 
-cutoff_date = datetime.now() - timedelta(days=RECENT_DAYS)
 cr = env.cr
-
-def has_recent_orders(partner_id):
-    cr.execute("""
-        SELECT 1 FROM purchase_order
-        WHERE partner_id = %s AND date_order >= %s
-        LIMIT 1
-    """, (partner_id, cutoff_date))
-    if cr.fetchone(): return True
-    cr.execute("""
-        SELECT 1 FROM sale_order
-        WHERE partner_id = %s AND date_order >= %s
-        LIMIT 1
-    """, (partner_id, cutoff_date))
-    return bool(cr.fetchone())
-
-def any_orders(partner_id):
-    cr.execute("SELECT COUNT(*) FROM purchase_order WHERE partner_id = %s", (partner_id,))
-    if cr.fetchone()[0]: return True
-    cr.execute("SELECT COUNT(*) FROM sale_order WHERE partner_id = %s", (partner_id,))
-    return bool(cr.fetchone()[0])
-
-def count_orders(partner_id):
-    cr.execute("SELECT COUNT(*) FROM purchase_order WHERE partner_id = %s", (partner_id,))
-    po = cr.fetchone()[0]
-    cr.execute("SELECT COUNT(*) FROM sale_order WHERE partner_id = %s", (partner_id,))
-    so = cr.fetchone()[0]
-    cr.execute("SELECT COUNT(*) FROM stock_picking WHERE partner_id = %s", (partner_id,))
-    pick = cr.fetchone()[0]
-    return po, so, pick
 
 # ─── 1. TÌM CÁC CẶP DUPLICATE ────────────────────────────────────────────────
 section("1. TÌM CÁC CẶP DUPLICATE COMPANY")
 
-# Loại 1: is_company=True có parent_id cùng tên (chính là anomaly Milwaukee)
+# Loại 1: is_company=True có parent_id cùng tên (anomaly)
 cr.execute("""
     SELECT c.id as dup_id, p.id as master_id, c.name
     FROM res_partner c
@@ -74,11 +44,11 @@ cr.execute("""
       AND upper(trim(c.name)) = upper(trim(p.name))
     ORDER BY c.name
 """)
-child_dups = cr.fetchall()   # (dup_id, master_id, name)
+child_dups = cr.fetchall()
 
-# Loại 2: 2 root companies cùng tên (parent_id IS NULL)
+# Loại 2: 2 root companies cùng tên → archive cái mới hơn (id lớn hơn)
 cr.execute("""
-    SELECT a.id, b.id, a.name
+    SELECT a.id as master_id, b.id as dup_id, a.name
     FROM res_partner a
     JOIN res_partner b ON upper(trim(a.name)) = upper(trim(b.name))
                        AND a.id < b.id
@@ -87,79 +57,77 @@ cr.execute("""
       AND a.active = True AND b.active = True
     ORDER BY a.name
 """)
-root_dups = cr.fetchall()   # (id_older, id_newer, name)
+root_dups = cr.fetchall()
 
 print(f"\n  Loại 1 (con bất thường - is_company+parent_id cùng tên): {len(child_dups)}")
 print(f"  Loại 2 (2 root company cùng tên)                        : {len(root_dups)}")
 
-# ─── 2. PHÂN LOẠI: SAFE vs SKIP ───────────────────────────────────────────────
-section("2. PHÂN LOẠI")
+# ─── 2. DANH SÁCH SẼ ARCHIVE ─────────────────────────────────────────────────
+section("2. DANH SÁCH SẼ ARCHIVE")
 
-safe_list  = []   # [(dup_id, master_id, name, reason)]
-skip_list  = []   # [(dup_id, master_id, name, reason)]
+archive_list = []  # [(dup_id, master_id, name)]
 
-# -- Loại 1: archive dup (con bất thường), giữ master (cha)
 for dup_id, master_id, name in child_dups:
-    if has_recent_orders(dup_id):
-        po, so, pick = count_orders(dup_id)
-        skip_list.append((dup_id, master_id, name,
-                          f"dup có đơn gần đây (PO={po} SO={so} pick={pick})"))
-    else:
-        po, so, pick = count_orders(dup_id)
-        safe_list.append((dup_id, master_id, name,
-                          f"[loại1-con] PO={po} SO={so} pick={pick}"))
+    archive_list.append((dup_id, master_id, name))
 
-# -- Loại 2: archive cái mới hơn (id lớn hơn = b), giữ cái cũ (a)
 for master_id, dup_id, name in root_dups:
-    # Ưu tiên giữ cái có đơn nhiều hơn, hoặc cái cũ hơn (ID nhỏ hơn)
-    master_has = any_orders(master_id)
-    dup_has    = any_orders(dup_id)
+    archive_list.append((dup_id, master_id, name))
 
-    if dup_has and has_recent_orders(dup_id):
-        skip_list.append((dup_id, master_id, name,
-                          f"dup có đơn gần đây (id={dup_id} > id={master_id})"))
-    elif not dup_has and not has_recent_orders(dup_id):
-        po, so, pick = count_orders(dup_id)
-        safe_list.append((dup_id, master_id, name,
-                          f"[loại2-root] PO={po} SO={so} pick={pick}"))
-    else:
-        po, so, pick = count_orders(dup_id)
-        skip_list.append((dup_id, master_id, name,
-                          f"dup có đơn (nhưng không gần đây) - xem thủ công PO={po}"))
-
-print(f"\n  ✓ AN TOÀN để archive : {len(safe_list)}")
-print(f"  ✗ SKIP (có đơn gần đây): {len(skip_list)}")
-
-print(f"\n  --- SKIP LIST (cần xử lý thủ công) ---")
-for dup_id, master_id, name, reason in skip_list[:30]:
-    print(f"  dup={dup_id:>7}  master={master_id:>7}  {name[:55]:55}  {reason}")
-if len(skip_list) > 30:
-    print(f"  ... và {len(skip_list)-30} cặp khác")
-
-print(f"\n  --- SAFE LIST ---")
-for dup_id, master_id, name, reason in safe_list[:50]:
-    print(f"  dup={dup_id:>7}  master={master_id:>7}  {name[:55]:55}  {reason}")
-if len(safe_list) > 50:
-    print(f"  ... và {len(safe_list)-50} cặp khác")
+print(f"\n  Tổng sẽ archive: {len(archive_list)}\n")
+print(f"  {'DUP_ID':>7}  {'MASTER_ID':>9}  NAME")
+print(f"  {'-'*7}  {'-'*9}  {'-'*60}")
+for dup_id, master_id, name in archive_list:
+    print(f"  {dup_id:>7}  {master_id:>9}  {name[:60]}")
 
 # ─── 3. THỰC HIỆN ────────────────────────────────────────────────────────────
 if DRY_RUN:
     section("DRY RUN — Đổi DRY_RUN = False để thực thi")
-    print(f"\n  Sẽ archive {len(safe_list)} records")
+    print(f"\n  Sẽ archive {len(archive_list)} records")
 else:
-    section(f"THỰC HIỆN ARCHIVE {len(safe_list)} records ...")
+    section(f"THỰC HIỆN ARCHIVE {len(archive_list)} records ...")
 
     archived = 0
     errors   = 0
     FIELDS_TO_CLEAR = ['vat', 'ref', 'company_registry', 'phone', 'mobile',
                        'email', 'street', 'city', 'zip']
 
-    for dup_id, master_id, name, reason in safe_list:
+    # Các bảng cần reassign partner_id từ dup → master
+    REASSIGN_TABLES = [
+        'purchase_order',
+        'sale_order',
+        'stock_picking',
+        'account_move',
+        'pos_order',
+        'mrp_production',
+        'purchase_order_line',
+        'sale_order_line',
+        'account_move_line',
+    ]
+
+    for dup_id, master_id, name in archive_list:
         try:
             dup    = env['res.partner'].sudo().with_context(active_test=False).browse(dup_id)
             master = env['res.partner'].sudo().browse(master_id)
 
-            # -- Chuyển ref / company_registry sang master nếu master chưa có --
+            # -- Reassign tất cả đơn hàng từ dup → master --
+            reassigned = {}
+            for tbl in REASSIGN_TABLES:
+                # Chỉ update nếu bảng và cột tồn tại
+                cr.execute("""
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = %s AND column_name = 'partner_id'
+                      AND table_schema = 'public'
+                """, (tbl,))
+                if not cr.fetchone():
+                    continue
+                cr.execute(
+                    f"UPDATE {tbl} SET partner_id = %s WHERE partner_id = %s",
+                    (master_id, dup_id)
+                )
+                if cr.rowcount:
+                    reassigned[tbl] = cr.rowcount
+
+            # -- Chuyển ref / company_registry / vat sang master nếu master chưa có --
             transferred = []
             if not master.ref and dup.ref:
                 master.write({'ref': dup.ref})
@@ -171,19 +139,27 @@ else:
                 master.write({'vat': dup.vat})
                 transferred.append(f"vat={dup.vat}")
 
-            # -- Xóa trắng thông tin trên dup trước khi archive --
+            # -- Xóa trắng thông tin trên dup rồi archive --
             clear_vals = {f: False for f in FIELDS_TO_CLEAR}
-            clear_vals['active'] = False
-            clear_vals['parent_id'] = False   # bỏ liên kết cha
+            clear_vals['active']    = False
+            clear_vals['parent_id'] = False
             dup.write(clear_vals)
 
-            msg = f"Archived as duplicate of id={master_id}. Transferred: {', '.join(transferred) or 'none'}"
+            msg_parts = []
+            if reassigned:
+                msg_parts.append("Reassigned: " + ", ".join(f"{t}({n})" for t, n in reassigned.items()))
             if transferred:
-                master.message_post(body=msg)
+                msg_parts.append("Transferred: " + ", ".join(transferred))
+            if msg_parts:
+                master.message_post(body=f"Archived duplicate id={dup_id}. " + " | ".join(msg_parts))
 
             archived += 1
-            print(f"  ✓ archive id={dup_id:>7}  → master={master_id:>7}  [{name[:50]}]"
-                  + (f"  transferred: {', '.join(transferred)}" if transferred else ""))
+            extra = ""
+            if reassigned:
+                extra += "  moved: " + " ".join(f"{t}({n})" for t, n in reassigned.items())
+            if transferred:
+                extra += "  transferred: " + ", ".join(transferred)
+            print(f"  ✓ archive id={dup_id:>7}  → master={master_id:>7}  [{name[:45]}]{extra}")
 
         except Exception as e:
             errors += 1
@@ -192,15 +168,13 @@ else:
     env.cr.commit()
     print(f"\n  Đã commit. Archived={archived}  Errors={errors}")
 
-    # -- Verify --
     section("VERIFY")
-    cr.execute("""
-        SELECT COUNT(*) FROM res_partner
-        WHERE is_company = True AND active = True
-          AND parent_id IS NOT NULL
-          AND id IN %s
-    """, (tuple(d for d, m, n, r in safe_list) or (0,),))
+    remaining_ids = tuple(d for d, m, n in archive_list) or (0,)
+    cr.execute(
+        "SELECT COUNT(*) FROM res_partner WHERE active = True AND id IN %s",
+        (remaining_ids,)
+    )
     remaining = cr.fetchone()[0]
-    print(f"  Records vẫn còn active trong safe_list: {remaining}  (mong đợi: 0)")
+    print(f"  Records vẫn còn active: {remaining}  (mong đợi: 0)")
 
 print("\n  Done.")
