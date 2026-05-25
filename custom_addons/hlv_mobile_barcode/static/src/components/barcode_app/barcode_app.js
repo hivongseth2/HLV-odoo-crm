@@ -171,7 +171,7 @@ export class BarcodeApp extends Component {
             
             if (result.type === 'picking' || ['product', 'location', 'package'].includes(result.type)) {
                 // Close the popup camera if it's currently open
-                this.closeCamera();
+                await this.closeCamera();
                 this.state.showCameraPopup = false;
 
                 this.pushHistory();
@@ -187,8 +187,8 @@ export class BarcodeApp extends Component {
                 }
 
                 // Start persistent inline camera on the newly loaded view
-                setTimeout(() => {
-                    this.startPersistentCamera(false);
+                setTimeout(async () => {
+                    await this.startPersistentCamera(false);
                 }, 200);
             }
         } catch (error) {
@@ -221,8 +221,8 @@ export class BarcodeApp extends Component {
         });
     }
 
-    goBack() {
-        this.closeCamera();
+    async goBack() {
+        await this.closeCamera();
         this.state.showCameraPopup = false;
         if (this.history && this.history.length > 0) {
             const prevState = this.history.pop();
@@ -238,17 +238,17 @@ export class BarcodeApp extends Component {
 
             // If the restored view is not main, start the inline camera
             if (this.state.currentView !== 'main') {
-                setTimeout(() => {
-                    this.startPersistentCamera(false);
+                setTimeout(async () => {
+                    await this.startPersistentCamera(false);
                 }, 150);
             }
         } else {
-            this.goToMain();
+            await this.goToMain();
         }
     }
 
-    goToMain() {
-        this.closeCamera();
+    async goToMain() {
+        await this.closeCamera();
         this.state.showCameraPopup = false;
         this.history = [];
         this.state.currentView = 'main';
@@ -309,8 +309,8 @@ export class BarcodeApp extends Component {
         }, 150);
     }
 
-    closePopupCamera() {
-        this.closeCamera();
+    async closePopupCamera() {
+        await this.closeCamera();
         this.state.showCameraPopup = false;
     }
 
@@ -342,11 +342,7 @@ export class BarcodeApp extends Component {
         }
         
         try {
-            if (this.html5Qrcode) {
-                try { await this.html5Qrcode.stop(); } catch(e) {}
-                try { this.html5Qrcode.clear(); } catch(e) {}
-                this.html5Qrcode = null;
-            }
+            await this.closeCamera();
 
             this.html5Qrcode = new window.Html5Qrcode("reader");
             
@@ -429,14 +425,17 @@ export class BarcodeApp extends Component {
         this.state.cameraFallback = false;
         this.state.cameraNeedsActivation = false;
         this.state.cameraErrorMessage = "";
-        if (this.html5Qrcode) {
+        
+        const qrcode = this.html5Qrcode;
+        this.html5Qrcode = null; // Immediately nullify to prevent concurrent access
+        
+        if (qrcode) {
             try {
-                await this.html5Qrcode.stop();
+                await qrcode.stop();
             } catch (e) {}
             try {
-                this.html5Qrcode.clear();
+                qrcode.clear();
             } catch (e) {}
-            this.html5Qrcode = null;
         }
     }
 
