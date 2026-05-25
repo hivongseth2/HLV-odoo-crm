@@ -47,6 +47,10 @@ hlv_mobile_barcode/
   * *F5/Reload vs Exit/Reset Sync*:
     - Khi F5/Reload trang: `localStorage` vẫn lưu giữ `hlv_opened_pickings` giúp số lượng quét hiện tại được giữ nguyên và tải lại an toàn từ backend.
     - Khi Quay lại (`goBack()`), về trang chủ (`goToMain()`), hoặc Làm lại (`clearPicking()`): Xóa `pickingId` khỏi `localStorage` và tự động gửi RPC `/hlv_mobile_barcode/clear_quantities` để reset sạch sẽ số lượng quét về 0 trên backend, đảm bảo tính nhất quán của cơ sở dữ liệu.
+- **Hierarchical Location Stock Lookup (Tra cứu tồn kho phân cấp cha-con)**:
+  * Tối ưu hóa API tra cứu tồn kho vị trí bằng cách thay đổi toán tử tìm kiếm `stock.quant` từ `=` sang `child_of` (`[('location_id', 'child_of', location.id)]`). 
+  * Điều này đảm bảo khi người dùng quét vị trí cấp trên hoặc vị trí cha (ví dụ như quét vùng kệ lớn `KBC`), hệ thống sẽ tự động tổng hợp đầy đủ tất cả dữ liệu tồn kho đang nằm ở vị trí cha và các vị trí con/cháu của nó, khớp 100% với hành vi hiển thị của Odoo backend tiêu chuẩn.
+  * Tích hợp hiển thị nhãn vị trí con cụ thể (`location_name`) bên dưới tên sản phẩm trên giao diện `InventoryLookup` để thủ kho biết chính xác sản phẩm đó đang nằm ở vị trí con cụ thể nào.
 - **Dynamic Warehouse Header**: API tự động trả về `warehouse_code` thực tế của phiếu kho (`picking.picking_type_id.warehouse_id.code` hoặc `location.warehouse_id.code`), hiển thị động lên Header dạng "Kho KBC", "Kho TSN"... thay vì "Kho HLV" tĩnh.
 
 ## API / Controllers

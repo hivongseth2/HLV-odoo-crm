@@ -363,7 +363,8 @@ class HLVMobileBarcodeController(http.Controller):
             title = location.display_name
             location_barcode = location.barcode or location.name
             warehouse_code = location.warehouse_id.code or 'HLV'
-            quants = quants.search([('location_id', '=', location.id)])
+            # Use child_of to aggregate stock in all sub-locations (essential for large warehouses like KBC)
+            quants = quants.search([('location_id', 'child_of', location.id)])
             for q in quants:
                 results.append({
                     'product_id': q.product_id.id,
@@ -371,6 +372,7 @@ class HLVMobileBarcodeController(http.Controller):
                     'quantity': q.quantity,
                     'package_name': q.package_id.name if q.package_id else '',
                     'quant_id': q.id,
+                    'location_name': q.location_id.display_name,
                 })
             return {'title': title, 'location_barcode': location_barcode, 'location_name': title, 'results': results, 'reservations': reservations, 'warehouse_code': warehouse_code}
         elif lookup_type == 'package':
