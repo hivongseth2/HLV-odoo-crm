@@ -23,19 +23,6 @@
                                 </div>
                             </div>
                         </div>
-
-                        <div style="margin-bottom: 20px;">
-                            <label style="font-size: 0.9rem; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; display: block;">Quét mã vạch sản phẩm để thêm</label>
-                            
-
-                            <!-- Manual Input for Hardware Scanners -->
-                            <div class="input-group-row" style="margin-top: 10px;">
-                                <input type="text" class="form-control" t-model="state.barcodeInput" placeholder="Hoặc dùng máy quét có dây..." t-on-keyup="onBarcodeInputKeyup" style="font-size: 1rem;"/>
-                                <button class="btn btn-secondary" type="button" t-on-click="() => this.onBarcodeInputEnter()">
-                                    <i class="fa fa-arrow-right"></i>
-                                </button>
-                            </div>
-                        </div>
                         
                         <t t-if="state.lines.length === 0">
                             <div style="text-align: center; padding: 30px; color: var(--text-muted);">

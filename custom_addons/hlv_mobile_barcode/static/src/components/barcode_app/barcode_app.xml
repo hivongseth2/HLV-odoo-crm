@@ -9,6 +9,9 @@
                         <i class="fa fa-boxes"></i> Kho HLV
                     </div>
                     <div style="display: flex; gap: 10px;">
+                        <div class="user-info" t-if="state.currentView === 'picking' and state.pickingId" t-on-click="clearPicking" style="background: var(--danger-color); color: white;">
+                            <i class="fa fa-undo"></i> Làm lại
+                        </div>
                         <div class="user-info" t-on-click="goToMain">
                             <i class="fa fa-home"></i> Trang chủ
                         </div>
@@ -28,13 +31,6 @@
                     
                     <div t-att-class="state.cameraFallback ? 'd-none' : ''" style="width: 100%; max-width: 450px; background: #000; display: flex; justify-content: center; overflow: hidden;">
                         <div id="reader" style="width: 100%;"></div>
-                    </div>
-                    
-                    <div class="input-group-row" style="margin: 0; padding: 8px 15px; width: 100%; box-sizing: border-box; background: white;">
-                        <input type="text" class="form-control form-control-sm" t-model="state.manualBarcode" placeholder="Nhập mã thủ công..." t-on-keyup="onManualBarcodeKeyup"/>
-                        <button class="btn btn-primary btn-sm" t-on-click="processManualBarcode">
-                            <i class="fa fa-arrow-right"></i>
-                        </button>
                     </div>
                 </div>
 
@@ -66,7 +62,7 @@
                     
                     <!-- Picking View Placeholder -->
                     <div t-elif="state.currentView === 'picking'" style="display: flex; flex-direction: column; height: 100%;">
-                        <PickingScanner pickingId="state.pickingId" onBack="() => this.goBack()" lastScannedProduct="state.lastScannedProduct" scannedLocationName="state.scannedLocationName"/>
+                        <PickingScanner pickingId="state.pickingId" onBack="() => this.goBack()" lastScannedProduct="state.lastScannedProduct" scannedLocationName="state.scannedLocationName" refreshTick="state.pickingRefreshTick"/>
                     </div>
                     
                     <!-- Move Component -->

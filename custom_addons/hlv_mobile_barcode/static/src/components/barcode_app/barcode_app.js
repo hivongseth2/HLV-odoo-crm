@@ -39,8 +39,8 @@ export class BarcodeApp extends Component {
             lookupTitle: savedState.lookupTitle || "",
             prefillLocationBarcode: savedState.prefillLocationBarcode || null,
             prefillLocationName: savedState.prefillLocationName || null,
-            showCamera: false,
             cameraFallback: false,
+            pickingRefreshTick: 0,
         });
         
         useEffect(() => {
@@ -379,6 +379,25 @@ export class BarcodeApp extends Component {
             target: 'current',
             context: { module: 'hlv_mobile_barcode' }
         });
+    }
+
+    async clearPicking() {
+        if (!confirm("Bạn có chắc muốn xoá toàn bộ số lượng đã quét để quét lại từ đầu không?")) {
+            return;
+        }
+        try {
+            const res = await rpc("/hlv_mobile_barcode/clear_quantities", {
+                picking_id: this.state.pickingId,
+            });
+            if (res.error) {
+                this.notification.add(res.error, { type: "danger" });
+            } else {
+                this.notification.add("Đã làm mới số lượng", { type: "success" });
+                this.state.pickingRefreshTick += 1;
+            }
+        } catch (e) {
+            this.notification.add("Lỗi kết nối", { type: "danger" });
+        }
     }
 }
 

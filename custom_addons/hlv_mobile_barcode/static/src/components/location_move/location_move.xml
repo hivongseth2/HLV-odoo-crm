@@ -35,9 +35,7 @@
                             
 
 
-                            <div class="input-group-row">
-                                <input type="text" class="form-control" t-model="state.locationInput" t-on-keyup="onLocationInputKeyup" placeholder="Quét hoặc nhập mã..."/>
-                            </div>
+
                         </div>
                         
                         <div style="margin-bottom: 20px;">

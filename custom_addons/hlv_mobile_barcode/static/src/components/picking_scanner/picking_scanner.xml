@@ -9,21 +9,8 @@
             <t t-elif="state.picking">
                 <div class="shipper-container" style="flex: 1; padding-bottom: 0;">
                     <!-- Step Header representing the picking -->
-                    <div class="card-box" style="padding: 15px; margin-bottom: 15px; flex-shrink: 0;">
-                        <div class="step-header" style="margin-bottom: 0; padding-bottom: 0; border-bottom: none; display: flex; justify-content: space-between; align-items: center;">
-                            <div style="display: flex; align-items: center;">
-                                <div class="step-icon">
-                                    <i class="fa fa-clipboard-list"></i>
-                                </div>
-                                <div class="step-info">
-                                    <div class="step-title">Phiếu xuất/nhập</div>
-                                    <div class="step-desc" style="font-weight: 600; color: var(--text-color);"><t t-esc="state.picking.name"/></div>
-                                </div>
-                            </div>
-                            <button t-if="state.picking.state !== 'done' and state.picking.state !== 'cancel'" class="btn btn-outline btn-sm" style="color: var(--danger-color); border: 1px solid var(--danger-color); border-radius: 6px; padding: 5px 10px;" t-on-click="clearQuantities">
-                                <i class="fa fa-undo"></i> Làm lại
-                            </button>
-                        </div>
+                    <div style="padding: 8px 15px; font-weight: bold; color: var(--primary-color); flex-shrink: 0; text-align: center; font-size: 1.1rem;">
+                        <i class="fa fa-clipboard-list"></i> <t t-esc="state.picking.name"/>
                     </div>
                 
                     <div class="card-box" style="padding: 15px; display: flex; flex-direction: column; flex: 1; overflow: hidden; margin-bottom: 0;">
