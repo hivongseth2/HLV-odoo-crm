@@ -215,6 +215,7 @@
                             <th width="90" class="text-end">Đơn Giá</th>
                             <th width="110" class="text-end">TT Thực Xuất</th>
                             <th width="90" class="text-end">VAT</th>
+                            <th width="110" class="text-end">TT + VAT</th>
                             <th width="70">Thiếu</th>
                         </tr>
                     </thead>
@@ -266,6 +267,9 @@
                                 <td class="text-end text-warning" style="font-size:0.82rem;">
                                     <t t-esc="this.formatCurrency(line.delivered_tax)"/>
                                 </td>
+                                <td class="text-end fw-bold text-primary">
+                                    <t t-esc="this.formatCurrency(line.delivered_total)"/>
+                                </td>
                                 <td t-att-class="'fw-bold ' + (Math.max(line.product_uom_qty - line.qty_delivered - (line.qty_packed || 0) - eff_stock, 0) > 0 ? 'text-danger' : 'text-muted opacity-50')">
                                     <t t-if="line.is_kit"><span class="small">-</span></t>
                                     <t t-else=""><t t-esc="this.formatQty(Math.max(line.product_uom_qty - line.qty_delivered - (line.qty_packed || 0) - eff_stock, 0))"/></t>
@@ -274,7 +278,7 @@
                             <!-- Phiếu đang giữ hàng (blocking reservations) -->
                             <t t-if="line.blocked_by and line.blocked_by.length > 0">
                                 <tr class="table-light">
-                                    <td colspan="9" class="text-start p-0">
+                                    <td colspan="10" class="text-start p-0">
                                         <div class="px-3 py-2" style="font-size:0.75rem;">
                                             <div class="fw-bold text-danger mb-1">
                                                 <i class="fa fa-lock me-1"></i>Đang bị giữ hàng bởi:

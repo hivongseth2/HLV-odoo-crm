@@ -988,7 +988,7 @@ function openDrawer(id){
   h+='<table class="table table-sm table-bordered table-lines"><thead class="table-light"><tr>'
     +'<th>Sản phẩm</th><th class="text-end">Chốt Bán</th><th class="text-end">Đóng Gói</th>'
     +'<th class="text-end">Tồn Kho</th><th class="text-end">Đã Giao</th>'
-    +'<th class="text-end">Đơn Giá</th><th class="text-end">TT Thực Xuất</th><th class="text-end">VAT</th>'
+    +'<th class="text-end">Đơn Giá</th><th class="text-end">TT Thực Xuất</th><th class="text-end">VAT</th><th class="text-end">TT + VAT</th>'
     +'<th class="text-end">Thiếu</th></tr></thead><tbody>';
   var grouped=groupLines(o.lines||[]);
   grouped.forEach(function(l){
@@ -1008,6 +1008,7 @@ function openDrawer(id){
       +'<td class="text-end text-muted small">'+fm(l.price_unit||0)+(l.discount?'<div class="text-danger" style="font-size:0.7rem">-'+l.discount+'%</div>':'')+'</td>'
       +'<td class="text-end fw-bold text-success">'+fm(l.delivered_subtotal||0)+'</td>'
       +'<td class="text-end text-warning" style="font-size:0.82rem">'+fm(l.delivered_tax||0)+'</td>'
+      +'<td class="text-end fw-bold text-primary">'+fm(l.delivered_total||0)+'</td>'
       +'<td class="text-end '+(shortage>0?'cell-shortage':'text-muted opacity-50')+'">'+fq(shortage)+'</td></tr>';
   });
   h+='</tbody></table>';
@@ -2053,6 +2054,8 @@ class SalePlanPublicController(http.Controller):
                 'font_color': '#C00000', 'bold': True,
             })
 
+            money_fmt = workbook.add_format({'border': 1, 'valign': 'vcenter', 'font_size': 10, 'num_format': '#,##0'})
+
             col_headers = [
                 ('STT', 5),
                 ('Mã phiếu XK', 16),
@@ -2066,6 +2069,10 @@ class SalePlanPublicController(http.Controller):
                 ('Mã sản phẩm', 16),
                 ('ĐVT', 8),
                 ('SL thực xuất', 12),
+                ('Đơn giá', 14),
+                ('TT thực xuất', 16),
+                ('VAT', 12),
+                ('TT + VAT', 16),
                 ('Ghi chú phiếu', 25),
             ]
 
@@ -2120,6 +2127,33 @@ class SalePlanPublicController(http.Controller):
                     qty_demand = move.product_uom_qty or 0
                     qty_done = getattr(move, 'quantity', None) or getattr(move, 'quantity_done', None) or 0
 
+                    # Price / financial from sale order line
+                    sol = move.sale_line_id
+                    if sol:
+                        price_unit = sol.price_unit
+                        discount = sol.discount
+                        price_after_disc = price_unit * (1.0 - discount / 100.0)
+                        if qty_done > 0:
+                            if sol.tax_id:
+                                _tax_res = sol.tax_id.with_context(round=False).compute_all(
+                                    price_after_disc,
+                                    currency=sol.order_id.currency_id,
+                                    quantity=qty_done,
+                                    product=sol.product_id,
+                                    partner=sol.order_id.partner_shipping_id,
+                                )
+                                line_subtotal = _tax_res['total_excluded']
+                                line_tax = sum(t['amount'] for t in _tax_res['taxes'])
+                                line_total = _tax_res['total_included']
+                            else:
+                                line_subtotal = price_after_disc * qty_done
+                                line_tax = 0.0
+                                line_total = line_subtotal
+                        else:
+                            price_unit = discount = line_subtotal = line_tax = line_total = 0.0
+                    else:
+                        price_unit = discount = line_subtotal = line_tax = line_total = 0.0
+
                     c = 0
                     sheet.write(row, c, stt, cell_fmt); c += 1
                     sheet.write(row, c, picking.name or '', cell_fmt); c += 1
@@ -2134,6 +2168,10 @@ class SalePlanPublicController(http.Controller):
                     sheet.write(row, c, product_code, cell_fmt); c += 1
                     sheet.write(row, c, uom_name, cell_fmt); c += 1
                     sheet.write(row, c, qty_done, num_fmt); c += 1
+                    sheet.write(row, c, round(price_unit, 0), money_fmt); c += 1
+                    sheet.write(row, c, round(line_subtotal, 0), money_fmt); c += 1
+                    sheet.write(row, c, round(line_tax, 0), money_fmt); c += 1
+                    sheet.write(row, c, round(line_total, 0), money_fmt); c += 1
                     sheet.write(row, c, note, cell_fmt)
                     row += 1
 
