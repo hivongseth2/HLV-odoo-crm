@@ -120,8 +120,8 @@ _PAGE = r"""<!DOCTYPE html>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 *{box-sizing:border-box}
 body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;color:#0f172a;-webkit-font-smoothing:antialiased;font-size:14px}
-.card,.form-control,.form-select,.btn,.badge,.list-group-item,.alert,.modal-content,
-.input-group-text,.dropdown-menu{border-radius:6px!important}
+.card,.form-control,.form-select,.badge,.list-group-item,.alert,.modal-content,
+.input-group-text,.dropdown-menu{border-radius:10px!important}
 /* Navbar */
 .navbar.bg-primary{background:#0f172a!important;border-bottom:1px solid #1e293b}
 /* KPI row 1 */
@@ -324,6 +324,96 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
 /* Second table (transfer suggestions) */
 .table-bordered:not(.table-lines){border:1px solid #e2e8f0!important}
 .table-bordered:not(.table-lines) thead.table-light th{background:#f8fafc!important;color:#64748b!important;font-size:.72rem!important;text-transform:uppercase!important;font-weight:600!important;border-color:#e2e8f0!important}
+/* ========================================================
+   LIQUID GLASS BUTTONS — premium modern style
+   ======================================================== */
+/* Base — all .btn elements */
+.btn{
+  border-radius:10px!important;
+  font-weight:500;font-size:.82rem;letter-spacing:.01em;
+  transition:all .2s cubic-bezier(.4,0,.2,1)!important;
+  position:relative;overflow:hidden}
+.btn-sm{border-radius:8px!important;font-size:.78rem;padding:5px 13px}
+/* Primary — indigo glow */
+.btn-primary{
+  background:linear-gradient(135deg,#4f46e5 0%,#6366f1 60%,#818cf8 100%)!important;
+  border:1px solid rgba(99,102,241,.35)!important;color:#fff!important;
+  box-shadow:0 2px 10px rgba(99,102,241,.35),inset 0 1px 0 rgba(255,255,255,.22)!important}
+.btn-primary:hover{
+  background:linear-gradient(135deg,#4338ca 0%,#4f46e5 60%,#6366f1 100%)!important;
+  box-shadow:0 4px 18px rgba(99,102,241,.45),inset 0 1px 0 rgba(255,255,255,.22)!important;
+  transform:translateY(-1px)}
+.btn-primary:active{transform:translateY(0);box-shadow:0 1px 4px rgba(99,102,241,.3)!important}
+/* Outline-primary — glass tab */
+.btn-outline-primary{
+  background:rgba(238,242,255,.7)!important;
+  backdrop-filter:blur(8px) saturate(1.5);
+  border:1px solid rgba(99,102,241,.3)!important;color:#4f46e5!important;
+  box-shadow:0 1px 4px rgba(99,102,241,.12),inset 0 1px 0 rgba(255,255,255,.8)!important}
+.btn-outline-primary:hover{
+  background:rgba(238,242,255,.95)!important;
+  box-shadow:0 2px 10px rgba(99,102,241,.2),inset 0 1px 0 rgba(255,255,255,.9)!important;
+  color:#3730a3!important;transform:translateY(-1px)}
+.btn-outline-primary.active,.btn-outline-primary:active{
+  background:linear-gradient(135deg,#4f46e5,#6366f1)!important;
+  color:#fff!important;border-color:transparent!important;
+  box-shadow:0 2px 10px rgba(99,102,241,.35),inset 0 1px 0 rgba(255,255,255,.2)!important}
+/* Secondary outline — frosted glass */
+.btn-outline-secondary{
+  background:rgba(255,255,255,.75)!important;
+  backdrop-filter:blur(10px) saturate(1.3);
+  border:1px solid #e2e8f0!important;color:#475569!important;
+  box-shadow:0 1px 3px rgba(0,0,0,.07),inset 0 1px 0 rgba(255,255,255,.95)!important}
+.btn-outline-secondary:hover{
+  background:rgba(241,245,249,.95)!important;color:#1e293b!important;
+  border-color:#cbd5e1!important;
+  box-shadow:0 2px 8px rgba(0,0,0,.1),inset 0 1px 0 rgba(255,255,255,.9)!important;
+  transform:translateY(-1px)}
+/* Success — emerald glow */
+.btn-success{
+  background:linear-gradient(135deg,#059669 0%,#10b981 60%,#34d399 100%)!important;
+  border:1px solid rgba(5,150,105,.3)!important;color:#fff!important;
+  box-shadow:0 2px 10px rgba(5,150,105,.32),inset 0 1px 0 rgba(255,255,255,.22)!important}
+.btn-success:hover{
+  background:linear-gradient(135deg,#047857 0%,#059669 60%,#10b981 100%)!important;
+  box-shadow:0 4px 18px rgba(5,150,105,.42),inset 0 1px 0 rgba(255,255,255,.22)!important;
+  color:#fff!important;transform:translateY(-1px)}
+/* Warning — amber glow */
+.btn-warning{
+  background:linear-gradient(135deg,#b45309 0%,#d97706 55%,#f59e0b 100%)!important;
+  border:1px solid rgba(180,83,9,.3)!important;color:#fff!important;
+  box-shadow:0 2px 10px rgba(217,119,6,.32),inset 0 1px 0 rgba(255,255,255,.2)!important}
+.btn-warning:hover{
+  background:linear-gradient(135deg,#92400e 0%,#b45309 55%,#d97706 100%)!important;
+  box-shadow:0 4px 18px rgba(180,83,9,.4),inset 0 1px 0 rgba(255,255,255,.2)!important;
+  color:#fff!important;transform:translateY(-1px)}
+/* Info — sky glow */
+.btn-info{
+  background:linear-gradient(135deg,#0284c7 0%,#0ea5e9 60%,#38bdf8 100%)!important;
+  border:1px solid rgba(2,132,199,.3)!important;color:#fff!important;
+  box-shadow:0 2px 10px rgba(2,132,199,.3),inset 0 1px 0 rgba(255,255,255,.22)!important}
+.btn-info:hover{
+  background:linear-gradient(135deg,#0369a1 0%,#0284c7 60%,#0ea5e9 100%)!important;
+  box-shadow:0 4px 18px rgba(2,132,199,.4),inset 0 1px 0 rgba(255,255,255,.22)!important;
+  color:#fff!important;transform:translateY(-1px)}
+/* Danger — rose glow */
+.btn-danger{
+  background:linear-gradient(135deg,#dc2626 0%,#ef4444 60%,#f87171 100%)!important;
+  border:1px solid rgba(220,38,38,.3)!important;color:#fff!important;
+  box-shadow:0 2px 10px rgba(220,38,38,.3),inset 0 1px 0 rgba(255,255,255,.18)!important}
+.btn-danger:hover{
+  background:linear-gradient(135deg,#b91c1c 0%,#dc2626 60%,#ef4444 100%)!important;
+  box-shadow:0 4px 18px rgba(220,38,38,.4),inset 0 1px 0 rgba(255,255,255,.18)!important;
+  transform:translateY(-1px)}
+/* Light — close button & misc */
+.btn-light{
+  background:rgba(248,250,252,.9)!important;
+  backdrop-filter:blur(6px);
+  border:1px solid #e2e8f0!important;color:#475569!important;
+  box-shadow:0 1px 3px rgba(0,0,0,.06),inset 0 1px 0 rgba(255,255,255,.95)!important}
+.btn-light:hover{background:rgba(241,245,249,.95)!important;border-color:#cbd5e1!important}
+/* Load-more pill */
+#btn-load-more{border-radius:20px!important;padding:5px 18px;font-size:.78rem}
 </style>
 </head><body>
 <div id="loading" class="loading-overlay d-none"><div class="spinner-border text-primary"></div></div>
