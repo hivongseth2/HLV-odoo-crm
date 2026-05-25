@@ -27,22 +27,7 @@
                         <div style="margin-bottom: 20px;">
                             <label style="font-size: 0.9rem; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; display: block;">Quét mã vạch sản phẩm để thêm</label>
                             
-                            <!-- Inline Camera -->
-                            <div t-if="state.showLocalCamera" class="camera-section active">
-                                <div id="batch-location-move-camera-reader" class="camera-reader"></div>
-                                <div class="camera-controls" style="padding: 10px; background: var(--light-bg); border-top: 1px solid var(--border-color); text-align: center;">
-                                    <button type="button" class="btn btn-secondary btn-sm" t-on-click="closeLocalCamera">
-                                        <i class="fa fa-times me-1"/> Đóng Camera
-                                    </button>
-                                </div>
-                            </div>
 
-                            <div class="input-group-row">
-                                <button class="btn btn-primary" type="button" t-on-click="openLocalCamera" style="width: 100%;">
-                                    <i class="fa fa-camera"/> Bật máy quét Camera
-                                </button>
-                            </div>
-                            
                             <!-- Manual Input for Hardware Scanners -->
                             <div class="input-group-row" style="margin-top: 10px;">
                                 <input type="text" class="form-control" t-model="state.barcodeInput" placeholder="Hoặc dùng máy quét có dây..." t-on-keyup="onBarcodeInputKeyup" style="font-size: 1rem;"/>

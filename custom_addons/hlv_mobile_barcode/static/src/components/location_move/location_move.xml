@@ -33,21 +33,10 @@
                                 </t>
                             </label>
                             
-                            <!-- Inline Camera -->
-                            <div t-if="state.showLocalCamera" class="camera-section active">
-                                <div id="location-move-camera-reader" class="camera-reader"></div>
-                                <div class="camera-controls" style="padding: 10px; background: var(--light-bg); border-top: 1px solid var(--border-color); text-align: center;">
-                                    <button type="button" class="btn btn-secondary btn-sm" t-on-click="closeLocalCamera">
-                                        <i class="fa fa-times me-1"/> Đóng Camera
-                                    </button>
-                                </div>
-                            </div>
+
 
                             <div class="input-group-row">
                                 <input type="text" class="form-control" t-model="state.locationInput" t-on-keyup="onLocationInputKeyup" placeholder="Quét hoặc nhập mã..."/>
-                                <button class="btn btn-primary" type="button" t-on-click="openLocalCamera">
-                                    <i class="fa fa-camera"/>
-                                </button>
                             </div>
                         </div>
                         

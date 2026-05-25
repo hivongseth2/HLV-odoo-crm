@@ -71,6 +71,7 @@ export class BarcodeApp extends Component {
         
         onMounted(() => {
             document.addEventListener('keydown', this.handleKeyDown.bind(this));
+            this.startPersistentCamera();
         });
     }
 
@@ -114,8 +115,6 @@ export class BarcodeApp extends Component {
     async processBarcode(barcode) {
         if (!barcode) return;
         
-        this.state.showCamera = false;
-        
         if (this.viewScannerCallback) {
             this.viewScannerCallback(barcode);
             return;
@@ -152,7 +151,6 @@ export class BarcodeApp extends Component {
                 this.playSound('error');
                 this.notification.add("Server error", { type: "danger" });
             }
-            await this.closeCamera();
             return;
         }
         
@@ -161,12 +159,10 @@ export class BarcodeApp extends Component {
             if (result.error) {
                 this.playSound('error');
                 this.notification.add(result.error, { type: "danger" });
-                await this.closeCamera();
                 return;
             }
             
             this.playSound('success');
-            await this.closeCamera();
             
             if (result.type === 'picking') {
                 this.pushHistory();
@@ -183,7 +179,6 @@ export class BarcodeApp extends Component {
         } catch (error) {
             this.playSound('error');
             this.notification.add("Server error", { type: "danger" });
-            await this.closeCamera();
         }
     }
 
@@ -281,10 +276,7 @@ export class BarcodeApp extends Component {
         this.state.currentView = 'lookup';
     }
 
-    async openCamera() {
-        this.state.showCamera = true;
-        
-        await new Promise(r => setTimeout(r, 100));
+    async startPersistentCamera() {
 
         if (!window.Html5Qrcode) {
             try {
@@ -322,6 +314,12 @@ export class BarcodeApp extends Component {
                         try { this.html5Qrcode.pause(); } catch(e) {}
                     }
                     await this.processBarcode(decodedText);
+                    
+                    setTimeout(() => {
+                        if (this.html5Qrcode && this.html5Qrcode.getState() === 2 /* PAUSED */) {
+                            try { this.html5Qrcode.resume(); } catch(e) {}
+                        }
+                    }, 1500);
                 },
                 (errorMessage) => {
                     // ignore parse errors
@@ -334,7 +332,6 @@ export class BarcodeApp extends Component {
                 this.state.cameraFallback = true;
             } else {
                 this.notification.add("Không thể mở Camera. Lỗi: " + err, { type: "warning" });
-                await this.closeCamera();
             }
         }
     }
@@ -351,7 +348,6 @@ export class BarcodeApp extends Component {
         } catch (err) {
             this.playSound('error');
             this.notification.add("Không tìm thấy mã vạch hợp lệ trong ảnh này.", { type: "danger" });
-            await this.closeCamera();
         }
     }
 
