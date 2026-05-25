@@ -10,8 +10,12 @@ class HLVMobileBarcodeController(http.Controller):
         Smart Routing API: Determine what the scanned barcode represents.
         Priority: Picking > Product > Location > Package
         """
+        if not barcode:
+            return {'error': _('Mã vạch không hợp lệ')}
+        barcode = barcode.strip()
+
         # 1. Check if it's a Picking
-        picking = request.env['stock.picking'].search([('name', '=', barcode)], limit=1)
+        picking = request.env['stock.picking'].sudo().search([('name', '=', barcode)], limit=1)
         if picking:
             # Check if picking type is allowed based on settings
             allowed_types = request.env.company.hlv_barcode_picking_type_ids
@@ -20,23 +24,23 @@ class HLVMobileBarcodeController(http.Controller):
             warehouse_code = picking.picking_type_id.warehouse_id.code or 'HLV'
             return {'type': 'picking', 'id': picking.id, 'name': picking.name, 'state': picking.state, 'warehouse_code': warehouse_code}
 
-        # 2. Check if it's a Product
-        product = request.env['product.product'].search([('barcode', '=', barcode)], limit=1)
+        # 2. Check if it's a Product (Barcode or SKU/Internal Reference)
+        product = request.env['product.product'].sudo().search(['|', ('barcode', '=', barcode), ('default_code', '=', barcode)], limit=1)
         if product:
             return {'type': 'product', 'id': product.id, 'name': product.display_name}
 
-        # 3. Check if it's a Location
-        location = request.env['stock.location'].search([('barcode', '=', barcode)], limit=1)
+        # 3. Check if it's a Location (Barcode or Name)
+        location = request.env['stock.location'].sudo().search(['|', ('barcode', '=', barcode), ('name', '=', barcode)], limit=1)
         if location:
             warehouse_code = location.warehouse_id.code or 'HLV'
             return {'type': 'location', 'id': location.id, 'name': location.display_name, 'warehouse_code': warehouse_code}
 
         # 4. Check if it's a Package
-        package = request.env['stock.quant.package'].search([('name', '=', barcode)], limit=1)
+        package = request.env['stock.quant.package'].sudo().search([('name', '=', barcode)], limit=1)
         if package:
             return {'type': 'package', 'id': package.id, 'name': package.name}
 
-        return {'error': _('Barcode "%s" not found in the system.', barcode)}
+        return {'error': _('Mã vạch hoặc mã SKU "%s" không tồn tại trên hệ thống.', barcode)}
 
     @http.route('/hlv_mobile_barcode/get_picking_data', type='json', auth='user')
     def get_picking_data(self, picking_id):
@@ -136,10 +140,14 @@ class HLVMobileBarcodeController(http.Controller):
         if not picking.exists() or picking.state not in ['draft', 'confirmed', 'assigned']:
             return {'error': _('Phiếu này không thể xử lý thêm sản phẩm.')}
 
+        if not barcode:
+            return {'error': _('Mã vạch không hợp lệ')}
+        barcode = barcode.strip()
+
         is_putaway = picking.picking_type_id.code in ['incoming', 'internal']
         
         # 1. Try to find location first
-        location = request.env['stock.location'].search(['|', ('barcode', '=', barcode), ('name', '=', barcode)], limit=1)
+        location = request.env['stock.location'].sudo().search(['|', ('barcode', '=', barcode), ('name', '=', barcode)], limit=1)
         if location:
             res = {'type': 'location', 'location_id': location.id, 'location_name': location.display_name, 'is_putaway': is_putaway}
             if last_product_id:
@@ -154,7 +162,7 @@ class HLVMobileBarcodeController(http.Controller):
                         res['updated_product_id'] = last_product_id
             return res
 
-        product = request.env['product.product'].search([('barcode', '=', barcode)], limit=1)
+        product = request.env['product.product'].sudo().search(['|', ('barcode', '=', barcode), ('default_code', '=', barcode)], limit=1)
         if not product:
             return {'error': _('Không tìm thấy mã vạch hợp lệ (Sản phẩm hoặc Vị trí).')}
 
@@ -329,10 +337,10 @@ class HLVMobileBarcodeController(http.Controller):
         reservations = []
         
         if lookup_type == 'product':
-            product = request.env['product.product'].browse(record_id)
+            product = request.env['product.product'].sudo().browse(record_id)
             title = product.display_name
-            # Only internal locations
-            quants = quants.search([('product_id', '=', product.id), ('location_id.usage', '=', 'internal')])
+            # Use sudo() to bypass company/location security rules in lookup view so that warehouse keepers always see actual inventory
+            quants = quants.sudo().search([('product_id', '=', product.id), ('location_id.usage', '=', 'internal'), ('quantity', '>', 0.0)])
             for q in quants:
                 results.append({
                     'location_id': q.location_id.id,
@@ -343,7 +351,8 @@ class HLVMobileBarcodeController(http.Controller):
                 })
                 
             # Fetch reservations (picking holding this product)
-            moves = request.env['stock.move'].search([
+            # Use sudo() to ensure reservation visibility regardless of record rules
+            moves = request.env['stock.move'].sudo().search([
                 ('product_id', '=', product.id),
                 ('state', 'not in', ['done', 'cancel', 'draft']),
                 ('picking_id', '!=', False)
@@ -359,12 +368,13 @@ class HLVMobileBarcodeController(http.Controller):
                 })
                 
         elif lookup_type == 'location':
-            location = request.env['stock.location'].browse(record_id)
+            location = request.env['stock.location'].sudo().browse(record_id)
             title = location.display_name
             location_barcode = location.barcode or location.name
             warehouse_code = location.warehouse_id.code or 'HLV'
             # Use child_of to aggregate stock in all sub-locations (essential for large warehouses like KBC)
-            quants = quants.search([('location_id', 'child_of', location.id)])
+            # Use sudo() to bypass company/location constraints so all actual stock is displayed
+            quants = quants.sudo().search([('location_id', 'child_of', location.id), ('quantity', '>', 0.0)])
             for q in quants:
                 results.append({
                     'product_id': q.product_id.id,
@@ -376,9 +386,10 @@ class HLVMobileBarcodeController(http.Controller):
                 })
             return {'title': title, 'location_barcode': location_barcode, 'location_name': title, 'results': results, 'reservations': reservations, 'warehouse_code': warehouse_code}
         elif lookup_type == 'package':
-            package = request.env['stock.quant.package'].browse(record_id)
+            package = request.env['stock.quant.package'].sudo().browse(record_id)
             title = package.name
-            quants = quants.search([('package_id', '=', package.id)])
+            # Use sudo() to bypass company constraints on packages
+            quants = quants.sudo().search([('package_id', '=', package.id), ('quantity', '>', 0.0)])
             for q in quants:
                 results.append({
                     'product_name': q.product_id.display_name,
@@ -390,9 +401,12 @@ class HLVMobileBarcodeController(http.Controller):
 
     @http.route('/hlv_mobile_barcode/validate_location', type='json', auth='user')
     def validate_location(self, barcode):
-        location = request.env['stock.location'].search([('barcode', '=', barcode)], limit=1)
+        if not barcode:
+            return {'error': _('Mã vạch không hợp lệ')}
+        barcode = barcode.strip()
+        location = request.env['stock.location'].sudo().search([('barcode', '=', barcode)], limit=1)
         if not location:
-            location = request.env['stock.location'].search([('name', '=', barcode)], limit=1)
+            location = request.env['stock.location'].sudo().search([('name', '=', barcode)], limit=1)
         
         if location:
             return {'success': True, 'location_name': location.display_name, 'location_barcode': location.barcode or location.name}
@@ -400,18 +414,21 @@ class HLVMobileBarcodeController(http.Controller):
 
     @http.route('/hlv_mobile_barcode/move_location', type='json', auth='user')
     def move_location(self, product_id, source_barcode, qty):
-        product = request.env['product.product'].browse(product_id)
+        product = request.env['product.product'].sudo().browse(product_id)
         if not product.exists():
             return {'error': _('Không tìm thấy sản phẩm')}
             
-        source_loc = request.env['stock.location'].search([('barcode', '=', source_barcode)], limit=1)
+        if not source_barcode:
+            return {'error': _('Mã vạch nguồn không hợp lệ')}
+        source_barcode = source_barcode.strip()
+        source_loc = request.env['stock.location'].sudo().search([('barcode', '=', source_barcode)], limit=1)
         if not source_loc:
             return {'error': _('Không tìm thấy vị trí nguồn')}
             
         company_id = request.env.company.id
         
         # Get Transit Location
-        transit_loc = request.env['stock.location'].search([
+        transit_loc = request.env['stock.location'].sudo().search([
             ('usage', '=', 'transit'), 
             ('company_id', 'in', [False, company_id])
         ], limit=1)
@@ -424,8 +441,8 @@ class HLVMobileBarcodeController(http.Controller):
             picking_type_int = warehouse.int_type_id
             picking_type_in = warehouse.in_type_id
         else:
-            picking_type_int = request.env['stock.picking.type'].search([('code', '=', 'internal'), ('company_id', '=', company_id)], limit=1)
-            picking_type_in = request.env['stock.picking.type'].search([('code', '=', 'incoming'), ('company_id', '=', company_id)], limit=1)
+            picking_type_int = request.env['stock.picking.type'].sudo().search([('code', '=', 'internal'), ('company_id', '=', company_id)], limit=1)
+            picking_type_in = request.env['stock.picking.type'].sudo().search([('code', '=', 'incoming'), ('company_id', '=', company_id)], limit=1)
         
         if not picking_type_int or not picking_type_in:
             return {'error': _('Chưa cấu hình Operation Types (INT, IN)')}
@@ -453,7 +470,7 @@ class HLVMobileBarcodeController(http.Controller):
         # 2. Create IN picking (Transit -> Destination)
         dest_loc = picking_type_in.default_location_dest_id
         if not dest_loc:
-            dest_loc = request.env['stock.location'].search([('usage', '=', 'internal'), ('company_id', '=', company_id)], limit=1)
+            dest_loc = request.env['stock.location'].sudo().search([('usage', '=', 'internal'), ('company_id', '=', company_id)], limit=1)
             
         picking_in = request.env['stock.picking'].create({
             'picking_type_id': picking_type_in.id,
@@ -480,14 +497,17 @@ class HLVMobileBarcodeController(http.Controller):
         if not lines:
             return {'error': _('Không có sản phẩm nào để chuyển')}
             
-        source_loc = request.env['stock.location'].search([('barcode', '=', source_barcode)], limit=1)
+        if not source_barcode:
+            return {'error': _('Mã vạch nguồn không hợp lệ')}
+        source_barcode = source_barcode.strip()
+        source_loc = request.env['stock.location'].sudo().search([('barcode', '=', source_barcode)], limit=1)
         if not source_loc:
             return {'error': _('Không tìm thấy vị trí nguồn')}
             
         company_id = request.env.company.id
         
         # Get Transit Location
-        transit_loc = request.env['stock.location'].search([
+        transit_loc = request.env['stock.location'].sudo().search([
             ('usage', '=', 'transit'), 
             ('company_id', 'in', [False, company_id])
         ], limit=1)
@@ -500,8 +520,8 @@ class HLVMobileBarcodeController(http.Controller):
             picking_type_int = warehouse.int_type_id
             picking_type_in = warehouse.in_type_id
         else:
-            picking_type_int = request.env['stock.picking.type'].search([('code', '=', 'internal'), ('company_id', '=', company_id)], limit=1)
-            picking_type_in = request.env['stock.picking.type'].search([('code', '=', 'incoming'), ('company_id', '=', company_id)], limit=1)
+            picking_type_int = request.env['stock.picking.type'].sudo().search([('code', '=', 'internal'), ('company_id', '=', company_id)], limit=1)
+            picking_type_in = request.env['stock.picking.type'].sudo().search([('code', '=', 'incoming'), ('company_id', '=', company_id)], limit=1)
         
         if not picking_type_int or not picking_type_in:
             return {'error': _('Chưa cấu hình Operation Types (INT, IN)')}
@@ -551,7 +571,7 @@ class HLVMobileBarcodeController(http.Controller):
         # 2. Create IN picking (Transit -> Destination)
         dest_loc = picking_type_in.default_location_dest_id
         if not dest_loc:
-            dest_loc = request.env['stock.location'].search([('usage', '=', 'internal'), ('company_id', '=', company_id)], limit=1)
+            dest_loc = request.env['stock.location'].sudo().search([('usage', '=', 'internal'), ('company_id', '=', company_id)], limit=1)
             
         picking_in = request.env['stock.picking'].create({
             'picking_type_id': picking_type_in.id,

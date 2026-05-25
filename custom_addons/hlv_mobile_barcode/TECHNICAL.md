@@ -47,10 +47,16 @@ hlv_mobile_barcode/
   * *F5/Reload vs Exit/Reset Sync*:
     - Khi F5/Reload trang: `localStorage` vẫn lưu giữ `hlv_opened_pickings` giúp số lượng quét hiện tại được giữ nguyên và tải lại an toàn từ backend.
     - Khi Quay lại (`goBack()`), về trang chủ (`goToMain()`), hoặc Làm lại (`clearPicking()`): Xóa `pickingId` khỏi `localStorage` và tự động gửi RPC `/hlv_mobile_barcode/clear_quantities` để reset sạch sẽ số lượng quét về 0 trên backend, đảm bảo tính nhất quán của cơ sở dữ liệu.
-- **Hierarchical Location Stock Lookup (Tra cứu tồn kho phân cấp cha-con)**:
-  * Tối ưu hóa API tra cứu tồn kho vị trí bằng cách thay đổi toán tử tìm kiếm `stock.quant` từ `=` sang `child_of` (`[('location_id', 'child_of', location.id)]`). 
-  * Điều này đảm bảo khi người dùng quét vị trí cấp trên hoặc vị trí cha (ví dụ như quét vùng kệ lớn `KBC`), hệ thống sẽ tự động tổng hợp đầy đủ tất cả dữ liệu tồn kho đang nằm ở vị trí cha và các vị trí con/cháu của nó, khớp 100% với hành vi hiển thị của Odoo backend tiêu chuẩn.
+- **Hierarchical & Sudo Location Stock Lookup (Tra cứu tồn kho phân cấp & Bỏ qua rào cản phân quyền)**:
+  * Tối ưu hóa API tra cứu tồn kho vị trí bằng cách thay đổi toán tử tìm kiếm `stock.quant` từ `=` sang `child_of` (`[('location_id', 'child_of', location.id)]`) kết hợp với phương thức `.sudo()`.
+  * Việc sử dụng `.sudo()` là bắt buộc để bỏ qua các rào cản phân quyền multi-company hoặc giới hạn vị trí ngầm định của Odoo ORM khi gọi qua RPC, đảm bảo thủ kho luôn thấy 100% dữ liệu tồn kho thực tế.
+  * Lọc thêm điều kiện `('quantity', '>', 0.0)` trên cả 3 nhánh tìm kiếm (`product`, `location`, `package`) để tránh hiển thị các dòng quant trống (bản ghi rác).
   * Tích hợp hiển thị nhãn vị trí con cụ thể (`location_name`) bên dưới tên sản phẩm trên giao diện `InventoryLookup` để thủ kho biết chính xác sản phẩm đó đang nằm ở vị trí con cụ thể nào.
+- **Sudo Bypass & SKU/Internal Reference Matching (Bypass Quyền hạn & Đồng bộ SKU)**:
+  * Áp dụng phương thức `.sudo()` cho toàn bộ các truy vấn `.search()` và `.browse()` liên quan đến Sản phẩm, Vị trí kho, Phiếu kho, và Gói hàng trong tất cả các API đầu cuối của Mobile Barcode để giải quyết triệt để lỗi "Không tìm thấy" do multi-company hoặc record rules của Odoo ORM chặn ngầm.
+  * Quét sản phẩm trong `smart_scan` và `process_barcode` hỗ trợ khớp đồng thời cả trường **Mã vạch (`barcode`)** lẫn **Mã SKU/Tham chiếu nội bộ (`default_code`)** của sản phẩm.
+  * Quét/Dán vị trí trong `smart_scan` hỗ trợ khớp cả **Mã vạch vị trí (`barcode`)** lẫn **Tên vị trí (`name`)**.
+  * Tự động cắt bỏ các khoảng trắng thừa (`.strip()`) ở hai đầu chuỗi quét ở tất cả các router backend, ngăn lỗi do máy quét cầm tay tự động nối thêm phím Enter/Tab.
 - **Dynamic Warehouse Header**: API tự động trả về `warehouse_code` thực tế của phiếu kho (`picking.picking_type_id.warehouse_id.code` hoặc `location.warehouse_id.code`), hiển thị động lên Header dạng "Kho KBC", "Kho TSN"... thay vì "Kho HLV" tĩnh.
 
 ## API / Controllers
