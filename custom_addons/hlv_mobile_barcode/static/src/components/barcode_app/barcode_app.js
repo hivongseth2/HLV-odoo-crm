@@ -40,6 +40,8 @@ export class BarcodeApp extends Component {
             prefillLocationBarcode: savedState.prefillLocationBarcode || null,
             prefillLocationName: savedState.prefillLocationName || null,
             cameraFallback: false,
+            cameraNeedsActivation: false,
+            cameraErrorMessage: "",
             pickingRefreshTick: 0,
         });
         
@@ -276,7 +278,16 @@ export class BarcodeApp extends Component {
         this.state.currentView = 'lookup';
     }
 
-    async startPersistentCamera() {
+    async startPersistentCamera(isUserGesture = false) {
+        // Check if page is served securely (HTTPS or localhost)
+        if (window.isSecureContext === false && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+            this.state.cameraFallback = true;
+            this.state.cameraErrorMessage = "HTTPS_REQUIRED";
+            return;
+        }
+
+        this.state.cameraNeedsActivation = false;
+        this.state.cameraErrorMessage = "";
 
         if (!window.Html5Qrcode) {
             try {
@@ -289,12 +300,18 @@ export class BarcodeApp extends Component {
                 });
             } catch (e) {
                 this.notification.add("Cannot load camera library. Need internet.", { type: "danger" });
-                this.state.showCamera = false;
+                this.state.cameraFallback = true;
                 return;
             }
         }
         
         try {
+            if (this.html5Qrcode) {
+                try { await this.html5Qrcode.stop(); } catch(e) {}
+                try { this.html5Qrcode.clear(); } catch(e) {}
+                this.html5Qrcode = null;
+            }
+
             this.html5Qrcode = new window.Html5Qrcode("reader");
             
             const config = { 
@@ -325,13 +342,29 @@ export class BarcodeApp extends Component {
                     // ignore parse errors
                 }
             );
+
+            this.state.cameraNeedsActivation = false;
+            this.state.cameraErrorMessage = "";
+            this.state.cameraFallback = false;
         } catch (err) {
             const errStr = String(err).toLowerCase();
+            console.error("Camera start error:", err);
+            
             if (errStr.includes("notallowederror") || errStr.includes("permission")) {
-                this.notification.add("Trình duyệt từ chối quyền Camera. Đã chuyển sang chế độ chụp ảnh/chọn file.", { type: "info" });
-                this.state.cameraFallback = true;
+                if (!isUserGesture) {
+                    // Fail on load (possibly iOS user-gesture requirement or first time permission prompt block)
+                    // We show the "Activate" overlay to let user click and trigger it via active gesture.
+                    this.state.cameraNeedsActivation = true;
+                    this.state.cameraErrorMessage = "PERMISSION_DENIED";
+                } else {
+                    // Real refusal or permission disabled globally
+                    this.state.cameraFallback = true;
+                    this.state.cameraErrorMessage = "PERMISSION_DENIED";
+                    this.notification.add("Không thể mở Camera. Hãy cấp quyền Camera cho Chrome trong Cài đặt iPhone.", { type: "danger" });
+                }
             } else {
                 this.notification.add("Không thể mở Camera. Lỗi: " + err, { type: "warning" });
+                this.state.cameraFallback = true;
             }
         }
     }
@@ -354,6 +387,8 @@ export class BarcodeApp extends Component {
     async closeCamera() {
         this.state.showCamera = false;
         this.state.cameraFallback = false;
+        this.state.cameraNeedsActivation = false;
+        this.state.cameraErrorMessage = "";
         if (this.html5Qrcode) {
             try {
                 await this.html5Qrcode.stop();

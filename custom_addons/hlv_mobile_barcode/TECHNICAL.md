@@ -28,7 +28,11 @@ hlv_mobile_barcode/
 
 ## Kiến trúc Frontend (OWL 2.0)
 - `barcode_app`: Component cha lắng nghe sự kiện barcode (`keydown`). Khi nhận mã, gọi Backend RPC `smart_scan`. Dựa vào response, thay đổi trạng thái (`currentView`) để hiển thị Component con tương ứng.
-- UI/UX: Các component dùng Bootstrap class kết hợp CSS custom trong `barcode_mobile.css` để đảm bảo nút bấm to, rõ, phù hợp thao tác bằng một tay.
+- **Persistent Inline Camera**: Camera được nhúng trực tiếp ở phần trên cùng của ứng dụng để quét liên tục. Sau mỗi lần quét thành công, camera tạm dừng 1.5 giây để xử lý rồi tự động kích hoạt lại.
+- **Xử lý Quyền & Bảo mật Camera di động**:
+  - *HTTPS Context*: Kiểm tra `window.isSecureContext`. Nếu truy cập qua HTTP (không bảo mật), hệ thống tự động tắt camera trực tiếp và hiển thị thông báo yêu cầu HTTPS, đồng thời kích hoạt fallback (chụp ảnh bằng file input).
+  - *iOS / Safari / Chrome User Gesture*: Để tránh việc hệ thống iOS (WKWebView) tự động từ chối (`NotAllowedError`) khi gọi camera tự động lúc tải trang (`onMounted`), component sẽ hiển thị một lớp phủ "Kích hoạt Camera". Khi người dùng chạm vào lớp phủ này (sự kiện click/tap), camera được khởi tạo thông qua user gesture hợp lệ, giúp kích hoạt hộp thoại xin quyền của iOS và khởi chạy camera thành công.
+- UI/UX: Các component dùng CSS custom trong `barcode_mobile.css` để đảm bảo bố cục co giãn tốt (flex layout), nút bấm to, rõ, phù hợp thao tác bằng một tay. Danh sách sản phẩm cuộn độc lập, đầu trang và chân trang được giữ cố định để tránh tràn màn hình.
 
 ## API / Controllers
 - `/hlv_mobile_barcode/smart_scan`: Đầu vào `barcode`. Trả về đối tượng khớp đầu tiên theo thứ tự ưu tiên: Picking > Product > Location > Package.

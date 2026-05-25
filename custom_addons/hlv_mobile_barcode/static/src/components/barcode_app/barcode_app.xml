@@ -20,6 +20,24 @@
 
                 <!-- Persistent Camera Section -->
                 <div class="persistent-camera-wrapper">
+                    <!-- Error Banners -->
+                    <t t-if="state.cameraErrorMessage">
+                        <div t-if="state.cameraErrorMessage === 'HTTPS_REQUIRED'" class="camera-error-banner">
+                            <i class="fa fa-shield-alt"></i>
+                            <div>
+                                <strong>Yêu cầu bảo mật (HTTPS):</strong> Trình duyệt yêu cầu kết nối HTTPS để mở Camera trực tiếp. Vui lòng truy cập lại qua địa chỉ <code>https://...</code> hoặc dùng tính năng Chọn ảnh/Chụp ảnh bên dưới.
+                            </div>
+                        </div>
+                        <div t-if="state.cameraErrorMessage === 'PERMISSION_DENIED'" class="camera-error-banner">
+                            <i class="fa fa-exclamation-triangle"></i>
+                            <div>
+                                <strong>Quyền Camera:</strong> Trình duyệt không thể truy cập camera.
+                                <br/>• Hãy nhấp nút <strong>Kích hoạt Camera</strong> dưới đây để cấp quyền.
+                                <br/>• Đảm bảo bạn đã cho phép Camera cho ứng dụng <strong>Chrome</strong> trong <strong>Cài đặt iPhone</strong> (Cài đặt &gt; Chrome &gt; Camera).
+                            </div>
+                        </div>
+                    </t>
+
                     <t t-if="state.cameraFallback">
                         <div style="padding: 10px; width: 100%; text-align: center;">
                             <input type="file" accept="image/*" capture="environment" id="cameraFileInput" style="display: none;" t-on-change="onFileSelected"/>
@@ -29,8 +47,18 @@
                         </div>
                     </t>
                     
-                    <div t-att-class="state.cameraFallback ? 'd-none' : ''" style="width: 100%; max-width: 450px; background: #000; overflow: hidden;">
+                    <div t-att-class="state.cameraFallback ? 'd-none' : ''" style="width: 100%; max-width: 450px; background: #000; overflow: hidden; position: relative; min-height: 200px;">
                         <div id="reader" style="width: 100%;"></div>
+                        
+                        <!-- Camera Activation Overlay -->
+                        <div t-if="state.cameraNeedsActivation" class="camera-activation-overlay" t-on-click="() => this.startPersistentCamera(true)">
+                            <div class="activation-btn">
+                                <i class="fa fa-camera"></i> Kích hoạt Camera
+                            </div>
+                            <div class="activation-hint">
+                                Nhấp để cấp quyền và mở Camera trực tiếp.
+                            </div>
+                        </div>
                     </div>
                 </div>
 

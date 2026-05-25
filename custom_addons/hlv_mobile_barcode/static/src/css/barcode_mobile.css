@@ -362,6 +362,86 @@
   display: block;
 }
 
+/* Camera Error Banner & Activation styles */
+.hlv-barcode-app .camera-error-banner {
+  background: #fff5f5;
+  border: 1px solid #feb2b2;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 8px 12px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 0.82rem;
+  color: #c53030;
+  text-align: left;
+  line-height: 1.45;
+  box-shadow: var(--shadow-sm);
+  width: calc(100% - 24px);
+  box-sizing: border-box;
+}
+
+.hlv-barcode-app .camera-error-banner i {
+  font-size: 1.15rem;
+  margin-top: 2px;
+  color: #e53e3e;
+  flex-shrink: 0;
+}
+
+.hlv-barcode-app .camera-error-banner code {
+  background: #fff;
+  padding: 2px 4px;
+  border-radius: 3px;
+  border: 1px solid #fed7d7;
+  font-family: monospace;
+  font-size: 0.8rem;
+  color: #c53030;
+}
+
+.hlv-barcode-app .camera-activation-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  cursor: pointer;
+  padding: 15px;
+  text-align: center;
+}
+
+.hlv-barcode-app .camera-activation-overlay .activation-btn {
+  background: var(--primary-color);
+  color: var(--white);
+  padding: 12px 24px;
+  border-radius: 30px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: transform 0.2s, background-color 0.2s;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+.hlv-barcode-app .camera-activation-overlay:active .activation-btn {
+  transform: scale(0.96);
+}
+
+.hlv-barcode-app .camera-activation-overlay .activation-hint {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.8rem;
+  margin-top: 10px;
+  max-width: 280px;
+  line-height: 1.4;
+}
+
 /* ==========================================================================
    ITEMS LIST
    ========================================================================== */
