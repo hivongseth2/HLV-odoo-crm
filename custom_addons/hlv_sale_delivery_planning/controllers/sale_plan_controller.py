@@ -121,7 +121,7 @@ _PAGE = r"""<!DOCTYPE html>
 *{box-sizing:border-box}
 body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;color:#0f172a;-webkit-font-smoothing:antialiased;font-size:14px}
 .card,.form-control,.form-select,.badge,.list-group-item,.alert,.modal-content,
-.input-group-text,.dropdown-menu{border-radius:10px!important}
+.input-group-text,.dropdown-menu{border-radius:3px!important}
 /* Navbar */
 .navbar.bg-primary{background:#0f172a!important;border-bottom:1px solid #1e293b}
 /* KPI row 1 */
@@ -185,7 +185,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
 .so-card-ready{background:#f0fdf4!important}
 .cursor-pointer{cursor:pointer}
 /* Filter chips */
-.filter-chip{font-size:.72rem;padding:3px 7px 3px 9px;display:inline-flex;align-items:center;gap:5px;cursor:default;border-radius:20px}
+.filter-chip{font-size:.65rem;padding:3px 7px 3px 9px;display:inline-flex;align-items:center;gap:5px;cursor:default;border-radius:20px}
 .filter-chip .chip-x{background:none;border:none;color:inherit;font-size:.9rem;line-height:1;padding:0 2px;cursor:pointer;opacity:.65}
 .filter-chip .chip-x:hover{opacity:1}
 /* Kanban */
@@ -197,13 +197,13 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
 .so-card{border:1px solid #e5e7eb!important;transition:.15s;box-shadow:none!important}
 .so-card:hover{border-color:#a5b4fc!important;box-shadow:0 2px 8px rgba(99,102,241,.1)!important}
 /* Drawer */
-#drawer{position:fixed;top:0;right:-820px;width:800px;height:100vh;background:#fff;
+#drawer{position:fixed;top:0;right:-1020px;width:1000px;height:100vh;background:#fff;
   border-left:1px solid #e5e7eb;box-shadow:-8px 0 32px rgba(0,0,0,.06);z-index:1060;transition:right .3s;overflow-y:auto}
 #drawer.open{right:0}
 #drawer-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.2);z-index:1055}
 #drawer-overlay.open{display:block}
 /* Drawer table */
-.table-lines td,.table-lines th{font-size:.8rem;vertical-align:middle}
+.table-lines td,.table-lines th{font-size:.7rem;vertical-align:middle}
 .table-lines thead th{background:#f9fafb;color:#6b7280;font-weight:600;text-transform:uppercase;font-size:.65rem;letter-spacing:.6px;padding:9px 8px;border-bottom:1px solid #e5e7eb}
 .table-lines td{padding:7px 8px;border-color:#f3f4f6}
 .table-lines tbody tr:hover{background:#fafafa}
@@ -217,7 +217,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
 .row-pending{background:#fffbeb}
 .row-delivered{background:#f0fdf4}
 /* Kanban col load more */
-.btn-col-more{font-size:.72rem;padding:7px 0;width:100%;background:#fafafa;border:1px dashed #e5e7eb;color:#6b7280;cursor:pointer;transition:.15s;font-weight:500}
+.btn-col-more{font-size:.65rem;padding:7px 0;width:100%;background:#fafafa;border:1px dashed #e5e7eb;color:#6b7280;cursor:pointer;transition:.15s;font-weight:500}
 .btn-col-more:hover{background:#f3f4f6;border-color:#d1d5db;color:#374151}
 /* Loading */
 .loading-overlay{position:fixed;inset:0;background:rgba(255,255,255,.8);z-index:2000;
@@ -225,7 +225,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
 .loading-overlay .spinner-border{width:2.5rem;height:2.5rem}
 /* Load more */
 #btn-load-more{font-weight:600;padding:5px 32px}
-@media(max-width:768px){#drawer{width:100%} .kanban-col{min-width:100%}}
+@media(max-width:1024px){#drawer{width:100%!important;right:-105%!important}} @media(max-width:768px){.kanban-col{min-width:100%}}
 /* Report button */
 .btn-report{font-size:.68rem;padding:2px 8px;border:1px solid #fecaca;color:#dc2626;background:#fef2f2;border-radius:4px;cursor:pointer;transition:.15s;line-height:1.4;font-weight:500}
 .btn-report:hover{background:#fee2e2;border-color:#dc2626}
@@ -241,7 +241,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
 .msg-item:last-child{border-bottom:none}
 .msg-meta{display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap}
 .msg-author{font-weight:600;color:#111827}
-.msg-date{color:#9ca3af;font-size:.72rem}
+.msg-date{color:#9ca3af;font-size:.65rem}
 .msg-origin{font-size:.65rem;background:#f3f4f6;color:#6b7280;padding:1px 6px;border-radius:4px}
 .msg-body{color:#4b5563;line-height:1.55;word-break:break-word}
 .msg-body p{margin:0 0 4px}
@@ -253,7 +253,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
 .msg-att-img:hover{opacity:.85}
 .msg-empty{padding:20px;text-align:center;color:#9ca3af;font-size:.8rem}
 .msg-compose-files{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
-.msg-compose-file{display:inline-flex;align-items:center;gap:6px;padding:3px 8px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:4px;font-size:.72rem;color:#4b5563}
+.msg-compose-file{display:inline-flex;align-items:center;gap:6px;padding:3px 8px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:4px;font-size:.65rem;color:#4b5563}
 .msg-compose-file button{border:none;background:transparent;color:#dc2626;padding:0;line-height:1}
 #report-modal .rmod-card{background:#fff;max-width:440px;width:90%;border-radius:8px;padding:24px;box-shadow:0 8px 24px rgba(0,0,0,.12)}
 /* ========================================================
@@ -288,7 +288,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
    ======================================================== */
 .table-lines thead.table-light>tr>th,.table-lines .table-light th{
   background:#f8fafc!important;color:#64748b!important;
-  font-size:.72rem!important;text-transform:uppercase!important;
+  font-size:.65rem!important;text-transform:uppercase!important;
   font-weight:600!important;letter-spacing:.5px!important;
   border-bottom:1px solid #e2e8f0!important}
 /* ========================================================
@@ -299,6 +299,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
 .table-lines td.text-success{color:#059669!important}
 /* VAT col (text-warning) → amber-700 */
 .table-lines td.text-warning{color:#b45309!important}
+.text-warning{color:#b45309!important}
 /* Total+VAT col (text-primary fw-bold) → indigo-600 */
 .table-lines td.text-primary{color:#4f46e5!important}
 /* Delivered qty (cell-delivered) → indigo-500 */
@@ -316,24 +317,29 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
 /* ========================================================
    MISC — count badge, alert strip, transfer table
    ======================================================== */
-#count-info{background:#1e293b!important;font-size:.72rem!important;padding:5px 12px!important;font-weight:500!important;border-radius:20px!important}
+#count-info{background:#1e293b!important;font-size:.65rem!important;padding:5px 12px!important;font-weight:500!important;border-radius:20px!important}
 .alert-warning{background:rgba(245,158,11,.05)!important;border:1px solid #fde68a!important;color:#92400e!important}
 .alert-warning h6{color:#92400e!important;font-size:.75rem}
 .table-lines .badge.bg-warning.text-dark{background:rgba(245,158,11,.12)!important;color:#b45309!important;border:1px solid #fde68a!important;font-weight:600}
 .table-lines .badge.bg-info.bg-opacity-25.text-dark{background:rgba(14,165,233,.1)!important;color:#075985!important;border:1px solid #bae6fd!important}
 /* Second table (transfer suggestions) */
 .table-bordered:not(.table-lines){border:1px solid #e2e8f0!important}
-.table-bordered:not(.table-lines) thead.table-light th{background:#f8fafc!important;color:#64748b!important;font-size:.72rem!important;text-transform:uppercase!important;font-weight:600!important;border-color:#e2e8f0!important}
+.table-bordered:not(.table-lines) thead.table-light th{background:#f8fafc!important;color:#64748b!important;font-size:.65rem!important;text-transform:uppercase!important;font-weight:600!important;border-color:#e2e8f0!important}
 /* ========================================================
    LIQUID GLASS BUTTONS — premium modern style
    ======================================================== */
 /* Base — all .btn elements */
 .btn{
-  border-radius:10px!important;
+  border-radius:3px!important;
   font-weight:500;font-size:.82rem;letter-spacing:.01em;
   transition:all .2s cubic-bezier(.4,0,.2,1)!important;
   position:relative;overflow:hidden}
-.btn-sm{border-radius:8px!important;font-size:.78rem;padding:5px 13px}
+.btn-sm{border-radius:3px!important;font-size:.78rem;padding:5px 13px}
+/* btn-group: flatten inner corners, keep outer 3px */
+.btn-group>.btn:not(:first-child),.btn-group>.btn-group:not(:first-child)>.btn{
+  border-top-left-radius:0!important;border-bottom-left-radius:0!important;margin-left:-1px}
+.btn-group>.btn:not(:last-child):not(.dropdown-toggle),.btn-group>.btn-group:not(:last-child)>.btn{
+  border-top-right-radius:0!important;border-bottom-right-radius:0!important}
 /* Primary — indigo glow */
 .btn-primary{
   background:linear-gradient(135deg,#4f46e5 0%,#6366f1 60%,#818cf8 100%)!important;
@@ -461,7 +467,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
     <div><div class="kpi-pack-label">Đang giao</div><div class="kpi-pack-val" id="kpi-ps">0</div></div>
   </div></div>
   <div style="flex:1 1 0;min-width:130px"><div class="card kpi-pack" id="kpi-pack-deltoday" data-filter="delivered_today">
-    <div class="kpi-pack-icon" style="background:#d4edda;color:#155724"><i class="fa fa-calendar-check-o"></i></div>
+    <div class="kpi-pack-icon" style="background:#d4edda;color:#155724"><i class="fa fa-calendar-check"></i></div>
     <div><div class="kpi-pack-label">Đã giao trong ngày</div><div class="kpi-pack-val" id="kpi-pdt">0</div></div>
   </div></div>
 </div>
@@ -555,17 +561,15 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
     <button id="grp-stock" class="btn btn-sm btn-outline-primary">&#128230; Tình trạng kho</button>
   </div>
   <div class="d-flex align-items-center gap-2">
-    <button id="btn-export-excel" class="btn btn-sm btn-success" title="Xuất Excel"><i class="fa fa-file-excel-o"></i> Xuất Excel</button>
-    <div class="btn-group">
-      <button id="btn-export-picking-excel" class="btn btn-sm btn-warning"><i class="fa fa-truck"></i> Xuất phiếu XK</button>
-      <button type="button" class="btn btn-sm btn-warning dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false"><span class="visually-hidden">Toggle</span></button>
-      <ul class="dropdown-menu">
-        <li><a class="dropdown-item" id="btn-export-picking-excel-dd" href="#"><i class="fa fa-list-alt me-1"></i> Chi tiết (có dòng SP)</a></li>
-        <li><a class="dropdown-item" id="btn-export-picking-simple-excel-dd" href="#"><i class="fa fa-file-text-o me-1"></i> Tóm tắt (không dòng SP)</a></li>
-      </ul>
+    <div class="btn-group btn-group-sm" role="group">
+      <button id="btn-export-excel" class="btn btn-sm btn-success" title="Xuất Excel"><i class="fa fa-file-excel-o"></i> Xuất Excel</button>
+      <button id="btn-export-picking-excel" class="btn btn-sm btn-warning" title="Xuất phiếu xuất kho (OUT đã xong)"><i class="fa fa-truck"></i> Xuất phiếu XK</button>
+      <button id="btn-export-picking-simple-excel" class="btn btn-sm btn-info" title="Xuất phiếu XK giản lược (không in dòng sản phẩm)"><i class="fa fa-file-text-o"></i> Xuất phiếu XK (tóm tắt)</button>
     </div>
-    <button id="btn-kanban" class="btn btn-sm btn-primary"><i class="fa fa-th"></i> Kanban</button>
-    <button id="btn-list" class="btn btn-sm btn-outline-secondary"><i class="fa fa-list"></i> Danh sách</button>
+    <div class="btn-group btn-group-sm" role="group">
+      <button id="btn-kanban" class="btn btn-sm btn-primary"><i class="fa fa-th"></i> Kanban</button>
+      <button id="btn-list" class="btn btn-sm btn-outline-secondary"><i class="fa fa-list"></i> Danh sách</button>
+    </div>
     <span class="vr"></span>
     <button id="btn-load-more" class="btn btn-sm btn-outline-primary d-none"><i class="fa fa-plus"></i> Tải thêm 100</button>
     <span class="badge bg-primary" style="font-size:.85rem;padding:9px 12px" id="count-info">0 / 0 đơn hàng</span>
@@ -952,7 +956,7 @@ function renderSOCard(o){
   if(o.x_studio_misa_saler_code) h+='<small class="text-muted"><i class="fa fa-id-badge me-1"></i>NV: '+esc(o.x_studio_misa_saler_code)+'</small><br>';
   if(o.origin) h+='<small class="text-muted" style="font-size:.7rem"><i class="fa fa-sticky-note-o me-1 text-warning"></i><b>Ghi ch\u00fa:</b> '+esc(o.origin)+'</small><br>';
   if(o.misa_shipping_address) h+='<small class="text-muted" style="font-size:.7rem"><i class="fa fa-map-marker me-1 text-danger"></i>'+esc(o.misa_shipping_address)+'</small><br>';
-  if(o._shipper_names&&o._shipper_names.length) h+='<small class="text-success fw-bold" style="font-size:.72rem"><i class="fa fa-motorcycle me-1"></i>T\u00e0i x\u1ebf: '+o._shipper_names.map(esc).join(', ')+'</small><br>';
+  if(o._shipper_names&&o._shipper_names.length) h+='<small class="text-success fw-bold" style="font-size:.65rem"><i class="fa fa-motorcycle me-1"></i>T\u00e0i x\u1ebf: '+o._shipper_names.map(esc).join(', ')+'</small><br>';
   if(o.tag_ids&&o.tag_ids.length) h+='<div class="mt-1">'+o.tag_ids.map(tagBadge).join('')+'</div>';
   if(o.transfer_suggestions&&o.transfer_suggestions.length){
     var tsWhs={};o.transfer_suggestions.forEach(function(s){s.sources.forEach(function(src){tsWhs[src.from_warehouse_id]=1;});});
@@ -966,7 +970,7 @@ function renderSOCard(o){
   h+='</div>';
   h+='<div class="d-flex justify-content-end mt-2">';
   if(reported){
-    h+='<span class="text-muted" style="font-size:.72rem"><i class="fa fa-flag text-danger me-1"></i>Đã báo cáo</span>';
+    h+='<span class="text-muted" style="font-size:.65rem"><i class="fa fa-flag text-danger me-1"></i>Đã báo cáo</span>';
   } else {
     h+='<button class="btn-report" data-so-id="'+o.id+'" data-so-name="'+esc(o.name)+'"><i class="fa fa-flag me-1"></i>Báo cáo</button>';
   }
@@ -988,7 +992,7 @@ function renderList(){
     tr.setAttribute('data-so-id',o.id);
     var isReported=S.reportedIds&&S.reportedIds[o.id];
     var reportCell=isReported
-      ?'<td><span class="text-muted" style="font-size:.72rem"><i class="fa fa-flag text-danger"></i></span></td>'
+      ?'<td><span class="text-muted" style="font-size:.65rem"><i class="fa fa-flag text-danger"></i></span></td>'
       :'<td><button class="btn-report" data-so-id="'+o.id+'" data-so-name="'+esc(o.name)+'"><i class="fa fa-flag"></i></button></td>';
     tr.innerHTML='<td class="fw-bold text-primary">'+esc(o.name)+'</td>'
       +'<td>'+esc(partnerName(o))+'</td>'
@@ -1434,7 +1438,7 @@ function renderHtghPresets(){
   presets.forEach(function(p,idx){
     var span=document.createElement('span');
     span.className='badge border d-inline-flex align-items-center gap-1 px-2 py-1';
-    span.style.cssText='font-size:.72rem;background:#f8f9fa;color:#495057;border-color:#dee2e6;cursor:default';
+    span.style.cssText='font-size:.65rem;background:#f8f9fa;color:#495057;border-color:#dee2e6;cursor:default';
     var lbl=document.createElement('span');
     lbl.style.cursor='pointer';
     lbl.title=p.value;
