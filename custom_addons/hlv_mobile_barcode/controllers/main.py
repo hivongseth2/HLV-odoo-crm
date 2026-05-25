@@ -259,6 +259,15 @@ class HLVMobileBarcodeController(http.Controller):
         
         return {'success': True, 'new_qty': move_line.quantity}
 
+    @http.route('/hlv_mobile_barcode/clear_quantities', type='json', auth='user')
+    def clear_quantities(self, picking_id):
+        picking = request.env['stock.picking'].browse(picking_id)
+        if picking.exists() and picking.state in ['draft', 'confirmed', 'assigned']:
+            # In Odoo 18, quantity is the done quantity on move_line
+            picking.move_line_ids.write({'quantity': 0})
+            return {'success': True}
+        return {'error': _('Không thể xoá số lượng của phiếu này')}
+
     @http.route('/hlv_mobile_barcode/delete_move', type='json', auth='user')
     def delete_move(self, move_id):
         move = request.env['stock.move'].browse(move_id)

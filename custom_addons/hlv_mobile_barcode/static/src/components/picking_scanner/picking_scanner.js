@@ -49,6 +49,25 @@ export class PickingScanner extends Component {
         this.state.loading = false;
     }
 
+    async clearQuantities() {
+        if (!confirm("Bạn có chắc muốn xoá toàn bộ số lượng đã quét để quét lại từ đầu không?")) {
+            return;
+        }
+        try {
+            const res = await rpc("/hlv_mobile_barcode/clear_quantities", {
+                picking_id: this.props.pickingId,
+            });
+            if (res.error) {
+                this.notification.add(res.error, { type: "danger" });
+            } else {
+                this.notification.add("Đã làm mới số lượng", { type: "success" });
+                await this.loadPicking();
+            }
+        } catch (e) {
+            this.notification.add("Lỗi kết nối", { type: "danger" });
+        }
+    }
+
     toggleEditLine(moveId) {
         if (this.state.editingLineId === moveId) {
             this.state.editingLineId = null;
