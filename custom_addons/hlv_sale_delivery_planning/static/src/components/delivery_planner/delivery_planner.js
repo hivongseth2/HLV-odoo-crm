@@ -2532,11 +2532,17 @@ export class DeliveryPlannerDashboard extends Component {
                 map[pid].qty_delivered += (l.qty_delivered || 0);
                 map[pid].qty_reserved_here += (l.qty_reserved_here || 0); // sum across lines
                 // qty_warehouse_free: keep first (product-level, same for all lines of same product/wh)
+                map[pid].delivered_subtotal += (l.delivered_subtotal || 0);
+                map[pid].delivered_tax += (l.delivered_tax || 0);
+                map[pid].delivered_total += (l.delivered_total || 0);
             } else {
                 map[pid] = { ...l, product_uom_qty: l.product_uom_qty || 0,
                     qty_delivered: l.qty_delivered || 0, qty_packed: l.qty_packed || 0,
                     qty_available: l.qty_available || 0, qty_warehouse_free: l.qty_warehouse_free || 0,
-                    qty_reserved_here: l.qty_reserved_here || 0 };
+                    qty_reserved_here: l.qty_reserved_here || 0,
+                    delivered_subtotal: l.delivered_subtotal || 0,
+                    delivered_tax: l.delivered_tax || 0,
+                    delivered_total: l.delivered_total || 0 };
                 order.push(pid);
             }
         }
