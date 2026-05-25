@@ -1,6 +1,6 @@
 /** @odoo-module **/
 
-import { Component, useState, onMounted, useEffect } from "@odoo/owl";
+import { Component, useState, onMounted, useEffect, useRef, onWillUnmount } from "@odoo/owl";
 import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 import { rpc } from "@web/core/network/rpc";
@@ -29,9 +29,12 @@ export class BarcodeApp extends Component {
         
         this.history = savedHistory;
 
+        this.hiddenInputRef = useRef("hiddenInput");
+
         this.state = useState({
             currentView: savedState.currentView || "main", 
             manualBarcode: "",
+            hiddenBarcode: "",
             pickingId: savedState.pickingId || null,
             pickingName: savedState.pickingName || "",
             warehouseCode: savedState.warehouseCode || "",
@@ -74,11 +77,36 @@ export class BarcodeApp extends Component {
 
         this.barcodeBuffer = "";
         this.barcodeTimeout = null;
+
+        this.keepFocusOnHiddenInput = () => {
+            const active = document.activeElement;
+            if (active && ['INPUT', 'TEXTAREA'].includes(active.tagName) && !active.classList.contains('hidden-barcode-input')) {
+                return;
+            }
+            const inputEl = this.hiddenInputRef?.el;
+            if (inputEl) {
+                inputEl.focus();
+            }
+        };
+
+        this.boundKeepFocus = this.keepFocusOnHiddenInput.bind(this);
         
         onMounted(() => {
             document.addEventListener('keydown', this.handleKeyDown.bind(this));
+            document.addEventListener('click', this.boundKeepFocus);
+            
+            this.focusInterval = setInterval(this.boundKeepFocus, 2000);
+            setTimeout(this.boundKeepFocus, 500);
+
             if (this.state.currentView !== 'main') {
                 this.startPersistentCamera();
+            }
+        });
+
+        onWillUnmount(() => {
+            document.removeEventListener('click', this.boundKeepFocus);
+            if (this.focusInterval) {
+                clearInterval(this.focusInterval);
             }
         });
     }
@@ -106,6 +134,17 @@ export class BarcodeApp extends Component {
     onManualBarcodeKeyup(ev) {
         if (ev.key === 'Enter') {
             this.processManualBarcode();
+        }
+    }
+
+    async onHiddenInputKeyup(ev) {
+        if (ev.key === 'Enter') {
+            const barcode = this.state.hiddenBarcode ? this.state.hiddenBarcode.trim() : "";
+            if (barcode) {
+                await this.processBarcode(barcode);
+            }
+            this.state.hiddenBarcode = "";
+            setTimeout(() => this.keepFocusOnHiddenInput(), 50);
         }
     }
 
