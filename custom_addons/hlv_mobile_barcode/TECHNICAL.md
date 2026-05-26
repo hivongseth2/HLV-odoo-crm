@@ -78,18 +78,22 @@ hlv_mobile_barcode/
 - `/hlv_mobile_barcode/get_inventory_lookup`: Truy vấn `stock.quant` cho màn hình tra cứu, tự động xác định `warehouse_code` từ vị trí kho.
 - `/hlv_mobile_barcode/move_location`: Tạo lệnh `stock.picking` type Internal và xử lý tự động validate để di chuyển tồn kho.
 
-## Phân quyền quét Barcode di động (Mới)
-Để tăng tính tự động hóa và bảo mật tối đa, ứng dụng Mobile Barcode tích hợp hệ thống phân quyền quét kho độc lập, tự vận hành hoàn toàn bên trong module:
+## Phân quyền quét Barcode di động (Hệ thống Nút gạt Động)
+Để tăng tính tự động hóa và bảo mật tối đa, ứng dụng Mobile Barcode tích hợp hệ thống phân quyền quét kho động, cho phép linh hoạt cấu hình và chuyển đổi:
 * **Models**:
   - `hlv.barcode.user.permission`: Định cấu hình người dùng (`res.users`) tại từng kho (`stock.warehouse`).
   - `hlv.barcode.picking.permission`: Cấu hình quyền chi tiết cho từng loại phiếu quét (`IN`, `OUT`, `INT`, `PICK`, `PACK`, `STO`) với các cờ boolean: `can_view` (Xem/Quét), `can_edit` (Sửa/Quét hàng), `can_delete` (Xóa dòng), `can_confirm` (Xác nhận phiếu).
-* **Kiểm tra quyền**:
-  - Tự động kiểm tra quyền quét/xem phiếu (`can_view`) trong router `smart_scan` và `get_picking_data`.
-  - Tự động kiểm tra quyền quét hàng/sửa đổi số lượng (`can_edit`) trong `process_barcode` và `update_move_line_qty`.
-  - Tự động kiểm tra quyền xóa dòng (`can_delete`) trong `delete_move`.
-  - Tự động kiểm tra quyền xác nhận (`can_confirm`) trong `validate_picking`.
-* **Cấu hình & Tích hợp**:
-  - Managers có thể tự động sinh phân quyền quét mặc định bằng cách nhấp nút **"⚡ Tạo phân quyền cho tất cả"** hoặc cấu hình chi tiết thông qua trang cài đặt chính của Barcode App hoặc menu phụ ẩn (Developer Mode).
+* **Nút gạt cấu hình (Toggle Setting)**:
+  - Tham số `hlv_barcode_use_independent_permissions` trong `ir.config_parameter` (được cấu hình qua Settings) cho phép quản trị viên lựa chọn:
+    - **Bật (True)**: Sử dụng cấu hình phân quyền quét của riêng Mobile Barcode (`hlv.barcode.*`).
+    - **Tắt (False - Mặc định)**: Dùng chung cấu hình phân quyền kho của module `hlv_warehouse_permission` (`warehouse.*`).
+* **Tránh lỗi biên dịch XML (Resilient Runtime Routing)**:
+  - Để tránh lỗi `ParseError` khi cài đặt module trên hệ thống không có `hlv_warehouse_permission`:
+    - Giao diện cài đặt sử dụng **nút gọi Python object (`action_open_warehouse_permissions`)** thay vì dùng action ID tĩnh để mở trang cấu hình chung của `hlv_warehouse_permission`.
+    - Menu phụ debug *"Phân quyền quét kho"* gọi một **Odoo Server Action (`action_open_barcode_permissions_menu`)**, tự động kiểm tra trạng thái nút gạt để trả về trang cấu hình tương ứng ở runtime.
+* **Kiểm tra quyền đa hình (Polymorphic Validation)**:
+  - Cả 6 API controllers kiểm tra quyền (`smart_scan`, `get_picking_data`, `process_barcode`, `update_move_line_qty`, `delete_move`, `validate_picking`) tự động quyết định model cần truy vấn tại runtime dựa trên nút gạt.
+  - Nếu module đích chưa cài đặt, `request.env.get(...)` sẽ trả về `None` một cách an toàn mà không bao giờ gây crash hệ thống.
 
 ## Hướng dẫn mở rộng
 - Khi cần thêm loại mã vạch mới: Thêm logic tìm kiếm vào endpoint `smart_scan` ở `controllers/main.py`.
