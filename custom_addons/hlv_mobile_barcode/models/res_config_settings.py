@@ -14,6 +14,11 @@ class ResCompany(models.Model):
         string='Print Label after Put in Pack',
         default=False
     )
+    hlv_barcode_use_independent_permissions = fields.Boolean(
+        string='Sử dụng phân quyền quét độc lập',
+        default=False,
+        help='Nếu bật, hệ thống sẽ sử dụng cấu hình phân quyền quét của riêng module Mobile Barcode. Nếu tắt, sẽ dùng chung cấu hình của module hlv_warehouse_permission.'
+    )
 
 class ResConfigSettings(models.TransientModel):
     _inherit = 'res.config.settings'
@@ -26,3 +31,23 @@ class ResConfigSettings(models.TransientModel):
         related='company_id.hlv_barcode_print_after_pack',
         readonly=False,
     )
+    hlv_barcode_use_independent_permissions = fields.Boolean(
+        related='company_id.hlv_barcode_use_independent_permissions',
+        readonly=False,
+    )
+
+    def action_open_warehouse_permissions(self):
+        self.ensure_one()
+        action = self.env.ref('hlv_warehouse_permission.action_warehouse_permission', raise_if_not_found=False)
+        if action:
+            return action.read()[0]
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': 'Không tìm thấy',
+                'message': 'Module hlv_warehouse_permission chưa được cài đặt hoặc không tìm thấy cấu hình!',
+                'type': 'warning',
+                'sticky': False,
+            }
+        }
