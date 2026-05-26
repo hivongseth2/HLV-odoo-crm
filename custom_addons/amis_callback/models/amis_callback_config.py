@@ -325,10 +325,16 @@ class AmisCallbackConfig(models.Model):
              'Để trống nếu không cần CC.',
     )
     meinvoice_mail_attach_pdf = fields.Boolean(
-        string='Đính kèm PDF từ meInvoice (đã cấp mã)',
+        string='Đính kèm PDF từ meInvoice (bản chính thức)',
         default=True,
         help='Khi gửi email hóa đơn đã cấp mã, tải PDF từ meInvoice và đính kèm vào email. '
              'Bỏ chọn nếu chỉ muốn dùng nội dung mẫu email.',
+    )
+    meinvoice_mail_attach_pdf_draft = fields.Boolean(
+        string='Đính kèm PDF bản xem trước (bản nháp)',
+        default=True,
+        help='Khi gửi email bản nháp, tải PDF xem trước từ meInvoice (/invoice/unpublishview) '
+             'và đính kèm vào email. Bỏ chọn nếu không muốn đính kèm PDF cho bản nháp.',
     )
 
     # ── Webhook → meInvoice auto-publish ─────────────────────────────────────

@@ -455,7 +455,7 @@ class MeinvoiceInvoice(models.Model):
         if not self.invoice_data_json:
             return self.env['ir.attachment']
         config = self.env['amis.callback.config'].sudo().search([], limit=1)
-        if not config or not config.meinvoice_mail_attach_pdf:
+        if not config or not config.meinvoice_mail_attach_pdf_draft:
             return self.env['ir.attachment']
         try:
             invoice_data = json.loads(self.invoice_data_json)

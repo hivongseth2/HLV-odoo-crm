@@ -238,6 +238,7 @@
                             <field name="meinvoice_mail_auto_send_draft"/>
                             <field name="meinvoice_mail_auto_send_published"/>
                             <field name="meinvoice_mail_attach_pdf"/>
+                            <field name="meinvoice_mail_attach_pdf_draft"/>
                         </group>
                     </group>
                     <group string="Webhook Shopee → Auto-publish HĐĐT">
