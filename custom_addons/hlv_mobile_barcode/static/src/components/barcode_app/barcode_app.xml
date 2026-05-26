@@ -75,8 +75,13 @@
                             <div class="header-title">
                                 <i class="fa fa-barcode"></i> Máy quét mã vạch
                             </div>
-                            <div class="user-info" t-on-click="openSettings">
-                                <i class="fa fa-cog"></i> Cài đặt
+                            <div style="display: flex; gap: 8px;">
+                                <div class="user-info" t-on-click="openSettings">
+                                    <i class="fa fa-cog"></i> Cài đặt
+                                </div>
+                                <div class="user-info" t-on-click="exitApp">
+                                    <i class="fa fa-sign-out-alt"></i> Thoát
+                                </div>
                             </div>
                         </div>
 
