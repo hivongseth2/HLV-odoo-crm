@@ -23,6 +23,15 @@ class HLVMobileBarcodeController(http.Controller):
             if picking.picking_type_id.code == 'outgoing' or 'pack' in pt_name or 'pack' in pt_code:
                 return {'error': _('Ứng dụng Mobile Barcode chỉ hỗ trợ xử lý phiếu PICK (Lấy hàng). Phiếu PACK và OUT được đảm nhận bởi phân hệ khác.')}
 
+            # Enforce warehouse scan permission (can_view)
+            Permission = request.env.get('warehouse.user.permission')
+            if Permission:
+                warehouse = picking.picking_type_id.warehouse_id
+                code = picking.picking_type_id.sequence_code
+                if warehouse and code:
+                    if not Permission.check_picking_operation(request.env.user, warehouse, code, 'can_view'):
+                        return {'error': _('Bạn không có quyền quét/xem phiếu %s tại kho "%s". Vui lòng liên hệ Admin!', code, warehouse.name)}
+
             # Check if picking type is allowed based on settings
             allowed_types = request.env.company.hlv_barcode_picking_type_ids
             if allowed_types and picking.picking_type_id not in allowed_types:
@@ -67,6 +76,15 @@ class HLVMobileBarcodeController(http.Controller):
         pt_code = (picking.picking_type_id.sequence_code or '').lower()
         if picking.picking_type_id.code == 'outgoing' or 'pack' in pt_name or 'pack' in pt_code:
             return {'error': _('Ứng dụng Mobile Barcode chỉ hỗ trợ xử lý phiếu PICK (Lấy hàng). Phiếu PACK và OUT được đảm nhận bởi phân hệ khác.')}
+
+        # Enforce warehouse scan permission (can_view)
+        Permission = request.env.get('warehouse.user.permission')
+        if Permission:
+            warehouse = picking.picking_type_id.warehouse_id
+            code = picking.picking_type_id.sequence_code
+            if warehouse and code:
+                if not Permission.check_picking_operation(request.env.user, warehouse, code, 'can_view'):
+                    return {'error': _('Bạn không có quyền xem phiếu %s tại kho "%s". Vui lòng liên hệ Admin!', code, warehouse.name)}
 
         lines = []
         # Group by move_id to show products
@@ -159,6 +177,15 @@ class HLVMobileBarcodeController(http.Controller):
         picking = request.env['stock.picking'].browse(picking_id)
         if not picking.exists() or picking.state not in ['draft', 'confirmed', 'assigned']:
             return {'error': _('Phiếu này không thể xử lý thêm sản phẩm.')}
+
+        # Enforce warehouse edit permission (can_edit)
+        Permission = request.env.get('warehouse.user.permission')
+        if Permission:
+            warehouse = picking.picking_type_id.warehouse_id
+            code = picking.picking_type_id.sequence_code
+            if warehouse and code:
+                if not Permission.check_picking_operation(request.env.user, warehouse, code, 'can_edit'):
+                    return {'error': _('Bạn không có quyền chỉnh sửa/quét hàng cho phiếu %s tại kho "%s". Vui lòng liên hệ Admin!', code, warehouse.name)}
 
         if not barcode:
             return {'error': _('Mã vạch không hợp lệ')}
@@ -265,6 +292,15 @@ class HLVMobileBarcodeController(http.Controller):
         if move.picking_id.state not in ['draft', 'confirmed', 'assigned']:
             return {'error': _('Phiếu không ở trạng thái cho phép sửa số lượng')}
 
+        # Enforce warehouse edit permission (can_edit)
+        Permission = request.env.get('warehouse.user.permission')
+        if Permission:
+            warehouse = move.picking_id.picking_type_id.warehouse_id
+            code = move.picking_id.picking_type_id.sequence_code
+            if warehouse and code:
+                if not Permission.check_picking_operation(request.env.user, warehouse, code, 'can_edit'):
+                    return {'error': _('Bạn không có quyền thay đổi số lượng phiếu %s tại kho "%s". Vui lòng liên hệ Admin!', code, warehouse.name)}
+
         # Odoo 18 uses quantity on move_line
         # Find or create a move_line
         move_line = move.move_line_ids.filtered(lambda ml: not ml.result_package_id)
@@ -317,6 +353,15 @@ class HLVMobileBarcodeController(http.Controller):
             
         if move.picking_id.state not in ['draft', 'confirmed', 'assigned']:
             return {'error': _('Phiếu không ở trạng thái cho phép xóa sản phẩm')}
+
+        # Enforce warehouse delete permission (can_delete)
+        Permission = request.env.get('warehouse.user.permission')
+        if Permission:
+            warehouse = move.picking_id.picking_type_id.warehouse_id
+            code = move.picking_id.picking_type_id.sequence_code
+            if warehouse and code:
+                if not Permission.check_picking_operation(request.env.user, warehouse, code, 'can_delete'):
+                    return {'error': _('Bạn không có quyền xóa sản phẩm trên phiếu %s tại kho "%s". Vui lòng liên hệ Admin!', code, warehouse.name)}
             
         try:
             move._action_cancel()
@@ -353,6 +398,15 @@ class HLVMobileBarcodeController(http.Controller):
         picking = request.env['stock.picking'].browse(picking_id)
         if not picking.exists():
             return {'error': _('Picking not found')}
+
+        # Enforce warehouse validation permission (can_confirm)
+        Permission = request.env.get('warehouse.user.permission')
+        if Permission:
+            warehouse = picking.picking_type_id.warehouse_id
+            code = picking.picking_type_id.sequence_code
+            if warehouse and code:
+                if not Permission.check_picking_operation(request.env.user, warehouse, code, 'can_confirm'):
+                    return {'error': _('Bạn không có quyền xác nhận phiếu %s tại kho "%s". Vui lòng liên hệ Admin!', code, warehouse.name)}
         try:
             picking.button_validate()
             return {'success': True}
