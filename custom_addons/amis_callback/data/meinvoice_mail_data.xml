@@ -86,7 +86,7 @@
     </div>
     <div style="padding:26px 28px;">
         <p style="color:#c62828;font-style:italic;font-size:13px;margin:0 0 20px 0;">
-            Chú ý: Đây là email tự động từ hệ thống, vui lòng không phản hồi (reply) lại email này
+            Chú ý: Đây là email tự động từ hệ thống, vui lòng không phản hồi (reply) lại email này.
         </p>
         <p style="margin:0 0 8px 0;">Kính gửi <strong t-out="object.buyer_legal_name or object.buyer_full_name or object.partner_id.name or 'Quý khách'"/>,</p>
         <p style="margin:0 0 20px 0;color:#444;">
