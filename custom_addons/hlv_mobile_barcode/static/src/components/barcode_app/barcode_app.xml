@@ -20,8 +20,8 @@
                     </div>
                 </div>
 
-                <!-- Persistent Camera Section (Only when NOT on main home screen) -->
-                <t t-if="state.currentView !== 'main'">
+                <!-- Persistent Camera Section (Only when NOT on main home screen and picking is not completed) -->
+                <t t-if="state.currentView !== 'main' and state.pickingState !== 'done'">
                     <div class="persistent-camera-wrapper">
                         <!-- Error Banners -->
                         <t t-if="state.cameraErrorMessage">
@@ -116,7 +116,7 @@
                     </div>
                     
                     <!-- Picking View -->
-                    <PickingScanner t-if="state.currentView === 'picking'" pickingId="state.pickingId" onBack="() => this.goBack()" onSelectPicking="(id, name) => this.selectPicking(id, name)" lastScannedProduct="state.lastScannedProduct" scannedLocationName="state.scannedLocationName" refreshTick="state.pickingRefreshTick"/>
+                    <PickingScanner t-if="state.currentView === 'picking'" pickingId="state.pickingId" onBack="() => this.goBack()" onSelectPicking="(id, name) => this.selectPicking(id, name)" onStateLoaded="(state) => this.onPickingStateLoaded(state)" lastScannedProduct="state.lastScannedProduct" scannedLocationName="state.scannedLocationName" refreshTick="state.pickingRefreshTick"/>
                     
                     <!-- Move Component -->
                     <LocationMove t-if="state.currentView === 'move'" productId="state.recordId" prefillLocationBarcode="state.prefillLocationBarcode" prefillLocationName="state.prefillLocationName" onBack="() => this.goBack()" registerScanner="(cb) => this.registerScanner(cb)"/>

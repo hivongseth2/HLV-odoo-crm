@@ -49,6 +49,7 @@ export class BarcodeApp extends Component {
             cameraErrorMessage: "",
             showCameraPopup: false,
             pickingRefreshTick: 0,
+            pickingState: "",
         });
         
         useEffect(() => {
@@ -310,6 +311,7 @@ export class BarcodeApp extends Component {
             this.state.lookupTitle = prevState.lookupTitle;
             this.state.prefillLocationBarcode = prevState.prefillLocationBarcode;
             this.state.prefillLocationName = prevState.prefillLocationName;
+            this.state.pickingState = "";
             this.viewScannerCallback = null;
 
             // If the restored view is not main, start the inline camera
@@ -346,6 +348,7 @@ export class BarcodeApp extends Component {
         this.state.recordId = null;
         this.state.prefillLocationBarcode = null;
         this.state.prefillLocationName = null;
+        this.state.pickingState = "";
         this.viewScannerCallback = null;
     }
 
@@ -401,11 +404,16 @@ export class BarcodeApp extends Component {
         this.state.scannedLocationId = null;
         this.state.scannedLocationName = "";
         this.state.lastScannedProduct = null;
+        this.state.pickingState = "";
         this.state.pickingRefreshTick += 1;
         
         setTimeout(async () => {
             await this.startPersistentCamera(false);
         }, 150);
+    }
+
+    onPickingStateLoaded(pickingState) {
+        this.state.pickingState = pickingState;
     }
 
     openPopupCamera() {

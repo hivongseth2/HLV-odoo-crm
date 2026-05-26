@@ -10,6 +10,7 @@ export class PickingScanner extends Component {
         pickingId: Number,
         onBack: Function,
         onSelectPicking: Function,
+        onStateLoaded: { type: Function, optional: true },
         lastScannedProduct: { type: Number, optional: true },
         scannedLocationName: { type: String, optional: true },
         refreshTick: { type: Number, optional: true },
@@ -46,6 +47,10 @@ export class PickingScanner extends Component {
             if (data.error) {
                 this.notification.add(data.error, { type: "danger" });
             } else {
+                if (this.props.onStateLoaded) {
+                    this.props.onStateLoaded(data.state);
+                }
+                
                 if (['draft', 'confirmed', 'assigned'].includes(data.state)) {
                     const storageKey = 'hlv_opened_pickings';
                     let openedPickings = [];
@@ -65,6 +70,9 @@ export class PickingScanner extends Component {
                             // Re-fetch data after clearing
                             const newData = await rpc("/hlv_mobile_barcode/get_picking_data", { picking_id: this.props.pickingId });
                             if (!newData.error) {
+                                if (this.props.onStateLoaded) {
+                                    this.props.onStateLoaded(newData.state);
+                                }
                                 this.state.picking = newData;
                                 this.state.loading = false;
                                 return;

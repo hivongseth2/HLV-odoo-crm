@@ -112,50 +112,50 @@ class HLVMobileBarcodeController(http.Controller):
                 'state': move.state,
                 'location_name': loc_name,
             })
-            
-        # Find linked Step 2 picking (for 2-step warehouse transfer INT -> IN)
+        # Find linked Step 2 picking (only active for internal transfers e.g. INT -> IN)
         linked_picking_id = False
         linked_picking_name = False
         
-        # Method 1: Via stock moves chain
-        dest_pickings = picking.move_ids.mapped('move_dest_ids.picking_id').filtered(
-            lambda p: p.id != picking.id and p.state not in ['cancel']
-        )
-        if dest_pickings:
-            linked_picking = dest_pickings[0]
-            linked_picking_id = linked_picking.id
-            linked_picking_name = linked_picking.name
-            
-        # Method 2: Fallback to same procurement group (sharing group_id)
-        if not linked_picking_id and picking.group_id:
-            group_pickings = request.env['stock.picking'].sudo().search([
-                ('group_id', '=', picking.group_id.id),
-                ('id', '!=', picking.id),
-                ('state', 'not in', ['cancel'])
-            ])
-            in_pickings = group_pickings.filtered(
-                lambda p: 'IN' in (p.picking_type_id.sequence_code or '').upper() 
-                or p.picking_type_id.code in ['incoming', 'internal']
+        if picking.picking_type_id.code == 'internal':
+            # Method 1: Via stock moves chain
+            dest_pickings = picking.move_ids.mapped('move_dest_ids.picking_id').filtered(
+                lambda p: p.id != picking.id and p.state not in ['cancel']
             )
-            if in_pickings:
-                linked_picking = in_pickings[0]
-                linked_picking_id = linked_picking.id
-                linked_picking_name = linked_picking.name
-            elif group_pickings:
-                linked_picking = group_pickings[0]
+            if dest_pickings:
+                linked_picking = dest_pickings[0]
                 linked_picking_id = linked_picking.id
                 linked_picking_name = linked_picking.name
                 
-        # Method 3: Fallback to origin matching current picking name
-        if not linked_picking_id:
-            origin_pickings = request.env['stock.picking'].sudo().search([
-                ('origin', '=', picking.name),
-                ('id', '!=', picking.id),
-                ('state', 'not in', ['cancel'])
-            ], limit=1)
-            if origin_pickings:
-                linked_picking_id = origin_pickings.id
-                linked_picking_name = origin_pickings.name
+            # Method 2: Fallback to same procurement group (sharing group_id)
+            if not linked_picking_id and picking.group_id:
+                group_pickings = request.env['stock.picking'].sudo().search([
+                    ('group_id', '=', picking.group_id.id),
+                    ('id', '!=', picking.id),
+                    ('state', 'not in', ['cancel'])
+                ])
+                in_pickings = group_pickings.filtered(
+                    lambda p: 'IN' in (p.picking_type_id.sequence_code or '').upper() 
+                    or p.picking_type_id.code in ['incoming', 'internal']
+                )
+                if in_pickings:
+                    linked_picking = in_pickings[0]
+                    linked_picking_id = linked_picking.id
+                    linked_picking_name = linked_picking.name
+                elif group_pickings:
+                    linked_picking = group_pickings[0]
+                    linked_picking_id = linked_picking.id
+                    linked_picking_name = linked_picking.name
+                    
+            # Method 3: Fallback to origin matching current picking name
+            if not linked_picking_id:
+                origin_pickings = request.env['stock.picking'].sudo().search([
+                    ('origin', '=', picking.name),
+                    ('id', '!=', picking.id),
+                    ('state', 'not in', ['cancel'])
+                ], limit=1)
+                if origin_pickings:
+                    linked_picking_id = origin_pickings.id
+                    linked_picking_name = origin_pickings.name
             
         return {
             'id': picking.id,
