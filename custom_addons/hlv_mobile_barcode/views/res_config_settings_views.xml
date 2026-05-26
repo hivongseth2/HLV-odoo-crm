@@ -14,6 +14,9 @@
                         <setting string="Print after Packing" help="Enable option to print label after Put in Pack">
                             <field name="hlv_barcode_print_after_pack"/>
                         </setting>
+                        <setting string="Cho phép quét Kiện hàng" help="Quét mã vạch kiện (PACKxxx) để xử lý nhanh toàn bộ sản phẩm bên trong.">
+                            <field name="hlv_barcode_allow_package_scan"/>
+                        </setting>
                         <setting string="Sử dụng phân quyền quét độc lập" help="Bật để dùng cấu hình phân quyền quét của riêng Mobile Barcode. Tắt để dùng phân quyền chung của hlv_warehouse_permission.">
                             <field name="hlv_barcode_use_independent_permissions"/>
                         </setting>

@@ -31,6 +31,11 @@ class ResConfigSettings(models.TransientModel):
         config_parameter='hlv_mobile_barcode.hlv_barcode_use_independent_permissions',
         help='Nếu bật, hệ thống sẽ sử dụng cấu hình phân quyền quét của riêng module Mobile Barcode. Nếu tắt, sẽ dùng chung cấu hình của module hlv_warehouse_permission.'
     )
+    hlv_barcode_allow_package_scan = fields.Boolean(
+        string='Cho phép quét Kiện hàng (Package)',
+        config_parameter='hlv_mobile_barcode.hlv_barcode_allow_package_scan',
+        help='Nếu bật, cho phép quét mã vạch của kiện hàng (PACKxxx) để tự động nhận dạng và xử lý hàng loạt tất cả sản phẩm bên trong kiện.'
+    )
 
     def action_open_warehouse_permissions(self):
         self.ensure_one()

@@ -55,17 +55,19 @@ class HLVMobileBarcodeController(http.Controller):
             return {'type': 'location', 'id': location.id, 'name': location.display_name, 'warehouse_code': warehouse_code}
 
         # 4. Check if it's a Package
-        package = request.env['stock.quant.package'].sudo().search([('name', '=', barcode)], limit=1)
-        if package:
-            warehouse_code = 'HLV'
-            location = package.location_id
-            if not location:
-                quant = request.env['stock.quant'].sudo().search([('package_id', '=', package.id)], limit=1)
-                if quant:
-                    location = quant.location_id
-            if location:
-                warehouse_code = location.warehouse_id.code or 'HLV'
-            return {'type': 'package', 'id': package.id, 'name': package.name, 'warehouse_code': warehouse_code}
+        allow_package = request.env['ir.config_parameter'].sudo().get_param('hlv_mobile_barcode.hlv_barcode_allow_package_scan', 'True') == 'True'
+        if allow_package:
+            package = request.env['stock.quant.package'].sudo().search([('name', '=', barcode)], limit=1)
+            if package:
+                warehouse_code = 'HLV'
+                location = package.location_id
+                if not location:
+                    quant = request.env['stock.quant'].sudo().search([('package_id', '=', package.id)], limit=1)
+                    if quant:
+                        location = quant.location_id
+                if location:
+                    warehouse_code = location.warehouse_id.code or 'HLV'
+                return {'type': 'package', 'id': package.id, 'name': package.name, 'warehouse_code': warehouse_code}
 
         return {'error': _('Mã vạch hoặc mã SKU "%s" không tồn tại trên hệ thống.', barcode)}
 
@@ -274,17 +276,20 @@ class HLVMobileBarcodeController(http.Controller):
         # 1.5. Try to find package
         package = request.env['stock.quant.package'].sudo().search([('name', '=', barcode)], limit=1)
         if package:
+            allow_package = request.env['ir.config_parameter'].sudo().get_param('hlv_mobile_barcode.hlv_barcode_allow_package_scan', 'True') == 'True'
+            if not allow_package:
+                return {'error': _('Tính năng quét Kiện hàng hiện đang bị tắt trong cấu hình hệ thống!')}
             # We found a package! Let's process the package contents in the picking.
             # A. Check if the picking has a move line for this package_id
-            move_lines = picking.move_line_ids.filtered(lambda ml: ml.package_id == package and ml.state not in ['done', 'cancel'])
+            move_lines = picking.move_line_ids.filtered(lambda ml: (ml.package_id == package or ml.result_package_id == package) and ml.state not in ['done', 'cancel'])
             if move_lines:
                 processed_lines = []
                 for ml in move_lines:
                     ml.quantity = ml.quantity_product_uom or ml.reserved_qty or 1.0
-                    processed_lines.append(ml.product_id.display_name)
+                    processed_lines.append(f"{ml.quantity} x {ml.product_id.display_name}")
                 return {
                     'success': True,
-                    'product_name': f"Kiện hàng {package.name} (Chứa: {', '.join(processed_lines)})",
+                    'product_name': f"Kiện hàng {package.name} (Đã quét: {', '.join(processed_lines)})",
                     'product_id': False,
                 }
             
