@@ -13,6 +13,7 @@ class MeinvoiceInvoice(models.Model):
 
     _name = 'meinvoice.invoice'
     _description = 'Hóa đơn điện tử meInvoice'
+    _inherit = ['mail.thread', 'mail.activity.mixin']
     _rec_name = 'name'
     _order = 'create_date desc'
 
@@ -102,7 +103,29 @@ class MeinvoiceInvoice(models.Model):
         help='Cron sẽ gọi /invoice/status để cập nhật trạng thái khi field này là True.',
     )
 
+    # ── Trạng thái gửi email ────────────────────────────────────────────────
+    mail_sent = fields.Boolean(string='Đã gửi email', default=False, copy=False)
+    mail_last_sent_at = fields.Datetime(string='Lần gửi email cuối', readonly=True, copy=False)
+    mail_last_sent_to = fields.Char(string='Email đã gửi đến', readonly=True, copy=False)
+    mail_sent_count = fields.Integer(string='Số lần đã gửi', default=0, readonly=True, copy=False)
+
     # ─────────────────────────────────────────────────────────────────────────
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        records = super().create(vals_list)
+        try:
+            config = self.env['amis.callback.config'].sudo().search([], limit=1)
+            if (config and config.meinvoice_mail_enabled
+                    and config.meinvoice_mail_auto_send_draft):
+                for rec in records:
+                    if rec.state == 'draft' and (rec.buyer_email or '').strip():
+                        rec.with_context(meinvoice_auto_mail=True)._send_meinvoice_mail(
+                            mode='draft', raise_on_error=False,
+                        )
+        except Exception:
+            _logger.exception('meInvoice: auto-send draft email thất bại (bỏ qua).')
+        return records
 
     def action_publish(self):
         """Gửi hóa đơn lên Cơ quan Thuế qua meInvoice API."""
@@ -186,6 +209,17 @@ class MeinvoiceInvoice(models.Model):
             'meInvoice submitted for SO %s: TransactionID=%s InvNo=%s — chờ CQT xác nhận.',
             order.name, transaction_id, inv_no,
         )
+
+        # Auto-send email cho khách hàng (mẫu "Đã cấp mã") nếu được cấu hình
+        try:
+            if (config.meinvoice_mail_enabled
+                    and config.meinvoice_mail_auto_send_published
+                    and (self.buyer_email or '').strip()):
+                self.with_context(meinvoice_auto_mail=True)._send_meinvoice_mail(
+                    mode='published', raise_on_error=False,
+                )
+        except Exception:
+            _logger.exception('meInvoice: auto-send published email thất bại (bỏ qua).')
 
         return {
             'type': 'ir.actions.client',
@@ -357,6 +391,215 @@ class MeinvoiceInvoice(models.Model):
                 raise UserError('Không thể hủy hóa đơn đã được CQT chấp nhận.')
             rec.write({'state': 'cancelled', 'cqt_check_queued': False})
         return True
+
+    # ── Gửi email cho khách hàng ────────────────────────────────────────────
+
+    def _get_mail_mode(self):
+        """Xác định mẫu email phù hợp theo trạng thái hóa đơn."""
+        self.ensure_one()
+        # Có số HĐ / mã CQT → coi như đã cấp mã
+        if self.inv_no or self.state in ('submitted', 'accepted', 'rejected'):
+            return 'published'
+        return 'draft'
+
+    def _get_mail_template(self, mode=None):
+        """Lấy mail.template theo cấu hình; fallback theo XML id mặc định."""
+        self.ensure_one()
+        mode = mode or self._get_mail_mode()
+        config = self.env['amis.callback.config'].sudo().search([], limit=1)
+        template = False
+        if config:
+            if mode == 'draft':
+                template = config.meinvoice_mail_template_draft_id
+            else:
+                template = config.meinvoice_mail_template_published_id
+        if not template:
+            xmlid = ('amis_callback.mail_template_meinvoice_draft' if mode == 'draft'
+                     else 'amis_callback.mail_template_meinvoice_published')
+            template = self.env.ref(xmlid, raise_if_not_found=False)
+        return template
+
+    def _meinvoice_pdf_attachment(self):
+        """Tải PDF từ meInvoice và tạo ir.attachment đính kèm vào record."""
+        self.ensure_one()
+        if not self.transaction_id:
+            return self.env['ir.attachment']
+        config = self.env['amis.callback.config'].sudo().search([], limit=1)
+        if not config or not config.meinvoice_mail_attach_pdf:
+            return self.env['ir.attachment']
+        try:
+            pdf_bytes = config.get_meinvoice_pdf_bytes(self.transaction_id)
+        except Exception:
+            _logger.exception('meInvoice: lấy PDF thất bại cho TransactionID=%s', self.transaction_id)
+            return self.env['ir.attachment']
+        if not pdf_bytes:
+            return self.env['ir.attachment']
+        import base64
+        fname = 'HoaDon_%s_%s.pdf' % (
+            (self.inv_series_result or self.inv_series or 'meinvoice').replace('/', '-'),
+            (self.inv_no or self.transaction_id or 'draft'),
+        )
+        return self.env['ir.attachment'].sudo().create({
+            'name': fname,
+            'datas': base64.b64encode(pdf_bytes),
+            'res_model': self._name,
+            'res_id': self.id,
+            'mimetype': 'application/pdf',
+        })
+
+    def _send_meinvoice_mail(self, mode=None, raise_on_error=True):
+        """Gửi email cho khách hàng theo mẫu cấu hình.
+
+        Args:
+            mode: 'draft' hoặc 'published'. None → tự xác định theo trạng thái.
+            raise_on_error: True → raise UserError khi thiếu cấu hình/email.
+        """
+        from datetime import datetime as _dt
+        for rec in self:
+            mode_ = mode or rec._get_mail_mode()
+            email_to = (rec.buyer_email or '').strip()
+            if not email_to:
+                if raise_on_error:
+                    raise UserError('Khách hàng chưa có email — không thể gửi.')
+                _logger.info('meInvoice: bỏ qua gửi mail cho HĐ id=%s (không có email).', rec.id)
+                continue
+            template = rec._get_mail_template(mode_)
+            if not template:
+                if raise_on_error:
+                    raise UserError(
+                        'Chưa cấu hình mẫu email "%s" cho meInvoice. '
+                        'Vào Cấu hình AMIS Callback để thiết lập.'
+                        % ('Bản nháp' if mode_ == 'draft' else 'Đã cấp mã')
+                    )
+                continue
+
+            config = self.env['amis.callback.config'].sudo().search([], limit=1)
+            email_cc = (config.meinvoice_mail_cc or '').strip() if config else ''
+
+            attachment_ids = []
+            if mode_ == 'published':
+                att = rec._meinvoice_pdf_attachment()
+                if att:
+                    attachment_ids = [att.id]
+
+            ctx = dict(self.env.context)
+            ctx['meinvoice_force_email_to'] = email_to
+            ctx['meinvoice_force_email_cc'] = email_cc
+
+            tpl = template.with_context(ctx)
+            try:
+                values = tpl.generate_email(
+                    rec.id, ['subject', 'body_html', 'email_from', 'reply_to']
+                )
+                values.setdefault('email_from', tpl.email_from or self.env.user.email or '')
+                values['email_to'] = email_to
+                if email_cc:
+                    values['email_cc'] = email_cc
+                values['model'] = rec._name
+                values['res_id'] = rec.id
+                values['auto_delete'] = False
+                if attachment_ids:
+                    values['attachment_ids'] = [(6, 0, attachment_ids)]
+                mail = self.env['mail.mail'].sudo().create(values)
+                mail.send(raise_exception=False)
+                sent_ok = mail.state == 'sent'
+            except Exception:
+                _logger.exception('meInvoice: gửi mail HĐ id=%s thất bại.', rec.id)
+                if raise_on_error:
+                    raise
+                sent_ok = False
+
+            rec.sudo().write({
+                'mail_sent': rec.mail_sent or sent_ok,
+                'mail_last_sent_at': _dt.utcnow(),
+                'mail_last_sent_to': email_to,
+                'mail_sent_count': (rec.mail_sent_count or 0) + (1 if sent_ok else 0),
+            })
+
+            # Ghi nhận vào chatter
+            try:
+                if sent_ok:
+                    rec.message_post(
+                        body='Đã gửi email HĐĐT (%s) tới <b>%s</b>%s.' % (
+                            'bản nháp' if mode_ == 'draft' else 'đã cấp mã',
+                            email_to,
+                            (' — CC: ' + email_cc) if email_cc else '',
+                        ),
+                        subtype_xmlid='mail.mt_note',
+                    )
+                else:
+                    rec.message_post(
+                        body='Gửi email HĐĐT tới %s thất bại — xem log.' % email_to,
+                        subtype_xmlid='mail.mt_note',
+                    )
+            except Exception:
+                pass
+
+        return True
+
+    def action_send_mail(self):
+        """Nút bấm: gửi email cho khách hàng (tự chọn mẫu theo trạng thái)."""
+        self.ensure_one()
+        config = self.env['amis.callback.config'].sudo().search([], limit=1)
+        if not config or not config.meinvoice_mail_enabled:
+            raise UserError(
+                'Chức năng gửi email HĐĐT chưa được bật. '
+                'Vào Cấu hình AMIS Callback → meInvoice để bật.'
+            )
+        self._send_meinvoice_mail(raise_on_error=True)
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': 'Đã gửi email',
+                'message': 'Email HĐĐT đã được gửi tới %s.' % (self.buyer_email or ''),
+                'type': 'success',
+                'sticky': False,
+            },
+        }
+
+    def action_open_send_mail_wizard(self):
+        """Mở composer mail chuẩn của Odoo (cho phép chỉnh sửa trước khi gửi)."""
+        self.ensure_one()
+        config = self.env['amis.callback.config'].sudo().search([], limit=1)
+        if not config or not config.meinvoice_mail_enabled:
+            raise UserError(
+                'Chức năng gửi email HĐĐT chưa được bật. '
+                'Vào Cấu hình AMIS Callback → meInvoice để bật.'
+            )
+        template = self._get_mail_template()
+        compose_form = self.env.ref('mail.email_compose_message_wizard_form', raise_if_not_found=False)
+
+        # Tải sẵn attachment PDF nếu đã cấp mã
+        attachment_ids = []
+        if self._get_mail_mode() == 'published':
+            att = self._meinvoice_pdf_attachment()
+            if att:
+                attachment_ids = [att.id]
+
+        ctx = {
+            'default_model': self._name,
+            'default_res_ids': [self.id],
+            'default_use_template': bool(template),
+            'default_template_id': template.id if template else False,
+            'default_composition_mode': 'comment',
+            'default_email_layout_xmlid': 'mail.mail_notification_light',
+            'default_partner_ids': [],
+            'default_email_to': (self.buyer_email or '').strip(),
+            'default_email_cc': (config.meinvoice_mail_cc or '').strip(),
+            'default_attachment_ids': [(6, 0, attachment_ids)] if attachment_ids else False,
+            'force_email': True,
+            'mark_meinvoice_mail_sent': True,
+        }
+        return {
+            'name': 'Gửi email HĐĐT',
+            'type': 'ir.actions.act_window',
+            'res_model': 'mail.compose.message',
+            'views': [(compose_form.id if compose_form else False, 'form')],
+            'view_id': compose_form.id if compose_form else False,
+            'target': 'new',
+            'context': ctx,
+        }
 
 
 class MeinvoiceInvoiceLine(models.Model):

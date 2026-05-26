@@ -221,6 +221,25 @@
                                    invisible="not meinvoice_is_pxk"/>
                         </group>
                     </group>
+                    <group string="meInvoice - Gửi email cho khách hàng">
+                        <group>
+                            <field name="meinvoice_mail_enabled"/>
+                            <field name="meinvoice_mail_template_draft_id"
+                                   invisible="not meinvoice_mail_enabled"
+                                   options="{'no_quick_create': True}"/>
+                            <field name="meinvoice_mail_template_published_id"
+                                   invisible="not meinvoice_mail_enabled"
+                                   options="{'no_quick_create': True}"/>
+                            <field name="meinvoice_mail_cc"
+                                   invisible="not meinvoice_mail_enabled"
+                                   placeholder="cc1@example.com, cc2@example.com"/>
+                        </group>
+                        <group invisible="not meinvoice_mail_enabled">
+                            <field name="meinvoice_mail_auto_send_draft"/>
+                            <field name="meinvoice_mail_auto_send_published"/>
+                            <field name="meinvoice_mail_attach_pdf"/>
+                        </group>
+                    </group>
                     <group string="Webhook Shopee → Auto-publish HĐĐT">
                         <group>
                             <field name="webhook_auto_publish_enabled"/>

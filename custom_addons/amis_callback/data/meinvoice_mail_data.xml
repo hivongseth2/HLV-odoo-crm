@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         Mẫu email — Hóa đơn nháp (chưa cấp mã)
+    ═══════════════════════════════════════════════════════════════════════ -->
+    <record id="mail_template_meinvoice_draft" model="mail.template">
+        <field name="name">meInvoice: Hóa đơn nháp gửi khách hàng</field>
+        <field name="model_id" ref="model_meinvoice_invoice"/>
+        <field name="subject">[{{ (object.sale_order_id.name or '') }}] Thông báo lập hóa đơn điện tử</field>
+        <field name="email_from">{{ (user.email_formatted or user.email or '') }}</field>
+        <field name="email_to">{{ (object.buyer_email or '') }}</field>
+        <field name="lang">{{ object.partner_id.lang }}</field>
+        <field name="auto_delete" eval="False"/>
+        <field name="body_html" type="html">
+<div style="margin:0 auto; max-width:600px; font-family:Arial,Helvetica,sans-serif; font-size:14px; color:#333;">
+    <p>Kính gửi <strong t-out="object.buyer_legal_name or object.buyer_full_name or object.partner_id.name or 'Quý khách'"/>,</p>
+    <p>
+        Công ty chúng tôi đang lập hóa đơn điện tử cho đơn hàng
+        <strong t-out="object.sale_order_id.name or ''"/>.
+        Dưới đây là thông tin tạm tính trước khi gửi Cơ quan Thuế:
+    </p>
+    <table style="border-collapse:collapse; width:100%; margin:12px 0;">
+        <tr>
+            <td style="padding:6px 10px; background:#f4f4f4; width:40%;">Ký hiệu</td>
+            <td style="padding:6px 10px;" t-out="object.inv_series or ''"/>
+        </tr>
+        <tr>
+            <td style="padding:6px 10px; background:#f4f4f4;">Ngày hóa đơn</td>
+            <td style="padding:6px 10px;" t-out="object.inv_date or ''"/>
+        </tr>
+        <tr>
+            <td style="padding:6px 10px; background:#f4f4f4;">Tổng tiền thanh toán</td>
+            <td style="padding:6px 10px;">
+                <strong t-out="'{:,.0f}'.format(object.total_amount_oc or 0).replace(',', '.')"/> VND
+            </td>
+        </tr>
+    </table>
+    <p>
+        Sau khi hóa đơn được Cơ quan Thuế cấp mã, hệ thống sẽ gửi cho Quý khách bản chính thức kèm file PDF.
+        Nếu thông tin xuất hóa đơn cần điều chỉnh (tên đơn vị, MST, địa chỉ...), vui lòng phản hồi email này
+        trong thời gian sớm nhất.
+    </p>
+    <p>Trân trọng cảm ơn Quý khách.</p>
+</div>
+        </field>
+    </record>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         Mẫu email — Hóa đơn đã cấp mã (đã phát hành)
+    ═══════════════════════════════════════════════════════════════════════ -->
+    <record id="mail_template_meinvoice_published" model="mail.template">
+        <field name="name">meInvoice: Hóa đơn đã cấp mã gửi khách hàng</field>
+        <field name="model_id" ref="model_meinvoice_invoice"/>
+        <field name="subject">Hóa đơn điện tử {{ (object.inv_series_result or object.inv_series or '') }} {{ object.inv_no or '' }}</field>
+        <field name="email_from">{{ (user.email_formatted or user.email or '') }}</field>
+        <field name="email_to">{{ (object.buyer_email or '') }}</field>
+        <field name="lang">{{ object.partner_id.lang }}</field>
+        <field name="auto_delete" eval="False"/>
+        <field name="body_html" type="html">
+<div style="margin:0 auto; max-width:600px; font-family:Arial,Helvetica,sans-serif; font-size:14px; color:#333;">
+    <p>Kính gửi <strong t-out="object.buyer_legal_name or object.buyer_full_name or object.partner_id.name or 'Quý khách'"/>,</p>
+    <p>
+        Công ty đã phát hành hóa đơn điện tử cho đơn hàng
+        <strong t-out="object.sale_order_id.name or ''"/>.
+        Thông tin hóa đơn như sau:
+    </p>
+    <table style="border-collapse:collapse; width:100%; margin:12px 0;">
+        <tr>
+            <td style="padding:6px 10px; background:#f4f4f4; width:40%;">Ký hiệu</td>
+            <td style="padding:6px 10px;" t-out="object.inv_series_result or object.inv_series or ''"/>
+        </tr>
+        <tr>
+            <td style="padding:6px 10px; background:#f4f4f4;">Số hóa đơn</td>
+            <td style="padding:6px 10px;"><strong t-out="object.inv_no or ''"/></td>
+        </tr>
+        <tr>
+            <td style="padding:6px 10px; background:#f4f4f4;">Mã CQT</td>
+            <td style="padding:6px 10px;" t-out="object.inv_code or ''"/>
+        </tr>
+        <tr>
+            <td style="padding:6px 10px; background:#f4f4f4;">Ngày hóa đơn</td>
+            <td style="padding:6px 10px;" t-out="object.inv_date_result or object.inv_date or ''"/>
+        </tr>
+        <tr>
+            <td style="padding:6px 10px; background:#f4f4f4;">Tổng tiền thanh toán</td>
+            <td style="padding:6px 10px;">
+                <strong t-out="'{:,.0f}'.format(object.total_amount_oc or 0).replace(',', '.')"/> VND
+            </td>
+        </tr>
+    </table>
+    <p>
+        File hóa đơn PDF được đính kèm theo email này (nếu có).
+        Quý khách có thể tra cứu hóa đơn bằng <strong>Mã CQT</strong> tại cổng tra cứu của Tổng cục Thuế.
+    </p>
+    <p>Trân trọng cảm ơn Quý khách đã mua hàng.</p>
+</div>
+        </field>
+    </record>
+
+</odoo>
