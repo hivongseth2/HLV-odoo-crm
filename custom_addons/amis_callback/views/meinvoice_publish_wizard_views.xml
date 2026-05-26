@@ -32,6 +32,14 @@
                     <button name="action_view_invoice" type="object"
                             string="Xem hóa đơn"
                             invisible="state not in ('submitted','accepted','rejected')"/>
+                    <button name="action_send_mail" type="object"
+                            string="Gửi email KH"
+                            class="btn-secondary"
+                            invisible="state == 'cancelled'"
+                            confirm="Gửi email hóa đơn này cho khách hàng?"/>
+                    <button name="action_open_send_mail_wizard" type="object"
+                            string="Soạn email…"
+                            invisible="state == 'cancelled'"/>
                     <button name="action_cancel" type="object"
                             string="Hủy"
                             invisible="state not in ('draft','submitted','rejected')"
@@ -124,7 +132,18 @@
                             </group>
                         </page>
                     </notebook>
+                    <group string="Email gửi khách hàng">
+                        <group>
+                            <field name="mail_sent" readonly="1"/>
+                            <field name="mail_last_sent_to" readonly="1"/>
+                        </group>
+                        <group>
+                            <field name="mail_last_sent_at" readonly="1"/>
+                            <field name="mail_sent_count" readonly="1"/>
+                        </group>
+                    </group>
                 </sheet>
+                <chatter/>
             </form>
         </field>
     </record>
@@ -179,6 +198,11 @@
                 <button name="action_view_invoice" type="object" string="Xem HĐ"
                         icon="fa-eye"
                         invisible="state not in ('submitted','accepted','rejected')"/>
+                <button name="action_send_mail" type="object" string="Gửi mail"
+                        icon="fa-envelope"
+                        invisible="state == 'cancelled'"
+                        confirm="Gửi email hóa đơn cho khách hàng?"/>
+                <field name="mail_sent" string="Đã mail" optional="show" widget="boolean"/>
             </list>
         </field>
     </record>

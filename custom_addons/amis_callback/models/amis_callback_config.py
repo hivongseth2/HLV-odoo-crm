@@ -288,6 +288,49 @@ class AmisCallbackConfig(models.Model):
              'Tắt khi chạy thực tế.',
     )
 
+    # ── meInvoice: Gửi email cho khách hàng ─────────────────────────────────
+    meinvoice_mail_enabled = fields.Boolean(
+        string='Bật gửi email HĐĐT cho khách hàng',
+        default=False,
+        help='Bật để hiển thị nút "Gửi email" trên form hóa đơn meInvoice và '
+             'cho phép cấu hình gửi tự động.',
+    )
+    meinvoice_mail_template_draft_id = fields.Many2one(
+        'mail.template',
+        string='Mẫu email — Bản nháp',
+        domain="[('model', '=', 'meinvoice.invoice')]",
+        help='Mẫu email dùng khi gửi hóa đơn ở trạng thái Nháp (chưa cấp mã CQT).',
+    )
+    meinvoice_mail_template_published_id = fields.Many2one(
+        'mail.template',
+        string='Mẫu email — Đã cấp mã',
+        domain="[('model', '=', 'meinvoice.invoice')]",
+        help='Mẫu email dùng khi gửi hóa đơn đã phát hành (có số HĐ / mã CQT).',
+    )
+    meinvoice_mail_auto_send_draft = fields.Boolean(
+        string='Tự động gửi email khi tạo bản nháp',
+        default=False,
+        help='Khi tạo hóa đơn nháp meInvoice và có email người mua, hệ thống tự gửi '
+             'email theo mẫu "Bản nháp". Yêu cầu bật "Gửi email HĐĐT".',
+    )
+    meinvoice_mail_auto_send_published = fields.Boolean(
+        string='Tự động gửi email khi phát hành thành công',
+        default=True,
+        help='Sau khi gửi hóa đơn lên CQT thành công và có email người mua, hệ thống '
+             'tự gửi email theo mẫu "Đã cấp mã". Yêu cầu bật "Gửi email HĐĐT".',
+    )
+    meinvoice_mail_cc = fields.Char(
+        string='Email CC mặc định',
+        help='Danh sách email CC (cách nhau bằng dấu phẩy) thêm vào mọi email HĐĐT gửi đi. '
+             'Để trống nếu không cần CC.',
+    )
+    meinvoice_mail_attach_pdf = fields.Boolean(
+        string='Đính kèm PDF từ meInvoice (đã cấp mã)',
+        default=True,
+        help='Khi gửi email hóa đơn đã cấp mã, tải PDF từ meInvoice và đính kèm vào email. '
+             'Bỏ chọn nếu chỉ muốn dùng nội dung mẫu email.',
+    )
+
     # ── Webhook → meInvoice auto-publish ─────────────────────────────────────
     webhook_auto_publish_enabled = fields.Boolean(
         string='Tự động phát hành HĐĐT khi nhận webhook Shopee',
@@ -1115,6 +1158,26 @@ class AmisCallbackConfig(models.Model):
             raise UserError('meInvoice không trả về nội dung file hóa đơn.')
         _logger.info('meInvoice download (%s): nhận được %d bytes base64', file_type, len(b64_data))
         return b64_data
+
+    def get_meinvoice_pdf_bytes(self, transaction_id):
+        """Tải PDF hóa đơn từ meInvoice và trả về raw bytes.
+
+        Returns:
+            bytes — nội dung PDF, hoặc b'' nếu không tải được.
+        """
+        self.ensure_one()
+        if not transaction_id:
+            return b''
+        url = self.get_meinvoice_download_url(transaction_id, file_type='PDF')
+        if not url:
+            return b''
+        try:
+            resp = requests.get(url, timeout=30)
+            resp.raise_for_status()
+            return resp.content or b''
+        except Exception as exc:
+            _logger.warning('meInvoice: tải PDF thất bại (%s): %s', transaction_id, exc)
+            return b''
 
     def get_meinvoice_templates(self):
         """Lấy danh sách mẫu hóa đơn từ meInvoice /invoice/templates.
