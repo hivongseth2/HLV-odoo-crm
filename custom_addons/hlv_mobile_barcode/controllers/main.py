@@ -112,11 +112,15 @@ class HLVMobileBarcodeController(http.Controller):
                 'state': move.state,
                 'location_name': loc_name,
             })
-        # Find linked Step 2 picking (only active for internal transfers e.g. INT -> IN)
+        # Find linked Step 2 picking (only active for pure internal transfers e.g. INT -> IN)
         linked_picking_id = False
         linked_picking_name = False
         
-        if picking.picking_type_id.code == 'internal':
+        pt_code = (picking.picking_type_id.sequence_code or '').lower()
+        pt_name = (picking.picking_type_id.name or '').lower()
+        is_pure_int = 'int' in pt_code and not any(x in pt_code or x in pt_name for x in ['pick', 'pack', 'out'])
+        
+        if picking.picking_type_id.code == 'internal' and is_pure_int:
             # Method 1: Via stock moves chain
             dest_pickings = picking.move_ids.mapped('move_dest_ids.picking_id').filtered(
                 lambda p: p.id != picking.id and p.state not in ['cancel']
