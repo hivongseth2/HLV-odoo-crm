@@ -84,7 +84,7 @@ hlv_mobile_barcode/
   - `hlv.barcode.user.permission`: Định cấu hình người dùng (`res.users`) tại từng kho (`stock.warehouse`).
   - `hlv.barcode.picking.permission`: Cấu hình quyền chi tiết cho từng loại phiếu quét (`IN`, `OUT`, `INT`, `PICK`, `PACK`, `STO`) với các cờ boolean: `can_view` (Xem/Quét), `can_edit` (Sửa/Quét hàng), `can_delete` (Xóa dòng), `can_confirm` (Xác nhận phiếu).
 * **Nút gạt cấu hình (Toggle Setting)**:
-  - Trường `hlv_barcode_use_independent_permissions` trên `res.company` cho phép quản trị viên lựa chọn:
+  - Tham số `hlv_barcode_use_independent_permissions` trong `ir.config_parameter` (được cấu hình qua Settings) cho phép quản trị viên lựa chọn:
     - **Bật (True)**: Sử dụng cấu hình phân quyền quét của riêng Mobile Barcode (`hlv.barcode.*`).
     - **Tắt (False - Mặc định)**: Dùng chung cấu hình phân quyền kho của module `hlv_warehouse_permission` (`warehouse.*`).
 * **Tránh lỗi biên dịch XML (Resilient Runtime Routing)**:

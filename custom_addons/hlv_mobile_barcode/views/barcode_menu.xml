@@ -27,7 +27,7 @@
         <field name="model_id" ref="base.model_res_users"/>
         <field name="state">code</field>
         <field name="code">
-use_independent = env.company.hlv_barcode_use_independent_permissions
+use_independent = env['ir.config_parameter'].sudo().get_param('hlv_mobile_barcode.hlv_barcode_use_independent_permissions') == 'True'
 action = False
 if use_independent:
     action = env.ref('hlv_mobile_barcode.action_barcode_permission', raise_if_not_found=False)

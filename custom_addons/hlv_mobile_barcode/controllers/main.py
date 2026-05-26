@@ -24,7 +24,7 @@ class HLVMobileBarcodeController(http.Controller):
                 return {'error': _('Ứng dụng Mobile Barcode chỉ hỗ trợ xử lý phiếu PICK (Lấy hàng). Phiếu PACK và OUT được đảm nhận bởi phân hệ khác.')}
 
             # Enforce warehouse scan permission (can_view)
-            use_independent = request.env.company.hlv_barcode_use_independent_permissions
+            use_independent = request.env['ir.config_parameter'].sudo().get_param('hlv_mobile_barcode.hlv_barcode_use_independent_permissions') == 'True'
             if use_independent:
                 Permission = request.env.get('hlv.barcode.user.permission')
             else:
@@ -82,7 +82,7 @@ class HLVMobileBarcodeController(http.Controller):
             return {'error': _('Ứng dụng Mobile Barcode chỉ hỗ trợ xử lý phiếu PICK (Lấy hàng). Phiếu PACK và OUT được đảm nhận bởi phân hệ khác.')}
 
         # Enforce warehouse scan permission (can_view)
-        use_independent = request.env.company.hlv_barcode_use_independent_permissions
+        use_independent = request.env['ir.config_parameter'].sudo().get_param('hlv_mobile_barcode.hlv_barcode_use_independent_permissions') == 'True'
         if use_independent:
             Permission = request.env.get('hlv.barcode.user.permission')
         else:
@@ -237,7 +237,7 @@ class HLVMobileBarcodeController(http.Controller):
             return {'error': _('Phiếu này không thể xử lý thêm sản phẩm.')}
 
         # Enforce warehouse edit permission (can_edit)
-        use_independent = request.env.company.hlv_barcode_use_independent_permissions
+        use_independent = request.env['ir.config_parameter'].sudo().get_param('hlv_mobile_barcode.hlv_barcode_use_independent_permissions') == 'True'
         if use_independent:
             Permission = request.env.get('hlv.barcode.user.permission')
         else:
@@ -425,7 +425,7 @@ class HLVMobileBarcodeController(http.Controller):
             return {'error': _('Phiếu không ở trạng thái cho phép sửa số lượng')}
 
         # Enforce warehouse edit permission (can_edit)
-        use_independent = request.env.company.hlv_barcode_use_independent_permissions
+        use_independent = request.env['ir.config_parameter'].sudo().get_param('hlv_mobile_barcode.hlv_barcode_use_independent_permissions') == 'True'
         if use_independent:
             Permission = request.env.get('hlv.barcode.user.permission')
         else:
@@ -491,7 +491,7 @@ class HLVMobileBarcodeController(http.Controller):
             return {'error': _('Phiếu không ở trạng thái cho phép xóa sản phẩm')}
 
         # Enforce warehouse delete permission (can_delete)
-        use_independent = request.env.company.hlv_barcode_use_independent_permissions
+        use_independent = request.env['ir.config_parameter'].sudo().get_param('hlv_mobile_barcode.hlv_barcode_use_independent_permissions') == 'True'
         if use_independent:
             Permission = request.env.get('hlv.barcode.user.permission')
         else:
@@ -540,7 +540,7 @@ class HLVMobileBarcodeController(http.Controller):
             return {'error': _('Picking not found')}
 
         # Enforce warehouse validation permission (can_confirm)
-        use_independent = request.env.company.hlv_barcode_use_independent_permissions
+        use_independent = request.env['ir.config_parameter'].sudo().get_param('hlv_mobile_barcode.hlv_barcode_use_independent_permissions') == 'True'
         if use_independent:
             Permission = request.env.get('hlv.barcode.user.permission')
         else:

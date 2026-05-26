@@ -14,11 +14,6 @@ class ResCompany(models.Model):
         string='Print Label after Put in Pack',
         default=False
     )
-    hlv_barcode_use_independent_permissions = fields.Boolean(
-        string='Sử dụng phân quyền quét độc lập',
-        default=False,
-        help='Nếu bật, hệ thống sẽ sử dụng cấu hình phân quyền quét của riêng module Mobile Barcode. Nếu tắt, sẽ dùng chung cấu hình của module hlv_warehouse_permission.'
-    )
 
 class ResConfigSettings(models.TransientModel):
     _inherit = 'res.config.settings'
@@ -32,8 +27,9 @@ class ResConfigSettings(models.TransientModel):
         readonly=False,
     )
     hlv_barcode_use_independent_permissions = fields.Boolean(
-        related='company_id.hlv_barcode_use_independent_permissions',
-        readonly=False,
+        string='Sử dụng phân quyền quét độc lập',
+        config_parameter='hlv_mobile_barcode.hlv_barcode_use_independent_permissions',
+        help='Nếu bật, hệ thống sẽ sử dụng cấu hình phân quyền quét của riêng module Mobile Barcode. Nếu tắt, sẽ dùng chung cấu hình của module hlv_warehouse_permission.'
     )
 
     def action_open_warehouse_permissions(self):
