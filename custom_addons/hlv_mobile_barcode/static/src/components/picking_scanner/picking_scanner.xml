@@ -65,15 +65,22 @@
                     </div>
                 </div>
                 
+                <!-- Transition to Step 2 Button -->
+                <div t-if="state.picking.linked_picking_id" style="padding: 10px; background: white; border-top: 1px solid var(--border-color); display: flex; gap: 8px;">
+                    <button class="btn btn-primary" style="flex: 1; padding: 12px; font-weight: bold; background-color: var(--primary-color); display: flex; align-items: center; justify-content: center; gap: 8px; border-radius: 8px; box-shadow: var(--shadow-sm);" t-on-click="() => props.onSelectPicking(state.picking.linked_picking_id, state.picking.linked_picking_name)">
+                        <i class="fa fa-arrow-right"></i> Chuyển sang Bước 2 (<t t-esc="state.picking.linked_picking_name"/>)
+                    </button>
+                </div>
+                
                 <!-- Fixed Footer -->
                 <div class="picking-footer">
                     <button class="btn btn-outline" style="flex: 1; padding: 10px;" t-on-click="props.onBack">
                         <i class="fa fa-arrow-left"></i> Quay lại
                     </button>
-                    <button class="btn btn-primary" style="flex: 1; padding: 10px; background-color: var(--info-color);" t-on-click="doPack">
+                    <button t-if="state.picking.state !== 'done'" class="btn btn-primary" style="flex: 1; padding: 10px; background-color: var(--info-color);" t-on-click="doPack">
                         <i class="fa fa-box"></i> Đóng gói
                     </button>
-                    <button class="btn btn-success" style="flex: 1; padding: 10px;" t-on-click="doValidate">
+                    <button t-if="state.picking.state !== 'done'" class="btn btn-success" style="flex: 1; padding: 10px;" t-on-click="doValidate">
                         <i class="fa fa-check"></i> Xác nhận
                     </button>
                 </div>

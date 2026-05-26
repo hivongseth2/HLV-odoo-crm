@@ -9,6 +9,7 @@ export class PickingScanner extends Component {
     static props = {
         pickingId: Number,
         onBack: Function,
+        onSelectPicking: Function,
         lastScannedProduct: { type: Number, optional: true },
         scannedLocationName: { type: String, optional: true },
         refreshTick: { type: Number, optional: true },
@@ -203,7 +204,7 @@ export class PickingScanner extends Component {
                 this.notification.add(res.error, { type: "danger" });
             } else if (res.success) {
                 this.notification.add("Validated successfully", { type: "success" });
-                this.props.onBack();
+                await this.loadPicking();
             }
         } catch (e) {
             this.notification.add("Server error", { type: "danger" });

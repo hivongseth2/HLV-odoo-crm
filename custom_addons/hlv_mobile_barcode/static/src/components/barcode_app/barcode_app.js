@@ -392,6 +392,22 @@ export class BarcodeApp extends Component {
         this.state.currentView = 'lookup';
     }
 
+    async selectPicking(pickingId, pickingName) {
+        await this.closeCamera();
+        this.pushHistory();
+        this.state.pickingId = pickingId;
+        this.state.pickingName = pickingName;
+        this.state.currentView = 'picking';
+        this.state.scannedLocationId = null;
+        this.state.scannedLocationName = "";
+        this.state.lastScannedProduct = null;
+        this.state.pickingRefreshTick += 1;
+        
+        setTimeout(async () => {
+            await this.startPersistentCamera(false);
+        }, 150);
+    }
+
     openPopupCamera() {
         this.state.showCameraPopup = true;
         setTimeout(() => {
