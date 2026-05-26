@@ -1144,9 +1144,21 @@ class AmisCallbackConfig(models.Model):
         if not url:
             return b''
         try:
-            resp = requests.get(url, timeout=30)
+            resp = requests.get(url, timeout=30, allow_redirects=True, headers={
+                'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+                'accept-language': 'vi,en-US;q=0.9,en;q=0.8',
+                'upgrade-insecure-requests': '1',
+                'sec-fetch-dest': 'document',
+                'sec-fetch-mode': 'navigate',
+                'sec-fetch-site': 'none',
+                'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+            })
             resp.raise_for_status()
-            return resp.content or b''
+            content = resp.content or b''
+            if not content or (b'%PDF' not in content[:10] and 'pdf' not in resp.headers.get('Content-Type', '').lower()):
+                _logger.warning('meInvoice: tải PDF published không có nội dung PDF (%s)', transaction_id)
+                return b''
+            return content
         except Exception as exc:
             _logger.warning('meInvoice: tải PDF thất bại (%s): %s', transaction_id, exc)
             return b''

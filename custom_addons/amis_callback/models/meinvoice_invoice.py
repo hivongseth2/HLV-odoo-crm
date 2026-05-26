@@ -394,6 +394,19 @@ class MeinvoiceInvoice(models.Model):
             rec.write({'state': 'cancelled', 'cqt_check_queued': False})
         return True
 
+    # ── Mail compose: gợi ý người nhận ─────────────────────────────────────
+
+    def message_get_suggested_recipients(self):
+        recipients = super().message_get_suggested_recipients()
+        for rec in self:
+            if rec.buyer_email:
+                rec._message_add_suggested_recipient(
+                    recipients,
+                    email=rec.buyer_email,
+                    reason='Email người mua',
+                )
+        return recipients
+
     # ── Gửi email cho khách hàng ────────────────────────────────────────────
 
     def _get_mail_mode(self):
