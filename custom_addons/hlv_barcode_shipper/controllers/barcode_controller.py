@@ -1070,9 +1070,7 @@ class BarcodeShipperController(http.Controller):
                     headers=[("Content-Type", "application/json")],
                 )
 
-            photo_b64 = base64.b64encode(photo_data).decode("utf-8")
             photo_name = photo_file.filename or "delivery_photo.jpg"
-            mimetype = photo_file.content_type or "image/jpeg"
             shipper_name = request.env.user.shipper_name or request.env.user.name
 
             pickings = request.env["stock.picking"].sudo().browse(
@@ -1082,13 +1080,6 @@ class BarcodeShipperController(http.Controller):
             for picking in pickings:
                 if not picking.exists():
                     continue
-                attachment = request.env["ir.attachment"].sudo().create({
-                    "name": photo_name,
-                    "datas": photo_b64,
-                    "res_model": "stock.picking",
-                    "res_id": picking.id,
-                    "mimetype": mimetype,
-                })
                 picking.message_post(
                     body=Markup(
                         "<p><i class='fa fa-camera'></i> Shipper <b>{}</b> "
@@ -1096,7 +1087,7 @@ class BarcodeShipperController(http.Controller):
                     ).format(escape(shipper_name)),
                     message_type="comment",
                     subtype_xmlid="mail.mt_note",
-                    attachment_ids=[attachment.id],
+                    attachments=[(photo_name, photo_data)],
                 )
                 posted.append(picking.name)
                 self._log_scan(
@@ -1117,6 +1108,6 @@ class BarcodeShipperController(http.Controller):
         except Exception as e:
             _logger.exception("Error in upload_delivery_photo")
             return request.make_response(
-                json.dumps({"success": False, "error": "Đã xảy ra lỗi hệ thống"}),
+                json.dumps({"success": False, "error": str(e)}),
                 headers=[("Content-Type", "application/json")],
             )

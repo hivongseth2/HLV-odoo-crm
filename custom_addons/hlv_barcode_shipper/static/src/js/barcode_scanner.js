@@ -1361,6 +1361,9 @@ class BarcodeShipper {
     }
 
     async sendPhotoAndComplete() {
+        // Đóng overlay trước khi upload để user thấy tiến trình và lỗi
+        this._stopPhotoCamera();
+
         // Build danh sách ảnh cần upload
         const photosToUpload = [];
         if (this._capturedPhotos && this._capturedPhotos.length > 0) {
@@ -1372,11 +1375,13 @@ class BarcodeShipper {
 
         const sendBtn = document.getElementById('photo-send-btn');
         if (sendBtn) {
+            sendBtn.style.display = 'flex';
             sendBtn.disabled = true;
             sendBtn.innerHTML = `<i class="fa fa-spinner fa-spin"></i> Đang gửi ${photosToUpload.length} ảnh...`;
         }
         this.showMessage('photo-result', `Đang tải ${photosToUpload.length} ảnh lên...`, 'warning');
 
+        let uploadOk = true;
         try {
             for (let i = 0; i < photosToUpload.length; i++) {
                 const photo = photosToUpload[i];
@@ -1392,16 +1397,25 @@ class BarcodeShipper {
                 });
                 const uploadJson = await uploadRes.json();
                 if (!uploadJson.success) {
-                    console.warn(`[Photo] Upload failed for ${photo.pickingName}:`, uploadJson.error);
+                    console.error(`[Photo] Upload failed for ${photo.pickingName}:`, uploadJson.error);
+                    this.showMessage('photo-result', `Lỗi gửi ảnh: ${uploadJson.error || 'Lỗi không xác định'}`, 'danger');
+                    uploadOk = false;
                 }
             }
-            this.showMessage('photo-result', 'Ảnh đã gửi! Đang hoàn tất đơn hàng...', 'success');
-            await this._doCompleteOut(this._photoPickingIds);
         } catch (e) {
-            console.error(e);
+            console.error('[Photo] Upload exception:', e);
             this.showMessage('photo-result', 'Lỗi kết nối khi gửi ảnh', 'danger');
             if (sendBtn) { sendBtn.disabled = false; sendBtn.innerHTML = '<i class="fa fa-paper-plane"></i> Gửi ảnh &amp; Hoàn tất'; }
+            return;
         }
+
+        if (!uploadOk) {
+            // Upload thất bại nhưng vẫn cho hoàn tất (có hỏi xác nhận)
+            if (!confirm('Một số ảnh không gửi được. Vẫn hoàn tất đơn hàng?')) return;
+        }
+
+        this.showMessage('photo-result', 'Ảnh đã gửi! Đang hoàn tất đơn hàng...', 'success');
+        await this._doCompleteOut(this._photoPickingIds);
     }
 
     async skipPhotoAndComplete() {
