@@ -8,3 +8,5 @@ __pycache__/
 .agent/
 .clinerules/
 CLAUDE.md
+*.xlsx
+~$*.xlsx

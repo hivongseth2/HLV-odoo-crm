@@ -92,24 +92,9 @@ export class BarcodeApp extends Component {
 
         this.boundKeepFocus = this.keepFocusOnHiddenInput.bind(this);
         
-        this.boundPreventCopy = (e) => {
-            e.preventDefault();
-            this.notification.add("Không được phép sao chép thông tin trên trang này!", { type: "warning" });
-        };
-        
-        this.boundPreventContextMenu = (e) => {
-            const active = e.target;
-            if (active && ['INPUT', 'TEXTAREA'].includes(active.tagName) && !active.classList.contains('hidden-barcode-input')) {
-                return;
-            }
-            e.preventDefault();
-        };
-        
         onMounted(() => {
             document.addEventListener('keydown', this.handleKeyDown.bind(this));
             document.addEventListener('click', this.boundKeepFocus);
-            document.addEventListener('copy', this.boundPreventCopy);
-            document.addEventListener('contextmenu', this.boundPreventContextMenu);
             
             this.focusInterval = setInterval(this.boundKeepFocus, 2000);
             setTimeout(this.boundKeepFocus, 500);
@@ -121,8 +106,6 @@ export class BarcodeApp extends Component {
 
         onWillUnmount(() => {
             document.removeEventListener('click', this.boundKeepFocus);
-            document.removeEventListener('copy', this.boundPreventCopy);
-            document.removeEventListener('contextmenu', this.boundPreventContextMenu);
             if (this.focusInterval) {
                 clearInterval(this.focusInterval);
             }
@@ -450,6 +433,20 @@ export class BarcodeApp extends Component {
         
         try {
             await this.closeCamera();
+
+            // Wait for the #reader element to be mounted in the DOM (async transitions)
+            let readerEl = document.getElementById("reader");
+            let retries = 0;
+            while (!readerEl && retries < 15) {
+                await new Promise(resolve => setTimeout(resolve, 50));
+                readerEl = document.getElementById("reader");
+                retries++;
+            }
+
+            if (!readerEl) {
+                console.warn("Html5Qrcode: #reader element not found in DOM after retries.");
+                return;
+            }
 
             this.html5Qrcode = new window.Html5Qrcode("reader");
             

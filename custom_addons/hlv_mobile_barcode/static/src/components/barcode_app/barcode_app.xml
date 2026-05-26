@@ -112,20 +112,6 @@
                                 </div>
                             </div>
 
-                            <!-- Camera Permission Persistence Guide Card -->
-                            <div class="card-box" style="padding: 15px; margin-bottom: 0; border-left: 4px solid var(--primary-color); background: rgba(59, 130, 246, 0.05);">
-                                <div style="font-weight: 700; font-size: 0.9rem; color: var(--primary-color); display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
-                                    <i class="fa fa-key"></i> Mẹo: Chỉ cấp quyền Camera 1 lần duy nhất
-                                </div>
-                                <div style="text-align: left; font-size: 0.82rem; color: var(--text-color); line-height: 1.55;">
-                                    <div>Để tránh bị hỏi lại quyền Camera mỗi lần mở lại trang hoặc vào phiếu:</div>
-                                    <div style="margin-top: 6px; padding-left: 10px;">
-                                        <strong>1. Bắt buộc kết nối HTTPS:</strong> Trình duyệt di động (Chrome/Safari) chỉ cho phép lưu trạng thái cấp quyền cho địa chỉ bảo mật dạng <code>https://...</code>. Kết nối <code>http://...</code> thông thường sẽ luôn luôn hỏi lại vì lý do an ninh.
-                                        <br/><strong style="margin-top: 5px; display: inline-block;">2. Trên iPhone / Safari:</strong> Nhấp vào biểu tượng <code>aA</code> ở thanh địa chỉ web &gt; chọn <strong>Cài đặt trang web (Website Settings)</strong> &gt; thay đổi quyền Camera từ <strong>Hỏi (Ask)</strong> thành <strong>Cho phép (Allow)</strong>.
-                                        <br/><strong style="margin-top: 5px; display: inline-block;">3. Trên Android / Chrome:</strong> Không sử dụng chế độ ẩn danh (Incognito). Khi Chrome hiện hộp thoại cấp quyền, chọn "Luôn cho phép cho trang web này".
-                                    </div>
-                                </div>
-                            </div>
                         </div>
                     </div>
                     
