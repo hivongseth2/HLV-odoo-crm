@@ -194,8 +194,6 @@ class BarcodeShipper {
         // === PICK STEP INLINE PHOTO ===
         document.getElementById('pick-inline-open-camera-btn')?.addEventListener('click', () => this._openPickInlineCam());
         document.getElementById('pick-inline-capture-btn')?.addEventListener('click', () => this._capturePickInlinePhoto());
-        document.getElementById('pick-inline-confirm-btn')?.addEventListener('click', () => this._confirmPickInlinePhoto());
-        document.getElementById('pick-inline-retake-btn')?.addEventListener('click', () => this._retakePickInlinePhoto());
         document.getElementById('pick-inline-skip-btn')?.addEventListener('click', () => this._skipPickInlinePhoto());
         document.getElementById('pick-inline-close-cam-btn')?.addEventListener('click', () => { this._closePickInlineCam(); });
 
@@ -631,6 +629,8 @@ class BarcodeShipper {
             this._startPickInlinePhoto(next);
         } else {
             this._renderPickConfirmedList();
+            // Tự động mở camera quét để người dùng có thể quét thêm phiếu
+            setTimeout(() => this.startCamera('camera-pick', 'reader-pick', 'pick'), 400);
         }
     }
 
@@ -647,9 +647,6 @@ class BarcodeShipper {
         if (photoDiv) photoDiv.style.display = 'block';
         document.getElementById('pick-inline-open-section').style.display = 'block';
         document.getElementById('pick-inline-camera-section').style.display = 'none';
-        document.getElementById('pick-inline-preview-section').style.display = 'none';
-        const resultEl = document.getElementById('pick-inline-photo-result');
-        if (resultEl) resultEl.className = 'alert';
 
         // Auto-open camera
         this._openPickInlineCam();
@@ -672,7 +669,6 @@ class BarcodeShipper {
             if (video) { video.srcObject = stream; await video.play(); }
             document.getElementById('pick-inline-open-section').style.display = 'none';
             document.getElementById('pick-inline-camera-section').style.display = 'block';
-            document.getElementById('pick-inline-preview-section').style.display = 'none';
         } catch (err) {
             console.error('[PickInlineCam]', err);
             document.getElementById('pick-inline-open-section').style.display = 'block';
@@ -703,13 +699,10 @@ class BarcodeShipper {
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         canvas.toBlob((blob) => {
             this._pickInlineBlob = blob;
-            const url = URL.createObjectURL(blob);
-            const img = document.getElementById('pick-inline-preview-img');
-            if (img) img.src = url;
             this._closePickInlineCam(false);
             document.getElementById('pick-inline-camera-section').style.display = 'none';
-            document.getElementById('pick-inline-open-section').style.display = 'none';
-            document.getElementById('pick-inline-preview-section').style.display = 'block';
+            // Auto-confirm ngay, không cần bước xem lại
+            this._confirmPickInlinePhoto();
         }, 'image/jpeg', 0.85);
     }
 
@@ -726,11 +719,17 @@ class BarcodeShipper {
         this._continuePickPhotoQueue();
     }
 
-    _retakePickInlinePhoto() {
-        this._pickInlineBlob = null;
-        document.getElementById('pick-inline-preview-section').style.display = 'none';
-        document.getElementById('pick-inline-open-section').style.display = 'none';
-        this._openPickInlineCam();
+    // Chụp lại ảnh cho một phiếu đã xác nhận (click vào thumbnail)
+    _retakePickPhoto(pickingId) {
+        const entry = this._pickPhotoList.find(p => p.pickingId === pickingId);
+        if (!entry) return;
+        this._startPickInlinePhoto({ id: entry.pickingId, name: entry.pickingName, soName: entry.soName });
+    }
+
+    // Bỏ chọn / xóa phiếu khỏi danh sách (click vào icon tick)
+    _removePickFromList(pickingId) {
+        this._pickPhotoList = this._pickPhotoList.filter(p => p.pickingId !== pickingId);
+        this._renderPickConfirmedList();
     }
 
     _skipPickInlinePhoto() {
@@ -755,16 +754,19 @@ class BarcodeShipper {
         }
         const items = this._pickPhotoList.map(p => {
             const hasPhoto = !!p.blob;
+            // Thumbnail: click để chụp lại
             const thumbHtml = hasPhoto
-                ? `<img src="${URL.createObjectURL(p.blob)}" style="width:40px;height:40px;object-fit:cover;border-radius:4px;border:1px solid #ccc;flex-shrink:0;" />`
-                : `<div style="width:40px;height:40px;border-radius:4px;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;background:#f5f5f5;flex-shrink:0;"><i class="fa fa-image" style="color:#bbb;"></i></div>`;
+                ? `<img src="${URL.createObjectURL(p.blob)}" title="Click để chụp lại" onclick="window.barcodeShipper._retakePickPhoto(${p.pickingId})" style="width:44px;height:44px;object-fit:cover;border-radius:6px;border:2px solid #4caf50;flex-shrink:0;cursor:pointer;" />`
+                : `<div title="Click để chụp ảnh" onclick="window.barcodeShipper._retakePickPhoto(${p.pickingId})" style="width:44px;height:44px;border-radius:6px;border:2px dashed #ffa726;display:flex;align-items:center;justify-content:center;background:#fff3e0;flex-shrink:0;cursor:pointer;"><i class="fa fa-camera" style="color:#ffa726;"></i></div>`;
+            // Tick: click để bỏ chọn
+            const tickHtml = `<i class="fa ${hasPhoto ? 'fa-check-circle' : 'fa-exclamation-circle'}" title="Click để bỏ chọn" onclick="window.barcodeShipper._removePickFromList(${p.pickingId})" style="color:${hasPhoto ? '#4caf50' : '#ff9800'};font-size:22px;flex-shrink:0;cursor:pointer;"></i>`;
             return `<div style="display:flex;align-items:center;gap:10px;padding:8px;background:#fff;border-radius:8px;margin-bottom:6px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
                 ${thumbHtml}
                 <div style="flex:1;min-width:0;">
                     <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.pickingName}</div>
                     ${p.soName && p.soName !== 'Khác' ? `<div style="font-size:11px;color:#888;">${p.soName}</div>` : ''}
                 </div>
-                <i class="fa ${hasPhoto ? 'fa-check-circle' : 'fa-exclamation-circle'}" style="color:${hasPhoto ? '#4caf50' : '#ff9800'};font-size:18px;flex-shrink:0;"></i>
+                ${tickHtml}
             </div>`;
         }).join('');
 
@@ -773,18 +775,12 @@ class BarcodeShipper {
                 ✓ ${this._pickPhotoList.length} phiếu đã xác nhận
             </div>
             ${items}
-            <button id="pick-scan-more-btn" class="btn btn-outline btn-block mb-2" style="margin-top:4px;">
-                <i class="fa fa-plus"></i> Quét thêm phiếu
-            </button>
-            <button id="pick-proceed-btn" class="btn btn-success btn-lg btn-block">
+            <button id="pick-proceed-btn" class="btn btn-success btn-lg btn-block" style="margin-top:8px;">
                 <i class="fa fa-arrow-right"></i> Tiến hành giao hàng (${this._pickPhotoList.length} phiếu)
             </button>
         `;
         container.style.display = 'block';
 
-        document.getElementById('pick-scan-more-btn')?.addEventListener('click', () => {
-            document.getElementById('pick-barcode-input')?.focus();
-        });
         document.getElementById('pick-proceed-btn')?.addEventListener('click', () => this._proceedToItemScan());
     }
 
