@@ -1563,7 +1563,7 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape'){closeDrawer
 
 // --- Auto-refresh: poll for changes every 10s ---
 var _lastFingerprint=null;
-var _pollInterval=60000; // 10 seconds
+var _pollInterval=300000; // 5 minutes
 var _pollTimer=null;
 var _pollPaused=false;
 
