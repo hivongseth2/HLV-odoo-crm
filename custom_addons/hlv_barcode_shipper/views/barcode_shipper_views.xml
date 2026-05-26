@@ -285,19 +285,6 @@
                                                     </button>
                                                 </div>
                                             </div>
-                                            <!-- Photo preview + confirm -->
-                                            <div id="pick-inline-preview-section" style="display:none;">
-                                                <img id="pick-inline-preview-img" style="width:100%;border-radius:8px;margin-bottom:8px;border:2px solid var(--success-color);" src="" alt=""/>
-                                                <div id="pick-inline-photo-result" class="alert" style="margin-bottom:8px;"></div>
-                                                <div style="display:flex;gap:8px;">
-                                                    <button id="pick-inline-confirm-btn" class="btn btn-success" style="flex:1;">
-                                                        <i class="fa fa-check"></i> Xác nhận ảnh
-                                                    </button>
-                                                    <button id="pick-inline-retake-btn" class="btn btn-outline">
-                                                        <i class="fa fa-redo"></i> Chụp lại
-                                                    </button>
-                                                </div>
-                                            </div>
                                         </div>
                                     </div>
 
