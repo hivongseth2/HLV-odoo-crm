@@ -434,6 +434,20 @@ export class BarcodeApp extends Component {
         try {
             await this.closeCamera();
 
+            // Wait for the #reader element to be mounted in the DOM (async transitions)
+            let readerEl = document.getElementById("reader");
+            let retries = 0;
+            while (!readerEl && retries < 15) {
+                await new Promise(resolve => setTimeout(resolve, 50));
+                readerEl = document.getElementById("reader");
+                retries++;
+            }
+
+            if (!readerEl) {
+                console.warn("Html5Qrcode: #reader element not found in DOM after retries.");
+                return;
+            }
+
             this.html5Qrcode = new window.Html5Qrcode("reader");
             
             const config = { 
