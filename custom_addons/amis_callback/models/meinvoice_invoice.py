@@ -600,17 +600,19 @@ class MeinvoiceInvoice(models.Model):
         try:
             import requests as _req
             _logger.info('meInvoice: fetching draft PDF URL: %s', view_url)
-            # Dùng Bearer token giống các API call khác; URL portal cần auth token
-            try:
-                _auth_headers = config._get_meinvoice_headers()
-                _auth_headers.pop('Content-Type', None)  # không cần cho GET
-            except Exception:
-                _auth_headers = {}
             resp = _req.get(
                 view_url,
                 timeout=30,
                 allow_redirects=True,
-                headers=_auth_headers,
+                headers={
+                    'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+                    'accept-language': 'vi,en-US;q=0.9,en;q=0.8',
+                    'upgrade-insecure-requests': '1',
+                    'sec-fetch-dest': 'document',
+                    'sec-fetch-mode': 'navigate',
+                    'sec-fetch-site': 'none',
+                    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+                },
             )
             resp.raise_for_status()
             content = resp.content or b''
