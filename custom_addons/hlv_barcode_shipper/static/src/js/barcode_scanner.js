@@ -1182,7 +1182,7 @@ class BarcodeShipper {
             const nextSoName = this.pickingDataMap[nextId]?.so_name || '';
             if (subtitleEl) subtitleEl.textContent = nextSoName
                 ? `QR: "${nextSoName}" → ${nextPickingName}`
-                : (nextPickingName || 'Hướng vào mã QR phiếu bàn giao');
+                : (nextPickingName || 'Hướng vào QR phiếu...');
         }
     }
 
@@ -1433,7 +1433,7 @@ class BarcodeShipper {
             // Single: confirm = Gửi & Hoàn tất
             if (confirmBtn) {
                 confirmBtn.style.display = 'flex';
-                confirmBtn.innerHTML = '<i class="fa fa-paper-plane"></i> Gửi &amp; Hoàn tất';
+                confirmBtn.innerHTML = '<i class="fa fa-paper-plane"></i> Hoàn tất';
             }
         } else {
             // Multi: chỉ cho confirm nếu đã detect được QR
@@ -1596,7 +1596,7 @@ class BarcodeShipper {
                             this._photoDetectedPickingId = null;
                             if (captureBtn) {
                                 captureBtn.disabled = true;
-                                captureBtn.innerHTML = '<i class="fa fa-qrcode"></i> Hướng vào mã QR phiếu bàn giao...';
+                                captureBtn.innerHTML = '<i class="fa fa-qrcode"></i> Hướng vào QR phiếu...';
                             }
                         }
                         if (barcodes.length > 0) {
