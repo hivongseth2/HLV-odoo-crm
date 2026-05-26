@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <!-- ── List view ──────────────────────────────────────────────────────── -->
+    <record id="view_meinvoice_mail_queue_list" model="ir.ui.view">
+        <field name="name">meinvoice.mail.queue.list</field>
+        <field name="model">meinvoice.mail.queue</field>
+        <field name="arch" type="xml">
+            <list string="Queue email HĐĐT"
+                  default_order="create_date desc"
+                  decoration-success="status == 'sent'"
+                  decoration-danger="status == 'failed'"
+                  decoration-muted="status == 'skipped'"
+                  decoration-warning="status == 'pending'">
+                <field name="create_date" string="Thời điểm tạo" optional="show"/>
+                <field name="invoice_id" string="Hóa đơn"/>
+                <field name="mode" string="Loại" widget="badge"
+                       decoration-info="mode == 'draft'"
+                       decoration-primary="mode == 'published'"/>
+                <field name="email_to" string="Email khách hàng"/>
+                <field name="status" widget="badge"
+                       decoration-success="status == 'sent'"
+                       decoration-danger="status == 'failed'"
+                       decoration-muted="status == 'skipped'"
+                       decoration-warning="status == 'pending'"/>
+                <field name="reason" string="Lý do" optional="show"/>
+                <field name="sent_at" string="Thời gian gửi" optional="show"/>
+                <field name="retry_count" string="Số lần thử" optional="show"/>
+                <button name="action_retry" string="Thử lại" type="object"
+                        icon="fa-refresh"
+                        invisible="status != 'failed'"/>
+                <button name="action_skip" string="Bỏ qua" type="object"
+                        icon="fa-ban"
+                        invisible="status not in ('pending', 'failed')"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ── Form view ─────────────────────────────────────────────────────── -->
+    <record id="view_meinvoice_mail_queue_form" model="ir.ui.view">
+        <field name="name">meinvoice.mail.queue.form</field>
+        <field name="model">meinvoice.mail.queue</field>
+        <field name="arch" type="xml">
+            <form string="Chi tiết Queue Email HĐĐT">
+                <header>
+                    <field name="status" widget="statusbar"
+                           statusbar_visible="pending,sent,failed,skipped"/>
+                    <button name="action_retry" string="Thử lại" type="object"
+                            class="btn-primary"
+                            invisible="status != 'failed'"/>
+                    <button name="action_skip" string="Bỏ qua" type="object"
+                            invisible="status not in ('pending', 'failed')"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group string="Thông tin gửi">
+                            <field name="invoice_id"/>
+                            <field name="mode"/>
+                            <field name="email_to"/>
+                        </group>
+                        <group string="Kết quả">
+                            <field name="status"/>
+                            <field name="reason"/>
+                            <field name="sent_at"/>
+                            <field name="retry_count"/>
+                            <field name="create_date" string="Tạo lúc"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- ── Search view ────────────────────────────────────────────────────── -->
+    <record id="view_meinvoice_mail_queue_search" model="ir.ui.view">
+        <field name="name">meinvoice.mail.queue.search</field>
+        <field name="model">meinvoice.mail.queue</field>
+        <field name="arch" type="xml">
+            <search string="Tìm kiếm queue email">
+                <field name="invoice_id"/>
+                <field name="email_to"/>
+                <filter string="Thất bại" name="failed" domain="[('status','=','failed')]"/>
+                <filter string="Chờ xử lý" name="pending" domain="[('status','=','pending')]"/>
+                <filter string="Đã gửi" name="sent" domain="[('status','=','sent')]"/>
+                <filter string="Bỏ qua" name="skipped" domain="[('status','=','skipped')]"/>
+                <separator/>
+                <filter string="Bản nháp" name="draft" domain="[('mode','=','draft')]"/>
+                <filter string="Bản chính thức" name="published" domain="[('mode','=','published')]"/>
+                <group expand="0" string="Nhóm theo">
+                    <filter string="Trạng thái" name="group_status" context="{'group_by': 'status'}"/>
+                    <filter string="Loại email" name="group_mode" context="{'group_by': 'mode'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- ── Action ─────────────────────────────────────────────────────────── -->
+    <record id="action_meinvoice_mail_queue" model="ir.actions.act_window">
+        <field name="name">Queue Email HĐĐT</field>
+        <field name="res_model">meinvoice.mail.queue</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_failed': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Chưa có bản ghi nào trong queue.
+            </p>
+            <p>Queue này ghi lại mọi lần gửi email HĐĐT cho khách hàng.</p>
+        </field>
+    </record>
+
+    <!-- ── Menu item ──────────────────────────────────────────────────────── -->
+    <menuitem id="menu_meinvoice_mail_queue"
+              name="Queue Email HĐĐT"
+              parent="menu_amis_callback_root"
+              action="action_meinvoice_mail_queue"
+              sequence="19"/>
+</odoo>
