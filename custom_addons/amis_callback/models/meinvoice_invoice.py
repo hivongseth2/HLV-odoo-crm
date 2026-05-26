@@ -509,15 +509,28 @@ class MeinvoiceInvoice(models.Model):
 
         try:
             import requests as _req
-            resp = _req.get(view_url, timeout=30)
+            _logger.info('meInvoice: fetching draft PDF URL: %s', view_url)
+            resp = _req.get(
+                view_url,
+                timeout=30,
+                allow_redirects=True,
+                headers={
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    'Accept': 'application/pdf,application/octet-stream,*/*',
+                },
+            )
             resp.raise_for_status()
             content = resp.content or b''
-            # Chỉ đính kèm nếu server trả về PDF
             content_type = resp.headers.get('Content-Type', '')
+            _logger.info(
+                'meInvoice: draft PDF response — final_url=%s status=%s Content-Type=%s Content-Length=%s first_bytes=%s',
+                resp.url, resp.status_code, content_type, len(content),
+                content[:16].hex() if content else '(empty)',
+            )
             if 'pdf' not in content_type.lower() and not content.startswith(b'%PDF'):
-                _logger.info(
-                    'meInvoice: unpublishview URL không trả về PDF (Content-Type=%s), bỏ qua.',
-                    content_type,
+                _logger.warning(
+                    'meInvoice: unpublishview URL không trả về PDF (Content-Type=%s, first=%s), bỏ qua.',
+                    content_type, content[:20],
                 )
                 return self.env['ir.attachment']
         except Exception:
