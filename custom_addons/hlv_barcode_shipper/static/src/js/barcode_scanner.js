@@ -54,12 +54,8 @@ class BarcodeShipper {
         this._photoQrLoopTimer = null;
         this._photoQrDetectedAt = 0;    // timestamp để debounce reset detected ID
 
-        // ---- Pick-step inline photo state ----
-        this._pickPhotoList = [];       // [{pickingId, pickingName, soName, blob}] — ảnh chụp tại bước quét phiếu
-        this._pickPhotoQueue = [];      // [{id, name, soName}] — hàng chờ chụp ảnh
-        this._pickCurrentItem = null;   // {id, name, soName} — phiếu đang chụp ảnh
-        this._pickInlineCamStream = null;
-        this._pickInlineBlob = null;
+        // ---- Pick-step state ----
+        this._pickPhotoList = [];       // [{pickingId, pickingName, soName, skipped}] — danh sách phiếu sẽ giao
 
         // ---- Settings ----
         this.settings = {
@@ -190,12 +186,6 @@ class BarcodeShipper {
         document.getElementById('new-delivery-btn')?.addEventListener('click', () => this.startNewDelivery());
         document.getElementById('btn-open-camera-pick')?.addEventListener('click', () => this.startCamera('camera-pick', 'reader-pick', 'pick'));
         document.getElementById('btn-open-camera-item')?.addEventListener('click', () => this.startCamera('camera-item', 'reader-item', 'item'));
-
-        // === PICK STEP INLINE PHOTO ===
-        document.getElementById('pick-inline-open-camera-btn')?.addEventListener('click', () => this._openPickInlineCam());
-        document.getElementById('pick-inline-capture-btn')?.addEventListener('click', () => this._capturePickInlinePhoto());
-        document.getElementById('pick-inline-skip-btn')?.addEventListener('click', () => this._skipPickInlinePhoto());
-        document.getElementById('pick-inline-close-cam-btn')?.addEventListener('click', () => { this._closePickInlineCam(); });
 
         // === PHOTO STEP ===
         document.getElementById('photo-open-camera-btn')?.addEventListener('click', () => this._startPhotoCamera());
@@ -588,19 +578,19 @@ class BarcodeShipper {
                     const newItems = [];
                     res.so_groups.forEach(g => {
                         (g.pickings || []).forEach(p => {
-                            if (!this._pickPhotoList.some(e => e.pickingId === p.id) &&
-                                !this._pickPhotoQueue.some(e => e.id === p.id)) {
-                                newItems.push({ id: p.id, name: p.name, soName: g.so_name || p.origin || 'Khác' });
+                            if (!this._pickPhotoList.some(e => e.pickingId === p.id)) {
+                                newItems.push({ pickingId: p.id, pickingName: p.name, soName: g.so_name || p.origin || 'Khác' });
                             }
                         });
                     });
                     if (newItems.length === 0) {
-                        this.showMessage('pick-result', 'Phiếu này đã được thêm vào danh sách.', 'warning');
+                        this.showMessage('pick-result', 'Phiếu này đã có trong danh sách rồi.', 'warning');
                         return;
                     }
-                    this._pickPhotoQueue.push(...newItems);
-                    this.showMessage('pick-result', `Tìm thấy ${newItems.length} phiếu. Chụp ảnh từng phiếu bàn giao.`, 'success');
-                    this._continuePickPhotoQueue();
+                    this._pickPhotoList.push(...newItems);
+                    this.showMessage('pick-result', `Đã thêm ${newItems.length} phiếu. Quét thêm hoặc nhấn "Tiến hành giao hàng".`, 'success');
+                    this._renderPickConfirmedList();
+                    setTimeout(() => this.startCamera('camera-pick', 'reader-pick', 'pick'), 400);
                 } else {
                     this.showMessage('pick-result', 'Không tìm thấy phiếu nào.', 'danger');
                 }
@@ -617,118 +607,7 @@ class BarcodeShipper {
         }
     }
 
-    // ========== PICK STEP INLINE PHOTO ==========
-
-    _continuePickPhotoQueue() {
-        if (this._pickPhotoQueue && this._pickPhotoQueue.length > 0) {
-            const next = this._pickPhotoQueue.shift();
-            if (this._pickPhotoList.some(p => p.pickingId === next.id)) {
-                this._continuePickPhotoQueue();
-                return;
-            }
-            this._startPickInlinePhoto(next);
-        } else {
-            this._renderPickConfirmedList();
-            // Tự động mở camera quét để người dùng có thể quét thêm phiếu
-            setTimeout(() => this.startCamera('camera-pick', 'reader-pick', 'pick'), 400);
-        }
-    }
-
-    _startPickInlinePhoto(item) {
-        this._pickCurrentItem = item;
-        this._pickInlineBlob = null;
-
-        const nameEl = document.getElementById('pick-inline-picking-name');
-        const soEl = document.getElementById('pick-inline-so-name');
-        if (nameEl) nameEl.textContent = item.name;
-        if (soEl) soEl.textContent = item.soName && item.soName !== 'Khác' ? `Đơn hàng: ${item.soName}` : '';
-
-        const photoDiv = document.getElementById('pick-inline-photo');
-        if (photoDiv) photoDiv.style.display = 'block';
-        document.getElementById('pick-inline-open-section').style.display = 'block';
-        document.getElementById('pick-inline-camera-section').style.display = 'none';
-
-        // Auto-open camera
-        this._openPickInlineCam();
-    }
-
-    async _openPickInlineCam() {
-        await this.stopCamera();
-        await new Promise(r => setTimeout(r, 300));
-        if (this._pickInlineCamStream) {
-            this._pickInlineCamStream.getTracks().forEach(t => t.stop());
-            this._pickInlineCamStream = null;
-        }
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
-                audio: false,
-            });
-            this._pickInlineCamStream = stream;
-            const video = document.getElementById('pick-inline-video');
-            if (video) { video.srcObject = stream; await video.play(); }
-            const camLabel = document.getElementById('pick-inline-cam-label');
-            const camSub = document.getElementById('pick-inline-cam-sublabel');
-            if (camLabel && this._pickCurrentItem) camLabel.textContent = this._pickCurrentItem.name;
-            if (camSub && this._pickCurrentItem) camSub.textContent = (this._pickCurrentItem.soName && this._pickCurrentItem.soName !== 'Khác') ? `Đơn hàng: ${this._pickCurrentItem.soName}` : '';
-            document.getElementById('pick-inline-open-section').style.display = 'none';
-            document.getElementById('pick-inline-camera-section').style.display = 'flex';
-        } catch (err) {
-            console.error('[PickInlineCam]', err);
-            document.getElementById('pick-inline-open-section').style.display = 'block';
-            document.getElementById('pick-inline-camera-section').style.display = 'none';
-        }
-    }
-
-    _closePickInlineCam(updateUI = true) {
-        if (this._pickInlineCamStream) {
-            this._pickInlineCamStream.getTracks().forEach(t => t.stop());
-            this._pickInlineCamStream = null;
-        }
-        const video = document.getElementById('pick-inline-video');
-        if (video) video.srcObject = null;
-        if (updateUI) {
-            document.getElementById('pick-inline-camera-section').style.display = 'none';
-            document.getElementById('pick-inline-open-section').style.display = 'block';
-        }
-    }
-
-    _capturePickInlinePhoto() {
-        const video = document.getElementById('pick-inline-video');
-        const canvas = document.getElementById('pick-inline-canvas');
-        if (!video || !canvas) return;
-        canvas.width = video.videoWidth || 1280;
-        canvas.height = video.videoHeight || 720;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        canvas.toBlob((blob) => {
-            this._pickInlineBlob = blob;
-            this._closePickInlineCam(false);
-            document.getElementById('pick-inline-camera-section').style.display = 'none';
-            // Auto-confirm ngay, không cần bước xem lại
-            this._confirmPickInlinePhoto();
-        }, 'image/jpeg', 0.85);
-    }
-
-    _confirmPickInlinePhoto() {
-        if (!this._pickCurrentItem) return;
-        const item = this._pickCurrentItem;
-        const entry = { pickingId: item.id, pickingName: item.name, soName: item.soName, blob: this._pickInlineBlob };
-        const existing = this._pickPhotoList.findIndex(p => p.pickingId === item.id);
-        if (existing >= 0) { this._pickPhotoList[existing] = entry; }
-        else { this._pickPhotoList.push(entry); }
-        this._pickCurrentItem = null;
-        this._pickInlineBlob = null;
-        document.getElementById('pick-inline-photo').style.display = 'none';
-        this._continuePickPhotoQueue();
-    }
-
-    // Chụp lại ảnh cho một phiếu đã xác nhận (click vào thumbnail)
-    _retakePickPhoto(pickingId) {
-        const entry = this._pickPhotoList.find(p => p.pickingId === pickingId);
-        if (!entry) return;
-        this._startPickInlinePhoto({ id: entry.pickingId, name: entry.pickingName, soName: entry.soName });
-    }
+    // ========== PICK STEP ==========
 
     // Toggle skip – bỏ qua / khôi phục phiếu (click vào icon tick)
     _toggleSkipPick(pickingId) {
@@ -736,19 +615,6 @@ class BarcodeShipper {
         if (!entry) return;
         entry.skipped = !entry.skipped;
         this._renderPickConfirmedList();
-    }
-
-    _skipPickInlinePhoto() {
-        if (!this._pickCurrentItem) return;
-        const item = this._pickCurrentItem;
-        const existing = this._pickPhotoList.findIndex(p => p.pickingId === item.id);
-        if (existing < 0) {
-            this._pickPhotoList.push({ pickingId: item.id, pickingName: item.name, soName: item.soName, blob: null });
-        }
-        this._pickCurrentItem = null;
-        this._closePickInlineCam(false);
-        document.getElementById('pick-inline-photo').style.display = 'none';
-        this._continuePickPhotoQueue();
     }
 
     _renderPickConfirmedList() {
@@ -760,21 +626,11 @@ class BarcodeShipper {
         }
         const deliverCount = this._pickPhotoList.filter(p => !p.skipped).length;
         const items = this._pickPhotoList.map(p => {
-            const hasPhoto = !!p.blob;
             const isSkipped = !!p.skipped;
-            // Thumbnail: có ảnh → click xem preview; không ảnh + không skip → click chụp
-            const thumbClick = hasPhoto
-                ? `onclick="window.barcodeShipper._previewPickPhoto(${p.pickingId})"`
-                : (!isSkipped ? `onclick="window.barcodeShipper._retakePickPhoto(${p.pickingId})"` : '');
-            const thumbHtml = hasPhoto
-                ? `<img src="${URL.createObjectURL(p.blob)}" title="${isSkipped ? 'Xem ảnh' : 'Xem / chụp lại'}" ${thumbClick} style="width:44px;height:44px;object-fit:cover;border-radius:6px;border:2px solid ${isSkipped ? '#ddd' : '#4caf50'};flex-shrink:0;cursor:pointer;opacity:${isSkipped ? '0.35' : '1'};" />`
-                : `<div title="${isSkipped ? '' : 'Click để chụp ảnh'}" ${thumbClick} style="width:44px;height:44px;border-radius:6px;border:2px dashed ${isSkipped ? '#e0e0e0' : '#ffa726'};display:flex;align-items:center;justify-content:center;background:${isSkipped ? '#f9f9f9' : '#fff3e0'};flex-shrink:0;cursor:${isSkipped ? 'default' : 'pointer'};"><i class="fa fa-camera" style="color:${isSkipped ? '#ccc' : '#ffa726'};"></i></div>`;
-            // Tick / Ban – click để toggle skip
             const tickHtml = isSkipped
                 ? `<i class="fa fa-ban" title="Đang bỏ qua – click để khôi phục" onclick="window.barcodeShipper._toggleSkipPick(${p.pickingId})" style="color:#e53935;font-size:22px;flex-shrink:0;cursor:pointer;"></i>`
-                : `<i class="fa fa-check-circle" title="Click để bỏ qua phiếu này" onclick="window.barcodeShipper._toggleSkipPick(${p.pickingId})" style="color:${hasPhoto ? '#4caf50' : '#ff9800'};font-size:22px;flex-shrink:0;cursor:pointer;"></i>`;
+                : `<i class="fa fa-check-circle" title="Click để bỏ qua phiếu này" onclick="window.barcodeShipper._toggleSkipPick(${p.pickingId})" style="color:#4caf50;font-size:22px;flex-shrink:0;cursor:pointer;"></i>`;
             return `<div style="display:flex;align-items:center;gap:10px;padding:8px;background:${isSkipped ? '#f7f7f7' : '#fff'};border-radius:8px;margin-bottom:6px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
-                ${thumbHtml}
                 <div style="flex:1;min-width:0;">
                     <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${isSkipped ? 'text-decoration:line-through;color:#bbb;' : ''}">${p.pickingName}</div>
                     ${p.soName && p.soName !== 'Khác' ? `<div style="font-size:11px;color:${isSkipped ? '#ccc' : '#888'};">${p.soName}</div>` : ''}
@@ -787,66 +643,14 @@ class BarcodeShipper {
             ? `✓ ${deliverCount}/${this._pickPhotoList.length} phiếu sẽ giao`
             : `✓ ${this._pickPhotoList.length} phiếu đã xác nhận`;
         container.innerHTML = `
-            <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">
-                ${headerText}
-            </div>
+            <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">${headerText}</div>
             ${items}
             ${deliverCount > 0
                 ? `<button id="pick-proceed-btn" class="btn btn-success btn-lg btn-block" style="margin-top:8px;"><i class="fa fa-arrow-right"></i> Tiến hành giao hàng (${deliverCount} phiếu)</button>`
-                : `<div class="alert alert-warning" style="margin-top:8px;">Tất cả phiếu đang bỏ qua. Quét thêm hoặc khôi phục phiếu.</div>`}
+                : `<div class="alert alert-warning" style="margin-top:8px;">Tất cả phiếu đang bỏ qua. Quét thêm hoặc khôi phục.</div>`}
         `;
         container.style.display = 'block';
         document.getElementById('pick-proceed-btn')?.addEventListener('click', () => this._proceedToItemScan());
-    }
-
-    // Xem trước ảnh đã chụp + options: OK / chụp lại / không giao
-    _previewPickPhoto(pickingId) {
-        const entry = this._pickPhotoList.find(p => p.pickingId === pickingId);
-        if (!entry || !entry.blob) return;
-        const url = URL.createObjectURL(entry.blob);
-        let modal = document.getElementById('pick-photo-preview-modal');
-        if (modal) modal.remove();
-        modal = document.createElement('div');
-        modal.id = 'pick-photo-preview-modal';
-        modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.93);z-index:10000;display:flex;flex-direction:column;';
-        modal.innerHTML = `
-            <div style="padding:14px 16px;background:rgba(0,0,0,0.6);color:#fff;flex-shrink:0;">
-                <div style="font-weight:700;font-size:15px;">${entry.pickingName}</div>
-                ${entry.soName && entry.soName !== 'Khác' ? `<div style="font-size:12px;opacity:0.7;">${entry.soName}</div>` : ''}
-            </div>
-            <div style="flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:8px;">
-                <img src="${url}" style="max-width:100%;max-height:100%;object-fit:contain;border-radius:6px;" />
-            </div>
-            <div style="padding:16px;display:flex;gap:10px;background:rgba(0,0,0,0.6);flex-shrink:0;">
-                <button onclick="window.barcodeShipper._closePhotoPreview()" class="btn btn-success" style="flex:1;">
-                    <i class="fa fa-check"></i> OK
-                </button>
-                <button onclick="window.barcodeShipper._retakePickPhotoFromPreview(${pickingId})" class="btn btn-outline" style="flex:1;color:#fff;border-color:rgba(255,255,255,0.5);">
-                    <i class="fa fa-redo"></i> Chụp lại
-                </button>
-                <button onclick="window.barcodeShipper._skipPickFromPreview(${pickingId})" class="btn btn-danger" style="flex:1;">
-                    <i class="fa fa-ban"></i> Không giao
-                </button>
-            </div>
-        `;
-        document.body.appendChild(modal);
-    }
-
-    _closePhotoPreview() {
-        const modal = document.getElementById('pick-photo-preview-modal');
-        if (modal) modal.remove();
-    }
-
-    _retakePickPhotoFromPreview(pickingId) {
-        this._closePhotoPreview();
-        this._retakePickPhoto(pickingId);
-    }
-
-    _skipPickFromPreview(pickingId) {
-        this._closePhotoPreview();
-        const entry = this._pickPhotoList.find(p => p.pickingId === pickingId);
-        if (entry) { entry.skipped = true; }
-        this._renderPickConfirmedList();
     }
 
     async _proceedToItemScan() {
@@ -1324,50 +1128,20 @@ class BarcodeShipper {
         const pickingIds = Object.keys(this.pickingDataMap).map(id => parseInt(id));
         if (pickingIds.length === 0) return;
 
-        if (!confirm(`Xác nhận hoàn tất ${pickingIds.length} đơn hàng?`)) return;
-
-        // Upload photos already captured at pick-scan step
-        const photosToUpload = (this._pickPhotoList || []).filter(p => p.blob && !p.skipped);
-        const completeBtn = document.getElementById('complete-all-btn');
-        if (completeBtn) { completeBtn.disabled = true; completeBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Đang xử lý...'; }
-
-        if (photosToUpload.length > 0) {
-            this.showMessage('item-result', `Đang tải ${photosToUpload.length} ảnh lên...`, 'warning');
-            try {
-                for (let i = 0; i < photosToUpload.length; i++) {
-                    const p = photosToUpload[i];
-                    const formData = new FormData();
-                    formData.append('picking_ids', JSON.stringify([p.pickingId]));
-                    formData.append('photo', p.blob, `delivery_${p.pickingId}.jpg`);
-                    await fetch('/api/barcode/upload_delivery_photo', {
-                        method: 'POST',
-                        headers: { 'X-Requested-With': 'XMLHttpRequest' },
-                        body: formData,
-                    });
-                }
-            } catch (e) { console.warn('[Photo] Upload error:', e); }
-        }
-
-        try {
-            this.showMessage('item-result', 'Đang hoàn tất đơn hàng...', 'warning');
-            const res = await this.apiCall('/api/barcode/complete_out', { picking_ids: pickingIds });
-            if (res.success) {
-                document.getElementById('completion-result').textContent = res.message;
-                this._closePickInlineCam(false);
-                this.showDeliverStep('step-complete');
-                this.playSound('success');
-                this.pickingDataMap = {};
-            } else {
-                this.showMessage('item-result', res.error || 'Có lỗi xảy ra', 'danger');
-                this.playSound('error');
-                if (completeBtn) { completeBtn.disabled = false; completeBtn.innerHTML = '<i class="fa fa-arrow-right"></i> Tiếp theo'; }
+        // Chuyển sang bước chụp ảnh biên bản bàn giao (có chữ ký khách hàng)
+        this._photoPickingIds = pickingIds;
+        this._capturedPhotos = [];
+        this._photoBlob = null;
+        this._photoDetectedPickingId = null;
+        this._photoNameToId = {};
+        pickingIds.forEach(id => {
+            const soName = this.pickingDataMap[id]?.so_name;
+            if (soName && soName !== 'Khác') {
+                this._photoNameToId[soName] = id;
             }
-        } catch (e) {
-            console.error(e);
-            this.showMessage('item-result', 'Lỗi kết nối', 'danger');
-            this.playSound('error');
-            if (completeBtn) { completeBtn.disabled = false; completeBtn.innerHTML = '<i class="fa fa-arrow-right"></i> Tiếp theo'; }
-        }
+        });
+        this._resetPhotoUI();
+        this.showDeliverStep('step-photo');
     }
 
     _resetPhotoUI() {
@@ -1811,13 +1585,8 @@ class BarcodeShipper {
         this.activePickingId = null;
         this.customerName = '';
 
-        // Reset pick-step inline photo state
+        // Reset pick-step state
         this._pickPhotoList = [];
-        this._pickPhotoQueue = [];
-        this._pickCurrentItem = null;
-        this._closePickInlineCam(false);
-        const inlinePhoto = document.getElementById('pick-inline-photo');
-        if (inlinePhoto) inlinePhoto.style.display = 'none';
         const confirmedList = document.getElementById('pick-confirmed-list');
         if (confirmedList) { confirmedList.style.display = 'none'; confirmedList.innerHTML = ''; }
 
