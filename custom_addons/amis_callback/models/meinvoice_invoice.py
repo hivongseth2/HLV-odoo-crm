@@ -581,13 +581,16 @@ class MeinvoiceInvoice(models.Model):
             return self.env['ir.attachment']
 
         # meInvoice trả về URL có Viewer=1 → server trả HTML viewer, không phải raw PDF.
-        # Bỏ tham số đó để lấy file PDF trực tiếp.
+        # Đổi Viewer=0 để server trả file PDF trực tiếp.
         try:
             from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
             _parsed = urlparse(view_url)
             _qs = parse_qs(_parsed.query, keep_blank_values=True)
-            _qs.pop('Viewer', None)
-            _qs.pop('viewer', None)
+            # Đặt Viewer=0 (xóa key cũ dù viết hoa/thường)
+            for _k in list(_qs):
+                if _k.lower() == 'viewer':
+                    del _qs[_k]
+            _qs['Viewer'] = ['0']
             view_url = urlunparse(_parsed._replace(
                 query=urlencode({k: v[0] for k, v in _qs.items()})
             ))
