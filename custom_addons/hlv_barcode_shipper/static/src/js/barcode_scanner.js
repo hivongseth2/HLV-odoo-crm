@@ -44,7 +44,7 @@ class BarcodeShipper {
         this._lastScanResult = '';
         this._lastScanTime = 0;
 
-        // ---- Photo camera state ----
+        // ---- Photo camera state (step-photo fallback) ----
         this._photoCameraStream = null;
         this._photoBlob = null;
         this._photoPickingIds = [];
@@ -53,6 +53,13 @@ class BarcodeShipper {
         this._photoDetectedPickingId = null;
         this._photoQrLoopTimer = null;
         this._photoQrDetectedAt = 0;    // timestamp để debounce reset detected ID
+
+        // ---- Pick-step inline photo state ----
+        this._pickPhotoList = [];       // [{pickingId, pickingName, soName, blob}] — ảnh chụp tại bước quét phiếu
+        this._pickPhotoQueue = [];      // [{id, name, soName}] — hàng chờ chụp ảnh
+        this._pickCurrentItem = null;   // {id, name, soName} — phiếu đang chụp ảnh
+        this._pickInlineCamStream = null;
+        this._pickInlineBlob = null;
 
         // ---- Settings ----
         this.settings = {
@@ -183,6 +190,14 @@ class BarcodeShipper {
         document.getElementById('new-delivery-btn')?.addEventListener('click', () => this.startNewDelivery());
         document.getElementById('btn-open-camera-pick')?.addEventListener('click', () => this.startCamera('camera-pick', 'reader-pick', 'pick'));
         document.getElementById('btn-open-camera-item')?.addEventListener('click', () => this.startCamera('camera-item', 'reader-item', 'item'));
+
+        // === PICK STEP INLINE PHOTO ===
+        document.getElementById('pick-inline-open-camera-btn')?.addEventListener('click', () => this._openPickInlineCam());
+        document.getElementById('pick-inline-capture-btn')?.addEventListener('click', () => this._capturePickInlinePhoto());
+        document.getElementById('pick-inline-confirm-btn')?.addEventListener('click', () => this._confirmPickInlinePhoto());
+        document.getElementById('pick-inline-retake-btn')?.addEventListener('click', () => this._retakePickInlinePhoto());
+        document.getElementById('pick-inline-skip-btn')?.addEventListener('click', () => this._skipPickInlinePhoto());
+        document.getElementById('pick-inline-close-cam-btn')?.addEventListener('click', () => { this._closePickInlineCam(); });
 
         // === PHOTO STEP ===
         document.getElementById('photo-open-camera-btn')?.addEventListener('click', () => this._startPhotoCamera());
@@ -570,27 +585,26 @@ class BarcodeShipper {
             const res = await this.apiCall('/api/barcode/scan_pick', { barcode });
             if (res.success) {
                 this.customerName = res.customer_name || 'Khách hàng';
-                // Show modal with SO groups
+                // Queue pickings for inline photo capture
                 if (res.so_groups && res.so_groups.length > 0) {
-                    // Check total number of pickings
-                    let totalPickings = 0;
-                    let singlePickingId = null;
+                    const newItems = [];
                     res.so_groups.forEach(g => {
-                        if (g.pickings) {
-                            totalPickings += g.pickings.length;
-                            if (g.pickings.length > 0) singlePickingId = g.pickings[0].id;
-                        }
+                        (g.pickings || []).forEach(p => {
+                            if (!this._pickPhotoList.some(e => e.pickingId === p.id) &&
+                                !this._pickPhotoQueue.some(e => e.id === p.id)) {
+                                newItems.push({ id: p.id, name: p.name, soName: g.so_name || p.origin || 'Khác' });
+                            }
+                        });
                     });
-
-                    if (totalPickings === 1 && singlePickingId) {
-                        this.showMessage('pick-result', 'Đã tìm thấy 1 phiếu, đang tải...', 'success');
-                        this.loadMultipleOutDetails([singlePickingId]);
-                    } else {
-                        this.showPickingSelectionModal(res.so_groups);
-                        this.showMessage('pick-result', res.message, 'success');
+                    if (newItems.length === 0) {
+                        this.showMessage('pick-result', 'Phiếu này đã được thêm vào danh sách.', 'warning');
+                        return;
                     }
+                    this._pickPhotoQueue.push(...newItems);
+                    this.showMessage('pick-result', `Tìm thấy ${newItems.length} phiếu. Chụp ảnh từng phiếu bàn giao.`, 'success');
+                    this._continuePickPhotoQueue();
                 } else {
-                    this.showMessage('pick-result', 'Không tìm thấy nhóm phiếu nào.', 'danger');
+                    this.showMessage('pick-result', 'Không tìm thấy phiếu nào.', 'danger');
                 }
             } else {
                 this.showMessage('pick-result', res.error || 'Không tìm thấy', 'danger');
@@ -604,6 +618,186 @@ class BarcodeShipper {
             this.focusCurrentInput();
         }
     }
+
+    // ========== PICK STEP INLINE PHOTO ==========
+
+    _continuePickPhotoQueue() {
+        if (this._pickPhotoQueue && this._pickPhotoQueue.length > 0) {
+            const next = this._pickPhotoQueue.shift();
+            if (this._pickPhotoList.some(p => p.pickingId === next.id)) {
+                this._continuePickPhotoQueue();
+                return;
+            }
+            this._startPickInlinePhoto(next);
+        } else {
+            this._renderPickConfirmedList();
+        }
+    }
+
+    _startPickInlinePhoto(item) {
+        this._pickCurrentItem = item;
+        this._pickInlineBlob = null;
+
+        const nameEl = document.getElementById('pick-inline-picking-name');
+        const soEl = document.getElementById('pick-inline-so-name');
+        if (nameEl) nameEl.textContent = item.name;
+        if (soEl) soEl.textContent = item.soName && item.soName !== 'Khác' ? `Đơn hàng: ${item.soName}` : '';
+
+        const photoDiv = document.getElementById('pick-inline-photo');
+        if (photoDiv) photoDiv.style.display = 'block';
+        document.getElementById('pick-inline-open-section').style.display = 'block';
+        document.getElementById('pick-inline-camera-section').style.display = 'none';
+        document.getElementById('pick-inline-preview-section').style.display = 'none';
+        const resultEl = document.getElementById('pick-inline-photo-result');
+        if (resultEl) resultEl.className = 'alert';
+
+        // Auto-open camera
+        this._openPickInlineCam();
+    }
+
+    async _openPickInlineCam() {
+        await this.stopCamera();
+        await new Promise(r => setTimeout(r, 300));
+        if (this._pickInlineCamStream) {
+            this._pickInlineCamStream.getTracks().forEach(t => t.stop());
+            this._pickInlineCamStream = null;
+        }
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+                audio: false,
+            });
+            this._pickInlineCamStream = stream;
+            const video = document.getElementById('pick-inline-video');
+            if (video) { video.srcObject = stream; await video.play(); }
+            document.getElementById('pick-inline-open-section').style.display = 'none';
+            document.getElementById('pick-inline-camera-section').style.display = 'block';
+            document.getElementById('pick-inline-preview-section').style.display = 'none';
+        } catch (err) {
+            console.error('[PickInlineCam]', err);
+            document.getElementById('pick-inline-open-section').style.display = 'block';
+            document.getElementById('pick-inline-camera-section').style.display = 'none';
+        }
+    }
+
+    _closePickInlineCam(updateUI = true) {
+        if (this._pickInlineCamStream) {
+            this._pickInlineCamStream.getTracks().forEach(t => t.stop());
+            this._pickInlineCamStream = null;
+        }
+        const video = document.getElementById('pick-inline-video');
+        if (video) video.srcObject = null;
+        if (updateUI) {
+            document.getElementById('pick-inline-camera-section').style.display = 'none';
+            document.getElementById('pick-inline-open-section').style.display = 'block';
+        }
+    }
+
+    _capturePickInlinePhoto() {
+        const video = document.getElementById('pick-inline-video');
+        const canvas = document.getElementById('pick-inline-canvas');
+        if (!video || !canvas) return;
+        canvas.width = video.videoWidth || 1280;
+        canvas.height = video.videoHeight || 720;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob((blob) => {
+            this._pickInlineBlob = blob;
+            const url = URL.createObjectURL(blob);
+            const img = document.getElementById('pick-inline-preview-img');
+            if (img) img.src = url;
+            this._closePickInlineCam(false);
+            document.getElementById('pick-inline-camera-section').style.display = 'none';
+            document.getElementById('pick-inline-open-section').style.display = 'none';
+            document.getElementById('pick-inline-preview-section').style.display = 'block';
+        }, 'image/jpeg', 0.85);
+    }
+
+    _confirmPickInlinePhoto() {
+        if (!this._pickCurrentItem) return;
+        const item = this._pickCurrentItem;
+        const entry = { pickingId: item.id, pickingName: item.name, soName: item.soName, blob: this._pickInlineBlob };
+        const existing = this._pickPhotoList.findIndex(p => p.pickingId === item.id);
+        if (existing >= 0) { this._pickPhotoList[existing] = entry; }
+        else { this._pickPhotoList.push(entry); }
+        this._pickCurrentItem = null;
+        this._pickInlineBlob = null;
+        document.getElementById('pick-inline-photo').style.display = 'none';
+        this._continuePickPhotoQueue();
+    }
+
+    _retakePickInlinePhoto() {
+        this._pickInlineBlob = null;
+        document.getElementById('pick-inline-preview-section').style.display = 'none';
+        document.getElementById('pick-inline-open-section').style.display = 'none';
+        this._openPickInlineCam();
+    }
+
+    _skipPickInlinePhoto() {
+        if (!this._pickCurrentItem) return;
+        const item = this._pickCurrentItem;
+        const existing = this._pickPhotoList.findIndex(p => p.pickingId === item.id);
+        if (existing < 0) {
+            this._pickPhotoList.push({ pickingId: item.id, pickingName: item.name, soName: item.soName, blob: null });
+        }
+        this._pickCurrentItem = null;
+        this._closePickInlineCam(false);
+        document.getElementById('pick-inline-photo').style.display = 'none';
+        this._continuePickPhotoQueue();
+    }
+
+    _renderPickConfirmedList() {
+        const container = document.getElementById('pick-confirmed-list');
+        if (!container) return;
+        if (!this._pickPhotoList || this._pickPhotoList.length === 0) {
+            container.style.display = 'none';
+            return;
+        }
+        const items = this._pickPhotoList.map(p => {
+            const hasPhoto = !!p.blob;
+            const thumbHtml = hasPhoto
+                ? `<img src="${URL.createObjectURL(p.blob)}" style="width:40px;height:40px;object-fit:cover;border-radius:4px;border:1px solid #ccc;flex-shrink:0;" />`
+                : `<div style="width:40px;height:40px;border-radius:4px;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;background:#f5f5f5;flex-shrink:0;"><i class="fa fa-image" style="color:#bbb;"></i></div>`;
+            return `<div style="display:flex;align-items:center;gap:10px;padding:8px;background:#fff;border-radius:8px;margin-bottom:6px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+                ${thumbHtml}
+                <div style="flex:1;min-width:0;">
+                    <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.pickingName}</div>
+                    ${p.soName && p.soName !== 'Khác' ? `<div style="font-size:11px;color:#888;">${p.soName}</div>` : ''}
+                </div>
+                <i class="fa ${hasPhoto ? 'fa-check-circle' : 'fa-exclamation-circle'}" style="color:${hasPhoto ? '#4caf50' : '#ff9800'};font-size:18px;flex-shrink:0;"></i>
+            </div>`;
+        }).join('');
+
+        container.innerHTML = `
+            <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">
+                ✓ ${this._pickPhotoList.length} phiếu đã xác nhận
+            </div>
+            ${items}
+            <button id="pick-scan-more-btn" class="btn btn-outline btn-block mb-2" style="margin-top:4px;">
+                <i class="fa fa-plus"></i> Quét thêm phiếu
+            </button>
+            <button id="pick-proceed-btn" class="btn btn-success btn-lg btn-block">
+                <i class="fa fa-arrow-right"></i> Tiến hành giao hàng (${this._pickPhotoList.length} phiếu)
+            </button>
+        `;
+        container.style.display = 'block';
+
+        document.getElementById('pick-scan-more-btn')?.addEventListener('click', () => {
+            document.getElementById('pick-barcode-input')?.focus();
+        });
+        document.getElementById('pick-proceed-btn')?.addEventListener('click', () => this._proceedToItemScan());
+    }
+
+    async _proceedToItemScan() {
+        const pickingIds = this._pickPhotoList.map(p => p.pickingId);
+        if (pickingIds.length === 0) {
+            this.showMessage('pick-result', 'Chưa có phiếu nào.', 'danger');
+            return;
+        }
+        await this.loadMultipleOutDetails(pickingIds);
+    }
+
+    // ==========================================
 
     showPickingSelectionModal(soGroups) {
         let modal = document.getElementById('picking-selection-modal');
@@ -1069,24 +1263,50 @@ class BarcodeShipper {
         const pickingIds = Object.keys(this.pickingDataMap).map(id => parseInt(id));
         if (pickingIds.length === 0) return;
 
-        // Store picking IDs for photo step
-        this._photoPickingIds = pickingIds;
+        if (!confirm(`Xác nhận hoàn tất ${pickingIds.length} đơn hàng?`)) return;
 
-        // Build so_name→id map cho QR matching (QR trên phiếu = tên sale order)
-        this._photoNameToId = {};
-        pickingIds.forEach(id => {
-            const soName = this.pickingDataMap[id]?.so_name;
-            if (soName && soName !== 'Khác') this._photoNameToId[soName] = id;
-        });
+        // Upload photos already captured at pick-scan step
+        const photosToUpload = (this._pickPhotoList || []).filter(p => p.blob);
+        const completeBtn = document.getElementById('complete-all-btn');
+        if (completeBtn) { completeBtn.disabled = true; completeBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Đang xử lý...'; }
 
-        // Reset captured photos list
-        this._capturedPhotos = [];
-        this._photoDetectedPickingId = null;
+        if (photosToUpload.length > 0) {
+            this.showMessage('item-result', `Đang tải ${photosToUpload.length} ảnh lên...`, 'warning');
+            try {
+                for (let i = 0; i < photosToUpload.length; i++) {
+                    const p = photosToUpload[i];
+                    const formData = new FormData();
+                    formData.append('picking_ids', JSON.stringify([p.pickingId]));
+                    formData.append('photo', p.blob, `delivery_${p.pickingId}.jpg`);
+                    await fetch('/api/barcode/upload_delivery_photo', {
+                        method: 'POST',
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                        body: formData,
+                    });
+                }
+            } catch (e) { console.warn('[Photo] Upload error:', e); }
+        }
 
-        // Go to photo capture step
-        this._photoBlob = null;
-        this._resetPhotoUI();
-        this.showDeliverStep('step-photo');
+        try {
+            this.showMessage('item-result', 'Đang hoàn tất đơn hàng...', 'warning');
+            const res = await this.apiCall('/api/barcode/complete_out', { picking_ids: pickingIds });
+            if (res.success) {
+                document.getElementById('completion-result').textContent = res.message;
+                this._closePickInlineCam(false);
+                this.showDeliverStep('step-complete');
+                this.playSound('success');
+                this.pickingDataMap = {};
+            } else {
+                this.showMessage('item-result', res.error || 'Có lỗi xảy ra', 'danger');
+                this.playSound('error');
+                if (completeBtn) { completeBtn.disabled = false; completeBtn.innerHTML = '<i class="fa fa-arrow-right"></i> Tiếp theo'; }
+            }
+        } catch (e) {
+            console.error(e);
+            this.showMessage('item-result', 'Lỗi kết nối', 'danger');
+            this.playSound('error');
+            if (completeBtn) { completeBtn.disabled = false; completeBtn.innerHTML = '<i class="fa fa-arrow-right"></i> Tiếp theo'; }
+        }
     }
 
     _resetPhotoUI() {
@@ -1529,6 +1749,16 @@ class BarcodeShipper {
         this.soGroups = [];
         this.activePickingId = null;
         this.customerName = '';
+
+        // Reset pick-step inline photo state
+        this._pickPhotoList = [];
+        this._pickPhotoQueue = [];
+        this._pickCurrentItem = null;
+        this._closePickInlineCam(false);
+        const inlinePhoto = document.getElementById('pick-inline-photo');
+        if (inlinePhoto) inlinePhoto.style.display = 'none';
+        const confirmedList = document.getElementById('pick-confirmed-list');
+        if (confirmedList) { confirmedList.style.display = 'none'; confirmedList.innerHTML = ''; }
 
         this.clearMessage('pick-result');
         this.clearMessage('item-result');

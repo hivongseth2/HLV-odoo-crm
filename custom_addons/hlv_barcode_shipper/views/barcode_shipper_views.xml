@@ -217,7 +217,7 @@
                                         <div class="step-icon"><i class="fa fa-search"></i></div>
                                         <div class="step-info">
                                             <div class="step-title">Quét phiếu giao hàng</div>
-                                            <p class="step-desc">Quét mã vạch trên phiếu PICK để bắt đầu giao.</p>
+                                            <p class="step-desc">Quét mã vạch từng phiếu OUT, chụp ảnh bàn giao ngay, sau đó tiến hành quét kiện.</p>
                                         </div>
                                     </div>
 
@@ -247,6 +247,62 @@
 
                                     <!-- List of received pickings ready to deliver -->
                                     <div id="deliver-received-list" style="margin-top: 15px;"></div>
+
+                                    <!-- Inline photo capture (hiện sau khi quét được phiếu) -->
+                                    <canvas id="pick-inline-canvas" style="display:none;"></canvas>
+                                    <div id="pick-inline-photo" style="display:none; margin-top:12px;">
+                                        <div style="background:#fffde7;border:1px solid #f9a825;border-radius:10px;padding:12px;">
+                                            <!-- Picking info header -->
+                                            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                                                <div style="background:var(--primary-color);color:#fff;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                                                    <i class="fa fa-camera"></i>
+                                                </div>
+                                                <div style="flex:1;">
+                                                    <div style="font-weight:700;font-size:14px;" id="pick-inline-picking-name">---</div>
+                                                    <div style="font-size:12px;color:#888;" id="pick-inline-so-name"></div>
+                                                </div>
+                                            </div>
+                                            <!-- Open camera button -->
+                                            <div id="pick-inline-open-section">
+                                                <button id="pick-inline-open-camera-btn" class="btn btn-primary btn-block mb-2">
+                                                    <i class="fa fa-camera"></i> Mở Camera Chụp Ảnh Phiếu
+                                                </button>
+                                                <button id="pick-inline-skip-btn" class="btn btn-outline btn-block" style="font-size:12px;">
+                                                    <i class="fa fa-forward"></i> Bỏ qua ảnh cho phiếu này
+                                                </button>
+                                            </div>
+                                            <!-- Camera live preview -->
+                                            <div id="pick-inline-camera-section" style="display:none;">
+                                                <div style="position:relative;border-radius:8px;overflow:hidden;background:#000;margin-bottom:8px;">
+                                                    <video id="pick-inline-video" autoplay="autoplay" playsinline="playsinline" muted="muted" style="width:100%;display:block;max-height:280px;object-fit:cover;"></video>
+                                                </div>
+                                                <div style="display:flex;gap:8px;">
+                                                    <button id="pick-inline-capture-btn" class="btn btn-success btn-lg" style="flex:1;">
+                                                        <i class="fa fa-circle"></i> Chụp ảnh
+                                                    </button>
+                                                    <button id="pick-inline-close-cam-btn" class="btn btn-outline">
+                                                        <i class="fa fa-times"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <!-- Photo preview + confirm -->
+                                            <div id="pick-inline-preview-section" style="display:none;">
+                                                <img id="pick-inline-preview-img" style="width:100%;border-radius:8px;margin-bottom:8px;border:2px solid var(--success-color);" src="" alt=""/>
+                                                <div id="pick-inline-photo-result" class="alert" style="margin-bottom:8px;"></div>
+                                                <div style="display:flex;gap:8px;">
+                                                    <button id="pick-inline-confirm-btn" class="btn btn-success" style="flex:1;">
+                                                        <i class="fa fa-check"></i> Xác nhận ảnh
+                                                    </button>
+                                                    <button id="pick-inline-retake-btn" class="btn btn-outline">
+                                                        <i class="fa fa-redo"></i> Chụp lại
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Danh sách phiếu đã xác nhận + nút tiến hành giao -->
+                                    <div id="pick-confirmed-list" style="display:none; margin-top:12px;"></div>
                                 </div>
                             </div>
 
