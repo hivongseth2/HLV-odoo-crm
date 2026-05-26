@@ -259,6 +259,76 @@ class HLVMobileBarcodeController(http.Controller):
                         res['updated_product_id'] = last_product_id
             return res
 
+        # 1.5. Try to find package
+        package = request.env['stock.quant.package'].sudo().search([('name', '=', barcode)], limit=1)
+        if package:
+            # We found a package! Let's process the package contents in the picking.
+            # A. Check if the picking has a move line for this package_id
+            move_lines = picking.move_line_ids.filtered(lambda ml: ml.package_id == package and ml.state not in ['done', 'cancel'])
+            if move_lines:
+                processed_lines = []
+                for ml in move_lines:
+                    ml.quantity = ml.quantity_product_uom or ml.reserved_qty or 1.0
+                    processed_lines.append(ml.product_id.display_name)
+                return {
+                    'success': True,
+                    'product_name': f"Kiện hàng {package.name} (Chứa: {', '.join(processed_lines)})",
+                    'product_id': False,
+                }
+            
+            # B. If no move lines for this package, search for the products inside the package (quants)
+            quants = request.env['stock.quant'].sudo().search([('package_id', '=', package.id)])
+            if quants:
+                processed_products = []
+                for quant in quants:
+                    product_in_pkg = quant.product_id
+                    qty_in_pkg = quant.quantity
+                    if qty_in_pkg <= 0:
+                        continue
+                    
+                    # Find a move for this product in the picking
+                    move = picking.move_ids_without_package.filtered(
+                        lambda m: m.product_id == product_in_pkg and m.state not in ['done', 'cancel']
+                    )
+                    if move:
+                        move = move[0]
+                        # Check limit to prevent over-scanning
+                        current_qty_done = sum(ml.quantity for ml in move.move_line_ids)
+                        target_qty = move.product_uom_qty
+                        
+                        # In case we can scan, determine how much of this package qty we can accept
+                        acceptable_qty = qty_in_pkg
+                        if target_qty > 0.0 and current_qty_done + acceptable_qty > target_qty:
+                            acceptable_qty = max(0.0, target_qty - current_qty_done)
+                            
+                        if acceptable_qty <= 0:
+                            continue
+                            
+                        # Update or create move line
+                        move_line = move.move_line_ids.filtered(lambda ml: ml.quantity < ml.quantity_product_uom and not ml.result_package_id)
+                        if move_line:
+                            move_line[0].quantity += acceptable_qty
+                        else:
+                            request.env['stock.move.line'].create({
+                                'move_id': move.id,
+                                'picking_id': picking.id,
+                                'product_id': product_in_pkg.id,
+                                'product_uom_id': move.product_uom.id,
+                                'quantity': acceptable_qty,
+                                'location_id': picking.location_id.id,
+                                'location_dest_id': picking.location_dest_id.id,
+                            })
+                        processed_products.append(f"{acceptable_qty} x {product_in_pkg.display_name}")
+                
+                if processed_products:
+                    return {
+                        'success': True,
+                        'product_name': f"Kiện hàng {package.name} (Đã xử lý: {', '.join(processed_products)})",
+                        'product_id': False,
+                    }
+            
+            return {'error': _('Kiện hàng "%s" không chứa sản phẩm nào phù hợp với phiếu này.', package.name)}
+
         product = request.env['product.product'].sudo().search(['|', ('barcode', '=', barcode), ('default_code', '=', barcode)], limit=1)
         if not product:
             return {'error': _('Không tìm thấy mã vạch hợp lệ (Sản phẩm hoặc Vị trí).')}
