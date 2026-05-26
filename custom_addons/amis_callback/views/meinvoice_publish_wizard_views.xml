@@ -32,11 +32,16 @@
                     <button name="action_view_invoice" type="object"
                             string="Xem hóa đơn"
                             invisible="state not in ('submitted','accepted','rejected')"/>
-                    <button name="action_send_mail" type="object"
-                            string="Gửi email KH"
+                    <button name="action_send_mail_draft" type="object"
+                            string="Email bản nháp"
                             class="btn-secondary"
                             invisible="state == 'cancelled'"
-                            confirm="Gửi email hóa đơn này cho khách hàng?"/>
+                            confirm="Gửi email thông báo lập hóa đơn (bản nháp) cho khách hàng?"/>
+                    <button name="action_send_mail_published" type="object"
+                            string="Email bản chính"
+                            class="btn-secondary"
+                            invisible="state not in ('submitted','accepted')"
+                            confirm="Gửi email hóa đơn đã cấp mã (bản chính thức) cho khách hàng?"/>
                     <button name="action_open_send_mail_wizard" type="object"
                             string="Soạn email…"
                             invisible="state == 'cancelled'"/>
@@ -198,10 +203,14 @@
                 <button name="action_view_invoice" type="object" string="Xem HĐ"
                         icon="fa-eye"
                         invisible="state not in ('submitted','accepted','rejected')"/>
-                <button name="action_send_mail" type="object" string="Gửi mail"
-                        icon="fa-envelope"
+                <button name="action_send_mail_draft" type="object" string="Mail nháp"
+                        icon="fa-envelope-o"
                         invisible="state == 'cancelled'"
-                        confirm="Gửi email hóa đơn cho khách hàng?"/>
+                        confirm="Gửi email bản nháp?"/>
+                <button name="action_send_mail_published" type="object" string="Mail chính"
+                        icon="fa-envelope"
+                        invisible="state not in ('submitted','accepted')"
+                        confirm="Gửi email bản chính thức?"/>
                 <field name="mail_sent" string="Đã mail" optional="show" widget="boolean"/>
             </list>
         </field>
