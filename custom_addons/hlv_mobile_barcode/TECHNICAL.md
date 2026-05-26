@@ -78,6 +78,19 @@ hlv_mobile_barcode/
 - `/hlv_mobile_barcode/get_inventory_lookup`: Truy vấn `stock.quant` cho màn hình tra cứu, tự động xác định `warehouse_code` từ vị trí kho.
 - `/hlv_mobile_barcode/move_location`: Tạo lệnh `stock.picking` type Internal và xử lý tự động validate để di chuyển tồn kho.
 
+## Phân quyền quét Barcode di động (Mới)
+Để tăng tính tự động hóa và bảo mật tối đa, ứng dụng Mobile Barcode tích hợp hệ thống phân quyền quét kho độc lập, tự vận hành hoàn toàn bên trong module:
+* **Models**:
+  - `hlv.barcode.user.permission`: Định cấu hình người dùng (`res.users`) tại từng kho (`stock.warehouse`).
+  - `hlv.barcode.picking.permission`: Cấu hình quyền chi tiết cho từng loại phiếu quét (`IN`, `OUT`, `INT`, `PICK`, `PACK`, `STO`) với các cờ boolean: `can_view` (Xem/Quét), `can_edit` (Sửa/Quét hàng), `can_delete` (Xóa dòng), `can_confirm` (Xác nhận phiếu).
+* **Kiểm tra quyền**:
+  - Tự động kiểm tra quyền quét/xem phiếu (`can_view`) trong router `smart_scan` và `get_picking_data`.
+  - Tự động kiểm tra quyền quét hàng/sửa đổi số lượng (`can_edit`) trong `process_barcode` và `update_move_line_qty`.
+  - Tự động kiểm tra quyền xóa dòng (`can_delete`) trong `delete_move`.
+  - Tự động kiểm tra quyền xác nhận (`can_confirm`) trong `validate_picking`.
+* **Cấu hình & Tích hợp**:
+  - Managers có thể tự động sinh phân quyền quét mặc định bằng cách nhấp nút **"⚡ Tạo phân quyền cho tất cả"** hoặc cấu hình chi tiết thông qua trang cài đặt chính của Barcode App hoặc menu phụ ẩn (Developer Mode).
+
 ## Hướng dẫn mở rộng
 - Khi cần thêm loại mã vạch mới: Thêm logic tìm kiếm vào endpoint `smart_scan` ở `controllers/main.py`.
 - Khi cần thêm tính năng xử lý, có thể tạo thêm các component OWL trong `static/src/components` và import vào `barcode_app.js`.
