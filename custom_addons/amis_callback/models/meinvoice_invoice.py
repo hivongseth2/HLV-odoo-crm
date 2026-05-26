@@ -3,6 +3,8 @@ import json
 import logging
 import uuid
 
+from markupsafe import Markup, escape
+
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 
@@ -510,7 +512,7 @@ class MeinvoiceInvoice(models.Model):
         return template
 
     def _meinvoice_pdf_attachment(self):
-        """Tải PDF từ meInvoice và tạo ir.attachment đính kèm vào record."""
+        """Tải PDF hóa đơn đã phát hành từ meInvoice và tạo ir.attachment."""
         self.ensure_one()
         if not self.transaction_id:
             return self.env['ir.attachment']
@@ -532,6 +534,77 @@ class MeinvoiceInvoice(models.Model):
         return self.env['ir.attachment'].sudo().create({
             'name': fname,
             'datas': base64.b64encode(pdf_bytes),
+            'res_model': self._name,
+            'res_id': self.id,
+            'mimetype': 'application/pdf',
+        })
+
+    def _meinvoice_draft_pdf_attachment(self):
+        """Tải PDF bản xem trước (nháp) từ meInvoice /invoice/unpublishview và tạo ir.attachment."""
+        self.ensure_one()
+        if not self.invoice_data_json:
+            return self.env['ir.attachment']
+        config = self.env['amis.callback.config'].sudo().search([], limit=1)
+        if not config or not config.meinvoice_mail_attach_pdf:
+            return self.env['ir.attachment']
+        try:
+            invoice_data = json.loads(self.invoice_data_json)
+        except Exception:
+            return self.env['ir.attachment']
+
+        # Patch buyer fields (giống action_preview_invoice)
+        inv_date = self.inv_date
+        new_series = (self.inv_series or '').strip()
+        invoice_data['InvSeries'] = new_series
+        invoice_data['InvDate'] = (
+            inv_date.strftime('%Y-%m-%d') if inv_date else invoice_data.get('InvDate', '')
+        )
+        invoice_data['PaymentMethodName'] = (self.payment_method or 'TM/CK').strip()
+        invoice_data['BuyerLegalName'] = (self.buyer_legal_name or '').strip()
+        invoice_data['BuyerFullName'] = (self.buyer_full_name or '').strip()
+        invoice_data['BuyerTaxCode'] = (self.buyer_tax_code or '').strip()
+        invoice_data['BuyerAddress'] = (self.buyer_address or '').strip()
+        invoice_data['BuyerPhoneNumber'] = (self.buyer_phone or '').strip()
+        invoice_data['BuyerEmail'] = (self.buyer_email or '').strip()
+        invoice_data['IsInvoiceCalculatingMachine'] = (
+            len(new_series) >= 5 and new_series[4].upper() == 'M'
+        )
+
+        try:
+            result = config._post_meinvoice('/invoice/unpublishview', payload=invoice_data)
+            view_url = result.get('data') or result.get('Data') or ''
+            if not view_url:
+                _logger.info('meInvoice: unpublishview không trả về URL, bỏ qua đính kèm PDF nháp.')
+                return self.env['ir.attachment']
+        except Exception:
+            _logger.exception('meInvoice: lấy URL preview nháp thất bại.')
+            return self.env['ir.attachment']
+
+        try:
+            import requests as _req
+            resp = _req.get(view_url, timeout=30)
+            resp.raise_for_status()
+            content = resp.content or b''
+            # Chỉ đính kèm nếu server trả về PDF
+            content_type = resp.headers.get('Content-Type', '')
+            if 'pdf' not in content_type.lower() and not content.startswith(b'%PDF'):
+                _logger.info(
+                    'meInvoice: unpublishview URL không trả về PDF (Content-Type=%s), bỏ qua.',
+                    content_type,
+                )
+                return self.env['ir.attachment']
+        except Exception:
+            _logger.exception('meInvoice: tải PDF bản nháp thất bại từ URL %s', view_url)
+            return self.env['ir.attachment']
+
+        if not content:
+            return self.env['ir.attachment']
+
+        import base64
+        fname = 'XemTruocHoaDon_%s.pdf' % (self.inv_series or 'nhap').replace('/', '-')
+        return self.env['ir.attachment'].sudo().create({
+            'name': fname,
+            'datas': base64.b64encode(content),
             'res_model': self._name,
             'res_id': self.id,
             'mimetype': 'application/pdf',
@@ -571,6 +644,10 @@ class MeinvoiceInvoice(models.Model):
                 att = rec._meinvoice_pdf_attachment()
                 if att:
                     attachment_ids = [att.id]
+            elif mode_ == 'draft':
+                att = rec._meinvoice_draft_pdf_attachment()
+                if att:
+                    attachment_ids = [att.id]
 
             email_values = {
                 'email_to': email_to,
@@ -578,17 +655,27 @@ class MeinvoiceInvoice(models.Model):
             }
             if email_cc:
                 email_values['email_cc'] = email_cc
-            if attachment_ids:
-                email_values['attachment_ids'] = [(4, aid) for aid in attachment_ids]
 
             try:
+                # Bước 1: tạo mail.mail chưa gửi
                 mail_id = template.sudo().send_mail(
                     rec.id,
-                    force_send=True,
+                    force_send=False,
                     raise_exception=True,
                     email_values=email_values,
                 )
-                sent_ok = bool(mail_id)
+                if not mail_id:
+                    raise UserError('Không tạo được mail.mail từ template.')
+
+                # Bước 2: gắn attachment PDF (nếu có) vào mail đã tạo
+                if attachment_ids:
+                    self.env['mail.mail'].sudo().browse(mail_id).write({
+                        'attachment_ids': [(4, aid) for aid in attachment_ids],
+                    })
+
+                # Bước 3: gửi
+                self.env['mail.mail'].sudo().browse(mail_id).send(raise_exception=False)
+                sent_ok = True
             except Exception:
                 _logger.exception('meInvoice: gửi mail HĐ id=%s thất bại.', rec.id)
                 if raise_on_error:
@@ -606,16 +693,16 @@ class MeinvoiceInvoice(models.Model):
             try:
                 if sent_ok:
                     rec.message_post(
-                        body='Đã gửi email HĐĐT (%s) tới <b>%s</b>%s.' % (
+                        body=Markup('Đã gửi email HĐĐT (%s) tới <b>%s</b>%s.') % (
                             'bản nháp' if mode_ == 'draft' else 'đã cấp mã',
-                            email_to,
-                            (' — CC: ' + email_cc) if email_cc else '',
+                            escape(email_to),
+                            (Markup(' — CC: ') + escape(email_cc)) if email_cc else '',
                         ),
                         subtype_xmlid='mail.mt_note',
                     )
                 else:
                     rec.message_post(
-                        body='Gửi email HĐĐT tới %s thất bại — xem log.' % email_to,
+                        body=Markup('Gửi email HĐĐT tới <b>%s</b> thất bại — xem log.') % escape(email_to),
                         subtype_xmlid='mail.mt_note',
                     )
             except Exception:
