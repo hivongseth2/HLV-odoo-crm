@@ -715,8 +715,8 @@ function _spLoadCache(){
 }
 var _spCacheRestored=false;
 
-function load(append){
-  if(!_spCacheRestored)showLoading();
+function load(append,silent){
+  if(!_spCacheRestored&&!silent)showLoading();
   _spCacheRestored=false;
   var offset=append?S.orders.length:0;
   var lim=append?100:S.limit;
@@ -1544,7 +1544,7 @@ function pollChanges(){
     if(_lastFingerprint===null){_lastFingerprint=fp;return;}
     if(fp!==_lastFingerprint){
       _lastFingerprint=fp;
-      load(false);
+      load(false,true);
       // Show a brief toast notification
       var t=document.createElement('div');
       t.style.cssText='position:fixed;bottom:24px;left:24px;z-index:3000;background:#3182ce;color:#fff;padding:10px 18px;border-radius:4px;box-shadow:0 4px 12px rgba(0,0,0,.2);font-size:.85rem;font-weight:600;transition:opacity .3s';
