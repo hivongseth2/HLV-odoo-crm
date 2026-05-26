@@ -25,7 +25,7 @@
     <menuitem id="menu_hlv_warehouse_permission_debug"
               name="Phân quyền quét kho"
               parent="menu_hlv_mobile_barcode_root"
-              action="hlv_warehouse_permission.action_warehouse_permission"
+              action="hlv_mobile_barcode.action_barcode_permission"
               groups="base.group_no_one"
               sequence="90"/>
 </odoo>
