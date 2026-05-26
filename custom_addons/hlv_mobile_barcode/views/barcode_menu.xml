@@ -20,4 +20,12 @@
               parent="stock.menu_stock_root"
               action="action_hlv_mobile_barcode"
               sequence="1"/>
+
+    <!-- Menu Item for Warehouse Permissions (Only visible when Odoo Debug Mode is turned on) -->
+    <menuitem id="menu_hlv_warehouse_permission_debug"
+              name="Phân quyền quét kho"
+              parent="menu_hlv_mobile_barcode_root"
+              action="hlv_warehouse_permission.action_warehouse_permission"
+              groups="base.group_no_one"
+              sequence="90"/>
 </odoo>

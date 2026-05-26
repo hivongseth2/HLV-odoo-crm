@@ -11,7 +11,7 @@ Mobile Barcode Scanner
 - Support Picking, Internal Transfer, Location Moves, Put in Pack
     """,
     "author": "HLV",
-    "depends": ["base", "stock", "web"],
+    "depends": ["base", "stock", "web", "hlv_warehouse_permission"],
     "data": [
         "views/res_config_settings_views.xml",
         "views/barcode_menu.xml",

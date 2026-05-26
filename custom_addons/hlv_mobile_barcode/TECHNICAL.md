@@ -59,10 +59,17 @@ hlv_mobile_barcode/
   * Quét hoặc tra cứu Kiện hàng/Gói hàng (`stock.quant.package`) tự động phân tích vị trí hiện tại của gói hoặc các `stock.quant` chứa bên trong để truy xuất đúng mã kho thực tế (`warehouse_code`), cập nhật tiêu đề Header thay vì hiển thị "Kho HLV" tĩnh.
   * Tự động cắt bỏ các khoảng trắng thừa (`.strip()`) ở hai đầu chuỗi quét ở tất cả các router backend, ngăn lỗi do máy quét cầm tay tự động nối thêm phím Enter/Tab.
 - **Dynamic Warehouse Header**: API tự động trả về `warehouse_code` thực tế của phiếu kho (`picking.picking_type_id.warehouse_id.code` hoặc `location.warehouse_id.code`), hiển thị động lên Header dạng "Kho KBC", "Kho TSN"... thay vì "Kho HLV" tĩnh.
+- **Liên kết & Chuyển đổi trực tiếp Quy trình 2 bước (INT -> IN)**:
+  - Khi hoàn thành hoặc quét một phiếu chuyển kho Bước 1 (`INT` - Internal Transfer) có trạng thái `done` (hoàn tất), ứng dụng hiển thị chi tiết thông tin phiếu và cung cấp một nút bấm nổi bật **"Chuyển sang Bước 2 (<Tên phiếu bước 2>)"** ngay phía trên chân trang.
+  - *Cơ chế tìm kiếm liên kết*: Backend tự động tìm kiếm phiếu Bước 2 (`IN`) thông qua 3 lớp fallback:
+    1. **Chuỗi dịch chuyển (Stock Moves Chain)**: Sử dụng quan hệ `move_dest_ids.picking_id` để tìm các stock.picking đích hợp lệ.
+    2. **Nhóm cung ứng (Procurement Group)**: Tìm kiếm các stock.picking khác có cùng `group_id` và có mã sequence chứa ký tự `'IN'` hoặc thuộc loại `incoming`/`internal`.
+    3. **Nguồn gốc tài liệu (Origin)**: Tìm kiếm các phiếu có trường `origin` khớp chính xác với tên của phiếu Bước 1.
+  - Khi người dùng nhấp nút chuyển đổi, ứng dụng thực hiện giải phóng camera cũ, lưu lịch sử duyệt (`pushHistory()`), cập nhật trạng thái mục tiêu và kích hoạt lại camera trên phiếu Bước 2 mới một cách mượt mà không bị lỗi gắn kết DOM.
 
 ## API / Controllers
 - `/hlv_mobile_barcode/smart_scan`: Đầu vào `barcode`. Trả về đối tượng khớp đầu tiên theo thứ tự ưu tiên: Picking > Product > Location > Package, đồng thời trả kèm thêm trường `warehouse_code`.
-- `/hlv_mobile_barcode/get_picking_data`: Trả về JSON tree chi tiết các line của một Picking để hiển thị, bao gồm cả `warehouse_code`.
+- `/hlv_mobile_barcode/get_picking_data`: Trả về JSON tree chi tiết các line của một Picking để hiển thị, bao gồm cả `warehouse_code`, đồng thời tự động tính toán và trả về `linked_picking_id` và `linked_picking_name` nếu có phiếu liên kết của bước tiếp theo trong quy trình chuyển kho 2 bước.
 - `/hlv_mobile_barcode/process_barcode`: Cập nhật `qty_done` khi quét sản phẩm nằm trong picking.
 - `/hlv_mobile_barcode/put_in_pack`: Đóng gói các dòng `qty_done` > 0 thành Package. Hỗ trợ trả cờ `print_after_pack` theo cấu hình.
 - `/hlv_mobile_barcode/get_inventory_lookup`: Truy vấn `stock.quant` cho màn hình tra cứu, tự động xác định `warehouse_code` từ vị trí kho.
