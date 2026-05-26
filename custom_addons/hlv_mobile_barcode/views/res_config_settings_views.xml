@@ -14,6 +14,15 @@
                         <setting string="Print after Packing" help="Enable option to print label after Put in Pack">
                             <field name="hlv_barcode_print_after_pack"/>
                         </setting>
+                        <setting string="Phân quyền kho hàng" help="Phân quyền chi tiết cho từng người dùng tại từng kho">
+                            <div class="mt-2">
+                                <button name="%(hlv_warehouse_permission.action_warehouse_permission)d"
+                                        type="action"
+                                        string="Cấu hình phân quyền kho"
+                                        class="btn-link"
+                                        icon="fa-arrow-right"/>
+                            </div>
+                        </setting>
                     </block>
                 </app>
             </xpath>
