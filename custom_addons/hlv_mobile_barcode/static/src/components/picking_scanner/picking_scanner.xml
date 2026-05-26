@@ -30,7 +30,7 @@
                                     <div class="item-info">
                                         <div class="item-name"><t t-esc="line.product_name"/></div>
                                         <div style="font-size: 0.8rem; margin-top: 3px; color: var(--text-muted); display: flex; align-items: center; gap: 4px;">
-                                            <i class="fa fa-barcode"></i> <t t-esc="line.product_barcode"/>
+                                            <i class="fa fa-barcode"></i> <span class="no-copy"><t t-esc="line.product_barcode"/></span>
                                             <span t-if="line.location_name" style="margin-left: 6px; color: var(--info-color); font-weight: 500;">
                                                 <i class="fa fa-map-marker-alt"></i> <t t-esc="line.location_name"/>
                                             </span>
