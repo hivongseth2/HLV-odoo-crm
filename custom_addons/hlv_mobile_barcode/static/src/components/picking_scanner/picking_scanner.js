@@ -138,11 +138,13 @@ export class PickingScanner extends Component {
             });
             if (res.error) {
                 this.notification.add(res.error, { type: "danger" });
+                ev.target.value = line.qty_done;
             } else {
                 line.qty_done = res.new_qty;
             }
         } catch (e) {
             this.notification.add("Lỗi kết nối", { type: "danger" });
+            ev.target.value = line.qty_done;
         } finally {
             this.isProcessingQty = false;
         }
