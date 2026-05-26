@@ -271,17 +271,19 @@
                                                     <i class="fa fa-forward"></i> Bỏ qua ảnh cho phiếu này
                                                 </button>
                                             </div>
-                                            <!-- Camera live preview -->
-                                            <div id="pick-inline-camera-section" style="display:none;">
-                                                <div style="position:relative;border-radius:8px;overflow:hidden;background:#000;margin-bottom:8px;">
-                                                    <video id="pick-inline-video" autoplay="autoplay" playsinline="playsinline" muted="muted" style="width:100%;display:block;max-height:280px;object-fit:cover;"></video>
+                                            <!-- Camera fullscreen overlay -->
+                                            <div id="pick-inline-camera-section" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#000; z-index:9999; flex-direction:column;">
+                                                <video id="pick-inline-video" autoplay="autoplay" playsinline="playsinline" muted="muted" style="width:100%;height:100%;object-fit:cover;display:block;"></video>
+                                                <div style="position:absolute;top:0;left:0;right:0;background:rgba(0,0,0,0.65);padding:14px 16px;color:#fff;">
+                                                    <div style="font-weight:700;font-size:15px;" id="pick-inline-cam-label">Chụp ảnh phiếu</div>
+                                                    <div style="font-size:12px;opacity:0.75;" id="pick-inline-cam-sublabel"></div>
                                                 </div>
-                                                <div style="display:flex;gap:8px;">
-                                                    <button id="pick-inline-capture-btn" class="btn btn-success btn-lg" style="flex:1;">
-                                                        <i class="fa fa-circle"></i> Chụp ảnh
-                                                    </button>
-                                                    <button id="pick-inline-close-cam-btn" class="btn btn-outline">
+                                                <div style="position:absolute;bottom:0;left:0;right:0;padding:20px 16px;display:flex;gap:12px;justify-content:center;background:rgba(0,0,0,0.5);">
+                                                    <button id="pick-inline-close-cam-btn" class="btn btn-outline" style="color:#fff;border-color:rgba(255,255,255,0.5);min-width:56px;">
                                                         <i class="fa fa-times"></i>
+                                                    </button>
+                                                    <button id="pick-inline-capture-btn" class="btn btn-success btn-lg" style="flex:1;max-width:240px;font-size:18px;border-radius:50px;">
+                                                        <i class="fa fa-circle"></i> Chụp
                                                     </button>
                                                 </div>
                                             </div>

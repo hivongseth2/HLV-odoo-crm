@@ -667,8 +667,12 @@ class BarcodeShipper {
             this._pickInlineCamStream = stream;
             const video = document.getElementById('pick-inline-video');
             if (video) { video.srcObject = stream; await video.play(); }
+            const camLabel = document.getElementById('pick-inline-cam-label');
+            const camSub = document.getElementById('pick-inline-cam-sublabel');
+            if (camLabel && this._pickCurrentItem) camLabel.textContent = this._pickCurrentItem.name;
+            if (camSub && this._pickCurrentItem) camSub.textContent = (this._pickCurrentItem.soName && this._pickCurrentItem.soName !== 'Khác') ? `Đơn hàng: ${this._pickCurrentItem.soName}` : '';
             document.getElementById('pick-inline-open-section').style.display = 'none';
-            document.getElementById('pick-inline-camera-section').style.display = 'block';
+            document.getElementById('pick-inline-camera-section').style.display = 'flex';
         } catch (err) {
             console.error('[PickInlineCam]', err);
             document.getElementById('pick-inline-open-section').style.display = 'block';
@@ -726,9 +730,11 @@ class BarcodeShipper {
         this._startPickInlinePhoto({ id: entry.pickingId, name: entry.pickingName, soName: entry.soName });
     }
 
-    // Bỏ chọn / xóa phiếu khỏi danh sách (click vào icon tick)
-    _removePickFromList(pickingId) {
-        this._pickPhotoList = this._pickPhotoList.filter(p => p.pickingId !== pickingId);
+    // Toggle skip – bỏ qua / khôi phục phiếu (click vào icon tick)
+    _toggleSkipPick(pickingId) {
+        const entry = this._pickPhotoList.find(p => p.pickingId === pickingId);
+        if (!entry) return;
+        entry.skipped = !entry.skipped;
         this._renderPickConfirmedList();
     }
 
@@ -752,42 +758,101 @@ class BarcodeShipper {
             container.style.display = 'none';
             return;
         }
+        const deliverCount = this._pickPhotoList.filter(p => !p.skipped).length;
         const items = this._pickPhotoList.map(p => {
             const hasPhoto = !!p.blob;
-            // Thumbnail: click để chụp lại
+            const isSkipped = !!p.skipped;
+            // Thumbnail: có ảnh → click xem preview; không ảnh + không skip → click chụp
+            const thumbClick = hasPhoto
+                ? `onclick="window.barcodeShipper._previewPickPhoto(${p.pickingId})"`
+                : (!isSkipped ? `onclick="window.barcodeShipper._retakePickPhoto(${p.pickingId})"` : '');
             const thumbHtml = hasPhoto
-                ? `<img src="${URL.createObjectURL(p.blob)}" title="Click để chụp lại" onclick="window.barcodeShipper._retakePickPhoto(${p.pickingId})" style="width:44px;height:44px;object-fit:cover;border-radius:6px;border:2px solid #4caf50;flex-shrink:0;cursor:pointer;" />`
-                : `<div title="Click để chụp ảnh" onclick="window.barcodeShipper._retakePickPhoto(${p.pickingId})" style="width:44px;height:44px;border-radius:6px;border:2px dashed #ffa726;display:flex;align-items:center;justify-content:center;background:#fff3e0;flex-shrink:0;cursor:pointer;"><i class="fa fa-camera" style="color:#ffa726;"></i></div>`;
-            // Tick: click để bỏ chọn
-            const tickHtml = `<i class="fa ${hasPhoto ? 'fa-check-circle' : 'fa-exclamation-circle'}" title="Click để bỏ chọn" onclick="window.barcodeShipper._removePickFromList(${p.pickingId})" style="color:${hasPhoto ? '#4caf50' : '#ff9800'};font-size:22px;flex-shrink:0;cursor:pointer;"></i>`;
-            return `<div style="display:flex;align-items:center;gap:10px;padding:8px;background:#fff;border-radius:8px;margin-bottom:6px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+                ? `<img src="${URL.createObjectURL(p.blob)}" title="${isSkipped ? 'Xem ảnh' : 'Xem / chụp lại'}" ${thumbClick} style="width:44px;height:44px;object-fit:cover;border-radius:6px;border:2px solid ${isSkipped ? '#ddd' : '#4caf50'};flex-shrink:0;cursor:pointer;opacity:${isSkipped ? '0.35' : '1'};" />`
+                : `<div title="${isSkipped ? '' : 'Click để chụp ảnh'}" ${thumbClick} style="width:44px;height:44px;border-radius:6px;border:2px dashed ${isSkipped ? '#e0e0e0' : '#ffa726'};display:flex;align-items:center;justify-content:center;background:${isSkipped ? '#f9f9f9' : '#fff3e0'};flex-shrink:0;cursor:${isSkipped ? 'default' : 'pointer'};"><i class="fa fa-camera" style="color:${isSkipped ? '#ccc' : '#ffa726'};"></i></div>`;
+            // Tick / Ban – click để toggle skip
+            const tickHtml = isSkipped
+                ? `<i class="fa fa-ban" title="Đang bỏ qua – click để khôi phục" onclick="window.barcodeShipper._toggleSkipPick(${p.pickingId})" style="color:#e53935;font-size:22px;flex-shrink:0;cursor:pointer;"></i>`
+                : `<i class="fa fa-check-circle" title="Click để bỏ qua phiếu này" onclick="window.barcodeShipper._toggleSkipPick(${p.pickingId})" style="color:${hasPhoto ? '#4caf50' : '#ff9800'};font-size:22px;flex-shrink:0;cursor:pointer;"></i>`;
+            return `<div style="display:flex;align-items:center;gap:10px;padding:8px;background:${isSkipped ? '#f7f7f7' : '#fff'};border-radius:8px;margin-bottom:6px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
                 ${thumbHtml}
                 <div style="flex:1;min-width:0;">
-                    <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.pickingName}</div>
-                    ${p.soName && p.soName !== 'Khác' ? `<div style="font-size:11px;color:#888;">${p.soName}</div>` : ''}
+                    <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${isSkipped ? 'text-decoration:line-through;color:#bbb;' : ''}">${p.pickingName}</div>
+                    ${p.soName && p.soName !== 'Khác' ? `<div style="font-size:11px;color:${isSkipped ? '#ccc' : '#888'};">${p.soName}</div>` : ''}
+                    ${isSkipped ? '<div style="font-size:11px;color:#e53935;font-style:italic;">Không giao</div>' : ''}
                 </div>
                 ${tickHtml}
             </div>`;
         }).join('');
-
+        const headerText = deliverCount < this._pickPhotoList.length
+            ? `✓ ${deliverCount}/${this._pickPhotoList.length} phiếu sẽ giao`
+            : `✓ ${this._pickPhotoList.length} phiếu đã xác nhận`;
         container.innerHTML = `
             <div style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">
-                ✓ ${this._pickPhotoList.length} phiếu đã xác nhận
+                ${headerText}
             </div>
             ${items}
-            <button id="pick-proceed-btn" class="btn btn-success btn-lg btn-block" style="margin-top:8px;">
-                <i class="fa fa-arrow-right"></i> Tiến hành giao hàng (${this._pickPhotoList.length} phiếu)
-            </button>
+            ${deliverCount > 0
+                ? `<button id="pick-proceed-btn" class="btn btn-success btn-lg btn-block" style="margin-top:8px;"><i class="fa fa-arrow-right"></i> Tiến hành giao hàng (${deliverCount} phiếu)</button>`
+                : `<div class="alert alert-warning" style="margin-top:8px;">Tất cả phiếu đang bỏ qua. Quét thêm hoặc khôi phục phiếu.</div>`}
         `;
         container.style.display = 'block';
-
         document.getElementById('pick-proceed-btn')?.addEventListener('click', () => this._proceedToItemScan());
     }
 
+    // Xem trước ảnh đã chụp + options: OK / chụp lại / không giao
+    _previewPickPhoto(pickingId) {
+        const entry = this._pickPhotoList.find(p => p.pickingId === pickingId);
+        if (!entry || !entry.blob) return;
+        const url = URL.createObjectURL(entry.blob);
+        let modal = document.getElementById('pick-photo-preview-modal');
+        if (modal) modal.remove();
+        modal = document.createElement('div');
+        modal.id = 'pick-photo-preview-modal';
+        modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.93);z-index:10000;display:flex;flex-direction:column;';
+        modal.innerHTML = `
+            <div style="padding:14px 16px;background:rgba(0,0,0,0.6);color:#fff;flex-shrink:0;">
+                <div style="font-weight:700;font-size:15px;">${entry.pickingName}</div>
+                ${entry.soName && entry.soName !== 'Khác' ? `<div style="font-size:12px;opacity:0.7;">${entry.soName}</div>` : ''}
+            </div>
+            <div style="flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:8px;">
+                <img src="${url}" style="max-width:100%;max-height:100%;object-fit:contain;border-radius:6px;" />
+            </div>
+            <div style="padding:16px;display:flex;gap:10px;background:rgba(0,0,0,0.6);flex-shrink:0;">
+                <button onclick="window.barcodeShipper._closePhotoPreview()" class="btn btn-success" style="flex:1;">
+                    <i class="fa fa-check"></i> OK
+                </button>
+                <button onclick="window.barcodeShipper._retakePickPhotoFromPreview(${pickingId})" class="btn btn-outline" style="flex:1;color:#fff;border-color:rgba(255,255,255,0.5);">
+                    <i class="fa fa-redo"></i> Chụp lại
+                </button>
+                <button onclick="window.barcodeShipper._skipPickFromPreview(${pickingId})" class="btn btn-danger" style="flex:1;">
+                    <i class="fa fa-ban"></i> Không giao
+                </button>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+
+    _closePhotoPreview() {
+        const modal = document.getElementById('pick-photo-preview-modal');
+        if (modal) modal.remove();
+    }
+
+    _retakePickPhotoFromPreview(pickingId) {
+        this._closePhotoPreview();
+        this._retakePickPhoto(pickingId);
+    }
+
+    _skipPickFromPreview(pickingId) {
+        this._closePhotoPreview();
+        const entry = this._pickPhotoList.find(p => p.pickingId === pickingId);
+        if (entry) { entry.skipped = true; }
+        this._renderPickConfirmedList();
+    }
+
     async _proceedToItemScan() {
-        const pickingIds = this._pickPhotoList.map(p => p.pickingId);
+        const pickingIds = this._pickPhotoList.filter(p => !p.skipped).map(p => p.pickingId);
         if (pickingIds.length === 0) {
-            this.showMessage('pick-result', 'Chưa có phiếu nào.', 'danger');
+            this.showMessage('pick-result', 'Chưa có phiếu nào để giao.', 'danger');
             return;
         }
         await this.loadMultipleOutDetails(pickingIds);
@@ -1262,7 +1327,7 @@ class BarcodeShipper {
         if (!confirm(`Xác nhận hoàn tất ${pickingIds.length} đơn hàng?`)) return;
 
         // Upload photos already captured at pick-scan step
-        const photosToUpload = (this._pickPhotoList || []).filter(p => p.blob);
+        const photosToUpload = (this._pickPhotoList || []).filter(p => p.blob && !p.skipped);
         const completeBtn = document.getElementById('complete-all-btn');
         if (completeBtn) { completeBtn.disabled = true; completeBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Đang xử lý...'; }
 
