@@ -115,11 +115,13 @@ export class PickingScanner extends Component {
                 qty_change: change
             });
             if (res.error) {
+                this.playSound('error');
                 this.notification.add(res.error, { type: "danger" });
             } else {
                 line.qty_done = res.new_qty;
             }
         } catch (e) {
+            this.playSound('error');
             this.notification.add("Lỗi kết nối", { type: "danger" });
         } finally {
             this.isProcessingQty = false;
@@ -137,12 +139,14 @@ export class PickingScanner extends Component {
                 new_qty: newVal
             });
             if (res.error) {
+                this.playSound('error');
                 this.notification.add(res.error, { type: "danger" });
                 ev.target.value = line.qty_done;
             } else {
                 line.qty_done = res.new_qty;
             }
         } catch (e) {
+            this.playSound('error');
             this.notification.add("Lỗi kết nối", { type: "danger" });
             ev.target.value = line.qty_done;
         } finally {
@@ -204,5 +208,15 @@ export class PickingScanner extends Component {
         } catch (e) {
             this.notification.add("Server error", { type: "danger" });
         }
+    }
+
+    playSound(type) {
+        try {
+            const audioPath = type === 'success' 
+                ? '/custom_barcode_scan_redirect/static/src/sound/success.mp3' 
+                : '/custom_barcode_scan_redirect/static/src/sound/error.mp3';
+            const audio = new Audio(audioPath);
+            audio.play().catch(e => console.error("Audio error:", e));
+        } catch (e) {}
     }
 }
