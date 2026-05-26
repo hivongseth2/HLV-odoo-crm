@@ -202,6 +202,11 @@ class HLVMobileBarcodeController(http.Controller):
         else:
             move = move[0]
 
+        # Check limit to prevent over-scanning
+        current_qty_done = sum(ml.quantity for ml in move.move_line_ids)
+        if move.product_uom_qty > 0.0 and current_qty_done + 1 > move.product_uom_qty:
+            return {'error': _('Sản phẩm "%s" đã quét đủ số lượng yêu cầu (%g/%g). Không thể quét thêm!', product.display_name, current_qty_done, move.product_uom_qty)}
+
         # In Odoo 17/18, qty_done is replaced by quantity
         move_line = move.move_line_ids.filtered(lambda ml: ml.quantity < ml.quantity_product_uom and not ml.result_package_id)
         
@@ -273,6 +278,11 @@ class HLVMobileBarcodeController(http.Controller):
 
         if new_val < 0:
             new_val = 0
+
+        # Check limit to prevent over-scanning/updating
+        other_lines_qty = sum(ml.quantity for ml in move.move_line_ids if ml.id != move_line.id)
+        if move.product_uom_qty > 0.0 and (new_val + other_lines_qty) > move.product_uom_qty:
+            return {'error': _('Số lượng vượt quá yêu cầu cho phép (%g/%g).', (new_val + other_lines_qty), move.product_uom_qty)}
 
         move_line.quantity = new_val
         
