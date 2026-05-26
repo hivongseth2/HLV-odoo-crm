@@ -600,21 +600,24 @@ class MeinvoiceInvoice(models.Model):
         try:
             import requests as _req
             _logger.info('meInvoice: fetching draft PDF URL: %s', view_url)
+            # Dùng Bearer token giống các API call khác; URL portal cần auth token
+            try:
+                _auth_headers = config._get_meinvoice_headers()
+                _auth_headers.pop('Content-Type', None)  # không cần cho GET
+            except Exception:
+                _auth_headers = {}
             resp = _req.get(
                 view_url,
                 timeout=30,
                 allow_redirects=True,
-                headers={
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                    'Accept': 'application/pdf,application/octet-stream,*/*',
-                },
+                headers=_auth_headers,
             )
             resp.raise_for_status()
             content = resp.content or b''
             content_type = resp.headers.get('Content-Type', '')
             _logger.info(
-                'meInvoice: draft PDF response — final_url=%s status=%s Content-Type=%s Content-Length=%s first_bytes=%s',
-                resp.url, resp.status_code, content_type, len(content),
+                'meInvoice: draft PDF response — status=%s Content-Type=%s Content-Length=%s first_bytes=%s',
+                resp.status_code, content_type, len(content),
                 content[:16].hex() if content else '(empty)',
             )
             if 'pdf' not in content_type.lower() and not content.startswith(b'%PDF'):
