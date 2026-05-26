@@ -863,7 +863,7 @@ class MeinvoiceInvoice(models.Model):
             'default_use_template': bool(template),
             'default_template_id': template.id if template else False,
             'default_composition_mode': 'comment',
-            'default_email_layout_xmlid': 'mail.mail_notification_light',
+            'default_email_layout_xmlid': False,
             'default_partner_ids': [],
             'default_email_to': (self.buyer_email or '').strip(),
             'default_email_cc': (config.meinvoice_mail_cc or '').strip(),
