@@ -490,6 +490,20 @@ class MeinvoiceInvoice(models.Model):
             _logger.exception('meInvoice: lấy URL preview nháp thất bại.')
             return self.env['ir.attachment']
 
+        # meInvoice trả về URL có Viewer=1 → server trả HTML viewer, không phải raw PDF.
+        # Bỏ tham số đó để lấy file PDF trực tiếp.
+        try:
+            from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+            _parsed = urlparse(view_url)
+            _qs = parse_qs(_parsed.query, keep_blank_values=True)
+            _qs.pop('Viewer', None)
+            _qs.pop('viewer', None)
+            view_url = urlunparse(_parsed._replace(
+                query=urlencode({k: v[0] for k, v in _qs.items()})
+            ))
+        except Exception:
+            pass  # giữ URL gốc nếu parse lỗi
+
         try:
             import requests as _req
             resp = _req.get(view_url, timeout=30)
@@ -525,19 +539,96 @@ class MeinvoiceInvoice(models.Model):
 
         Args:
             mode: 'draft' hoặc 'published'. None → tự xác định theo trạng thái.
-            raise_on_error: True → raise UserError khi thiếu cấu hình/email.
+            raise_on_error: True → raise UserError khi thiếu cấu hình/email (chỉ áp dụng
+                            cho published; draft luôn bỏ qua nếu không có email).
+
+        Returns:
+            dict với keys 'sent', 'skipped', 'failed' — mỗi key là list id bản ghi.
+
+        Context:
+            meinvoice_mail_queue_id: id của meinvoice.mail.queue để cập nhật thay vì tạo mới
+                                     (dùng khi retry từ queue).
         """
         from datetime import datetime as _dt
+
+        def _upsert_queue(rec, mode_, email_to):
+            """Tạo queue entry mới hoặc cập nhật entry cũ (khi retry)."""
+            queue_id = self.env.context.get('meinvoice_mail_queue_id')
+            Queue = self.env['meinvoice.mail.queue'].sudo()
+            if queue_id:
+                entry = Queue.browse(queue_id)
+                if entry.exists():
+                    entry.write({
+                        'status': 'pending',
+                        'email_to': email_to or False,
+                        'retry_count': entry.retry_count + 1,
+                        'reason': False,
+                    })
+                    return entry
+            return Queue.create({
+                'invoice_id': rec.id,
+                'mode': mode_,
+                'email_to': email_to or False,
+                'status': 'pending',
+            })
+
+        summary = {'sent': [], 'skipped': [], 'failed': []}
+
         for rec in self:
             mode_ = mode or rec._get_mail_mode()
             email_to = (rec.buyer_email or '').strip()
+
+            # ── Tạo / lấy queue entry ─────────────────────────────────────
+            queue_entry = _upsert_queue(rec, mode_, email_to)
+
+            # ── Kiểm tra email ────────────────────────────────────────────
             if not email_to:
-                if raise_on_error:
-                    raise UserError('Khách hàng chưa có email — không thể gửi.')
-                _logger.info('meInvoice: bỏ qua gửi mail cho HĐ id=%s (không có email).', rec.id)
-                continue
+                if mode_ == 'draft':
+                    reason = 'Không có email khách hàng'
+                    queue_entry.write({'status': 'skipped', 'reason': reason})
+                    _logger.info('meInvoice: bỏ qua gửi mail (nháp) HĐ id=%s — không có email.', rec.id)
+                    summary['skipped'].append(rec.id)
+                    try:
+                        rec.message_post(
+                            body=Markup('Bỏ qua gửi email bản nháp — khách hàng chưa có địa chỉ email.'),
+                            subtype_xmlid='mail.mt_note',
+                        )
+                    except Exception:
+                        pass
+                    continue
+                else:
+                    reason = 'Không có email khách hàng'
+                    queue_entry.write({'status': 'failed', 'reason': reason})
+                    _logger.info('meInvoice: gửi mail (published) HĐ id=%s thất bại — không có email.', rec.id)
+                    summary['failed'].append(rec.id)
+                    try:
+                        rec.message_post(
+                            body=Markup('Gửi email bản chính thức <b>thất bại</b> — khách hàng chưa có địa chỉ email.'),
+                            subtype_xmlid='mail.mt_note',
+                        )
+                    except Exception:
+                        pass
+                    if raise_on_error:
+                        raise UserError('Khách hàng chưa có email — không thể gửi.')
+                    continue
+
+            # ── Kiểm tra template ─────────────────────────────────────────
             template = rec._get_mail_template(mode_)
             if not template:
+                reason = 'Chưa cấu hình mẫu email %s' % ('bản nháp' if mode_ == 'draft' else 'bản chính thức')
+                queue_entry.write({'status': 'failed', 'reason': reason})
+                _logger.warning('meInvoice: chưa có mẫu email "%s" cho HĐ id=%s.', mode_, rec.id)
+                summary['failed'].append(rec.id)
+                try:
+                    rec.message_post(
+                        body=Markup('Gửi email <b>thất bại</b> — chưa cấu hình mẫu email %s. '
+                                    'Vào Cấu hình AMIS Callback → meInvoice để thiết lập.') % (
+                            'bản nháp' if mode_ == 'draft' else 'bản chính thức',
+                        ),
+                        subtype_xmlid='mail.mt_note',
+                    )
+                except Exception:
+                    pass
                 if raise_on_error:
                     raise UserError(
                         'Chưa cấu hình mẫu email "%s" cho meInvoice. '
@@ -566,8 +657,8 @@ class MeinvoiceInvoice(models.Model):
             if email_cc:
                 email_values['email_cc'] = email_cc
 
+            # ── Gửi ──────────────────────────────────────────────────────
             try:
-                # Bước 1: tạo mail.mail chưa gửi
                 mail_id = template.sudo().send_mail(
                     rec.id,
                     force_send=False,
@@ -576,14 +667,10 @@ class MeinvoiceInvoice(models.Model):
                 )
                 if not mail_id:
                     raise UserError('Không tạo được mail.mail từ template.')
-
-                # Bước 2: gắn attachment PDF (nếu có) vào mail đã tạo
                 if attachment_ids:
                     self.env['mail.mail'].sudo().browse(mail_id).write({
                         'attachment_ids': [(4, aid) for aid in attachment_ids],
                     })
-
-                # Bước 3: gửi
                 self.env['mail.mail'].sudo().browse(mail_id).send(raise_exception=False)
                 sent_ok = True
             except Exception:
@@ -592,14 +679,22 @@ class MeinvoiceInvoice(models.Model):
                     raise
                 sent_ok = False
 
+            now = _dt.utcnow()
             rec.sudo().write({
                 'mail_sent': rec.mail_sent or sent_ok,
-                'mail_last_sent_at': _dt.utcnow(),
+                'mail_last_sent_at': now,
                 'mail_last_sent_to': email_to,
                 'mail_sent_count': (rec.mail_sent_count or 0) + (1 if sent_ok else 0),
             })
 
-            # Ghi nhận vào chatter
+            if sent_ok:
+                queue_entry.write({'status': 'sent', 'sent_at': now, 'reason': False})
+                summary['sent'].append(rec.id)
+            else:
+                queue_entry.write({'status': 'failed', 'reason': 'Lỗi gửi mail — xem server log'})
+                summary['failed'].append(rec.id)
+
+            # ── Ghi chatter ──────────────────────────────────────────────
             try:
                 if sent_ok:
                     rec.message_post(
@@ -618,7 +713,7 @@ class MeinvoiceInvoice(models.Model):
             except Exception:
                 pass
 
-        return True
+        return summary
 
     def _check_mail_enabled(self):
         config = self.env['amis.callback.config'].sudo().search([], limit=1)
@@ -631,35 +726,61 @@ class MeinvoiceInvoice(models.Model):
 
     def action_send_mail_draft(self):
         """Nút bấm: gửi email bản nháp (thông báo lập hóa đơn, chưa cấp mã)."""
-        self.ensure_one()
         self._check_mail_enabled()
-        self._send_meinvoice_mail(mode='draft', raise_on_error=True)
+        result = self._send_meinvoice_mail(mode='draft', raise_on_error=False)
+        sent = len(result['sent'])
+        skipped = len(result['skipped'])
+        failed = len(result['failed'])
+        parts = []
+        if sent:
+            parts.append('Đã gửi: %d' % sent)
+        if skipped:
+            parts.append('Bỏ qua (không có email): %d' % skipped)
+        if failed:
+            parts.append('Thất bại: %d' % failed)
+        msg = ' | '.join(parts) or 'Không có bản ghi nào được xử lý.'
+        notif_type = 'danger' if failed else ('warning' if skipped and not sent else 'success')
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
-                'title': 'Đã gửi email bản nháp',
-                'message': 'Email thông báo lập hóa đơn (bản nháp) đã gửi tới %s.' % (self.buyer_email or ''),
-                'type': 'success',
-                'sticky': False,
+                'title': 'Gửi email bản nháp',
+                'message': msg,
+                'type': notif_type,
+                'sticky': bool(failed),
             },
         }
 
     def action_send_mail_published(self):
         """Nút bấm: gửi email bản chính thức (đã cấp mã CQT, kèm PDF nếu được cấu hình)."""
-        self.ensure_one()
         self._check_mail_enabled()
-        if self.state not in ('submitted', 'accepted'):
-            raise UserError('Chỉ có thể gửi bản chính thức khi hóa đơn đã phát hành (có số HĐ / mã CQT).')
-        self._send_meinvoice_mail(mode='published', raise_on_error=True)
+        invalid = self.filtered(lambda r: r.state not in ('submitted', 'accepted'))
+        if invalid:
+            raise UserError(
+                'Chỉ có thể gửi bản chính thức khi hóa đơn đã phát hành. '
+                'Các HĐ chưa đủ điều kiện: %s' % ', '.join(invalid.mapped('transaction_id') or ['(unknown)'])
+            )
+        result = self._send_meinvoice_mail(mode='published', raise_on_error=False)
+        sent = len(result['sent'])
+        skipped = len(result['skipped'])
+        failed = len(result['failed'])
+        parts = []
+        if sent:
+            parts.append('Đã gửi: %d' % sent)
+        if skipped:
+            parts.append('Bỏ qua (không có email): %d' % skipped)
+        if failed:
+            parts.append('Thất bại: %d' % failed)
+        msg = ' | '.join(parts) or 'Không có bản ghi nào được xử lý.'
+        notif_type = 'danger' if failed else ('warning' if skipped and not sent else 'success')
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
-                'title': 'Đã gửi email bản chính thức',
-                'message': 'Email hóa đơn đã cấp mã đã gửi tới %s.' % (self.buyer_email or ''),
-                'type': 'success',
-                'sticky': False,
+                'title': 'Gửi email bản chính thức',
+                'message': msg,
+                'type': notif_type,
+                'sticky': bool(failed),
             },
         }
 
