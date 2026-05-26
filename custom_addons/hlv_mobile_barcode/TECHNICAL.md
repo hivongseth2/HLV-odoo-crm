@@ -70,7 +70,10 @@ hlv_mobile_barcode/
 ## API / Controllers
 - `/hlv_mobile_barcode/smart_scan`: Đầu vào `barcode`. Trả về đối tượng khớp đầu tiên theo thứ tự ưu tiên: Picking > Product > Location > Package, đồng thời trả kèm thêm trường `warehouse_code`.
 - `/hlv_mobile_barcode/get_picking_data`: Trả về JSON tree chi tiết các line của một Picking để hiển thị, bao gồm cả `warehouse_code`, đồng thời tự động tính toán và trả về `linked_picking_id` và `linked_picking_name` nếu có phiếu liên kết của bước tiếp theo trong quy trình chuyển kho 2 bước.
-- `/hlv_mobile_barcode/process_barcode`: Cập nhật `qty_done` khi quét sản phẩm nằm trong picking.
+- `/hlv_mobile_barcode/process_barcode`: Cập nhật `qty_done` khi quét sản phẩm, vị trí, hoặc kiện hàng (Package) nằm trong picking.
+  * *Hỗ trợ quét Kiện hàng (Package)*: Khi người dùng quét mã vạch của kiện hàng (`stock.quant.package`), hệ thống sẽ:
+    1. Kiểm tra xem phiếu kho có dòng dịch chuyển (move line) nào dành riêng cho kiện hàng này không. Nếu có, tự động cập nhật số lượng hoàn tất cho các dòng đó.
+    2. Nếu không có dòng dịch chuyển riêng cho kiện hàng, hệ thống tự động tra cứu danh sách sản phẩm và số lượng thực tế chứa trong kiện thông qua `stock.quant`, sau đó tự động khớp, bổ sung và cập nhật số lượng hoàn thành tương ứng cho các sản phẩm đó trong phiếu một cách hàng loạt.
 - `/hlv_mobile_barcode/put_in_pack`: Đóng gói các dòng `qty_done` > 0 thành Package. Hỗ trợ trả cờ `print_after_pack` theo cấu hình.
 - `/hlv_mobile_barcode/get_inventory_lookup`: Truy vấn `stock.quant` cho màn hình tra cứu, tự động xác định `warehouse_code` từ vị trí kho.
 - `/hlv_mobile_barcode/move_location`: Tạo lệnh `stock.picking` type Internal và xử lý tự động validate để di chuyển tồn kho.
