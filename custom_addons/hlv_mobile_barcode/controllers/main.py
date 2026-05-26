@@ -17,6 +17,12 @@ class HLVMobileBarcodeController(http.Controller):
         # 1. Check if it's a Picking
         picking = request.env['stock.picking'].sudo().search([('name', '=', barcode)], limit=1)
         if picking:
+            # Block PACK and OUT steps (keep only PICK allowed)
+            pt_name = (picking.picking_type_id.name or '').lower()
+            pt_code = (picking.picking_type_id.sequence_code or '').lower()
+            if picking.picking_type_id.code == 'outgoing' or 'pack' in pt_name or 'pack' in pt_code:
+                return {'error': _('Ứng dụng Mobile Barcode chỉ hỗ trợ xử lý phiếu PICK (Lấy hàng). Phiếu PACK và OUT được đảm nhận bởi phân hệ khác.')}
+
             # Check if picking type is allowed based on settings
             allowed_types = request.env.company.hlv_barcode_picking_type_ids
             if allowed_types and picking.picking_type_id not in allowed_types:
@@ -55,6 +61,12 @@ class HLVMobileBarcodeController(http.Controller):
         picking = request.env['stock.picking'].browse(picking_id)
         if not picking.exists():
             return {'error': _('Picking not found')}
+
+        # Block PACK and OUT steps (keep only PICK allowed)
+        pt_name = (picking.picking_type_id.name or '').lower()
+        pt_code = (picking.picking_type_id.sequence_code or '').lower()
+        if picking.picking_type_id.code == 'outgoing' or 'pack' in pt_name or 'pack' in pt_code:
+            return {'error': _('Ứng dụng Mobile Barcode chỉ hỗ trợ xử lý phiếu PICK (Lấy hàng). Phiếu PACK và OUT được đảm nhận bởi phân hệ khác.')}
 
         lines = []
         # Group by move_id to show products
