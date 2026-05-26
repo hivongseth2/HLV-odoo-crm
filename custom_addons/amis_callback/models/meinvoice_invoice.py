@@ -531,13 +531,38 @@ class MeinvoiceInvoice(models.Model):
         config = self.env['amis.callback.config'].sudo().search([], limit=1)
         if not config or not config.meinvoice_mail_attach_pdf:
             return self.env['ir.attachment']
+
+        # Dùng /invoice/publishview (giống action_view_invoice) thay vì /invoice/download
+        # vì /invoice/download raise InvoiceNotExist khi hóa đơn chưa chuyển tiếp CQT xong.
         try:
-            pdf_bytes = config.get_meinvoice_pdf_bytes(self.transaction_id)
+            view_url = config.get_meinvoice_publishview_url([self.transaction_id])
+            if not view_url:
+                _logger.warning('meInvoice: publishview không trả về URL cho TransactionID=%s', self.transaction_id)
+                return self.env['ir.attachment']
         except Exception:
-            _logger.exception('meInvoice: lấy PDF thất bại cho TransactionID=%s', self.transaction_id)
+            _logger.exception('meInvoice: lấy publishview URL thất bại cho TransactionID=%s', self.transaction_id)
             return self.env['ir.attachment']
-        if not pdf_bytes:
+
+        try:
+            import requests as _req
+            resp = _req.get(view_url, timeout=30, allow_redirects=True, headers={
+                'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+                'accept-language': 'vi,en-US;q=0.9,en;q=0.8',
+                'upgrade-insecure-requests': '1',
+                'sec-fetch-dest': 'document',
+                'sec-fetch-mode': 'navigate',
+                'sec-fetch-site': 'none',
+                'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+            })
+            resp.raise_for_status()
+            content = resp.content or b''
+            if not content or ('pdf' not in resp.headers.get('Content-Type', '').lower() and not content.startswith(b'%PDF')):
+                _logger.warning('meInvoice: publishview URL không trả về PDF cho TransactionID=%s', self.transaction_id)
+                return self.env['ir.attachment']
+        except Exception:
+            _logger.exception('meInvoice: tải PDF published thất bại cho TransactionID=%s', self.transaction_id)
             return self.env['ir.attachment']
+
         import base64
         fname = 'HoaDon_%s_%s.pdf' % (
             (self.inv_series_result or self.inv_series or 'meinvoice').replace('/', '-'),
@@ -545,7 +570,7 @@ class MeinvoiceInvoice(models.Model):
         )
         return self.env['ir.attachment'].sudo().create({
             'name': fname,
-            'datas': base64.b64encode(pdf_bytes),
+            'datas': base64.b64encode(content),
             'res_model': self._name,
             'res_id': self.id,
             'mimetype': 'application/pdf',
