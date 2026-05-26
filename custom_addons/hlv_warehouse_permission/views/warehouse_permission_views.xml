@@ -24,6 +24,7 @@
                 <field name="user_id"/>
                 <field name="warehouse_id"/>
                 <field name="can_update_inventory" widget="boolean_toggle"/>
+                <button name="action_open_detail" type="object" string="Phân quyền chi tiết" class="btn btn-secondary btn-sm" icon="fa-arrow-right"/>
             </list>
         </field>
     </record>

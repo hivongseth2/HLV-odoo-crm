@@ -1,12 +1,12 @@
 from odoo import models, fields, api, _
 
 PICKING_TYPE_CODES = [
-    ('IN', 'Phiếu nhập kho'),
-    ('OUT', 'Phiếu xuất kho'),
-    ('INT', 'Phiếu chuyển nội bộ'),
-    ('PICK', 'Phiếu lấy hàng'),
-    ('PACK', 'Phiếu đóng gói'),
-    ('STO', 'Phiếu lưu kho'),
+    ('IN', 'Phiếu nhập kho (IN)'),
+    ('OUT', 'Phiếu xuất hàng (OUT)'),
+    ('INT', 'Phiếu chuyển nội bộ (INT)'),
+    ('PICK', 'Phiếu lấy hàng (PICK)'),
+    ('PACK', 'Phiếu đóng gói (PACK)'),
+    ('STO', 'Phiếu lưu kho (STO)'),
 ]
 
 
@@ -37,6 +37,16 @@ class WarehouseUserPermission(models.Model):
             user_name = rec.user_id.name or ''
             wh_name = rec.warehouse_id.name or ''
             rec.display_name = f'{user_name} - {wh_name}'
+
+    def action_open_detail(self):
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': 'warehouse.user.permission',
+            'view_mode': 'form',
+            'res_id': self.id,
+            'target': 'current',
+        }
 
     @api.model
     def check_permission(self, user, warehouse, permission_field):
