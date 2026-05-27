@@ -917,6 +917,8 @@ class HLVMobileBarcodeController(http.Controller):
         })
         
         picking_int.action_confirm()
+        if hasattr(picking_int, 'second_transfer_created'):
+            picking_int.write({'second_transfer_created': True})
         picking_int.button_validate()
         
         # 2. Create IN picking (Transit -> Destination)
@@ -1018,6 +1020,8 @@ class HLVMobileBarcodeController(http.Controller):
             except Exception as e:
                 return {'error': _('Lỗi khi đóng gói: %s', str(e))}
                 
+        if hasattr(picking_int, 'second_transfer_created'):
+            picking_int.write({'second_transfer_created': True})
         picking_int.button_validate()
         
         # 2. Create IN picking (Transit -> Destination)
