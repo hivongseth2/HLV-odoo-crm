@@ -1,17 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- Thêm cấu hình môi trường Sandbox/Production vào shopee.account form -->
-    <record id="view_shopee_account_env_ext" model="ir.ui.view">
-        <field name="name">shopee.account.env.ext</field>
-        <field name="model">shopee.account</field>
-        <field name="inherit_id" ref="sale_shopee.view_shopee_account_form"/>
+    <!-- Thêm cấu hình môi trường Sandbox/Production vào shopee.shop form -->
+    <record id="view_shopee_shop_env_ext" model="ir.ui.view">
+        <field name="name">shopee.shop.env.ext</field>
+        <field name="model">shopee.shop</field>
+        <field name="inherit_id" ref="sale_shopee.shopee_shop_view_form"/>
         <field name="arch" type="xml">
-            <!-- Thêm vào tab "Thông tin đăng nhập" (hoặc sheet trực tiếp) -->
-            <xpath expr="//field[@name='partner_key']" position="after">
+            <xpath expr="//field[@name='account_id']" position="after">
                 <field name="is_sandbox" widget="boolean_toggle"
                        string="Môi trường Sandbox (Test)"
                        help="Bật nếu đang dùng Test Partner_id — sẽ gọi https://openplatform.sandbox.test-stable.shopee.sg thay vì Production URL."/>
-                <field name="shopee_env_base_url" readonly="1" string="Base URL đang dùng"/>
             </xpath>
         </field>
     </record>

@@ -17,7 +17,8 @@ from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
 
-SHOPEE_BASE_URL = 'https://partner.shopeemobile.com'
+SHOPEE_BASE_URL    = 'https://partner.shopeemobile.com'
+SHOPEE_SANDBOX_URL = 'https://openplatform.sandbox.test-stable.shopee.sg'
 
 # Các trường optional mặc định lấy đầy đủ từ Shopee
 DEFAULT_OPTIONAL_FIELDS = (
@@ -115,7 +116,7 @@ def get_credentials_from_shop(shop):
             _("Thiếu thông tin cấu hình:\n%s") % '\n'.join(f"- {m}" for m in missing)
         )
 
-    base_url = getattr(account, 'shopee_env_base_url', None) or SHOPEE_BASE_URL
+    base_url = SHOPEE_SANDBOX_URL if getattr(shop, 'is_sandbox', False) else SHOPEE_BASE_URL
 
     return {
         'partner_id': partner_id,
