@@ -152,11 +152,7 @@ class HLVMobileBarcodeController(http.Controller):
         linked_picking_id = False
         linked_picking_name = False
         
-        pt_code = (picking.picking_type_id.sequence_code or '').lower()
-        pt_name = (picking.picking_type_id.name or '').lower()
-        is_pure_int = 'int' in pt_code and not any(x in pt_code or x in pt_name for x in ['pick', 'pack', 'out'])
-        
-        if picking.picking_type_id.code == 'internal' and is_pure_int:
+        if picking.picking_type_id.code == 'internal':
             # Method 1: Via stock moves chain
             dest_pickings = picking.move_ids.mapped('move_dest_ids.picking_id').filtered(
                 lambda p: p.id != picking.id and p.state not in ['cancel']
@@ -821,6 +817,77 @@ class HLVMobileBarcodeController(http.Controller):
                     return {'error': _('Bạn không có quyền xác nhận phiếu %s tại kho "%s". Vui lòng liên hệ Admin!', code, warehouse.name)}
         try:
             picking.button_validate()
+            
+            # --- AUTO CREATE STEP 2 IN PICKING IF MANUALLY CREATED 2-STEP TRANSIT ---
+            if picking.picking_type_id.code == 'internal' and (picking.location_dest_id.usage == 'transit' or picking.location_dest_id.company_id.id != picking.company_id.id):
+                # Check if it already has a linked picking to avoid duplicate creation
+                linked_exists = request.env['stock.picking'].sudo().search([
+                    ('origin', '=', picking.name),
+                    ('state', 'not in', ['cancel'])
+                ], limit=1)
+                if not linked_exists:
+                    linked_exists = picking.move_ids.mapped('move_dest_ids.picking_id').filtered(
+                        lambda p: p.id != picking.id and p.state not in ['cancel']
+                    )
+                
+                if not linked_exists:
+                    warehouse = picking.picking_type_id.warehouse_id
+                    picking_type_in = False
+                    if warehouse and warehouse.in_type_id:
+                        picking_type_in = warehouse.in_type_id
+                    else:
+                        picking_type_in = request.env['stock.picking.type'].sudo().search([
+                            ('code', '=', 'incoming'), 
+                            ('company_id', '=', picking.company_id.id),
+                            ('warehouse_id', '=', warehouse.id if warehouse else False)
+                        ], limit=1)
+                        if not picking_type_in:
+                            picking_type_in = request.env['stock.picking.type'].sudo().search([
+                                ('code', '=', 'incoming'), 
+                                ('company_id', '=', picking.company_id.id)
+                            ], limit=1)
+                    
+                    if picking_type_in:
+                        transit_loc = picking.location_dest_id
+                        dest_loc = picking_type_in.default_location_dest_id
+                        if not dest_loc:
+                            dest_loc = request.env['stock.location'].sudo().search([
+                                ('usage', '=', 'internal'), 
+                                ('company_id', '=', picking.company_id.id)
+                            ], limit=1)
+                        
+                        picking_in = request.env['stock.picking'].sudo().create({
+                            'picking_type_id': picking_type_in.id,
+                            'location_id': transit_loc.id,
+                            'location_dest_id': dest_loc.id,
+                            'origin': picking.name,
+                        })
+                        
+                        for move in picking.move_ids:
+                            if move.state == 'cancel':
+                                continue
+                            qty_done = sum(ml.quantity for ml in move.move_line_ids)
+                            if qty_done <= 0:
+                                qty_done = move.product_uom_qty
+                            if qty_done <= 0:
+                                continue
+                                
+                            request.env['stock.move'].sudo().create({
+                                'name': move.name or _('Mobile Move IN'),
+                                'picking_id': picking_in.id,
+                                'product_id': move.product_id.id,
+                                'product_uom_qty': qty_done,
+                                'product_uom': move.product_uom.id,
+                                'location_id': transit_loc.id,
+                                'location_dest_id': dest_loc.id,
+                            })
+                        
+                        try:
+                            picking_in.sudo().action_confirm()
+                        except Exception as ex:
+                            pass
+            # ------------------------------------------------------------------------
+            
             return {'success': True}
         except Exception as e:
             return {'error': str(e)}
