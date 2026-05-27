@@ -840,10 +840,16 @@ class ShopeeProduct(models.Model):
             extended_text = []
             for f in field_list:
                 if f.get('field_type') == 'text':
-                    extended_text.append((f.get('text', {}) or {}).get('text', ''))
+                    # Shopee có thể trả 'text' là str (mới) hoặc dict {'text': str}
+                    raw = f.get('text', '')
+                    if isinstance(raw, dict):
+                        extended_text.append(raw.get('text', '') or '')
+                    elif isinstance(raw, str):
+                        extended_text.append(raw)
                 elif f.get('field_type') == 'image':
                     img = f.get('image_info', {}) or {}
-                    extended_text.append('[ẢNH] %s' % (img.get('image_url') or img.get('image_id') or ''))
+                    if isinstance(img, dict):
+                        extended_text.append('[ẢNH] %s' % (img.get('image_url') or img.get('image_id') or ''))
             if extended_text:
                 desc = (desc + '\n\n--- Extended ---\n' + '\n'.join(extended_text)) if desc else '\n'.join(extended_text)
 
@@ -1256,7 +1262,16 @@ class ShopeeProduct(models.Model):
         for rec in self:
             if self.env.context.get('skip_shopee_auto_quality'):
                 continue
-            # Tránh gọi API liên tục khi web client read nhiều lần.
+            # Auto-tải nội dung (mô tả + ảnh + video) — chạy độc lập với throttle
+            # 15 phút để người dùng luôn thấy nội dung mới nhất khi mở form lần đầu.
+            if not rec.shopee_item_id:
+                pass
+            elif not rec.edit_description and not rec.image_line_ids and not rec.video_line_ids:
+                try:
+                    rec.with_context(skip_shopee_auto_quality=True).action_fetch_full_content()
+                except Exception as e:
+                    _logger.warning('Auto-fetch content failed for %s: %s', rec.id, e)
+            # Tránh gọi API chẩn đoán/vi phạm liên tục khi web client read nhiều lần.
             if rec.quality_last_checked:
                 age = fields.Datetime.now() - rec.quality_last_checked
                 if age.total_seconds() < 15 * 60:
@@ -1280,13 +1295,6 @@ class ShopeeProduct(models.Model):
                 rec.with_context(skip_shopee_auto_quality=True).write({
                     'extra_summary': _('Không tải được thông tin thêm: %s') % str(e),
                 })
-            # Auto-tải nội dung (mô tả + ảnh + video) lần đầu mở form Nội dung.
-            if not rec.edit_description and not rec.image_line_ids and not rec.video_line_ids:
-                try:
-                    rec.with_context(skip_shopee_auto_quality=True).action_fetch_full_content()
-                except Exception:
-                    # Im lặng — người dùng có thể bấm "Tải từ Shopee" thủ công.
-                    pass
 
     def web_read(self, specification):
         if not self.env.context.get('skip_shopee_auto_quality') and len(self) <= 3:

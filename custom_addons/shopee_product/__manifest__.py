@@ -18,7 +18,7 @@
     'author': "HLV",
     'website': "https://www.hlv.vn",
     'category': 'Sales',
-    'version': '18.0.1.16.0',
+    'version': '18.0.1.17.0',
     'depends': [
         'mail',
         'sale',

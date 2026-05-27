@@ -83,6 +83,12 @@ class ShopeeProductModel(models.Model):
         compute='_compute_shopee_item_mapping',
         store=False,
     )
+    odoo_product_id = fields.Many2one(
+        'product.product',
+        string='Sản phẩm Odoo (biến thể)',
+        help='Liên kết biến thể Shopee này với một sản phẩm Odoo riêng. '
+             'Mỗi biến thể có thể trỏ tới một product.product khác nhau.',
+    )
 
     # ── Computed ────────────────────────────────────────────────────────────
     display_name_computed = fields.Char(
@@ -206,3 +212,41 @@ class ShopeeProductModel(models.Model):
         shopee_product_api.call_delete_model(creds, int(item_id), [int(self.shopee_model_id)])
         self.unlink()
         return True
+
+    # ── shopee.item linking per model ──────────────────────────────────────
+    def write(self, vals):
+        result = super().write(vals)
+        if 'odoo_product_id' in vals:
+            self._sync_model_link_to_shopee_item()
+        return result
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        records = super().create(vals_list)
+        records.filtered('odoo_product_id')._sync_model_link_to_shopee_item()
+        return records
+
+    def _sync_model_link_to_shopee_item(self):
+        """Tạo/cập nhật shopee.item cho từng biến thể (shop_id + item_id + model_id)."""
+        ShopeeItem = self.env['shopee.item'].sudo()
+        for rec in self:
+            sp = rec.shopee_product_id
+            if not sp.shop_id or not sp.shopee_item_id or not rec.shopee_model_id:
+                continue
+            if not rec.odoo_product_id:
+                continue
+            existing = ShopeeItem.search([
+                ('shop_id', '=', sp.shop_id.id),
+                ('shopee_item_identifier', '=', str(sp.shopee_item_id)),
+                ('shopee_model_identifier', '=', str(rec.shopee_model_id)),
+            ], limit=1)
+            if existing:
+                if existing.product_id.id != rec.odoo_product_id.id:
+                    existing.write({'product_id': rec.odoo_product_id.id})
+            else:
+                ShopeeItem.create({
+                    'shop_id': sp.shop_id.id,
+                    'shopee_item_identifier': str(sp.shopee_item_id),
+                    'shopee_model_identifier': str(rec.shopee_model_id),
+                    'product_id': rec.odoo_product_id.id,
+                })

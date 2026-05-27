@@ -433,6 +433,7 @@ class ShopeeProductCreateWizard(models.TransientModel):
             raise UserError(_('Shopee không trả về item_id. Phản hồi: %s') % result)
 
         # 5. Tạo shopee.product record ───────────────────────────────────
+        odoo_product = self.product_template_id.product_variant_id if self.product_template_id else False
         shopee_product = self.env['shopee.product'].create({
             'shop_id': self.shop_id.id,
             'shopee_item_id': shopee_item_id,
@@ -444,7 +445,15 @@ class ShopeeProductCreateWizard(models.TransientModel):
             'total_available_stock': int(self.initial_stock or 0),
             'item_status': 'REVIEWING',
             'last_synced': fields.Datetime.now(),
+            'odoo_product_id': odoo_product.id if odoo_product else False,
         })
+        # _sync_manual_link_to_shopee_item đã được gọi tự động trong write()
+        # khi 'odoo_product_id' có trong vals → shopee.item được tạo/cập nhật.
+        if odoo_product:
+            try:
+                shopee_product._sync_manual_link_to_shopee_item()
+            except Exception as e:
+                _logger.warning('Không tạo được mapping shopee.item: %s', e)
 
         self.write({
             'result_item_id': shopee_item_id,

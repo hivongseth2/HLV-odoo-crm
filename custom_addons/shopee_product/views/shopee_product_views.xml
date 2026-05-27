@@ -266,7 +266,9 @@
                                       decoration-warning="available_stock &lt; 5 and available_stock &gt; 0">
                                     <field name="tier_label" string="Phân loại" readonly="1"/>
                                     <field name="model_sku" string="SKU"/>
-                                    <field name="mapped_product_id" string="Sản phẩm Odoo" readonly="1" optional="show"/>
+                                    <field name="odoo_product_id" string="Sản phẩm Odoo (biến thể)"
+                                           options="{'no_create': True}"/>
+                                    <field name="mapped_product_id" string="Từ mapping" readonly="1" optional="hide"/>
                                     <field name="model_status" string="Trạng thái" readonly="1" widget="badge"
                                            decoration-success="model_status == 'MODEL_NORMAL'"
                                            decoration-muted="model_status == 'MODEL_UNAVAILABLE'"/>
