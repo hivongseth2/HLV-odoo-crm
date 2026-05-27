@@ -195,7 +195,13 @@ def call_get_item_list(creds, item_status=None, page_size=100, offset=0,
     )
     _status, body = _do_get(api_path, params)
     _check_error(body, 'get_item_list')
-    resp = body.get('response', {})
+    resp = body.get('response')
+    if not isinstance(resp, dict):
+        # Shopee đôi khi trả 'response' là string/null khi lỗi auth/quota
+        raise UserError(
+            _("Shopee get_item_list: phản hồi không hợp lệ — %s")
+            % (body.get('message', '') or str(resp or 'null'))
+        )
     return (
         resp.get('item', []),
         resp.get('total_count', 0),
@@ -249,7 +255,13 @@ def call_get_item_base_info(creds, item_id_list):
     )
     _status, body = _do_get(api_path, params)
     _check_error(body, 'get_item_base_info')
-    return body.get('response', {}).get('item_list', [])
+    resp = body.get('response')
+    if not isinstance(resp, dict):
+        raise UserError(
+            _("Shopee get_item_base_info: phản hồi không hợp lệ — %s")
+            % (body.get('message', '') or str(resp or 'null'))
+        )
+    return resp.get('item_list', [])
 
 
 def call_get_item_base_info_batch(creds, item_id_list):

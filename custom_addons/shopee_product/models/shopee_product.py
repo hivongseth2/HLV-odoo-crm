@@ -43,10 +43,11 @@ class ShopeeProduct(models.Model):
         ondelete='cascade',
         index=True,
     )
-    shopee_item_id = fields.Integer(
+    shopee_item_id = fields.Char(
         string='Item ID Shopee',
         required=True,
         index=True,
+        size=64,
         help='Mã định danh duy nhất của sản phẩm trên Shopee (item_id).',
     )
 
@@ -240,9 +241,9 @@ class ShopeeProduct(models.Model):
             get_credentials_from_shop,
         )
         creds = get_credentials_from_shop(self.shop_id)
-        items = shopee_product_api.call_get_item_base_info(creds, [self.shopee_item_id])
+        items = shopee_product_api.call_get_item_base_info(creds, [int(self.shopee_item_id)])
         if not items:
-            raise UserError(_("Không tìm thấy thông tin sản phẩm ID %d trên Shopee.") % self.shopee_item_id)
+            raise UserError(_("Không tìm thấy thông tin sản phẩm ID %s trên Shopee.") % self.shopee_item_id)
         _update_record_from_api(self, items[0])
         return {
             'type': 'ir.actions.client',
@@ -273,7 +274,7 @@ class ShopeeProduct(models.Model):
         )
         creds = get_credentials_from_shop(self.shop_id)
         model_list, tier_variation_list = shopee_product_api.call_get_model_list(
-            creds, self.shopee_item_id
+            creds, int(self.shopee_item_id)
         )
 
         ShopeeModel = self.env['shopee.product.model']
@@ -351,7 +352,7 @@ class ShopeeProduct(models.Model):
             raise UserError(_('Không có giá hợp lệ để cập nhật.'))
 
         success, failure = shopee_product_api.call_update_price(
-            creds, self.shopee_item_id, price_list
+            creds, int(self.shopee_item_id), price_list
         )
 
         if failure:
@@ -394,7 +395,7 @@ class ShopeeProduct(models.Model):
             return self._action_open_no_model_stock_wizard()
 
         success, failure = shopee_product_api.call_update_stock(
-            creds, self.shopee_item_id, stock_list
+            creds, int(self.shopee_item_id), stock_list
         )
 
         if failure:
@@ -432,7 +433,7 @@ class ShopeeProduct(models.Model):
             get_credentials_from_shop,
         )
         creds = get_credentials_from_shop(self.shop_id)
-        shopee_product_api.call_delete_item(creds, [self.shopee_item_id])
+        shopee_product_api.call_delete_item(creds, [int(self.shopee_item_id)])
         self.write({'item_status': 'SELLER_DELETE'})
         return {
             'type': 'ir.actions.client',
@@ -488,8 +489,9 @@ class ShopeeProduct(models.Model):
         # 3. Upsert vào DB
         created = updated = 0
         existing = {
-            r.shopee_item_id: r
+            int(r.shopee_item_id): r
             for r in self.sudo().search([('shop_id', '=', shop.id)])
+            if r.shopee_item_id
         }
 
         for item_data in base_info_list:
@@ -526,7 +528,7 @@ class ShopeeProduct(models.Model):
             if not item.shop_id or not item.shopee_item_identifier:
                 continue
             try:
-                shopee_item_id = int(item.shopee_item_identifier)
+                shopee_item_id = str(int(item.shopee_item_identifier))  # normalize to str
             except (TypeError, ValueError):
                 _logger.warning(
                     "Skip shopee.item %s with invalid item id %r",
@@ -589,16 +591,21 @@ class ShopeeProduct(models.Model):
 def _extract_price(item_data):
     """Lấy original_price và current_price từ price_info list."""
     price_info = item_data.get('price_info', [])
-    if price_info:
+    if isinstance(price_info, list) and price_info:
         first = price_info[0]
-        return first.get('original_price', 0.0), first.get('current_price', 0.0)
+        if isinstance(first, dict):
+            return first.get('original_price', 0.0), first.get('current_price', 0.0)
     return 0.0, 0.0
 
 
 def _extract_stock(item_data):
     """Lấy total_available_stock từ stock_info_v2."""
-    stock_v2 = item_data.get('stock_info_v2', {})
-    summary = stock_v2.get('summary_info', {})
+    stock_v2 = item_data.get('stock_info_v2')
+    if not isinstance(stock_v2, dict):
+        return 0
+    summary = stock_v2.get('summary_info')
+    if not isinstance(summary, dict):
+        return 0
     return summary.get('total_available_stock', 0)
 
 
@@ -611,7 +618,7 @@ def _build_vals_from_api(item_data, shop_id):
     )
     return {
         'shop_id': shop_id,
-        'shopee_item_id': item_data['item_id'],
+        'shopee_item_id': str(item_data['item_id']),
         'item_name': item_data.get('item_name', ''),
         'item_sku': item_data.get('item_sku', ''),
         'category_id': item_data.get('category_id', 0),

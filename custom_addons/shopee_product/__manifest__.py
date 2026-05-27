@@ -18,7 +18,7 @@
     'author': "HLV",
     'website': "https://www.hlv.vn",
     'category': 'Sales',
-    'version': '18.0.1.0.0',
+    'version': '18.0.1.1.0',
     'depends': [
         'sale',
         'shopee_order_fetch',   # auth, signing, shopee.shop / shopee.account models

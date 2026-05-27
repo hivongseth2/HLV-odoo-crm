@@ -56,7 +56,7 @@ class ShopeePushStockWizard(models.TransientModel):
             {'model_id': 0, 'seller_stock': [{'stock': self.new_stock}]}
         ]
         success, failure = shopee_product_api.call_update_stock(
-            creds, product.shopee_item_id, stock_list
+            creds, int(product.shopee_item_id), stock_list
         )
 
         if failure:
