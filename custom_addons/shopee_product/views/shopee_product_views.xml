@@ -305,24 +305,28 @@
 
                             <!-- ═══ Tab 2: Nội dung ════════════════════════════════════ -->
                             <page string="Nội dung" name="tab_content_editor">
-                                <div class="p-3">
-                                    <div class="rounded-3 p-4 shadow-sm" style="background:#f8fafc; box-shadow:0 8px 20px rgba(15,23,42,.06);">
-                                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-                                            <div class="d-flex align-items-center gap-2">
-                                                <span class="rounded-circle d-inline-flex align-items-center justify-content-center flex-shrink-0" style="width:34px;height:34px;background:#fde8e2;color:#ee4d2d;font-size:15px;"><i class="fa fa-pencil"/></span>
-                                                <span class="fw-semibold fs-5" style="color:#222;">Mô tả, ảnh, video</span>
-                                            </div>
+                                <div class="o_shopee_content_editor">
+                                    <div class="o_shopee_content_section">
+                                        <div class="o_shopee_content_title">
+                                            <h3>Thông tin cơ bản</h3>
                                             <div class="d-flex flex-wrap gap-2">
                                                 <button name="action_fetch_full_content" type="object" string="Tải từ Shopee" class="btn btn-shopee-soft" icon="fa-download"/>
                                                 <button name="action_push_content_update" type="object" string="Đẩy nội dung" class="btn btn-shopee" icon="fa-upload" confirm="Cập nhật mô tả/ảnh/video lên Shopee?"/>
                                             </div>
                                         </div>
                                         <div class="mb-3">
+                                            <span class="d-block text-muted small mb-1">Tên sản phẩm</span>
+                                            <field name="item_name" nolabel="1"/>
+                                        </div>
+                                        <div class="mb-3">
                                             <span class="d-block text-muted small mb-1">Mô tả Shopee</span>
                                             <field name="edit_description" nolabel="1" widget="text" placeholder="Tải từ Shopee hoặc nhập mô tả mới…"/>
                                         </div>
-                                        <div class="row g-3">
-                                            <div class="col-lg-7">
+                                    </div>
+                                    <div class="o_shopee_content_section">
+                                        <div class="o_shopee_content_title"><h3>Hình ảnh &amp; video sản phẩm</h3></div>
+                                        <div class="o_shopee_media_grid">
+                                            <div>
                                                 <div class="fw-semibold mb-2" style="color:#ee4d2d;"><i class="fa fa-image me-1"/> Ảnh sản phẩm</div>
                                                 <field name="image_line_ids" nolabel="1">
                                                     <list editable="bottom" decoration-muted="not active">
@@ -335,7 +339,7 @@
                                                     </list>
                                                 </field>
                                             </div>
-                                            <div class="col-lg-5">
+                                            <div>
                                                 <div class="fw-semibold mb-2" style="color:#ee4d2d;"><i class="fa fa-video-camera me-1"/> Video sản phẩm</div>
                                                 <field name="video_line_ids" nolabel="1">
                                                     <list editable="bottom" decoration-muted="not active">
@@ -362,7 +366,7 @@
                                     <!-- Chất lượng nội dung &amp; Vi phạm -->
                                     <div class="row g-3 mb-3">
                                         <div class="col-lg-8">
-                                            <div class="rounded-3 p-4 h-100 shadow-sm" style="background:#fef7f3; box-shadow:0 8px 20px rgba(15,23,42,.06);">
+                                            <div class="rounded-3 p-4 h-100 shadow-sm o_shopee_quality_card">
                                                 <div class="d-flex align-items-center gap-2 mb-3">
                                                     <span class="rounded-circle d-inline-flex align-items-center justify-content-center flex-shrink-0" style="width:34px;height:34px;background:#fde8e2;color:#ee4d2d;font-size:15px;"><i class="fa fa-check-circle"/></span>
                                                     <span class="fw-semibold fs-5" style="color:#222;">Chất lượng nội dung</span>
@@ -370,13 +374,13 @@
                                                 <span class="d-block text-muted small mb-1">Tên sản phẩm</span>
                                                 <field name="item_name" nolabel="1" readonly="1" class="d-block w-100 mb-3" style="white-space:normal; word-break:break-word; overflow-wrap:anywhere; line-height:1.5;"/>
                                                 <span class="d-block text-muted small mb-1">Kết quả chẩn đoán</span>
-                                                <field name="quality_summary" nolabel="1" readonly="1" widget="text"/>
+                                                <field name="quality_summary" nolabel="1" readonly="1" widget="text" class="o_shopee_quality_text"/>
                                                 <span class="d-block text-muted small mt-3 mb-1">Thông tin thêm</span>
-                                                <field name="extra_summary" nolabel="1" readonly="1" widget="text"/>
+                                                <field name="extra_summary" nolabel="1" readonly="1" widget="text" class="o_shopee_quality_text"/>
                                             </div>
                                         </div>
                                         <div class="col-lg-4">
-                                            <div class="rounded-3 p-4 h-100 shadow-sm" style="background:#f8fafc; box-shadow:0 8px 20px rgba(15,23,42,.06);">
+                                            <div class="rounded-3 p-4 h-100 shadow-sm o_shopee_violation_card">
                                                 <div class="d-flex align-items-center gap-2 mb-3">
                                                     <span class="rounded-circle d-inline-flex align-items-center justify-content-center flex-shrink-0" style="width:34px;height:34px;background:#fde8e2;color:#ee4d2d;font-size:15px;"><i class="fa fa-ban"/></span>
                                                     <span class="fw-semibold fs-5" style="color:#222;">Vi phạm</span>
@@ -393,7 +397,7 @@
                                                 <span class="d-block text-muted small mb-1">Cập nhật Shopee</span>
                                                 <div class="mb-3"><field name="shopee_update_time" nolabel="1" readonly="1"/></div>
                                                 <span class="d-block text-muted small mb-1">Kết quả kiểm tra</span>
-                                                <field name="violation_summary" nolabel="1" readonly="1" widget="text"/>
+                                                <field name="violation_summary" nolabel="1" readonly="1" widget="text" class="o_shopee_quality_text"/>
                                                 <span class="d-block text-muted small mt-3 mb-1">Kiểm tra lúc</span>
                                                 <field name="quality_last_checked" nolabel="1" readonly="1"/>
                                             </div>

@@ -388,6 +388,7 @@ class ShopeeProductCreateWizard(models.TransientModel):
             ))
 
         # 3. Build payload ───────────────────────────────────────────────
+        seller_stock = [{'stock': int(self.initial_stock or 0)}]
         item_data = {
             'item_name': self.item_name,
             'description': self.description or self.item_name,
@@ -402,8 +403,11 @@ class ShopeeProductCreateWizard(models.TransientModel):
             'image': {'image_id_list': image_id_list},
             'logistics': logistics,
             'attribute_list': attribute_list,
+            # Shopee add_item ở một số region/sandbox vẫn validate seller_stock
+            # trực tiếp, dù docs mới dùng stock_info_v2.
+            'seller_stock': seller_stock,
             'stock_info_v2': {
-                'seller_stock': [{'stock': int(self.initial_stock or 0)}],
+                'seller_stock': seller_stock,
             },
         }
 

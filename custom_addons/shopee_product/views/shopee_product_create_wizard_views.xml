@@ -7,23 +7,33 @@
         <field name="name">shopee.product.create.wizard.form</field>
         <field name="model">shopee.product.create.wizard</field>
         <field name="arch" type="xml">
-            <form string="Tạo sản phẩm lên Shopee">
+            <form string="Tạo sản phẩm lên Shopee" class="o_shopee_create_wizard">
                 <sheet>
-                    <div class="oe_title">
-                        <h2>Tạo sản phẩm Shopee từ Odoo</h2>
+                    <div class="sp-create-head">
+                        <div>
+                            <div class="sp-eyebrow">Shopee Seller Center</div>
+                            <h2>Tạo sản phẩm Shopee từ Odoo</h2>
+                        </div>
+                        <div class="sp-head-actions">
+                            <button name="action_sync_categories" type="object" string="Tải danh mục" class="btn btn-shopee-soft" icon="fa-download" invisible="not shop_id"/>
+                            <button name="action_suggest_category" type="object" string="Gợi ý danh mục" class="btn btn-shopee" icon="fa-magic" invisible="not shop_id or not item_name"/>
+                        </div>
                     </div>
 
                     <!-- Nguồn & cửa hàng -->
-                    <group>
-                        <group string="Nguồn &amp; Cửa hàng">
+                    <div class="sp-section sp-section-compact">
+                        <div class="sp-section-title">Nguồn &amp; cửa hàng</div>
+                        <group>
                             <field name="product_template_id" options="{'no_create': True}"/>
                             <field name="shop_id" options="{'no_create': True}"/>
                         </group>
-                    </group>
+                    </div>
 
                     <!-- Thông tin sản phẩm -->
-                    <group string="Thông tin sản phẩm">
-                        <group>
+                    <div class="sp-section">
+                        <div class="sp-section-title">Thông tin cơ bản</div>
+                        <div class="sp-two-col">
+                            <div class="sp-panel">
                             <field name="item_name"/>
                             <field name="item_sku"/>
                             <field name="original_price"/>
@@ -58,16 +68,19 @@
                             <field name="brand_id" readonly="1" invisible="1"/>
                             <field name="brand_name" readonly="1" invisible="1"/>
                             <field name="upload_product_image"/>
-                        </group>
-                        <group>
+                            </div>
+                            <div class="sp-panel sp-description-panel">
+                            <div class="sp-field-label">Mô tả sản phẩm</div>
                             <field name="description" widget="text" nolabel="1"
                                    placeholder="Mô tả sản phẩm (tuỳ chọn)…"/>
-                        </group>
-                    </group>
+                            </div>
+                        </div>
+                    </div>
 
                     <!-- Thuộc tính -->
-                    <group string="Thuộc tính Shopee">
-                        <div class="col-12">
+                    <div class="sp-section">
+                        <div class="sp-section-title">Thông tin chi tiết</div>
+                        <div class="sp-help-line">Các thuộc tính bắt buộc được lấy tự động theo ngành hàng.</div>
                             <field name="attribute_line_ids" nolabel="1">
                                 <list editable="bottom" create="false" delete="false"
                                       decoration-danger="is_mandatory and not value_id and not value_text">
@@ -79,16 +92,15 @@
                                     <field name="attribute_id" optional="hide"/>
                                 </list>
                             </field>
-                        </div>
-                    </group>
+                    </div>
 
                     <!-- Vận chuyển -->
-                    <group string="Vận chuyển (Logistics)">
-                        <div class="col-12">
-                            <p class="text-muted small mb-1">
+                    <div class="sp-section">
+                        <div class="sp-section-title">Vận chuyển</div>
+                        <div class="sp-help-line">
                                 Tick chọn kênh vận chuyển muốn bật cho sản phẩm.
                                 Danh sách tự động lấy từ Shopee khi chọn cửa hàng.
-                            </p>
+                        </div>
                             <button name="action_reload_logistics" type="object"
                                     string="↻ Tải lại danh sách"
                                     class="btn-link"
@@ -101,8 +113,7 @@
                                     <field name="cod_enabled" widget="boolean"/>
                                 </list>
                             </field>
-                        </div>
-                    </group>
+                    </div>
                 </sheet>
                 <footer>
                     <button name="action_create_shopee_product" type="object"
