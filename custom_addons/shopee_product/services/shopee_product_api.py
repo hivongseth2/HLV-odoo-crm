@@ -52,11 +52,11 @@ def _do_get(api_path, params, timeout=30):
     try:
         resp = req_lib.get(url, params=params, timeout=timeout)
     except Exception as e:
-        raise UserError(“lỗi kết nối Shopee API:\n%s” % str(e))
+        raise UserError("lỗi kết nối Shopee API:\n%s" % str(e))
     try:
         body = resp.json()
     except Exception:
-        raise UserError(“Shopee trả về response không hợp lệ:\n%s” % resp.text)
+        raise UserError("Shopee trả về response không hợp lệ:\n%s" % resp.text)
     return resp.status_code, body
 
 
@@ -65,11 +65,11 @@ def _do_post(api_path, params, json_body, timeout=30):
     try:
         resp = req_lib.post(url, params=params, json=json_body, timeout=timeout)
     except Exception as e:
-        raise UserError(“lỗi kết nối Shopee API:\n%s” % str(e))
+        raise UserError("lỗi kết nối Shopee API:\n%s" % str(e))
     try:
         body = resp.json()
     except Exception:
-        raise UserError(“Shopee trả về response không hợp lệ:\n%s” % resp.text)
+        raise UserError("Shopee trả về response không hợp lệ:\n%s" % resp.text)
     return resp.status_code, body
 
 
