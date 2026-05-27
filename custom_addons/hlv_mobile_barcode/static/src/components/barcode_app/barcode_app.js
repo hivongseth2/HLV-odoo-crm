@@ -605,6 +605,9 @@ export class BarcodeApp extends Component {
                 } catch (e) {}
                 
                 this.notification.add("Đã làm mới số lượng", { type: "success" });
+                this.state.scannedLocationId = null;
+                this.state.scannedLocationName = "";
+                this.state.lastScannedProduct = null;
                 this.state.pickingRefreshTick += 1;
             }
         } catch (e) {

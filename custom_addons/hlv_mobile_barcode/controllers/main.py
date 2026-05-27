@@ -509,11 +509,31 @@ class HLVMobileBarcodeController(http.Controller):
     @http.route('/hlv_mobile_barcode/clear_quantities', type='json', auth='user')
     def clear_quantities(self, picking_id):
         picking = request.env['stock.picking'].browse(picking_id)
-        if picking.exists() and picking.state in ['draft', 'confirmed', 'assigned']:
-            # In Odoo 18, quantity is the done quantity on move_line
-            picking.move_line_ids.write({'quantity': 0})
+        if not picking.exists() or picking.state not in ['draft', 'confirmed', 'assigned']:
+            return {'error': _('Không thể xoá số lượng của phiếu này')}
+            
+        try:
+            # 1. Handle stock move lines
+            for ml in picking.move_line_ids:
+                if ml.quantity_product_uom == 0.0:
+                    # Dynamically created line -> delete it!
+                    ml.unlink()
+                else:
+                    # Reserved line -> reset quantity and clear packaging
+                    ml.write({
+                        'quantity': 0.0,
+                        'result_package_id': False
+                    })
+                    
+            # 2. Handle stock moves that were created dynamically on the fly (demand = 0)
+            dynamic_moves = picking.move_ids_without_package.filtered(lambda m: m.product_uom_qty == 0.0)
+            if dynamic_moves:
+                dynamic_moves._action_cancel()
+                dynamic_moves.unlink()
+                
             return {'success': True}
-        return {'error': _('Không thể xoá số lượng của phiếu này')}
+        except Exception as e:
+            return {'error': _('Lỗi khi làm mới: %s', str(e))}
 
     @http.route('/hlv_mobile_barcode/delete_move', type='json', auth='user')
     def delete_move(self, move_id=None, move_line_id=None):

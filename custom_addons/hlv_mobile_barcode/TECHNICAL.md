@@ -46,7 +46,7 @@ hlv_mobile_barcode/
   * *Single-Request Quantity Lock (isProcessingQty)*: Khóa thao tác nút chỉnh nhanh hoặc ô nhập số lượng thủ công trên Picking card trong khi đợi backend phản hồi thành công, ngăn xung đột chèn dữ liệu song song.
   * *F5/Reload vs Exit/Reset Sync*:
     - Khi F5/Reload trang: `localStorage` vẫn lưu giữ `hlv_opened_pickings` giúp số lượng quét hiện tại được giữ nguyên và tải lại an toàn từ backend.
-    - Khi Quay lại (`goBack()`), về trang chủ (`goToMain()`), hoặc Làm lại (`clearPicking()`): Xóa `pickingId` khỏi `localStorage` và tự động gửi RPC `/hlv_mobile_barcode/clear_quantities` để reset sạch sẽ số lượng quét về 0 trên backend, đảm bảo tính nhất quán của cơ sở dữ liệu.
+    - Khi Quay lại (`goBack()`), về trang chủ (`goToMain()`), hoặc Làm lại (`clearPicking()`): Xóa `pickingId` khỏi `localStorage` và tự động gửi RPC `/hlv_mobile_barcode/clear_quantities` để reset sạch sẽ toàn bộ dữ liệu quét (hủy và xóa các dòng dịch chuyển/sản phẩm tạo động, reset số lượng đặt trước về 0 và gỡ kiện cho các dòng đặt trước ban đầu), đồng thời làm sạch state vị trí và sản phẩm đã quét ở giao diện.
 - **Hierarchical & Sudo Location Stock Lookup (Tra cứu tồn kho phân cấp & Bỏ qua rào cản phân quyền)**:
   * Tối ưu hóa API tra cứu tồn kho vị trí bằng cách thay đổi toán tử tìm kiếm `stock.quant` từ `=` sang `child_of` (`[('location_id', 'child_of', location.id)]`) kết hợp với phương thức `.sudo()`.
   * Việc sử dụng `.sudo()` là bắt buộc để bỏ qua các rào cản phân quyền multi-company hoặc giới hạn vị trí ngầm định của Odoo ORM khi gọi qua RPC, đảm bảo thủ kho luôn thấy 100% dữ liệu tồn kho thực tế.
