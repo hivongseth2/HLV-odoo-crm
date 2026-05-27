@@ -252,8 +252,8 @@ def call_get_item_base_info(creds, item_id_list):
     Trả về list item dict đầy đủ.
     """
     api_path = '/api/v2/product/get_item_base_info'
-    # Shopee yêu cầu JSON array string trong query param
-    extra = {'item_id_list': json.dumps(item_id_list)}
+    # Shopee nhận item_id_list dưới dạng repeated params: item_id_list=id1&item_id_list=id2
+    extra = {'item_id_list': item_id_list}
     params = _build_signed_params(creds, api_path, extra)
     _logger.info(
         "Shopee Product API: get_item_base_info ids_count=%d first=%s",
