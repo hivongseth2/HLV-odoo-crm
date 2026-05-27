@@ -99,7 +99,7 @@ class HLVMobileBarcodeController(http.Controller):
         pt_code = (picking.picking_type_id.sequence_code or '').upper()
         pt_type = picking.picking_type_id.code
         is_putaway = False
-        if pt_type == 'incoming' or (pt_type == 'internal' and 'INT' not in pt_code and 'IN' in pt_code):
+        if pt_type == 'incoming' or (pt_type == 'internal' and 'INT' not in pt_code and 'IN' in pt_code) or picking.location_id.usage == 'transit':
             is_putaway = True
 
         lines = []
@@ -317,7 +317,7 @@ class HLVMobileBarcodeController(http.Controller):
         pt_code = (picking.picking_type_id.sequence_code or '').upper()
         pt_type = picking.picking_type_id.code
         is_putaway = False
-        if pt_type == 'incoming' or (pt_type == 'internal' and 'INT' not in pt_code and 'IN' in pt_code):
+        if pt_type == 'incoming' or (pt_type == 'internal' and 'INT' not in pt_code and 'IN' in pt_code) or picking.location_id.usage == 'transit':
             is_putaway = True
         
         # 1. Try to find location first
