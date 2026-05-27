@@ -57,6 +57,10 @@ class ShopeeProduct(models.Model):
     item_name = fields.Char(string='Tên sản phẩm', index=True)
     item_sku = fields.Char(string='SKU', index=True)
     category_id = fields.Integer(string='Category ID Shopee')
+    category_display = fields.Char(
+        string='Danh mục Shopee',
+        compute='_compute_category_display',
+    )
     item_status = fields.Selection(
         ITEM_STATUS_SELECTION,
         string='Trạng thái',
@@ -125,6 +129,10 @@ class ShopeeProduct(models.Model):
     )
     last_api_section = fields.Char(string='Nhóm API gần nhất', readonly=True)
     last_api_synced_at = fields.Datetime(string='API cập nhật lần cuối', readonly=True)
+    last_api_result_display = fields.Text(
+        string='Kết quả API gần nhất',
+        compute='_compute_last_api_result_display',
+    )
 
     # ── Cấu hình tồn kho ─────────────────────────────────
     stock_update_mode = fields.Selection([
@@ -145,10 +153,12 @@ class ShopeeProduct(models.Model):
         ('manual', 'Thủ công'),
         ('price_field', 'Cột giá từ sản phẩm'),
     ], string='Phương thức cập nhật giá', default='manual')
-    price_field_name = fields.Selection([
-        ('list_price', 'Giá bán (list_price)'),
-        ('standard_price', 'Giá vốn (cost)'),
-    ], string='Cột giá', default='list_price')
+    price_field_id = fields.Many2one(
+        'ir.model.fields',
+        string='Cột giá (product.template)',
+        domain="[('model', '=', 'product.template'), ('ttype', 'in', ['float', 'monetary', 'integer'])]",
+        help='Chọn bất kỳ cột số trên product.template: list_price, standard_price, x_studio_gia_san_tmdt, x_studio_gi_bn_thng_mi, x_studio_ga_web, ...',
+    )
     manual_price = fields.Float(string='Giá thủ công', digits=(16, 0), default=0)
 
     # ── Biến thể (models) ────────────────────────────────
@@ -167,6 +177,35 @@ class ShopeeProduct(models.Model):
     def _compute_model_count(self):
         for rec in self:
             rec.model_count = len(rec.model_ids)
+
+    @api.depends('category_id', 'raw_data')
+    def _compute_category_display(self):
+        for rec in self:
+            cid = rec.category_id or 0
+            name = ''
+            raw = rec.raw_data if isinstance(rec.raw_data, dict) else {}
+            cat_info = raw.get('category_info') or raw.get('category') or {}
+            if isinstance(cat_info, dict):
+                name = cat_info.get('display_name') or cat_info.get('name') or ''
+            if name:
+                rec.category_display = f"{cid} — {name}"
+            else:
+                rec.category_display = str(cid) if cid else ''
+
+    @api.depends('raw_data', 'last_api_section')
+    def _compute_last_api_result_display(self):
+        for rec in self:
+            raw = rec.raw_data if isinstance(rec.raw_data, dict) else {}
+            section = rec.last_api_section
+            if section and section in raw:
+                try:
+                    rec.last_api_result_display = _json.dumps(
+                        raw[section], ensure_ascii=False, indent=2
+                    )
+                except Exception:
+                    rec.last_api_result_display = str(raw[section])
+            else:
+                rec.last_api_result_display = ''
 
     _sql_constraints = [
         (
@@ -274,16 +313,7 @@ class ShopeeProduct(models.Model):
         if not items:
             raise UserError(_("Không tìm thấy thông tin sản phẩm ID %s trên Shopee.") % self.shopee_item_id)
         _update_record_from_api(self, items[0])
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': _("Đã cập nhật"),
-                'message': _("Đã đồng bộ lại sản phẩm '%s' từ Shopee.") % self.item_name,
-                'type': 'success',
-                'sticky': False,
-            },
-        }
+        return {'type': 'ir.actions.client', 'tag': 'reload'}
 
     def action_open_sync_wizard(self):
         """Mở wizard đồng bộ hàng loạt."""
@@ -367,32 +397,38 @@ class ShopeeProduct(models.Model):
         }
 
     def action_push_price(self):
-        """
-        Đẩy giá lên Shopee theo price_update_mode:
-        - manual: dùng new_price trên từng biến thể / manual_price nếu không có biến thể
-        - price_field: đọc cột giá price_field_name từ product.template liên kết
-        """
+        """Đẩy giá lên Shopee theo price_update_mode và reload form."""
         self.ensure_one()
         from odoo.addons.shopee_order_fetch.services.shopee_api import (
             get_credentials_from_shop,
         )
         creds = get_credentials_from_shop(self.shop_id)
         mode = self.price_update_mode or 'manual'
-        field = self.price_field_name or 'list_price'
+        fname = self.price_field_id.name if self.price_field_id else None
 
         def _price_from_product(product):
-            val = getattr(product.product_tmpl_id, field, None)
-            if not val:
-                val = getattr(product, field, None)
+            if not product or not fname:
+                return 0.0
+            val = getattr(product, fname, None)
+            if not val and hasattr(product, 'product_tmpl_id'):
+                val = getattr(product.product_tmpl_id, fname, None)
             return float(val or 0)
+
+        if mode == 'price_field' and not fname:
+            raise UserError(_('Vui lòng chọn cột giá từ product.template.'))
 
         if self.has_model and self.model_ids:
             price_list = []
             for m in self.model_ids:
                 if not m.shopee_model_id:
                     continue
-                if mode == 'price_field' and m.mapped_product_id:
-                    price = _price_from_product(m.mapped_product_id)
+                if mode == 'price_field':
+                    product = m.mapped_product_id
+                    if not product:
+                        raise UserError(_(
+                            'Biến thể "%s" chưa có mapping shopee.item → product.product, không đọc được giá.'
+                        ) % (m.tier_label or m.model_sku or m.shopee_model_id))
+                    price = _price_from_product(product)
                 else:
                     price = m.new_price
                 if price > 0:
@@ -400,7 +436,9 @@ class ShopeeProduct(models.Model):
         else:
             if mode == 'price_field':
                 product = self.mapped_product_ids[:1] or self.odoo_product_id
-                price = _price_from_product(product) if product else 0
+                if not product:
+                    raise UserError(_('Sản phẩm chưa có mapping Odoo để đọc giá.'))
+                price = _price_from_product(product)
             else:
                 price = self.manual_price or self.original_price
             price_list = [{'model_id': 0, 'original_price': price}] if price > 0 else []
@@ -418,25 +456,12 @@ class ShopeeProduct(models.Model):
             )
             raise UserError(_('Một số giá cập nhật thất bại: %s') % msgs)
 
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': _('Cập nhật giá thành công'),
-                'message': _('Đã cập nhật giá %d model.') % len(success),
-                'type': 'success',
-                'sticky': False,
-            },
-        }
+        # Tự refresh sau khi push
+        self.action_refresh_from_shopee()
+        return {'type': 'ir.actions.client', 'tag': 'reload'}
 
     def action_push_stock(self):
-        """
-        Đẩy tồn kho lên Shopee theo stock_update_mode:
-        - manual: dùng new_stock trên từng biến thể / manual_stock nếu không có biến thể
-        - total_warehouses: tổng qty_available tất cả kho
-        - warehouse: qty_available của kho được chọn
-        - fixed_location: qty_available tại vị trí cố định
-        """
+        """Đẩy tồn kho lên Shopee theo stock_update_mode và reload form."""
         self.ensure_one()
         from odoo.addons.shopee_order_fetch.services.shopee_api import (
             get_credentials_from_shop,
@@ -444,14 +469,32 @@ class ShopeeProduct(models.Model):
         creds = get_credentials_from_shop(self.shop_id)
         mode = self.stock_update_mode or 'manual'
 
+        if mode == 'warehouse' and not self.stock_warehouse_id:
+            raise UserError(_('Vui lòng chọn kho hàng.'))
+        if mode == 'fixed_location' and not self.stock_location_id:
+            raise UserError(_('Vui lòng chọn vị trí kho.'))
+
         def _qty_from_product(product):
+            if not product:
+                return 0
             if mode == 'total_warehouses':
-                return int(product.with_context(compute_child=True).qty_available)
-            elif mode == 'warehouse' and self.stock_warehouse_id:
-                return int(product.with_context(warehouse=self.stock_warehouse_id.id).qty_available)
-            elif mode == 'fixed_location' and self.stock_location_id:
-                return int(product.with_context(location=self.stock_location_id.id).qty_available)
-            return 0
+                qty = product.qty_available
+            elif mode == 'warehouse':
+                qty = product.with_context(warehouse=self.stock_warehouse_id.id).qty_available
+            elif mode == 'fixed_location':
+                # context 'location' cần list id hoặc int; tính cả child location
+                loc_ids = self.stock_location_id.search([
+                    ('id', 'child_of', self.stock_location_id.id),
+                    ('usage', '=', 'internal'),
+                ]).ids
+                qty = product.with_context(location=loc_ids).qty_available
+                _logger.info(
+                    "Shopee push_stock fixed_location: product=%s location=%s child_ids=%s qty=%s",
+                    product.display_name, self.stock_location_id.complete_name, loc_ids, qty,
+                )
+            else:
+                qty = 0
+            return int(qty or 0)
 
         if self.has_model and self.model_ids:
             stock_list = []
@@ -460,10 +503,13 @@ class ShopeeProduct(models.Model):
                     continue
                 if mode == 'manual':
                     qty = m.new_stock
-                elif m.mapped_product_id:
-                    qty = _qty_from_product(m.mapped_product_id)
                 else:
-                    qty = m.new_stock  # fallback nếu không có sản phẩm liên kết
+                    product = m.mapped_product_id
+                    if not product:
+                        raise UserError(_(
+                            'Biến thể "%s" chưa có mapping shopee.item → product.product, không đọc được tồn kho.'
+                        ) % (m.tier_label or m.model_sku or m.shopee_model_id))
+                    qty = _qty_from_product(product)
                 stock_list.append({
                     'model_id': int(m.shopee_model_id),
                     'seller_stock': [{'stock': qty}],
@@ -473,7 +519,9 @@ class ShopeeProduct(models.Model):
                 qty = self.manual_stock
             else:
                 product = self.mapped_product_ids[:1] or self.odoo_product_id
-                qty = _qty_from_product(product) if product else self.manual_stock
+                if not product:
+                    raise UserError(_('Sản phẩm chưa có mapping Odoo để đọc tồn kho.'))
+                qty = _qty_from_product(product)
             stock_list = [{'model_id': 0, 'seller_stock': [{'stock': qty}]}]
 
         if not stock_list:
@@ -489,16 +537,9 @@ class ShopeeProduct(models.Model):
             )
             raise UserError(_('Một số tồn kho cập nhật thất bại: %s') % msgs)
 
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': _('Cập nhật tồn kho thành công'),
-                'message': _('Đã cập nhật tồn kho %d model.') % len(success),
-                'type': 'success',
-                'sticky': False,
-            },
-        }
+        # Tự refresh sau khi push
+        self.action_refresh_from_shopee()
+        return {'type': 'ir.actions.client', 'tag': 'reload'}
 
     def action_delete_from_shopee(self):
         """Xóa sản phẩm này khỏi Shopee (soft delete — trạng thái SELLER_DELETE)."""
