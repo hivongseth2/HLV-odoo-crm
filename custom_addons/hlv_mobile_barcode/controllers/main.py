@@ -408,7 +408,7 @@ class HLVMobileBarcodeController(http.Controller):
         else:
             move = move[0]
 
-        # Check limit to prevent over-scanning
+        # Check limit to prevent over-scanning (demand-based)
         current_qty_done = sum(ml.quantity for ml in move.move_line_ids)
         if move.product_uom_qty > 0.0 and current_qty_done + 1 > move.product_uom_qty:
             return {'error': _('Sản phẩm "%s" đã quét đủ số lượng yêu cầu (%g/%g). Không thể quét thêm!', product.display_name, current_qty_done, move.product_uom_qty)}
@@ -421,12 +421,6 @@ class HLVMobileBarcodeController(http.Controller):
         
         # Check actual physical stock in the source location to prevent over-picking (only when picking, i.e., not is_putaway)
         if not is_putaway:
-            # Calculate how many of this product have already been processed in this picking from this exact source location
-            processed_qty_from_loc = sum(
-                ml.quantity for ml in move.move_line_ids 
-                if ml.location_id.id == ml_src_id
-            )
-            
             # Find the actual physical stock available at this source location (including all sub-locations)
             quants = request.env['stock.quant'].sudo().search([
                 ('product_id', '=', product.id),
@@ -434,21 +428,60 @@ class HLVMobileBarcodeController(http.Controller):
             ])
             available_qty = sum(q.quantity for q in quants)
             
+            # Calculate total processed qty for this product across ALL moves in this picking
+            # that source from the same location tree (parent + children)
+            source_loc = request.env['stock.location'].sudo().browse(ml_src_id)
+            child_loc_ids = request.env['stock.location'].sudo().search([('id', 'child_of', ml_src_id)]).ids
+            processed_qty_from_loc = sum(
+                ml.quantity for ml in picking.move_line_ids
+                if ml.product_id == product and ml.location_id.id in child_loc_ids
+            )
+            
+            if available_qty <= 0:
+                return {
+                    'error': _(
+                        'Sản phẩm "%s" không có tồn kho tại vị trí "%s" (bao gồm các vị trí con). Không thể quét!',
+                        product.display_name,
+                        source_loc.display_name
+                    )
+                }
+            
             if processed_qty_from_loc + 1 > available_qty:
                 return {
                     'error': _(
                         'Số lượng quét (%g) vượt quá tồn kho thực tế tại vị trí "%s" (%g). Không thể quét thêm!',
                         processed_qty_from_loc + 1,
-                        request.env['stock.location'].sudo().browse(ml_src_id).display_name,
+                        source_loc.display_name,
                         available_qty
                     )
                 }
+            
+            # Resolve actual child location where stock exists for accurate move line creation
+            # If stock is not directly at ml_src_id but at a child location, use the child location
+            actual_src_id = ml_src_id
+            direct_quants = request.env['stock.quant'].sudo().search([
+                ('product_id', '=', product.id),
+                ('location_id', '=', ml_src_id),
+                ('quantity', '>', 0)
+            ])
+            if not direct_quants:
+                # No stock at exact location, find the child location that has stock
+                child_quants = request.env['stock.quant'].sudo().search([
+                    ('product_id', '=', product.id),
+                    ('location_id', 'child_of', ml_src_id),
+                    ('quantity', '>', 0)
+                ], order='quantity desc')
+                if child_quants:
+                    # Use the child location with the most stock
+                    actual_src_id = child_quants[0].location_id.id
+            
+            ml_src_id = actual_src_id
         
         if move_line:
             # Check if location matches, otherwise we might need a new move line
             last_ml = move_line[-1]
             if (is_putaway and destination_location_id and last_ml.location_dest_id.id != destination_location_id) or \
-               (not is_putaway and destination_location_id and last_ml.location_id.id != destination_location_id):
+               (not is_putaway and destination_location_id and last_ml.location_id.id != ml_src_id):
                 # Locations differ, create a new move line
                 request.env['stock.move.line'].create({
                     'move_id': move.id,
@@ -542,9 +575,11 @@ class HLVMobileBarcodeController(http.Controller):
             
         if not is_putaway:
             ml_src_id = move_line.location_id.id
+            # Check across ALL move lines in the picking for this product (not just this one move)
+            child_loc_ids = request.env['stock.location'].sudo().search([('id', 'child_of', ml_src_id)]).ids
             processed_qty_from_loc = sum(
-                ml.quantity for ml in move.move_line_ids 
-                if ml.location_id.id == ml_src_id and ml.id != move_line.id
+                ml.quantity for ml in move.picking_id.move_line_ids
+                if ml.product_id == move.product_id and ml.location_id.id in child_loc_ids and ml.id != move_line.id
             )
             
             quants = request.env['stock.quant'].sudo().search([
