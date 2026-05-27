@@ -609,6 +609,7 @@ export class BarcodeApp extends Component {
                 this.state.scannedLocationName = "";
                 this.state.lastScannedProduct = null;
                 this.state.pickingRefreshTick += 1;
+                window.location.reload();
             }
         } catch (e) {
             this.notification.add("Lỗi kết nối", { type: "danger" });

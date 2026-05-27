@@ -99,8 +99,15 @@ export class PickingScanner extends Component {
             if (res.error) {
                 this.notification.add(res.error, { type: "danger" });
             } else {
+                const storageKey = 'hlv_opened_pickings';
+                try {
+                    let opened = JSON.parse(localStorage.getItem(storageKey) || '[]');
+                    opened = opened.filter(id => id !== this.props.pickingId);
+                    localStorage.setItem(storageKey, JSON.stringify(opened));
+                } catch (e) {}
+                
                 this.notification.add("Đã làm mới số lượng", { type: "success" });
-                await this.loadPicking();
+                window.location.reload();
             }
         } catch (e) {
             this.notification.add("Lỗi kết nối", { type: "danger" });
