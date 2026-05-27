@@ -37,6 +37,8 @@
                       decoration-success="shopee_item_mapping_count &gt; 0"/>
                 <field name="shopee_update_time" string="Cập nhật Shopee" optional="show"/>
                 <field name="last_synced" string="Đồng bộ lần cuối" optional="show"/>
+                <field name="pending_stock_sync" string="Chờ sync" optional="show" widget="boolean"
+                       decoration-warning="pending_stock_sync == True"/>
                 <field name="shopee_item_id" string="Mã sản phẩm Shopee" optional="show"/>
             </list>
         </field>
@@ -205,7 +207,11 @@
                         <div class="row g-3 mb-3">
                             <div class="col-lg-6">
                                 <div class="rounded-3 p-3 h-100 shadow-sm" style="background:#fef7f3; box-shadow:0 8px 20px rgba(15,23,42,.06);">
-                                    <div class="fw-semibold mb-2" style="color:#ee4d2d;"><i class="fa fa-cubes me-1"/> Tồn kho — phương thức cập nhật</div>
+                                    <div class="fw-semibold mb-2" style="color:#ee4d2d;"><i class="fa fa-cubes me-1"/> Tồn kho — phương thức cập nhật
+                                        <span class="badge bg-warning text-dark small ms-2" invisible="not pending_stock_sync">
+                                            <i class="fa fa-clock-o me-1"/> Chờ đồng bộ
+                                        </span>
+                                    </div>
                                     <field name="stock_update_mode" nolabel="1" widget="radio"/>
                                     <div invisible="stock_update_mode != 'warehouse'" class="mt-2">
                                         <field name="stock_warehouse_id" placeholder="Chọn kho hàng"/>

@@ -130,6 +130,14 @@ class ShopeeProduct(models.Model):
     last_api_section = fields.Char(string='Nhóm API gần nhất', readonly=True)
     last_api_synced_at = fields.Datetime(string='API cập nhật lần cuối', readonly=True)
 
+    # ── Hàng đợi đồng bộ tồn kho ─────────────────────────
+    pending_stock_sync = fields.Boolean(
+        string='Chờ đồng bộ tồn kho',
+        default=False,
+        help='True khi tồn kho thay đổi qua phiếu kho và đang chờ đồng bộ lên Shopee.',
+    )
+    pending_sync_since = fields.Datetime(string='Đánh dấu lúc', readonly=True)
+
     # ── Cấu hình tồn kho ─────────────────────────────────
     stock_update_mode = fields.Selection([
         ('manual', 'Thủ công'),
@@ -572,6 +580,85 @@ class ShopeeProduct(models.Model):
                 'sticky': False,
             },
         }
+
+    @api.model
+    def _mark_for_stock_sync(self, product_ids):
+        """Đánh dấu shopee.products cần đồng bộ tồn kho khi Odoo product.product thay đổi.
+
+        Được gọi từ stock.picking._action_done() sau khi phiếu kho hoàn thành.
+        Tìm kiếm qua cả odoo_product_id (link thủ công) và shopee.item mapping.
+        """
+        if not product_ids:
+            return
+
+        # 1. Tìm qua odoo_product_id (liên kết thủ công trực tiếp)
+        direct = self.search([
+            ('odoo_product_id', 'in', product_ids),
+            ('stock_update_mode', 'not in', ['manual', False]),
+        ])
+
+        # 2. Tìm qua shopee.item mapping (sale_shopee)
+        via_items = self.browse()
+        try:
+            shopee_items = self.env['shopee.item'].sudo().search(
+                [('product_id', 'in', product_ids)]
+            )
+            if shopee_items:
+                item_identifiers = list({
+                    str(si.shopee_item_identifier)
+                    for si in shopee_items
+                    if si.shopee_item_identifier
+                })
+                via_items = self.search([
+                    ('shopee_item_id', 'in', item_identifiers),
+                    ('stock_update_mode', 'not in', ['manual', False]),
+                    ('id', 'not in', direct.ids),
+                ])
+        except Exception as e:
+            _logger.debug("Shopee _mark_for_stock_sync: bỏ qua shopee.item lookup: %s", e)
+
+        to_mark = direct | via_items
+        if to_mark:
+            to_mark.write({
+                'pending_stock_sync': True,
+                'pending_sync_since': fields.Datetime.now(),
+            })
+            _logger.info(
+                "Shopee: đánh dấu %d sản phẩm chờ đồng bộ tồn kho (triggered by %d products)",
+                len(to_mark), len(product_ids),
+            )
+
+    @api.model
+    def cron_process_stock_sync_queue(self):
+        """Scheduled action: xử lý hàng đợi đồng bộ tồn kho Shopee.
+
+        Chạy thường xuyên (VD: mỗi 15 phút) để đẩy tồn kho sau khi
+        phiếu kho được xác nhận qua app barcode hoặc thủ công.
+        """
+        pending = self.search([
+            ('pending_stock_sync', '=', True),
+            ('stock_update_mode', 'not in', ['manual', False]),
+            ('item_status', 'not in', ['SELLER_DELETE', 'SHOPEE_DELETE']),
+        ])
+        if not pending:
+            return
+        success_count = 0
+        error_count = 0
+        for product in pending:
+            try:
+                product._do_push_stock()
+                product.write({'pending_stock_sync': False, 'pending_sync_since': False})
+                success_count += 1
+            except Exception as e:
+                error_count += 1
+                _logger.error(
+                    "Shopee stock sync queue: thất bại id=%s item=%s: %s",
+                    product.id, product.shopee_item_id, str(e),
+                )
+        _logger.info(
+            "Shopee stock sync queue: hoàn tất — %d thành công, %d lỗi",
+            success_count, error_count,
+        )
 
     def action_delete_from_shopee(self):
         """Xóa sản phẩm này khỏi Shopee (soft delete — trạng thái SELLER_DELETE)."""

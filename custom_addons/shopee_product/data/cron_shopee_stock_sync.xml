@@ -29,4 +29,21 @@
         <field name="code">action = records.action_bulk_sync_stock()</field>
     </record>
 
+    <!-- ═══════════════════════════════════════════════════════════════
+         CRON: Xử lý hàng đợi đồng bộ tồn kho (trigger từ phiếu kho)
+         Chạy mỗi 15 phút để đẩy tồn kho Shopee sau khi app barcode
+         hoặc người dùng xác nhận phiếu kho trong Odoo.
+         Mặc định tắt (active=False). Admin bật trong Scheduled Actions.
+    ═══════════════════════════════════════════════════════════════ -->
+    <record id="cron_shopee_process_stock_queue" model="ir.cron">
+        <field name="name">Shopee: Xử lý hàng đợi đồng bộ tồn kho</field>
+        <field name="model_id" ref="shopee_product.model_shopee_product"/>
+        <field name="state">code</field>
+        <field name="code">model.cron_process_stock_sync_queue()</field>
+        <field name="interval_number">15</field>
+        <field name="interval_type">minutes</field>
+        <field name="numbercall">-1</field>
+        <field name="active">False</field>
+    </record>
+
 </odoo>

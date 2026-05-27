@@ -310,6 +310,44 @@ def call_get_item_extra_info(creds, item_id_list):
 
 
 # ──────────────────────────────────────────────────────
+#  Media Space
+# ──────────────────────────────────────────────────────
+
+def call_upload_image(creds, image_binary):
+    """
+    POST /api/v2/media_space/upload_image  (multipart/form-data)
+
+    image_binary: bytes của file ảnh (JPEG/PNG, tối thiểu 200×200px).
+    Trả về image_id (str) để dùng trong image_id_list khi tạo/sửa sản phẩm.
+    """
+    api_path = '/api/v2/media_space/upload_image'
+    params = _build_signed_params(creds, api_path)
+    url = '{}{}'.format(creds.get('base_url') or SHOPEE_BASE_URL, api_path)
+    _logger.info("Shopee Product API: upload_image (%d bytes)", len(image_binary))
+    try:
+        resp = req_lib.post(
+            url,
+            params=params,
+            files={'image': ('product.jpg', image_binary, 'image/jpeg')},
+            timeout=60,
+        )
+    except Exception as e:
+        raise UserError('Lỗi kết nối khi upload ảnh lên Shopee: %s' % str(e))
+    try:
+        body = resp.json()
+    except Exception:
+        raise UserError(
+            'Shopee trả về response không hợp lệ khi upload ảnh (status %s).'
+            % resp.status_code
+        )
+    _check_error(body, 'upload_image')
+    image_id = body.get('response', {}).get('image_id', '')
+    if not image_id:
+        raise UserError('Shopee không trả về image_id sau khi upload ảnh.')
+    return image_id
+
+
+# ──────────────────────────────────────────────────────
 #  Write items
 # ──────────────────────────────────────────────────────
 
