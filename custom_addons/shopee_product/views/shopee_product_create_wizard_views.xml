@@ -91,7 +91,7 @@
                                     <field name="value_text"/>
                                     <field name="attribute_id"/>
                                     <templates>
-                                        <t t-name="kanban-box">
+                                        <t t-name="card">
                                             <div class="sp-attr-card">
                                                 <div class="sp-attr-label">
                                                     <t t-if="record.is_mandatory.raw_value"><span class="sp-req">*</span></t>
@@ -126,14 +126,14 @@
                                     <field name="cod_enabled"/>
                                     <field name="selected"/>
                                     <templates>
-                                        <t t-name="kanban-box">
+                                        <t t-name="card">
                                             <div class="sp-logi-card" t-att-class="record.selected.raw_value ? 'sp-logi-on' : ''">
                                                 <div class="sp-logi-main">
                                                     <div class="sp-logi-name"><field name="channel_name"/></div>
                                                     <div class="sp-logi-meta">
                                                         <span class="sp-logi-chip">ID <field name="channel_id"/></span>
                                                         <t t-if="record.cod_enabled.raw_value">
-                                                            <span class="sp-logi-chip sp-logi-cod"><i class="fa fa-money me-1"/>COD</span>
+                                                            <span class="sp-logi-chip sp-logi-cod"><i class="fa fa-money me-1" title="Hỗ trợ COD" role="img" aria-label="COD"/>COD</span>
                                                         </t>
                                                     </div>
                                                 </div>

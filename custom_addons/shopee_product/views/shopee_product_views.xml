@@ -108,8 +108,8 @@
                                 </h1>
                                 <div class="d-flex flex-wrap gap-3" style="color:#6b7280;">
                                     <span><i class="fa fa-barcode me-1" style="color:#ee4d2d;"/> <field name="item_sku" nolabel="1" placeholder="SKU"/></span>
-                                    <span><i class="fa fa-hashtag me-1" style="color:#ee4d2d;"/> <field name="shopee_item_id" nolabel="1" readonly="1"/></span>
-                                    <span><i class="fa fa-shopping-bag me-1" style="color:#ee4d2d;"/> <field name="shop_id" nolabel="1" readonly="1" options="{'no_open': False}"/></span>
+                                    <span><i class="fa fa-hashtag me-1" style="color:#ee4d2d;" title="Mã sản phẩm Shopee" role="img" aria-label="Mã sản phẩm Shopee"/> <field name="shopee_item_id" nolabel="1" readonly="1"/></span>
+                                    <span><i class="fa fa-shopping-bag me-1" style="color:#ee4d2d;" title="Cửa hàng" role="img" aria-label="Cửa hàng"/> <field name="shop_id" nolabel="1" readonly="1" options="{'no_open': False}"/></span>
                                 </div>
                             </div>
                         </div>
@@ -277,6 +277,14 @@
                                     <field name="shopee_model_id" string="Mã biến thể" readonly="1" optional="show"/>
                                     <field name="shopee_item_mapping_id" string="Liên kết" readonly="1" optional="hide"/>
                                     <field name="last_synced" string="Đồng bộ lần cuối" readonly="1" optional="hide"/>
+                                    <button name="action_push_model_update" type="object"
+                                            string="Đẩy biến thể" class="btn-link"
+                                            icon="fa-upload"
+                                            confirm="Cập nhật SKU/Giá mới/Tồn mới của biến thể này lên Shopee?"/>
+                                    <button name="action_delete_model_from_shopee" type="object"
+                                            string="Xóa khỏi Shopee" class="btn-link text-danger"
+                                            icon="fa-trash"
+                                            confirm="Xóa biến thể này khỏi Shopee? Hành động không thể hoàn tác."/>
                                 </list>
                             </field>
                         </div>
@@ -289,7 +297,7 @@
                                     <div class="rounded-3 p-4 shadow-sm" style="background:#fef7f3; border-left:4px solid #ee4d2d; box-shadow:0 8px 20px rgba(15,23,42,.06);">
                                         <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
                                             <div class="d-flex align-items-center gap-2">
-                                                <span class="rounded-circle d-inline-flex align-items-center justify-content-center flex-shrink-0" style="width:34px;height:34px;background:#fde8e2;color:#ee4d2d;font-size:15px;"><i class="fa fa-comments"/></span>
+                                                <span class="rounded-circle d-inline-flex align-items-center justify-content-center flex-shrink-0" style="width:34px;height:34px;background:#fde8e2;color:#ee4d2d;font-size:15px;"><i class="fa fa-comments" title="Bình luậ3n" role="img" aria-label="Bình luậ3n"/></span>
                                                 <span class="fw-semibold fs-5" style="color:#222;">Bình luận</span>
                                             </div>
                                             <div class="d-flex flex-wrap gap-2">
@@ -322,7 +330,7 @@
                                     <div class="o_shopee_content_section">
                                         <div class="sp-media-row">
                                             <div class="sp-media-col">
-                                                <div class="sp-media-head"><i class="fa fa-image"/> Ảnh sản phẩm</div>
+                                                <div class="sp-media-head"><i class="fa fa-image" title="Ảnh" role="img" aria-label="Ảnh"/> Ảnh sản phẩm</div>
                                                 <field name="image_line_ids" nolabel="1" mode="kanban">
                                                     <kanban class="o_shopee_media_kanban sp-image-kanban">
                                                         <field name="sequence"/>
@@ -332,17 +340,17 @@
                                                         <field name="upload_image"/>
                                                         <field name="upload_filename"/>
                                                         <templates>
-                                                            <t t-name="kanban-box">
+                                                            <t t-name="card">
                                                                 <div class="sp-media-tile" t-att-class="record.active.raw_value ? '' : 'sp-media-off'">
                                                                     <div class="sp-media-thumb">
                                                                         <t t-if="record.image_url.raw_value">
-                                                                            <img t-att-src="record.image_url.raw_value" alt=""/>
+                                                                            <img t-att-src="record.image_url.raw_value" alt="Ảnh sản phẩm Shopee"/>
                                                                         </t>
                                                                         <t t-elif="record.upload_image.raw_value">
                                                                             <field name="upload_image" widget="image" nolabel="1" options="{'size': [120, 120]}"/>
                                                                         </t>
                                                                         <t t-else="">
-                                                                            <div class="sp-media-empty"><i class="fa fa-image"/></div>
+                                                                            <div class="sp-media-empty"><i class="fa fa-image" title="Chưa có ảnh" role="img" aria-label="Chưa có ảnh"/></div>
                                                                         </t>
                                                                     </div>
                                                                     <div class="sp-media-meta">
@@ -352,7 +360,7 @@
                                                                         </div>
                                                                         <div class="sp-media-actions">
                                                                             <field name="active" widget="boolean_toggle" nolabel="1"/>
-                                                                            <label>Dùng</label>
+                                                                            <span class="o_form_label">Dùng</span>
                                                                         </div>
                                                                     </div>
                                                                     <div class="sp-media-upload">
@@ -377,7 +385,7 @@
                                                 </field>
                                             </div>
                                             <div class="sp-media-col">
-                                                <div class="sp-media-head"><i class="fa fa-video-camera"/> Video sản phẩm</div>
+                                                <div class="sp-media-head"><i class="fa fa-video-camera" title="Video" role="img" aria-label="Video"/> Video sản phẩm</div>
                                                 <field name="video_line_ids" nolabel="1" mode="kanban">
                                                     <kanban class="o_shopee_media_kanban sp-video-kanban">
                                                         <field name="sequence"/>
@@ -389,14 +397,14 @@
                                                         <field name="upload_filename"/>
                                                         <field name="video_upload_id"/>
                                                         <templates>
-                                                            <t t-name="kanban-box">
+                                                            <t t-name="card">
                                                                 <div class="sp-media-tile sp-video-tile" t-att-class="record.active.raw_value ? '' : 'sp-media-off'">
                                                                     <div class="sp-media-thumb">
                                                                         <t t-if="record.video_url.raw_value">
                                                                             <video t-att-src="record.video_url.raw_value" controls="controls"/>
                                                                         </t>
                                                                         <t t-else="">
-                                                                            <div class="sp-media-empty"><i class="fa fa-video-camera"/></div>
+                                                                            <div class="sp-media-empty"><i class="fa fa-video-camera" title="Chưa có video" role="img" aria-label="Chưa có video"/></div>
                                                                         </t>
                                                                     </div>
                                                                     <div class="sp-media-meta">
@@ -410,7 +418,7 @@
                                                                         </div>
                                                                         <div class="sp-media-actions">
                                                                             <field name="active" widget="boolean_toggle" nolabel="1"/>
-                                                                            <label>Dùng</label>
+                                                                            <span class="o_form_label">Dùng</span>
                                                                         </div>
                                                                     </div>
                                                                     <div class="sp-media-upload">

@@ -1,7 +1,10 @@
 import json
 import logging
 
-from odoo import api, fields, models
+from odoo import _, api, fields, models
+from odoo.exceptions import UserError
+
+from ..services import shopee_product_api
 
 _logger = logging.getLogger(__name__)
 
@@ -141,3 +144,65 @@ class ShopeeProductModel(models.Model):
                 # API trả về 'name' hoặc 'variation_option_name'
                 labels.append(opt.get('name') or opt.get('variation_option_name', ''))
         return ' / '.join(labels)
+
+    # ── Shopee model CRUD ──────────────────────────────────────────────────
+    def _shopee_creds(self):
+        from odoo.addons.shopee_order_fetch.services.shopee_api import (
+            get_credentials_from_shop,
+        )
+        self.ensure_one()
+        if not self.shopee_product_id.shop_id:
+            raise UserError(_('Sản phẩm Shopee chưa liên kết cửa hàng.'))
+        return get_credentials_from_shop(self.shopee_product_id.shop_id)
+
+    def action_push_model_update(self):
+        """Đẩy thay đổi của biến thể này lên Shopee qua update_model.
+
+        Cập nhật model_sku, original_price (nếu nhập new_price), seller_stock
+        (nếu nhập new_stock).
+        """
+        self.ensure_one()
+        if not self.shopee_model_id:
+            raise UserError(_('Biến thể chưa có model_id trên Shopee.'))
+        item_id = self.shopee_product_id.shopee_item_id
+        if not item_id:
+            raise UserError(_('Sản phẩm chưa có item_id trên Shopee.'))
+
+        model_entry = {'model_id': int(self.shopee_model_id)}
+        if self.model_sku:
+            model_entry['model_sku'] = self.model_sku
+        if self.new_price:
+            model_entry['original_price'] = float(self.new_price)
+        if self.new_stock:
+            model_entry['seller_stock'] = [{'stock': int(self.new_stock)}]
+
+        if len(model_entry) == 1:
+            raise UserError(_('Không có thay đổi (SKU/Giá mới/Tồn kho mới) để đẩy.'))
+
+        creds = self._shopee_creds()
+        _logger.info('Shopee update_model item_id=%s payload=%s', item_id, model_entry)
+        shopee_product_api.call_update_model(creds, int(item_id), [model_entry])
+
+        vals = {'last_synced': fields.Datetime.now()}
+        if self.new_price:
+            vals.update({'original_price': self.new_price, 'current_price': self.new_price, 'new_price': 0})
+        if self.new_stock:
+            vals.update({'available_stock': self.new_stock, 'new_stock': 0})
+        self.write(vals)
+        return True
+
+    def action_delete_model_from_shopee(self):
+        """Xóa biến thể này khỏi Shopee qua delete_model rồi xóa bản ghi Odoo."""
+        self.ensure_one()
+        if not self.shopee_model_id:
+            self.unlink()
+            return True
+        item_id = self.shopee_product_id.shopee_item_id
+        if not item_id:
+            raise UserError(_('Sản phẩm chưa có item_id trên Shopee.'))
+
+        creds = self._shopee_creds()
+        _logger.info('Shopee delete_model item_id=%s model_id=%s', item_id, self.shopee_model_id)
+        shopee_product_api.call_delete_model(creds, int(item_id), [int(self.shopee_model_id)])
+        self.unlink()
+        return True
