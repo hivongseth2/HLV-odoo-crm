@@ -32,6 +32,7 @@ class ShopeeProduct(models.Model):
 
     _name = 'shopee.product'
     _description = 'Sản phẩm Shopee'
+    _inherit = ['mail.thread', 'mail.activity.mixin']
     _order = 'shopee_update_time desc, id desc'
     _rec_name = 'item_name'
 

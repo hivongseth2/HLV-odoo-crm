@@ -20,6 +20,7 @@
     'category': 'Sales',
     'version': '18.0.1.1.0',
     'depends': [
+        'mail',
         'sale',
         'shopee_order_fetch',   # auth, signing, shopee.shop / shopee.account models
         'shopee_webhook',       # menu_shopee_root (ứng dụng Shopee)
