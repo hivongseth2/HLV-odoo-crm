@@ -13,9 +13,9 @@
                   decoration-warning="item_status == 'UNLIST'"
                   decoration-danger="item_status == 'BANNED'"
                   decoration-info="item_status == 'REVIEWING'">
-                <field name="item_name" string="Tên sản phẩm"/>
+                <field name="item_name" string="Sản phẩm Shopee"/>
                 <field name="item_sku" string="SKU" optional="show"/>
-                <field name="shop_id" string="Cửa hàng" optional="show"/>
+                <field name="shop_id" string="Shop" optional="show"/>
                 <field name="item_status" string="Trạng thái" widget="badge"
                        decoration-success="item_status == 'NORMAL'"
                        decoration-warning="item_status == 'UNLIST'"
@@ -27,10 +27,14 @@
                 <field name="total_available_stock" string="Tồn kho"
                        decoration-danger="total_available_stock == 0"
                        decoration-warning="total_available_stock &lt; 5 and total_available_stock &gt; 0"/>
-                <field name="has_model" string="Biến thể" widget="boolean_toggle" optional="show"/>
-                <field name="model_count" string="Số biến thể" optional="show"/>
-                <field name="mapped_product_count" string="SP Odoo" optional="show"/>
-                <field name="shopee_item_mapping_count" string="Mapping" optional="show"/>
+                  <field name="has_model" string="Có biến thể" widget="boolean_toggle" optional="show"/>
+                  <field name="model_count" string="Dòng biến thể" optional="show"
+                      decoration-danger="has_model and model_count == 0"
+                      decoration-success="model_count &gt; 0"/>
+                  <field name="mapped_product_count" string="SP Odoo" optional="show"
+                      decoration-success="mapped_product_count &gt; 0"/>
+                  <field name="shopee_item_mapping_count" string="Mapping" optional="show"
+                      decoration-success="shopee_item_mapping_count &gt; 0"/>
                 <field name="shopee_update_time" string="Cập nhật Shopee" optional="show"/>
                 <field name="last_synced" string="Đồng bộ lần cuối" optional="show"/>
                 <field name="shopee_item_id" string="Item ID" optional="show"/>
@@ -47,32 +51,26 @@
         <field name="arch" type="xml">
             <form string="Sản phẩm Shopee">
                 <header>
-                    <!-- Làm mới từ API -->
                     <button name="action_refresh_from_shopee" type="object"
-                            string="Làm mới từ Shopee" class="btn-secondary"
+                        string="Làm mới" class="btn-secondary"
                             icon="fa-refresh"/>
-                    <!-- Tải biến thể (chỉ khi has_model) -->
                     <button name="action_load_models" type="object"
                             string="Tải biến thể" class="btn-secondary"
                             icon="fa-list-ul"
                             invisible="not has_model"/>
-                    <!-- Đẩy giá -->
                     <button name="action_push_price" type="object"
-                            string="Đẩy giá lên Shopee" class="btn-primary"
+                        string="Đẩy giá" class="btn-primary"
                             icon="fa-tag"
                             confirm="Cập nhật giá lên Shopee?"/>
-                    <!-- Đẩy tồn kho -->
                     <button name="action_push_stock" type="object"
                             string="Đẩy tồn kho" class="btn-primary"
                             icon="fa-cubes"
                             confirm="Cập nhật tồn kho lên Shopee?"/>
-                    <!-- Xóa khỏi Shopee -->
                     <button name="action_delete_from_shopee" type="object"
                             string="Xóa khỏi Shopee" class="btn-danger"
                             icon="fa-trash"
                             confirm="⚠️ Sản phẩm sẽ bị xóa khỏi Shopee. Tiếp tục?"
                             invisible="item_status in ('SELLER_DELETE', 'SHOPEE_DELETE')"/>
-                    <!-- Status bar -->
                     <field name="item_status" widget="statusbar"
                            statusbar_visible="NORMAL,UNLIST,REVIEWING,BANNED"/>
                 </header>
@@ -111,7 +109,11 @@
                         </button>
                     </div>
 
-                    <!-- ── Title ── -->
+                    <div class="alert alert-warning" role="alert" invisible="not has_model or model_count">
+                        <i class="fa fa-exclamation-triangle me-1"/>
+                        Sản phẩm này có mapping biến thể nhưng chưa có dòng biến thể. Nhấn <strong>Tải biến thể</strong> để đồng bộ model từ Shopee hoặc dựng từ mapping shopee.item.
+                    </div>
+
                     <div class="oe_title">
                         <label class="o_form_label" for="item_name"/>
                         <h1>
@@ -122,29 +124,29 @@
                         </h3>
                     </div>
 
-                    <!-- ── Main groups ── -->
                     <group>
-                        <group string="Thông tin Shopee">
+                        <group string="Shopee">
                             <field name="shopee_item_id" readonly="1"/>
                             <field name="shop_id" readonly="1"/>
                             <field name="category_id" string="Danh mục (ID)" readonly="1"/>
                             <field name="has_model" string="Có biến thể" widget="boolean"
                                    readonly="1"/>
                         </group>
-                        <group string="Giá &amp; Tồn kho">
+                        <group string="Vận hành">
                             <field name="original_price" string="Giá gốc (đ)" widget="integer"/>
                             <field name="current_price" string="Giá hiện tại (đ)"
                                    widget="integer" readonly="1"/>
                             <field name="total_available_stock" string="Tổng tồn kho"
                                    readonly="1"/>
+                            <field name="model_count" string="Dòng biến thể" readonly="1"/>
                         </group>
                     </group>
                     <group>
                         <group string="Liên kết Odoo">
-                            <field name="mapped_product_ids" widget="many2many_tags"
-                                readonly="1" string="Từ shopee.item"/>
                             <field name="shopee_item_mapping_ids" widget="many2many_tags"
                                 readonly="1" string="Mapping shopee.item"/>
+                            <field name="mapped_product_ids" widget="many2many_tags"
+                                readonly="1" string="Sản phẩm Odoo"/>
                             <field name="odoo_product_id" options="{'no_create': True}"
                                 string="Link thủ công (cũ)"/>
                         </group>
@@ -156,45 +158,39 @@
                         </group>
                     </group>
 
-                    <!-- ── Notebook ── -->
                     <notebook>
-                        <!-- Tab biến thể -->
                         <page string="Biến thể / Model" name="models_tab"
                               invisible="not has_model">
                             <div class="alert alert-info" role="alert">
                                 <i class="fa fa-info-circle mr-1"/>
-                                Nhấn <strong>Tải biến thể</strong> để đồng bộ từ Shopee.
-                                Sau đó chỉnh <em>Giá mới</em> / <em>Tồn kho mới</em>
-                                rồi nhấn nút đẩy ở thanh trên.
+                                Chỉnh <strong>Giá mới</strong> hoặc <strong>Tồn kho mới</strong>, sau đó dùng nút đẩy ở thanh trên để cập nhật lên Shopee.
                             </div>
                             <field name="model_ids" nolabel="1">
                                 <list editable="bottom">
                                     <field name="tier_label" string="Phân loại" readonly="1"/>
                                     <field name="model_sku" string="SKU biến thể"/>
-                                     <field name="mapped_product_id" string="Sản phẩm Odoo"
-                                         readonly="1" optional="show"/>
+                                 <field name="mapped_product_id" string="Sản phẩm Odoo"
+                                     readonly="1" optional="show"/>
                                     <field name="model_status" string="Trạng thái"
                                            readonly="1" widget="badge"
                                            decoration-success="model_status == 'MODEL_NORMAL'"
                                            decoration-muted="model_status == 'MODEL_UNAVAILABLE'"/>
-                                    <field name="current_price" string="Giá hiện tại (đ)"
+                                 <field name="current_price" string="Giá hiện tại"
                                            readonly="1" widget="integer"/>
-                                    <field name="new_price" string="Giá mới (đ)"
+                                 <field name="new_price" string="Giá mới"
                                            widget="integer"/>
-                                    <field name="available_stock" string="Tồn hiện tại"
+                                 <field name="available_stock" string="Tồn hiện tại"
                                            readonly="1"/>
                                     <field name="new_stock" string="Tồn kho mới"/>
                                     <field name="shopee_model_id" string="Model ID"
                                            readonly="1" optional="show"/>
-                                     <field name="shopee_item_mapping_id" string="Mapping"
-                                         readonly="1" optional="hide"/>
+                                 <field name="shopee_item_mapping_id" string="Mapping"
+                                     readonly="1" optional="hide"/>
                                     <field name="last_synced" string="Đồng bộ lần cuối"
                                            readonly="1" optional="show"/>
                                 </list>
                             </field>
                         </page>
-
-                        <!-- Tab dữ liệu thô -->
                         <page string="Dữ liệu thô (JSON)" name="raw_data_tab">
                             <field name="raw_data" widget="json" readonly="1" nolabel="1"/>
                         </page>

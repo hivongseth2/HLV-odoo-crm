@@ -28,7 +28,7 @@ class ShopeeProductModel(models.Model):
     )
 
     # ── Shopee identifiers ──────────────────────────────────────────────────
-    shopee_model_id = fields.Integer('Model ID Shopee', index=True, readonly=True)
+    shopee_model_id = fields.Char('Model ID Shopee', index=True, readonly=True, size=64)
     model_sku = fields.Char('SKU biến thể')
     model_status = fields.Selection(
         [('MODEL_NORMAL', 'Đang bán'), ('MODEL_UNAVAILABLE', 'Không khả dụng')],

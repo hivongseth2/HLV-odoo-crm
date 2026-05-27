@@ -283,14 +283,16 @@ class ShopeeProduct(models.Model):
 
         existing = {r.shopee_model_id: r for r in self.model_ids}
         for m in model_list:
-            mid = m.get('model_id', 0)
+            mid = str(m.get('model_id') or '0')
             tier_index_raw = m.get('tier_index', [])
             tier_label = ShopeeModel._tier_label_from_variation(
                 tier_index_raw, tier_variation_list
             )
-            price_info = (m.get('price_info') or [{}])[0]
-            stock_v2 = m.get('stock_info_v2', {})
-            avail = stock_v2.get('summary_info', {}).get('total_available_stock', 0)
+            price_list = m.get('price_info') if isinstance(m.get('price_info'), list) else []
+            price_info = price_list[0] if price_list and isinstance(price_list[0], dict) else {}
+            stock_v2 = m.get('stock_info_v2') if isinstance(m.get('stock_info_v2'), dict) else {}
+            summary = stock_v2.get('summary_info') if isinstance(stock_v2.get('summary_info'), dict) else {}
+            avail = summary.get('total_available_stock', 0)
 
             vals = {
                 'shopee_model_id': mid,
@@ -311,19 +313,26 @@ class ShopeeProduct(models.Model):
                 ShopeeModel.create({'shopee_product_id': self.id, **vals})
 
         # Xóa các model không còn trên Shopee
-        shopee_model_ids = {m.get('model_id', 0) for m in model_list}
+        if not model_list and self.shopee_item_mapping_ids:
+            self._sync_models_from_shopee_item_mappings(self.shopee_item_mapping_ids, now)
+
+        shopee_model_ids = {str(m.get('model_id') or '0') for m in model_list}
         orphans = self.model_ids.filtered(
-            lambda r: r.shopee_model_id not in shopee_model_ids
+            lambda r: model_list and r.shopee_model_id not in shopee_model_ids
         )
         if orphans:
             orphans.unlink()
+
+        loaded_count = self.env['shopee.product.model'].sudo().search_count([
+            ('shopee_product_id', '=', self.id),
+        ])
 
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
                 'title': _('Đã tải biến thể'),
-                'message': _('Tải %d biến thể thành công.') % len(model_list),
+                'message': _('Tải %d biến thể thành công.') % loaded_count,
                 'type': 'success',
                 'sticky': False,
             },
@@ -342,9 +351,9 @@ class ShopeeProduct(models.Model):
 
         if self.has_model and self.model_ids:
             price_list = [
-                {'model_id': m.shopee_model_id, 'original_price': m.new_price}
+                {'model_id': int(m.shopee_model_id), 'original_price': m.new_price}
                 for m in self.model_ids
-                if m.new_price > 0
+                if m.shopee_model_id and m.new_price > 0
             ]
         else:
             price_list = [{'model_id': 0, 'original_price': self.original_price}]
@@ -387,10 +396,11 @@ class ShopeeProduct(models.Model):
         if self.has_model and self.model_ids:
             stock_list = [
                 {
-                    'model_id': m.shopee_model_id,
+                    'model_id': int(m.shopee_model_id),
                     'seller_stock': [{'stock': m.new_stock}],
                 }
                 for m in self.model_ids
+                if m.shopee_model_id
             ]
         else:
             return self._action_open_no_model_stock_wizard()
@@ -577,14 +587,51 @@ class ShopeeProduct(models.Model):
                 rec.write(vals)
                 updated += 1
             else:
-                self.sudo().create(vals)
+                rec = self.sudo().create(vals)
                 created += 1
+            rec._sync_models_from_shopee_item_mappings(mappings, now)
 
         _logger.info(
             "ShopeeProduct.import_from_shopee_items: tạo mới=%d cập nhật=%d mappings=%d",
             created, updated, len(shopee_items),
         )
         return created, updated, len(shopee_items)
+
+    def _sync_models_from_shopee_item_mappings(self, mappings, now=None):
+        """Create lightweight model lines from sale_shopee mapping rows."""
+        self.ensure_one()
+        now = now or fields.Datetime.now()
+        existing = {line.shopee_model_id: line for line in self.model_ids}
+        seen_model_ids = set()
+        for mapping in mappings:
+            model_identifier = str(mapping.shopee_model_identifier or '')
+            if not model_identifier or model_identifier in seen_model_ids:
+                continue
+            seen_model_ids.add(model_identifier)
+            product = mapping.product_id
+            product_name = product.display_name if product else mapping.display_name
+            product_sku = product.default_code if product else ''
+            product_price = (product.lst_price or product.list_price or 0.0) if product else 0.0
+            product_stock = product.qty_available if product else 0
+            vals = {
+                'shopee_model_id': model_identifier,
+                'model_sku': product_sku or '',
+                'model_status': 'MODEL_NORMAL',
+                'tier_label': product_name or model_identifier,
+                'original_price': product_price,
+                'current_price': product_price,
+                'new_price': product_price,
+                'available_stock': product_stock,
+                'new_stock': product_stock,
+                'last_synced': now,
+            }
+            if model_identifier in existing:
+                existing[model_identifier].write(vals)
+            else:
+                self.env['shopee.product.model'].sudo().create({
+                    'shopee_product_id': self.id,
+                    **vals,
+                })
 
 
 # ── Private helpers ──────────────────────────────────────
