@@ -52,6 +52,7 @@ class ShopeeProductSyncWizard(models.TransientModel):
     )
     result_created = fields.Integer(string='Tạo mới', readonly=True)
     result_updated = fields.Integer(string='Cập nhật', readonly=True)
+    result_mapping_count = fields.Integer(string='Mapping đã đọc', readonly=True)
     result_message = fields.Text(string='Kết quả', readonly=True)
 
     # ── Constraints ──────────────────────────────────────
@@ -124,6 +125,48 @@ class ShopeeProductSyncWizard(models.TransientModel):
             raise UserError(_("Đồng bộ thất bại:\n%s") % str(e))
 
         # Giữ wizard mở để xem kết quả
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': self._name,
+            'res_id': self.id,
+            'view_mode': 'form',
+            'target': 'new',
+        }
+
+    def action_import_from_shopee_items(self):
+        """Khởi tạo danh sách từ mapping shopee.item có sẵn, không gọi Shopee API."""
+        self.ensure_one()
+        try:
+            created, updated, mapping_count = self.env['shopee.product'].import_from_shopee_items(
+                shop=self.shop_id,
+            )
+            self.write({
+                'state': 'done',
+                'result_created': created,
+                'result_updated': updated,
+                'result_mapping_count': mapping_count,
+                'result_message': (
+                    f"Khởi tạo từ shopee.item thành công!\n"
+                    f"• Mapping đã đọc: {mapping_count}\n"
+                    f"• Tạo mới: {created} sản phẩm\n"
+                    f"• Cập nhật: {updated} sản phẩm\n"
+                    f"\nLưu ý: giá/tồn/trạng thái là dữ liệu khởi tạo từ product.product. "
+                    f"Chạy đồng bộ Shopee API sau đó để lấy dữ liệu live từ sàn."
+                ),
+            })
+        except UserError:
+            raise
+        except Exception as e:
+            self.write({
+                'state': 'error',
+                'result_message': f"Lỗi khi khởi tạo từ shopee.item:\n{str(e)}",
+            })
+            _logger.exception(
+                "ShopeeProductSyncWizard: lỗi khi import shopee.item shop %s",
+                self.shop_id.display_name,
+            )
+            raise UserError(_("Khởi tạo từ shopee.item thất bại:\n%s") % str(e))
+
         return {
             'type': 'ir.actions.act_window',
             'res_model': self._name,
