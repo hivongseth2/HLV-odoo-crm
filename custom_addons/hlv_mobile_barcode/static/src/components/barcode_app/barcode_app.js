@@ -39,6 +39,8 @@ export class BarcodeApp extends Component {
             pickingId: savedState.pickingId || null,
             pickingName: savedState.pickingName || "",
             warehouseCode: savedState.warehouseCode || "",
+            scannedLocationId: savedState.scannedLocationId || null,
+            scannedLocationName: savedState.scannedLocationName || "",
             lookupType: savedState.lookupType || null,
             recordId: savedState.recordId || null,
             lookupTitle: savedState.lookupTitle || "",
@@ -58,6 +60,8 @@ export class BarcodeApp extends Component {
                 pickingId: this.state.pickingId,
                 pickingName: this.state.pickingName,
                 warehouseCode: this.state.warehouseCode,
+                scannedLocationId: this.state.scannedLocationId,
+                scannedLocationName: this.state.scannedLocationName,
                 lookupType: this.state.lookupType,
                 recordId: this.state.recordId,
                 lookupTitle: this.state.lookupTitle,
@@ -70,6 +74,8 @@ export class BarcodeApp extends Component {
             this.state.pickingId,
             this.state.pickingName,
             this.state.warehouseCode,
+            this.state.scannedLocationId,
+            this.state.scannedLocationName,
             this.state.lookupType,
             this.state.recordId,
             this.state.lookupTitle,
@@ -231,23 +237,21 @@ export class BarcodeApp extends Component {
                 await this.closeCamera();
                 this.state.showCameraPopup = false;
 
-                this.pushHistory();
-                this.state.warehouseCode = result.warehouse_code || "HLV";
                 if (result.type === 'picking') {
-                    this.state.pickingId = result.id;
-                    this.state.pickingName = result.name;
-                    this.state.currentView = 'picking';
+                    await this.selectPicking(result.id, result.name);
                 } else {
+                    this.pushHistory();
+                    this.state.warehouseCode = result.warehouse_code || "HLV";
                     this.state.lookupType = result.type;
                     this.state.recordId = result.id;
                     this.state.lookupTitle = result.name;
                     this.state.currentView = 'lookup';
+                    
+                    // Start persistent inline camera on the newly loaded view
+                    setTimeout(async () => {
+                        await this.startPersistentCamera(false);
+                    }, 200);
                 }
-
-                // Start persistent inline camera on the newly loaded view
-                setTimeout(async () => {
-                    await this.startPersistentCamera(false);
-                }, 200);
             }
         } catch (error) {
             this.playSound('error');
@@ -379,6 +383,8 @@ export class BarcodeApp extends Component {
                 this.state.pickingId = res.picking_id;
                 this.state.pickingName = res.picking_name;
                 this.state.warehouseCode = res.warehouse_code || "HLV";
+                this.state.scannedLocationId = res.location_id;
+                this.state.scannedLocationName = res.location_name;
                 this.state.currentView = 'picking';
             }
         } catch (e) {
@@ -406,6 +412,14 @@ export class BarcodeApp extends Component {
         this.state.lastScannedProduct = null;
         this.state.pickingState = "";
         this.state.pickingRefreshTick += 1;
+
+        // Tải vị trí nguồn mặc định của phiếu để hiển thị trực tiếp lên tiêu đề
+        rpc("/hlv_mobile_barcode/get_picking_data", { picking_id: pickingId }).then((data) => {
+            if (data && !data.error && data.location_name) {
+                this.state.scannedLocationId = data.location_id;
+                this.state.scannedLocationName = data.location_name;
+            }
+        }).catch(() => {});
         
         setTimeout(async () => {
             await this.startPersistentCamera(false);

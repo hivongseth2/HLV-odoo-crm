@@ -225,6 +225,8 @@ class HLVMobileBarcodeController(http.Controller):
             'state': picking.state,
             'picking_type_code': picking.picking_type_id.code,
             'warehouse_code': picking.picking_type_id.warehouse_id.code or 'HLV',
+            'location_id': picking.location_id.id,
+            'location_name': picking.location_id.display_name or picking.location_id.name,
             'lines': lines,
             'packages': packages,
             'linked_picking_id': linked_picking_id,
@@ -272,14 +274,26 @@ class HLVMobileBarcodeController(http.Controller):
         if not picking_type_int:
             return {'error': _('Chưa cấu hình Operation Types (INT)')}
 
+        partner_id = False
+        if warehouse and warehouse.partner_id:
+            partner_id = warehouse.partner_id.id
+
         picking_int = request.env['stock.picking'].create({
             'picking_type_id': picking_type_int.id,
             'location_id': source_loc.id,
             'location_dest_id': transit_loc.id,
+            'partner_id': partner_id,
         })
         
         # Keep it in draft so user can add lines
-        return {'success': True, 'picking_id': picking_int.id, 'picking_name': picking_int.name, 'warehouse_code': picking_int.picking_type_id.warehouse_id.code or 'HLV'}
+        return {
+            'success': True, 
+            'picking_id': picking_int.id, 
+            'picking_name': picking_int.name, 
+            'warehouse_code': picking_int.picking_type_id.warehouse_id.code or 'HLV',
+            'location_id': source_loc.id,
+            'location_name': source_loc.display_name or source_loc.name
+        }
 
     @http.route('/hlv_mobile_barcode/process_barcode', type='json', auth='user')
     def process_barcode(self, picking_id, barcode, destination_location_id=None, last_product_id=None):
@@ -756,6 +770,22 @@ class HLVMobileBarcodeController(http.Controller):
         if not picking.exists():
             return {'error': _('Picking not found')}
 
+        # Nếu là phiếu chuyển nội bộ 2 bước (INT) và chưa có partner_id, tự động gán partner của kho nguồn (location_id)
+        if picking.picking_type_id.code == 'internal' and not picking.partner_id:
+            is_transit = False
+            complete_name = (picking.location_dest_id.complete_name or "").strip().lower()
+            accepted_names = ["physical locations/inter-warehouse transit", "vị trí vật lý/trung chuyển liên kho", "kho trung gian"]
+            if any(complete_name.endswith(name) or complete_name == name for name in accepted_names) or picking.location_dest_id.usage == 'transit':
+                is_transit = True
+                
+            if is_transit:
+                warehouse = picking.location_id.warehouse_id
+                if not warehouse:
+                    warehouse = request.env['stock.warehouse'].sudo().search([('view_location_id', 'parent_of', picking.location_id.id)], limit=1)
+                
+                if warehouse and warehouse.partner_id:
+                    picking.sudo().write({'partner_id': warehouse.partner_id.id})
+
         # Enforce warehouse validation permission (can_confirm)
         use_independent = request.env['ir.config_parameter'].sudo().get_param('hlv_mobile_barcode.hlv_barcode_use_independent_permissions') == 'True'
         if use_independent:
@@ -900,10 +930,18 @@ class HLVMobileBarcodeController(http.Controller):
             return {'error': _('Chưa cấu hình Operation Types (INT, IN)')}
 
         # 1. Create and Validate INT picking (Source -> Transit)
+        partner_id = False
+        actual_warehouse = warehouse
+        if not actual_warehouse:
+            actual_warehouse = request.env['stock.warehouse'].sudo().search([('view_location_id', 'parent_of', source_loc.id)], limit=1)
+        if actual_warehouse and actual_warehouse.partner_id:
+            partner_id = actual_warehouse.partner_id.id
+
         picking_int = request.env['stock.picking'].create({
             'picking_type_id': picking_type_int.id,
             'location_id': source_loc.id,
             'location_dest_id': transit_loc.id,
+            'partner_id': partner_id,
         })
         
         request.env['stock.move'].create({
@@ -981,10 +1019,18 @@ class HLVMobileBarcodeController(http.Controller):
             return {'error': _('Chưa cấu hình Operation Types (INT, IN)')}
 
         # 1. Create INT picking (Source -> Transit)
+        partner_id = False
+        actual_warehouse = warehouse
+        if not actual_warehouse:
+            actual_warehouse = request.env['stock.warehouse'].sudo().search([('view_location_id', 'parent_of', source_loc.id)], limit=1)
+        if actual_warehouse and actual_warehouse.partner_id:
+            partner_id = actual_warehouse.partner_id.id
+
         picking_int = request.env['stock.picking'].create({
             'picking_type_id': picking_type_int.id,
             'location_id': source_loc.id,
             'location_dest_id': transit_loc.id,
+            'partner_id': partner_id,
         })
         
         for line in lines:
