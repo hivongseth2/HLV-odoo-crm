@@ -665,6 +665,10 @@ class ShopeeProduct(models.Model):
             get_credentials_from_shop,
         )
         creds = get_credentials_from_shop(shop)
+        _logger.info(
+            "ShopeeProduct.sync_from_shop: partner_id=%s shop_id=%s",
+            creds.get('partner_id'), creds.get('shop_identifier'),
+        )
 
         if not item_status:
             item_status = ['NORMAL']
