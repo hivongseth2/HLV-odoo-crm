@@ -31,7 +31,6 @@ import logging
 
 import requests as req_lib
 
-from odoo import _
 from odoo.exceptions import UserError
 from odoo.addons.shopee_order_fetch.services.shopee_api import (
     _build_signed_params,
@@ -53,11 +52,11 @@ def _do_get(api_path, params, timeout=30):
     try:
         resp = req_lib.get(url, params=params, timeout=timeout)
     except Exception as e:
-        raise UserError(_("Lỗi kết nối Shopee API:\n%s") % str(e))
+        raise UserError(“lỗi kết nối Shopee API:\n%s” % str(e))
     try:
         body = resp.json()
     except Exception:
-        raise UserError(_("Shopee trả về response không hợp lệ:\n%s") % resp.text)
+        raise UserError(“Shopee trả về response không hợp lệ:\n%s” % resp.text)
     return resp.status_code, body
 
 
@@ -66,11 +65,11 @@ def _do_post(api_path, params, json_body, timeout=30):
     try:
         resp = req_lib.post(url, params=params, json=json_body, timeout=timeout)
     except Exception as e:
-        raise UserError(_("Lỗi kết nối Shopee API:\n%s") % str(e))
+        raise UserError(“lỗi kết nối Shopee API:\n%s” % str(e))
     try:
         body = resp.json()
     except Exception:
-        raise UserError(_("Shopee trả về response không hợp lệ:\n%s") % resp.text)
+        raise UserError(“Shopee trả về response không hợp lệ:\n%s” % resp.text)
     return resp.status_code, body
 
 
@@ -78,7 +77,7 @@ def _check_error(body, context=''):
     """Raise UserError nếu response có field error."""
     if body.get('error'):
         raise UserError(
-            _("Shopee API lỗi%s: %s — %s")
+            "Shopee API lỗi%s: %s — %s"
             % (f" ({context})" if context else '', body.get('error'), body.get('message', ''))
         )
 
@@ -206,7 +205,7 @@ def call_get_item_list(creds, item_status=None, page_size=100, offset=0,
     if not isinstance(resp, dict):
         # Shopee đôi khi trả 'response' là string/null khi lỗi auth/quota
         raise UserError(
-            _("Shopee get_item_list: phản hồi không hợp lệ — %s")
+            "Shopee get_item_list: phản hồi không hợp lệ — %s"
             % (body.get('message', '') or str(resp or 'null'))
         )
     return (
@@ -265,7 +264,7 @@ def call_get_item_base_info(creds, item_id_list):
     resp = body.get('response')
     if not isinstance(resp, dict):
         raise UserError(
-            _("Shopee get_item_base_info: phản hồi không hợp lệ — %s")
+            "Shopee get_item_base_info: phản hồi không hợp lệ — %s"
             % (body.get('message', '') or str(resp or 'null'))
         )
     return resp.get('item_list', [])
