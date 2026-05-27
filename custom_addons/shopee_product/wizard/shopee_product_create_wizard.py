@@ -58,7 +58,7 @@ class ShopeeProductCreateWizard(models.TransientModel):
     # ── Shopee-specific ────────────────────────────────────────────────────
     shopee_category_id = fields.Many2one(
         'shopee.category', string='Danh mục Shopee',
-        domain="[('shop_id','=',shop_id)]",
+        domain="[('shop_id','=',shop_id),('has_children','=',False)]",
         help='Chọn danh mục từ cây danh mục Shopee đã đồng bộ. '
              'Dùng nút "↻ Tải danh mục" nếu danh sách trống.',
     )
@@ -71,6 +71,11 @@ class ShopeeProductCreateWizard(models.TransientModel):
         string='Gợi ý danh mục', readonly=True,
         help='Bấm "Gợi ý danh mục" để Shopee đề xuất dựa trên tên sản phẩm.',
     )
+    brand_id = fields.Integer(
+        string='Brand ID Shopee', default=0,
+        help='0 = No Brand. Shopee vẫn yêu cầu gửi object brand khi tạo sản phẩm.',
+    )
+    brand_name = fields.Char(string='Tên brand', default='No Brand')
 
     logistic_line_ids = fields.One2many(
         'shopee.product.create.wizard.logistic',
@@ -136,9 +141,25 @@ class ShopeeProductCreateWizard(models.TransientModel):
         for ch in channels:
             if not ch.get('enabled', True):
                 continue
+            channel_id = (
+                ch.get('logistics_channel_id')
+                or ch.get('logistic_id')
+                or ch.get('channel_id')
+                or ch.get('id')
+            )
+            channel_name = (
+                ch.get('logistics_channel_name')
+                or ch.get('logistic_name')
+                or ch.get('channel_name')
+                or ch.get('name')
+                or ''
+            )
+            if not channel_id:
+                _logger.warning('Shopee logistics channel không có ID: %s', ch)
+                continue
             lines.append((0, 0, {
-                'channel_id': ch.get('logistics_channel_id'),
-                'channel_name': ch.get('logistics_channel_name', ''),
+                'channel_id': int(channel_id),
+                'channel_name': channel_name,
                 'cod_enabled': ch.get('cod_enabled', False),
                 'selected': False,
             }))
@@ -211,6 +232,7 @@ class ShopeeProductCreateWizard(models.TransientModel):
             cat_rec = Cat.search([
                 ('shop_id', '=', self.shop_id.id),
                 ('category_id', '=', cid),
+                ('has_children', '=', False),
             ], limit=1)
             name = cat_rec.full_path if cat_rec else '?'
             lines.append('  • [%s] %s' % (cid, name))
@@ -228,6 +250,11 @@ class ShopeeProductCreateWizard(models.TransientModel):
                 'Vui lòng chọn Danh mục Shopee.\n'
                 'Nếu danh sách rỗng, bấm "↻ Tải danh mục" hoặc "Gợi ý danh mục".'
             ))
+        if self.shopee_category_id and self.shopee_category_id.has_children:
+            raise UserError(_(
+                'Danh mục "%s" vẫn còn danh mục con.\n'
+                'Shopee yêu cầu chọn danh mục lá (leaf category).'
+            ) % self.shopee_category_id.full_path)
 
         from odoo.addons.shopee_order_fetch.services.shopee_api import (
             get_credentials_from_shop,
@@ -270,6 +297,10 @@ class ShopeeProductCreateWizard(models.TransientModel):
             'description': self.description or self.item_name,
             'item_sku': self.item_sku or '',
             'category_id': self.category_id,
+            'brand': {
+                'brand_id': int(self.brand_id or 0),
+                'original_brand_name': self.brand_name or 'No Brand',
+            },
             'original_price': self.original_price,
             'weight': self.weight,
             'image': {'image_id_list': image_id_list},

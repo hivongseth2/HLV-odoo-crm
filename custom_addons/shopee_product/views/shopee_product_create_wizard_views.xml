@@ -33,7 +33,7 @@
                             <div class="o_row">
                                 <field name="shopee_category_id"
                                        options="{'no_create': True}"
-                                       placeholder="Gõ để tìm danh mục…"/>
+                                       placeholder="Gõ để tìm danh mục lá…"/>
                                 <button name="action_sync_categories" type="object"
                                         string="↻ Tải danh mục" class="btn-link"
                                         invisible="not shop_id"/>
@@ -46,6 +46,11 @@
                             <field name="category_suggestion" readonly="1"
                                    invisible="not category_suggestion"
                                    widget="text"/>
+                            <label for="brand_id"/>
+                            <div class="o_row">
+                                <field name="brand_id"/>
+                                <field name="brand_name" placeholder="No Brand"/>
+                            </div>
                             <field name="upload_product_image"/>
                         </group>
                         <group>
