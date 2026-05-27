@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         SHOPEE.PUSH.STOCK.WIZARD — View (sản phẩm không có biến thể)
+    ═══════════════════════════════════════════════════════════════ -->
+    <record id="view_shopee_push_stock_wizard_form" model="ir.ui.view">
+        <field name="name">shopee.push.stock.wizard.form</field>
+        <field name="model">shopee.push.stock.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Cập nhật tồn kho Shopee">
+                <sheet>
+                    <group>
+                        <field name="shopee_product_id" readonly="1"/>
+                        <field name="current_stock" readonly="1" string="Tồn kho hiện tại"/>
+                        <field name="new_stock" string="Tồn kho mới" required="1"/>
+                    </group>
+                </sheet>
+                <footer>
+                    <button name="action_confirm" type="object"
+                            string="Cập nhật lên Shopee" class="btn-primary"/>
+                    <button string="Hủy" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+</odoo>

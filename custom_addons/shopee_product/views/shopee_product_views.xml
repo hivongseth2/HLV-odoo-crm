@@ -1,0 +1,277 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         SHOPEE.PRODUCT — LIST VIEW
+    ═══════════════════════════════════════════════════════════════ -->
+    <record id="view_shopee_product_list" model="ir.ui.view">
+        <field name="name">shopee.product.list</field>
+        <field name="model">shopee.product</field>
+        <field name="arch" type="xml">
+            <list string="Sản phẩm Shopee"
+                  decoration-muted="item_status in ('SELLER_DELETE','SHOPEE_DELETE')"
+                  decoration-warning="item_status == 'UNLIST'"
+                  decoration-danger="item_status == 'BANNED'"
+                  decoration-info="item_status == 'REVIEWING'">
+                <field name="item_name" string="Tên sản phẩm"/>
+                <field name="item_sku" string="SKU" optional="show"/>
+                <field name="shop_id" string="Cửa hàng" optional="show"/>
+                <field name="item_status" string="Trạng thái" widget="badge"
+                       decoration-success="item_status == 'NORMAL'"
+                       decoration-warning="item_status == 'UNLIST'"
+                       decoration-danger="item_status in ('BANNED','SHOPEE_DELETE')"
+                       decoration-muted="item_status == 'SELLER_DELETE'"
+                       decoration-info="item_status == 'REVIEWING'"/>
+                <field name="original_price" string="Giá gốc (đ)" widget="integer" optional="show"/>
+                <field name="current_price" string="Giá bán (đ)" widget="integer"/>
+                <field name="total_available_stock" string="Tồn kho"
+                       decoration-danger="total_available_stock == 0"
+                       decoration-warning="total_available_stock &lt; 5 and total_available_stock &gt; 0"/>
+                <field name="has_model" string="Biến thể" widget="boolean_toggle" optional="show"/>
+                <field name="model_count" string="Số biến thể" optional="show"/>
+                <field name="odoo_product_id" string="Liên kết Odoo" optional="show"/>
+                <field name="shopee_update_time" string="Cập nhật Shopee" optional="show"/>
+                <field name="last_synced" string="Đồng bộ lần cuối" optional="show"/>
+                <field name="shopee_item_id" string="Item ID" optional="show"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         SHOPEE.PRODUCT — FORM VIEW
+    ═══════════════════════════════════════════════════════════════ -->
+    <record id="view_shopee_product_form" model="ir.ui.view">
+        <field name="name">shopee.product.form</field>
+        <field name="model">shopee.product</field>
+        <field name="arch" type="xml">
+            <form string="Sản phẩm Shopee">
+                <header>
+                    <!-- Làm mới từ API -->
+                    <button name="action_refresh_from_shopee" type="object"
+                            string="Làm mới từ Shopee" class="btn-secondary"
+                            icon="fa-refresh"/>
+                    <!-- Tải biến thể (chỉ khi has_model) -->
+                    <button name="action_load_models" type="object"
+                            string="Tải biến thể" class="btn-secondary"
+                            icon="fa-list-ul"
+                            invisible="not has_model"/>
+                    <!-- Đẩy giá -->
+                    <button name="action_push_price" type="object"
+                            string="Đẩy giá lên Shopee" class="btn-primary"
+                            icon="fa-tag"
+                            confirm="Cập nhật giá lên Shopee?"/>
+                    <!-- Đẩy tồn kho -->
+                    <button name="action_push_stock" type="object"
+                            string="Đẩy tồn kho" class="btn-primary"
+                            icon="fa-cubes"
+                            confirm="Cập nhật tồn kho lên Shopee?"/>
+                    <!-- Xóa khỏi Shopee -->
+                    <button name="action_delete_from_shopee" type="object"
+                            string="Xóa khỏi Shopee" class="btn-danger"
+                            icon="fa-trash"
+                            confirm="⚠️ Sản phẩm sẽ bị xóa khỏi Shopee. Tiếp tục?"
+                            invisible="item_status in ('SELLER_DELETE', 'SHOPEE_DELETE')"/>
+                    <!-- Status bar -->
+                    <field name="item_status" widget="statusbar"
+                           statusbar_visible="NORMAL,UNLIST,REVIEWING,BANNED"/>
+                </header>
+
+                <sheet>
+                    <!-- ── Stat buttons ── -->
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_load_models" type="object"
+                                class="oe_stat_button" icon="fa-list-ul"
+                                invisible="not has_model">
+                            <field name="model_count" widget="statinfo"
+                                   string="Biến thể"/>
+                        </button>
+                        <button type="object" name="action_refresh_from_shopee"
+                                class="oe_stat_button" icon="fa-cubes">
+                            <field name="total_available_stock" widget="statinfo"
+                                   string="Tồn kho"/>
+                        </button>
+                        <button type="url" url="%(shopee_item_url)s"
+                                class="oe_stat_button" icon="fa-external-link"
+                                invisible="not shopee_item_url">
+                            <span class="o_stat_text">Xem Shopee</span>
+                        </button>
+                    </div>
+
+                    <!-- ── Title ── -->
+                    <div class="oe_title">
+                        <label class="o_form_label" for="item_name"/>
+                        <h1>
+                            <field name="item_name" placeholder="Tên sản phẩm Shopee"/>
+                        </h1>
+                        <h3>
+                            <field name="item_sku" placeholder="SKU"/>
+                        </h3>
+                    </div>
+
+                    <!-- ── Main groups ── -->
+                    <group>
+                        <group string="Thông tin Shopee">
+                            <field name="shopee_item_id" readonly="1"/>
+                            <field name="shop_id" readonly="1"/>
+                            <field name="category_id" string="Danh mục (ID)" readonly="1"/>
+                            <field name="has_model" string="Có biến thể" widget="boolean"
+                                   readonly="1"/>
+                        </group>
+                        <group string="Giá &amp; Tồn kho">
+                            <field name="original_price" string="Giá gốc (đ)" widget="integer"/>
+                            <field name="current_price" string="Giá hiện tại (đ)"
+                                   widget="integer" readonly="1"/>
+                            <field name="total_available_stock" string="Tổng tồn kho"
+                                   readonly="1"/>
+                        </group>
+                    </group>
+                    <group>
+                        <group string="Liên kết Odoo">
+                            <field name="odoo_product_id" options="{'no_create': True}"
+                                   string="Sản phẩm Odoo"/>
+                        </group>
+                        <group string="Thời gian đồng bộ">
+                            <field name="shopee_update_time" readonly="1"
+                                   string="Cập nhật trên Shopee"/>
+                            <field name="last_synced" readonly="1"
+                                   string="Đồng bộ lần cuối"/>
+                        </group>
+                    </group>
+
+                    <!-- ── Notebook ── -->
+                    <notebook>
+                        <!-- Tab biến thể -->
+                        <page string="Biến thể / Model" name="models_tab"
+                              invisible="not has_model">
+                            <div class="alert alert-info" role="alert">
+                                <i class="fa fa-info-circle mr-1"/>
+                                Nhấn <strong>Tải biến thể</strong> để đồng bộ từ Shopee.
+                                Sau đó chỉnh <em>Giá mới</em> / <em>Tồn kho mới</em>
+                                rồi nhấn nút đẩy ở thanh trên.
+                            </div>
+                            <field name="model_ids" nolabel="1">
+                                <list editable="bottom">
+                                    <field name="tier_label" string="Phân loại" readonly="1"/>
+                                    <field name="model_sku" string="SKU biến thể"/>
+                                    <field name="model_status" string="Trạng thái"
+                                           readonly="1" widget="badge"
+                                           decoration-success="model_status == 'MODEL_NORMAL'"
+                                           decoration-muted="model_status == 'MODEL_UNAVAILABLE'"/>
+                                    <field name="current_price" string="Giá hiện tại (đ)"
+                                           readonly="1" widget="integer"/>
+                                    <field name="new_price" string="Giá mới (đ)"
+                                           widget="integer"/>
+                                    <field name="available_stock" string="Tồn hiện tại"
+                                           readonly="1"/>
+                                    <field name="new_stock" string="Tồn kho mới"/>
+                                    <field name="shopee_model_id" string="Model ID"
+                                           readonly="1" optional="show"/>
+                                    <field name="last_synced" string="Đồng bộ lần cuối"
+                                           readonly="1" optional="show"/>
+                                </list>
+                            </field>
+                        </page>
+
+                        <!-- Tab dữ liệu thô -->
+                        <page string="Dữ liệu thô (JSON)" name="raw_data_tab">
+                            <field name="raw_data" widget="json" readonly="1" nolabel="1"/>
+                        </page>
+                    </notebook>
+                </sheet>
+
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         SHOPEE.PRODUCT — SEARCH VIEW
+    ═══════════════════════════════════════════════════════════════ -->
+    <record id="view_shopee_product_search" model="ir.ui.view">
+        <field name="name">shopee.product.search</field>
+        <field name="model">shopee.product</field>
+        <field name="arch" type="xml">
+            <search string="Tìm sản phẩm Shopee">
+                <field name="item_name" string="Tên / SKU"
+                       filter_domain="['|',('item_name','ilike',self),('item_sku','ilike',self)]"/>
+                <field name="shopee_item_id" string="Item ID Shopee"/>
+                <field name="shop_id" string="Cửa hàng"/>
+                <field name="odoo_product_id" string="Sản phẩm Odoo"/>
+
+                <separator/>
+                <filter name="filter_normal" string="Đang bán"
+                        domain="[('item_status','=','NORMAL')]"/>
+                <filter name="filter_unlist" string="Đang ẩn"
+                        domain="[('item_status','=','UNLIST')]"/>
+                <filter name="filter_banned" string="Bị cấm"
+                        domain="[('item_status','=','BANNED')]"/>
+                <filter name="filter_reviewing" string="Đang duyệt"
+                        domain="[('item_status','=','REVIEWING')]"/>
+                <separator/>
+                <filter name="filter_has_model" string="Có biến thể"
+                        domain="[('has_model','=',True)]"/>
+                <filter name="filter_no_odoo" string="Chưa liên kết Odoo"
+                        domain="[('odoo_product_id','=',False)]"/>
+                <filter name="filter_out_of_stock" string="Hết hàng"
+                        domain="[('total_available_stock','=',0)]"/>
+                <separator/>
+                <filter name="filter_deleted" string="Đã xóa"
+                        domain="[('item_status','in',['SELLER_DELETE','SHOPEE_DELETE'])]"/>
+
+                <group expand="0" string="Nhóm theo">
+                    <filter name="group_shop" string="Cửa hàng"
+                            context="{'group_by': 'shop_id'}"/>
+                    <filter name="group_status" string="Trạng thái"
+                            context="{'group_by': 'item_status'}"/>
+                    <filter name="group_sync_date" string="Ngày đồng bộ"
+                            context="{'group_by': 'last_synced:day'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         ACTION — Danh sách sản phẩm
+    ═══════════════════════════════════════════════════════════════ -->
+    <record id="action_shopee_product" model="ir.actions.act_window">
+        <field name="name">Sản phẩm Shopee</field>
+        <field name="res_model">shopee.product</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_shopee_product_search"/>
+        <field name="context">{'search_default_filter_normal': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Chưa có sản phẩm Shopee nào.
+            </p>
+            <p>Nhấn <strong>Đồng bộ từ Shopee</strong> để kéo dữ liệu về.</p>
+        </field>
+    </record>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         ACTION — Mở wizard đồng bộ
+    ═══════════════════════════════════════════════════════════════ -->
+    <record id="action_shopee_product_sync_wizard" model="ir.actions.act_window">
+        <field name="name">Đồng bộ sản phẩm Shopee</field>
+        <field name="res_model">shopee.product.sync.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         MENU
+    ═══════════════════════════════════════════════════════════════ -->
+    <menuitem id="menu_shopee_product"
+              name="Sản phẩm"
+              parent="shopee_webhook.menu_shopee_root"
+              action="action_shopee_product"
+              sequence="20"
+              groups="sales_team.group_sale_salesman"/>
+
+    <menuitem id="menu_shopee_product_sync"
+              name="Đồng bộ từ Shopee"
+              parent="shopee_webhook.menu_shopee_root"
+              action="action_shopee_product_sync_wizard"
+              sequence="21"
+              groups="sales_team.group_sale_salesman"/>
+
+</odoo>
