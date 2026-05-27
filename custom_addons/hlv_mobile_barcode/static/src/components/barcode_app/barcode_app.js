@@ -82,7 +82,7 @@ export class BarcodeApp extends Component {
 
         this.keepFocusOnHiddenInput = () => {
             const active = document.activeElement;
-            if (active && ['INPUT', 'TEXTAREA'].includes(active.tagName) && !active.classList.contains('hidden-barcode-input')) {
+            if (active && ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName) && !active.classList.contains('hidden-barcode-input')) {
                 return;
             }
             const inputEl = this.hiddenInputRef?.el;
