@@ -129,10 +129,6 @@ class ShopeeProduct(models.Model):
     )
     last_api_section = fields.Char(string='Nhóm API gần nhất', readonly=True)
     last_api_synced_at = fields.Datetime(string='API cập nhật lần cuối', readonly=True)
-    last_api_result_display = fields.Text(
-        string='Kết quả API gần nhất',
-        compute='_compute_last_api_result_display',
-    )
 
     # ── Cấu hình tồn kho ─────────────────────────────────
     stock_update_mode = fields.Selection([
@@ -192,20 +188,7 @@ class ShopeeProduct(models.Model):
             else:
                 rec.category_display = str(cid) if cid else ''
 
-    @api.depends('raw_data', 'last_api_section')
-    def _compute_last_api_result_display(self):
-        for rec in self:
-            raw = rec.raw_data if isinstance(rec.raw_data, dict) else {}
-            section = rec.last_api_section
-            if section and section in raw:
-                try:
-                    rec.last_api_result_display = _json.dumps(
-                        raw[section], ensure_ascii=False, indent=2
-                    )
-                except Exception:
-                    rec.last_api_result_display = str(raw[section])
-            else:
-                rec.last_api_result_display = ''
+
 
     _sql_constraints = [
         (
@@ -453,8 +436,8 @@ class ShopeeProduct(models.Model):
         self.action_refresh_from_shopee()
         return {'type': 'ir.actions.client', 'tag': 'reload'}
 
-    def action_push_stock(self):
-        """Đẩy tồn kho lên Shopee theo stock_update_mode và reload form."""
+    def _do_push_stock(self):
+        """Đẩy tồn kho lên Shopee (không reload). Dùng cho cron và action_push_stock."""
         self.ensure_one()
         mode = self.stock_update_mode or 'manual'
 
@@ -471,7 +454,6 @@ class ShopeeProduct(models.Model):
             elif mode == 'warehouse':
                 qty = product.with_context(warehouse=self.stock_warehouse_id.id).qty_available
             elif mode == 'fixed_location':
-                # context 'location' cần list id hoặc int; tính cả child location
                 loc_ids = self.stock_location_id.search([
                     ('id', 'child_of', self.stock_location_id.id),
                     ('usage', '=', 'internal'),
@@ -527,9 +509,69 @@ class ShopeeProduct(models.Model):
             )
             raise UserError(_('Một số tồn kho cập nhật thất bại: %s') % msgs)
 
+    def action_push_stock(self):
+        """Đẩy tồn kho lên Shopee theo stock_update_mode và reload form."""
+        self.ensure_one()
+        self._do_push_stock()
         # Tự refresh sau khi push
         self.action_refresh_from_shopee()
         return {'type': 'ir.actions.client', 'tag': 'reload'}
+
+    @api.model
+    def cron_push_stock_to_shopee(self):
+        """Scheduled action: đồng bộ tồn kho → Shopee cho tất cả sản phẩm auto-mode."""
+        products = self.search([
+            ('stock_update_mode', 'not in', ['manual', False]),
+            ('item_status', 'not in', ['SELLER_DELETE', 'SHOPEE_DELETE']),
+        ])
+        success_count = 0
+        error_count = 0
+        for product in products:
+            try:
+                product._do_push_stock()
+                success_count += 1
+            except Exception as e:
+                error_count += 1
+                _logger.error(
+                    "Shopee cron_push_stock: thất bại id=%s item=%s: %s",
+                    product.id, product.shopee_item_id, str(e),
+                )
+        _logger.info(
+            "Shopee cron_push_stock: hoàn tất — %d thành công, %d lỗi",
+            success_count, error_count,
+        )
+
+    def action_bulk_sync_stock(self):
+        """Đồng bộ tồn kho hàng loạt cho các sản phẩm được chọn (chế độ auto)."""
+        auto_products = self.filtered(
+            lambda p: p.stock_update_mode and p.stock_update_mode != 'manual'
+        )
+        if not auto_products:
+            raise UserError(_('Không có sản phẩm nào có chế độ tồn kho tự động trong danh sách đã chọn.'))
+        success_count = 0
+        error_msgs = []
+        for product in auto_products:
+            try:
+                product._do_push_stock()
+                success_count += 1
+            except Exception as e:
+                error_msgs.append('%s: %s' % (product.item_name or product.shopee_item_id, str(e)))
+        if error_msgs:
+            raise UserError(
+                _('Đồng bộ thành công %d sản phẩm.\nLỗi:\n%s') % (
+                    success_count, '\n'.join(error_msgs[:10])
+                )
+            )
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _('Đồng bộ tồn kho hoàn tất'),
+                'message': _('Đã đồng bộ thành công %d sản phẩm lên Shopee.') % success_count,
+                'type': 'success',
+                'sticky': False,
+            },
+        }
 
     def action_delete_from_shopee(self):
         """Xóa sản phẩm này khỏi Shopee (soft delete — trạng thái SELLER_DELETE)."""
@@ -585,6 +627,7 @@ class ShopeeProduct(models.Model):
             raise
 
     def _store_raw_section(self, section, value, title, message=None):
+        """Lưu kết quả API vào raw_data và hiển thị thông báo dễ đọc."""
         self.ensure_one()
         raw_data = self.raw_data if isinstance(self.raw_data, dict) else {}
         raw_data = dict(raw_data)
@@ -596,7 +639,16 @@ class ShopeeProduct(models.Model):
             'last_api_section': section,
             'last_api_synced_at': now,
         })
-        return {'type': 'ir.actions.client', 'tag': 'reload'}
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': str(title),
+                'message': str(message) if message else '',
+                'type': 'success',
+                'sticky': True,
+            },
+        }
 
     def action_fetch_item_extra_info(self):
         self.ensure_one()
@@ -604,9 +656,19 @@ class ShopeeProduct(models.Model):
         result = self._call_with_token_refresh(
             lambda creds: shopee_product_api.call_get_item_extra_info(creds, [item_id])
         )
-        return self._store_raw_section(
-            'extra_info', result, _('Đã lấy Extra Info'), _('Đã lưu thông tin bổ sung của sản phẩm.')
-        )
+        items = result if isinstance(result, list) else [result]
+        item = items[0] if items else {}
+        parts = []
+        if 'view_count' in item:
+            parts.append(_("Lượt xem: %s") % f"{item['view_count']:,}")
+        if 'liked_count' in item:
+            parts.append(_("Lượt thích: %s") % f"{item['liked_count']:,}")
+        if 'comment_count' in item:
+            parts.append(_("Bình luận: %s") % f"{item['comment_count']:,}")
+        if 'sold' in item:
+            parts.append(_("Số bán: %s") % f"{item['sold']:,}")
+        msg = "\n".join(parts) if parts else _('Đã lấy thông tin bổ sung')
+        return self._store_raw_section('extra_info', result, _('Thông tin bổ sung'), msg)
 
     def action_fetch_content_diagnosis(self):
         self.ensure_one()
@@ -614,12 +676,23 @@ class ShopeeProduct(models.Model):
         success, failure = self._call_with_token_refresh(
             lambda creds: shopee_product_api.call_get_item_content_diagnosis_result(creds, [item_id])
         )
-        return self._store_raw_section(
-            'content_diagnosis',
-            {'success_item_list': success, 'failure_item_list': failure},
-            _('Đã chẩn đoán nội dung'),
-            _('Đã lưu kết quả Content Quality vào Raw JSON.'),
-        )
+        data = {'success_item_list': success, 'failure_item_list': failure}
+        if failure:
+            msg = _('❌ Không lấy được kết quả (%d lỗi)') % len(failure)
+        elif success:
+            item = success[0]
+            level = item.get('quality_level', '?')
+            tasks = item.get('unfinished_task', [])
+            if tasks:
+                lines = [_('Chất lượng nội dung: Cấp %s/3') % level, _('Cần cải thiện:')]
+                for t in tasks[:8]:
+                    lines.append('  • %s' % t.get('suggestion', ''))
+                msg = '\n'.join(lines)
+            else:
+                msg = _('Chất lượng nội dung: Cấp %s/3\n✓ Không còn vấn đề cần cải thiện') % level
+        else:
+            msg = _('Không có dữ liệu chẩn đoán')
+        return self._store_raw_section('content_diagnosis', data, _('Chẩn đoán nội dung'), msg)
 
     def action_fetch_category_recommendation(self):
         self.ensure_one()
@@ -629,9 +702,17 @@ class ShopeeProduct(models.Model):
         result = self._call_with_token_refresh(
             lambda creds: shopee_product_api.call_category_recommend(creds, item_name)
         )
-        return self._store_raw_section(
-            'category_recommendation', result, _('Đã gợi ý danh mục')
-        )
+        cats = result.get('category', result.get('categories', []))
+        if cats:
+            lines = [_('Danh mục gợi ý:')]
+            for i, c in enumerate(cats[:8], 1):
+                name = c.get('display_category_name') or c.get('category_name') or '?'
+                cid = c.get('category_id', '')
+                lines.append('  %d. %s (ID: %s)' % (i, name, cid))
+            msg = '\n'.join(lines)
+        else:
+            msg = _('Không có gợi ý danh mục')
+        return self._store_raw_section('category_recommendation', result, _('Gợi ý danh mục'), msg)
 
     def action_fetch_recommend_attributes(self):
         self.ensure_one()
@@ -642,9 +723,13 @@ class ShopeeProduct(models.Model):
         result = self._call_with_token_refresh(
             lambda creds: shopee_product_api.call_get_recommend_attribute(creds, item_name, cat_id)
         )
-        return self._store_raw_section(
-            'recommend_attribute', result, _('Đã gợi ý thuộc tính')
-        )
+        attrs = result.get('attribute', result.get('attributes', []))
+        if attrs:
+            names = [a.get('attribute_name', '?') for a in attrs[:12]]
+            msg = _('Thuộc tính gợi ý:\n') + '\n'.join('  • %s' % n for n in names)
+        else:
+            msg = _('Không có gợi ý thuộc tính')
+        return self._store_raw_section('recommend_attribute', result, _('Gợi ý thuộc tính'), msg)
 
     def action_fetch_variation_tree(self):
         self.ensure_one()
@@ -654,9 +739,10 @@ class ShopeeProduct(models.Model):
         result = self._call_with_token_refresh(
             lambda creds: shopee_product_api.call_get_variations(creds, cat_id)
         )
-        return self._store_raw_section(
-            'variation_tree', result, _('Đã lấy cây phân loại')
-        )
+        variations = result.get('variation', result.get('variations', []))
+        count = len(variations) if isinstance(variations, list) else 0
+        msg = _('Tìm thấy %d cấp phân loại cho danh mục %s') % (count, cat_id)
+        return self._store_raw_section('variation_tree', result, _('Cây phân loại'), msg)
 
     def action_fetch_kit_item_limit(self):
         self.ensure_one()
@@ -664,9 +750,9 @@ class ShopeeProduct(models.Model):
         result = self._call_with_token_refresh(
             lambda creds: shopee_product_api.call_get_kit_item_limit(creds, cat_id)
         )
-        return self._store_raw_section(
-            'kit_item_limit', result, _('Đã lấy giới hạn Kit Item')
-        )
+        max_count = result.get('max_model_count', result.get('max_count', '?'))
+        msg = _('Giới hạn sản phẩm trong bộ: %s') % max_count
+        return self._store_raw_section('kit_item_limit', result, _('Giới hạn Kit Item'), msg)
 
     def action_fetch_kit_item_info(self):
         self.ensure_one()
@@ -691,8 +777,11 @@ class ShopeeProduct(models.Model):
                     'sticky': False,
                 },
             }
+        models_in_kit = result.get('model_list', result.get('item_list', []))
+        kit_count = len(models_in_kit) if isinstance(models_in_kit, list) else 0
+        msg = _('Bộ sản phẩm gồm %d thành phần') % kit_count
         return self._store_raw_section(
-            'kit_item_info', result, _('Đã lấy Kit Item Info')
+            'kit_item_info', result, _('Thông tin bộ sản phẩm'), msg
         )
 
     def action_check_deboost_search(self):
@@ -710,25 +799,34 @@ class ShopeeProduct(models.Model):
                 page_size=10,
             )
         )
-        return self._store_raw_section(
-            'deboost_search',
-            {
-                'item_id_list': item_ids,
-                'total_count': total_count,
-                'next_offset': next_offset,
-                'current_item_matched': str(self.shopee_item_id) in {str(item_id) for item_id in item_ids},
-            },
-            _('Đã kiểm tra Deboost'),
-        )
+        current_matched = str(self.shopee_item_id) in {str(i) for i in item_ids}
+        data = {
+            'item_id_list': item_ids,
+            'total_count': total_count,
+            'next_offset': next_offset,
+            'current_item_matched': current_matched,
+        }
+        if current_matched:
+            msg = _('⚠ Sản phẩm này đang bị hạ hạng (deboost)\nTổng trong danh sách deboost: %d') % total_count
+        else:
+            msg = _('✓ Sản phẩm này không bị hạ hạng\nTổng trong danh sách deboost: %d') % total_count
+        return self._store_raw_section('deboost_search', data, _('Kiểm tra Deboost'), msg)
 
     def action_fetch_item_limit(self):
         self.ensure_one()
         result = self._call_with_token_refresh(
             lambda creds: shopee_product_api.call_get_item_limit(creds)
         )
-        return self._store_raw_section(
-            'item_limit', result, _('Đã lấy giới hạn sản phẩm')
-        )
+        parts = []
+        for k in ['item_total_count', 'max_item_count', 'sold_count', 'item_left']:
+            if k in result:
+                label = k.replace('_', ' ').title()
+                parts.append('%s: %s' % (label, result[k]))
+        if not parts:
+            parts = ['%s: %s' % (str(k).replace('_', ' ').title(), v)
+                     for k, v in result.items() if isinstance(v, (int, float))][:6]
+        msg = '\n'.join(parts) if parts else _('Đã lấy giới hạn sản phẩm')
+        return self._store_raw_section('item_limit', result, _('Giới hạn sản phẩm'), msg)
 
     def action_fetch_comments(self):
         self.ensure_one()
@@ -736,9 +834,20 @@ class ShopeeProduct(models.Model):
         result = self._call_with_token_refresh(
             lambda creds: shopee_product_api.call_get_comment(creds, item_id=item_id, page_size=20)
         )
-        return self._store_raw_section(
-            'comments', result, _('Đã lấy bình luận'), _('Đã lưu danh sách bình luận vào Raw JSON.')
-        )
+        comments = result.get('comment', result.get('comments', []))
+        total = result.get('item_total', result.get('total', len(comments)))
+        if comments:
+            lines = [_('Tổng %d bình luận. Mới nhất:') % total]
+            for c in comments[:3]:
+                author = c.get('buyer_username') or c.get('username') or '?'
+                rating = c.get('rating_star', c.get('rating', 0))
+                content = c.get('comment', '')[:60]
+                stars = '★' * int(rating) if rating else ''
+                lines.append('  • %s %s: %s' % (author, stars, content))
+            msg = '\n'.join(lines)
+        else:
+            msg = _('Không có bình luận (tổng: %d)') % total
+        return self._store_raw_section('comments', result, _('Bình luận'), msg)
 
     def action_fetch_boosted_list(self):
         self.ensure_one()
@@ -747,10 +856,16 @@ class ShopeeProduct(models.Model):
         )
         current_item = str(self.shopee_item_id)
         current_boost = [item for item in result if str(item.get('item_id')) == current_item]
+        total_boost = len(result)
+        if current_boost:
+            msg = _('✓ Sản phẩm này đang được đẩy hiển thị\nTổng đang đẩy trong shop: %d') % total_boost
+        else:
+            msg = _('Sản phẩm này chưa được đẩy hiển thị\nTổng đang đẩy trong shop: %d') % total_boost
         return self._store_raw_section(
             'boosted_list',
             {'item_list': result, 'current_item': current_boost},
-            _('Đã lấy danh sách đang đẩy hiển thị'),
+            _('Trạng thái đẩy hiển thị'),
+            msg,
         )
 
     def action_fetch_violation_info(self):
@@ -759,9 +874,29 @@ class ShopeeProduct(models.Model):
         result = self._call_with_token_refresh(
             lambda creds: shopee_product_api.call_get_item_violation_info(creds, [item_id])
         )
-        return self._store_raw_section(
-            'violation_info', result, _('Đã lấy thông tin vi phạm')
-        )
+        items = result if isinstance(result, list) else (result.get('item_list') or [])
+        if not items:
+            msg = _('✓ Không tìm thấy thông tin vi phạm')
+        else:
+            item = items[0]
+            deboost_flag = item.get('deboost', False)
+            status = item.get('item_status', '?')
+            violations = item.get('violation_list') or item.get('violations') or []
+            deboost_txt = _('Có ⚠') if deboost_flag else _('Không ✓')
+            lines = [
+                _('Deboost: %s') % deboost_txt,
+                _('Trạng thái: %s') % status,
+            ]
+            if violations:
+                lines.append(_('Vi phạm (%d mục):') % len(violations))
+                for v in violations[:5]:
+                    vtype = v.get('violation_type', '')
+                    action_txt = v.get('suggest_action', '')
+                    lines.append('  • %s: %s' % (vtype, action_txt))
+            else:
+                lines.append(_('✓ Không có vi phạm cụ thể'))
+            msg = '\n'.join(lines)
+        return self._store_raw_section('violation_info', result, _('Thông tin vi phạm'), msg)
 
     def action_fetch_size_chart_list(self):
         self.ensure_one()
@@ -771,9 +906,14 @@ class ShopeeProduct(models.Model):
         result = self._call_with_token_refresh(
             lambda creds: shopee_product_api.call_get_size_chart_list(creds, cat_id, page_size=20)
         )
-        return self._store_raw_section(
-            'size_chart_list', result, _('Đã lấy danh sách bảng kích thước')
-        )
+        charts = result.get('size_chart', result.get('size_chart_list', []))
+        count = len(charts) if isinstance(charts, list) else 0
+        if count:
+            names = ', '.join(c.get('title', '?') for c in charts[:5])
+            msg = _('Tìm thấy %d bảng kích thước: %s') % (count, names)
+        else:
+            msg = _('Không có bảng kích thước cho danh mục này')
+        return self._store_raw_section('size_chart_list', result, _('Bảng kích thước'), msg)
 
     def _open_operation_wizard(self, operation, title):
         self.ensure_one()

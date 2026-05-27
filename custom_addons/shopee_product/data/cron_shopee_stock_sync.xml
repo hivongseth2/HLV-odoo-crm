@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         CRON: Đồng bộ tồn kho Odoo → Shopee
+         Mặc định tắt (active=False). Admin bật và chỉnh chu kỳ trong
+         Settings > Technical > Automation > Scheduled Actions
+    ═══════════════════════════════════════════════════════════════ -->
+    <record id="cron_shopee_sync_stock" model="ir.cron">
+        <field name="name">Shopee: Đồng bộ tồn kho lên Shopee</field>
+        <field name="model_id" ref="shopee_product.model_shopee_product"/>
+        <field name="state">code</field>
+        <field name="code">model.cron_push_stock_to_shopee()</field>
+        <field name="interval_number">1</field>
+        <field name="interval_type">hours</field>
+        <field name="numbercall">-1</field>
+        <field name="active">False</field>
+    </record>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         SERVER ACTION: Đồng bộ tồn kho hàng loạt (từ list view)
+    ═══════════════════════════════════════════════════════════════ -->
+    <record id="action_shopee_bulk_sync_stock" model="ir.actions.server">
+        <field name="name">Đồng bộ tồn kho lên Shopee</field>
+        <field name="model_id" ref="shopee_product.model_shopee_product"/>
+        <field name="binding_model_id" ref="shopee_product.model_shopee_product"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="code">action = records.action_bulk_sync_stock()</field>
+    </record>
+
+</odoo>

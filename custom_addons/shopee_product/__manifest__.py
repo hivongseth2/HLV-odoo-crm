@@ -18,7 +18,7 @@
     'author': "HLV",
     'website': "https://www.hlv.vn",
     'category': 'Sales',
-    'version': '18.0.1.4.0',
+    'version': '18.0.1.5.0',
     'depends': [
         'mail',
         'sale',
@@ -27,6 +27,7 @@
     ],
     'data': [
         'security/ir.model.access.csv',
+        'data/cron_shopee_stock_sync.xml',
         'views/shopee_product_views.xml',
         'views/shopee_result_viewer_views.xml',
         'views/shopee_product_sync_wizard_views.xml',

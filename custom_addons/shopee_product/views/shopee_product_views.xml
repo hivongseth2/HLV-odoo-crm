@@ -320,25 +320,6 @@
                             <page string="Thông tin khác" name="tab_other">
                                 <div class="p-3">
 
-                                    <!-- Kết quả API gần nhất (hiển thị nổi bật) -->
-                                    <div class="rounded-3 p-3 mb-3 shadow-sm"
-                                         style="background:#fff7ed; border-left:4px solid #ee4d2d; box-shadow:0 8px 20px rgba(15,23,42,.06);"
-                                         invisible="not last_api_section">
-                                        <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
-                                            <div class="fw-semibold" style="color:#ee4d2d;">
-                                                <i class="fa fa-bullhorn me-1"/>
-                                                Kết quả gần nhất:
-                                                <field name="last_api_section" nolabel="1" readonly="1" class="d-inline"/>
-                                            </div>
-                                            <div class="text-muted small">
-                                                <i class="fa fa-clock-o me-1"/>
-                                                <field name="last_api_synced_at" nolabel="1" readonly="1" class="d-inline"/>
-                                            </div>
-                                        </div>
-                                        <field name="last_api_result_display" nolabel="1" readonly="1"
-                                               style="white-space:pre-wrap; font-family:monospace; font-size:12px; background:#fff; padding:8px; border-radius:4px; max-height:400px; overflow:auto; display:block;"/>
-                                    </div>
-
                                     <!-- Chất lượng nội dung &amp; Vi phạm -->
                                     <div class="row g-3 mb-3">
                                         <div class="col-lg-8">
