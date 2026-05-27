@@ -71,11 +71,22 @@ class ShopeeProductCreateWizard(models.TransientModel):
         string='Gợi ý danh mục', readonly=True,
         help='Bấm "Gợi ý danh mục" để Shopee đề xuất dựa trên tên sản phẩm.',
     )
-    brand_id = fields.Integer(
-        string='Brand ID Shopee', default=0,
-        help='0 = No Brand. Shopee vẫn yêu cầu gửi object brand khi tạo sản phẩm.',
+    shopee_brand_id = fields.Many2one(
+        'shopee.brand', string='Thương hiệu Shopee',
+        domain="[('shop_id','=',shop_id),('category_id','=',category_id)]",
+        help='Danh sách thương hiệu được lấy từ Shopee theo danh mục.',
     )
-    brand_name = fields.Char(string='Tên brand', default='No Brand')
+    brand_id = fields.Integer(
+        string='Brand ID Shopee', compute='_compute_brand_fields', store=True, readonly=False,
+    )
+    brand_name = fields.Char(
+        string='Tên brand', compute='_compute_brand_fields', store=True, readonly=False,
+    )
+    attribute_line_ids = fields.One2many(
+        'shopee.product.create.wizard.attribute',
+        'wizard_id',
+        string='Thuộc tính Shopee',
+    )
 
     logistic_line_ids = fields.One2many(
         'shopee.product.create.wizard.logistic',
@@ -185,6 +196,61 @@ class ShopeeProductCreateWizard(models.TransientModel):
             elif not rec.category_id:
                 rec.category_id = 0
 
+    @api.depends('shopee_brand_id')
+    def _compute_brand_fields(self):
+        for rec in self:
+            if rec.shopee_brand_id:
+                rec.brand_id = rec.shopee_brand_id.brand_id
+                rec.brand_name = rec.shopee_brand_id.brand_name
+            else:
+                rec.brand_id = 0
+                rec.brand_name = 'No Brand'
+
+    @api.onchange('shopee_category_id')
+    def _onchange_category_load_brand_attributes(self):
+        self.shopee_brand_id = False
+        self.attribute_line_ids = [(5, 0, 0)]
+        if not self.shop_id or not self.category_id:
+            return
+        self._load_brand_attribute_lines()
+
+    def _load_brand_attribute_lines(self):
+        self.ensure_one()
+        Brand = self.env['shopee.brand']
+        Attribute = self.env['shopee.attribute']
+        try:
+            if not Brand.search_count([('shop_id', '=', self.shop_id.id), ('category_id', '=', self.category_id)]):
+                Brand._sync_from_shopee(self.shop_id, self.category_id)
+            if not Attribute.search_count([('shop_id', '=', self.shop_id.id), ('category_id', '=', self.category_id)]):
+                Attribute._sync_from_shopee(self.shop_id, self.category_id)
+        except Exception as e:
+            _logger.warning('Shopee wizard: không tải được brand/attribute: %s', e)
+            return {
+                'warning': {
+                    'title': _('Không tải được thương hiệu/thuộc tính'),
+                    'message': str(e),
+                }
+            }
+
+        no_brand = Brand.search([
+            ('shop_id', '=', self.shop_id.id),
+            ('category_id', '=', self.category_id),
+            ('brand_id', '=', 0),
+        ], limit=1)
+        self.shopee_brand_id = no_brand or Brand.search([
+            ('shop_id', '=', self.shop_id.id),
+            ('category_id', '=', self.category_id),
+        ], limit=1)
+        attrs = Attribute.search([
+            ('shop_id', '=', self.shop_id.id),
+            ('category_id', '=', self.category_id),
+        ])
+        self.attribute_line_ids = [(0, 0, {
+            'shopee_attribute_id': attr.id,
+            'is_mandatory': attr.is_mandatory,
+            'input_type': attr.input_type,
+        }) for attr in attrs]
+
     def action_sync_categories(self):
         """Đồng bộ cây danh mục Shopee cho shop hiện tại."""
         self.ensure_one()
@@ -200,6 +266,21 @@ class ShopeeProductCreateWizard(models.TransientModel):
                 'type': 'success',
                 'sticky': False,
             },
+        }
+
+    def action_reload_brand_attributes(self):
+        self.ensure_one()
+        if not self.shop_id or not self.category_id:
+            raise UserError(_('Vui lòng chọn shop và danh mục trước.'))
+        self.env['shopee.brand']._sync_from_shopee(self.shop_id, self.category_id)
+        self.env['shopee.attribute']._sync_from_shopee(self.shop_id, self.category_id)
+        self._load_brand_attribute_lines()
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': self._name,
+            'res_id': self.id,
+            'view_mode': 'form',
+            'target': 'new',
         }
 
     def action_suggest_category(self):
@@ -240,6 +321,7 @@ class ShopeeProductCreateWizard(models.TransientModel):
                 first_match = cat_rec
         if first_match:
             self.shopee_category_id = first_match
+            self._load_brand_attribute_lines()
         self.category_suggestion = '\n'.join(lines)
 
     def action_create_shopee_product(self):
@@ -271,6 +353,20 @@ class ShopeeProductCreateWizard(models.TransientModel):
             {'logistic_id': int(l.channel_id), 'enabled': True}
             for l in selected_lines
         ]
+
+        attribute_list = []
+        missing_required = []
+        for line in self.attribute_line_ids:
+            values = line._to_shopee_values()
+            if line.is_mandatory and not values:
+                missing_required.append(line.attribute_name)
+            if values:
+                attribute_list.append({
+                    'attribute_id': int(line.attribute_id),
+                    'attribute_value_list': values,
+                })
+        if missing_required:
+            raise UserError(_('Vui lòng chọn/nhập thuộc tính bắt buộc:\n%s') % '\n'.join(missing_required))
 
         # 2. Upload ảnh ──────────────────────────────────────────────────
         image_id_list = []
@@ -305,8 +401,9 @@ class ShopeeProductCreateWizard(models.TransientModel):
             'weight': self.weight,
             'image': {'image_id_list': image_id_list},
             'logistics': logistics,
+            'attribute_list': attribute_list,
             'stock_info_v2': {
-                'seller_stock': [{'stock': self.initial_stock}],
+                'seller_stock': [{'stock': int(self.initial_stock or 0)}],
             },
         }
 
@@ -331,7 +428,7 @@ class ShopeeProductCreateWizard(models.TransientModel):
             'category_id': self.category_id,
             'original_price': self.original_price,
             'current_price': self.original_price,
-            'total_available_stock': self.initial_stock,
+            'total_available_stock': int(self.initial_stock or 0),
             'item_status': 'REVIEWING',
             'last_synced': fields.Datetime.now(),
         })
@@ -366,3 +463,43 @@ class ShopeeProductCreateWizardLogistic(models.TransientModel):
     channel_id = fields.Integer(string='Channel ID', readonly=True)
     channel_name = fields.Char(string='Tên kênh', readonly=True)
     cod_enabled = fields.Boolean(string='Hỗ trợ COD', readonly=True)
+
+
+class ShopeeProductCreateWizardAttribute(models.TransientModel):
+    _name = 'shopee.product.create.wizard.attribute'
+    _description = 'Thuộc tính trong wizard tạo sản phẩm Shopee'
+    _order = 'is_mandatory desc, attribute_name'
+
+    wizard_id = fields.Many2one(
+        'shopee.product.create.wizard', required=True, ondelete='cascade',
+    )
+    shopee_attribute_id = fields.Many2one(
+        'shopee.attribute', string='Thuộc tính', required=True, readonly=True,
+    )
+    attribute_id = fields.Integer(
+        string='Attribute ID', related='shopee_attribute_id.attribute_id', readonly=True,
+    )
+    attribute_name = fields.Char(
+        string='Tên thuộc tính', related='shopee_attribute_id.attribute_name', readonly=True,
+    )
+    is_mandatory = fields.Boolean(string='Bắt buộc', readonly=True)
+    input_type = fields.Char(string='Kiểu nhập', readonly=True)
+    value_id = fields.Many2one(
+        'shopee.attribute.value', string='Giá trị',
+        domain="[('attribute_id_ref','=',shopee_attribute_id)]",
+    )
+    value_text = fields.Char(string='Giá trị nhập tay')
+
+    def _to_shopee_values(self):
+        self.ensure_one()
+        if self.value_id:
+            value = {
+                'value_id': int(self.value_id.value_id or 0),
+                'original_value_name': self.value_id.value_name,
+            }
+            if self.value_id.value_unit:
+                value['value_unit'] = self.value_id.value_unit
+            return [value]
+        if self.value_text:
+            return [{'original_value_name': self.value_text.strip()}]
+        return []

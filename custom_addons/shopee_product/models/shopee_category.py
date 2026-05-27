@@ -71,6 +71,7 @@ class ShopeeCategory(models.Model):
     @api.model
     def _sync_from_shopee(self, shop, language='vi'):
         """Đồng bộ toàn bộ cây danh mục cho 1 shop. Trả về số record upsert."""
+        self = self.sudo()
         from odoo.addons.shopee_order_fetch.services.shopee_api import (
             get_credentials_from_shop,
         )

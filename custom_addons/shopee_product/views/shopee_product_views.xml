@@ -303,23 +303,53 @@
                                 </div>
                             </page>
 
-                            <!-- ═══ Tab 2: Ảnh ═════════════════════════════════════════ -->
-                            <page string="Ảnh" name="tab_images">
+                            <!-- ═══ Tab 2: Nội dung ════════════════════════════════════ -->
+                            <page string="Nội dung" name="tab_content_editor">
                                 <div class="p-3">
                                     <div class="rounded-3 p-4 shadow-sm" style="background:#f8fafc; box-shadow:0 8px 20px rgba(15,23,42,.06);">
-                                        <div class="d-flex align-items-center gap-2 mb-3">
-                                            <span class="rounded-circle d-inline-flex align-items-center justify-content-center flex-shrink-0" style="width:34px;height:34px;background:#fde8e2;color:#ee4d2d;font-size:15px;"><i class="fa fa-image"/></span>
-                                            <span class="fw-semibold fs-5" style="color:#222;">Ảnh bộ sản phẩm</span>
+                                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                                            <div class="d-flex align-items-center gap-2">
+                                                <span class="rounded-circle d-inline-flex align-items-center justify-content-center flex-shrink-0" style="width:34px;height:34px;background:#fde8e2;color:#ee4d2d;font-size:15px;"><i class="fa fa-pencil"/></span>
+                                                <span class="fw-semibold fs-5" style="color:#222;">Mô tả, ảnh, video</span>
+                                            </div>
+                                            <div class="d-flex flex-wrap gap-2">
+                                                <button name="action_fetch_full_content" type="object" string="Tải từ Shopee" class="btn btn-shopee-soft" icon="fa-download"/>
+                                                <button name="action_push_content_update" type="object" string="Đẩy nội dung" class="btn btn-shopee" icon="fa-upload" confirm="Cập nhật mô tả/ảnh/video lên Shopee?"/>
+                                            </div>
                                         </div>
                                         <div class="mb-3">
-                                            <span class="d-block text-muted small mb-1">Sản phẩm Odoo liên kết</span>
-                                            <field name="mapped_product_ids" nolabel="1" widget="many2many_tags" readonly="1" options="{'no_open': False}"/>
+                                            <span class="d-block text-muted small mb-1">Mô tả Shopee</span>
+                                            <field name="edit_description" nolabel="1" widget="text" placeholder="Tải từ Shopee hoặc nhập mô tả mới…"/>
                                         </div>
-                                        <div class="d-flex flex-wrap gap-2">
-                                            <button name="action_open_mapped_products" type="object" string="Mở Odoo" class="btn btn-shopee-soft" icon="fa-external-link" invisible="not mapped_product_count"/>
-                                            <button name="action_fetch_kit_item_limit" type="object" string="Giới hạn bộ" class="btn btn-shopee" icon="fa-sliders"/>
-                                            <button name="action_fetch_kit_item_info" type="object" string="Thông tin bộ" class="btn btn-shopee-soft" icon="fa-image"/>
-                                            <button name="action_open_generate_kit_image_wizard" type="object" string="Tạo ảnh" class="btn btn-shopee-soft" icon="fa-magic"/>
+                                        <div class="row g-3">
+                                            <div class="col-lg-7">
+                                                <div class="fw-semibold mb-2" style="color:#ee4d2d;"><i class="fa fa-image me-1"/> Ảnh sản phẩm</div>
+                                                <field name="image_line_ids" nolabel="1">
+                                                    <list editable="bottom" decoration-muted="not active">
+                                                        <field name="sequence" widget="handle"/>
+                                                        <field name="active" widget="boolean_toggle"/>
+                                                        <field name="image_id"/>
+                                                        <field name="image_url" widget="url" readonly="1"/>
+                                                        <field name="upload_image" widget="binary" filename="upload_filename"/>
+                                                        <field name="upload_filename" invisible="1"/>
+                                                    </list>
+                                                </field>
+                                            </div>
+                                            <div class="col-lg-5">
+                                                <div class="fw-semibold mb-2" style="color:#ee4d2d;"><i class="fa fa-video-camera me-1"/> Video sản phẩm</div>
+                                                <field name="video_line_ids" nolabel="1">
+                                                    <list editable="bottom" decoration-muted="not active">
+                                                        <field name="sequence" widget="handle"/>
+                                                        <field name="active" widget="boolean_toggle"/>
+                                                        <field name="video_id" readonly="1"/>
+                                                        <field name="video_url" widget="url" readonly="1"/>
+                                                        <field name="duration" readonly="1"/>
+                                                        <field name="upload_video" widget="binary" filename="upload_filename"/>
+                                                        <field name="upload_filename" invisible="1"/>
+                                                        <field name="video_upload_id" optional="hide"/>
+                                                    </list>
+                                                </field>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -339,14 +369,10 @@
                                                 </div>
                                                 <span class="d-block text-muted small mb-1">Tên sản phẩm</span>
                                                 <field name="item_name" nolabel="1" readonly="1" class="d-block w-100 mb-3" style="white-space:normal; word-break:break-word; overflow-wrap:anywhere; line-height:1.5;"/>
-                                                <span class="d-block text-muted small mb-1">SKU</span>
-                                                <field name="item_sku" nolabel="1" class="mb-3"/>
-                                                <div class="d-flex flex-wrap gap-2">
-                                                    <button name="action_fetch_content_diagnosis" type="object" string="Chẩn đoán" class="btn btn-shopee" icon="fa-check-circle"/>
-                                                    <button name="action_fetch_category_recommendation" type="object" string="Gợi ý danh mục" class="btn btn-shopee-soft" icon="fa-folder-open"/>
-                                                    <button name="action_fetch_recommend_attributes" type="object" string="Gợi ý thuộc tính" class="btn btn-shopee-soft" icon="fa-list"/>
-                                                    <button name="action_fetch_item_extra_info" type="object" string="Thông tin thêm" class="btn btn-shopee-soft" icon="fa-info-circle"/>
-                                                </div>
+                                                <span class="d-block text-muted small mb-1">Kết quả chẩn đoán</span>
+                                                <field name="quality_summary" nolabel="1" readonly="1" widget="text"/>
+                                                <span class="d-block text-muted small mt-3 mb-1">Thông tin thêm</span>
+                                                <field name="extra_summary" nolabel="1" readonly="1" widget="text"/>
                                             </div>
                                         </div>
                                         <div class="col-lg-4">
@@ -366,10 +392,10 @@
                                                 </div>
                                                 <span class="d-block text-muted small mb-1">Cập nhật Shopee</span>
                                                 <div class="mb-3"><field name="shopee_update_time" nolabel="1" readonly="1"/></div>
-                                                <div class="d-flex flex-column gap-2">
-                                                    <button name="action_fetch_violation_info" type="object" string="Thông tin vi phạm" class="btn btn-shopee" icon="fa-ban"/>
-                                                    <button name="action_fetch_content_diagnosis" type="object" string="Kiểm tra lỗi nội dung" class="btn btn-shopee-outline" icon="fa-search"/>
-                                                </div>
+                                                <span class="d-block text-muted small mb-1">Kết quả kiểm tra</span>
+                                                <field name="violation_summary" nolabel="1" readonly="1" widget="text"/>
+                                                <span class="d-block text-muted small mt-3 mb-1">Kiểm tra lúc</span>
+                                                <field name="quality_last_checked" nolabel="1" readonly="1"/>
                                             </div>
                                         </div>
                                     </div>

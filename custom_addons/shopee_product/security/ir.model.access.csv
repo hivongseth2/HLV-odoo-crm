@@ -13,3 +13,14 @@ access_shopee_product_create_wizard,shopee.product.create.wizard all,model_shope
 access_shopee_product_create_wizard_logistic,shopee.product.create.wizard.logistic all,model_shopee_product_create_wizard_logistic,sales_team.group_sale_salesman,1,1,1,1
 access_shopee_category_salesman,shopee.category salesman,model_shopee_category,sales_team.group_sale_salesman,1,0,0,0
 access_shopee_category_manager,shopee.category manager,model_shopee_category,sales_team.group_sale_manager,1,1,1,1
+access_shopee_brand_salesman,shopee.brand salesman,model_shopee_brand,sales_team.group_sale_salesman,1,0,0,0
+access_shopee_brand_manager,shopee.brand manager,model_shopee_brand,sales_team.group_sale_manager,1,1,1,1
+access_shopee_attribute_salesman,shopee.attribute salesman,model_shopee_attribute,sales_team.group_sale_salesman,1,0,0,0
+access_shopee_attribute_manager,shopee.attribute manager,model_shopee_attribute,sales_team.group_sale_manager,1,1,1,1
+access_shopee_attribute_value_salesman,shopee.attribute.value salesman,model_shopee_attribute_value,sales_team.group_sale_salesman,1,0,0,0
+access_shopee_attribute_value_manager,shopee.attribute.value manager,model_shopee_attribute_value,sales_team.group_sale_manager,1,1,1,1
+access_shopee_product_image_salesman,shopee.product.image salesman,model_shopee_product_image,sales_team.group_sale_salesman,1,1,1,1
+access_shopee_product_image_manager,shopee.product.image manager,model_shopee_product_image,sales_team.group_sale_manager,1,1,1,1
+access_shopee_product_video_salesman,shopee.product.video salesman,model_shopee_product_video,sales_team.group_sale_salesman,1,1,1,1
+access_shopee_product_video_manager,shopee.product.video manager,model_shopee_product_video,sales_team.group_sale_manager,1,1,1,1
+access_shopee_product_create_wizard_attribute,shopee.product.create.wizard.attribute all,model_shopee_product_create_wizard_attribute,sales_team.group_sale_salesman,1,1,1,1

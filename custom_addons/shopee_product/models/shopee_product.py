@@ -7,6 +7,7 @@ Model lưu trữ cache sản phẩm đã đồng bộ từ Shopee.
 Mỗi record = 1 item trên 1 shop Shopee.
 Dùng để theo dõi, quản lý và đẩy sản phẩm từ Odoo lên Shopee.
 """
+import base64
 import json as _json
 import logging
 from datetime import datetime
@@ -129,6 +130,19 @@ class ShopeeProduct(models.Model):
     )
     last_api_section = fields.Char(string='Nhóm API gần nhất', readonly=True)
     last_api_synced_at = fields.Datetime(string='API cập nhật lần cuối', readonly=True)
+
+    # ── Editor nội dung ─────────────────────────────────
+    edit_description = fields.Text(string='Mô tả Shopee')
+    image_line_ids = fields.One2many(
+        'shopee.product.image', 'shopee_product_id', string='Ảnh Shopee',
+    )
+    video_line_ids = fields.One2many(
+        'shopee.product.video', 'shopee_product_id', string='Video Shopee',
+    )
+    quality_summary = fields.Text(string='Chất lượng nội dung', readonly=True)
+    violation_summary = fields.Text(string='Vi phạm', readonly=True)
+    extra_summary = fields.Text(string='Thông tin thêm', readonly=True)
+    quality_last_checked = fields.Datetime(string='Kiểm tra nội dung lúc', readonly=True)
 
     # ── Hàng đợi đồng bộ tồn kho ─────────────────────────
     pending_stock_sync = fields.Boolean(
@@ -303,6 +317,8 @@ class ShopeeProduct(models.Model):
         if not items:
             raise UserError(_("Không tìm thấy thông tin sản phẩm ID %s trên Shopee.") % self.shopee_item_id)
         _update_record_from_api(self, items[0])
+        self.with_context(skip_shopee_auto_quality=True).action_fetch_full_content()
+        self._auto_refresh_quality_panels()
         return {'type': 'ir.actions.client', 'tag': 'reload'}
 
     def action_open_sync_wizard(self):
@@ -836,6 +852,30 @@ class ShopeeProduct(models.Model):
         image_url_list = images.get('image_url_list') or []
         video_info_list = item.get('video_info') or []
 
+        image_commands = [(5, 0, 0)]
+        for seq, image_id in enumerate(image_id_list, 1):
+            image_commands.append((0, 0, {
+                'sequence': seq,
+                'image_id': image_id,
+                'image_url': image_url_list[seq - 1] if len(image_url_list) >= seq else '',
+                'active': True,
+            }))
+        video_commands = [(5, 0, 0)]
+        for seq, video in enumerate(video_info_list, 1):
+            v_url = video.get('video_url_list', [{}])[0].get('video_url') if video.get('video_url_list') else ''
+            video_commands.append((0, 0, {
+                'sequence': seq,
+                'video_id': video.get('video_id') or video.get('video_upload_id') or '',
+                'video_url': v_url,
+                'duration': video.get('duration') or 0,
+                'active': True,
+            }))
+        self.write({
+            'edit_description': desc,
+            'image_line_ids': image_commands,
+            'video_line_ids': video_commands,
+        })
+
         summary_lines = [
             _('Tên: %s') % (item.get('item_name') or ''),
             _('Mô tả: %d ký tự') % len(desc),
@@ -868,6 +908,57 @@ class ShopeeProduct(models.Model):
             '\n'.join(summary_lines),
         )
 
+    def action_push_content_update(self):
+        """Đẩy mô tả, ảnh, video đã chỉnh trên form về Shopee qua update_item."""
+        self.ensure_one()
+        if not self.shopee_item_id:
+            raise UserError(_('Sản phẩm chưa có shopee_item_id.'))
+        active_images = self.image_line_ids.filtered(lambda l: l.active).sorted('sequence')
+        image_id_list = []
+        for line in active_images:
+            if line.upload_image:
+                image_binary = base64.b64decode(line.upload_image)
+                line.image_id = self._call_with_token_refresh(
+                    lambda creds: shopee_product_api.call_upload_image(creds, image_binary)
+                )
+            if line.image_id:
+                image_id_list.append(line.image_id)
+        if not image_id_list:
+            raise UserError(_('Shopee yêu cầu ít nhất một ảnh sản phẩm.'))
+
+        video_upload_ids = []
+        for line in self.video_line_ids.filtered(lambda l: l.active).sorted('sequence'):
+            if line.upload_video:
+                video_binary = base64.b64decode(line.upload_video)
+                line.video_upload_id = self._call_with_token_refresh(
+                    lambda creds: shopee_product_api.call_upload_video(
+                        creds, video_binary, filename=line.upload_filename or 'product.mp4',
+                    )
+                )
+            if line.video_upload_id:
+                video_upload_ids.append(line.video_upload_id)
+
+        payload = {
+            'description': self.edit_description or self.item_name or '',
+            'image': {'image_id_list': image_id_list},
+        }
+        if video_upload_ids:
+            payload['video_upload_id'] = video_upload_ids
+        item_id = int(self.shopee_item_id)
+        result = self._call_with_token_refresh(
+            lambda creds: shopee_product_api.call_update_item(creds, item_id, payload)
+        )
+        self.action_fetch_full_content()
+        return self._store_raw_section(
+            'content_update', result, _('Cập nhật nội dung'),
+            _('Đã đẩy mô tả/ảnh/video lên Shopee.'),
+        )
+
+    def _get_credentials(self):
+        from odoo.addons.shopee_order_fetch.services.shopee_api import get_credentials_from_shop
+        self.ensure_one()
+        return get_credentials_from_shop(self.shop_id)
+
     def action_fetch_item_extra_info(self):
         self.ensure_one()
         item_id = int(self.shopee_item_id)
@@ -886,6 +977,7 @@ class ShopeeProduct(models.Model):
         if 'sold' in item:
             parts.append(_("Số bán: %s") % f"{item['sold']:,}")
         msg = "\n".join(parts) if parts else _('Đã lấy thông tin bổ sung')
+        self.write({'extra_summary': msg, 'quality_last_checked': fields.Datetime.now()})
         return self._store_raw_section('extra_info', result, _('Thông tin bổ sung'), msg)
 
     def action_fetch_content_diagnosis(self):
@@ -910,6 +1002,7 @@ class ShopeeProduct(models.Model):
                 msg = _('Chất lượng nội dung: Cấp %s/3\n✓ Không còn vấn đề cần cải thiện') % level
         else:
             msg = _('Không có dữ liệu chẩn đoán')
+        self.write({'quality_summary': msg, 'quality_last_checked': fields.Datetime.now()})
         return self._store_raw_section('content_diagnosis', data, _('Chẩn đoán nội dung'), msg)
 
     def action_fetch_category_recommendation(self):
@@ -1155,7 +1248,43 @@ class ShopeeProduct(models.Model):
             else:
                 lines.append(_('✓ Không có vi phạm cụ thể'))
             msg = '\n'.join(lines)
+        self.write({'violation_summary': msg, 'quality_last_checked': fields.Datetime.now()})
         return self._store_raw_section('violation_info', result, _('Thông tin vi phạm'), msg)
+
+    def _auto_refresh_quality_panels(self):
+        """Best-effort refresh for form UX; never blocks opening the product."""
+        for rec in self:
+            if self.env.context.get('skip_shopee_auto_quality'):
+                continue
+            # Tránh gọi API liên tục khi web client read nhiều lần.
+            if rec.quality_last_checked:
+                age = fields.Datetime.now() - rec.quality_last_checked
+                if age.total_seconds() < 15 * 60:
+                    continue
+            try:
+                rec.with_context(skip_shopee_auto_quality=True).action_fetch_content_diagnosis()
+            except Exception as e:
+                rec.with_context(skip_shopee_auto_quality=True).write({
+                    'quality_summary': _('Không tải được chẩn đoán: %s') % str(e),
+                    'quality_last_checked': fields.Datetime.now(),
+                })
+            try:
+                rec.with_context(skip_shopee_auto_quality=True).action_fetch_violation_info()
+            except Exception as e:
+                rec.with_context(skip_shopee_auto_quality=True).write({
+                    'violation_summary': _('Không tải được vi phạm: %s') % str(e),
+                })
+            try:
+                rec.with_context(skip_shopee_auto_quality=True).action_fetch_item_extra_info()
+            except Exception as e:
+                rec.with_context(skip_shopee_auto_quality=True).write({
+                    'extra_summary': _('Không tải được thông tin thêm: %s') % str(e),
+                })
+
+    def web_read(self, specification):
+        if not self.env.context.get('skip_shopee_auto_quality') and len(self) <= 3:
+            self._auto_refresh_quality_panels()
+        return super().web_read(specification)
 
     def action_fetch_size_chart_list(self):
         self.ensure_one()
@@ -1407,6 +1536,40 @@ class ShopeeProduct(models.Model):
                     'shopee_product_id': self.id,
                     **vals,
                 })
+
+
+class ShopeeProductImage(models.Model):
+    _name = 'shopee.product.image'
+    _description = 'Ảnh sản phẩm Shopee'
+    _order = 'shopee_product_id, sequence, id'
+
+    shopee_product_id = fields.Many2one(
+        'shopee.product', required=True, ondelete='cascade', index=True,
+    )
+    sequence = fields.Integer(string='Thứ tự', default=10)
+    active = fields.Boolean(string='Dùng', default=True)
+    image_id = fields.Char(string='Image ID Shopee', readonly=False)
+    image_url = fields.Char(string='URL ảnh', readonly=True)
+    upload_image = fields.Binary(string='Ảnh mới')
+    upload_filename = fields.Char(string='Tên file')
+
+
+class ShopeeProductVideo(models.Model):
+    _name = 'shopee.product.video'
+    _description = 'Video sản phẩm Shopee'
+    _order = 'shopee_product_id, sequence, id'
+
+    shopee_product_id = fields.Many2one(
+        'shopee.product', required=True, ondelete='cascade', index=True,
+    )
+    sequence = fields.Integer(string='Thứ tự', default=10)
+    active = fields.Boolean(string='Dùng', default=True)
+    video_id = fields.Char(string='Video ID', readonly=True)
+    video_upload_id = fields.Char(string='Video Upload ID')
+    video_url = fields.Char(string='URL video', readonly=True)
+    duration = fields.Integer(string='Thời lượng (giây)', readonly=True)
+    upload_video = fields.Binary(string='Video mới')
+    upload_filename = fields.Char(string='Tên file')
 
 
 # ── Private helpers ──────────────────────────────────────

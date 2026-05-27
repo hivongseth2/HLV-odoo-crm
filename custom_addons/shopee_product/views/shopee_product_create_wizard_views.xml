@@ -46,17 +46,40 @@
                             <field name="category_suggestion" readonly="1"
                                    invisible="not category_suggestion"
                                    widget="text"/>
-                            <label for="brand_id"/>
+                            <label for="shopee_brand_id"/>
                             <div class="o_row">
-                                <field name="brand_id"/>
-                                <field name="brand_name" placeholder="No Brand"/>
+                                <field name="shopee_brand_id"
+                                       options="{'no_create': True}"
+                                       placeholder="Chọn brand từ Shopee…"/>
+                                <button name="action_reload_brand_attributes" type="object"
+                                        string="↻ Brand/thuộc tính" class="btn-link"
+                                        invisible="not category_id"/>
                             </div>
+                            <field name="brand_id" readonly="1" invisible="1"/>
+                            <field name="brand_name" readonly="1" invisible="1"/>
                             <field name="upload_product_image"/>
                         </group>
                         <group>
                             <field name="description" widget="text" nolabel="1"
                                    placeholder="Mô tả sản phẩm (tuỳ chọn)…"/>
                         </group>
+                    </group>
+
+                    <!-- Thuộc tính -->
+                    <group string="Thuộc tính Shopee">
+                        <div class="col-12">
+                            <field name="attribute_line_ids" nolabel="1">
+                                <list editable="bottom" create="false" delete="false"
+                                      decoration-danger="is_mandatory and not value_id and not value_text">
+                                    <field name="is_mandatory" widget="boolean"/>
+                                    <field name="attribute_name"/>
+                                    <field name="value_id" options="{'no_create': True}"/>
+                                    <field name="value_text"/>
+                                    <field name="input_type" optional="hide"/>
+                                    <field name="attribute_id" optional="hide"/>
+                                </list>
+                            </field>
+                        </div>
                     </group>
 
                     <!-- Vận chuyển -->

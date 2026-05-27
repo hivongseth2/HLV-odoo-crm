@@ -369,6 +369,51 @@ def call_upload_image(creds, image_binary):
     return image_id
 
 
+def call_upload_video(creds, video_binary, filename='product.mp4'):
+    """
+    POST /api/v2/media_space/upload_video  (multipart/form-data)
+
+    Trả về video_upload_id để dùng trong add_item/update_item.
+    """
+    api_path = '/api/v2/media_space/upload_video'
+    params = _build_signed_params(creds, api_path)
+    url = '{}{}'.format(creds.get('base_url') or SHOPEE_BASE_URL, api_path)
+    _logger.info("Shopee Product API: upload_video file=%s bytes=%d", filename, len(video_binary))
+    try:
+        resp = req_lib.post(
+            url,
+            params=params,
+            files={'video': (filename or 'product.mp4', video_binary, 'video/mp4')},
+            timeout=180,
+        )
+    except Exception as e:
+        raise UserError('Lỗi kết nối khi upload video lên Shopee: %s' % str(e))
+    try:
+        body = resp.json()
+    except Exception:
+        raise UserError(
+            'Shopee trả về response không hợp lệ khi upload video (status %s).'
+            % resp.status_code
+        )
+    _check_error(body, 'upload_video')
+    resp_data = body.get('response', {}) or {}
+    video_upload_id = ''
+    if isinstance(resp_data, dict):
+        video_upload_id = (
+            resp_data.get('video_upload_id')
+            or resp_data.get('upload_id')
+            or resp_data.get('video_id')
+            or ''
+        )
+    if not video_upload_id:
+        _logger.error("Shopee upload_video: response không có video_upload_id: %s", body)
+        raise UserError(
+            'Shopee không trả về video_upload_id sau khi upload video.\n'
+            'Response: %s' % body
+        )
+    return video_upload_id
+
+
 # ──────────────────────────────────────────────────────
 #  Write items
 # ──────────────────────────────────────────────────────
