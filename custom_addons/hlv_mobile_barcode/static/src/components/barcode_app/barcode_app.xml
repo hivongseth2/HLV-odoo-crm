@@ -8,7 +8,13 @@
                 <!-- Header (hidden on main screen) -->
                 <div class="shipper-header" t-if="state.currentView !== 'main'">
                     <div class="header-title">
-                        <i class="fa fa-boxes"></i> Kho <t t-esc="state.warehouseCode || 'HLV'"/>
+                        <i class="fa fa-boxes"></i>
+                        <t t-if="state.pickingName and state.pickingName.includes('INT') and state.scannedLocationName">
+                            <t t-esc="state.scannedLocationName"/>
+                        </t>
+                        <t t-else="">
+                            Kho <t t-esc="state.warehouseCode || 'HLV'"/>
+                        </t>
                     </div>
                     <div style="display: flex; gap: 8px;">
                         <div class="user-info" t-if="state.currentView === 'picking' and state.pickingId" t-on-click="clearPicking" style="background: var(--danger-color); color: white;">
