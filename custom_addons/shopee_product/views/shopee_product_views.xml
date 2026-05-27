@@ -69,90 +69,145 @@
                             string="Xóa khỏi Shopee" class="btn-danger" icon="fa-trash"
                             confirm="Sản phẩm sẽ bị xóa khỏi Shopee. Tiếp tục?"
                             invisible="item_status in ('SELLER_DELETE', 'SHOPEE_DELETE')"/>
-                    <field name="item_status" widget="statusbar"
-                           statusbar_visible="NORMAL,UNLIST,REVIEWING,BANNED"/>
                 </header>
 
                 <sheet>
                     <field name="shopee_item_url" invisible="1"/>
 
-                    <div class="o_shopee_workbench_identity mb-3">
-                        <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
-                            <div class="oe_title flex-grow-1">
-                                <span class="text-uppercase text-muted fw-bold">Shopee Product Workbench</span>
-                                <h1 class="mb-1">
-                                    <field name="item_name" placeholder="Tên sản phẩm Shopee"/>
+                    <div class="container-fluid px-0 o_shopee_workbench">
+                        <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 p-3 mb-3 border rounded bg-100">
+                            <div class="flex-grow-1 min-w-0">
+                                <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                                    <span class="badge text-bg-light border">Shopee Product</span>
+                                    <field name="item_status" widget="badge"
+                                           decoration-success="item_status == 'NORMAL'"
+                                           decoration-warning="item_status == 'UNLIST'"
+                                           decoration-danger="item_status in ('BANNED','SHOPEE_DELETE')"
+                                           decoration-muted="item_status == 'SELLER_DELETE'"
+                                           decoration-info="item_status == 'REVIEWING'"/>
+                                </div>
+                                <h1 class="display-6 fw-semibold mb-2 lh-sm">
+                                    <field name="item_name" nolabel="1" placeholder="Tên sản phẩm Shopee"/>
                                 </h1>
-                                <div class="d-flex flex-wrap gap-2 align-items-center text-muted">
-                                    <span>SKU</span>
-                                    <field name="item_sku" placeholder="Chưa có SKU"/>
-                                    <span>•</span>
-                                    <span>Item ID</span>
-                                    <field name="shopee_item_id" readonly="1"/>
+                                <div class="d-flex flex-wrap gap-3 text-muted">
+                                    <span><i class="fa fa-barcode me-1"/> <field name="item_sku" nolabel="1" placeholder="SKU"/></span>
+                                    <span><i class="fa fa-hashtag me-1"/> <field name="shopee_item_id" nolabel="1" readonly="1"/></span>
+                                    <span><i class="fa fa-shopping-bag me-1"/> <field name="shop_id" nolabel="1" readonly="1" options="{'no_open': False}"/></span>
                                 </div>
                             </div>
-                            <div class="d-flex flex-column gap-2 min-w-0">
-                                <field name="shop_id" readonly="1" options="{'no_open': False}"/>
-                                <field name="last_synced" readonly="1" string="Đồng bộ lần cuối"/>
+                            <div class="d-flex flex-wrap gap-2">
+                                <button name="action_refresh_from_shopee" type="object"
+                                        string="Làm mới" class="btn btn-primary" icon="fa-refresh"/>
+                                <button name="action_load_models" type="object"
+                                        string="Biến thể" class="btn btn-outline-primary" icon="fa-list-ul"
+                                        invisible="not has_model"/>
+                                <button name="action_open_shopee_item" type="object"
+                                        string="Shopee" class="btn btn-outline-secondary" icon="fa-external-link"
+                                        invisible="not shopee_item_url"/>
                             </div>
                         </div>
-                    </div>
 
-                    <div class="oe_button_box o_shopee_kpi_band" name="button_box">
-                        <button type="object" name="action_refresh_from_shopee"
-                                class="oe_stat_button" icon="fa-cubes">
-                            <field name="total_available_stock" widget="statinfo" string="Tồn kho"/>
-                        </button>
-                        <button name="action_load_models" type="object"
-                                class="oe_stat_button" icon="fa-list-ul"
-                                invisible="not has_model">
-                            <field name="model_count" widget="statinfo" string="Biến thể"/>
-                        </button>
-                        <button type="object" name="action_open_shopee_item_mappings"
-                                class="oe_stat_button" icon="fa-link"
-                                invisible="not shopee_item_mapping_count">
-                            <field name="shopee_item_mapping_count" widget="statinfo" string="Mapping"/>
-                        </button>
-                        <button type="object" name="action_open_mapped_products"
-                                class="oe_stat_button" icon="fa-cube"
-                                invisible="not mapped_product_count">
-                            <field name="mapped_product_count" widget="statinfo" string="SP Odoo"/>
-                        </button>
-                        <button type="object" name="action_open_shopee_item"
-                                class="oe_stat_button" icon="fa-external-link"
-                                invisible="not shopee_item_url">
-                            <span class="o_stat_text">Shopee</span>
-                        </button>
-                    </div>
+                        <div class="row g-3 mb-3">
+                            <div class="col-6 col-lg-3">
+                                <button type="object" name="action_refresh_from_shopee" class="btn w-100 text-start border bg-white p-3">
+                                    <div class="text-muted small text-uppercase">Tồn kho</div>
+                                    <div class="fs-3 fw-semibold"><field name="total_available_stock" nolabel="1" readonly="1"/></div>
+                                </button>
+                            </div>
+                            <div class="col-6 col-lg-3">
+                                <button name="action_load_models" type="object" class="btn w-100 text-start border bg-white p-3" invisible="not has_model">
+                                    <div class="text-muted small text-uppercase">Biến thể</div>
+                                    <div class="fs-3 fw-semibold"><field name="model_count" nolabel="1" readonly="1"/></div>
+                                </button>
+                                <div class="border bg-white p-3 rounded" invisible="has_model">
+                                    <div class="text-muted small text-uppercase">Biến thể</div>
+                                    <div class="fs-3 fw-semibold"><field name="model_count" nolabel="1" readonly="1"/></div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-lg-3">
+                                <button type="object" name="action_open_shopee_item_mappings" class="btn w-100 text-start border bg-white p-3" invisible="not shopee_item_mapping_count">
+                                    <div class="text-muted small text-uppercase">Mapping</div>
+                                    <div class="fs-3 fw-semibold"><field name="shopee_item_mapping_count" nolabel="1" readonly="1"/></div>
+                                </button>
+                                <div class="border bg-white p-3 rounded" invisible="shopee_item_mapping_count">
+                                    <div class="text-muted small text-uppercase">Mapping</div>
+                                    <div class="fs-3 fw-semibold"><field name="shopee_item_mapping_count" nolabel="1" readonly="1"/></div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-lg-3">
+                                <button type="object" name="action_open_mapped_products" class="btn w-100 text-start border bg-white p-3" invisible="not mapped_product_count">
+                                    <div class="text-muted small text-uppercase">SP Odoo</div>
+                                    <div class="fs-3 fw-semibold"><field name="mapped_product_count" nolabel="1" readonly="1"/></div>
+                                </button>
+                                <div class="border bg-white p-3 rounded" invisible="mapped_product_count">
+                                    <div class="text-muted small text-uppercase">SP Odoo</div>
+                                    <div class="fs-3 fw-semibold"><field name="mapped_product_count" nolabel="1" readonly="1"/></div>
+                                </div>
+                            </div>
+                        </div>
 
-                    <div class="alert alert-warning" role="alert" invisible="not has_model or model_count">
-                        <i class="fa fa-exclamation-triangle me-1"/>
-                        Có mapping biến thể nhưng chưa có dòng model. Dùng <strong>Tải biến thể</strong> để dựng bảng giá/tồn theo từng phân loại.
-                    </div>
+                        <div class="row g-3 mb-3">
+                            <div class="col-lg-4">
+                                <div class="border rounded bg-white p-3 h-100">
+                                    <div class="fw-semibold mb-3">Identity</div>
+                                    <div class="mb-3">
+                                        <label class="text-muted small">Danh mục Shopee</label>
+                                        <field name="category_id" nolabel="1" readonly="1"/>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="text-muted small">Có phân loại</label>
+                                        <field name="has_model" nolabel="1" widget="boolean" readonly="1"/>
+                                    </div>
+                                    <div>
+                                        <label class="text-muted small">Cập nhật Shopee</label>
+                                        <field name="shopee_update_time" nolabel="1" readonly="1"/>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-lg-4">
+                                <div class="border rounded bg-white p-3 h-100">
+                                    <div class="fw-semibold mb-3">Giá &amp; tồn</div>
+                                    <div class="mb-3">
+                                        <label class="text-muted small">Giá gốc</label>
+                                        <field name="original_price" nolabel="1" widget="integer"/>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="text-muted small">Giá hiện tại</label>
+                                        <field name="current_price" nolabel="1" widget="integer" readonly="1"/>
+                                    </div>
+                                    <div>
+                                        <label class="text-muted small">Tồn hiện tại</label>
+                                        <field name="total_available_stock" nolabel="1" readonly="1"/>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-lg-4">
+                                <div class="border rounded bg-white p-3 h-100">
+                                    <div class="fw-semibold mb-3">Liên kết Odoo</div>
+                                    <div class="mb-3">
+                                        <label class="text-muted small">Mapping shopee.item</label>
+                                        <field name="shopee_item_mapping_ids" nolabel="1" widget="many2many_tags" readonly="1"/>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="text-muted small">Sản phẩm Odoo</label>
+                                        <field name="mapped_product_ids" nolabel="1" widget="many2many_tags" readonly="1"/>
+                                    </div>
+                                    <div>
+                                        <label class="text-muted small">Link thủ công</label>
+                                        <field name="odoo_product_id" nolabel="1" options="{'no_create': True}"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
 
-                    <group class="o_shopee_summary_grid">
-                        <group string="Định danh">
-                            <field name="category_id" string="Danh mục Shopee" readonly="1"/>
-                            <field name="has_model" string="Có phân loại" widget="boolean" readonly="1"/>
-                            <field name="shopee_update_time" string="Cập nhật trên Shopee" readonly="1"/>
-                        </group>
-                        <group string="Giá &amp; tồn">
-                            <field name="original_price" string="Giá gốc" widget="integer"/>
-                            <field name="current_price" string="Giá hiện tại" widget="integer" readonly="1"/>
-                            <field name="total_available_stock" string="Tồn hiện tại" readonly="1"/>
-                        </group>
-                        <group string="Liên kết Odoo">
-                            <field name="shopee_item_mapping_ids" widget="many2many_tags"
-                                   readonly="1" string="Mapping shopee.item"/>
-                            <field name="mapped_product_ids" widget="many2many_tags"
-                                   readonly="1" string="Sản phẩm Odoo"/>
-                            <field name="odoo_product_id" options="{'no_create': True}"
-                                   string="Link thủ công"/>
-                        </group>
-                    </group>
-
-                    <notebook class="o_shopee_workbench_tabs">
-                        <page string="Workbench giá/tồn" name="models_tab" invisible="not has_model">
+                        <div class="border rounded bg-white p-3 mb-3" invisible="not has_model">
+                            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                                <div class="fw-semibold fs-5">Giá &amp; tồn theo biến thể</div>
+                                <div class="d-flex flex-wrap gap-2">
+                                    <button name="action_push_price" type="object" string="Đẩy giá" class="btn btn-primary" icon="fa-tag" confirm="Cập nhật giá lên Shopee?"/>
+                                    <button name="action_push_stock" type="object" string="Đẩy tồn kho" class="btn btn-primary" icon="fa-cubes" confirm="Cập nhật tồn kho lên Shopee?"/>
+                                </div>
+                            </div>
                             <field name="model_ids" nolabel="1">
                                 <list editable="bottom"
                                       decoration-danger="available_stock == 0"
@@ -172,68 +227,59 @@
                                     <field name="last_synced" string="Đồng bộ lần cuối" readonly="1" optional="hide"/>
                                 </list>
                             </field>
-                        </page>
+                        </div>
 
-                        <page string="Content Quality" name="content_quality_tab">
-                            <div class="row g-3">
-                                <div class="col-lg-4">
-                                    <div class="alert alert-info mb-0" role="alert">
-                                        <strong>Content quality</strong><br/>
-                                        Kiểm tra tên, SKU, danh mục và dữ liệu gốc trả về từ Shopee.
+                        <div class="row g-3 mb-3">
+                            <div class="col-xl-4 col-lg-6">
+                                <div class="border rounded bg-white p-3 h-100">
+                                    <div class="fw-semibold mb-3"><i class="fa fa-check-circle me-1"/> Content quality</div>
+                                    <label class="text-muted small">Tên sản phẩm</label>
+                                    <field name="item_name" nolabel="1"/>
+                                    <label class="text-muted small mt-3">SKU</label>
+                                    <field name="item_sku" nolabel="1"/>
+                                </div>
+                            </div>
+                            <div class="col-xl-4 col-lg-6">
+                                <div class="border rounded bg-white p-3 h-100">
+                                    <div class="fw-semibold mb-3"><i class="fa fa-ban me-1"/> Violation</div>
+                                    <field name="item_status" nolabel="1" readonly="1"/>
+                                    <field name="shopee_update_time" nolabel="1" readonly="1"/>
+                                </div>
+                            </div>
+                            <div class="col-xl-4 col-lg-6">
+                                <div class="border rounded bg-white p-3 h-100">
+                                    <div class="fw-semibold mb-3"><i class="fa fa-comments me-1"/> Comment</div>
+                                    <field name="shopee_item_mapping_ids" nolabel="1" widget="many2many_tags" readonly="1"/>
+                                </div>
+                            </div>
+                            <div class="col-xl-4 col-lg-6">
+                                <div class="border rounded bg-white p-3 h-100">
+                                    <div class="fw-semibold mb-3"><i class="fa fa-rocket me-1"/> Boost</div>
+                                    <div class="d-flex flex-wrap gap-2">
+                                        <button name="action_refresh_from_shopee" type="object" string="Làm mới" class="btn btn-outline-primary" icon="fa-refresh"/>
+                                        <button name="action_open_shopee_item" type="object" string="Shopee" class="btn btn-outline-secondary" icon="fa-external-link" invisible="not shopee_item_url"/>
                                     </div>
                                 </div>
-                                <div class="col-lg-8">
-                                    <group>
-                                        <field name="item_name" string="Tên sản phẩm"/>
-                                        <field name="item_sku" string="SKU"/>
-                                        <field name="category_id" string="Danh mục Shopee" readonly="1"/>
-                                    </group>
+                            </div>
+                            <div class="col-xl-4 col-lg-6">
+                                <div class="border rounded bg-white p-3 h-100">
+                                    <div class="fw-semibold mb-3"><i class="fa fa-image me-1"/> Kit image</div>
+                                    <field name="mapped_product_ids" nolabel="1" widget="many2many_tags" readonly="1"/>
                                 </div>
                             </div>
-                        </page>
-
-                        <page string="Violation" name="violation_tab">
-                            <div class="alert alert-secondary" role="alert">
-                                Panel dành cho dữ liệu vi phạm sản phẩm Shopee. Khi API violation được nối vào service layer, dữ liệu sẽ hiển thị tại đây.
+                            <div class="col-xl-4 col-lg-6">
+                                <div class="border rounded bg-white p-3 h-100">
+                                    <div class="fw-semibold mb-3"><i class="fa fa-clock-o me-1"/> Đồng bộ</div>
+                                    <field name="last_synced" nolabel="1" readonly="1"/>
+                                </div>
                             </div>
+                        </div>
+
+                        <div class="border rounded bg-white p-3">
+                            <div class="fw-semibold mb-3">Raw JSON</div>
                             <field name="raw_data" widget="json" readonly="1" nolabel="1"/>
-                        </page>
-
-                        <page string="Comment" name="comment_tab">
-                            <div class="alert alert-secondary" role="alert">
-                                Panel quản lý bình luận Shopee theo sản phẩm. Chatter bên phải vẫn dùng cho ghi chú nội bộ Odoo.
-                            </div>
-                            <field name="shopee_item_mapping_ids" widget="many2many_tags" readonly="1" string="Mapping liên quan"/>
-                        </page>
-
-                        <page string="Boost" name="boost_tab">
-                            <group>
-                                <group string="Trạng thái boost">
-                                    <field name="item_status" readonly="1"/>
-                                    <field name="last_synced" readonly="1"/>
-                                </group>
-                                <group string="Thao tác">
-                                    <button name="action_refresh_from_shopee" type="object"
-                                            string="Làm mới dữ liệu Shopee" class="btn-secondary"
-                                            icon="fa-refresh"/>
-                                    <button name="action_open_shopee_item" type="object"
-                                            string="Mở trang Shopee" class="btn-secondary"
-                                            icon="fa-external-link" invisible="not shopee_item_url"/>
-                                </group>
-                            </group>
-                        </page>
-
-                        <page string="Kit Image" name="kit_image_tab">
-                            <div class="alert alert-secondary" role="alert">
-                                Khu vực kiểm tra dữ liệu phục vụ tạo ảnh kit/combo. Thông tin chi tiết đang đọc từ JSON gốc của item.
-                            </div>
-                            <field name="raw_data" widget="json" readonly="1" nolabel="1"/>
-                        </page>
-
-                        <page string="Raw JSON" name="raw_data_tab">
-                            <field name="raw_data" widget="json" readonly="1" nolabel="1"/>
-                        </page>
-                    </notebook>
+                        </div>
+                    </div>
                 </sheet>
 
                 <chatter/>
