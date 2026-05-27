@@ -32,6 +32,11 @@
         'views/shopee_push_stock_wizard_views.xml',
         'views/shopee_product_operation_wizard_views.xml',
     ],
+    'assets': {
+        'web.assets_backend': [
+            'shopee_product/static/src/css/shopee_product.css',
+        ],
+    },
     'installable': True,
     'application': False,
     'license': 'LGPL-3',
