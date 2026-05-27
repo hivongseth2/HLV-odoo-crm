@@ -287,25 +287,49 @@ export class BarcodeApp extends Component {
     }
 
     async goBack() {
-        await this.closeCamera();
-        this.state.showCameraPopup = false;
-        
         const currentPickingId = this.state.pickingId;
         const currentView = this.state.currentView;
+
+        if (currentView === 'picking' && this.state.pickingState !== 'done' && currentPickingId) {
+            const confirmed = confirm("Bạn có chắc chắn muốn thoát khỏi phiếu này không? Hành động này sẽ XÓA HẾT số lượng đã quét và HỦY PHIẾU");
+            if (!confirmed) {
+                return;
+            }
+            this.state.isProcessing = true;
+            try {
+                const res = await rpc("/hlv_mobile_barcode/clear_and_cancel_picking", { picking_id: currentPickingId });
+                if (res && res.error) {
+                    this.notification.add(res.error, { type: "danger" });
+                } else {
+                    this.notification.add("Đã hủy phiếu và giải phóng sản phẩm thành công.", { type: "success" });
+                }
+            } catch (e) {
+                console.error("Cancel error:", e);
+            } finally {
+                this.state.isProcessing = false;
+            }
+            
+            const storageKey = 'hlv_opened_pickings';
+            try {
+                let opened = JSON.parse(localStorage.getItem(storageKey) || '[]');
+                opened = opened.filter(id => id !== currentPickingId);
+                localStorage.setItem(storageKey, JSON.stringify(opened));
+            } catch (e) {}
+        } else if (currentView === 'picking' && currentPickingId) {
+            const storageKey = 'hlv_opened_pickings';
+            try {
+                let opened = JSON.parse(localStorage.getItem(storageKey) || '[]');
+                opened = opened.filter(id => id !== currentPickingId);
+                localStorage.setItem(storageKey, JSON.stringify(opened));
+            } catch (e) {}
+        }
+
+        await this.closeCamera();
+        this.state.showCameraPopup = false;
 
         if (this.history && this.history.length > 0) {
             const prevState = this.history.pop();
             
-            if (currentView === 'picking' && prevState.currentView !== 'picking' && currentPickingId) {
-                rpc("/hlv_mobile_barcode/clear_quantities", { picking_id: currentPickingId }).catch(e => {});
-                const storageKey = 'hlv_opened_pickings';
-                try {
-                    let opened = JSON.parse(localStorage.getItem(storageKey) || '[]');
-                    opened = opened.filter(id => id !== currentPickingId);
-                    localStorage.setItem(storageKey, JSON.stringify(opened));
-                } catch (e) {}
-            }
-
             this.state.currentView = prevState.currentView;
             this.state.pickingId = prevState.pickingId;
             this.state.pickingName = prevState.pickingName;
@@ -325,17 +349,40 @@ export class BarcodeApp extends Component {
                 }, 150);
             }
         } else {
-            await this.goToMain();
+            await this.goToMain(true);
         }
     }
 
-    async goToMain() {
-        await this.closeCamera();
-        this.state.showCameraPopup = false;
-
+    async goToMain(skipConfirm = false) {
         const currentPickingId = this.state.pickingId;
-        if (this.state.currentView === 'picking' && currentPickingId) {
-            rpc("/hlv_mobile_barcode/clear_quantities", { picking_id: currentPickingId }).catch(e => {});
+        const currentView = this.state.currentView;
+
+        if (!skipConfirm && currentView === 'picking' && this.state.pickingState !== 'done' && currentPickingId) {
+            const confirmed = confirm("Bạn có chắc chắn muốn thoát khỏi phiếu này không? Hành động này sẽ XÓA HẾT số lượng đã quét và HỦY PHIẾU");
+            if (!confirmed) {
+                return;
+            }
+            this.state.isProcessing = true;
+            try {
+                const res = await rpc("/hlv_mobile_barcode/clear_and_cancel_picking", { picking_id: currentPickingId });
+                if (res && res.error) {
+                    this.notification.add(res.error, { type: "danger" });
+                } else {
+                    this.notification.add("Đã hủy phiếu và giải phóng sản phẩm thành công.", { type: "success" });
+                }
+            } catch (e) {
+                console.error("Cancel error:", e);
+            } finally {
+                this.state.isProcessing = false;
+            }
+            
+            const storageKey = 'hlv_opened_pickings';
+            try {
+                let opened = JSON.parse(localStorage.getItem(storageKey) || '[]');
+                opened = opened.filter(id => id !== currentPickingId);
+                localStorage.setItem(storageKey, JSON.stringify(opened));
+            } catch (e) {}
+        } else if (currentView === 'picking' && currentPickingId) {
             const storageKey = 'hlv_opened_pickings';
             try {
                 let opened = JSON.parse(localStorage.getItem(storageKey) || '[]');
@@ -343,6 +390,9 @@ export class BarcodeApp extends Component {
                 localStorage.setItem(storageKey, JSON.stringify(opened));
             } catch (e) {}
         }
+
+        await this.closeCamera();
+        this.state.showCameraPopup = false;
 
         this.history = [];
         this.state.currentView = 'main';

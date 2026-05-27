@@ -668,6 +668,27 @@ class HLVMobileBarcodeController(http.Controller):
         except Exception as e:
             return {'error': _('Lỗi khi làm mới: %s', str(e))}
 
+    @http.route('/hlv_mobile_barcode/clear_and_cancel_picking', type='json', auth='user')
+    def clear_and_cancel_picking(self, picking_id):
+        picking = request.env['stock.picking'].browse(picking_id)
+        if not picking.exists():
+            return {'success': True}
+            
+        if picking.state == 'done':
+            return {'error': _('Phiếu đã hoàn thành, không thể hủy.')}
+            
+        try:
+            # 1. Clear quantities first to release any dynamic scanning
+            self.clear_quantities(picking_id)
+            
+            # 2. Cancel picking to release all reserves
+            if picking.state not in ['cancel']:
+                picking.action_cancel()
+                
+            return {'success': True}
+        except Exception as e:
+            return {'error': _('Lỗi khi hủy phiếu: %s', str(e))}
+
     @http.route('/hlv_mobile_barcode/delete_move', type='json', auth='user')
     def delete_move(self, move_id=None, move_line_id=None):
         if move_line_id:
