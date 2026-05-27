@@ -25,6 +25,15 @@ export class PickingScanner extends Component {
             picking: null,
             loading: true,
             editingLineId: null,
+            packagesExpanded: true,
+            editingPackage: null,
+            packageEditItems: [],
+            packageAvailableItems: [],
+            packageOtherPackages: [],
+            addItemMoveLineId: "",
+            addItemQty: 1,
+            transferTargets: {},
+            transferQtys: {},
         });
 
         onWillStart(async () => {
@@ -255,6 +264,187 @@ export class PickingScanner extends Component {
             }
         } catch (e) {
             this.notification.add("Lỗi kết nối", { type: "danger" });
+        }
+    }
+
+    togglePackages() {
+        this.state.packagesExpanded = !this.state.packagesExpanded;
+    }
+
+    async openPackageEdit(pkg) {
+        this.state.loading = true;
+        try {
+            const data = await rpc("/hlv_mobile_barcode/get_package_details", {
+                picking_id: this.props.pickingId,
+                package_id: pkg.id
+            });
+            if (data.error) {
+                this.notification.add(data.error, { type: "danger" });
+            } else {
+                this.state.editingPackage = {
+                    id: data.package_id,
+                    name: data.package_name
+                };
+                this.state.packageEditItems = data.items.map(item => ({
+                    ...item,
+                    isChanged: false,
+                    originalQty: item.qty_done
+                }));
+                this.state.packageAvailableItems = data.all_items;
+                this.state.packageOtherPackages = data.other_packages;
+                
+                this.state.addItemMoveLineId = data.all_items.length > 0 ? String(data.all_items[0].move_line_id) : "";
+                this.state.addItemQty = 1;
+
+                this.state.transferTargets = {};
+                this.state.transferQtys = {};
+                for (const item of data.items) {
+                    this.state.transferTargets[item.move_line_id] = data.other_packages.length > 0 ? String(data.other_packages[0].package_id) : "";
+                    this.state.transferQtys[item.move_line_id] = 1;
+                }
+            }
+        } catch (e) {
+            this.notification.add("Không thể tải chi tiết kiện hàng", { type: "danger" });
+        } finally {
+            this.state.loading = false;
+        }
+    }
+
+    closePackageEdit() {
+        this.state.editingPackage = null;
+        this.state.packageEditItems = [];
+        this.state.packageAvailableItems = [];
+        this.state.packageOtherPackages = [];
+        this.loadPicking();
+    }
+
+    pkgAdjustQty(item, delta) {
+        const target = this.state.packageEditItems.find(i => i.move_line_id === item.move_line_id);
+        if (target) {
+            const newQty = target.qty_done + delta;
+            if (newQty < 0) return;
+            target.qty_done = newQty;
+            target.isChanged = true;
+        }
+    }
+
+    async pkgRemoveItem(item) {
+        if (!confirm(`Bạn có chắc muốn bỏ sản phẩm ${item.product_name} ra khỏi kiện hàng này?`)) return;
+        this.state.loading = true;
+        try {
+            const res = await rpc("/hlv_mobile_barcode/remove_package_item", {
+                picking_id: this.props.pickingId,
+                package_id: this.state.editingPackage.id,
+                move_line_id: item.move_line_id
+            });
+            if (res.error) {
+                this.notification.add(res.error, { type: "danger" });
+            } else {
+                this.notification.add(res.message || "Đã bỏ sản phẩm khỏi kiện", { type: "success" });
+                this.playSound('success');
+                await this.openPackageEdit(this.state.editingPackage);
+            }
+        } catch (e) {
+            this.notification.add("Lỗi kết nối", { type: "danger" });
+        } finally {
+            this.state.loading = false;
+        }
+    }
+
+    async pkgAddItem() {
+        const mlId = parseInt(this.state.addItemMoveLineId);
+        const qty = parseFloat(this.state.addItemQty);
+        if (!mlId || isNaN(qty) || qty <= 0) {
+            this.notification.add("Sản phẩm hoặc số lượng không hợp lệ!", { type: "warning" });
+            return;
+        }
+        
+        this.state.loading = true;
+        try {
+            const res = await rpc("/hlv_mobile_barcode/add_item_to_package", {
+                picking_id: this.props.pickingId,
+                package_id: this.state.editingPackage.id,
+                move_line_id: mlId,
+                qty: qty
+            });
+            if (res.error) {
+                this.notification.add(res.error, { type: "danger" });
+            } else {
+                this.notification.add(res.message || "Đã thêm sản phẩm vào kiện", { type: "success" });
+                this.playSound('success');
+                await this.openPackageEdit(this.state.editingPackage);
+            }
+        } catch (e) {
+            this.notification.add("Lỗi kết nối", { type: "danger" });
+        } finally {
+            this.state.loading = false;
+        }
+    }
+
+    async pkgTransferItem(item) {
+        const toPkgId = parseInt(this.state.transferTargets[item.move_line_id]);
+        const qty = parseFloat(this.state.transferQtys[item.move_line_id]);
+        
+        if (!toPkgId || isNaN(qty) || qty <= 0 || qty > item.qty_done) {
+            this.notification.add("Số lượng chuyển hoặc kiện đích không hợp lệ!", { type: "warning" });
+            return;
+        }
+        
+        this.state.loading = true;
+        try {
+            const res = await rpc("/hlv_mobile_barcode/transfer_item_between_packages", {
+                picking_id: this.props.pickingId,
+                from_package_id: this.state.editingPackage.id,
+                to_package_id: toPkgId,
+                move_line_id: item.move_line_id,
+                qty: qty
+            });
+            if (res.error) {
+                this.notification.add(res.error, { type: "danger" });
+            } else {
+                this.notification.add(res.message || "Đã chuyển sản phẩm", { type: "success" });
+                this.playSound('success');
+                await this.openPackageEdit(this.state.editingPackage);
+            }
+        } catch (e) {
+            this.notification.add("Lỗi kết nối", { type: "danger" });
+        } finally {
+            this.state.loading = false;
+        }
+    }
+
+    async savePackageChanges() {
+        const changedItems = this.state.packageEditItems.filter(i => i.isChanged);
+        if (changedItems.length === 0) {
+            this.closePackageEdit();
+            return;
+        }
+        
+        this.state.loading = true;
+        try {
+            let hasError = false;
+            for (const item of changedItems) {
+                const res = await rpc("/hlv_mobile_barcode/update_package_item_qty", {
+                    picking_id: this.props.pickingId,
+                    package_id: this.state.editingPackage.id,
+                    move_line_id: item.move_line_id,
+                    new_qty: item.qty_done
+                });
+                if (res.error) {
+                    this.notification.add(`${item.product_name}: ${res.error}`, { type: "danger" });
+                    hasError = true;
+                    break;
+                }
+            }
+            if (!hasError) {
+                this.notification.add("Lưu thay đổi kiện hàng thành công!", { type: "success" });
+                this.playSound('success');
+                this.closePackageEdit();
+            }
+        } catch (e) {
+            this.notification.add("Lỗi kết nối khi lưu thay đổi", { type: "danger" });
+        } finally {
+            this.state.loading = false;
         }
     }
 

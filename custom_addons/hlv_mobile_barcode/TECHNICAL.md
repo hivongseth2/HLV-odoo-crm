@@ -69,8 +69,8 @@ hlv_mobile_barcode/
 
 ## API / Controllers
 - `/hlv_mobile_barcode/smart_scan`: Đầu vào `barcode`. Trả về đối tượng khớp đầu tiên theo thứ tự ưu tiên: Picking > Product > Location > Package, đồng thời trả kèm thêm trường `warehouse_code`.
-- `/hlv_mobile_barcode/get_picking_data`: Trả về JSON tree chi tiết các dòng dịch chuyển (stock.move.line) của một Picking để hiển thị riêng biệt theo kiện (Package) hoặc hàng lẻ (Unpacked), bao gồm cả `warehouse_code`, các thông tin liên kết 2 bước `linked_picking_id` và `linked_picking_name`.
-- `/hlv_mobile_barcode/process_barcode`: Cập nhật `qty_done` khi quét sản phẩm, vị trí, hoặc kiện hàng. Hỗ trợ bỏ qua và tự tạo dòng mới khi quét sản phẩm đã được đóng gói/nằm trong kiện hàng, tránh ghi đè số lượng đã đóng gói.
+- `/hlv_mobile_barcode/get_picking_data`: Trả về JSON tree chi tiết các dòng dịch chuyển (stock.move.line) của một Picking để hiển thị riêng biệt theo kiện (Package) hoặc hàng lẻ (Unpacked), bao gồm cả `warehouse_code`, các thông tin liên kết 2 bước `linked_picking_id`, `linked_picking_name` và danh sách tóm tắt kiện hàng (`packages`).
+- `/hlv_mobile_barcode/process_barcode`: Cập nhật `quantity` khi quét sản phẩm, vị trí, hoặc kiện hàng. Hỗ trợ bỏ qua và tự tạo dòng mới khi quét sản phẩm đã được đóng gói/nằm trong kiện hàng, tránh ghi đè số lượng đã đóng gói.
   * *Giải quyết vị trí con (Child Location Resolution)*: Khi quét từ vị trí cha (ví dụ A1-T1) nhưng tồn kho thực tế nằm ở vị trí con (A1-T1/THUNG 1), hệ thống tự động tìm và gán đúng vị trí con có hàng vào `location_id` của move line, đảm bảo Odoo validate picking thành công.
   * *Giới hạn số lượng quét theo tồn kho thực tế*: Kiểm tra tổng số lượng đã quét cho cùng sản phẩm trên TOÀN BỘ picking (không chỉ 1 move) tại cây vị trí nguồn (bao gồm tất cả vị trí con). Nếu vượt quá tồn kho thực tế → chặn quét và thông báo lỗi rõ ràng.
   * *Hỗ trợ quét Kiện hàng (Package)*: Được kiểm soát thông qua cấu hình **"Cho phép quét Kiện hàng" (hlv_barcode_allow_package_scan)** trong Cài đặt hệ thống (mặc định bật). Khi người dùng quét mã vạch của kiện hàng (`stock.quant.package`):
@@ -78,8 +78,26 @@ hlv_mobile_barcode/
     2. Nếu không có dòng dịch chuyển riêng cho kiện hàng, hệ thống tự động tra cứu danh sách sản phẩm và số lượng thực tế chứa trong kiện thông qua `stock.quant`, sau đó tự động khớp, bổ sung và cập nhật số lượng hoàn thành tương ứng cho các sản phẩm đó trong phiếu một cách hàng loạt.
 - `/hlv_mobile_barcode/put_in_pack`: Đóng gói các dòng có số lượng đã quét lẻ thành Package. Trả về tên kiện hàng vừa đóng gói (`package_name`) và cờ `print_after_pack`.
 - `/hlv_mobile_barcode/unpack_move_line`: Gỡ sản phẩm ra khỏi kiện hàng (xóa `package_id` và `result_package_id` trên dòng dịch chuyển được chọn) để chuyển về dạng hàng lẻ, cho phép chỉnh sửa hoặc quét bổ sung.
+- `/hlv_mobile_barcode/get_package_details`: Trả về chi tiết các sản phẩm trong kiện hiện tại, các kiện khác có thể chuyển sang, và danh sách sản phẩm lẻ chưa đóng gói để thêm vào kiện.
+- `/hlv_mobile_barcode/update_package_item_qty`: Điều chỉnh số lượng sản phẩm trong kiện. Nếu giảm, tách phần thừa ra thành hàng lẻ (không mất số lượng đã quét).
+- `/hlv_mobile_barcode/remove_package_item`: Gỡ sản phẩm khỏi kiện, trả về dạng hàng lẻ đã quét (unpack).
+- `/hlv_mobile_barcode/add_item_to_package`: Thêm số lượng sản phẩm lẻ (đã quét) vào kiện hiện tại.
+- `/hlv_mobile_barcode/transfer_item_between_packages`: Di chuyển số lượng sản phẩm từ kiện này sang kiện khác một cách trực tiếp.
 - `/hlv_mobile_barcode/get_inventory_lookup`: Truy vấn `stock.quant` cho màn hình tra cứu, tự động xác định `warehouse_code` từ vị trí kho.
 - `/hlv_mobile_barcode/move_location`: Tạo lệnh `stock.picking` type Internal và xử lý tự động validate để di chuyển tồn kho.
+
+## Quản lý Kiện hàng nâng cao (Package Management Section & Edit Modal)
+Ứng dụng Mobile Barcode phân tách hoàn toàn hiển thị kiện hàng thành một khu vực riêng và bổ sung modal chỉnh sửa chi tiết:
+- **Khu vực Kiện hàng (Collapsible Packages Section)**:
+  - Hiển thị ngay trên danh sách sản phẩm, tự động thu gọn/mở rộng.
+  - Các kiện hàng được hiển thị dưới dạng Card trực quan, tóm tắt các sản phẩm chứa bên trong và hiển thị nút "Chỉnh sửa" để quản lý.
+- **Modal Chỉnh sửa Kiện hàng (Package Edit Modal)**:
+  - Modal toàn màn hình tối ưu cho Mobile Web, hiển thị danh sách sản phẩm trong kiện.
+  - Cho phép điều chỉnh trực tiếp số lượng (+/- 1) của từng dòng trong kiện (tự động cập nhật qua endpoint `update_package_item_qty`).
+  - Gỡ sản phẩm khỏi kiện về dạng hàng lẻ (qua endpoint `remove_package_item`).
+  - Thêm sản phẩm lẻ (đã quét trước đó) vào kiện trực tiếp từ danh sách chọn (qua endpoint `add_item_to_package`).
+  - Chuyển đổi số lượng sản phẩm trực tiếp từ kiện hiện tại sang một kiện đích khác trong cùng phiếu (qua endpoint `transfer_item_between_packages`).
+
 
 ## Phân quyền quét Barcode di động (Hệ thống Nút gạt Động)
 Để tăng tính tự động hóa và bảo mật tối đa, ứng dụng Mobile Barcode tích hợp hệ thống phân quyền quét kho động, cho phép linh hoạt cấu hình và chuyển đổi:

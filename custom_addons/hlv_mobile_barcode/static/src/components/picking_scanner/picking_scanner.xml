@@ -20,6 +20,46 @@
                         <i class="fa fa-map-marker-alt"></i> Vị trí quét tiếp theo: <t t-esc="props.scannedLocationName"/>
                     </div>
                     
+                    <!-- Collapsible Packages Section -->
+                    <div t-if="state.picking.packages and state.picking.packages.length > 0" class="packages-section">
+                        <div class="packages-header" t-on-click="togglePackages">
+                            <span class="packages-title">
+                                <i class="fa fa-boxes"></i> Kiện hàng đã đóng (<t t-esc="state.picking.packages.length"/>)
+                            </span>
+                            <i t-attf-class="fa fa-chevron-#{state.packagesExpanded ? 'up' : 'down'} toggle-icon"></i>
+                        </div>
+                        <div t-if="state.packagesExpanded" class="packages-list-container">
+                            <div class="packages-grid">
+                                <t t-foreach="state.picking.packages" t-as="pkg" t-key="pkg.id">
+                                    <div class="package-card-custom">
+                                        <div class="package-card-header">
+                                            <span class="package-card-title">
+                                                <i class="fa fa-box" style="color: var(--secondary-color);"></i>
+                                                <t t-esc="pkg.name"/>
+                                            </span>
+                                            <span class="package-card-qty-badge">
+                                                <t t-esc="pkg.total_done"/> SP
+                                            </span>
+                                        </div>
+                                        <div class="package-card-body">
+                                            <t t-foreach="pkg.lines" t-as="pl" t-key="pl.move_line_id">
+                                                <div class="package-card-item-row">
+                                                    <span class="pkg-item-name"><t t-esc="pl.product_name"/></span>
+                                                    <span class="pkg-item-qty"><t t-esc="pl.qty_done"/> <t t-esc="pl.uom"/></span>
+                                                </div>
+                                            </t>
+                                        </div>
+                                        <div class="package-card-footer" t-if="state.picking.state !== 'done'">
+                                            <button class="btn btn-outline btn-sm btn-pkg-edit" t-on-click="() => this.openPackageEdit(pkg)">
+                                                <i class="fa fa-edit"></i> Chỉnh sửa
+                                            </button>
+                                        </div>
+                                    </div>
+                                </t>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <div style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 4px;">
                         Danh sách sản phẩm
                     </div>
@@ -38,7 +78,6 @@
                                             </span>
                                             <span t-if="line.package_name" class="item-package-badge">
                                                 <i class="fa fa-box"></i> <t t-esc="line.package_name"/>
-                                                <i t-if="state.picking.state !== 'done'" class="fa fa-times-circle btn-unpack" title="Gỡ khỏi kiện hàng" t-on-click="() => this.unpackLine(line)"></i>
                                             </span>
                                         </div>
                                     </div>
@@ -89,6 +128,108 @@
                     <button t-if="state.picking.state !== 'done'" class="btn btn-success" style="flex: 1; padding: 10px;" t-on-click="doValidate">
                         <i class="fa fa-check"></i> Xác nhận
                     </button>
+                </div>
+
+                <!-- Package Edit Modal -->
+                <div t-if="state.editingPackage" class="modal-overlay-custom" t-on-click.self="closePackageEdit">
+                    <div class="modal-container-custom package-edit-modal">
+                        <!-- Modal Header -->
+                        <div class="modal-header-custom">
+                            <h3 class="modal-title-custom">
+                                <i class="fa fa-box"></i> Chi tiết kiện: <t t-esc="state.editingPackage.name"/>
+                            </h3>
+                            <button class="modal-close-btn" t-on-click="closePackageEdit">
+                                <i class="fa fa-times"></i>
+                            </button>
+                        </div>
+                        
+                        <!-- Modal Body -->
+                        <div class="modal-body-custom">
+                            <!-- Product List in Package -->
+                            <div class="modal-section-title">SẢN PHẨM TRONG KIỆN</div>
+                            <div class="pkg-edit-items-list">
+                                <t t-if="state.packageEditItems.length === 0">
+                                    <div class="text-muted" style="text-align: center; padding: 20px;">
+                                        Kiện hàng trống!
+                                    </div>
+                                </t>
+                                <t t-else="">
+                                    <t t-foreach="state.packageEditItems" t-as="item" t-key="item.move_line_id">
+                                        <div class="pkg-edit-item-card">
+                                            <div class="pkg-edit-item-info">
+                                                <div class="pkg-edit-item-name"><t t-esc="item.product_name"/></div>
+                                                <div class="pkg-edit-item-sub font-monospace" style="font-size: 0.75rem; color: var(--text-muted);">
+                                                    BC: <t t-esc="item.product_barcode"/> | SKU: <t t-esc="item.product_sku"/>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- Operations for Item: Qty edit, Unpack, Transfer -->
+                                            <div class="pkg-edit-item-ops">
+                                                <!-- Qty controls -->
+                                                <div class="pkg-qty-control-row">
+                                                    <button class="btn btn-outline btn-sm" t-on-click="() => this.pkgAdjustQty(item, -1)">-1</button>
+                                                    <span class="pkg-qty-val">
+                                                        <t t-esc="item.qty_done"/> <t t-esc="item.uom"/>
+                                                    </span>
+                                                    <button class="btn btn-outline btn-sm" t-on-click="() => this.pkgAdjustQty(item, 1)">+1</button>
+                                                </div>
+                                                
+                                                <div class="pkg-action-buttons-row">
+                                                    <!-- Unpack -->
+                                                    <button class="btn btn-danger btn-sm btn-pkg-action" style="padding: 4px 8px; font-size: 0.78rem;" t-on-click="() => this.pkgRemoveItem(item)">
+                                                        <i class="fa fa-sign-out-alt"></i> Gỡ kiện
+                                                    </button>
+                                                    
+                                                    <!-- Transfer controls -->
+                                                    <div t-if="state.packageOtherPackages.length > 0" class="pkg-transfer-box">
+                                                        <div class="pkg-transfer-inputs">
+                                                            <select class="form-select form-select-sm" t-model="state.transferTargets[item.move_line_id]">
+                                                                <t t-foreach="state.packageOtherPackages" t-as="op" t-key="op.package_id">
+                                                                    <option t-att-value="String(op.package_id)">
+                                                                        Sang <t t-esc="op.package_name"/>
+                                                                    </option>
+                                                                </t>
+                                                            </select>
+                                                            <input type="number" class="form-control form-control-sm" style="width: 50px; text-align: center;" t-model="state.transferQtys[item.move_line_id]" min="1" t-att-max="item.qty_done" step="any"/>
+                                                            <button class="btn btn-primary btn-sm" style="padding: 4px 8px;" t-on-click="() => this.pkgTransferItem(item)">
+                                                                <i class="fa fa-exchange-alt"></i> Chuyển
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </t>
+                                </t>
+                            </div>
+                            
+                            <!-- Add Item to Package section -->
+                            <div t-if="state.packageAvailableItems.length > 0" class="pkg-add-section-container">
+                                <div class="modal-section-title" style="margin-top: 20px;">THÊM SẢN PHẨM LẺ VÀO KIỆN</div>
+                                <div class="pkg-add-form">
+                                    <select class="form-select form-select-sm" t-model="state.addItemMoveLineId">
+                                        <t t-foreach="state.packageAvailableItems" t-as="av" t-key="av.move_line_id">
+                                            <option t-att-value="String(av.move_line_id)">
+                                                <t t-esc="av.product_name"/> (Sẵn có: <t t-esc="av.qty_available"/>)
+                                            </option>
+                                        </t>
+                                    </select>
+                                    <div style="display: flex; gap: 8px; align-items: center;">
+                                        <input type="number" class="form-control form-control-sm" style="width: 70px; text-align: center;" t-model="state.addItemQty" min="1" step="any"/>
+                                        <button class="btn btn-success btn-sm btn-pkg-action" style="flex: 1; padding: 6px 12px;" t-on-click="pkgAddItem">
+                                            <i class="fa fa-plus"></i> Thêm vào kiện
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Modal Footer -->
+                        <div class="modal-footer-custom">
+                            <button class="btn btn-outline" style="flex: 1;" t-on-click="closePackageEdit">Hủy</button>
+                            <button class="btn btn-success" style="flex: 1;" t-on-click="savePackageChanges">Lưu thay đổi</button>
+                        </div>
+                    </div>
                 </div>
             </t>
         </div>

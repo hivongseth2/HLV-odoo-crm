@@ -197,6 +197,28 @@ class HLVMobileBarcodeController(http.Controller):
                     linked_picking_id = origin_pickings.id
                     linked_picking_name = origin_pickings.name
             
+        packages = []
+        all_result_pkgs = picking.move_line_ids.mapped('result_package_id')
+        for pkg in all_result_pkgs:
+            pkg_mls = picking.move_line_ids.filtered(
+                lambda ml: ml.result_package_id.id == pkg.id
+            )
+            total_done = sum(ml.quantity for ml in pkg_mls)
+            package_lines = [{
+                'move_line_id': ml.id,
+                'product_name': ml.product_id.display_name,
+                'product_barcode': ml.product_id.barcode or '',
+                'qty_done': ml.quantity,
+                'uom': ml.product_uom_id.name,
+            } for ml in pkg_mls if ml.quantity > 0]
+            if package_lines:
+                packages.append({
+                    'id': pkg.id,
+                    'name': pkg.name,
+                    'total_done': total_done,
+                    'lines': package_lines,
+                })
+
         return {
             'id': picking.id,
             'name': picking.name,
@@ -204,6 +226,7 @@ class HLVMobileBarcodeController(http.Controller):
             'picking_type_code': picking.picking_type_id.code,
             'warehouse_code': picking.picking_type_id.warehouse_id.code or 'HLV',
             'lines': lines,
+            'packages': packages,
             'linked_picking_id': linked_picking_id,
             'linked_picking_name': linked_picking_name,
         }
@@ -1025,3 +1048,377 @@ class HLVMobileBarcodeController(http.Controller):
         picking_in.action_confirm()
         
         return {'success': True, 'in_picking_name': picking_in.name, 'package_name': package_name}
+
+    @http.route('/hlv_mobile_barcode/get_package_details', type='json', auth='user')
+    def get_package_details(self, picking_id, package_id):
+        picking = request.env['stock.picking'].browse(picking_id)
+        if not picking.exists():
+            return {'error': _('Picking not found')}
+
+        Package = request.env['stock.quant.package']
+        package = Package.sudo().browse(package_id)
+
+        if not package.exists():
+            return {'error': _('Gói hàng không tồn tại!')}
+
+        # Lấy move_lines của package này trong picking hiện tại
+        move_lines = request.env['stock.move.line'].sudo().search([
+            ('picking_id', '=', picking.id),
+            ('result_package_id', '=', package.id)
+        ])
+
+        # Lấy TẤT CẢ move_lines của picking
+        all_move_lines = request.env['stock.move.line'].sudo().search([
+            ('picking_id', '=', picking.id)
+        ])
+
+        items = []
+        for ml in move_lines:
+            qty = float(ml.quantity or 0)
+            if qty <= 0:
+                continue
+            
+            product_barcode = ml.product_id.barcode or ''
+            product_sku = ml.product_id.default_code or ''
+
+            items.append({
+                'move_line_id': ml.id,
+                'product_id': ml.product_id.id,
+                'product_name': ml.product_id.display_name,
+                'product_sku': product_sku,
+                'product_barcode': product_barcode,
+                'qty_done': qty,
+                'uom': ml.product_uom_id.name,
+            })
+
+        # Lấy các packages khác trong picking này
+        all_packages_in_picking = request.env['stock.move.line'].sudo().search([
+            ('picking_id', '=', picking.id),
+            ('result_package_id', '!=', False)
+        ]).mapped('result_package_id')
+
+        other_packages = []
+        for pkg in all_packages_in_picking:
+            if pkg.id != package.id:
+                other_packages.append({
+                    'package_id': pkg.id,
+                    'package_name': pkg.name or f"PACK{pkg.id}"
+                })
+
+        # Xử lý sản phẩm lẻ chưa được đóng gói (available items)
+        all_items = []
+        product_map = {}
+
+        # Quét từ Move Lines
+        for ml in all_move_lines:
+            pid = ml.product_id.id
+            if pid not in product_map:
+                product_map[pid] = {
+                    'product_name': ml.product_id.display_name,
+                    'product_sku': ml.product_id.default_code or '', 
+                    'product_barcode': ml.product_id.barcode or '',
+                    'move_line_id': ml.id,
+                    'total_scanned': 0.0,
+                    'unassigned_scanned': 0.0,
+                    'demand': 0.0
+                }
+            
+            qty = float(ml.quantity or 0)
+            product_map[pid]['total_scanned'] += qty
+            
+            if not ml.result_package_id and qty > 0:
+                product_map[pid]['unassigned_scanned'] += qty
+
+        # Quét từ Demand
+        for move in picking.move_ids_without_package:
+             pid = move.product_id.id
+             if pid in product_map:
+                 product_map[pid]['demand'] += move.product_uom_qty
+             else:
+                 product_map[pid] = {
+                    'product_name': move.product_id.display_name,
+                    'product_sku': move.product_id.default_code or '',
+                    'product_barcode': move.product_id.barcode or '',
+                    'move_line_id': False, 
+                    'total_scanned': 0.0,
+                    'unassigned_scanned': 0.0,
+                    'demand': move.product_uom_qty
+                }
+
+        # Tổng hợp lại thành list có sẵn hàng lẻ
+        for pid, data in product_map.items():
+            qty_available = data['unassigned_scanned']
+
+            if qty_available > 0:
+                ml_id = data['move_line_id']
+                if not ml_id:
+                    tmp_ml = request.env['stock.move.line'].sudo().search([
+                        ('picking_id', '=', picking.id),
+                        ('product_id', '=', pid)
+                    ], limit=1)
+                    if tmp_ml:
+                        ml_id = tmp_ml.id
+                
+                if ml_id:
+                    all_items.append({
+                        'move_line_id': ml_id,
+                        'product_id': pid,
+                        'product_name': data['product_name'],
+                        'product_sku': data['product_sku'],         
+                        'product_barcode': data['product_barcode'],
+                        'qty_available': qty_available
+                    })
+
+        # Đồng bộ thông tin
+        sync_info = []
+        for pid, data in product_map.items():
+            total = data['total_scanned']
+            unassigned = data['unassigned_scanned']
+            packed_qty = total - unassigned
+            sync_info.append({
+                'product_id': pid,
+                'product_barcode': data['product_barcode'],
+                'product_sku': data['product_sku'],
+                'packed_qty': packed_qty
+            })
+
+        return {
+            'package_id': package.id,
+            'package_name': package.name,
+            'items': items,
+            'other_packages': other_packages,
+            'all_items': all_items,
+            'sync_info': sync_info
+        }
+
+    @http.route('/hlv_mobile_barcode/update_package_item_qty', type='json', auth='user')
+    def update_package_item_qty(self, picking_id, package_id, move_line_id, new_qty):
+        picking = request.env['stock.picking'].browse(picking_id)
+        if not picking.exists():
+            return {'error': _('Picking not found')}
+
+        move_line = request.env['stock.move.line'].sudo().browse(move_line_id)
+        if not move_line.exists() or move_line.picking_id.id != picking.id:
+            return {'error': _('Dòng điều chuyển không tồn tại!')}
+
+        if move_line.result_package_id.id != package_id:
+            return {'error': _('Sản phẩm này không thuộc gói này!')}
+
+        if new_qty < 0:
+            return {'error': _('Số lượng không được âm!')}
+
+        old_qty = move_line.quantity
+        
+        # Trường hợp tăng số lượng: kiểm tra available
+        if new_qty > old_qty:
+            original_move = move_line.move_id
+            if original_move:
+                total_current_done = sum(ml.quantity for ml in original_move.move_line_ids)
+                available_qty = original_move.product_uom_qty - (total_current_done - old_qty)
+                
+                if new_qty > available_qty:
+                    return {'error': _('⚠️ Số lượng không được vượt quá %s (tối đa cho sản phẩm này)', available_qty)}
+            
+            move_line.with_context(skip_qty_validation=True).write({'quantity': new_qty})
+            
+        # Trường hợp giảm số lượng: Unpack phần thừa
+        elif new_qty < old_qty:
+            diff = old_qty - new_qty
+            
+            # 1. Cập nhật dòng hiện tại trong package
+            if new_qty == 0:
+                move_line.with_context(skip_qty_validation=True).write({'result_package_id': False})
+            else:
+                move_line.with_context(skip_qty_validation=True).write({'quantity': new_qty})
+                
+                # 2. Tạo hoặc cộng dồn vào dòng hàng lẻ có sẵn
+                existing_loose_line = request.env['stock.move.line'].sudo().search([
+                    ('picking_id', '=', picking.id),
+                    ('product_id', '=', move_line.product_id.id),
+                    ('result_package_id', '=', False),
+                    ('location_id', '=', move_line.location_id.id),
+                    ('location_dest_id', '=', move_line.location_dest_id.id),
+                ], limit=1)
+                
+                if existing_loose_line:
+                    existing_loose_line.with_context(skip_qty_validation=True).write({
+                        'quantity': existing_loose_line.quantity + diff
+                    })
+                else:
+                    move_line.with_context(skip_qty_validation=True).copy({
+                        'quantity': diff,
+                        'result_package_id': False
+                    })
+
+        return {
+            'success': True,
+            'old_qty': old_qty,
+            'new_qty': new_qty,
+            'message': _('Cập nhật thành công: %s → %s', old_qty, new_qty)
+        }
+
+    @http.route('/hlv_mobile_barcode/remove_package_item', type='json', auth='user')
+    def remove_package_item(self, picking_id, package_id, move_line_id):
+        picking = request.env['stock.picking'].browse(picking_id)
+        if not picking.exists():
+            return {'error': _('Picking not found')}
+
+        move_line = request.env['stock.move.line'].sudo().browse(move_line_id)
+        if not move_line.exists() or move_line.picking_id.id != picking.id:
+            return {'error': _('Dòng điều chuyển không tồn tại!')}
+
+        if move_line.result_package_id.id != package_id:
+            return {'error': _('Sản phẩm này không thuộc gói này!')}
+
+        move_line.with_context(skip_qty_validation=True).write({
+            'result_package_id': False
+        })
+        
+        return {
+            'success': True,
+            'message': _('Đã bỏ sản phẩm khỏi kiện (vẫn giữ trạng thái đã quét)')
+        }
+
+    @http.route('/hlv_mobile_barcode/add_item_to_package', type='json', auth='user')
+    def add_item_to_package(self, picking_id, package_id, move_line_id, qty):
+        picking = request.env['stock.picking'].browse(picking_id)
+        if not picking.exists():
+            return {'error': _('Picking not found')}
+
+        move_line = request.env['stock.move.line'].sudo().browse(move_line_id)
+        if not move_line.exists() or move_line.picking_id.id != picking.id:
+            return {'error': _('Dòng điều chuyển không tồn tại!')}
+
+        if qty <= 0:
+            return {'error': _('Số lượng thêm phải lớn hơn 0!')}
+
+        product = move_line.product_id
+
+        # Lấy thông tin tổng quan
+        all_product_lines = request.env['stock.move.line'].sudo().search([
+            ('picking_id', '=', picking.id),
+            ('product_id', '=', product.id),
+        ])
+
+        # Tính unassigned scanned
+        unassigned_lines = all_product_lines.filtered(lambda ml: not ml.result_package_id and ml.quantity > 0)
+        total_unassigned = sum(float(ml.quantity or 0) for ml in unassigned_lines)
+        
+        if qty > total_unassigned:
+            return {
+                'error': _('⚠️ Không thể thêm %s vào package.\n• Chưa đóng gói (đã quét): %s\n• Yêu cầu: Bạn phải quét sản phẩm ở màn hình chính trước khi thêm vào gói!', qty, total_unassigned)
+            }
+
+        remaining_qty_to_add = qty
+        if total_unassigned > 0:
+            sorted_unassigned = unassigned_lines.sorted(key=lambda l: l.id)
+            
+            for ml in sorted_unassigned:
+                if remaining_qty_to_add <= 0:
+                    break
+                
+                available = float(ml.quantity or 0)
+                take = min(remaining_qty_to_add, available)
+                
+                # Tìm dòng trong package đích
+                dest_line = all_product_lines.filtered(lambda l: l.result_package_id.id == package_id and l.id != ml.id)
+                
+                if dest_line:
+                    # Giảm source trước
+                    if take == available:
+                        ml.with_context(skip_qty_validation=True).unlink()
+                    else:
+                        ml.with_context(skip_qty_validation=True).write({'quantity': ml.quantity - take})
+                        
+                    # Merge vào dest_line
+                    dest_line[0].with_context(skip_qty_validation=True).write({
+                        'quantity': dest_line[0].quantity + take
+                    })
+                else:
+                    # Không có dòng đích
+                    if take == available:
+                        ml.with_context(skip_qty_validation=True).write({'result_package_id': package_id})
+                    else:
+                        ml.with_context(skip_qty_validation=True).write({'quantity': ml.quantity - take})
+                        ml.with_context(skip_qty_validation=True).copy({
+                            'quantity': take,
+                            'result_package_id': package_id
+                        })
+                
+                remaining_qty_to_add -= take
+
+        return {
+            'success': True,
+            'message': _('Đã thêm %s sản phẩm vào kiện thành công.', qty)
+        }
+
+    @http.route('/hlv_mobile_barcode/transfer_item_between_packages', type='json', auth='user')
+    def transfer_item_between_packages(self, picking_id, from_package_id, to_package_id, move_line_id, qty):
+        picking = request.env['stock.picking'].browse(picking_id)
+        if not picking.exists():
+            return {'error': _('Picking not found')}
+
+        if from_package_id == to_package_id:
+            return {'error': _('Gói nguồn và gói đích phải khác nhau!')}
+
+        move_line = request.env['stock.move.line'].sudo().browse(move_line_id)
+        if not move_line.exists() or move_line.picking_id.id != picking.id:
+            return {'error': _('Dòng điều chuyển không tồn tại!')}
+
+        if move_line.result_package_id.id != from_package_id:
+            return {'error': _('Sản phẩm này không thuộc gói nguồn!')}
+
+        if qty <= 0 or qty > move_line.quantity:
+            return {'error': _('Số lượng chuyển không hợp lệ!')}
+
+        to_package = request.env['stock.quant.package'].sudo().browse(to_package_id)
+        if not to_package.exists():
+            return {'error': _('Gói đích không tồn tại!')}
+
+        # Kiểm tra xem gói đích có trong phiếu này không
+        to_ml_exists = request.env['stock.move.line'].sudo().search([
+            ('picking_id', '=', picking.id),
+            ('result_package_id', '=', to_package_id)
+        ], limit=1)
+        if not to_ml_exists:
+            return {'error': _('Gói đích không tồn tại hoặc không hợp lệ trong phiếu này!')}
+
+        # Cập nhật package nguồn
+        ctx = dict(request.env.context, skip_qty_validation=True)
+        new_qty = move_line.quantity - qty
+        
+        # Tìm xem sản phẩm có trong package đích không
+        existing_in_target = request.env['stock.move.line'].sudo().search([
+            ('picking_id', '=', picking.id),
+            ('product_id', '=', move_line.product_id.id),
+            ('result_package_id', '=', to_package_id),
+            ('move_id', '=', move_line.move_id.id)
+        ], limit=1)
+
+        # Giảm số lượng ở nguồn trước
+        if new_qty == 0:
+            if existing_in_target:
+                existing_in_target.with_context(ctx).write({
+                    'quantity': existing_in_target.quantity + qty
+                })
+                move_line.with_context(ctx).unlink()
+            else:
+                move_line.with_context(ctx).write({
+                    'result_package_id': to_package_id
+                })
+        else:
+            move_line.with_context(ctx).write({'quantity': new_qty})
+            if existing_in_target:
+                existing_in_target.with_context(ctx).write({
+                    'quantity': existing_in_target.quantity + qty
+                })
+            else:
+                move_line.with_context(ctx).copy({
+                    'result_package_id': to_package_id,
+                    'quantity': qty
+                })
+
+        return {
+            'success': True,
+            'message': _('Đã chuyển %s sản phẩm sang gói đích thành công.', qty)
+        }
