@@ -13,7 +13,6 @@
         <field name="code">model.cron_push_stock_to_shopee()</field>
         <field name="interval_number">1</field>
         <field name="interval_type">hours</field>
-        <field name="numbercall">-1</field>
         <field name="active">False</field>
     </record>
 
@@ -42,7 +41,6 @@
         <field name="code">model.cron_process_stock_sync_queue()</field>
         <field name="interval_number">15</field>
         <field name="interval_type">minutes</field>
-        <field name="numbercall">-1</field>
         <field name="active">False</field>
     </record>
 

@@ -619,10 +619,23 @@ class ShopeeProduct(models.Model):
 
         to_mark = direct | via_items
         if to_mark:
-            to_mark.write({
-                'pending_stock_sync': True,
-                'pending_sync_since': fields.Datetime.now(),
-            })
+            now = fields.Datetime.now()
+            to_mark.write({'pending_stock_sync': True, 'pending_sync_since': now})
+            # Tạo / cập nhật log entry cho mỗi sản phẩm
+            SyncLog = self.env['shopee.stock.sync.log'].sudo()
+            for product in to_mark:
+                existing = SyncLog.search([
+                    ('shopee_product_id', '=', product.id),
+                    ('state', '=', 'pending'),
+                ], limit=1)
+                if existing:
+                    existing.write({'triggered_at': now})
+                else:
+                    SyncLog.create({
+                        'shopee_product_id': product.id,
+                        'state': 'pending',
+                        'triggered_at': now,
+                    })
             _logger.info(
                 "Shopee: đánh dấu %d sản phẩm chờ đồng bộ tồn kho (triggered by %d products)",
                 len(to_mark), len(product_ids),
@@ -644,17 +657,42 @@ class ShopeeProduct(models.Model):
             return
         success_count = 0
         error_count = 0
+        SyncLog = self.env['shopee.stock.sync.log'].sudo()
         for product in pending:
             try:
                 product._do_push_stock()
+                stock_qty = product.total_available_stock
                 product.write({'pending_stock_sync': False, 'pending_sync_since': False})
                 success_count += 1
+                # Cập nhật log thành done
+                log = SyncLog.search([
+                    ('shopee_product_id', '=', product.id),
+                    ('state', '=', 'pending'),
+                ], limit=1)
+                if log:
+                    log.write({
+                        'state': 'done',
+                        'synced_at': fields.Datetime.now(),
+                        'stock_qty': stock_qty,
+                    })
             except Exception as e:
                 error_count += 1
+                err_msg = str(e)
                 _logger.error(
                     "Shopee stock sync queue: thất bại id=%s item=%s: %s",
-                    product.id, product.shopee_item_id, str(e),
+                    product.id, product.shopee_item_id, err_msg,
                 )
+                # Cập nhật log thành error
+                log = SyncLog.search([
+                    ('shopee_product_id', '=', product.id),
+                    ('state', '=', 'pending'),
+                ], limit=1)
+                if log:
+                    log.write({
+                        'state': 'error',
+                        'synced_at': fields.Datetime.now(),
+                        'error_message': err_msg,
+                    })
         _logger.info(
             "Shopee stock sync queue: hoàn tất — %d thành công, %d lỗi",
             success_count, error_count,

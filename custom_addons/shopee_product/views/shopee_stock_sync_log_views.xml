@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- ═══════════════════════════════════════════════════════════════
+         ACTION — Hàng đợi đồng bộ tồn kho
+    ═══════════════════════════════════════════════════════════════ -->
+    <record id="action_shopee_stock_sync_log" model="ir.actions.act_window">
+        <field name="name">Hàng đợi đồng bộ tồn kho</field>
+        <field name="res_model">shopee.stock.sync.log</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[]</field>
+        <field name="context">{'search_default_filter_pending': 1}</field>
+    </record>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         LIST VIEW
+    ═══════════════════════════════════════════════════════════════ -->
+    <record id="view_shopee_stock_sync_log_list" model="ir.ui.view">
+        <field name="name">shopee.stock.sync.log.list</field>
+        <field name="model">shopee.stock.sync.log</field>
+        <field name="arch" type="xml">
+            <list string="Hàng đợi đồng bộ tồn kho Shopee"
+                  decoration-warning="state == 'pending'"
+                  decoration-success="state == 'done'"
+                  decoration-danger="state == 'error'"
+                  default_order="triggered_at desc">
+                <field name="triggered_at" string="Đánh dấu lúc" widget="datetime"/>
+                <field name="shop_id" string="Cửa hàng"/>
+                <field name="item_name" string="Sản phẩm"/>
+                <field name="shopee_item_id" string="Item ID" optional="show"/>
+                <field name="state" string="Trạng thái" widget="badge"
+                       decoration-warning="state == 'pending'"
+                       decoration-success="state == 'done'"
+                       decoration-danger="state == 'error'"/>
+                <field name="stock_qty" string="Tồn kho đã đẩy" optional="show"/>
+                <field name="synced_at" string="Đồng bộ lúc" optional="show" widget="datetime"/>
+                <field name="error_message" string="Lỗi" optional="show"/>
+                <field name="shopee_product_id" string="Sản phẩm Shopee" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         SEARCH VIEW
+    ═══════════════════════════════════════════════════════════════ -->
+    <record id="view_shopee_stock_sync_log_search" model="ir.ui.view">
+        <field name="name">shopee.stock.sync.log.search</field>
+        <field name="model">shopee.stock.sync.log</field>
+        <field name="arch" type="xml">
+            <search string="Tìm kiếm log đồng bộ">
+                <field name="item_name" string="Tên sản phẩm"/>
+                <field name="shop_id" string="Cửa hàng"/>
+                <field name="shopee_item_id" string="Item ID"/>
+                <separator/>
+                <filter name="filter_pending" string="Đang chờ"
+                        domain="[('state', '=', 'pending')]"/>
+                <filter name="filter_done" string="Thành công"
+                        domain="[('state', '=', 'done')]"/>
+                <filter name="filter_error" string="Lỗi"
+                        domain="[('state', '=', 'error')]"/>
+                <separator/>
+                <filter name="filter_today" string="Hôm nay"
+                        domain="[('triggered_at', '>=', (datetime.date.today()).strftime('%Y-%m-%d 00:00:00'))]"/>
+                <group expand="0" string="Nhóm theo">
+                    <filter name="group_state" string="Trạng thái"
+                            context="{'group_by': 'state'}"/>
+                    <filter name="group_shop" string="Cửa hàng"
+                            context="{'group_by': 'shop_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         MENU
+    ═══════════════════════════════════════════════════════════════ -->
+    <menuitem id="menu_shopee_stock_sync_log"
+              name="Hàng đợi đồng bộ tồn kho"
+              parent="shopee_webhook.menu_shopee_root"
+              action="action_shopee_stock_sync_log"
+              sequence="22"
+              groups="sales_team.group_sale_salesman"/>
+</odoo>
