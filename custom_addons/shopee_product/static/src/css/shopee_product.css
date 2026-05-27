@@ -335,7 +335,7 @@
     padding: 0 !important;
 }
 .o_shopee_media_kanban .o_kanban_record {
-    width: 160px !important;
+    width: 180px !important;
     margin: 6px !important;
     padding: 0 !important;
     border: none !important;
@@ -380,21 +380,55 @@
 }
 .sp-media-meta {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: column;
+    align-items: stretch;
     font-size: 11px;
     color: #6b7280;
     gap: 4px;
+    min-width: 0;
+}
+.sp-media-meta > .sp-media-id,
+.sp-media-meta > .sp-media-extra {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 .sp-media-actions {
     display: flex;
     align-items: center;
     gap: 4px;
+    flex-shrink: 0;
+    white-space: nowrap;
 }
-.sp-media-actions label {
+.sp-media-actions label,
+.sp-media-actions .o_form_label,
+.sp-media-actions span {
     font-size: 11px;
     color: #6b7280;
     margin: 0;
+    white-space: nowrap;
+    word-break: keep-all;
+}
+
+/* Nút Thêm (Add) trên kanban ảnh/video — biến thành tile dashed nhỏ gọn */
+.o_shopee_media_kanban .o-kanban-button-new,
+.o_shopee_media_kanban .o_cp_buttons .o_list_button_add,
+.o_shopee_media_kanban .o_kanban_button_new {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    height: 36px;
+    padding: 4px 14px !important;
+    border: 1px dashed #ee4d2d !important;
+    background: #fff !important;
+    color: #ee4d2d !important;
+    font-weight: 500;
+    border-radius: 6px;
+}
+.o_shopee_media_kanban .o-kanban-button-new:hover,
+.o_shopee_media_kanban .o_kanban_button_new:hover {
+    background: #fef0eb !important;
 }
 .sp-media-upload .o_field_binary {
     font-size: 11px;

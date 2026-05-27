@@ -133,6 +133,12 @@ class ShopeeProduct(models.Model):
 
     # ── Editor nội dung ─────────────────────────────────
     edit_description = fields.Text(string='Mô tả Shopee')
+    edit_brand_id = fields.Integer(string='Mã thương hiệu Shopee')
+    edit_brand_name = fields.Char(string='Tên thương hiệu')
+    edit_weight = fields.Float(string='Cân nặng (kg)', help='Cân nặng sau khi đóng gói, tính theo kg.')
+    edit_package_length = fields.Float(string='Dài (cm)')
+    edit_package_width = fields.Float(string='Rộng (cm)')
+    edit_package_height = fields.Float(string='Cao (cm)')
     image_line_ids = fields.One2many(
         'shopee.product.image', 'shopee_product_id', string='Ảnh Shopee',
     )
@@ -878,6 +884,12 @@ class ShopeeProduct(models.Model):
             }))
         self.write({
             'edit_description': desc,
+            'edit_brand_id': (item.get('brand') or {}).get('brand_id') or 0,
+            'edit_brand_name': (item.get('brand') or {}).get('original_brand_name') or '',
+            'edit_weight': item.get('weight') or 0.0,
+            'edit_package_length': (item.get('dimension') or {}).get('package_length') or 0.0,
+            'edit_package_width': (item.get('dimension') or {}).get('package_width') or 0.0,
+            'edit_package_height': (item.get('dimension') or {}).get('package_height') or 0.0,
             'image_line_ids': image_commands,
             'video_line_ids': video_commands,
         })
@@ -945,12 +957,55 @@ class ShopeeProduct(models.Model):
                 video_upload_ids.append(line.video_upload_id)
 
         payload = {
-            'description': self.edit_description or self.item_name or '',
             'image': {'image_id_list': image_id_list},
         }
         if video_upload_ids:
             payload['video_upload_id'] = video_upload_ids
+
+        # Mô tả: nếu sản phẩm gốc có extended_description (ảnh trong mô tả),
+        # Shopee bắt buộc dùng extended_description thay vì description plain text
+        # ngược lại sẽ báo product.error_busi.
+        new_desc = (self.edit_description or self.item_name or '').strip()
+        has_extended = '[ẢNH]' in (self.edit_description or '') or any(
+            (l.image_id and l.sequence > 1) for l in self.image_line_ids
+        )
+        if has_extended:
+            # Tách phần text gốc (loại bỏ marker [ẢNH] ...) và build field_list
+            text_only = '\n'.join(
+                line for line in new_desc.splitlines()
+                if not line.strip().startswith('[ẢNH]')
+                and line.strip() != '--- Extended ---'
+            ).strip()
+            payload['extended_description'] = {
+                'field_list': [{
+                    'field_type': 'text',
+                    'text': text_only or self.item_name or '',
+                }],
+            }
+        else:
+            payload['description'] = new_desc
+
+        # Các trường khác có thể update qua update_item
+        if self.edit_brand_id:
+            payload['brand'] = {
+                'brand_id': int(self.edit_brand_id),
+                'original_brand_name': self.edit_brand_name or '',
+            }
+        if self.edit_weight:
+            payload['weight'] = float(self.edit_weight)
+        if any((self.edit_package_length, self.edit_package_width, self.edit_package_height)):
+            payload['dimension'] = {
+                'package_length': int(self.edit_package_length or 0),
+                'package_width': int(self.edit_package_width or 0),
+                'package_height': int(self.edit_package_height or 0),
+            }
+        if self.category_id:
+            try:
+                payload['category_id'] = int(self.category_id)
+            except (TypeError, ValueError):
+                pass
         item_id = int(self.shopee_item_id)
+        _logger.info('Shopee update_item content payload keys=%s', list(payload.keys()))
         result = self._call_with_token_refresh(
             lambda creds: shopee_product_api.call_update_item(creds, item_id, payload)
         )
