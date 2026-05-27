@@ -403,8 +403,12 @@ class HLVMobileBarcodeController(http.Controller):
         if move.product_uom_qty > 0.0 and current_qty_done + 1 > move.product_uom_qty:
             return {'error': _('Sản phẩm "%s" đã quét đủ số lượng yêu cầu (%g/%g). Không thể quét thêm!', product.display_name, current_qty_done, move.product_uom_qty)}
 
-        # In Odoo 17/18, qty_done is replaced by quantity
-        move_line = move.move_line_ids.filtered(lambda ml: ml.quantity < ml.quantity_product_uom and not ml.result_package_id and not ml.package_id)
+        # Find an unpacked move line that is not in any package and is either not fully filled or has no reservation
+        move_line = move.move_line_ids.filtered(
+            lambda ml: not ml.result_package_id 
+            and not ml.package_id 
+            and (ml.quantity < ml.quantity_product_uom or ml.quantity_product_uom == 0.0)
+        )
         
         ml_dest_id = destination_location_id if (destination_location_id and is_putaway) else picking.location_dest_id.id
         ml_src_id = destination_location_id if (destination_location_id and not is_putaway) else picking.location_id.id
