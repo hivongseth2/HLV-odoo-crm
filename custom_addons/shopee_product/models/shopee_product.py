@@ -962,28 +962,49 @@ class ShopeeProduct(models.Model):
         if video_upload_ids:
             payload['video_upload_id'] = video_upload_ids
 
-        # Mô tả: nếu sản phẩm gốc có extended_description (ảnh trong mô tả),
-        # Shopee bắt buộc dùng extended_description thay vì description plain text
-        # ngược lại sẽ báo product.error_busi.
+        # Mô tả: theo docs update_item, extended_description phải nằm trong
+        # description_info và luôn đi kèm description_type='extended'. Nếu gửi
+        # description thường, đặt description_type='normal' để Shopee biết đang
+        # cố ý overwrite mô tả có ảnh nhúng.
         new_desc = (self.edit_description or self.item_name or '').strip()
-        has_extended = '[ẢNH]' in (self.edit_description or '') or any(
-            (l.image_id and l.sequence > 1) for l in self.image_line_ids
-        )
+        has_extended = '[ẢNH]' in (self.edit_description or '')
         if has_extended:
-            # Tách phần text gốc (loại bỏ marker [ẢNH] ...) và build field_list
-            text_only = '\n'.join(
-                line for line in new_desc.splitlines()
-                if not line.strip().startswith('[ẢNH]')
-                and line.strip() != '--- Extended ---'
-            ).strip()
-            payload['extended_description'] = {
-                'field_list': [{
-                    'field_type': 'text',
-                    'text': text_only or self.item_name or '',
-                }],
+            field_list = []
+            text_buffer = []
+
+            def flush_text_buffer():
+                text_value = '\n'.join(text_buffer).strip()
+                if text_value:
+                    field_list.append({'field_type': 'text', 'text': text_value})
+                text_buffer.clear()
+
+            for line in new_desc.splitlines():
+                clean = line.strip()
+                if clean == '--- Extended ---':
+                    continue
+                if clean.startswith('[ẢNH]'):
+                    flush_text_buffer()
+                    image_value = clean.replace('[ẢNH]', '', 1).strip()
+                    if image_value and not image_value.startswith(('http://', 'https://')):
+                        field_list.append({
+                            'field_type': 'image',
+                            'image_info': {'image_id': image_value},
+                        })
+                    continue
+                text_buffer.append(line)
+            flush_text_buffer()
+            if not field_list:
+                field_list.append({'field_type': 'text', 'text': self.item_name or ''})
+
+            payload['description_info'] = {
+                'extended_description': {
+                    'field_list': field_list,
+                },
             }
+            payload['description_type'] = 'extended'
         else:
             payload['description'] = new_desc
+            payload['description_type'] = 'normal'
 
         # Các trường khác có thể update qua update_item
         if self.edit_brand_id:

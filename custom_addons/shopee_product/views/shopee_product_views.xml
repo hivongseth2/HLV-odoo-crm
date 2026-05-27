@@ -261,7 +261,7 @@
                         <notebook>
 
                             <!-- ═══ Tab Biến thể ════════════════════════════════════════ -->
-                            <page string="Biến thể" name="tab_models" invisible="not has_model">
+                            <page string="Biến thể" name="tab_models">
                                 <div class="p-3">
                                     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
                                         <div class="fw-semibold fs-5" style="color:#ee4d2d;"><i class="fa fa-sliders me-1" title="Biến thể" role="img" aria-label="Biến thể"/> Giá &amp; tồn theo biến thể</div>
