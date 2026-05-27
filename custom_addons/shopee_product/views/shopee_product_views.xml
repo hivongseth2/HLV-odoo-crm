@@ -179,11 +179,17 @@
                                 <div class="rounded-3 p-3 h-100 shadow-sm" style="background:#fef7f3; box-shadow:0 8px 20px rgba(15,23,42,.06);">
                                     <div class="fw-semibold mb-3" style="color:#ee4d2d;"><i class="fa fa-link me-1"/> Liên kết Odoo</div>
                                     <div class="mb-3">
-                                        <span class="d-block text-muted small">Liên kết shopee.item</span>
+                                        <div class="d-flex justify-content-between align-items-center mb-1">
+                                            <span class="text-muted small">Liên kết shopee.item</span>
+                                            <button name="action_open_shopee_item_mappings" type="object" string="Mở" class="btn btn-link p-0" icon="fa-external-link" invisible="not shopee_item_mapping_count"/>
+                                        </div>
                                         <field name="shopee_item_mapping_ids" nolabel="1" widget="many2many_tags" readonly="1" options="{'no_open': False}"/>
                                     </div>
                                     <div class="mb-3">
-                                        <span class="d-block text-muted small">Sản phẩm Odoo</span>
+                                        <div class="d-flex justify-content-between align-items-center mb-1">
+                                            <span class="text-muted small">Sản phẩm Odoo</span>
+                                            <button name="action_open_mapped_products" type="object" string="Mở" class="btn btn-link p-0" icon="fa-external-link" invisible="not mapped_product_count"/>
+                                        </div>
                                         <field name="mapped_product_ids" nolabel="1" widget="many2many_tags" readonly="1" options="{'no_open': False}"/>
                                     </div>
                                     <div>
