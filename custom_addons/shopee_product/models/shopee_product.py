@@ -123,7 +123,62 @@ class ShopeeProduct(models.Model):
         readonly=True,
         help='Toàn bộ JSON trả về từ get_item_base_info để tra cứu chi tiết.',
     )
+    last_api_synced_at = fields.Datetime(
+        string='Cập nhật API lần cuối',
+        readonly=True,
+    )
 
+    # ── Cấu hình đẩy tồn kho ─────────────────────────
+    stock_update_method = fields.Selection(
+        [
+            ('all_warehouse', 'Tổng tất cả kho'),
+            ('fixed_location', 'Vị trí cố định'),
+            ('by_warehouse', 'Theo kho'),
+            ('manual', 'Thủ công'),
+        ],
+        string='Phương thức tồn kho',
+        default='all_warehouse',
+        help='Cách tính tồn kho từ Odoo để đẩy lên Shopee.',
+    )
+    stock_location_id = fields.Many2one(
+        'stock.location',
+        string='Vị trí kho',
+        domain="[('usage', '=', 'internal')]",
+    )
+    stock_warehouse_id = fields.Many2one(
+        'stock.warehouse',
+        string='Kho hàng',
+    )
+    manual_stock_value = fields.Integer(
+        string='Tồn kho thủ công',
+        default=0,
+        help='Dùng khi phương thức = Thủ công (sản phẩm không có biến thể).',
+    )
+
+    # ── Cấu hình đẩy giá ─────────────────────────────
+    price_update_method = fields.Selection(
+        [
+            ('price_field', 'Theo cột giá Odoo'),
+            ('manual', 'Thủ công'),
+        ],
+        string='Phương thức giá',
+        default='price_field',
+        help='Cách lấy giá từ Odoo để đẩy lên Shopee.',
+    )
+    price_field_name = fields.Selection(
+        [
+            ('list_price', 'Giá bán (list_price)'),
+            ('standard_price', 'Giá vốn (standard_price)'),
+        ],
+        string='Cột giá Odoo',
+        default='list_price',
+    )
+    manual_price_value = fields.Float(
+        string='Giá thủ công',
+        digits=(16, 0),
+        default=0.0,
+        help='Dùng khi phương thức = Thủ công.',
+    )
     # ── Biến thể (models) ────────────────────────────────
     model_ids = fields.One2many(
         'shopee.product.model',
@@ -339,10 +394,31 @@ class ShopeeProduct(models.Model):
             },
         }
 
+    def _get_product_stock(self, product):
+        """Tính tồn kho theo phương thức cấu hình."""
+        self.ensure_one()
+        if not product or self.stock_update_method == 'manual':
+            return self.manual_stock_value
+        if self.stock_update_method == 'fixed_location' and self.stock_location_id:
+            return int(product.with_context(location=self.stock_location_id.id).qty_available)
+        if self.stock_update_method == 'by_warehouse' and self.stock_warehouse_id:
+            return int(product.with_context(warehouse=self.stock_warehouse_id.id).qty_available)
+        return int(product.qty_available)
+
+    def _get_product_price(self, product):
+        """Lấy giá theo phương thức cấu hình."""
+        self.ensure_one()
+        if not product or self.price_update_method == 'manual':
+            return self.manual_price_value
+        if self.price_field_name == 'standard_price':
+            return float(product.standard_price or 0.0)
+        return float(product.lst_price or 0.0)
+
     def action_push_price(self):
         """
-        Đẩy giá mới (field new_price trên model lines) lên Shopee.
-        Với sản phẩm không có biến thể: dùng original_price của record này.
+        Đẩy giá lên Shopee.
+        Nếu price_update_method='price_field': đọc giá từ cột Odoo.
+        Nếu price_update_method='manual': dùng new_price trên model lines / manual_price_value.
         """
         self.ensure_one()
         from odoo.addons.shopee_order_fetch.services.shopee_api import (
@@ -351,13 +427,30 @@ class ShopeeProduct(models.Model):
         creds = get_credentials_from_shop(self.shop_id)
 
         if self.has_model and self.model_ids:
-            price_list = [
-                {'model_id': int(m.shopee_model_id), 'original_price': m.new_price}
-                for m in self.model_ids
-                if m.shopee_model_id and m.new_price > 0
-            ]
+            if self.price_update_method == 'manual':
+                price_list = [
+                    {'model_id': int(m.shopee_model_id), 'original_price': m.new_price}
+                    for m in self.model_ids
+                    if m.shopee_model_id and m.new_price > 0
+                ]
+            else:
+                price_list = []
+                for m in self.model_ids:
+                    if not m.shopee_model_id:
+                        continue
+                    price = self._get_product_price(m.mapped_product_id or False)
+                    price_list.append({'model_id': int(m.shopee_model_id), 'original_price': price})
         else:
-            price_list = [{'model_id': 0, 'original_price': self.original_price}]
+            if self.price_update_method == 'manual':
+                price = self.manual_price_value or self.original_price
+            else:
+                product = self.odoo_product_id or (
+                    self.mapped_product_ids[0] if self.mapped_product_ids else False
+                )
+                if not product:
+                    raise UserError(_('Cần liên kết sản phẩm Odoo để lấy giá tự động.'))
+                price = self._get_product_price(product)
+            price_list = [{'model_id': 0, 'original_price': price}]
 
         if not price_list:
             raise UserError(_('Không có giá hợp lệ để cập nhật.'))
@@ -385,8 +478,9 @@ class ShopeeProduct(models.Model):
 
     def action_push_stock(self):
         """
-        Đẩy tồn kho mới (field new_stock trên model lines) lên Shopee.
-        Với sản phẩm không có biến thể: không có model_ids, dùng wizard.
+        Đẩy tồn kho lên Shopee.
+        Nếu stock_update_method != 'manual': tính tự động từ Odoo.
+        Nếu stock_update_method == 'manual': dùng new_stock trên model lines / wizard.
         """
         self.ensure_one()
         from odoo.addons.shopee_order_fetch.services.shopee_api import (
@@ -395,16 +489,37 @@ class ShopeeProduct(models.Model):
         creds = get_credentials_from_shop(self.shop_id)
 
         if self.has_model and self.model_ids:
-            stock_list = [
-                {
-                    'model_id': int(m.shopee_model_id),
-                    'seller_stock': [{'stock': m.new_stock}],
-                }
-                for m in self.model_ids
-                if m.shopee_model_id
-            ]
+            if self.stock_update_method == 'manual':
+                stock_list = [
+                    {
+                        'model_id': int(m.shopee_model_id),
+                        'seller_stock': [{'stock': m.new_stock}],
+                    }
+                    for m in self.model_ids if m.shopee_model_id
+                ]
+            else:
+                stock_list = []
+                for m in self.model_ids:
+                    if not m.shopee_model_id:
+                        continue
+                    stock = self._get_product_stock(m.mapped_product_id or False)
+                    stock_list.append({
+                        'model_id': int(m.shopee_model_id),
+                        'seller_stock': [{'stock': stock}],
+                    })
         else:
-            return self._action_open_no_model_stock_wizard()
+            if self.stock_update_method == 'manual':
+                return self._action_open_no_model_stock_wizard()
+            product = self.odoo_product_id or (
+                self.mapped_product_ids[0] if self.mapped_product_ids else False
+            )
+            if not product:
+                raise UserError(_('Cần liên kết sản phẩm Odoo để tính tồn kho tự động.'))
+            stock = self._get_product_stock(product)
+            stock_list = [{'model_id': 0, 'seller_stock': [{'stock': stock}]}]
+
+        if not stock_list:
+            raise UserError(_('Không có dữ liệu tồn kho để cập nhật.'))
 
         success, failure = shopee_product_api.call_update_stock(
             creds, int(self.shopee_item_id), stock_list
@@ -473,18 +588,17 @@ class ShopeeProduct(models.Model):
         raw_data[section] = value
         raw_data['last_api_section'] = section
         raw_data['last_api_synced_at'] = fields.Datetime.to_string(now)
-        self.write({'raw_data': raw_data, 'last_synced': now})
-        viewer = self.env['shopee.result.viewer'].create({
-            'title': title,
-            'result_json': _json.dumps(value, ensure_ascii=False, indent=2),
-        })
+        self.write({'raw_data': raw_data, 'last_synced': now, 'last_api_synced_at': now})
+        now_str = fields.Datetime.to_string(now)
         return {
-            'type': 'ir.actions.act_window',
-            'name': title,
-            'res_model': 'shopee.result.viewer',
-            'res_id': viewer.id,
-            'view_mode': 'form',
-            'target': 'new',
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': title,
+                'message': message or _('Đã lưu lúc %s — xem tab Thông tin khác → Dữ liệu JSON.') % now_str,
+                'type': 'success',
+                'sticky': False,
+            },
         }
 
     def action_fetch_item_extra_info(self):

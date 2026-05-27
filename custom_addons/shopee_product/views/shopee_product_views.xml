@@ -345,12 +345,63 @@
                                                     <span class="rounded-circle d-inline-flex align-items-center justify-content-center flex-shrink-0" style="width:30px;height:30px;background:#fde8e2;color:#ee4d2d;font-size:13px;"><i class="fa fa-clock-o"/></span>
                                                     <span class="fw-semibold" style="color:#222;">Đồng bộ</span>
                                                 </div>
+                                                <div class="text-muted small mb-1">Đồng bộ sản phẩm lần cuối</div>
                                                 <div class="text-muted small mb-2"><field name="last_synced" nolabel="1" readonly="1"/></div>
+                                                <div class="text-muted small mb-1">Cập nhật API lần cuối</div>
+                                                <div class="text-muted small mb-2"><field name="last_api_synced_at" nolabel="1" readonly="1"/></div>
                                                 <div class="d-flex flex-wrap gap-2">
                                                     <button name="action_fetch_item_limit" type="object" string="Giới hạn SP" class="btn btn-shopee" icon="fa-dashboard"/>
                                                     <button name="action_fetch_item_extra_info" type="object" string="Thông tin thêm" class="btn btn-shopee-soft" icon="fa-info-circle"/>
                                                     <button name="action_fetch_size_chart_list" type="object" string="Bảng kích thước" class="btn btn-shopee-soft" icon="fa-table"/>
                                                     <button name="action_open_size_chart_detail_wizard" type="object" string="Chi tiết KT" class="btn btn-shopee-soft" icon="fa-list-alt"/>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Cấu hình đẩy tồn kho & Giá -->
+                                    <div class="row g-3 mb-3">
+                                        <div class="col-lg-6">
+                                            <div class="rounded-3 p-4 h-100 shadow-sm" style="background:#fef7f3; box-shadow:0 8px 20px rgba(15,23,42,.06);">
+                                                <div class="d-flex align-items-center gap-2 mb-3">
+                                                    <span class="rounded-circle d-inline-flex align-items-center justify-content-center flex-shrink-0" style="width:30px;height:30px;background:#fde8e2;color:#ee4d2d;font-size:13px;"><i class="fa fa-cubes"/></span>
+                                                    <span class="fw-semibold" style="color:#222;">Cấu hình tồn kho</span>
+                                                </div>
+                                                <div class="mb-2">
+                                                    <span class="d-block text-muted small mb-1">Phương thức cập nhật</span>
+                                                    <field name="stock_update_method" nolabel="1" widget="radio"/>
+                                                </div>
+                                                <div invisible="stock_update_method != 'fixed_location'" class="mt-2">
+                                                    <span class="d-block text-muted small mb-1">Vị trí kho</span>
+                                                    <field name="stock_location_id" nolabel="1"/>
+                                                </div>
+                                                <div invisible="stock_update_method != 'by_warehouse'" class="mt-2">
+                                                    <span class="d-block text-muted small mb-1">Kho hàng</span>
+                                                    <field name="stock_warehouse_id" nolabel="1"/>
+                                                </div>
+                                                <div invisible="stock_update_method != 'manual'" class="mt-2">
+                                                    <span class="d-block text-muted small mb-1">Tồn kho thủ công (sản phẩm không biến thể)</span>
+                                                    <field name="manual_stock_value" nolabel="1"/>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-lg-6">
+                                            <div class="rounded-3 p-4 h-100 shadow-sm" style="background:#f8fafc; box-shadow:0 8px 20px rgba(15,23,42,.06);">
+                                                <div class="d-flex align-items-center gap-2 mb-3">
+                                                    <span class="rounded-circle d-inline-flex align-items-center justify-content-center flex-shrink-0" style="width:30px;height:30px;background:#fde8e2;color:#ee4d2d;font-size:13px;"><i class="fa fa-tag"/></span>
+                                                    <span class="fw-semibold" style="color:#222;">Cấu hình giá</span>
+                                                </div>
+                                                <div class="mb-2">
+                                                    <span class="d-block text-muted small mb-1">Phương thức cập nhật</span>
+                                                    <field name="price_update_method" nolabel="1" widget="radio"/>
+                                                </div>
+                                                <div invisible="price_update_method != 'price_field'" class="mt-2">
+                                                    <span class="d-block text-muted small mb-1">Cột giá Odoo</span>
+                                                    <field name="price_field_name" nolabel="1"/>
+                                                </div>
+                                                <div invisible="price_update_method != 'manual'" class="mt-2">
+                                                    <span class="d-block text-muted small mb-1">Giá thủ công (sản phẩm không biến thể)</span>
+                                                    <field name="manual_price_value" nolabel="1" widget="integer"/>
                                                 </div>
                                             </div>
                                         </div>
