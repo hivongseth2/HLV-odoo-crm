@@ -30,6 +30,7 @@
                     <!-- Kết quả sau khi sync -->
                     <group invisible="state == 'draft'">
                         <group string="Kết quả đồng bộ">
+                            <field name="result_mapping_count" string="Mapping đã đọc" readonly="1"/>
                             <field name="result_created" string="Sản phẩm tạo mới" readonly="1"/>
                             <field name="result_updated" string="Sản phẩm cập nhật" readonly="1"/>
                         </group>
@@ -45,6 +46,11 @@
                             string="Bắt đầu đồng bộ"
                             type="object"
                             class="btn-primary"
+                            invisible="state != 'draft'"/>
+                        <button name="action_import_from_shopee_items"
+                            string="Khởi tạo từ shopee.item"
+                            type="object"
+                            class="btn-secondary"
                             invisible="state != 'draft'"/>
                     <button string="Huỷ"
                             class="btn-secondary"

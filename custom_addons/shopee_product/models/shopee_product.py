@@ -510,6 +510,79 @@ class ShopeeProduct(models.Model):
         )
         return created, updated
 
+    @api.model
+    def import_from_shopee_items(self, shop=None):
+        """Create/update product cache rows from existing sale_shopee mapping."""
+        if 'shopee.item' not in self.env:
+            raise UserError(_('Không tìm thấy model shopee.item để khởi tạo dữ liệu.'))
+
+        domain = []
+        if shop:
+            domain.append(('shop_id', '=', shop.id))
+
+        shopee_items = self.env['shopee.item'].sudo().search(domain)
+        grouped = {}
+        for item in shopee_items:
+            if not item.shop_id or not item.shopee_item_identifier:
+                continue
+            try:
+                shopee_item_id = int(item.shopee_item_identifier)
+            except (TypeError, ValueError):
+                _logger.warning(
+                    "Skip shopee.item %s with invalid item id %r",
+                    item.id, item.shopee_item_identifier,
+                )
+                continue
+            grouped.setdefault((item.shop_id.id, shopee_item_id), self.env['shopee.item'].sudo().browse())
+            grouped[(item.shop_id.id, shopee_item_id)] |= item
+
+        created = updated = 0
+        now = fields.Datetime.now()
+        existing = {
+            (rec.shop_id.id, rec.shopee_item_id): rec
+            for rec in self.sudo().search([])
+        }
+
+        for (shop_id, shopee_item_id), mappings in grouped.items():
+            products = mappings.mapped('product_id')
+            first_product = products[:1]
+            first_mapping = mappings[:1]
+            model_identifiers = [m.shopee_model_identifier for m in mappings if m.shopee_model_identifier]
+            has_model = len(mappings) > 1 or bool(model_identifiers)
+            item_name = first_product.display_name or _('Shopee Item %s') % shopee_item_id
+            item_sku = first_product.default_code or ''
+            vals = {
+                'shop_id': shop_id,
+                'shopee_item_id': shopee_item_id,
+                'item_name': item_name,
+                'item_sku': item_sku,
+                'item_status': 'NORMAL',
+                'original_price': first_product.lst_price or first_product.list_price or 0.0,
+                'current_price': first_product.lst_price or first_product.list_price or 0.0,
+                'total_available_stock': sum(products.mapped('qty_available')),
+                'has_model': has_model,
+                'last_synced': now,
+                'raw_data': {
+                    'source': 'shopee.item',
+                    'mapping_ids': mappings.ids,
+                    'first_mapping_id': first_mapping.id,
+                    'mapped_product_ids': products.ids,
+                },
+            }
+            rec = existing.get((shop_id, shopee_item_id))
+            if rec:
+                rec.write(vals)
+                updated += 1
+            else:
+                self.sudo().create(vals)
+                created += 1
+
+        _logger.info(
+            "ShopeeProduct.import_from_shopee_items: tạo mới=%d cập nhật=%d mappings=%d",
+            created, updated, len(shopee_items),
+        )
+        return created, updated, len(shopee_items)
+
 
 # ── Private helpers ──────────────────────────────────────
 
