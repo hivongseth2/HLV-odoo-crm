@@ -22,18 +22,21 @@
                   decoration-warning="state == 'pending'"
                   decoration-success="state == 'done'"
                   decoration-danger="state == 'error'"
+                  decoration-muted="state == 'skipped'"
                   default_order="triggered_at desc">
-                <field name="triggered_at" string="Đánh dấu lúc" widget="datetime"/>
+                <field name="triggered_at" string="Trigger lúc" widget="datetime"/>
                 <field name="shop_id" string="Cửa hàng"/>
                 <field name="item_name" string="Sản phẩm"/>
-                <field name="shopee_item_id" string="Item ID" optional="show"/>
+                <field name="stock_update_mode" string="Chế độ sync" optional="show"/>
                 <field name="state" string="Trạng thái" widget="badge"
                        decoration-warning="state == 'pending'"
                        decoration-success="state == 'done'"
-                       decoration-danger="state == 'error'"/>
+                       decoration-danger="state == 'error'"
+                       decoration-muted="state == 'skipped'"/>
                 <field name="stock_qty" string="Tồn kho đã đẩy" optional="show"/>
-                <field name="synced_at" string="Đồng bộ lúc" optional="show" widget="datetime"/>
-                <field name="error_message" string="Lỗi" optional="show"/>
+                <field name="synced_at" string="Xử lý lúc" optional="show" widget="datetime"/>
+                <field name="error_message" string="Lỗi / Ghi chú" optional="show"/>
+                <field name="shopee_item_id" string="Item ID" optional="show"/>
                 <field name="shopee_product_id" string="Sản phẩm Shopee" optional="hide"/>
             </list>
         </field>
@@ -57,6 +60,8 @@
                         domain="[('state', '=', 'done')]"/>
                 <filter name="filter_error" string="Lỗi"
                         domain="[('state', '=', 'error')]"/>
+                <filter name="filter_skipped" string="Bỏ qua (manual)"
+                        domain="[('state', '=', 'skipped')]"/>
                 <separator/>
                 <filter name="filter_today" string="Hôm nay"
                         domain="[('triggered_at', '>=', (datetime.date.today()).strftime('%Y-%m-%d 00:00:00'))]"/>

@@ -587,17 +587,16 @@ class ShopeeProduct(models.Model):
 
         Được gọi từ stock.picking._action_done() sau khi phiếu kho hoàn thành.
         Tìm kiếm qua cả odoo_product_id (link thủ công) và shopee.item mapping.
+        Đánh dấu TẤT CẢ sản phẩm có liên kết — kể cả mode thủ công.
+        Cron sẽ tự xử lý: push nếu auto-mode, skip nếu manual.
         """
         if not product_ids:
             return
 
         # 1. Tìm qua odoo_product_id (liên kết thủ công trực tiếp)
-        direct = self.search([
-            ('odoo_product_id', 'in', product_ids),
-            ('stock_update_mode', 'not in', ['manual', False]),
-        ])
+        direct = self.search([('odoo_product_id', 'in', product_ids)])
 
-        # 2. Tìm qua shopee.item mapping (sale_shopee)
+        # 2. Tìm qua shopee.item mapping (sale_shopee / shopee_order_fetch)
         via_items = self.browse()
         try:
             shopee_items = self.env['shopee.item'].sudo().search(
@@ -611,33 +610,47 @@ class ShopeeProduct(models.Model):
                 })
                 via_items = self.search([
                     ('shopee_item_id', 'in', item_identifiers),
-                    ('stock_update_mode', 'not in', ['manual', False]),
                     ('id', 'not in', direct.ids),
                 ])
         except Exception as e:
-            _logger.debug("Shopee _mark_for_stock_sync: bỏ qua shopee.item lookup: %s", e)
+            _logger.info(
+                "Shopee _mark_for_stock_sync: shopee.item lookup failed (model missing?): %s", e
+            )
 
         to_mark = direct | via_items
-        if to_mark:
-            now = fields.Datetime.now()
-            to_mark.write({'pending_stock_sync': True, 'pending_sync_since': now})
-            # Tạo / cập nhật log entry cho mỗi sản phẩm
-            SyncLog = self.env['shopee.stock.sync.log'].sudo()
-            for product in to_mark:
-                existing = SyncLog.search([
-                    ('shopee_product_id', '=', product.id),
-                    ('state', '=', 'pending'),
-                ], limit=1)
-                if existing:
-                    existing.write({'triggered_at': now})
-                else:
-                    SyncLog.create({
-                        'shopee_product_id': product.id,
-                        'state': 'pending',
-                        'triggered_at': now,
-                    })
+        _logger.info(
+            "Shopee _mark_for_stock_sync: %d sản phẩm Odoo thay đổi → "
+            "%d direct (odoo_product_id) + %d via shopee.item = %d tổng cộng",
+            len(product_ids), len(direct), len(via_items), len(to_mark),
+        )
+        if not to_mark:
             _logger.info(
-                "Shopee: đánh dấu %d sản phẩm chờ đồng bộ tồn kho (triggered by %d products)",
+                "Shopee _mark_for_stock_sync: không tìm thấy shopee.product nào liên kết "
+                "với product_ids=%s. Kiểm tra odoo_product_id hoặc shopee.item mapping.",
+                product_ids[:10],
+            )
+            return
+
+        now = fields.Datetime.now()
+        to_mark.write({'pending_stock_sync': True, 'pending_sync_since': now})
+        # Tạo / cập nhật log entry cho mỗi sản phẩm
+        SyncLog = self.env['shopee.stock.sync.log'].sudo()
+        for product in to_mark:
+            existing = SyncLog.search([
+                ('shopee_product_id', '=', product.id),
+                ('state', '=', 'pending'),
+            ], limit=1)
+            if existing:
+                existing.write({'triggered_at': now})
+            else:
+                SyncLog.create({
+                    'shopee_product_id': product.id,
+                    'state': 'pending',
+                    'stock_update_mode': product.stock_update_mode or 'manual',
+                    'triggered_at': now,
+                })
+        _logger.info(
+            "Shopee: đánh dấu %d sản phẩm chờ đồng bộ tồn kho (triggered by %d products)",
                 len(to_mark), len(product_ids),
             )
 
@@ -648,31 +661,45 @@ class ShopeeProduct(models.Model):
         Chạy thường xuyên (VD: mỗi 15 phút) để đẩy tồn kho sau khi
         phiếu kho được xác nhận qua app barcode hoặc thủ công.
         """
+        # Lấy TẤT CẢ pending (kể cả manual) để clear flag và log
         pending = self.search([
             ('pending_stock_sync', '=', True),
-            ('stock_update_mode', 'not in', ['manual', False]),
             ('item_status', 'not in', ['SELLER_DELETE', 'SHOPEE_DELETE']),
         ])
         if not pending:
             return
         success_count = 0
         error_count = 0
+        skip_count = 0
         SyncLog = self.env['shopee.stock.sync.log'].sudo()
+        now = fields.Datetime.now()
         for product in pending:
+            log = SyncLog.search([
+                ('shopee_product_id', '=', product.id),
+                ('state', '=', 'pending'),
+            ], limit=1)
+
+            # Sản phẩm mode thủ công → bỏ qua (không đẩy), clear flag
+            if not product.stock_update_mode or product.stock_update_mode == 'manual':
+                skip_count += 1
+                product.write({'pending_stock_sync': False, 'pending_sync_since': False})
+                if log:
+                    log.write({
+                        'state': 'skipped',
+                        'synced_at': now,
+                        'error_message': 'Chế độ thủ công — không tự đồng bộ. Cấu hình stock_update_mode để bật auto-sync.',
+                    })
+                continue
+
             try:
                 product._do_push_stock()
                 stock_qty = product.total_available_stock
                 product.write({'pending_stock_sync': False, 'pending_sync_since': False})
                 success_count += 1
-                # Cập nhật log thành done
-                log = SyncLog.search([
-                    ('shopee_product_id', '=', product.id),
-                    ('state', '=', 'pending'),
-                ], limit=1)
                 if log:
                     log.write({
                         'state': 'done',
-                        'synced_at': fields.Datetime.now(),
+                        'synced_at': now,
                         'stock_qty': stock_qty,
                     })
             except Exception as e:
@@ -682,20 +709,15 @@ class ShopeeProduct(models.Model):
                     "Shopee stock sync queue: thất bại id=%s item=%s: %s",
                     product.id, product.shopee_item_id, err_msg,
                 )
-                # Cập nhật log thành error
-                log = SyncLog.search([
-                    ('shopee_product_id', '=', product.id),
-                    ('state', '=', 'pending'),
-                ], limit=1)
                 if log:
                     log.write({
                         'state': 'error',
-                        'synced_at': fields.Datetime.now(),
+                        'synced_at': now,
                         'error_message': err_msg,
                     })
         _logger.info(
-            "Shopee stock sync queue: hoàn tất — %d thành công, %d lỗi",
-            success_count, error_count,
+            "Shopee stock sync queue: hoàn tất — %d thành công, %d lỗi, %d bỏ qua (manual)",
+            success_count, error_count, skip_count,
         )
 
     def action_delete_from_shopee(self):

@@ -53,6 +53,7 @@ class ShopeeStockSyncLog(models.Model):
 
     state = fields.Selection([
         ('pending', 'Chờ xử lý'),
+        ('skipped', 'Bỏ qua (thủ công)'),
         ('done', 'Thành công'),
         ('error', 'Lỗi'),
     ], string='Trạng thái', default='pending', index=True, required=True)
@@ -66,3 +67,9 @@ class ShopeeStockSyncLog(models.Model):
 
     stock_qty = fields.Integer(string='Tồn kho đã đẩy', readonly=True)
     error_message = fields.Text(string='Thông báo lỗi', readonly=True)
+
+    stock_update_mode = fields.Char(
+        string='Chế độ đồng bộ',
+        readonly=True,
+        help='stock_update_mode tại thời điểm trigger (manual/warehouse/...)',
+    )
