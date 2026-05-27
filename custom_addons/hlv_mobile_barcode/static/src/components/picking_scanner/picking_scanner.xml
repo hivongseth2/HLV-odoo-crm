@@ -36,9 +36,9 @@
                                             <span t-if="line.location_name" style="color: var(--info-color); font-weight: 500; display: inline-flex; align-items: center; gap: 4px;">
                                                 <i class="fa fa-map-marker-alt"></i> <t t-esc="line.location_name"/>
                                             </span>
-                                            <span t-if="line.package_name" style="background-color: #e9ecef; border: 1px solid #ced4da; padding: 2px 6px; border-radius: 4px; color: #495057; font-weight: 600; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 4px;">
+                                            <span t-if="line.package_name" class="item-package-badge">
                                                 <i class="fa fa-box"></i> <t t-esc="line.package_name"/>
-                                                <i t-if="state.picking.state !== 'done'" class="fa fa-times-circle text-danger" style="margin-left: 4px; font-size: 0.85rem; cursor: pointer;" title="Gỡ khỏi kiện hàng" t-on-click="() => this.unpackLine(line)"></i>
+                                                <i t-if="state.picking.state !== 'done'" class="fa fa-times-circle btn-unpack" title="Gỡ khỏi kiện hàng" t-on-click="() => this.unpackLine(line)"></i>
                                             </span>
                                         </div>
                                     </div>

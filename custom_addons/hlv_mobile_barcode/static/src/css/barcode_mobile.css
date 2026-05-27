@@ -673,3 +673,49 @@
     height: 240px !important;
   }
 }
+
+/* ==========================================================================
+   PACKAGE BADGE STYLING
+   ========================================================================== */
+.hlv-barcode-app .item-package-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(23, 162, 184, 0.08);
+  border: 1px solid rgba(23, 162, 184, 0.2);
+  padding: 3px 10px;
+  border-radius: 20px; /* Modern Pill shape */
+  color: #0c5460;
+  font-weight: 600;
+  font-size: 0.72rem;
+  letter-spacing: 0.3px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.hlv-barcode-app .item-package-badge:hover {
+  background: rgba(23, 162, 184, 0.12);
+  border-color: rgba(23, 162, 184, 0.3);
+}
+
+.hlv-barcode-app .item-package-badge i.fa-box {
+  color: var(--info-color);
+  font-size: 0.8rem;
+}
+
+.hlv-barcode-app .item-package-badge .btn-unpack {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(12, 84, 96, 0.6);
+  cursor: pointer;
+  margin-left: 2px;
+  font-size: 0.95rem;
+  transition: all 0.2s ease;
+}
+
+.hlv-barcode-app .item-package-badge .btn-unpack:hover {
+  color: var(--danger-color);
+  transform: scale(1.2);
+}
+
