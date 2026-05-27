@@ -208,6 +208,7 @@
                                 <div class="d-flex flex-wrap gap-2">
                                     <button name="action_push_price" type="object" string="Đẩy giá" class="btn text-white" style="background:#ee4d2d;" icon="fa-tag" confirm="Cập nhật giá lên Shopee?"/>
                                     <button name="action_push_stock" type="object" string="Đẩy tồn kho" class="btn text-white" style="background:#ee4d2d;" icon="fa-cubes" confirm="Cập nhật tồn kho lên Shopee?"/>
+                                    <button name="action_fetch_variation_tree" type="object" string="Cây phân loại" class="btn btn-light" icon="fa-sitemap"/>
                                 </div>
                             </div>
                             <field name="model_ids" nolabel="1">
@@ -239,6 +240,12 @@
                                     <field name="item_name" nolabel="1"/>
                                     <span class="d-block text-muted small mt-3">SKU</span>
                                     <field name="item_sku" nolabel="1"/>
+                                    <div class="d-flex flex-wrap gap-2 mt-3">
+                                        <button name="action_fetch_content_diagnosis" type="object" string="Chẩn đoán" class="btn text-white" style="background:#ee4d2d;" icon="fa-check-circle"/>
+                                        <button name="action_fetch_category_recommendation" type="object" string="Gợi ý danh mục" class="btn btn-light" icon="fa-folder-open"/>
+                                        <button name="action_fetch_recommend_attributes" type="object" string="Gợi ý thuộc tính" class="btn btn-light" icon="fa-list"/>
+                                        <button name="action_fetch_item_extra_info" type="object" string="Extra info" class="btn btn-light" icon="fa-info-circle"/>
+                                    </div>
                                 </div>
                             </div>
                             <div class="col-xl-4 col-lg-6">
@@ -246,6 +253,9 @@
                                     <div class="fw-semibold mb-3" style="color:#ee4d2d;"><i class="fa fa-ban me-1"/> Violation</div>
                                     <field name="item_status" nolabel="1" readonly="1"/>
                                     <field name="shopee_update_time" nolabel="1" readonly="1"/>
+                                    <div class="d-flex flex-wrap gap-2 mt-3">
+                                        <button name="action_fetch_content_diagnosis" type="object" string="Kiểm tra lỗi nội dung" class="btn text-white" style="background:#ee4d2d;" icon="fa-search"/>
+                                    </div>
                                 </div>
                             </div>
                             <div class="col-xl-4 col-lg-6">
@@ -259,6 +269,7 @@
                                     <div class="fw-semibold mb-3" style="color:#ee4d2d;"><i class="fa fa-rocket me-1"/> Boost</div>
                                     <div class="d-flex flex-wrap gap-2">
                                         <button name="action_refresh_from_shopee" type="object" string="Làm mới" class="btn text-white" style="background:#ee4d2d;" icon="fa-refresh"/>
+                                        <button name="action_check_deboost_search" type="object" string="Deboost" class="btn btn-light" icon="fa-search"/>
                                         <button name="action_open_shopee_item" type="object" string="Shopee" class="btn btn-light" icon="fa-external-link" invisible="not shopee_item_url"/>
                                     </div>
                                 </div>
@@ -267,12 +278,20 @@
                                 <div class="rounded-3 bg-white p-3 h-100 shadow-sm" style="box-shadow:0 8px 20px rgba(15,23,42,.06);">
                                     <div class="fw-semibold mb-3" style="color:#ee4d2d;"><i class="fa fa-image me-1"/> Kit image</div>
                                     <field name="mapped_product_ids" nolabel="1" widget="many2many_tags" readonly="1"/>
+                                    <div class="d-flex flex-wrap gap-2 mt-3">
+                                        <button name="action_fetch_kit_item_limit" type="object" string="Giới hạn kit" class="btn text-white" style="background:#ee4d2d;" icon="fa-sliders"/>
+                                        <button name="action_fetch_kit_item_info" type="object" string="Kit info" class="btn btn-light" icon="fa-image"/>
+                                    </div>
                                 </div>
                             </div>
                             <div class="col-xl-4 col-lg-6">
                                 <div class="rounded-3 bg-white p-3 h-100 shadow-sm" style="box-shadow:0 8px 20px rgba(15,23,42,.06);">
                                     <div class="fw-semibold mb-3" style="color:#ee4d2d;"><i class="fa fa-clock-o me-1"/> Đồng bộ</div>
                                     <field name="last_synced" nolabel="1" readonly="1"/>
+                                    <div class="d-flex flex-wrap gap-2 mt-3">
+                                        <button name="action_fetch_item_limit" type="object" string="Item limit" class="btn text-white" style="background:#ee4d2d;" icon="fa-dashboard"/>
+                                        <button name="action_fetch_item_extra_info" type="object" string="Extra info" class="btn btn-light" icon="fa-info-circle"/>
+                                    </div>
                                 </div>
                             </div>
                         </div>

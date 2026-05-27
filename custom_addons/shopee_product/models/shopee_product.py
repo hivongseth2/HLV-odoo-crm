@@ -457,6 +457,133 @@ class ShopeeProduct(models.Model):
             },
         }
 
+    def _get_shopee_credentials(self):
+        self.ensure_one()
+        from odoo.addons.shopee_order_fetch.services.shopee_api import (
+            get_credentials_from_shop,
+        )
+        return get_credentials_from_shop(self.shop_id)
+
+    def _store_raw_section(self, section, value, title, message=None):
+        self.ensure_one()
+        raw_data = self.raw_data if isinstance(self.raw_data, dict) else {}
+        raw_data = dict(raw_data)
+        now = fields.Datetime.now()
+        raw_data[section] = value
+        raw_data['last_api_section'] = section
+        raw_data['last_api_synced_at'] = fields.Datetime.to_string(now)
+        self.write({'raw_data': raw_data, 'last_synced': now})
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': title,
+                'message': message or _('Đã cập nhật dữ liệu vào Raw JSON.'),
+                'type': 'success',
+                'sticky': False,
+            },
+        }
+
+    def action_fetch_item_extra_info(self):
+        self.ensure_one()
+        result = shopee_product_api.call_get_item_extra_info(
+            self._get_shopee_credentials(), [int(self.shopee_item_id)]
+        )
+        return self._store_raw_section(
+            'extra_info', result, _('Đã lấy Extra Info'), _('Đã lưu thông tin bổ sung của sản phẩm.')
+        )
+
+    def action_fetch_content_diagnosis(self):
+        self.ensure_one()
+        success, failure = shopee_product_api.call_get_item_content_diagnosis_result(
+            self._get_shopee_credentials(), [int(self.shopee_item_id)]
+        )
+        return self._store_raw_section(
+            'content_diagnosis',
+            {'success_item_list': success, 'failure_item_list': failure},
+            _('Đã chẩn đoán nội dung'),
+            _('Đã lưu kết quả Content Quality vào Raw JSON.'),
+        )
+
+    def action_fetch_category_recommendation(self):
+        self.ensure_one()
+        if not self.item_name:
+            raise UserError(_('Cần có tên sản phẩm để gợi ý danh mục.'))
+        result = shopee_product_api.call_category_recommend(
+            self._get_shopee_credentials(), self.item_name
+        )
+        return self._store_raw_section(
+            'category_recommendation', result, _('Đã gợi ý danh mục')
+        )
+
+    def action_fetch_recommend_attributes(self):
+        self.ensure_one()
+        if not self.item_name or not self.category_id:
+            raise UserError(_('Cần có tên sản phẩm và category_id để gợi ý thuộc tính.'))
+        result = shopee_product_api.call_get_recommend_attribute(
+            self._get_shopee_credentials(), self.item_name, self.category_id
+        )
+        return self._store_raw_section(
+            'recommend_attribute', result, _('Đã gợi ý thuộc tính')
+        )
+
+    def action_fetch_variation_tree(self):
+        self.ensure_one()
+        if not self.category_id:
+            raise UserError(_('Cần có category_id để lấy cây phân loại Shopee.'))
+        result = shopee_product_api.call_get_variations(
+            self._get_shopee_credentials(), self.category_id
+        )
+        return self._store_raw_section(
+            'variation_tree', result, _('Đã lấy cây phân loại')
+        )
+
+    def action_fetch_kit_item_limit(self):
+        self.ensure_one()
+        result = shopee_product_api.call_get_kit_item_limit(
+            self._get_shopee_credentials(), self.category_id or None
+        )
+        return self._store_raw_section(
+            'kit_item_limit', result, _('Đã lấy giới hạn Kit Item')
+        )
+
+    def action_fetch_kit_item_info(self):
+        self.ensure_one()
+        result = shopee_product_api.call_get_kit_item_info(
+            self._get_shopee_credentials(), int(self.shopee_item_id)
+        )
+        return self._store_raw_section(
+            'kit_item_info', result, _('Đã lấy Kit Item Info')
+        )
+
+    def action_check_deboost_search(self):
+        self.ensure_one()
+        item_ids, total_count, next_offset = shopee_product_api.call_search_item(
+            self._get_shopee_credentials(),
+            item_sku=self.item_sku or None,
+            item_name=False if self.item_sku else self.item_name,
+            item_status=self.item_status or None,
+            deboost_only=True,
+            page_size=10,
+        )
+        return self._store_raw_section(
+            'deboost_search',
+            {
+                'item_id_list': item_ids,
+                'total_count': total_count,
+                'next_offset': next_offset,
+                'current_item_matched': str(self.shopee_item_id) in {str(item_id) for item_id in item_ids},
+            },
+            _('Đã kiểm tra Deboost'),
+        )
+
+    def action_fetch_item_limit(self):
+        self.ensure_one()
+        result = shopee_product_api.call_get_item_limit(self._get_shopee_credentials())
+        return self._store_raw_section(
+            'item_limit', result, _('Đã lấy giới hạn sản phẩm')
+        )
+
     # ── Classmethod helpers ─────────────────────────────
 
     @api.model
