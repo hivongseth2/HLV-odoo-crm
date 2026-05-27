@@ -349,10 +349,12 @@ class ShopeeProductCreateWizard(models.TransientModel):
             raise UserError(_(
                 'Vui lòng tick chọn ít nhất một kênh vận chuyển.'
             ))
-        logistics = [
-            {'logistic_id': int(l.channel_id), 'enabled': True}
-            for l in selected_lines
-        ]
+        logistic_info = []
+        for l in selected_lines:
+            entry = {'logistic_id': int(l.channel_id), 'enabled': True}
+            if l.shipping_fee:
+                entry['shipping_fee'] = float(l.shipping_fee)
+            logistic_info.append(entry)
 
         attribute_list = []
         missing_required = []
@@ -401,7 +403,8 @@ class ShopeeProductCreateWizard(models.TransientModel):
             'original_price': self.original_price,
             'weight': self.weight,
             'image': {'image_id_list': image_id_list},
-            'logistics': logistics,
+            # Shopee add_item dùng key 'logistic_info', không phải 'logistics'.
+            'logistic_info': logistic_info,
             'attribute_list': attribute_list,
             # Shopee add_item ở một số region/sandbox vẫn validate seller_stock
             # trực tiếp, dù docs mới dùng stock_info_v2.
@@ -412,6 +415,12 @@ class ShopeeProductCreateWizard(models.TransientModel):
         }
 
         # 4. Gọi add_item ────────────────────────────────────────────────
+        _logger.info(
+            'Shopee add_item payload: logistic_info=%s, attribute_count=%s, '
+            'image_count=%s, brand=%s',
+            logistic_info, len(attribute_list), len(image_id_list),
+            item_data.get('brand'),
+        )
         try:
             result = shopee_product_api.call_add_item(creds, item_data)
         except UserError:
@@ -467,6 +476,7 @@ class ShopeeProductCreateWizardLogistic(models.TransientModel):
     channel_id = fields.Integer(string='Channel ID', readonly=True)
     channel_name = fields.Char(string='Tên kênh', readonly=True)
     cod_enabled = fields.Boolean(string='Hỗ trợ COD', readonly=True)
+    shipping_fee = fields.Float(string='Phí vận chuyển', digits=(16, 0), default=0)
 
 
 class ShopeeProductCreateWizardAttribute(models.TransientModel):

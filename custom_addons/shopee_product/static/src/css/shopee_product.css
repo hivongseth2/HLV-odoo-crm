@@ -195,3 +195,217 @@
         flex-direction: column;
     }
 }
+
+/* ───── Wizard: Thuộc tính (kanban cards) ───── */
+.o_shopee_attr_kanban.o_kanban_view {
+    background: transparent !important;
+    padding: 0 !important;
+}
+.o_shopee_attr_kanban .o_kanban_record {
+    width: calc(50% - 12px) !important;
+    margin: 6px !important;
+    padding: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+.o_shopee_attr_kanban .sp-attr-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.o_shopee_attr_kanban .sp-attr-label {
+    font-size: 13px;
+    color: #1f2937;
+    font-weight: 500;
+}
+.o_shopee_attr_kanban .sp-req {
+    color: #ee4d2d;
+    margin-right: 4px;
+    font-weight: 700;
+}
+.o_shopee_attr_kanban .sp-attr-input {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+.o_shopee_attr_kanban .sp-attr-input input,
+.o_shopee_attr_kanban .sp-attr-input .o_input {
+    border: 1px solid #d1d5db !important;
+    border-radius: 4px !important;
+    padding: 6px 8px !important;
+    background: #fff !important;
+}
+
+/* ───── Wizard: Vận chuyển (kanban rows) ───── */
+.o_shopee_logi_kanban.o_kanban_view {
+    background: transparent !important;
+    padding: 0 !important;
+}
+.o_shopee_logi_kanban .o_kanban_record {
+    width: 100% !important;
+    margin: 6px 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+.o_shopee_logi_kanban .sp-logi-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 16px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #fff;
+    transition: all .15s ease;
+}
+.o_shopee_logi_kanban .sp-logi-card.sp-logi-on {
+    border-color: #ee4d2d;
+    background: #fff7f4;
+    box-shadow: 0 1px 4px rgba(238,77,45,.08);
+}
+.o_shopee_logi_kanban .sp-logi-name {
+    font-weight: 600;
+    color: #1f2937;
+    font-size: 14px;
+}
+.o_shopee_logi_kanban .sp-logi-meta {
+    display: flex;
+    gap: 6px;
+    margin-top: 4px;
+    flex-wrap: wrap;
+}
+.o_shopee_logi_kanban .sp-logi-chip {
+    font-size: 11px;
+    color: #6b7280;
+    background: #f3f4f6;
+    border-radius: 10px;
+    padding: 2px 8px;
+}
+.o_shopee_logi_kanban .sp-logi-cod {
+    background: #ecfdf5;
+    color: #047857;
+}
+.o_shopee_logi_kanban .sp-logi-toggle .o_field_boolean_toggle {
+    transform: scale(1.1);
+}
+
+/* ───── Content editor: media tiles ───── */
+.sp-content-desc-wrap {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    padding: 12px 14px;
+}
+.sp-content-desc-label {
+    font-size: 12px;
+    color: #6b7280;
+    margin-bottom: 6px;
+}
+.sp-content-desc textarea,
+.sp-content-desc .o_input {
+    border: none !important;
+    background: transparent !important;
+    min-height: 140px !important;
+    line-height: 1.55 !important;
+    color: #111827 !important;
+    padding: 0 !important;
+}
+.sp-media-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+.sp-media-head {
+    font-weight: 600;
+    color: #ee4d2d;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.o_shopee_media_kanban.o_kanban_view {
+    background: transparent !important;
+    padding: 0 !important;
+}
+.o_shopee_media_kanban .o_kanban_record {
+    width: 160px !important;
+    margin: 6px !important;
+    padding: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+.sp-media-tile {
+    background: #fff;
+    border: 1px dashed #d1d5db;
+    border-radius: 8px;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transition: border-color .15s ease;
+}
+.sp-media-tile:hover {
+    border-color: #ee4d2d;
+}
+.sp-media-tile.sp-media-off {
+    opacity: 0.55;
+}
+.sp-media-thumb {
+    width: 100%;
+    height: 130px;
+    border-radius: 6px;
+    background: #f9fafb;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+.sp-media-thumb img,
+.sp-media-thumb video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.sp-media-empty {
+    color: #d1d5db;
+    font-size: 32px;
+}
+.sp-media-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    color: #6b7280;
+    gap: 4px;
+}
+.sp-media-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.sp-media-actions label {
+    font-size: 11px;
+    color: #6b7280;
+    margin: 0;
+}
+.sp-media-upload .o_field_binary {
+    font-size: 11px;
+}
+.sp-media-upload .o_select_file_button,
+.sp-media-upload .o_clear_file_button {
+    padding: 2px 6px !important;
+    font-size: 11px !important;
+}
+
+@media (max-width: 1100px) {
+    .o_shopee_attr_kanban .o_kanban_record { width: 100% !important; }
+    .sp-media-row { grid-template-columns: 1fr; }
+}

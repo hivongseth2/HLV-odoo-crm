@@ -80,17 +80,31 @@
                     <!-- Thuộc tính -->
                     <div class="sp-section">
                         <div class="sp-section-title">Thông tin chi tiết</div>
-                        <div class="sp-help-line">Các thuộc tính bắt buộc được lấy tự động theo ngành hàng.</div>
-                            <field name="attribute_line_ids" nolabel="1">
-                                <list editable="bottom" create="false" delete="false"
-                                      decoration-danger="is_mandatory and not value_id and not value_text">
-                                    <field name="is_mandatory" widget="boolean"/>
+                        <div class="sp-help-line">Các thuộc tính bắt buộc được lấy tự động theo ngành hàng. Trường có dấu <span class="text-danger fw-bold">*</span> là bắt buộc.</div>
+                            <field name="attribute_line_ids" nolabel="1" mode="kanban">
+                                <kanban class="o_shopee_attr_kanban" create="false" delete="false" group_create="false" records_draggable="false">
+                                    <field name="is_mandatory"/>
                                     <field name="attribute_name"/>
-                                    <field name="value_id" options="{'no_create': True}"/>
+                                    <field name="input_type"/>
+                                    <field name="shopee_attribute_id"/>
+                                    <field name="value_id"/>
                                     <field name="value_text"/>
-                                    <field name="input_type" optional="hide"/>
-                                    <field name="attribute_id" optional="hide"/>
-                                </list>
+                                    <field name="attribute_id"/>
+                                    <templates>
+                                        <t t-name="kanban-box">
+                                            <div class="sp-attr-card">
+                                                <div class="sp-attr-label">
+                                                    <t t-if="record.is_mandatory.raw_value"><span class="sp-req">*</span></t>
+                                                    <span class="sp-attr-name"><field name="attribute_name"/></span>
+                                                </div>
+                                                <div class="sp-attr-input">
+                                                    <field name="value_id" nolabel="1" options="{'no_create': True, 'no_open': True}" placeholder="Chọn giá trị…"/>
+                                                    <field name="value_text" nolabel="1" placeholder="Hoặc nhập giá trị…"/>
+                                                </div>
+                                            </div>
+                                        </t>
+                                    </templates>
+                                </kanban>
                             </field>
                     </div>
 
@@ -98,20 +112,38 @@
                     <div class="sp-section">
                         <div class="sp-section-title">Vận chuyển</div>
                         <div class="sp-help-line">
-                                Tick chọn kênh vận chuyển muốn bật cho sản phẩm.
+                                Bật kênh vận chuyển muốn áp dụng cho sản phẩm.
                                 Danh sách tự động lấy từ Shopee khi chọn cửa hàng.
                         </div>
                             <button name="action_reload_logistics" type="object"
                                     string="↻ Tải lại danh sách"
                                     class="btn-link"
                                     invisible="not shop_id"/>
-                            <field name="logistic_line_ids" nolabel="1">
-                                <list editable="bottom" create="false" delete="false">
-                                    <field name="selected" widget="boolean_toggle"/>
+                            <field name="logistic_line_ids" nolabel="1" mode="kanban">
+                                <kanban class="o_shopee_logi_kanban" create="false" delete="false" group_create="false" records_draggable="false">
                                     <field name="channel_id"/>
                                     <field name="channel_name"/>
-                                    <field name="cod_enabled" widget="boolean"/>
-                                </list>
+                                    <field name="cod_enabled"/>
+                                    <field name="selected"/>
+                                    <templates>
+                                        <t t-name="kanban-box">
+                                            <div class="sp-logi-card" t-att-class="record.selected.raw_value ? 'sp-logi-on' : ''">
+                                                <div class="sp-logi-main">
+                                                    <div class="sp-logi-name"><field name="channel_name"/></div>
+                                                    <div class="sp-logi-meta">
+                                                        <span class="sp-logi-chip">ID <field name="channel_id"/></span>
+                                                        <t t-if="record.cod_enabled.raw_value">
+                                                            <span class="sp-logi-chip sp-logi-cod"><i class="fa fa-money me-1"/>COD</span>
+                                                        </t>
+                                                    </div>
+                                                </div>
+                                                <div class="sp-logi-toggle">
+                                                    <field name="selected" widget="boolean_toggle" nolabel="1"/>
+                                                </div>
+                                            </div>
+                                        </t>
+                                    </templates>
+                                </kanban>
                             </field>
                     </div>
                 </sheet>

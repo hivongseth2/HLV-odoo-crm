@@ -1280,6 +1280,13 @@ class ShopeeProduct(models.Model):
                 rec.with_context(skip_shopee_auto_quality=True).write({
                     'extra_summary': _('Không tải được thông tin thêm: %s') % str(e),
                 })
+            # Auto-tải nội dung (mô tả + ảnh + video) lần đầu mở form Nội dung.
+            if not rec.edit_description and not rec.image_line_ids and not rec.video_line_ids:
+                try:
+                    rec.with_context(skip_shopee_auto_quality=True).action_fetch_full_content()
+                except Exception:
+                    # Im lặng — người dùng có thể bấm "Tải từ Shopee" thủ công.
+                    pass
 
     def web_read(self, specification):
         if not self.env.context.get('skip_shopee_auto_quality') and len(self) <= 3:

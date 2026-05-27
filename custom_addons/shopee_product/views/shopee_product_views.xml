@@ -308,50 +308,132 @@
                                 <div class="o_shopee_content_editor">
                                     <div class="o_shopee_content_section">
                                         <div class="o_shopee_content_title">
-                                            <h3>Thông tin cơ bản</h3>
+                                            <h3><i class="fa fa-pencil me-2" style="color:#ee4d2d;"/>Mô tả, ảnh, video</h3>
                                             <div class="d-flex flex-wrap gap-2">
                                                 <button name="action_fetch_full_content" type="object" string="Tải từ Shopee" class="btn btn-shopee-soft" icon="fa-download"/>
                                                 <button name="action_push_content_update" type="object" string="Đẩy nội dung" class="btn btn-shopee" icon="fa-upload" confirm="Cập nhật mô tả/ảnh/video lên Shopee?"/>
                                             </div>
                                         </div>
-                                        <div class="mb-3">
-                                            <span class="d-block text-muted small mb-1">Tên sản phẩm</span>
-                                            <field name="item_name" nolabel="1"/>
-                                        </div>
-                                        <div class="mb-3">
-                                            <span class="d-block text-muted small mb-1">Mô tả Shopee</span>
-                                            <field name="edit_description" nolabel="1" widget="text" placeholder="Tải từ Shopee hoặc nhập mô tả mới…"/>
+                                        <div class="sp-content-desc-wrap">
+                                            <div class="sp-content-desc-label">Mô tả Shopee</div>
+                                            <field name="edit_description" nolabel="1" widget="text" placeholder="Tải từ Shopee hoặc nhập mô tả mới…" class="sp-content-desc"/>
                                         </div>
                                     </div>
                                     <div class="o_shopee_content_section">
-                                        <div class="o_shopee_content_title"><h3>Hình ảnh &amp; video sản phẩm</h3></div>
-                                        <div class="o_shopee_media_grid">
-                                            <div>
-                                                <div class="fw-semibold mb-2" style="color:#ee4d2d;"><i class="fa fa-image me-1"/> Ảnh sản phẩm</div>
-                                                <field name="image_line_ids" nolabel="1">
-                                                    <list editable="bottom" decoration-muted="not active">
-                                                        <field name="sequence" widget="handle"/>
-                                                        <field name="active" widget="boolean_toggle"/>
+                                        <div class="sp-media-row">
+                                            <div class="sp-media-col">
+                                                <div class="sp-media-head"><i class="fa fa-image"/> Ảnh sản phẩm</div>
+                                                <field name="image_line_ids" nolabel="1" mode="kanban">
+                                                    <kanban class="o_shopee_media_kanban sp-image-kanban">
+                                                        <field name="sequence"/>
+                                                        <field name="active"/>
                                                         <field name="image_id"/>
-                                                        <field name="image_url" widget="url" readonly="1"/>
-                                                        <field name="upload_image" widget="binary" filename="upload_filename"/>
-                                                        <field name="upload_filename" invisible="1"/>
-                                                    </list>
+                                                        <field name="image_url"/>
+                                                        <field name="upload_image"/>
+                                                        <field name="upload_filename"/>
+                                                        <templates>
+                                                            <t t-name="kanban-box">
+                                                                <div class="sp-media-tile" t-att-class="record.active.raw_value ? '' : 'sp-media-off'">
+                                                                    <div class="sp-media-thumb">
+                                                                        <t t-if="record.image_url.raw_value">
+                                                                            <img t-att-src="record.image_url.raw_value" alt=""/>
+                                                                        </t>
+                                                                        <t t-elif="record.upload_image.raw_value">
+                                                                            <field name="upload_image" widget="image" nolabel="1" options="{'size': [120, 120]}"/>
+                                                                        </t>
+                                                                        <t t-else="">
+                                                                            <div class="sp-media-empty"><i class="fa fa-image"/></div>
+                                                                        </t>
+                                                                    </div>
+                                                                    <div class="sp-media-meta">
+                                                                        <div class="sp-media-id">
+                                                                            <t t-if="record.image_id.raw_value">ID: <field name="image_id"/></t>
+                                                                            <t t-else=""><span class="text-muted">Chưa upload</span></t>
+                                                                        </div>
+                                                                        <div class="sp-media-actions">
+                                                                            <field name="active" widget="boolean_toggle" nolabel="1"/>
+                                                                            <label>Dùng</label>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div class="sp-media-upload">
+                                                                        <field name="upload_image" widget="binary" filename="upload_filename" nolabel="1"/>
+                                                                    </div>
+                                                                </div>
+                                                            </t>
+                                                        </templates>
+                                                    </kanban>
+                                                    <form>
+                                                        <sheet>
+                                                            <group>
+                                                                <field name="sequence"/>
+                                                                <field name="active" widget="boolean_toggle"/>
+                                                                <field name="image_id" readonly="1"/>
+                                                                <field name="image_url" widget="url" readonly="1"/>
+                                                                <field name="upload_image" widget="image" filename="upload_filename"/>
+                                                                <field name="upload_filename" invisible="1"/>
+                                                            </group>
+                                                        </sheet>
+                                                    </form>
                                                 </field>
                                             </div>
-                                            <div>
-                                                <div class="fw-semibold mb-2" style="color:#ee4d2d;"><i class="fa fa-video-camera me-1"/> Video sản phẩm</div>
-                                                <field name="video_line_ids" nolabel="1">
-                                                    <list editable="bottom" decoration-muted="not active">
-                                                        <field name="sequence" widget="handle"/>
-                                                        <field name="active" widget="boolean_toggle"/>
-                                                        <field name="video_id" readonly="1"/>
-                                                        <field name="video_url" widget="url" readonly="1"/>
-                                                        <field name="duration" readonly="1"/>
-                                                        <field name="upload_video" widget="binary" filename="upload_filename"/>
-                                                        <field name="upload_filename" invisible="1"/>
-                                                        <field name="video_upload_id" optional="hide"/>
-                                                    </list>
+                                            <div class="sp-media-col">
+                                                <div class="sp-media-head"><i class="fa fa-video-camera"/> Video sản phẩm</div>
+                                                <field name="video_line_ids" nolabel="1" mode="kanban">
+                                                    <kanban class="o_shopee_media_kanban sp-video-kanban">
+                                                        <field name="sequence"/>
+                                                        <field name="active"/>
+                                                        <field name="video_id"/>
+                                                        <field name="video_url"/>
+                                                        <field name="duration"/>
+                                                        <field name="upload_video"/>
+                                                        <field name="upload_filename"/>
+                                                        <field name="video_upload_id"/>
+                                                        <templates>
+                                                            <t t-name="kanban-box">
+                                                                <div class="sp-media-tile sp-video-tile" t-att-class="record.active.raw_value ? '' : 'sp-media-off'">
+                                                                    <div class="sp-media-thumb">
+                                                                        <t t-if="record.video_url.raw_value">
+                                                                            <video t-att-src="record.video_url.raw_value" controls="controls"/>
+                                                                        </t>
+                                                                        <t t-else="">
+                                                                            <div class="sp-media-empty"><i class="fa fa-video-camera"/></div>
+                                                                        </t>
+                                                                    </div>
+                                                                    <div class="sp-media-meta">
+                                                                        <div class="sp-media-id">
+                                                                            <t t-if="record.video_id.raw_value">ID: <field name="video_id"/></t>
+                                                                            <t t-elif="record.video_upload_id.raw_value">Upload: <field name="video_upload_id"/></t>
+                                                                            <t t-else=""><span class="text-muted">Chưa upload</span></t>
+                                                                        </div>
+                                                                        <div class="sp-media-extra">
+                                                                            <t t-if="record.duration.raw_value"><field name="duration"/>s</t>
+                                                                        </div>
+                                                                        <div class="sp-media-actions">
+                                                                            <field name="active" widget="boolean_toggle" nolabel="1"/>
+                                                                            <label>Dùng</label>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div class="sp-media-upload">
+                                                                        <field name="upload_video" widget="binary" filename="upload_filename" nolabel="1"/>
+                                                                    </div>
+                                                                </div>
+                                                            </t>
+                                                        </templates>
+                                                    </kanban>
+                                                    <form>
+                                                        <sheet>
+                                                            <group>
+                                                                <field name="sequence"/>
+                                                                <field name="active" widget="boolean_toggle"/>
+                                                                <field name="video_id" readonly="1"/>
+                                                                <field name="video_upload_id" readonly="1"/>
+                                                                <field name="video_url" widget="url" readonly="1"/>
+                                                                <field name="duration" readonly="1"/>
+                                                                <field name="upload_video" widget="binary" filename="upload_filename"/>
+                                                                <field name="upload_filename" invisible="1"/>
+                                                            </group>
+                                                        </sheet>
+                                                    </form>
                                                 </field>
                                             </div>
                                         </div>
