@@ -90,7 +90,8 @@
                             <field name="total_available_stock" widget="statinfo"
                                    string="Tồn kho"/>
                         </button>
-                        <button type="url" url="%(shopee_item_url)s"
+                        <field name="shopee_item_url" invisible="1"/>
+                        <button type="object" name="action_open_shopee_item"
                                 class="oe_stat_button" icon="fa-external-link"
                                 invisible="not shopee_item_url">
                             <span class="o_stat_text">Xem Shopee</span>

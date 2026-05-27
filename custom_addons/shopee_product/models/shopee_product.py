@@ -141,6 +141,17 @@ class ShopeeProduct(models.Model):
 
     # ── Actions ─────────────────────────────────────────
 
+    def action_open_shopee_item(self):
+        """Open the Shopee product page in a new browser tab."""
+        self.ensure_one()
+        if not self.shopee_item_url:
+            raise UserError(_('Không có link Shopee cho sản phẩm này.'))
+        return {
+            'type': 'ir.actions.act_url',
+            'url': self.shopee_item_url,
+            'target': 'new',
+        }
+
     def action_refresh_from_shopee(self):
         """Cập nhật lại thông tin sản phẩm này từ Shopee API."""
         self.ensure_one()
