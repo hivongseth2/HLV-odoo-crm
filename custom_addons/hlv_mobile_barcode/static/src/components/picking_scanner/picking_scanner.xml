@@ -185,7 +185,7 @@
                                                         <div class="pkg-transfer-inputs">
                                                             <select class="form-select form-select-sm" t-model="state.transferTargets[item.move_line_id]">
                                                                 <t t-foreach="state.packageOtherPackages" t-as="op" t-key="op.package_id">
-                                                                    <option t-att-value="String(op.package_id)">
+                                                                    <option t-att-value="op.package_id">
                                                                         Sang <t t-esc="op.package_name"/>
                                                                     </option>
                                                                 </t>
@@ -209,7 +209,7 @@
                                 <div class="pkg-add-form">
                                     <select class="form-select form-select-sm" t-model="state.addItemMoveLineId">
                                         <t t-foreach="state.packageAvailableItems" t-as="av" t-key="av.move_line_id">
-                                            <option t-att-value="String(av.move_line_id)">
+                                            <option t-att-value="av.move_line_id">
                                                 <t t-esc="av.product_name"/> (Sẵn có: <t t-esc="av.qty_available"/>)
                                             </option>
                                         </t>
