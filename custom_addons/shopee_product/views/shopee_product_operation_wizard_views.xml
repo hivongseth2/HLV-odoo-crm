@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_shopee_product_operation_wizard_form" model="ir.ui.view">
+        <field name="name">shopee.product.operation.wizard.form</field>
+        <field name="model">shopee.product.operation.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Thao tác Shopee">
+                <sheet>
+                    <group>
+                        <field name="shopee_product_id"/>
+                        <field name="operation"/>
+                    </group>
+                    <group string="Trả lời bình luận" invisible="operation != 'reply_comment'">
+                        <field name="comment_id" required="operation == 'reply_comment'"/>
+                        <field name="reply_comment" required="operation == 'reply_comment'" placeholder="Nhập nội dung trả lời khách hàng..."/>
+                    </group>
+                    <group string="Chi tiết bảng kích thước" invisible="operation != 'size_chart_detail'">
+                        <field name="size_chart_id" required="operation == 'size_chart_detail'"/>
+                    </group>
+                    <group string="Tạo ảnh bộ sản phẩm" invisible="operation != 'generate_kit_image'">
+                        <field name="component_list_json" required="operation == 'generate_kit_image'"/>
+                    </group>
+                </sheet>
+                <footer>
+                    <button name="action_execute" type="object" string="Thực hiện" class="btn-primary"/>
+                    <button string="Đóng" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

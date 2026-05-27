@@ -30,6 +30,7 @@
         'views/shopee_product_views.xml',
         'views/shopee_product_sync_wizard_views.xml',
         'views/shopee_push_stock_wizard_views.xml',
+        'views/shopee_product_operation_wizard_views.xml',
     ],
     'installable': True,
     'application': False,

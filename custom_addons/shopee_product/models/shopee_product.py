@@ -584,6 +584,69 @@ class ShopeeProduct(models.Model):
             'item_limit', result, _('Đã lấy giới hạn sản phẩm')
         )
 
+    def action_fetch_comments(self):
+        self.ensure_one()
+        result = shopee_product_api.call_get_comment(
+            self._get_shopee_credentials(), item_id=int(self.shopee_item_id), page_size=20
+        )
+        return self._store_raw_section(
+            'comments', result, _('Đã lấy bình luận'), _('Đã lưu danh sách bình luận vào Raw JSON.')
+        )
+
+    def action_fetch_boosted_list(self):
+        self.ensure_one()
+        result = shopee_product_api.call_get_boosted_list(self._get_shopee_credentials())
+        current_item = str(self.shopee_item_id)
+        current_boost = [item for item in result if str(item.get('item_id')) == current_item]
+        return self._store_raw_section(
+            'boosted_list',
+            {'item_list': result, 'current_item': current_boost},
+            _('Đã lấy danh sách đang đẩy hiển thị'),
+        )
+
+    def action_fetch_violation_info(self):
+        self.ensure_one()
+        result = shopee_product_api.call_get_item_violation_info(
+            self._get_shopee_credentials(), [int(self.shopee_item_id)]
+        )
+        return self._store_raw_section(
+            'violation_info', result, _('Đã lấy thông tin vi phạm')
+        )
+
+    def action_fetch_size_chart_list(self):
+        self.ensure_one()
+        if not self.category_id:
+            raise UserError(_('Cần có category_id để lấy danh sách bảng kích thước.'))
+        result = shopee_product_api.call_get_size_chart_list(
+            self._get_shopee_credentials(), self.category_id, page_size=20
+        )
+        return self._store_raw_section(
+            'size_chart_list', result, _('Đã lấy danh sách bảng kích thước')
+        )
+
+    def _open_operation_wizard(self, operation, title):
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': title,
+            'res_model': 'shopee.product.operation.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {
+                'default_shopee_product_id': self.id,
+                'default_operation': operation,
+            },
+        }
+
+    def action_open_reply_comment_wizard(self):
+        return self._open_operation_wizard('reply_comment', _('Trả lời bình luận Shopee'))
+
+    def action_open_size_chart_detail_wizard(self):
+        return self._open_operation_wizard('size_chart_detail', _('Chi tiết bảng kích thước'))
+
+    def action_open_generate_kit_image_wizard(self):
+        return self._open_operation_wizard('generate_kit_image', _('Tạo ảnh bộ sản phẩm'))
+
     # ── Classmethod helpers ─────────────────────────────
 
     @api.model

@@ -18,6 +18,13 @@ APIs được implement:
   POST /api/v2/product/add_item
   POST /api/v2/product/update_item
   POST /api/v2/product/delete_item
+    GET  /api/v2/product/get_comment
+    POST /api/v2/product/reply_comment
+    GET  /api/v2/product/get_boosted_list
+    GET  /api/v2/product/get_item_violation_info
+    GET  /api/v2/product/get_size_chart_list
+    GET  /api/v2/product/get_size_chart_detail
+    POST /api/v2/product/generate_kit_image
 """
 import json
 import logging
@@ -509,6 +516,127 @@ def call_update_stock(creds, item_id, stock_list):
     _check_error(body, 'update_stock')
     resp = body.get('response', {})
     return resp.get('success_list', []), resp.get('failure_list', [])
+
+
+def call_get_boosted_list(creds):
+    """
+    GET /api/v2/product/get_boosted_list
+
+    Trả về danh sách item đang boost cùng thời gian cooldown còn lại.
+    """
+    api_path = '/api/v2/product/get_boosted_list'
+    params = _build_signed_params(creds, api_path)
+    _logger.info("Shopee Product API: get_boosted_list")
+    _status, body = _do_get(api_path, params)
+    _check_error(body, 'get_boosted_list')
+    response = body.get('response', {})
+    if not isinstance(response, dict):
+        return []
+    item_list = response.get('item_list', [])
+    return item_list if isinstance(item_list, list) else []
+
+
+def call_get_comment(creds, item_id=None, comment_id=None, cursor='', page_size=10):
+    """
+    GET /api/v2/product/get_comment
+
+    Lấy bình luận theo item_id hoặc comment_id. page_size: 1..100.
+    Trả về response dict gồm item_comment_list, more, next_cursor.
+    """
+    api_path = '/api/v2/product/get_comment'
+    extra = {'cursor': cursor or '', 'page_size': page_size}
+    if item_id:
+        extra['item_id'] = item_id
+    if comment_id:
+        extra['comment_id'] = comment_id
+    params = _build_signed_params(creds, api_path, extra)
+    _logger.info("Shopee Product API: get_comment item_id=%s comment_id=%s", item_id, comment_id)
+    _status, body = _do_get(api_path, params)
+    _check_error(body, 'get_comment')
+    response = body.get('response', {})
+    return response if isinstance(response, dict) else {}
+
+
+def call_reply_comment(creds, comment_list):
+    """
+    POST /api/v2/product/reply_comment
+
+    comment_list: [{comment_id: int, comment: str}], giới hạn 1..100.
+    """
+    api_path = '/api/v2/product/reply_comment'
+    params = _build_signed_params(creds, api_path)
+    _logger.info("Shopee Product API: reply_comment count=%d", len(comment_list))
+    _status, body = _do_post(api_path, params, {'comment_list': comment_list})
+    _check_error(body, 'reply_comment')
+    response = body.get('response', {})
+    return response if isinstance(response, dict) else {}
+
+
+def call_get_item_violation_info(creds, item_id_list):
+    """
+    GET /api/v2/product/get_item_violation_info
+
+    item_id_list: list[int], tối đa 50.
+    """
+    api_path = '/api/v2/product/get_item_violation_info'
+    extra = {'item_id_list': json.dumps(item_id_list)}
+    params = _build_signed_params(creds, api_path, extra)
+    _logger.info("Shopee Product API: get_item_violation_info count=%d", len(item_id_list))
+    _status, body = _do_get(api_path, params)
+    _check_error(body, 'get_item_violation_info')
+    response = body.get('response', {})
+    if not isinstance(response, dict):
+        return []
+    item_list = response.get('item_list', [])
+    return item_list if isinstance(item_list, list) else []
+
+
+def call_get_size_chart_list(creds, category_id, page_size=10, cursor=''):
+    """
+    GET /api/v2/product/get_size_chart_list
+
+    Lấy danh sách size chart theo category_id. page_size tối đa 50.
+    """
+    api_path = '/api/v2/product/get_size_chart_list'
+    extra = {'category_id': category_id, 'page_size': page_size}
+    if cursor:
+        extra['cursor'] = cursor
+    params = _build_signed_params(creds, api_path, extra)
+    _logger.info("Shopee Product API: get_size_chart_list category_id=%s", category_id)
+    _status, body = _do_get(api_path, params)
+    _check_error(body, 'get_size_chart_list')
+    response = body.get('response', {})
+    return response if isinstance(response, dict) else {}
+
+
+def call_get_size_chart_detail(creds, size_chart_id):
+    """
+    GET /api/v2/product/get_size_chart_detail
+
+    Lấy chi tiết size chart theo size_chart_id.
+    """
+    api_path = '/api/v2/product/get_size_chart_detail'
+    params = _build_signed_params(creds, api_path, {'size_chart_id': size_chart_id})
+    _logger.info("Shopee Product API: get_size_chart_detail size_chart_id=%s", size_chart_id)
+    _status, body = _do_get(api_path, params)
+    _check_error(body, 'get_size_chart_detail')
+    response = body.get('response', {})
+    return response if isinstance(response, dict) else {}
+
+
+def call_generate_kit_image(creds, component_list):
+    """
+    POST /api/v2/product/generate_kit_image
+
+    component_list: [{component_item_id: int, component_model_id?: int}], tối đa 9.
+    """
+    api_path = '/api/v2/product/generate_kit_image'
+    params = _build_signed_params(creds, api_path)
+    _logger.info("Shopee Product API: generate_kit_image count=%d", len(component_list))
+    _status, body = _do_post(api_path, params, {'component_list': component_list})
+    _check_error(body, 'generate_kit_image')
+    response = body.get('response', {})
+    return response if isinstance(response, dict) else {}
 
 
 # ---------------------------------------------------------------------------

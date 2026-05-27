@@ -15,7 +15,7 @@
                   decoration-info="item_status == 'REVIEWING'">
                 <field name="item_name" string="Sản phẩm Shopee"/>
                 <field name="item_sku" string="SKU" optional="show"/>
-                <field name="shop_id" string="Shop" optional="show"/>
+                <field name="shop_id" string="Cửa hàng" optional="show"/>
                 <field name="item_status" string="Trạng thái" widget="badge"
                        decoration-success="item_status == 'NORMAL'"
                        decoration-warning="item_status == 'UNLIST'"
@@ -31,13 +31,13 @@
                   <field name="model_count" string="Dòng biến thể" optional="show"
                       decoration-danger="has_model and model_count == 0"
                       decoration-success="model_count &gt; 0"/>
-                  <field name="mapped_product_count" string="SP Odoo" optional="show"
+                  <field name="mapped_product_count" string="Sản phẩm Odoo" optional="show"
                       decoration-success="mapped_product_count &gt; 0"/>
-                  <field name="shopee_item_mapping_count" string="Mapping" optional="show"
+                  <field name="shopee_item_mapping_count" string="Liên kết" optional="show"
                       decoration-success="shopee_item_mapping_count &gt; 0"/>
                 <field name="shopee_update_time" string="Cập nhật Shopee" optional="show"/>
                 <field name="last_synced" string="Đồng bộ lần cuối" optional="show"/>
-                <field name="shopee_item_id" string="Item ID" optional="show"/>
+                <field name="shopee_item_id" string="Mã sản phẩm Shopee" optional="show"/>
             </list>
         </field>
     </record>
@@ -49,7 +49,7 @@
         <field name="name">shopee.product.form</field>
         <field name="model">shopee.product</field>
         <field name="arch" type="xml">
-            <form string="Shopee Product Workbench">
+            <form string="Bàn làm việc sản phẩm Shopee">
                 <header>
                         <button name="action_refresh_from_shopee" type="object"
                             string="Làm mới" class="btn text-white" icon="fa-refresh" style="background:#ee4d2d;"/>
@@ -78,7 +78,7 @@
                         <div class="p-4 mb-3 rounded-3 shadow-sm" style="background:#fff3ef; box-shadow:0 8px 24px rgba(238,77,45,.10);">
                             <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
                                 <div class="d-flex flex-wrap align-items-center gap-2">
-                                    <span class="badge text-white" style="background:#ee4d2d;">Shopee Product</span>
+                                    <span class="badge text-white" style="background:#ee4d2d;">Sản phẩm Shopee</span>
                                     <field name="item_status" widget="badge"
                                            decoration-success="item_status == 'NORMAL'"
                                            decoration-warning="item_status == 'UNLIST'"
@@ -128,21 +128,21 @@
                             </div>
                             <div class="col-6 col-lg-3">
                                 <button type="object" name="action_open_shopee_item_mappings" class="btn w-100 text-start rounded-3 p-3 shadow-sm" style="background:#fff; box-shadow:0 8px 20px rgba(15,23,42,.06);" invisible="not shopee_item_mapping_count">
-                                    <div class="small text-uppercase fw-semibold" style="color:#ee4d2d;">Mapping</div>
+                                    <div class="small text-uppercase fw-semibold" style="color:#ee4d2d;">Liên kết</div>
                                     <div class="fs-3 fw-semibold" style="color:#222;"><field name="shopee_item_mapping_count" nolabel="1" readonly="1"/></div>
                                 </button>
                                 <div class="p-3 rounded-3 shadow-sm" style="background:#fff; box-shadow:0 8px 20px rgba(15,23,42,.06);" invisible="shopee_item_mapping_count">
-                                    <div class="small text-uppercase fw-semibold" style="color:#ee4d2d;">Mapping</div>
+                                    <div class="small text-uppercase fw-semibold" style="color:#ee4d2d;">Liên kết</div>
                                     <div class="fs-3 fw-semibold" style="color:#222;"><field name="shopee_item_mapping_count" nolabel="1" readonly="1"/></div>
                                 </div>
                             </div>
                             <div class="col-6 col-lg-3">
                                 <button type="object" name="action_open_mapped_products" class="btn w-100 text-start rounded-3 p-3 shadow-sm" style="background:#fff; box-shadow:0 8px 20px rgba(15,23,42,.06);" invisible="not mapped_product_count">
-                                    <div class="small text-uppercase fw-semibold" style="color:#ee4d2d;">SP Odoo</div>
+                                    <div class="small text-uppercase fw-semibold" style="color:#ee4d2d;">Sản phẩm Odoo</div>
                                     <div class="fs-3 fw-semibold" style="color:#222;"><field name="mapped_product_count" nolabel="1" readonly="1"/></div>
                                 </button>
                                 <div class="p-3 rounded-3 shadow-sm" style="background:#fff; box-shadow:0 8px 20px rgba(15,23,42,.06);" invisible="mapped_product_count">
-                                    <div class="small text-uppercase fw-semibold" style="color:#ee4d2d;">SP Odoo</div>
+                                    <div class="small text-uppercase fw-semibold" style="color:#ee4d2d;">Sản phẩm Odoo</div>
                                     <div class="fs-3 fw-semibold" style="color:#222;"><field name="mapped_product_count" nolabel="1" readonly="1"/></div>
                                 </div>
                             </div>
@@ -151,7 +151,7 @@
                         <div class="row g-3 mb-3">
                             <div class="col-lg-4">
                                 <div class="rounded-3 bg-white p-3 h-100 shadow-sm" style="box-shadow:0 8px 20px rgba(15,23,42,.06);">
-                                    <div class="fw-semibold mb-3" style="color:#ee4d2d;"><i class="fa fa-id-card-o me-1"/> Identity</div>
+                                    <div class="fw-semibold mb-3" style="color:#ee4d2d;"><i class="fa fa-id-card-o me-1"/> Định danh</div>
                                     <div class="mb-3">
                                         <span class="d-block text-muted small">Danh mục Shopee</span>
                                         <field name="category_id" nolabel="1" readonly="1"/>
@@ -187,7 +187,7 @@
                                 <div class="rounded-3 bg-white p-3 h-100 shadow-sm" style="box-shadow:0 8px 20px rgba(15,23,42,.06);">
                                     <div class="fw-semibold mb-3" style="color:#ee4d2d;"><i class="fa fa-link me-1"/> Liên kết Odoo</div>
                                     <div class="mb-3">
-                                        <span class="d-block text-muted small">Mapping shopee.item</span>
+                                        <span class="d-block text-muted small">Liên kết shopee.item</span>
                                         <field name="shopee_item_mapping_ids" nolabel="1" widget="many2many_tags" readonly="1"/>
                                     </div>
                                     <div class="mb-3">
@@ -225,8 +225,8 @@
                                     <field name="new_price" string="Giá mới" widget="integer"/>
                                     <field name="available_stock" string="Tồn hiện tại" readonly="1"/>
                                     <field name="new_stock" string="Tồn mới"/>
-                                    <field name="shopee_model_id" string="Model ID" readonly="1" optional="show"/>
-                                    <field name="shopee_item_mapping_id" string="Mapping" readonly="1" optional="hide"/>
+                                    <field name="shopee_model_id" string="Mã biến thể" readonly="1" optional="show"/>
+                                    <field name="shopee_item_mapping_id" string="Liên kết" readonly="1" optional="hide"/>
                                     <field name="last_synced" string="Đồng bộ lần cuối" readonly="1" optional="hide"/>
                                 </list>
                             </field>
@@ -235,7 +235,7 @@
                         <div class="row g-3 mb-3">
                             <div class="col-xl-4 col-lg-6">
                                 <div class="rounded-3 bg-white p-3 h-100 shadow-sm" style="box-shadow:0 8px 20px rgba(15,23,42,.06);">
-                                    <div class="fw-semibold mb-3" style="color:#ee4d2d;"><i class="fa fa-check-circle me-1"/> Content quality</div>
+                                    <div class="fw-semibold mb-3" style="color:#ee4d2d;"><i class="fa fa-check-circle me-1"/> Chất lượng nội dung</div>
                                     <span class="d-block text-muted small">Tên sản phẩm</span>
                                     <field name="item_name" nolabel="1"/>
                                     <span class="d-block text-muted small mt-3">SKU</span>
@@ -244,43 +244,50 @@
                                         <button name="action_fetch_content_diagnosis" type="object" string="Chẩn đoán" class="btn text-white" style="background:#ee4d2d;" icon="fa-check-circle"/>
                                         <button name="action_fetch_category_recommendation" type="object" string="Gợi ý danh mục" class="btn btn-light" icon="fa-folder-open"/>
                                         <button name="action_fetch_recommend_attributes" type="object" string="Gợi ý thuộc tính" class="btn btn-light" icon="fa-list"/>
-                                        <button name="action_fetch_item_extra_info" type="object" string="Extra info" class="btn btn-light" icon="fa-info-circle"/>
+                                        <button name="action_fetch_item_extra_info" type="object" string="Thông tin thêm" class="btn btn-light" icon="fa-info-circle"/>
                                     </div>
                                 </div>
                             </div>
                             <div class="col-xl-4 col-lg-6">
                                 <div class="rounded-3 bg-white p-3 h-100 shadow-sm" style="box-shadow:0 8px 20px rgba(15,23,42,.06);">
-                                    <div class="fw-semibold mb-3" style="color:#ee4d2d;"><i class="fa fa-ban me-1"/> Violation</div>
+                                    <div class="fw-semibold mb-3" style="color:#ee4d2d;"><i class="fa fa-ban me-1"/> Vi phạm</div>
                                     <field name="item_status" nolabel="1" readonly="1"/>
                                     <field name="shopee_update_time" nolabel="1" readonly="1"/>
                                     <div class="d-flex flex-wrap gap-2 mt-3">
+                                        <button name="action_fetch_violation_info" type="object" string="Thông tin vi phạm" class="btn text-white" style="background:#ee4d2d;" icon="fa-ban"/>
                                         <button name="action_fetch_content_diagnosis" type="object" string="Kiểm tra lỗi nội dung" class="btn text-white" style="background:#ee4d2d;" icon="fa-search"/>
                                     </div>
                                 </div>
                             </div>
                             <div class="col-xl-4 col-lg-6">
                                 <div class="rounded-3 bg-white p-3 h-100 shadow-sm" style="box-shadow:0 8px 20px rgba(15,23,42,.06);">
-                                    <div class="fw-semibold mb-3" style="color:#ee4d2d;"><i class="fa fa-comments me-1"/> Comment</div>
+                                    <div class="fw-semibold mb-3" style="color:#ee4d2d;"><i class="fa fa-comments me-1"/> Bình luận</div>
                                     <field name="shopee_item_mapping_ids" nolabel="1" widget="many2many_tags" readonly="1"/>
+                                    <div class="d-flex flex-wrap gap-2 mt-3">
+                                        <button name="action_fetch_comments" type="object" string="Lấy bình luận" class="btn text-white" style="background:#ee4d2d;" icon="fa-comments"/>
+                                        <button name="action_open_reply_comment_wizard" type="object" string="Trả lời" class="btn btn-light" icon="fa-reply"/>
+                                    </div>
                                 </div>
                             </div>
                             <div class="col-xl-4 col-lg-6">
                                 <div class="rounded-3 bg-white p-3 h-100 shadow-sm" style="box-shadow:0 8px 20px rgba(15,23,42,.06);">
-                                    <div class="fw-semibold mb-3" style="color:#ee4d2d;"><i class="fa fa-rocket me-1"/> Boost</div>
+                                    <div class="fw-semibold mb-3" style="color:#ee4d2d;"><i class="fa fa-rocket me-1"/> Đẩy hiển thị</div>
                                     <div class="d-flex flex-wrap gap-2">
                                         <button name="action_refresh_from_shopee" type="object" string="Làm mới" class="btn text-white" style="background:#ee4d2d;" icon="fa-refresh"/>
-                                        <button name="action_check_deboost_search" type="object" string="Deboost" class="btn btn-light" icon="fa-search"/>
+                                        <button name="action_fetch_boosted_list" type="object" string="Danh sách đang đẩy" class="btn btn-light" icon="fa-rocket"/>
+                                        <button name="action_check_deboost_search" type="object" string="Kiểm tra hạ hạng" class="btn btn-light" icon="fa-search"/>
                                         <button name="action_open_shopee_item" type="object" string="Shopee" class="btn btn-light" icon="fa-external-link" invisible="not shopee_item_url"/>
                                     </div>
                                 </div>
                             </div>
                             <div class="col-xl-4 col-lg-6">
                                 <div class="rounded-3 bg-white p-3 h-100 shadow-sm" style="box-shadow:0 8px 20px rgba(15,23,42,.06);">
-                                    <div class="fw-semibold mb-3" style="color:#ee4d2d;"><i class="fa fa-image me-1"/> Kit image</div>
+                                    <div class="fw-semibold mb-3" style="color:#ee4d2d;"><i class="fa fa-image me-1"/> Ảnh bộ sản phẩm</div>
                                     <field name="mapped_product_ids" nolabel="1" widget="many2many_tags" readonly="1"/>
                                     <div class="d-flex flex-wrap gap-2 mt-3">
-                                        <button name="action_fetch_kit_item_limit" type="object" string="Giới hạn kit" class="btn text-white" style="background:#ee4d2d;" icon="fa-sliders"/>
-                                        <button name="action_fetch_kit_item_info" type="object" string="Kit info" class="btn btn-light" icon="fa-image"/>
+                                        <button name="action_fetch_kit_item_limit" type="object" string="Giới hạn bộ" class="btn text-white" style="background:#ee4d2d;" icon="fa-sliders"/>
+                                        <button name="action_fetch_kit_item_info" type="object" string="Thông tin bộ" class="btn btn-light" icon="fa-image"/>
+                                        <button name="action_open_generate_kit_image_wizard" type="object" string="Tạo ảnh bộ" class="btn btn-light" icon="fa-magic"/>
                                     </div>
                                 </div>
                             </div>
@@ -289,15 +296,17 @@
                                     <div class="fw-semibold mb-3" style="color:#ee4d2d;"><i class="fa fa-clock-o me-1"/> Đồng bộ</div>
                                     <field name="last_synced" nolabel="1" readonly="1"/>
                                     <div class="d-flex flex-wrap gap-2 mt-3">
-                                        <button name="action_fetch_item_limit" type="object" string="Item limit" class="btn text-white" style="background:#ee4d2d;" icon="fa-dashboard"/>
-                                        <button name="action_fetch_item_extra_info" type="object" string="Extra info" class="btn btn-light" icon="fa-info-circle"/>
+                                        <button name="action_fetch_item_limit" type="object" string="Giới hạn sản phẩm" class="btn text-white" style="background:#ee4d2d;" icon="fa-dashboard"/>
+                                        <button name="action_fetch_item_extra_info" type="object" string="Thông tin thêm" class="btn btn-light" icon="fa-info-circle"/>
+                                        <button name="action_fetch_size_chart_list" type="object" string="Bảng kích thước" class="btn btn-light" icon="fa-table"/>
+                                        <button name="action_open_size_chart_detail_wizard" type="object" string="Chi tiết kích thước" class="btn btn-light" icon="fa-list-alt"/>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
                         <div class="rounded-3 bg-white p-3 shadow-sm" style="box-shadow:0 8px 20px rgba(15,23,42,.06);">
-                            <div class="fw-semibold mb-3" style="color:#ee4d2d;"><i class="fa fa-code me-1"/> Raw JSON</div>
+                            <div class="fw-semibold mb-3" style="color:#ee4d2d;"><i class="fa fa-code me-1"/> Dữ liệu JSON</div>
                             <field name="raw_data" widget="json" readonly="1" nolabel="1"/>
                         </div>
                     </div>
