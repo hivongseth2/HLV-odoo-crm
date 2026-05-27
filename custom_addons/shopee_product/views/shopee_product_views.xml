@@ -224,15 +224,19 @@
                             </field>
                         </div>
 
+                        <!-- ── Chất lượng nội dung  &amp;  Vi phạm ─────────────── -->
                         <div class="row g-3 mb-3">
-                            <div class="col-xl-4 col-lg-6">
-                                <div class="rounded-3 p-3 h-100 shadow-sm" style="background:#fef7f3; box-shadow:0 8px 20px rgba(15,23,42,.06);">
-                                    <div class="fw-semibold mb-3" style="color:#ee4d2d;"><i class="fa fa-check-circle me-1"/> Chất lượng nội dung</div>
-                                    <span class="d-block text-muted small">Tên sản phẩm</span>
-                                    <field name="item_name" nolabel="1" readonly="1" class="d-block w-100" style="white-space:normal; word-break:break-word; overflow-wrap:anywhere; line-height:1.45;"/>
-                                    <span class="d-block text-muted small mt-3">SKU</span>
-                                    <field name="item_sku" nolabel="1"/>
-                                    <div class="d-flex flex-wrap gap-2 mt-3">
+                            <div class="col-lg-8">
+                                <div class="rounded-3 p-4 h-100 shadow-sm" style="background:#fef7f3; box-shadow:0 8px 20px rgba(15,23,42,.06);">
+                                    <div class="d-flex align-items-center gap-2 mb-3">
+                                        <span class="rounded-circle d-inline-flex align-items-center justify-content-center flex-shrink-0" style="width:34px;height:34px;background:#fde8e2;color:#ee4d2d;font-size:15px;"><i class="fa fa-check-circle"/></span>
+                                        <span class="fw-semibold fs-5" style="color:#222;">Chất lượng nội dung</span>
+                                    </div>
+                                    <span class="d-block text-muted small mb-1">Tên sản phẩm</span>
+                                    <field name="item_name" nolabel="1" readonly="1" class="d-block w-100 mb-3" style="white-space:normal; word-break:break-word; overflow-wrap:anywhere; line-height:1.5;"/>
+                                    <span class="d-block text-muted small mb-1">SKU</span>
+                                    <field name="item_sku" nolabel="1" class="mb-3"/>
+                                    <div class="d-flex flex-wrap gap-2">
                                         <button name="action_fetch_content_diagnosis" type="object" string="Chẩn đoán" class="btn btn-shopee" icon="fa-check-circle"/>
                                         <button name="action_fetch_category_recommendation" type="object" string="Gợi ý danh mục" class="btn btn-shopee-soft" icon="fa-folder-open"/>
                                         <button name="action_fetch_recommend_attributes" type="object" string="Gợi ý thuộc tính" class="btn btn-shopee-soft" icon="fa-list"/>
@@ -240,61 +244,85 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-xl-4 col-lg-6">
-                                <div class="rounded-3 p-3 h-100 shadow-sm" style="background:#f8fafc; box-shadow:0 8px 20px rgba(15,23,42,.06);">
-                                    <div class="fw-semibold mb-3" style="color:#ee4d2d;"><i class="fa fa-ban me-1"/> Vi phạm</div>
-                                    <field name="item_status" nolabel="1" readonly="1"/>
-                                    <field name="shopee_update_time" nolabel="1" readonly="1"/>
-                                    <div class="d-flex flex-wrap gap-2 mt-3">
-                                        <button name="action_fetch_violation_info" type="object" string="Thông tin vi phạm" class="btn" style="background:#ee4d2d; color:#ffffff; border:2px solid #ee4d2d;" icon="fa-ban"/>
+                            <div class="col-lg-4">
+                                <div class="rounded-3 p-4 h-100 shadow-sm" style="background:#f8fafc; box-shadow:0 8px 20px rgba(15,23,42,.06);">
+                                    <div class="d-flex align-items-center gap-2 mb-3">
+                                        <span class="rounded-circle d-inline-flex align-items-center justify-content-center flex-shrink-0" style="width:34px;height:34px;background:#fde8e2;color:#ee4d2d;font-size:15px;"><i class="fa fa-ban"/></span>
+                                        <span class="fw-semibold fs-5" style="color:#222;">Vi phạm</span>
+                                    </div>
+                                    <span class="d-block text-muted small mb-1">Trạng thái</span>
+                                    <div class="mb-2">
+                                        <field name="item_status" nolabel="1" readonly="1" widget="badge"
+                                               decoration-success="item_status == 'NORMAL'"
+                                               decoration-warning="item_status == 'UNLIST'"
+                                               decoration-danger="item_status in ('BANNED','SHOPEE_DELETE')"
+                                               decoration-muted="item_status == 'SELLER_DELETE'"
+                                               decoration-info="item_status == 'REVIEWING'"/>
+                                    </div>
+                                    <span class="d-block text-muted small mb-1">Cập nhật Shopee</span>
+                                    <div class="mb-3"><field name="shopee_update_time" nolabel="1" readonly="1"/></div>
+                                    <div class="d-flex flex-column gap-2">
+                                        <button name="action_fetch_violation_info" type="object" string="Thông tin vi phạm" class="btn btn-shopee" icon="fa-ban"/>
                                         <button name="action_fetch_content_diagnosis" type="object" string="Kiểm tra lỗi nội dung" class="btn btn-shopee-outline" icon="fa-search"/>
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-xl-4 col-lg-6">
-                                <div class="rounded-3 p-3 h-100 shadow-sm" style="background:#fef7f3; box-shadow:0 8px 20px rgba(15,23,42,.06);">
-                                    <div class="fw-semibold mb-3" style="color:#ee4d2d;"><i class="fa fa-comments me-1"/> Bình luận</div>
-                                    <field name="shopee_item_mapping_ids" nolabel="1" widget="many2many_tags" readonly="1" options="{'no_open': False}"/>
-                                    <div class="d-flex flex-wrap gap-2 mt-3">
-                                        <button name="action_open_shopee_item_mappings" type="object" string="Mở item liên kết" class="btn btn-shopee-soft" icon="fa-external-link" invisible="not shopee_item_mapping_count"/>
-                                        <button name="action_fetch_comments" type="object" string="Lấy bình luận" class="btn btn-shopee" icon="fa-comments"/>
-                                        <button name="action_open_reply_comment_wizard" type="object" string="Trả lời" class="btn btn-shopee-soft" icon="fa-reply"/>
-                                    </div>
+                        </div>
+
+                        <!-- ── Bình luận ─────────────────────────────────────────── -->
+                        <div class="rounded-3 p-4 mb-3 shadow-sm" style="background:#fef7f3; border-left:4px solid #ee4d2d; box-shadow:0 8px 20px rgba(15,23,42,.06);">
+                            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="rounded-circle d-inline-flex align-items-center justify-content-center flex-shrink-0" style="width:34px;height:34px;background:#fde8e2;color:#ee4d2d;font-size:15px;"><i class="fa fa-comments"/></span>
+                                    <span class="fw-semibold fs-5" style="color:#222;">Bình luận</span>
+                                </div>
+                                <div class="d-flex flex-wrap gap-2">
+                                    <button name="action_fetch_comments" type="object" string="Lấy bình luận" class="btn btn-shopee" icon="fa-comments"/>
+                                    <button name="action_open_reply_comment_wizard" type="object" string="Trả lời" class="btn btn-shopee-soft" icon="fa-reply"/>
+                                    <button name="action_open_shopee_item_mappings" type="object" string="Mở item liên kết" class="btn btn-shopee-soft" icon="fa-external-link" invisible="not shopee_item_mapping_count"/>
                                 </div>
                             </div>
-                            <div class="col-xl-4 col-lg-6">
-                                <div class="rounded-3 p-3 h-100 shadow-sm" style="background:#f8fafc; box-shadow:0 8px 20px rgba(15,23,42,.06);">
-                                    <div class="fw-semibold mb-3" style="color:#ee4d2d;"><i class="fa fa-rocket me-1"/> Đẩy hiển thị</div>
-                                    <div class="d-flex flex-wrap gap-2">
-                                        <button name="action_refresh_from_shopee" type="object" string="Làm mới" class="btn btn-shopee" icon="fa-refresh"/>
-                                        <button name="action_fetch_boosted_list" type="object" string="Danh sách đang đẩy" class="btn btn-shopee-soft" icon="fa-rocket"/>
-                                        <button name="action_check_deboost_search" type="object" string="Kiểm tra hạ hạng" class="btn btn-shopee-soft" icon="fa-search"/>
-                                        <button name="action_open_shopee_item" type="object" string="Shopee" class="btn btn-shopee-soft" icon="fa-external-link" invisible="not shopee_item_url"/>
-                                    </div>
+                            <field name="shopee_item_mapping_ids" nolabel="1" widget="many2many_tags" readonly="1" options="{'no_open': False}"/>
+                        </div>
+
+                        <!-- ── Công cụ: Đẩy hiển thị | Ảnh bộ sản phẩm | Đồng bộ ── -->
+                        <div class="d-flex flex-wrap mb-3 rounded-3 overflow-hidden shadow-sm" style="background:#f8fafc; border:1px solid #e9ecef; box-shadow:0 8px 20px rgba(15,23,42,.06);">
+                            <div class="flex-fill p-4" style="min-width:230px; border-right:1px solid #e9ecef;">
+                                <div class="d-flex align-items-center gap-2 mb-3">
+                                    <span class="rounded-circle d-inline-flex align-items-center justify-content-center flex-shrink-0" style="width:30px;height:30px;background:#fde8e2;color:#ee4d2d;font-size:13px;"><i class="fa fa-rocket"/></span>
+                                    <span class="fw-semibold" style="color:#222;">Đẩy hiển thị</span>
+                                </div>
+                                <div class="d-flex flex-wrap gap-2">
+                                    <button name="action_refresh_from_shopee" type="object" string="Làm mới" class="btn btn-shopee" icon="fa-refresh"/>
+                                    <button name="action_fetch_boosted_list" type="object" string="Đang đẩy" class="btn btn-shopee-soft" icon="fa-rocket"/>
+                                    <button name="action_check_deboost_search" type="object" string="Kiểm tra hạ hạng" class="btn btn-shopee-soft" icon="fa-search"/>
+                                    <button name="action_open_shopee_item" type="object" string="Shopee" class="btn btn-shopee-soft" icon="fa-external-link" invisible="not shopee_item_url"/>
                                 </div>
                             </div>
-                            <div class="col-xl-4 col-lg-6">
-                                <div class="rounded-3 p-3 h-100 shadow-sm" style="background:#fef7f3; box-shadow:0 8px 20px rgba(15,23,42,.06);">
-                                    <div class="fw-semibold mb-3" style="color:#ee4d2d;"><i class="fa fa-image me-1"/> Ảnh bộ sản phẩm</div>
-                                    <field name="mapped_product_ids" nolabel="1" widget="many2many_tags" readonly="1" options="{'no_open': False}"/>
-                                    <div class="d-flex flex-wrap gap-2 mt-3">
-                                        <button name="action_open_mapped_products" type="object" string="Mở sản phẩm Odoo" class="btn btn-shopee-soft" icon="fa-external-link" invisible="not mapped_product_count"/>
-                                        <button name="action_fetch_kit_item_limit" type="object" string="Giới hạn bộ" class="btn btn-shopee" icon="fa-sliders"/>
-                                        <button name="action_fetch_kit_item_info" type="object" string="Thông tin bộ" class="btn btn-shopee-soft" icon="fa-image"/>
-                                        <button name="action_open_generate_kit_image_wizard" type="object" string="Tạo ảnh bộ" class="btn btn-shopee-soft" icon="fa-magic"/>
-                                    </div>
+                            <div class="flex-fill p-4" style="min-width:230px; border-right:1px solid #e9ecef;">
+                                <div class="d-flex align-items-center gap-2 mb-3">
+                                    <span class="rounded-circle d-inline-flex align-items-center justify-content-center flex-shrink-0" style="width:30px;height:30px;background:#fde8e2;color:#ee4d2d;font-size:13px;"><i class="fa fa-image"/></span>
+                                    <span class="fw-semibold" style="color:#222;">Ảnh bộ sản phẩm</span>
+                                </div>
+                                <field name="mapped_product_ids" nolabel="1" widget="many2many_tags" readonly="1" options="{'no_open': False}" class="mb-2"/>
+                                <div class="d-flex flex-wrap gap-2">
+                                    <button name="action_open_mapped_products" type="object" string="Mở Odoo" class="btn btn-shopee-soft" icon="fa-external-link" invisible="not mapped_product_count"/>
+                                    <button name="action_fetch_kit_item_limit" type="object" string="Giới hạn bộ" class="btn btn-shopee" icon="fa-sliders"/>
+                                    <button name="action_fetch_kit_item_info" type="object" string="Thông tin bộ" class="btn btn-shopee-soft" icon="fa-image"/>
+                                    <button name="action_open_generate_kit_image_wizard" type="object" string="Tạo ảnh" class="btn btn-shopee-soft" icon="fa-magic"/>
                                 </div>
                             </div>
-                            <div class="col-xl-4 col-lg-6">
-                                <div class="rounded-3 p-3 h-100 shadow-sm" style="background:#f8fafc; box-shadow:0 8px 20px rgba(15,23,42,.06);">
-                                    <div class="fw-semibold mb-3" style="color:#ee4d2d;"><i class="fa fa-clock-o me-1"/> Đồng bộ</div>
-                                    <field name="last_synced" nolabel="1" readonly="1"/>
-                                    <div class="d-flex flex-wrap gap-2 mt-3">
-                                        <button name="action_fetch_item_limit" type="object" string="Giới hạn sản phẩm" class="btn btn-shopee" icon="fa-dashboard"/>
-                                        <button name="action_fetch_item_extra_info" type="object" string="Thông tin thêm" class="btn btn-shopee-soft" icon="fa-info-circle"/>
-                                        <button name="action_fetch_size_chart_list" type="object" string="Bảng kích thước" class="btn btn-shopee-soft" icon="fa-table"/>
-                                        <button name="action_open_size_chart_detail_wizard" type="object" string="Chi tiết kích thước" class="btn btn-shopee-soft" icon="fa-list-alt"/>
-                                    </div>
+                            <div class="flex-fill p-4" style="min-width:230px;">
+                                <div class="d-flex align-items-center gap-2 mb-3">
+                                    <span class="rounded-circle d-inline-flex align-items-center justify-content-center flex-shrink-0" style="width:30px;height:30px;background:#fde8e2;color:#ee4d2d;font-size:13px;"><i class="fa fa-clock-o"/></span>
+                                    <span class="fw-semibold" style="color:#222;">Đồng bộ</span>
+                                </div>
+                                <div class="text-muted small mb-2"><field name="last_synced" nolabel="1" readonly="1"/></div>
+                                <div class="d-flex flex-wrap gap-2">
+                                    <button name="action_fetch_item_limit" type="object" string="Giới hạn SP" class="btn btn-shopee" icon="fa-dashboard"/>
+                                    <button name="action_fetch_item_extra_info" type="object" string="Thông tin thêm" class="btn btn-shopee-soft" icon="fa-info-circle"/>
+                                    <button name="action_fetch_size_chart_list" type="object" string="Bảng kích thước" class="btn btn-shopee-soft" icon="fa-table"/>
+                                    <button name="action_open_size_chart_detail_wizard" type="object" string="Chi tiết KT" class="btn btn-shopee-soft" icon="fa-list-alt"/>
                                 </div>
                             </div>
                         </div>
