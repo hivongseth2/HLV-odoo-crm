@@ -10,7 +10,7 @@ import logging
 _logger = logging.getLogger(__name__)
 
 
-def migrate(cr, installed_version):
+def migrate(cr, version):
     cr.execute("""
         SELECT data_type
         FROM information_schema.columns
