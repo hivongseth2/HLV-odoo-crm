@@ -47,8 +47,8 @@ ITEM_BATCH_SIZE = 50
 #  HTTP helpers
 # ──────────────────────────────────────────────────────
 
-def _do_get(api_path, params, timeout=30):
-    url = f"{SHOPEE_BASE_URL}{api_path}"
+def _do_get(api_path, params, base_url=None, timeout=30):
+    url = f"{base_url or SHOPEE_BASE_URL}{api_path}"
     try:
         resp = req_lib.get(url, params=params, timeout=timeout)
     except Exception as e:
@@ -60,8 +60,8 @@ def _do_get(api_path, params, timeout=30):
     return resp.status_code, body
 
 
-def _do_post(api_path, params, json_body, timeout=30):
-    url = f"{SHOPEE_BASE_URL}{api_path}"
+def _do_post(api_path, params, json_body, base_url=None, timeout=30, base_url=creds.get('base_url')):
+    url = f"{base_url or SHOPEE_BASE_URL}{api_path}"
     try:
         resp = req_lib.post(url, params=params, json=json_body, timeout=timeout)
     except Exception as e:
@@ -97,7 +97,7 @@ def call_get_category(creds, language='vi'):
     api_path = '/api/v2/product/get_category'
     params = _build_signed_params(creds, api_path, {'language': language})
     _logger.info("Shopee Product API: get_category lang=%s", language)
-    _status, body = _do_get(api_path, params)
+    _status, body = _do_get(api_path, params, base_url=creds.get('base_url'))
     _check_error(body, 'get_category')
     return body.get('response', {}).get('category_list', [])
 
@@ -117,7 +117,7 @@ def call_get_attribute_tree(creds, category_id, language='vi'):
     }
     params = _build_signed_params(creds, api_path, extra)
     _logger.info("Shopee Product API: get_attribute_tree category_id=%s", category_id)
-    _status, body = _do_get(api_path, params)
+    _status, body = _do_get(api_path, params, base_url=creds.get('base_url'))
     _check_error(body, 'get_attribute_tree')
     return body.get('response', {}).get('attribute_list', [])
 
@@ -139,7 +139,7 @@ def call_get_brand_list(creds, category_id, status=1, offset=0, page_size=100):
     }
     params = _build_signed_params(creds, api_path, extra)
     _logger.info("Shopee Product API: get_brand_list category_id=%s offset=%s", category_id, offset)
-    _status, body = _do_get(api_path, params)
+    _status, body = _do_get(api_path, params, base_url=creds.get('base_url'))
     _check_error(body, 'get_brand_list')
     resp = body.get('response', {})
     return (
@@ -159,7 +159,7 @@ def call_get_item_limit(creds):
     api_path = '/api/v2/product/get_item_limit'
     params = _build_signed_params(creds, api_path)
     _logger.info("Shopee Product API: get_item_limit")
-    _status, body = _do_get(api_path, params)
+    _status, body = _do_get(api_path, params, base_url=creds.get('base_url'))
     _check_error(body, 'get_item_limit')
     return body.get('response', {})
 
@@ -199,7 +199,7 @@ def call_get_item_list(creds, item_status=None, page_size=100, offset=0,
         "Shopee Product API: get_item_list status=%s offset=%s page_size=%s",
         item_status, offset, page_size,
     )
-    _status, body = _do_get(api_path, params)
+    _status, body = _do_get(api_path, params, base_url=creds.get('base_url'))
     _check_error(body, 'get_item_list')
     resp = body.get('response')
     if not isinstance(resp, dict):
@@ -259,7 +259,7 @@ def call_get_item_base_info(creds, item_id_list):
         "Shopee Product API: get_item_base_info ids_count=%d first=%s",
         len(item_id_list), item_id_list[:3],
     )
-    _status, body = _do_get(api_path, params)
+    _status, body = _do_get(api_path, params, base_url=creds.get('base_url'))
     _check_error(body, 'get_item_base_info')
     resp = body.get('response')
     if not isinstance(resp, dict):
@@ -296,7 +296,7 @@ def call_get_item_extra_info(creds, item_id_list):
     params = _build_signed_params(creds, api_path, extra)
     _logger.info("Shopee Product API: get_item_extra_info ids_count=%d", len(item_id_list))
     try:
-        _status, body = _do_get(api_path, params)
+        _status, body = _do_get(api_path, params, base_url=creds.get('base_url'))
     except Exception as e:
         _logger.warning("Shopee get_item_extra_info thất bại: %s", str(e))
         return []
@@ -325,7 +325,7 @@ def call_add_item(creds, item_data):
     api_path = '/api/v2/product/add_item'
     params = _build_signed_params(creds, api_path)
     _logger.info("Shopee Product API: add_item sku=%s", item_data.get('item_sku', '?'))
-    _status, body = _do_post(api_path, params, item_data)
+    _status, body = _do_post(api_path, params, item_data, base_url=creds.get('base_url'))
     _check_error(body, 'add_item')
     return body.get('response', {})
 
@@ -343,7 +343,7 @@ def call_update_item(creds, item_id, item_data):
     params = _build_signed_params(creds, api_path)
     payload = dict(item_data, item_id=item_id)
     _logger.info("Shopee Product API: update_item item_id=%s", item_id)
-    _status, body = _do_post(api_path, params, payload)
+    _status, body = _do_post(api_path, params, payload, base_url=creds.get('base_url'))
     _check_error(body, 'update_item')
     return body.get('response', {})
 
@@ -358,7 +358,7 @@ def call_delete_item(creds, item_id_list):
     api_path = '/api/v2/product/delete_item'
     params = _build_signed_params(creds, api_path)
     _logger.info("Shopee Product API: delete_item ids=%s", item_id_list)
-    _status, body = _do_post(api_path, params, {'item_id_list': item_id_list})
+    _status, body = _do_post(api_path, params, {'item_id_list': item_id_list}, base_url=creds.get('base_url'))
     _check_error(body, 'delete_item')
     return body.get('response', {})
 
@@ -378,7 +378,7 @@ def call_get_model_list(creds, item_id):
     api_path = '/api/v2/product/get_model_list'
     params = _build_signed_params(creds, api_path, {'item_id': item_id})
     _logger.info("Shopee Product API: get_model_list item_id=%s", item_id)
-    _status, body = _do_get(api_path, params)
+    _status, body = _do_get(api_path, params, base_url=creds.get('base_url'))
     _check_error(body, 'get_model_list')
     resp = body.get('response', {})
     return resp.get('model', []), resp.get('tier_variation', [])
@@ -398,7 +398,7 @@ def call_init_tier_variation(creds, payload):
     api_path = '/api/v2/product/init_tier_variation'
     params = _build_signed_params(creds, api_path)
     _logger.info("Shopee Product API: init_tier_variation item_id=%s", payload.get('item_id'))
-    _status, body = _do_post(api_path, params, payload)
+    _status, body = _do_post(api_path, params, payload, base_url=creds.get('base_url'))
     _check_error(body, 'init_tier_variation')
     return body.get('response', {})
 
@@ -415,7 +415,7 @@ def call_update_tier_variation(creds, payload):
     api_path = '/api/v2/product/update_tier_variation'
     params = _build_signed_params(creds, api_path)
     _logger.info("Shopee Product API: update_tier_variation item_id=%s", payload.get('item_id'))
-    _status, body = _do_post(api_path, params, payload)
+    _status, body = _do_post(api_path, params, payload, base_url=creds.get('base_url'))
     _check_error(body, 'update_tier_variation')
     return body.get('response', {})
 
@@ -432,7 +432,7 @@ def call_add_model(creds, item_id, model_list):
     api_path = '/api/v2/product/add_model'
     params = _build_signed_params(creds, api_path)
     _logger.info("Shopee Product API: add_model item_id=%s count=%d", item_id, len(model_list))
-    _status, body = _do_post(api_path, params, {'item_id': item_id, 'model': model_list})
+    _status, body = _do_post(api_path, params, {'item_id': item_id, 'model': model_list}, base_url=creds.get('base_url'))
     _check_error(body, 'add_model')
     return body.get('response', {})
 
@@ -449,7 +449,7 @@ def call_update_model(creds, item_id, model_list):
     api_path = '/api/v2/product/update_model'
     params = _build_signed_params(creds, api_path)
     _logger.info("Shopee Product API: update_model item_id=%s count=%d", item_id, len(model_list))
-    _status, body = _do_post(api_path, params, {'item_id': item_id, 'model': model_list})
+    _status, body = _do_post(api_path, params, {'item_id': item_id, 'model': model_list}, base_url=creds.get('base_url'))
     _check_error(body, 'update_model')
     return body.get('response', {})
 
@@ -466,7 +466,7 @@ def call_delete_model(creds, item_id, model_id_list):
     api_path = '/api/v2/product/delete_model'
     params = _build_signed_params(creds, api_path)
     _logger.info("Shopee Product API: delete_model item_id=%s model_ids=%s", item_id, model_id_list)
-    _status, body = _do_post(api_path, params, {'item_id': item_id, 'model_id_list': model_id_list})
+    _status, body = _do_post(api_path, params, {'item_id': item_id, 'model_id_list': model_id_list}, base_url=creds.get('base_url'))
     _check_error(body, 'delete_model')
     return body.get('response', {})
 
@@ -490,7 +490,7 @@ def call_update_price(creds, item_id, price_list):
     _logger.info(
         "Shopee Product API: update_price item_id=%s entries=%d", item_id, len(price_list)
     )
-    _status, body = _do_post(api_path, params, {'item_id': item_id, 'price_list': price_list})
+    _status, body = _do_post(api_path, params, {'item_id': item_id, 'price_list': price_list}, base_url=creds.get('base_url'))
     _check_error(body, 'update_price')
     resp = body.get('response', {})
     return resp.get('success_list', []), resp.get('failure_list', [])
@@ -511,7 +511,7 @@ def call_update_stock(creds, item_id, stock_list):
     _logger.info(
         "Shopee Product API: update_stock item_id=%s entries=%d", item_id, len(stock_list)
     )
-    _status, body = _do_post(api_path, params, {'item_id': item_id, 'stock_list': stock_list})
+    _status, body = _do_post(api_path, params, {'item_id': item_id, 'stock_list': stock_list}, base_url=creds.get('base_url'))
     _check_error(body, 'update_stock')
     resp = body.get('response', {})
     return resp.get('success_list', []), resp.get('failure_list', [])
@@ -526,7 +526,7 @@ def call_get_boosted_list(creds):
     api_path = '/api/v2/product/get_boosted_list'
     params = _build_signed_params(creds, api_path)
     _logger.info("Shopee Product API: get_boosted_list")
-    _status, body = _do_get(api_path, params)
+    _status, body = _do_get(api_path, params, base_url=creds.get('base_url'))
     _check_error(body, 'get_boosted_list')
     response = body.get('response', {})
     if not isinstance(response, dict):
@@ -550,7 +550,7 @@ def call_get_comment(creds, item_id=None, comment_id=None, cursor='', page_size=
         extra['comment_id'] = comment_id
     params = _build_signed_params(creds, api_path, extra)
     _logger.info("Shopee Product API: get_comment item_id=%s comment_id=%s", item_id, comment_id)
-    _status, body = _do_get(api_path, params)
+    _status, body = _do_get(api_path, params, base_url=creds.get('base_url'))
     _check_error(body, 'get_comment')
     response = body.get('response', {})
     return response if isinstance(response, dict) else {}
@@ -565,7 +565,7 @@ def call_reply_comment(creds, comment_list):
     api_path = '/api/v2/product/reply_comment'
     params = _build_signed_params(creds, api_path)
     _logger.info("Shopee Product API: reply_comment count=%d", len(comment_list))
-    _status, body = _do_post(api_path, params, {'comment_list': comment_list})
+    _status, body = _do_post(api_path, params, {'comment_list': comment_list}, base_url=creds.get('base_url'))
     _check_error(body, 'reply_comment')
     response = body.get('response', {})
     return response if isinstance(response, dict) else {}
@@ -581,7 +581,7 @@ def call_get_item_violation_info(creds, item_id_list):
     extra = {'item_id_list': json.dumps(item_id_list)}
     params = _build_signed_params(creds, api_path, extra)
     _logger.info("Shopee Product API: get_item_violation_info count=%d", len(item_id_list))
-    _status, body = _do_get(api_path, params)
+    _status, body = _do_get(api_path, params, base_url=creds.get('base_url'))
     _check_error(body, 'get_item_violation_info')
     response = body.get('response', {})
     if not isinstance(response, dict):
@@ -602,7 +602,7 @@ def call_get_size_chart_list(creds, category_id, page_size=10, cursor=''):
         extra['cursor'] = cursor
     params = _build_signed_params(creds, api_path, extra)
     _logger.info("Shopee Product API: get_size_chart_list category_id=%s", category_id)
-    _status, body = _do_get(api_path, params)
+    _status, body = _do_get(api_path, params, base_url=creds.get('base_url'))
     _check_error(body, 'get_size_chart_list')
     response = body.get('response', {})
     return response if isinstance(response, dict) else {}
@@ -617,7 +617,7 @@ def call_get_size_chart_detail(creds, size_chart_id):
     api_path = '/api/v2/product/get_size_chart_detail'
     params = _build_signed_params(creds, api_path, {'size_chart_id': size_chart_id})
     _logger.info("Shopee Product API: get_size_chart_detail size_chart_id=%s", size_chart_id)
-    _status, body = _do_get(api_path, params)
+    _status, body = _do_get(api_path, params, base_url=creds.get('base_url'))
     _check_error(body, 'get_size_chart_detail')
     response = body.get('response', {})
     return response if isinstance(response, dict) else {}
@@ -632,7 +632,7 @@ def call_generate_kit_image(creds, component_list):
     api_path = '/api/v2/product/generate_kit_image'
     params = _build_signed_params(creds, api_path)
     _logger.info("Shopee Product API: generate_kit_image count=%d", len(component_list))
-    _status, body = _do_post(api_path, params, {'component_list': component_list})
+    _status, body = _do_post(api_path, params, {'component_list': component_list}, base_url=creds.get('base_url'))
     _check_error(body, 'generate_kit_image')
     response = body.get('response', {})
     return response if isinstance(response, dict) else {}
@@ -674,7 +674,7 @@ def call_search_item(creds, item_name=None, item_sku=None, item_status=None,
             extra['item_status'] = [item_status]
     params = _build_signed_params(creds, api_path, extra)
     _logger.info("Shopee Product API: search_item name=%r sku=%r", item_name, item_sku)
-    _status, body = _do_get(api_path, params)
+    _status, body = _do_get(api_path, params, base_url=creds.get('base_url'))
     _check_error(body, 'search_item')
     resp = body.get('response', {})
     return (
@@ -697,7 +697,7 @@ def call_category_recommend(creds, item_name, product_cover_image=None):
         extra['product_cover_image'] = product_cover_image
     params = _build_signed_params(creds, api_path, extra)
     _logger.info("Shopee Product API: category_recommend item_name=%r", item_name)
-    _status, body = _do_get(api_path, params)
+    _status, body = _do_get(api_path, params, base_url=creds.get('base_url'))
     _check_error(body, 'category_recommend')
     return body.get('response', {}).get('category_id', [])
 
@@ -717,7 +717,7 @@ def call_register_brand(creds, payload):
     _logger.info(
         "Shopee Product API: register_brand name=%r", payload.get('original_brand_name')
     )
-    _status, body = _do_post(api_path, params, payload)
+    _status, body = _do_post(api_path, params, payload, base_url=creds.get('base_url'))
     _check_error(body, 'register_brand')
     resp = body.get('response', {})
     return resp.get('brand_id'), resp.get('original_brand_name')
@@ -738,7 +738,7 @@ def call_get_recommend_attribute(creds, item_name, category_id, cover_image_id=N
     _logger.info(
         "Shopee Product API: get_recommend_attribute category_id=%s", category_id
     )
-    _status, body = _do_get(api_path, params)
+    _status, body = _do_get(api_path, params, base_url=creds.get('base_url'))
     _check_error(body, 'get_recommend_attribute')
     return body.get('response', {}).get('attribute_list', [])
 
@@ -759,7 +759,7 @@ def call_get_weight_recommendation(creds, payload):
     api_path = '/api/v2/product/get_weight_recommendation'
     params = _build_signed_params(creds, api_path)
     _logger.info("Shopee Product API: get_weight_recommendation")
-    _status, body = _do_post(api_path, params, payload)
+    _status, body = _do_post(api_path, params, payload, base_url=creds.get('base_url'))
     _check_error(body, 'get_weight_recommendation')
     return body.get('response', {}).get('normal_weight_range', [])
 
@@ -775,7 +775,7 @@ def call_get_variations(creds, category_id):
     extra = {'category_id': category_id}
     params = _build_signed_params(creds, api_path, extra)
     _logger.info("Shopee Product API: get_variations category_id=%s", category_id)
-    _status, body = _do_get(api_path, params)
+    _status, body = _do_get(api_path, params, base_url=creds.get('base_url'))
     _check_error(body, 'get_variations')
     return body.get('data', {}).get('standardise_variation_list', [])
 
@@ -799,7 +799,7 @@ def call_get_item_content_diagnosis_result(creds, item_id_list):
     _logger.info(
         "Shopee Product API: get_item_content_diagnosis_result count=%d", len(item_id_list)
     )
-    _status, body = _do_post(api_path, params, {'item_id_list': item_id_list})
+    _status, body = _do_post(api_path, params, {'item_id_list': item_id_list}, base_url=creds.get('base_url'))
     _check_error(body, 'get_item_content_diagnosis_result')
     resp = body.get('response', {})
     return resp.get('success_item_list', []), resp.get('failure_item_list', [])
@@ -825,7 +825,7 @@ def call_get_item_list_by_content_diagnosis(creds, page_size=20, offset='',
         payload['issue_type'] = issue_type
     params = _build_signed_params(creds, api_path)
     _logger.info("Shopee Product API: get_item_list_by_content_diagnosis page_size=%d", page_size)
-    _status, body = _do_post(api_path, params, payload)
+    _status, body = _do_post(api_path, params, payload, base_url=creds.get('base_url'))
     _check_error(body, 'get_item_list_by_content_diagnosis')
     resp = body.get('response', {})
     return (
@@ -854,7 +854,7 @@ def call_get_kit_item_limit(creds, category_id=None):
         extra['category_id'] = category_id
     params = _build_signed_params(creds, api_path, extra)
     _logger.info("Shopee Product API: get_kit_item_limit category_id=%s", category_id)
-    _status, body = _do_get(api_path, params)
+    _status, body = _do_get(api_path, params, base_url=creds.get('base_url'))
     _check_error(body, 'get_kit_item_limit')
     return body.get('response', {})
 
@@ -872,7 +872,7 @@ def call_add_kit_item(creds, payload):
     api_path = '/api/v2/product/add_kit_item'
     params = _build_signed_params(creds, api_path)
     _logger.info("Shopee Product API: add_kit_item")
-    _status, body = _do_post(api_path, params, payload)
+    _status, body = _do_post(api_path, params, payload, base_url=creds.get('base_url'))
     _check_error(body, 'add_kit_item')
     return body.get('response', {}).get('item_id')
 
@@ -891,7 +891,7 @@ def call_update_kit_item(creds, item_id, payload):
     _logger.info("Shopee Product API: update_kit_item item_id=%s", item_id)
     data = dict(payload)
     data['item_id'] = item_id
-    _status, body = _do_post(api_path, params, data)
+    _status, body = _do_post(api_path, params, data, base_url=creds.get('base_url'))
     _check_error(body, 'update_kit_item')
     return body.get('response', {})
 
@@ -908,6 +908,6 @@ def call_get_kit_item_info(creds, item_id):
     extra = {'item_id': item_id}
     params = _build_signed_params(creds, api_path, extra)
     _logger.info("Shopee Product API: get_kit_item_info item_id=%s", item_id)
-    _status, body = _do_get(api_path, params)
+    _status, body = _do_get(api_path, params, base_url=creds.get('base_url'))
     _check_error(body, 'get_kit_item_info')
     return body.get('response', {}).get('product_info', {})

@@ -14,6 +14,7 @@
     'depends': ['sale', 'stock', 'sale_shopee'],
     'data': [
         'security/ir.model.access.csv',
+        'views/shopee_account_ext_views.xml',
         'views/shopee_order_fetch_wizard_views.xml',
         'views/sale_order_views.xml',
     ],

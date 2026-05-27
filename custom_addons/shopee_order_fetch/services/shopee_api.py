@@ -115,11 +115,14 @@ def get_credentials_from_shop(shop):
             _("Thiếu thông tin cấu hình:\n%s") % '\n'.join(f"- {m}" for m in missing)
         )
 
+    base_url = getattr(account, 'shopee_env_base_url', None) or SHOPEE_BASE_URL
+
     return {
         'partner_id': partner_id,
         'partner_key': partner_key,
         'access_token': access_token,
         'shop_identifier': shop_identifier,
+        'base_url': base_url,
     }
 
 
