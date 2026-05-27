@@ -28,6 +28,7 @@
     'data': [
         'security/ir.model.access.csv',
         'views/shopee_product_views.xml',
+        'views/shopee_result_viewer_views.xml',
         'views/shopee_product_sync_wizard_views.xml',
         'views/shopee_push_stock_wizard_views.xml',
         'views/shopee_product_operation_wizard_views.xml',

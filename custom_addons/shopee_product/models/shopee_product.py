@@ -7,6 +7,7 @@ Model lưu trữ cache sản phẩm đã đồng bộ từ Shopee.
 Mỗi record = 1 item trên 1 shop Shopee.
 Dùng để theo dõi, quản lý và đẩy sản phẩm từ Odoo lên Shopee.
 """
+import json as _json
 import logging
 from datetime import datetime
 
@@ -473,15 +474,17 @@ class ShopeeProduct(models.Model):
         raw_data['last_api_section'] = section
         raw_data['last_api_synced_at'] = fields.Datetime.to_string(now)
         self.write({'raw_data': raw_data, 'last_synced': now})
+        viewer = self.env['shopee.result.viewer'].create({
+            'title': title,
+            'result_json': _json.dumps(value, ensure_ascii=False, indent=2),
+        })
         return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': title,
-                'message': message or _('Đã cập nhật dữ liệu vào Raw JSON.'),
-                'type': 'success',
-                'sticky': False,
-            },
+            'type': 'ir.actions.act_window',
+            'name': title,
+            'res_model': 'shopee.result.viewer',
+            'res_id': viewer.id,
+            'view_mode': 'form',
+            'target': 'new',
         }
 
     def action_fetch_item_extra_info(self):
