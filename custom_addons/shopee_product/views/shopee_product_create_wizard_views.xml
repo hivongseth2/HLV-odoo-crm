@@ -43,11 +43,21 @@
                     <group string="Vận chuyển (Logistics)">
                         <div class="col-12">
                             <p class="text-muted small mb-1">
-                                Nhập Logistic ID, mỗi dòng một ID. Tìm trong
-                                <strong>Shopee Seller Center → Cài đặt → Vận chuyển</strong>.
+                                Tick chọn kênh vận chuyển muốn bật cho sản phẩm.
+                                Danh sách tự động lấy từ Shopee khi chọn cửa hàng.
                             </p>
-                            <field name="logistic_ids_text" nolabel="1"
-                                   widget="text" style="min-height: 80px;"/>
+                            <button name="action_reload_logistics" type="object"
+                                    string="↻ Tải lại danh sách"
+                                    class="btn-link"
+                                    invisible="not shop_id"/>
+                            <field name="logistic_line_ids" nolabel="1">
+                                <list editable="bottom" create="false" delete="false">
+                                    <field name="selected" widget="boolean_toggle"/>
+                                    <field name="channel_id"/>
+                                    <field name="channel_name"/>
+                                    <field name="cod_enabled" widget="boolean"/>
+                                </list>
+                            </field>
                         </div>
                     </group>
                 </sheet>

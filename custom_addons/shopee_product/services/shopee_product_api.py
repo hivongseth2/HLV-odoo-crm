@@ -341,9 +341,31 @@ def call_upload_image(creds, image_binary):
             % resp.status_code
         )
     _check_error(body, 'upload_image')
-    image_id = body.get('response', {}).get('image_id', '')
+    # Shopee có nhiều shape response tuỳ phiên bản:
+    #   response.image_info.image_id            (v2 chuẩn)
+    #   response.image_id                       (legacy)
+    #   response.image_info_list[0].image_info  (multi-upload)
+    resp_data = body.get('response', {}) or {}
+    image_id = ''
+    if isinstance(resp_data, dict):
+        info = resp_data.get('image_info') or {}
+        if isinstance(info, dict):
+            image_id = info.get('image_id', '')
+        if not image_id:
+            image_id = resp_data.get('image_id', '')
+        if not image_id:
+            info_list = resp_data.get('image_info_list') or []
+            if info_list and isinstance(info_list[0], dict):
+                inner = info_list[0].get('image_info') or info_list[0]
+                if isinstance(inner, dict):
+                    image_id = inner.get('image_id', '')
     if not image_id:
-        raise UserError('Shopee không trả về image_id sau khi upload ảnh.')
+        _logger.error("Shopee upload_image: response không có image_id: %s", body)
+        raise UserError(
+            'Shopee không trả về image_id sau khi upload ảnh.\n'
+            'Response: %s' % body
+        )
+    _logger.info("Shopee upload_image: thành công image_id=%s", image_id)
     return image_id
 
 
@@ -399,6 +421,34 @@ def call_delete_item(creds, item_id_list):
     _status, body = _do_post(api_path, params, {'item_id_list': item_id_list}, base_url=creds.get('base_url'))
     _check_error(body, 'delete_item')
     return body.get('response', {})
+
+
+# ──────────────────────────────────────────────────────
+#  Logistics
+# ──────────────────────────────────────────────────────
+
+def call_get_logistics_channels(creds):
+    """
+    GET /api/v2/logistics/get_channel_list
+
+    Lấy danh sách kênh vận chuyển khả dụng cho shop hiện tại.
+    Trả về list dict: [
+      {
+        'logistics_channel_id': int,
+        'logistics_channel_name': str,
+        'enabled': bool,
+        'cod_enabled': bool,
+        ...
+      },
+      ...
+    ]
+    """
+    api_path = '/api/v2/logistics/get_channel_list'
+    params = _build_signed_params(creds, api_path)
+    _logger.info("Shopee Logistics API: get_channel_list shop=%s", creds.get('shop_identifier'))
+    _status, body = _do_get(api_path, params, base_url=creds.get('base_url'))
+    _check_error(body, 'get_channel_list')
+    return body.get('response', {}).get('logistics_channel_list', []) or []
 
 
 # ──────────────────────────────────────────────────────

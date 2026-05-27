@@ -7,8 +7,8 @@ Wizard tạo sản phẩm mới trên Shopee từ sản phẩm Odoo (product.tem
 Luồng:
 1. Mở wizard (từ Actions trên product.template)
 2. Chọn cửa hàng Shopee — các thông tin cơ bản được tự động điền
-3. Nhập category_id Shopee và logistic IDs (bắt buộc)
-4. Nhấn "Tạo sản phẩm Shopee" → API call_add_item → tạo shopee.product
+3. Wizard tự gọi Shopee API lấy danh sách kênh vận chuyển → người dùng tick chọn
+4. Nhấn "Tạo sản phẩm Shopee" → upload ảnh + add_item → tạo shopee.product
 """
 import base64
 import logging
@@ -61,14 +61,11 @@ class ShopeeProductCreateWizard(models.TransientModel):
         required=True,
         help='ID danh mục Shopee. Tìm bằng nút "Gợi ý danh mục" trên shopee.product.',
     )
-    logistic_ids_text = fields.Text(
-        string='Logistic IDs',
-        placeholder='40013\n40014',
-        help=(
-            'Mỗi dòng một Logistic ID (số nguyên).\n'
-            'Tìm trong Shopee Seller Center → Cài đặt → Vận chuyển.\n'
-            'Hoặc dùng nút "Xem logistics" ở dưới.'
-        ),
+
+    logistic_line_ids = fields.One2many(
+        'shopee.product.create.wizard.logistic',
+        'wizard_id',
+        string='Kênh vận chuyển',
     )
 
     # ── Ảnh ───────────────────────────────────────────────────────────────
@@ -104,6 +101,51 @@ class ShopeeProductCreateWizard(models.TransientModel):
         if product:
             self.initial_stock = int(product.qty_available or 0)
 
+    @api.onchange('shop_id')
+    def _onchange_shop_load_logistics(self):
+        """Khi chọn shop, tự động gọi Shopee API lấy danh sách kênh vận chuyển."""
+        self.logistic_line_ids = [(5, 0, 0)]
+        if not self.shop_id:
+            return
+        try:
+            from odoo.addons.shopee_order_fetch.services.shopee_api import (
+                get_credentials_from_shop,
+            )
+            creds = get_credentials_from_shop(self.shop_id)
+            channels = shopee_product_api.call_get_logistics_channels(creds)
+        except Exception as e:
+            _logger.warning("Shopee wizard: không lấy được logistics: %s", e)
+            return {
+                'warning': {
+                    'title': _('Không tải được kênh vận chuyển'),
+                    'message': str(e),
+                }
+            }
+
+        lines = []
+        for ch in channels:
+            if not ch.get('enabled', True):
+                continue
+            lines.append((0, 0, {
+                'channel_id': ch.get('logistics_channel_id'),
+                'channel_name': ch.get('logistics_channel_name', ''),
+                'cod_enabled': ch.get('cod_enabled', False),
+                'selected': False,
+            }))
+        self.logistic_line_ids = lines
+
+    def action_reload_logistics(self):
+        """Nút thủ công để reload danh sách kênh vận chuyển."""
+        self.ensure_one()
+        self._onchange_shop_load_logistics()
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': self._name,
+            'res_id': self.id,
+            'view_mode': 'form',
+            'target': 'new',
+        }
+
     def action_create_shopee_product(self):
         self.ensure_one()
 
@@ -112,7 +154,18 @@ class ShopeeProductCreateWizard(models.TransientModel):
         )
         creds = get_credentials_from_shop(self.shop_id)
 
-        # 1. Upload ảnh ──────────────────────────────────────────────────
+        # 1. Validate logistics ─────────────────────────────────────────
+        selected_lines = self.logistic_line_ids.filtered(lambda l: l.selected)
+        if not selected_lines:
+            raise UserError(_(
+                'Vui lòng tick chọn ít nhất một kênh vận chuyển.'
+            ))
+        logistics = [
+            {'logistic_id': int(l.channel_id), 'enabled': True}
+            for l in selected_lines
+        ]
+
+        # 2. Upload ảnh ──────────────────────────────────────────────────
         image_id_list = []
         if self.upload_product_image and self.product_template_id.image_1920:
             try:
@@ -129,20 +182,6 @@ class ShopeeProductCreateWizard(models.TransientModel):
             raise UserError(_(
                 'Không có ảnh để upload hoặc upload ảnh thất bại.\n'
                 'Vui lòng thêm ảnh đại diện cho sản phẩm Odoo trước khi tạo trên Shopee.'
-            ))
-
-        # 2. Parse logistics ─────────────────────────────────────────────
-        logistics = []
-        if self.logistic_ids_text:
-            for line in self.logistic_ids_text.strip().splitlines():
-                line = line.strip()
-                if line.isdigit():
-                    logistics.append({'logistic_id': int(line), 'enabled': True})
-
-        if not logistics:
-            raise UserError(_(
-                'Vui lòng nhập ít nhất một Logistic ID.\n'
-                'Tìm trong Shopee Seller Center → Cài đặt → Vận chuyển.'
             ))
 
         # 3. Build payload ───────────────────────────────────────────────
@@ -200,3 +239,19 @@ class ShopeeProductCreateWizard(models.TransientModel):
             'view_mode': 'form',
             'target': 'current',
         }
+
+
+class ShopeeProductCreateWizardLogistic(models.TransientModel):
+    _name = 'shopee.product.create.wizard.logistic'
+    _description = 'Kênh vận chuyển trong wizard tạo sản phẩm Shopee'
+    _order = 'channel_name'
+
+    wizard_id = fields.Many2one(
+        'shopee.product.create.wizard',
+        required=True,
+        ondelete='cascade',
+    )
+    selected = fields.Boolean(string='Chọn', default=False)
+    channel_id = fields.Integer(string='Channel ID', readonly=True)
+    channel_name = fields.Char(string='Tên kênh', readonly=True)
+    cod_enabled = fields.Boolean(string='Hỗ trợ COD', readonly=True)

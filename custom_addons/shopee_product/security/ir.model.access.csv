@@ -10,3 +10,4 @@ access_shopee_result_viewer,shopee.result.viewer all,model_shopee_result_viewer,
 access_shopee_stock_sync_log_salesman,shopee.stock.sync.log salesman,model_shopee_stock_sync_log,sales_team.group_sale_salesman,1,0,0,0
 access_shopee_stock_sync_log_manager,shopee.stock.sync.log manager,model_shopee_stock_sync_log,sales_team.group_sale_manager,1,1,1,1
 access_shopee_product_create_wizard,shopee.product.create.wizard all,model_shopee_product_create_wizard,sales_team.group_sale_salesman,1,1,1,1
+access_shopee_product_create_wizard_logistic,shopee.product.create.wizard.logistic all,model_shopee_product_create_wizard_logistic,sales_team.group_sale_salesman,1,1,1,1
