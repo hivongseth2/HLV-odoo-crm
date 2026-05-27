@@ -151,15 +151,15 @@
                                 <div class="border rounded bg-white p-3 h-100">
                                     <div class="fw-semibold mb-3">Identity</div>
                                     <div class="mb-3">
-                                        <label class="text-muted small">Danh mục Shopee</label>
+                                        <span class="d-block text-muted small">Danh mục Shopee</span>
                                         <field name="category_id" nolabel="1" readonly="1"/>
                                     </div>
                                     <div class="mb-3">
-                                        <label class="text-muted small">Có phân loại</label>
+                                        <span class="d-block text-muted small">Có phân loại</span>
                                         <field name="has_model" nolabel="1" widget="boolean" readonly="1"/>
                                     </div>
                                     <div>
-                                        <label class="text-muted small">Cập nhật Shopee</label>
+                                        <span class="d-block text-muted small">Cập nhật Shopee</span>
                                         <field name="shopee_update_time" nolabel="1" readonly="1"/>
                                     </div>
                                 </div>
@@ -168,15 +168,15 @@
                                 <div class="border rounded bg-white p-3 h-100">
                                     <div class="fw-semibold mb-3">Giá &amp; tồn</div>
                                     <div class="mb-3">
-                                        <label class="text-muted small">Giá gốc</label>
+                                        <span class="d-block text-muted small">Giá gốc</span>
                                         <field name="original_price" nolabel="1" widget="integer"/>
                                     </div>
                                     <div class="mb-3">
-                                        <label class="text-muted small">Giá hiện tại</label>
+                                        <span class="d-block text-muted small">Giá hiện tại</span>
                                         <field name="current_price" nolabel="1" widget="integer" readonly="1"/>
                                     </div>
                                     <div>
-                                        <label class="text-muted small">Tồn hiện tại</label>
+                                        <span class="d-block text-muted small">Tồn hiện tại</span>
                                         <field name="total_available_stock" nolabel="1" readonly="1"/>
                                     </div>
                                 </div>
@@ -185,15 +185,15 @@
                                 <div class="border rounded bg-white p-3 h-100">
                                     <div class="fw-semibold mb-3">Liên kết Odoo</div>
                                     <div class="mb-3">
-                                        <label class="text-muted small">Mapping shopee.item</label>
+                                        <span class="d-block text-muted small">Mapping shopee.item</span>
                                         <field name="shopee_item_mapping_ids" nolabel="1" widget="many2many_tags" readonly="1"/>
                                     </div>
                                     <div class="mb-3">
-                                        <label class="text-muted small">Sản phẩm Odoo</label>
+                                        <span class="d-block text-muted small">Sản phẩm Odoo</span>
                                         <field name="mapped_product_ids" nolabel="1" widget="many2many_tags" readonly="1"/>
                                     </div>
                                     <div>
-                                        <label class="text-muted small">Link thủ công</label>
+                                        <span class="d-block text-muted small">Link thủ công</span>
                                         <field name="odoo_product_id" nolabel="1" options="{'no_create': True}"/>
                                     </div>
                                 </div>
@@ -233,9 +233,9 @@
                             <div class="col-xl-4 col-lg-6">
                                 <div class="border rounded bg-white p-3 h-100">
                                     <div class="fw-semibold mb-3"><i class="fa fa-check-circle me-1"/> Content quality</div>
-                                    <label class="text-muted small">Tên sản phẩm</label>
+                                    <span class="d-block text-muted small">Tên sản phẩm</span>
                                     <field name="item_name" nolabel="1"/>
-                                    <label class="text-muted small mt-3">SKU</label>
+                                    <span class="d-block text-muted small mt-3">SKU</span>
                                     <field name="item_sku" nolabel="1"/>
                                 </div>
                             </div>
