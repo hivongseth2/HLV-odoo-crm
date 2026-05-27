@@ -60,7 +60,7 @@ def _do_get(api_path, params, base_url=None, timeout=30):
     return resp.status_code, body
 
 
-def _do_post(api_path, params, json_body, base_url=None, timeout=30, base_url=creds.get('base_url')):
+def _do_post(api_path, params, json_body, base_url=None, timeout=30):
     url = f"{base_url or SHOPEE_BASE_URL}{api_path}"
     try:
         resp = req_lib.post(url, params=params, json=json_body, timeout=timeout)
