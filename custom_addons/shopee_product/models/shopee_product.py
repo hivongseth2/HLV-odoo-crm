@@ -549,9 +549,21 @@ class ShopeeProduct(models.Model):
 
     def action_fetch_kit_item_info(self):
         self.ensure_one()
-        result = shopee_product_api.call_get_kit_item_info(
-            self._get_shopee_credentials(), int(self.shopee_item_id)
-        )
+        try:
+            result = shopee_product_api.call_get_kit_item_info(
+                self._get_shopee_credentials(), int(self.shopee_item_id)
+            )
+        except UserError as exc:
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': _('Không phải bộ sản phẩm (Kit)'),
+                    'message': str(exc.args[0]),
+                    'type': 'warning',
+                    'sticky': False,
+                },
+            }
         return self._store_raw_section(
             'kit_item_info', result, _('Đã lấy Kit Item Info')
         )
@@ -790,6 +802,37 @@ class ShopeeProduct(models.Model):
             created, updated, len(shopee_items),
         )
         return created, updated, len(shopee_items)
+
+    # ── write override ──────────────────────────────────────────────────────
+
+    def write(self, vals):
+        result = super().write(vals)
+        if 'odoo_product_id' in vals:
+            self._sync_manual_link_to_shopee_item()
+        return result
+
+    def _sync_manual_link_to_shopee_item(self):
+        """Khi odoo_product_id được set thủ công, tự tạo/cập nhật bản ghi shopee.item."""
+        ShopeeItem = self.env['shopee.item'].sudo()
+        for rec in self:
+            if not rec.shop_id or not rec.shopee_item_id:
+                continue
+            if not rec.odoo_product_id:
+                continue
+            existing = ShopeeItem.search([
+                ('shop_id', '=', rec.shop_id.id),
+                ('shopee_item_identifier', '=', str(rec.shopee_item_id)),
+                ('shopee_model_identifier', 'in', [False, '', '0']),
+            ], limit=1)
+            if existing:
+                if existing.product_id.id != rec.odoo_product_id.id:
+                    existing.write({'product_id': rec.odoo_product_id.id})
+            else:
+                ShopeeItem.create({
+                    'shop_id': rec.shop_id.id,
+                    'shopee_item_identifier': str(rec.shopee_item_id),
+                    'product_id': rec.odoo_product_id.id,
+                })
 
     def _sync_models_from_shopee_item_mappings(self, mappings, now=None):
         """Create lightweight model lines from sale_shopee mapping rows."""
