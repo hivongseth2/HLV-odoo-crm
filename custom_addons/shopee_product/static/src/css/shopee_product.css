@@ -1,14 +1,18 @@
-/* Shopee Product — Custom button styles
-   Dùng class thay vì inline style vì Odoo 18 strip style attr trên button
+/* Shopee Product — Custom button styles v2
+   Odoo 18 strips style attr on buttons — use CSS classes instead
+   Higher specificity with .o_web_client prefix to beat Bootstrap defaults
    ─────────────────────────────────────────────────────────────────────── */
 
 /* Primary: nền cam đặc, chữ trắng */
+.o_web_client .btn.btn-shopee,
+.o_web_client .btn.btn-shopee:focus,
 .btn.btn-shopee,
 .btn.btn-shopee:focus {
     background: #ee4d2d !important;
     color: #ffffff !important;
     border: 2px solid #ee4d2d !important;
 }
+.o_web_client .btn.btn-shopee:hover,
 .btn.btn-shopee:hover {
     background: #d63e20 !important;
     border-color: #d63e20 !important;
@@ -16,24 +20,30 @@
 }
 
 /* Outline: viền cam, nền trong suốt, chữ cam */
+.o_web_client .btn.btn-shopee-outline,
+.o_web_client .btn.btn-shopee-outline:focus,
 .btn.btn-shopee-outline,
 .btn.btn-shopee-outline:focus {
     background: transparent !important;
     color: #ee4d2d !important;
     border: 2px solid #ee4d2d !important;
 }
+.o_web_client .btn.btn-shopee-outline:hover,
 .btn.btn-shopee-outline:hover {
     background: #fde8e2 !important;
     color: #c0341b !important;
 }
 
 /* Soft: nền cam nhạt, chữ đỏ sẫm, viền nhạt */
+.o_web_client .btn.btn-shopee-soft,
+.o_web_client .btn.btn-shopee-soft:focus,
 .btn.btn-shopee-soft,
 .btn.btn-shopee-soft:focus {
     background: #fde8e2 !important;
     color: #c0341b !important;
     border: 1px solid #f5b8ac !important;
 }
+.o_web_client .btn.btn-shopee-soft:hover,
 .btn.btn-shopee-soft:hover {
     background: #f9d0c4 !important;
     color: #a02a14 !important;
