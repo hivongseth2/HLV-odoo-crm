@@ -797,6 +797,77 @@ class ShopeeProduct(models.Model):
             },
         }
 
+    def action_fetch_full_content(self):
+        """Lấy đầy đủ nội dung sản phẩm từ Shopee (mô tả, ảnh, video).
+
+        Dùng GET /api/v2/product/get_item_base_info — trả về dict với
+        description, image (image_id_list, image_url_list), video_info...
+        Lưu vào raw_data['full_content'] để form view hiển thị.
+        """
+        self.ensure_one()
+        if not self.shopee_item_id:
+            raise UserError(_('Sản phẩm chưa có shopee_item_id.'))
+        item_id = int(self.shopee_item_id)
+        items = self._call_with_token_refresh(
+            lambda creds: shopee_product_api.call_get_item_base_info(creds, [item_id])
+        )
+        item = (items or [{}])[0] if isinstance(items, list) else items
+        if not isinstance(item, dict):
+            raise UserError(_('Shopee trả về dữ liệu không hợp lệ: %s') % item)
+
+        # Trích xuất các phần thường dùng
+        desc = item.get('description') or ''
+        if isinstance(item.get('description_info'), dict):
+            # description_info dạng extended (rich text + images)
+            ext = item['description_info'].get('extended_description', {})
+            field_list = ext.get('field_list') or []
+            extended_text = []
+            for f in field_list:
+                if f.get('field_type') == 'text':
+                    extended_text.append((f.get('text', {}) or {}).get('text', ''))
+                elif f.get('field_type') == 'image':
+                    img = f.get('image_info', {}) or {}
+                    extended_text.append('[ẢNH] %s' % (img.get('image_url') or img.get('image_id') or ''))
+            if extended_text:
+                desc = (desc + '\n\n--- Extended ---\n' + '\n'.join(extended_text)) if desc else '\n'.join(extended_text)
+
+        images = item.get('image', {}) or {}
+        image_id_list = images.get('image_id_list') or []
+        image_url_list = images.get('image_url_list') or []
+        video_info_list = item.get('video_info') or []
+
+        summary_lines = [
+            _('Tên: %s') % (item.get('item_name') or ''),
+            _('Mô tả: %d ký tự') % len(desc),
+            _('Ảnh: %d') % len(image_id_list),
+            _('Video: %d') % len(video_info_list),
+            _('Trạng thái: %s') % (item.get('item_status') or ''),
+            _('Danh mục: %s') % (item.get('category_id') or ''),
+        ]
+        # Liệt kê URL ảnh (tối đa 5 đầu)
+        for i, url in enumerate(image_url_list[:5], 1):
+            summary_lines.append('  ảnh %d: %s' % (i, url))
+        # Video
+        for i, v in enumerate(video_info_list[:3], 1):
+            v_url = v.get('video_url_list', [{}])[0].get('video_url') if v.get('video_url_list') else ''
+            summary_lines.append('  video %d: %s (%ss)' % (
+                i, v_url or v.get('video_id', ''), v.get('duration', '?')
+            ))
+
+        return self._store_raw_section(
+            'full_content',
+            {
+                'description': desc,
+                'image_id_list': image_id_list,
+                'image_url_list': image_url_list,
+                'video_info_list': video_info_list,
+                'item_name': item.get('item_name'),
+                'category_id': item.get('category_id'),
+            },
+            _('Nội dung sản phẩm Shopee'),
+            '\n'.join(summary_lines),
+        )
+
     def action_fetch_item_extra_info(self):
         self.ensure_one()
         item_id = int(self.shopee_item_id)
@@ -849,12 +920,37 @@ class ShopeeProduct(models.Model):
         result = self._call_with_token_refresh(
             lambda creds: shopee_product_api.call_category_recommend(creds, item_name)
         )
-        cats = result.get('category', result.get('categories', []))
-        if cats:
+        # Shopee trả về list of int category_id (hoặc list of dict tuỳ phiên bản).
+        if isinstance(result, dict):
+            cats_raw = result.get('category_id') or result.get('category') or result.get('categories') or []
+        else:
+            cats_raw = result or []
+
+        # Build name map từ get_category (cache trong raw_data nếu có).
+        name_map = {}
+        if cats_raw and not (cats_raw and isinstance(cats_raw[0], dict)):
+            try:
+                cat_list = self._call_with_token_refresh(
+                    lambda creds: shopee_product_api.call_get_category(creds)
+                )
+                for c in (cat_list or []):
+                    name_map[c.get('category_id')] = (
+                        c.get('display_category_name')
+                        or c.get('original_category_name')
+                        or ''
+                    )
+            except Exception as e:
+                _logger.warning('Không lấy được tên category để enrich: %s', e)
+
+        if cats_raw:
             lines = [_('Danh mục gợi ý:')]
-            for i, c in enumerate(cats[:8], 1):
-                name = c.get('display_category_name') or c.get('category_name') or '?'
-                cid = c.get('category_id', '')
+            for i, c in enumerate(cats_raw[:8], 1):
+                if isinstance(c, dict):
+                    name = c.get('display_category_name') or c.get('category_name') or '?'
+                    cid = c.get('category_id', '')
+                else:
+                    cid = c
+                    name = name_map.get(cid, '?')
                 lines.append('  %d. %s (ID: %s)' % (i, name, cid))
             msg = '\n'.join(lines)
         else:
@@ -870,9 +966,20 @@ class ShopeeProduct(models.Model):
         result = self._call_with_token_refresh(
             lambda creds: shopee_product_api.call_get_recommend_attribute(creds, item_name, cat_id)
         )
-        attrs = result.get('attribute', result.get('attributes', []))
+        # Service trả về list attribute_list trực tiếp.
+        if isinstance(result, list):
+            attrs = result
+        elif isinstance(result, dict):
+            attrs = result.get('attribute_list') or result.get('attribute') or result.get('attributes') or []
+        else:
+            attrs = []
         if attrs:
-            names = [a.get('attribute_name', '?') for a in attrs[:12]]
+            names = []
+            for a in attrs[:12]:
+                if isinstance(a, dict):
+                    names.append(a.get('attribute_name') or a.get('original_attribute_name') or '?')
+                else:
+                    names.append(str(a))
             msg = _('Thuộc tính gợi ý:\n') + '\n'.join('  • %s' % n for n in names)
         else:
             msg = _('Không có gợi ý thuộc tính')
@@ -886,7 +993,12 @@ class ShopeeProduct(models.Model):
         result = self._call_with_token_refresh(
             lambda creds: shopee_product_api.call_get_variations(creds, cat_id)
         )
-        variations = result.get('variation', result.get('variations', []))
+        if isinstance(result, list):
+            variations = result
+        elif isinstance(result, dict):
+            variations = result.get('standardise_variation_list') or result.get('variation') or result.get('variations') or []
+        else:
+            variations = []
         count = len(variations) if isinstance(variations, list) else 0
         msg = _('Tìm thấy %d cấp phân loại cho danh mục %s') % (count, cat_id)
         return self._store_raw_section('variation_tree', result, _('Cây phân loại'), msg)

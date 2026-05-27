@@ -67,6 +67,9 @@
                     <button name="action_open_shopee_item" type="object"
                             string="Xem Shopee" class="btn btn-shopee-soft" icon="fa-external-link"
                             invisible="not shopee_item_url"/>
+                    <button name="action_fetch_full_content" type="object"
+                            string="Lấy nội dung" class="btn btn-shopee-soft" icon="fa-file-text-o"
+                            help="Tải mô tả, ảnh, video của sản phẩm từ Shopee về để xem/sửa."/>
                     <button name="action_delete_from_shopee" type="object"
                             string="Xóa khỏi Shopee" class="btn-danger" icon="fa-trash"
                             confirm="Sản phẩm sẽ bị xóa khỏi Shopee. Tiếp tục?"

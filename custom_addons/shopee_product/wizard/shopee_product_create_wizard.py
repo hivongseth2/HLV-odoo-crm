@@ -56,10 +56,20 @@ class ShopeeProductCreateWizard(models.TransientModel):
     )
 
     # ── Shopee-specific ────────────────────────────────────────────────────
+    shopee_category_id = fields.Many2one(
+        'shopee.category', string='Danh mục Shopee',
+        domain="[('shop_id','=',shop_id)]",
+        help='Chọn danh mục từ cây danh mục Shopee đã đồng bộ. '
+             'Dùng nút "↻ Tải danh mục" nếu danh sách trống.',
+    )
     category_id = fields.Integer(
         string='Category ID Shopee',
-        required=True,
-        help='ID danh mục Shopee. Tìm bằng nút "Gợi ý danh mục" trên shopee.product.',
+        compute='_compute_category_id', store=True, readonly=False,
+        help='ID danh mục Shopee. Tự động điền khi chọn từ danh sách phía trên.',
+    )
+    category_suggestion = fields.Text(
+        string='Gợi ý danh mục', readonly=True,
+        help='Bấm "Gợi ý danh mục" để Shopee đề xuất dựa trên tên sản phẩm.',
     )
 
     logistic_line_ids = fields.One2many(
@@ -146,8 +156,78 @@ class ShopeeProductCreateWizard(models.TransientModel):
             'target': 'new',
         }
 
+    @api.depends('shopee_category_id')
+    def _compute_category_id(self):
+        for rec in self:
+            if rec.shopee_category_id:
+                rec.category_id = rec.shopee_category_id.category_id
+            elif not rec.category_id:
+                rec.category_id = 0
+
+    def action_sync_categories(self):
+        """Đồng bộ cây danh mục Shopee cho shop hiện tại."""
+        self.ensure_one()
+        if not self.shop_id:
+            raise UserError(_('Vui lòng chọn cửa hàng trước.'))
+        count = self.env['shopee.category']._sync_from_shopee(self.shop_id)
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _('Đồng bộ danh mục Shopee'),
+                'message': _('Đã đồng bộ %d danh mục.') % count,
+                'type': 'success',
+                'sticky': False,
+            },
+        }
+
+    def action_suggest_category(self):
+        """Gọi Shopee category_recommend dựa trên tên sản phẩm."""
+        self.ensure_one()
+        if not self.item_name:
+            raise UserError(_('Cần nhập tên sản phẩm trước khi gợi ý danh mục.'))
+        if not self.shop_id:
+            raise UserError(_('Vui lòng chọn cửa hàng trước.'))
+        from odoo.addons.shopee_order_fetch.services.shopee_api import (
+            get_credentials_from_shop,
+        )
+        creds = get_credentials_from_shop(self.shop_id)
+        result = shopee_product_api.call_category_recommend(creds, self.item_name)
+        cat_ids = result if isinstance(result, list) else (
+            result.get('category_id') or []
+        )
+        if not cat_ids:
+            self.category_suggestion = _('Không có gợi ý danh mục cho tên này.')
+            return
+        Cat = self.env['shopee.category']
+        if not Cat.search_count([('shop_id', '=', self.shop_id.id)]):
+            try:
+                Cat._sync_from_shopee(self.shop_id)
+            except Exception as e:
+                _logger.warning('Sync danh mục thất bại khi gợi ý: %s', e)
+        lines = [_('Danh mục Shopee gợi ý:')]
+        first_match = False
+        for cid in cat_ids[:8]:
+            cat_rec = Cat.search([
+                ('shop_id', '=', self.shop_id.id),
+                ('category_id', '=', cid),
+            ], limit=1)
+            name = cat_rec.full_path if cat_rec else '?'
+            lines.append('  • [%s] %s' % (cid, name))
+            if cat_rec and not first_match:
+                first_match = cat_rec
+        if first_match:
+            self.shopee_category_id = first_match
+        self.category_suggestion = '\n'.join(lines)
+
     def action_create_shopee_product(self):
         self.ensure_one()
+
+        if not self.category_id:
+            raise UserError(_(
+                'Vui lòng chọn Danh mục Shopee.\n'
+                'Nếu danh sách rỗng, bấm "↻ Tải danh mục" hoặc "Gợi ý danh mục".'
+            ))
 
         from odoo.addons.shopee_order_fetch.services.shopee_api import (
             get_credentials_from_shop,

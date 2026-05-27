@@ -29,8 +29,23 @@
                             <field name="original_price"/>
                             <field name="weight"/>
                             <field name="initial_stock"/>
-                            <field name="category_id"
-                                   help="Nhập ID danh mục Shopee (số nguyên). Dùng nút 'Gợi ý danh mục' ở trang sản phẩm Shopee để tra cứu."/>
+                            <label for="shopee_category_id"/>
+                            <div class="o_row">
+                                <field name="shopee_category_id"
+                                       options="{'no_create': True}"
+                                       placeholder="Gõ để tìm danh mục…"/>
+                                <button name="action_sync_categories" type="object"
+                                        string="↻ Tải danh mục" class="btn-link"
+                                        invisible="not shop_id"/>
+                                <button name="action_suggest_category" type="object"
+                                        string="🪄 Gợi ý" class="btn-link"
+                                        invisible="not shop_id or not item_name"/>
+                            </div>
+                            <field name="category_id" readonly="1"
+                                   invisible="not category_id"/>
+                            <field name="category_suggestion" readonly="1"
+                                   invisible="not category_suggestion"
+                                   widget="text"/>
                             <field name="upload_product_image"/>
                         </group>
                         <group>
