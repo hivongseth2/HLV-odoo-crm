@@ -96,11 +96,17 @@ class HLVMobileBarcodeController(http.Controller):
                 if not Permission.check_picking_operation(request.env.user, warehouse, code, 'can_view'):
                     return {'error': _('Bạn không có quyền xem phiếu %s tại kho "%s". Vui lòng liên hệ Admin!', code, warehouse.name)}
 
+        pt_code = (picking.picking_type_id.sequence_code or '').upper()
+        pt_type = picking.picking_type_id.code
+        is_putaway = False
+        if pt_type == 'incoming' or (pt_type == 'internal' and 'INT' not in pt_code and 'IN' in pt_code):
+            is_putaway = True
+
         lines = []
         for move in picking.move_ids_without_package:
             if move.move_line_ids:
                 for ml in move.move_line_ids:
-                    if picking.picking_type_id.code in ['incoming', 'internal']:
+                    if is_putaway:
                         loc_name = ml.location_dest_id.display_name
                     else:
                         loc_name = ml.location_id.display_name
@@ -122,7 +128,7 @@ class HLVMobileBarcodeController(http.Controller):
                         'package_id': ml.package_id.id or False,
                     })
             else:
-                if picking.picking_type_id.code in ['incoming', 'internal']:
+                if is_putaway:
                     loc_name = move.location_dest_id.display_name
                 else:
                     loc_name = move.location_id.display_name
@@ -275,7 +281,11 @@ class HLVMobileBarcodeController(http.Controller):
             return {'error': _('Mã vạch không hợp lệ')}
         barcode = barcode.strip()
 
-        is_putaway = picking.picking_type_id.code in ['incoming', 'internal']
+        pt_code = (picking.picking_type_id.sequence_code or '').upper()
+        pt_type = picking.picking_type_id.code
+        is_putaway = False
+        if pt_type == 'incoming' or (pt_type == 'internal' and 'INT' not in pt_code and 'IN' in pt_code):
+            is_putaway = True
         
         # 1. Try to find location first
         location = request.env['stock.location'].sudo().search(['|', ('barcode', '=', barcode), ('name', '=', barcode)], limit=1)
@@ -409,6 +419,31 @@ class HLVMobileBarcodeController(http.Controller):
         ml_dest_id = destination_location_id if (destination_location_id and is_putaway) else picking.location_dest_id.id
         ml_src_id = destination_location_id if (destination_location_id and not is_putaway) else picking.location_id.id
         
+        # Check actual physical stock in the source location to prevent over-picking (only when picking, i.e., not is_putaway)
+        if not is_putaway:
+            # Calculate how many of this product have already been processed in this picking from this exact source location
+            processed_qty_from_loc = sum(
+                ml.quantity for ml in move.move_line_ids 
+                if ml.location_id.id == ml_src_id
+            )
+            
+            # Find the actual physical stock available at this source location (including all sub-locations)
+            quants = request.env['stock.quant'].sudo().search([
+                ('product_id', '=', product.id),
+                ('location_id', 'child_of', ml_src_id)
+            ])
+            available_qty = sum(q.quantity for q in quants)
+            
+            if processed_qty_from_loc + 1 > available_qty:
+                return {
+                    'error': _(
+                        'Số lượng quét (%g) vượt quá tồn kho thực tế tại vị trí "%s" (%g). Không thể quét thêm!',
+                        processed_qty_from_loc + 1,
+                        request.env['stock.location'].sudo().browse(ml_src_id).display_name,
+                        available_qty
+                    )
+                }
+        
         if move_line:
             # Check if location matches, otherwise we might need a new move line
             last_ml = move_line[-1]
@@ -497,6 +532,36 @@ class HLVMobileBarcodeController(http.Controller):
         other_lines_qty = sum(ml.quantity for ml in move.move_line_ids if ml.id != move_line.id)
         if move.product_uom_qty > 0.0 and (new_val + other_lines_qty) > move.product_uom_qty:
             return {'error': _('Số lượng vượt quá yêu cầu cho phép (%g/%g).', (new_val + other_lines_qty), move.product_uom_qty)}
+
+        # If we are picking from a location, validate physical stock
+        pt_code = (move.picking_id.picking_type_id.sequence_code or '').upper()
+        pt_type = move.picking_id.picking_type_id.code
+        is_putaway = False
+        if pt_type == 'incoming' or (pt_type == 'internal' and 'INT' not in pt_code and 'IN' in pt_code):
+            is_putaway = True
+            
+        if not is_putaway:
+            ml_src_id = move_line.location_id.id
+            processed_qty_from_loc = sum(
+                ml.quantity for ml in move.move_line_ids 
+                if ml.location_id.id == ml_src_id and ml.id != move_line.id
+            )
+            
+            quants = request.env['stock.quant'].sudo().search([
+                ('product_id', '=', move.product_id.id),
+                ('location_id', 'child_of', ml_src_id)
+            ])
+            available_qty = sum(q.quantity for q in quants)
+            
+            if (new_val + processed_qty_from_loc) > available_qty:
+                return {
+                    'error': _(
+                        'Số lượng cập nhật (%g) vượt quá tồn kho thực tế tại vị trí "%s" (%g).',
+                        new_val + processed_qty_from_loc,
+                        move_line.location_id.display_name,
+                        available_qty
+                    )
+                }
 
         move_line.quantity = new_val
         
