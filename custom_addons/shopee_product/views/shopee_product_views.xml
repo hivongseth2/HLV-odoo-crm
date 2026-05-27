@@ -75,10 +75,10 @@
                     <field name="shopee_item_url" invisible="1"/>
 
                     <div class="container-fluid px-0 o_shopee_workbench">
-                        <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 p-3 mb-3 border rounded bg-100">
+                        <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 p-3 mb-3 border border-primary rounded bg-primary-subtle shadow-sm">
                             <div class="flex-grow-1 min-w-0">
                                 <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-                                    <span class="badge text-bg-light border">Shopee Product</span>
+                                    <span class="badge text-bg-primary">Shopee Product</span>
                                     <field name="item_status" widget="badge"
                                            decoration-success="item_status == 'NORMAL'"
                                            decoration-warning="item_status == 'UNLIST'"
@@ -86,13 +86,13 @@
                                            decoration-muted="item_status == 'SELLER_DELETE'"
                                            decoration-info="item_status == 'REVIEWING'"/>
                                 </div>
-                                <h1 class="display-6 fw-semibold mb-2 lh-sm">
+                                <h1 class="display-6 fw-semibold mb-2 lh-sm text-primary-emphasis">
                                     <field name="item_name" nolabel="1" placeholder="Tên sản phẩm Shopee"/>
                                 </h1>
                                 <div class="d-flex flex-wrap gap-3 text-muted">
-                                    <span><i class="fa fa-barcode me-1"/> <field name="item_sku" nolabel="1" placeholder="SKU"/></span>
-                                    <span><i class="fa fa-hashtag me-1"/> <field name="shopee_item_id" nolabel="1" readonly="1"/></span>
-                                    <span><i class="fa fa-shopping-bag me-1"/> <field name="shop_id" nolabel="1" readonly="1" options="{'no_open': False}"/></span>
+                                    <span><i class="fa fa-barcode me-1 text-primary"/> <field name="item_sku" nolabel="1" placeholder="SKU"/></span>
+                                    <span><i class="fa fa-hashtag me-1 text-info"/> <field name="shopee_item_id" nolabel="1" readonly="1"/></span>
+                                    <span><i class="fa fa-shopping-bag me-1 text-success"/> <field name="shop_id" nolabel="1" readonly="1" options="{'no_open': False}"/></span>
                                 </div>
                             </div>
                             <div class="d-flex flex-wrap gap-2">
@@ -109,47 +109,47 @@
 
                         <div class="row g-3 mb-3">
                             <div class="col-6 col-lg-3">
-                                <button type="object" name="action_refresh_from_shopee" class="btn w-100 text-start border bg-white p-3">
-                                    <div class="text-muted small text-uppercase">Tồn kho</div>
-                                    <div class="fs-3 fw-semibold"><field name="total_available_stock" nolabel="1" readonly="1"/></div>
+                                <button type="object" name="action_refresh_from_shopee" class="btn w-100 text-start border border-success border-start border-4 bg-success-subtle p-3 shadow-sm">
+                                    <div class="text-success small text-uppercase fw-semibold">Tồn kho</div>
+                                    <div class="fs-3 fw-semibold text-success-emphasis"><field name="total_available_stock" nolabel="1" readonly="1"/></div>
                                 </button>
                             </div>
                             <div class="col-6 col-lg-3">
-                                <button name="action_load_models" type="object" class="btn w-100 text-start border bg-white p-3" invisible="not has_model">
-                                    <div class="text-muted small text-uppercase">Biến thể</div>
-                                    <div class="fs-3 fw-semibold"><field name="model_count" nolabel="1" readonly="1"/></div>
+                                <button name="action_load_models" type="object" class="btn w-100 text-start border border-info border-start border-4 bg-info-subtle p-3 shadow-sm" invisible="not has_model">
+                                    <div class="text-info small text-uppercase fw-semibold">Biến thể</div>
+                                    <div class="fs-3 fw-semibold text-info-emphasis"><field name="model_count" nolabel="1" readonly="1"/></div>
                                 </button>
-                                <div class="border bg-white p-3 rounded" invisible="has_model">
-                                    <div class="text-muted small text-uppercase">Biến thể</div>
-                                    <div class="fs-3 fw-semibold"><field name="model_count" nolabel="1" readonly="1"/></div>
+                                <div class="border border-info border-start border-4 bg-info-subtle p-3 rounded shadow-sm" invisible="has_model">
+                                    <div class="text-info small text-uppercase fw-semibold">Biến thể</div>
+                                    <div class="fs-3 fw-semibold text-info-emphasis"><field name="model_count" nolabel="1" readonly="1"/></div>
                                 </div>
                             </div>
                             <div class="col-6 col-lg-3">
-                                <button type="object" name="action_open_shopee_item_mappings" class="btn w-100 text-start border bg-white p-3" invisible="not shopee_item_mapping_count">
-                                    <div class="text-muted small text-uppercase">Mapping</div>
-                                    <div class="fs-3 fw-semibold"><field name="shopee_item_mapping_count" nolabel="1" readonly="1"/></div>
+                                <button type="object" name="action_open_shopee_item_mappings" class="btn w-100 text-start border border-warning border-start border-4 bg-warning-subtle p-3 shadow-sm" invisible="not shopee_item_mapping_count">
+                                    <div class="text-warning small text-uppercase fw-semibold">Mapping</div>
+                                    <div class="fs-3 fw-semibold text-warning-emphasis"><field name="shopee_item_mapping_count" nolabel="1" readonly="1"/></div>
                                 </button>
-                                <div class="border bg-white p-3 rounded" invisible="shopee_item_mapping_count">
-                                    <div class="text-muted small text-uppercase">Mapping</div>
-                                    <div class="fs-3 fw-semibold"><field name="shopee_item_mapping_count" nolabel="1" readonly="1"/></div>
+                                <div class="border border-warning border-start border-4 bg-warning-subtle p-3 rounded shadow-sm" invisible="shopee_item_mapping_count">
+                                    <div class="text-warning small text-uppercase fw-semibold">Mapping</div>
+                                    <div class="fs-3 fw-semibold text-warning-emphasis"><field name="shopee_item_mapping_count" nolabel="1" readonly="1"/></div>
                                 </div>
                             </div>
                             <div class="col-6 col-lg-3">
-                                <button type="object" name="action_open_mapped_products" class="btn w-100 text-start border bg-white p-3" invisible="not mapped_product_count">
-                                    <div class="text-muted small text-uppercase">SP Odoo</div>
-                                    <div class="fs-3 fw-semibold"><field name="mapped_product_count" nolabel="1" readonly="1"/></div>
+                                <button type="object" name="action_open_mapped_products" class="btn w-100 text-start border border-primary border-start border-4 bg-primary-subtle p-3 shadow-sm" invisible="not mapped_product_count">
+                                    <div class="text-primary small text-uppercase fw-semibold">SP Odoo</div>
+                                    <div class="fs-3 fw-semibold text-primary-emphasis"><field name="mapped_product_count" nolabel="1" readonly="1"/></div>
                                 </button>
-                                <div class="border bg-white p-3 rounded" invisible="mapped_product_count">
-                                    <div class="text-muted small text-uppercase">SP Odoo</div>
-                                    <div class="fs-3 fw-semibold"><field name="mapped_product_count" nolabel="1" readonly="1"/></div>
+                                <div class="border border-primary border-start border-4 bg-primary-subtle p-3 rounded shadow-sm" invisible="mapped_product_count">
+                                    <div class="text-primary small text-uppercase fw-semibold">SP Odoo</div>
+                                    <div class="fs-3 fw-semibold text-primary-emphasis"><field name="mapped_product_count" nolabel="1" readonly="1"/></div>
                                 </div>
                             </div>
                         </div>
 
                         <div class="row g-3 mb-3">
                             <div class="col-lg-4">
-                                <div class="border rounded bg-white p-3 h-100">
-                                    <div class="fw-semibold mb-3">Identity</div>
+                                <div class="border border-primary border-top border-3 rounded bg-white p-3 h-100 shadow-sm">
+                                    <div class="fw-semibold mb-3 text-primary"><i class="fa fa-id-card-o me-1"/> Identity</div>
                                     <div class="mb-3">
                                         <span class="d-block text-muted small">Danh mục Shopee</span>
                                         <field name="category_id" nolabel="1" readonly="1"/>
@@ -165,8 +165,8 @@
                                 </div>
                             </div>
                             <div class="col-lg-4">
-                                <div class="border rounded bg-white p-3 h-100">
-                                    <div class="fw-semibold mb-3">Giá &amp; tồn</div>
+                                <div class="border border-success border-top border-3 rounded bg-white p-3 h-100 shadow-sm">
+                                    <div class="fw-semibold mb-3 text-success"><i class="fa fa-line-chart me-1"/> Giá &amp; tồn</div>
                                     <div class="mb-3">
                                         <span class="d-block text-muted small">Giá gốc</span>
                                         <field name="original_price" nolabel="1" widget="integer"/>
@@ -182,8 +182,8 @@
                                 </div>
                             </div>
                             <div class="col-lg-4">
-                                <div class="border rounded bg-white p-3 h-100">
-                                    <div class="fw-semibold mb-3">Liên kết Odoo</div>
+                                <div class="border border-warning border-top border-3 rounded bg-white p-3 h-100 shadow-sm">
+                                    <div class="fw-semibold mb-3 text-warning"><i class="fa fa-link me-1"/> Liên kết Odoo</div>
                                     <div class="mb-3">
                                         <span class="d-block text-muted small">Mapping shopee.item</span>
                                         <field name="shopee_item_mapping_ids" nolabel="1" widget="many2many_tags" readonly="1"/>
@@ -200,9 +200,9 @@
                             </div>
                         </div>
 
-                        <div class="border rounded bg-white p-3 mb-3" invisible="not has_model">
+                        <div class="border border-success border-top border-4 rounded bg-white p-3 mb-3 shadow-sm" invisible="not has_model">
                             <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-                                <div class="fw-semibold fs-5">Giá &amp; tồn theo biến thể</div>
+                                <div class="fw-semibold fs-5 text-success"><i class="fa fa-sliders me-1"/> Giá &amp; tồn theo biến thể</div>
                                 <div class="d-flex flex-wrap gap-2">
                                     <button name="action_push_price" type="object" string="Đẩy giá" class="btn btn-primary" icon="fa-tag" confirm="Cập nhật giá lên Shopee?"/>
                                     <button name="action_push_stock" type="object" string="Đẩy tồn kho" class="btn btn-primary" icon="fa-cubes" confirm="Cập nhật tồn kho lên Shopee?"/>
@@ -231,8 +231,8 @@
 
                         <div class="row g-3 mb-3">
                             <div class="col-xl-4 col-lg-6">
-                                <div class="border rounded bg-white p-3 h-100">
-                                    <div class="fw-semibold mb-3"><i class="fa fa-check-circle me-1"/> Content quality</div>
+                                <div class="border border-info border-top border-3 rounded bg-white p-3 h-100 shadow-sm">
+                                    <div class="fw-semibold mb-3 text-info"><i class="fa fa-check-circle me-1"/> Content quality</div>
                                     <span class="d-block text-muted small">Tên sản phẩm</span>
                                     <field name="item_name" nolabel="1"/>
                                     <span class="d-block text-muted small mt-3">SKU</span>
@@ -240,21 +240,21 @@
                                 </div>
                             </div>
                             <div class="col-xl-4 col-lg-6">
-                                <div class="border rounded bg-white p-3 h-100">
-                                    <div class="fw-semibold mb-3"><i class="fa fa-ban me-1"/> Violation</div>
+                                <div class="border border-danger border-top border-3 rounded bg-white p-3 h-100 shadow-sm">
+                                    <div class="fw-semibold mb-3 text-danger"><i class="fa fa-ban me-1"/> Violation</div>
                                     <field name="item_status" nolabel="1" readonly="1"/>
                                     <field name="shopee_update_time" nolabel="1" readonly="1"/>
                                 </div>
                             </div>
                             <div class="col-xl-4 col-lg-6">
-                                <div class="border rounded bg-white p-3 h-100">
-                                    <div class="fw-semibold mb-3"><i class="fa fa-comments me-1"/> Comment</div>
+                                <div class="border border-primary border-top border-3 rounded bg-white p-3 h-100 shadow-sm">
+                                    <div class="fw-semibold mb-3 text-primary"><i class="fa fa-comments me-1"/> Comment</div>
                                     <field name="shopee_item_mapping_ids" nolabel="1" widget="many2many_tags" readonly="1"/>
                                 </div>
                             </div>
                             <div class="col-xl-4 col-lg-6">
-                                <div class="border rounded bg-white p-3 h-100">
-                                    <div class="fw-semibold mb-3"><i class="fa fa-rocket me-1"/> Boost</div>
+                                <div class="border border-warning border-top border-3 rounded bg-white p-3 h-100 shadow-sm">
+                                    <div class="fw-semibold mb-3 text-warning"><i class="fa fa-rocket me-1"/> Boost</div>
                                     <div class="d-flex flex-wrap gap-2">
                                         <button name="action_refresh_from_shopee" type="object" string="Làm mới" class="btn btn-outline-primary" icon="fa-refresh"/>
                                         <button name="action_open_shopee_item" type="object" string="Shopee" class="btn btn-outline-secondary" icon="fa-external-link" invisible="not shopee_item_url"/>
@@ -262,21 +262,21 @@
                                 </div>
                             </div>
                             <div class="col-xl-4 col-lg-6">
-                                <div class="border rounded bg-white p-3 h-100">
-                                    <div class="fw-semibold mb-3"><i class="fa fa-image me-1"/> Kit image</div>
+                                <div class="border border-success border-top border-3 rounded bg-white p-3 h-100 shadow-sm">
+                                    <div class="fw-semibold mb-3 text-success"><i class="fa fa-image me-1"/> Kit image</div>
                                     <field name="mapped_product_ids" nolabel="1" widget="many2many_tags" readonly="1"/>
                                 </div>
                             </div>
                             <div class="col-xl-4 col-lg-6">
-                                <div class="border rounded bg-white p-3 h-100">
-                                    <div class="fw-semibold mb-3"><i class="fa fa-clock-o me-1"/> Đồng bộ</div>
+                                <div class="border border-secondary border-top border-3 rounded bg-white p-3 h-100 shadow-sm">
+                                    <div class="fw-semibold mb-3 text-secondary"><i class="fa fa-clock-o me-1"/> Đồng bộ</div>
                                     <field name="last_synced" nolabel="1" readonly="1"/>
                                 </div>
                             </div>
                         </div>
 
-                        <div class="border rounded bg-white p-3">
-                            <div class="fw-semibold mb-3">Raw JSON</div>
+                        <div class="border border-secondary border-top border-3 rounded bg-white p-3 shadow-sm">
+                            <div class="fw-semibold mb-3 text-secondary"><i class="fa fa-code me-1"/> Raw JSON</div>
                             <field name="raw_data" widget="json" readonly="1" nolabel="1"/>
                         </div>
                     </div>
