@@ -24,15 +24,21 @@
                         Danh sách sản phẩm
                     </div>
                     <div class="items-list" style="margin-top: 0;">
-                        <t t-foreach="state.picking.lines" t-as="line" t-key="line.move_id">
+                        <t t-foreach="state.picking.lines" t-as="line" t-key="line.id || 'draft_' + line.product_id">
                             <div style="border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 8px; overflow: hidden;">
                                 <div t-attf-class="item-card #{line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0 ? 'scanned' : ''}" style="border: none; margin-bottom: 0;">
                                     <div class="item-info">
                                         <div class="item-name"><t t-esc="line.product_name"/></div>
-                                        <div style="font-size: 0.8rem; margin-top: 3px; color: var(--text-muted); display: flex; align-items: center; gap: 4px;">
-                                            <i class="fa fa-barcode"></i> <span class="no-copy"><t t-esc="line.product_barcode"/></span>
-                                            <span t-if="line.location_name" style="margin-left: 6px; color: var(--info-color); font-weight: 500;">
+                                        <div style="font-size: 0.8rem; margin-top: 3px; color: var(--text-muted); display: flex; align-items: center; flex-wrap: wrap; gap: 8px;">
+                                            <span style="display: inline-flex; align-items: center; gap: 4px;">
+                                                <i class="fa fa-barcode"></i> <span class="no-copy"><t t-esc="line.product_barcode"/></span>
+                                            </span>
+                                            <span t-if="line.location_name" style="color: var(--info-color); font-weight: 500; display: inline-flex; align-items: center; gap: 4px;">
                                                 <i class="fa fa-map-marker-alt"></i> <t t-esc="line.location_name"/>
+                                            </span>
+                                            <span t-if="line.package_name" style="background-color: #e9ecef; border: 1px solid #ced4da; padding: 2px 6px; border-radius: 4px; color: #495057; font-weight: 600; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 4px;">
+                                                <i class="fa fa-box"></i> <t t-esc="line.package_name"/>
+                                                <i t-if="state.picking.state !== 'done'" class="fa fa-times-circle text-danger" style="margin-left: 4px; font-size: 0.85rem; cursor: pointer;" title="Gỡ khỏi kiện hàng" t-on-click="() => this.unpackLine(line)"></i>
                                             </span>
                                         </div>
                                     </div>
