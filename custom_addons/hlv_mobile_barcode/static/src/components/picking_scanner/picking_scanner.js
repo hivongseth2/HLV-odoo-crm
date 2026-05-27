@@ -121,6 +121,7 @@ export class PickingScanner extends Component {
         try {
             const res = await rpc("/hlv_mobile_barcode/update_move_line_qty", {
                 move_id: line.move_id,
+                move_line_id: line.id,
                 qty_change: change
             });
             if (res.error) {
@@ -128,6 +129,9 @@ export class PickingScanner extends Component {
                 this.notification.add(res.error, { type: "danger" });
             } else {
                 line.qty_done = res.new_qty;
+                if (!line.id) {
+                    await this.loadPicking();
+                }
             }
         } catch (e) {
             this.playSound('error');
@@ -145,6 +149,7 @@ export class PickingScanner extends Component {
         try {
             const res = await rpc("/hlv_mobile_barcode/update_move_line_qty", {
                 move_id: line.move_id,
+                move_line_id: line.id,
                 new_qty: newVal
             });
             if (res.error) {
@@ -153,6 +158,9 @@ export class PickingScanner extends Component {
                 ev.target.value = line.qty_done;
             } else {
                 line.qty_done = res.new_qty;
+                if (!line.id) {
+                    await this.loadPicking();
+                }
             }
         } catch (e) {
             this.playSound('error');
@@ -167,12 +175,31 @@ export class PickingScanner extends Component {
         if (!confirm(`Bạn có chắc muốn xóa sản phẩm ${line.product_name}?`)) return;
         try {
             const res = await rpc("/hlv_mobile_barcode/delete_move", {
-                move_id: line.move_id
+                move_id: line.move_id,
+                move_line_id: line.id
             });
             if (res.error) {
                 this.notification.add(res.error, { type: "danger" });
             } else {
                 this.notification.add("Đã xóa", { type: "success" });
+                await this.loadPicking();
+            }
+        } catch (e) {
+            this.notification.add("Lỗi kết nối", { type: "danger" });
+        }
+    }
+
+    async unpackLine(line) {
+        if (!confirm(`Bạn có chắc muốn gỡ dòng sản phẩm này ra khỏi kiện hàng ${line.package_name || ''}?`)) return;
+        try {
+            const res = await rpc("/hlv_mobile_barcode/unpack_move_line", {
+                move_line_id: line.id
+            });
+            if (res.error) {
+                this.notification.add(res.error, { type: "danger" });
+            } else {
+                this.notification.add("Đã gỡ sản phẩm ra khỏi kiện thành công!", { type: "success" });
+                this.playSound('success');
                 await this.loadPicking();
             }
         } catch (e) {
@@ -186,9 +213,13 @@ export class PickingScanner extends Component {
             if (res.error) {
                 this.notification.add(res.error, { type: "danger" });
             } else if (res.success) {
-                this.notification.add("Packed successfully", { type: "success" });
+                const msg = res.package_name 
+                    ? `Đóng gói thành công vào kiện ${res.package_name}!` 
+                    : "Đóng gói thành công!";
+                this.notification.add(msg, { type: "success" });
+                this.playSound('success');
                 if (res.print_after_pack && res.package_id) {
-                    if (confirm("Do you want to print the label for this package?")) {
+                    if (confirm(`Bạn có muốn in nhãn cho kiện hàng ${res.package_name || ''} không?`)) {
                         this.actionService.doAction({
                             type: 'ir.actions.report',
                             report_type: 'qweb-pdf',
@@ -201,7 +232,7 @@ export class PickingScanner extends Component {
                 await this.loadPicking();
             }
         } catch (e) {
-            this.notification.add("Server error", { type: "danger" });
+            this.notification.add("Lỗi kết nối", { type: "danger" });
         }
     }
 
@@ -211,11 +242,12 @@ export class PickingScanner extends Component {
             if (res.error) {
                 this.notification.add(res.error, { type: "danger" });
             } else if (res.success) {
-                this.notification.add("Validated successfully", { type: "success" });
+                this.notification.add("Xác nhận phiếu thành công!", { type: "success" });
+                this.playSound('success');
                 await this.loadPicking();
             }
         } catch (e) {
-            this.notification.add("Server error", { type: "danger" });
+            this.notification.add("Lỗi kết nối", { type: "danger" });
         }
     }
 

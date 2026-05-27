@@ -69,12 +69,13 @@ hlv_mobile_barcode/
 
 ## API / Controllers
 - `/hlv_mobile_barcode/smart_scan`: Đầu vào `barcode`. Trả về đối tượng khớp đầu tiên theo thứ tự ưu tiên: Picking > Product > Location > Package, đồng thời trả kèm thêm trường `warehouse_code`.
-- `/hlv_mobile_barcode/get_picking_data`: Trả về JSON tree chi tiết các line của một Picking để hiển thị, bao gồm cả `warehouse_code`, đồng thời tự động tính toán và trả về `linked_picking_id` và `linked_picking_name` nếu có phiếu liên kết của bước tiếp theo trong quy trình chuyển kho 2 bước.
-- `/hlv_mobile_barcode/process_barcode`: Cập nhật `qty_done` khi quét sản phẩm, vị trí, hoặc kiện hàng (Package) nằm trong picking.
+- `/hlv_mobile_barcode/get_picking_data`: Trả về JSON tree chi tiết các dòng dịch chuyển (stock.move.line) của một Picking để hiển thị riêng biệt theo kiện (Package) hoặc hàng lẻ (Unpacked), bao gồm cả `warehouse_code`, các thông tin liên kết 2 bước `linked_picking_id` và `linked_picking_name`.
+- `/hlv_mobile_barcode/process_barcode`: Cập nhật `qty_done` khi quét sản phẩm, vị trí, hoặc kiện hàng. Hỗ trợ bỏ qua và tự tạo dòng mới khi quét sản phẩm đã được đóng gói/nằm trong kiện hàng, tránh ghi đè số lượng đã đóng gói.
   * *Hỗ trợ quét Kiện hàng (Package)*: Được kiểm soát thông qua cấu hình **"Cho phép quét Kiện hàng" (hlv_barcode_allow_package_scan)** trong Cài đặt hệ thống (mặc định bật). Khi người dùng quét mã vạch của kiện hàng (`stock.quant.package`):
     1. Kiểm tra xem phiếu kho có dòng dịch chuyển (move line) nào dành riêng cho kiện hàng này không (khớp `package_id` hoặc `result_package_id`). Nếu có, tự động cập nhật số lượng hoàn tất cho các dòng đó theo số lượng reserved.
     2. Nếu không có dòng dịch chuyển riêng cho kiện hàng, hệ thống tự động tra cứu danh sách sản phẩm và số lượng thực tế chứa trong kiện thông qua `stock.quant`, sau đó tự động khớp, bổ sung và cập nhật số lượng hoàn thành tương ứng cho các sản phẩm đó trong phiếu một cách hàng loạt.
-- `/hlv_mobile_barcode/put_in_pack`: Đóng gói các dòng `qty_done` > 0 thành Package. Hỗ trợ trả cờ `print_after_pack` theo cấu hình.
+- `/hlv_mobile_barcode/put_in_pack`: Đóng gói các dòng có số lượng đã quét lẻ thành Package. Trả về tên kiện hàng vừa đóng gói (`package_name`) và cờ `print_after_pack`.
+- `/hlv_mobile_barcode/unpack_move_line`: Gỡ sản phẩm ra khỏi kiện hàng (xóa `package_id` và `result_package_id` trên dòng dịch chuyển được chọn) để chuyển về dạng hàng lẻ, cho phép chỉnh sửa hoặc quét bổ sung.
 - `/hlv_mobile_barcode/get_inventory_lookup`: Truy vấn `stock.quant` cho màn hình tra cứu, tự động xác định `warehouse_code` từ vị trí kho.
 - `/hlv_mobile_barcode/move_location`: Tạo lệnh `stock.picking` type Internal và xử lý tự động validate để di chuyển tồn kho.
 
