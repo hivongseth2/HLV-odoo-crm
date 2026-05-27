@@ -84,10 +84,34 @@ class ShopeeProduct(models.Model):
     # ── Liên kết Odoo ───────────────────────────────────
     odoo_product_id = fields.Many2one(
         'product.product',
-        string='Sản phẩm Odoo',
+        string='Sản phẩm Odoo thủ công',
         ondelete='set null',
         index=True,
-        help='Liên kết sản phẩm Shopee này với sản phẩm Odoo tương ứng.',
+        help='Liên kết thủ công cũ. Ưu tiên mapping từ shopee.item nếu có.',
+    )
+    shopee_item_mapping_ids = fields.Many2many(
+        'shopee.item',
+        string='Mapping shopee.item',
+        compute='_compute_shopee_item_mapping',
+        store=False,
+        help='Mapping có sẵn từ sale_shopee/shopee_order_fetch theo shop + Shopee item_id.',
+    )
+    shopee_item_mapping_count = fields.Integer(
+        string='Số mapping',
+        compute='_compute_shopee_item_mapping',
+        store=False,
+    )
+    mapped_product_ids = fields.Many2many(
+        'product.product',
+        string='Sản phẩm Odoo từ shopee.item',
+        compute='_compute_shopee_item_mapping',
+        store=False,
+        help='Các product.product đang được shopee.item trỏ tới.',
+    )
+    mapped_product_count = fields.Integer(
+        string='Số sản phẩm Odoo',
+        compute='_compute_shopee_item_mapping',
+        store=False,
     )
 
     # ── Dữ liệu thô ─────────────────────────────────────
@@ -139,6 +163,35 @@ class ShopeeProduct(models.Model):
             else:
                 rec.shopee_item_url = False
 
+    @api.depends('shop_id', 'shopee_item_id')
+    def _compute_shopee_item_mapping(self):
+        ShopeeItem = self.env['shopee.item'].sudo()
+        Product = self.env['product.product'].sudo()
+        for rec in self:
+            mappings = ShopeeItem.browse()
+            if rec.shop_id and rec.shopee_item_id:
+                mappings = rec._find_shopee_item_mappings()
+            products = mappings.mapped('product_id') if mappings else Product.browse()
+            rec.shopee_item_mapping_ids = mappings
+            rec.shopee_item_mapping_count = len(mappings)
+            rec.mapped_product_ids = products
+            rec.mapped_product_count = len(products)
+
+    def _find_shopee_item_mappings(self, model_id=None):
+        """Find sale_shopee mapping rows for this Shopee item/model."""
+        self.ensure_one()
+        if not self.shop_id or not self.shopee_item_id:
+            return self.env['shopee.item'].browse()
+
+        domain = [
+            ('shop_id', '=', self.shop_id.id),
+            ('shopee_item_identifier', '=', str(self.shopee_item_id)),
+        ]
+        if model_id is not None:
+            model_value = str(model_id or '')
+            domain.append(('shopee_model_identifier', '=', model_value))
+        return self.env['shopee.item'].sudo().search(domain)
+
     # ── Actions ─────────────────────────────────────────
 
     def action_open_shopee_item(self):
@@ -150,6 +203,34 @@ class ShopeeProduct(models.Model):
             'type': 'ir.actions.act_url',
             'url': self.shopee_item_url,
             'target': 'new',
+        }
+
+    def action_open_shopee_item_mappings(self):
+        """Open shopee.item mappings already maintained by sale_shopee."""
+        self.ensure_one()
+        if not self.shopee_item_mapping_ids:
+            raise UserError(_('Chưa có mapping shopee.item cho sản phẩm này.'))
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Mapping shopee.item'),
+            'res_model': 'shopee.item',
+            'view_mode': 'list,form',
+            'domain': [('id', 'in', self.shopee_item_mapping_ids.ids)],
+            'target': 'current',
+        }
+
+    def action_open_mapped_products(self):
+        """Open product.product records linked through shopee.item."""
+        self.ensure_one()
+        if not self.mapped_product_ids:
+            raise UserError(_('Chưa có sản phẩm Odoo nào được mapping qua shopee.item.'))
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Sản phẩm Odoo đã mapping'),
+            'res_model': 'product.product',
+            'view_mode': 'list,form',
+            'domain': [('id', 'in', self.mapped_product_ids.ids)],
+            'target': 'current',
         }
 
     def action_refresh_from_shopee(self):

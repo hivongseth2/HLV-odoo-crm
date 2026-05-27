@@ -66,6 +66,21 @@ class ShopeeProductModel(models.Model):
 
     last_synced = fields.Datetime('Đồng bộ lần cuối', readonly=True)
 
+    # ── sale_shopee mapping ────────────────────────────────────────────────
+    shopee_item_mapping_id = fields.Many2one(
+        'shopee.item',
+        string='Mapping shopee.item',
+        compute='_compute_shopee_item_mapping',
+        store=False,
+        help='Mapping biến thể có sẵn từ sale_shopee theo item_id + model_id.',
+    )
+    mapped_product_id = fields.Many2one(
+        'product.product',
+        string='Sản phẩm Odoo từ shopee.item',
+        compute='_compute_shopee_item_mapping',
+        store=False,
+    )
+
     # ── Computed ────────────────────────────────────────────────────────────
     display_name_computed = fields.Char(
         compute='_compute_display_name_computed',
@@ -77,6 +92,24 @@ class ShopeeProductModel(models.Model):
         for rec in self:
             parts = [p for p in [rec.tier_label, rec.model_sku] if p]
             rec.display_name_computed = ' — '.join(parts) if parts else str(rec.shopee_model_id)
+
+    @api.depends('shopee_product_id.shop_id', 'shopee_product_id.shopee_item_id', 'shopee_model_id')
+    def _compute_shopee_item_mapping(self):
+        ShopeeItem = self.env['shopee.item'].sudo()
+        Product = self.env['product.product']
+        for rec in self:
+            mapping = ShopeeItem.browse()
+            product = Product.browse()
+            product_rec = rec.shopee_product_id
+            if product_rec.shop_id and product_rec.shopee_item_id:
+                mapping = ShopeeItem.search([
+                    ('shop_id', '=', product_rec.shop_id.id),
+                    ('shopee_item_identifier', '=', str(product_rec.shopee_item_id)),
+                    ('shopee_model_identifier', '=', str(rec.shopee_model_id or '')),
+                ], limit=1)
+                product = mapping.product_id if mapping else product
+            rec.shopee_item_mapping_id = mapping
+            rec.mapped_product_id = product
 
     # ── Helper ──────────────────────────────────────────────────────────────
     @api.model
