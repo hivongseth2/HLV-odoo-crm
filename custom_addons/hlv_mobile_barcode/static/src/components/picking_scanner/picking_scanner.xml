@@ -15,10 +15,7 @@
             
                 <!-- Scrollable product list area -->
                 <div class="picking-scroll-area">
-                    <!-- Active Location Banner -->
-                    <div t-if="props.scannedLocationName" class="alert alert-info" style="margin-bottom: 10px; padding: 8px 10px; border-radius: 8px; font-weight: 600; display: flex; align-items: center; gap: 8px; border-left: 4px solid var(--info-color);">
-                        <i class="fa fa-map-marker-alt"></i> Vị trí quét tiếp theo: <t t-esc="props.scannedLocationName"/>
-                    </div>
+
                     
                     <!-- Collapsible Packages Section -->
                     <div t-if="state.picking.packages and state.picking.packages.length > 0" class="packages-section">
