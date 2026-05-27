@@ -15,6 +15,13 @@ import requests as req_lib
 from odoo import _
 from odoo.exceptions import UserError
 
+# Lỗi Shopee trả về khi access_token hết hạn (typo trong Shopee API — 3 chữ 'e' là đúng)
+SHOPEE_INVALID_TOKEN_ERRORS = frozenset([
+    'invalid_access_token',
+    'invalid_acceess_token',  # typo lịch sử trong Shopee API
+    'error_auth',
+])
+
 _logger = logging.getLogger(__name__)
 
 SHOPEE_BASE_URL    = 'https://partner.shopeemobile.com'
@@ -211,3 +218,99 @@ def call_escrow_detail_strict(creds, order_sn):
         )
 
     return body.get('response', {})
+
+
+# ──────────────────────────────────────────────────────
+#  Token Refresh
+# ──────────────────────────────────────────────────────
+
+def refresh_shopee_access_token(shop):
+    """
+    Làm mới Shopee access_token cho một shop record.
+
+    Gọi POST /api/v2/auth/refresh_access_token với refresh_token hiện tại,
+    sau đó cập nhật shop.access_token (và shop.refresh_token nếu trả về mới).
+
+    :param shop: shopee.shop record
+    :return: new_access_token (str)
+    :raises UserError: nếu shop không có refresh_token hoặc Shopee trả lỗi
+    """
+    refresh_token = getattr(shop, 'refresh_token', False)
+    if not refresh_token:
+        raise UserError(
+            _("Shop '%s' không có Refresh Token — cần cấp quyền OAuth lại từ Shopee.")
+            % shop.display_name
+        )
+
+    account = getattr(shop, 'account_id', False)
+    if not account:
+        raise UserError(
+            _("Shop '%s' chưa được liên kết với Shopee Account.") % shop.display_name
+        )
+
+    partner_id = getattr(account, 'partner_identifier', False)
+    partner_key = getattr(account, 'partner_key', False)
+    if not partner_id or not partner_key:
+        raise UserError(_("Thiếu partner_identifier hoặc partner_key trên Shopee Account."))
+
+    shop_id = getattr(shop, 'shop_identifier', False)
+    if not shop_id:
+        raise UserError(_("Shop '%s' thiếu shop_identifier.") % shop.display_name)
+
+    api_path = '/api/v2/auth/refresh_access_token'
+    ts = int(time.time())
+    # Sign cho auth endpoint: KHÔNG có access_token trong base string
+    base_string = f"{partner_id}{api_path}{ts}"
+    sign = hmac.new(
+        str(partner_key).encode('utf-8'),
+        base_string.encode('utf-8'),
+        hashlib.sha256,
+    ).hexdigest()
+
+    params = {
+        'partner_id': int(partner_id),
+        'timestamp': ts,
+        'sign': sign,
+    }
+    body = {
+        'refresh_token': refresh_token,
+        'shop_id': int(shop_id),
+    }
+
+    base_url = SHOPEE_SANDBOX_URL if getattr(shop, 'is_sandbox', False) else SHOPEE_BASE_URL
+    url = f"{base_url}{api_path}"
+
+    _logger.info(
+        "Shopee: đang refresh access_token cho shop %s (shop_id=%s)",
+        shop.display_name, shop_id,
+    )
+    try:
+        resp = req_lib.post(url, params=params, json=body, timeout=30)
+        data = resp.json()
+    except Exception as exc:
+        raise UserError(_("Lỗi kết nối khi refresh Shopee token:\n%s") % str(exc))
+
+    err = data.get('error')
+    if err:
+        raise UserError(
+            _("Shopee từ chối refresh token cho shop '%s':\n%s — %s\n\n"
+              "Cần cấp phép OAuth lại từ Shopee Partner Portal.")
+            % (shop.display_name, err, data.get('message', ''))
+        )
+
+    new_access_token = data.get('access_token')
+    new_refresh_token = data.get('refresh_token')
+
+    if not new_access_token:
+        raise UserError(_("Shopee không trả về access_token mới sau khi refresh."))
+
+    write_vals = {'access_token': new_access_token}
+    if new_refresh_token:
+        write_vals['refresh_token'] = new_refresh_token
+
+    shop.sudo().write(write_vals)
+    _logger.info(
+        "Shopee: refresh token thành công cho shop %s — expire_in=%s",
+        shop.display_name, data.get('expire_in', 'N/A'),
+    )
+    return new_access_token

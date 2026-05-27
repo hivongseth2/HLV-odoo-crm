@@ -11,6 +11,13 @@
                        string="Môi trường Sandbox (Test)"
                        help="Bật nếu đang dùng Test Partner_id — sẽ gọi https://openplatform.sandbox.test-stable.shopee.sg thay vì Production URL."/>
             </xpath>
+            <xpath expr="//header" position="inside">
+                <button name="action_refresh_shopee_token" type="object"
+                        string="Làm mới Token Shopee"
+                        class="btn btn-warning"
+                        icon="fa-refresh"
+                        confirm="Gọi Shopee API để lấy access_token mới bằng refresh_token hiện tại?"/>
+            </xpath>
         </field>
     </record>
 </odoo>

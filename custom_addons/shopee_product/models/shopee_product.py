@@ -305,11 +305,10 @@ class ShopeeProduct(models.Model):
     def action_refresh_from_shopee(self):
         """Cập nhật lại thông tin sản phẩm này từ Shopee API."""
         self.ensure_one()
-        from odoo.addons.shopee_order_fetch.services.shopee_api import (
-            get_credentials_from_shop,
+        item_id = int(self.shopee_item_id)
+        items = self._call_with_token_refresh(
+            lambda creds: shopee_product_api.call_get_item_base_info(creds, [item_id])
         )
-        creds = get_credentials_from_shop(self.shop_id)
-        items = shopee_product_api.call_get_item_base_info(creds, [int(self.shopee_item_id)])
         if not items:
             raise UserError(_("Không tìm thấy thông tin sản phẩm ID %s trên Shopee.") % self.shopee_item_id)
         _update_record_from_api(self, items[0])
@@ -328,12 +327,9 @@ class ShopeeProduct(models.Model):
     def action_load_models(self):
         """Tải danh sách biến thể (model) từ Shopee và lưu vào model_ids."""
         self.ensure_one()
-        from odoo.addons.shopee_order_fetch.services.shopee_api import (
-            get_credentials_from_shop,
-        )
-        creds = get_credentials_from_shop(self.shop_id)
-        model_list, tier_variation_list = shopee_product_api.call_get_model_list(
-            creds, int(self.shopee_item_id)
+        item_id = int(self.shopee_item_id)
+        model_list, tier_variation_list = self._call_with_token_refresh(
+            lambda creds: shopee_product_api.call_get_model_list(creds, item_id)
         )
 
         ShopeeModel = self.env['shopee.product.model']
@@ -399,10 +395,6 @@ class ShopeeProduct(models.Model):
     def action_push_price(self):
         """Đẩy giá lên Shopee theo price_update_mode và reload form."""
         self.ensure_one()
-        from odoo.addons.shopee_order_fetch.services.shopee_api import (
-            get_credentials_from_shop,
-        )
-        creds = get_credentials_from_shop(self.shop_id)
         mode = self.price_update_mode or 'manual'
         fname = self.price_field_id.name if self.price_field_id else None
 
@@ -446,8 +438,9 @@ class ShopeeProduct(models.Model):
         if not price_list:
             raise UserError(_('Không có giá hợp lệ để cập nhật.'))
 
-        success, failure = shopee_product_api.call_update_price(
-            creds, int(self.shopee_item_id), price_list
+        item_id = int(self.shopee_item_id)
+        success, failure = self._call_with_token_refresh(
+            lambda creds: shopee_product_api.call_update_price(creds, item_id, price_list)
         )
 
         if failure:
@@ -463,10 +456,6 @@ class ShopeeProduct(models.Model):
     def action_push_stock(self):
         """Đẩy tồn kho lên Shopee theo stock_update_mode và reload form."""
         self.ensure_one()
-        from odoo.addons.shopee_order_fetch.services.shopee_api import (
-            get_credentials_from_shop,
-        )
-        creds = get_credentials_from_shop(self.shop_id)
         mode = self.stock_update_mode or 'manual'
 
         if mode == 'warehouse' and not self.stock_warehouse_id:
@@ -527,8 +516,9 @@ class ShopeeProduct(models.Model):
         if not stock_list:
             raise UserError(_('Không có tồn kho hợp lệ để cập nhật.'))
 
-        success, failure = shopee_product_api.call_update_stock(
-            creds, int(self.shopee_item_id), stock_list
+        item_id = int(self.shopee_item_id)
+        success, failure = self._call_with_token_refresh(
+            lambda creds: shopee_product_api.call_update_stock(creds, item_id, stock_list)
         )
 
         if failure:
@@ -544,11 +534,10 @@ class ShopeeProduct(models.Model):
     def action_delete_from_shopee(self):
         """Xóa sản phẩm này khỏi Shopee (soft delete — trạng thái SELLER_DELETE)."""
         self.ensure_one()
-        from odoo.addons.shopee_order_fetch.services.shopee_api import (
-            get_credentials_from_shop,
+        item_id = int(self.shopee_item_id)
+        self._call_with_token_refresh(
+            lambda creds: shopee_product_api.call_delete_item(creds, [item_id])
         )
-        creds = get_credentials_from_shop(self.shop_id)
-        shopee_product_api.call_delete_item(creds, [int(self.shopee_item_id)])
         self.write({'item_status': 'SELLER_DELETE'})
         return {
             'type': 'ir.actions.client',
@@ -568,6 +557,33 @@ class ShopeeProduct(models.Model):
         )
         return get_credentials_from_shop(self.shop_id)
 
+    def _call_with_token_refresh(self, fn):
+        """
+        Gọi fn(creds) và tự động làm mới token nếu Shopee trả invalid_access_token,
+        sau đó retry một lần.
+
+        :param fn: callable nhận creds dict, thực hiện Shopee API call
+        :return: kết quả của fn
+        """
+        from odoo.addons.shopee_order_fetch.services.shopee_api import (
+            get_credentials_from_shop,
+            SHOPEE_INVALID_TOKEN_ERRORS,
+        )
+        creds = get_credentials_from_shop(self.shop_id)
+        try:
+            return fn(creds)
+        except UserError as exc:
+            msg = str(exc.args[0]) if exc.args else ''
+            if any(code in msg for code in SHOPEE_INVALID_TOKEN_ERRORS):
+                _logger.warning(
+                    "Shopee invalid_access_token cho shop %s — đang tự refresh...",
+                    self.shop_id.display_name,
+                )
+                self.shop_id._refresh_shopee_token()
+                creds = get_credentials_from_shop(self.shop_id)
+                return fn(creds)
+            raise
+
     def _store_raw_section(self, section, value, title, message=None):
         self.ensure_one()
         raw_data = self.raw_data if isinstance(self.raw_data, dict) else {}
@@ -584,8 +600,9 @@ class ShopeeProduct(models.Model):
 
     def action_fetch_item_extra_info(self):
         self.ensure_one()
-        result = shopee_product_api.call_get_item_extra_info(
-            self._get_shopee_credentials(), [int(self.shopee_item_id)]
+        item_id = int(self.shopee_item_id)
+        result = self._call_with_token_refresh(
+            lambda creds: shopee_product_api.call_get_item_extra_info(creds, [item_id])
         )
         return self._store_raw_section(
             'extra_info', result, _('Đã lấy Extra Info'), _('Đã lưu thông tin bổ sung của sản phẩm.')
@@ -593,8 +610,9 @@ class ShopeeProduct(models.Model):
 
     def action_fetch_content_diagnosis(self):
         self.ensure_one()
-        success, failure = shopee_product_api.call_get_item_content_diagnosis_result(
-            self._get_shopee_credentials(), [int(self.shopee_item_id)]
+        item_id = int(self.shopee_item_id)
+        success, failure = self._call_with_token_refresh(
+            lambda creds: shopee_product_api.call_get_item_content_diagnosis_result(creds, [item_id])
         )
         return self._store_raw_section(
             'content_diagnosis',
@@ -607,8 +625,9 @@ class ShopeeProduct(models.Model):
         self.ensure_one()
         if not self.item_name:
             raise UserError(_('Cần có tên sản phẩm để gợi ý danh mục.'))
-        result = shopee_product_api.call_category_recommend(
-            self._get_shopee_credentials(), self.item_name
+        item_name = self.item_name
+        result = self._call_with_token_refresh(
+            lambda creds: shopee_product_api.call_category_recommend(creds, item_name)
         )
         return self._store_raw_section(
             'category_recommendation', result, _('Đã gợi ý danh mục')
@@ -618,8 +637,10 @@ class ShopeeProduct(models.Model):
         self.ensure_one()
         if not self.item_name or not self.category_id:
             raise UserError(_('Cần có tên sản phẩm và category_id để gợi ý thuộc tính.'))
-        result = shopee_product_api.call_get_recommend_attribute(
-            self._get_shopee_credentials(), self.item_name, self.category_id
+        item_name = self.item_name
+        cat_id = self.category_id
+        result = self._call_with_token_refresh(
+            lambda creds: shopee_product_api.call_get_recommend_attribute(creds, item_name, cat_id)
         )
         return self._store_raw_section(
             'recommend_attribute', result, _('Đã gợi ý thuộc tính')
@@ -629,8 +650,9 @@ class ShopeeProduct(models.Model):
         self.ensure_one()
         if not self.category_id:
             raise UserError(_('Cần có category_id để lấy cây phân loại Shopee.'))
-        result = shopee_product_api.call_get_variations(
-            self._get_shopee_credentials(), self.category_id
+        cat_id = self.category_id
+        result = self._call_with_token_refresh(
+            lambda creds: shopee_product_api.call_get_variations(creds, cat_id)
         )
         return self._store_raw_section(
             'variation_tree', result, _('Đã lấy cây phân loại')
@@ -638,8 +660,9 @@ class ShopeeProduct(models.Model):
 
     def action_fetch_kit_item_limit(self):
         self.ensure_one()
-        result = shopee_product_api.call_get_kit_item_limit(
-            self._get_shopee_credentials(), self.category_id or None
+        cat_id = self.category_id or None
+        result = self._call_with_token_refresh(
+            lambda creds: shopee_product_api.call_get_kit_item_limit(creds, cat_id)
         )
         return self._store_raw_section(
             'kit_item_limit', result, _('Đã lấy giới hạn Kit Item')
@@ -647,11 +670,17 @@ class ShopeeProduct(models.Model):
 
     def action_fetch_kit_item_info(self):
         self.ensure_one()
+        from odoo.addons.shopee_order_fetch.services.shopee_api import (
+            SHOPEE_INVALID_TOKEN_ERRORS,
+        )
+        item_id = int(self.shopee_item_id)
         try:
-            result = shopee_product_api.call_get_kit_item_info(
-                self._get_shopee_credentials(), int(self.shopee_item_id)
+            result = self._call_with_token_refresh(
+                lambda creds: shopee_product_api.call_get_kit_item_info(creds, item_id)
             )
         except UserError as exc:
+            if any(code in str(exc) for code in SHOPEE_INVALID_TOKEN_ERRORS):
+                raise
             return {
                 'type': 'ir.actions.client',
                 'tag': 'display_notification',
@@ -668,13 +697,18 @@ class ShopeeProduct(models.Model):
 
     def action_check_deboost_search(self):
         self.ensure_one()
-        item_ids, total_count, next_offset = shopee_product_api.call_search_item(
-            self._get_shopee_credentials(),
-            item_sku=self.item_sku or None,
-            item_name=False if self.item_sku else self.item_name,
-            item_status=self.item_status or None,
-            deboost_only=True,
-            page_size=10,
+        _item_sku = self.item_sku or None
+        _item_name = False if self.item_sku else self.item_name
+        _item_status = self.item_status or None
+        item_ids, total_count, next_offset = self._call_with_token_refresh(
+            lambda creds: shopee_product_api.call_search_item(
+                creds,
+                item_sku=_item_sku,
+                item_name=_item_name,
+                item_status=_item_status,
+                deboost_only=True,
+                page_size=10,
+            )
         )
         return self._store_raw_section(
             'deboost_search',
@@ -689,15 +723,18 @@ class ShopeeProduct(models.Model):
 
     def action_fetch_item_limit(self):
         self.ensure_one()
-        result = shopee_product_api.call_get_item_limit(self._get_shopee_credentials())
+        result = self._call_with_token_refresh(
+            lambda creds: shopee_product_api.call_get_item_limit(creds)
+        )
         return self._store_raw_section(
             'item_limit', result, _('Đã lấy giới hạn sản phẩm')
         )
 
     def action_fetch_comments(self):
         self.ensure_one()
-        result = shopee_product_api.call_get_comment(
-            self._get_shopee_credentials(), item_id=int(self.shopee_item_id), page_size=20
+        item_id = int(self.shopee_item_id)
+        result = self._call_with_token_refresh(
+            lambda creds: shopee_product_api.call_get_comment(creds, item_id=item_id, page_size=20)
         )
         return self._store_raw_section(
             'comments', result, _('Đã lấy bình luận'), _('Đã lưu danh sách bình luận vào Raw JSON.')
@@ -705,7 +742,9 @@ class ShopeeProduct(models.Model):
 
     def action_fetch_boosted_list(self):
         self.ensure_one()
-        result = shopee_product_api.call_get_boosted_list(self._get_shopee_credentials())
+        result = self._call_with_token_refresh(
+            lambda creds: shopee_product_api.call_get_boosted_list(creds)
+        )
         current_item = str(self.shopee_item_id)
         current_boost = [item for item in result if str(item.get('item_id')) == current_item]
         return self._store_raw_section(
@@ -716,8 +755,9 @@ class ShopeeProduct(models.Model):
 
     def action_fetch_violation_info(self):
         self.ensure_one()
-        result = shopee_product_api.call_get_item_violation_info(
-            self._get_shopee_credentials(), [int(self.shopee_item_id)]
+        item_id = int(self.shopee_item_id)
+        result = self._call_with_token_refresh(
+            lambda creds: shopee_product_api.call_get_item_violation_info(creds, [item_id])
         )
         return self._store_raw_section(
             'violation_info', result, _('Đã lấy thông tin vi phạm')
@@ -727,8 +767,9 @@ class ShopeeProduct(models.Model):
         self.ensure_one()
         if not self.category_id:
             raise UserError(_('Cần có category_id để lấy danh sách bảng kích thước.'))
-        result = shopee_product_api.call_get_size_chart_list(
-            self._get_shopee_credentials(), self.category_id, page_size=20
+        cat_id = self.category_id
+        result = self._call_with_token_refresh(
+            lambda creds: shopee_product_api.call_get_size_chart_list(creds, cat_id, page_size=20)
         )
         return self._store_raw_section(
             'size_chart_list', result, _('Đã lấy danh sách bảng kích thước')
