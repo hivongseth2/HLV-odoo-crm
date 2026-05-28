@@ -15,15 +15,15 @@
                 <div class="bg-white border shadow-sm p-2 mb-3 d-flex flex-wrap align-items-end gap-2">
                     <div>
                         <label class="form-label small text-muted mb-1">Từ ngày</label>
-                        <input type="date" class="form-control form-control-sm" t-att-value="state.dateFrom" t-on-change="(ev) => { this.state.dateFrom = ev.target.value; }"/>
+                        <input type="date" class="form-control form-control-sm" t-att-value="state.dateFrom" t-on-change="onDateFromChange"/>
                     </div>
                     <div>
                         <label class="form-label small text-muted mb-1">Đến ngày</label>
-                        <input type="date" class="form-control form-control-sm" t-att-value="state.dateTo" t-on-change="(ev) => { this.state.dateTo = ev.target.value; }"/>
+                        <input type="date" class="form-control form-control-sm" t-att-value="state.dateTo" t-on-change="onDateToChange"/>
                     </div>
                     <div>
                         <label class="form-label small text-muted mb-1">Người đóng</label>
-                        <select class="form-select form-select-sm" t-att-value="state.packerUserId" t-on-change="(ev) => { this.state.packerUserId = ev.target.value; }">
+                        <select class="form-select form-select-sm" t-att-value="state.packerUserId" t-on-change="onPackerUserIdChange">
                             <option value="all">Tất cả packer</option>
                             <t t-foreach="state.packers" t-as="packer" t-key="packer.id">
                                 <option t-att-value="packer.id"><t t-esc="packer.packer_name"/></option>

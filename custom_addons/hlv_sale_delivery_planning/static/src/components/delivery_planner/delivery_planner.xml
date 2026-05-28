@@ -287,7 +287,7 @@
                                                     <t t-foreach="state.packerUsers" t-as="pu" t-key="pu.id">
                                                         <option t-att-value="pu.id"
                                                                 t-att-selected="pu.id === row.packer_user_id">
-                                                            <t t-esc="pu.name"/>
+                                                            <t t-esc="pu.packer_name || pu.name"/>
                                                         </option>
                                                     </t>
                                                 </select>

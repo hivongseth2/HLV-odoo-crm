@@ -41,8 +41,11 @@ export class PackingKpiDashboard extends Component {
         }
     }
 
-    setRange(mode) {
-        const now = new Date();
+    onDateFromChange(ev) { this.state.dateFrom = ev.target.value; }
+    onDateToChange(ev) { this.state.dateTo = ev.target.value; }
+    onPackerUserIdChange(ev) { this.state.packerUserId = ev.target.value; }
+
+    setRange(mode) {        const now = new Date();
         const toDate = new Date(now);
         const fromDate = new Date(now);
         if (mode === "week") {
