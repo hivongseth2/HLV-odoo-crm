@@ -90,19 +90,40 @@ for m in moves.sorted('id'):
     print(f"  {m.id:>7}  {m.state:12}  {src_usage:12}  {dst_usage:12}  {m.product_uom_qty:>8.2f}  {picking:20}  {has_sale:6}  {has_po:6}  {origin}")
 
 # ── 4. BREAKDOWN: incoming vs outgoing ─────────────────────
+# Odoo outgoing_qty = active SO-linked moves where src child_of view_location_id
+# AND dst NOT child_of lot_stock_id (= PACK or SHIP step). Use same approach.
 in_moves  = [m for m in moves if m.location_dest_id.usage == 'internal' and m.location_id.usage not in ('internal',)]
 out_moves = [m for m in moves if m.location_dest_id.usage == 'customer']
 out_int   = [m for m in moves if m.location_dest_id.usage == 'internal' and m.location_id.usage == 'internal']
 
+# Odoo-aligned outgoing: all active SO-linked moves (no location filter)
+all_whs_v = env['stock.warehouse'].sudo().search([])
+_view_loc_ids = all_whs_v.mapped('view_location_id').ids
+_lot_stock_ids = all_whs_v.mapped('lot_stock_id').ids
+_lot_stock_children = set(env['stock.location'].sudo().search([('id', 'child_of', _lot_stock_ids)]).ids) if _lot_stock_ids else set()
+_view_loc_children  = set(env['stock.location'].sudo().search([('id', 'child_of', _view_loc_ids)]).ids) if _view_loc_ids else set()
+
+# Method 1: all SO-linked active moves (what the controller now uses)
+so_out_moves = env['stock.move'].sudo().search([
+    ('product_id', '=', pid), ('state', 'in', ACTIVE_STATES),
+    '|', ('sale_line_id', '!=', False), ('picking_id.sale_id', '!=', False),
+])
+# Method 2: Odoo-aligned (src child_of view_location AND dst NOT child_of lot_stock)
+so_out_odoo = [m for m in so_out_moves if m.location_id.id in _view_loc_children and m.location_dest_id.id not in _lot_stock_children]
+
 print(f"\n[Breakdown moves]")
 print(f"  Nhập vào internal (khác internal): {sum(m.product_uom_qty for m in in_moves):>8.2f}  ({len(in_moves)} move)")
 print(f"  Xuất ra customer               :  {sum(m.product_uom_qty for m in out_moves):>8.2f}  ({len(out_moves)} move)")
-print(f"  Internal transfers              :  {sum(m.product_uom_qty for m in out_int):>8.2f}  ({len(out_int)} move) ← không tính vào dự báo thường")
+print(f"  Internal transfers              :  {sum(m.product_uom_qty for m in out_int):>8.2f}  ({len(out_int)} move)")
+print(f"  SO-linked outgoing (controller) :  {sum(m.product_uom_qty for m in so_out_moves):>8.2f}  ({len(so_out_moves)} move) ← dùng trong controller")
+print(f"  SO-linked outgoing (Odoo-align) :  {sum(m.product_uom_qty for m in so_out_odoo):>8.2f}  ({len(so_out_odoo)} move) ← src in view_loc, dst not in lot_stock")
 
-my_forecast = qty_hand_raw + sum(m.product_uom_qty for m in in_moves) - sum(m.product_uom_qty for m in out_moves)
-print(f"\n[Custom logic]  {qty_hand_raw} + {sum(m.product_uom_qty for m in in_moves)} - {sum(m.product_uom_qty for m in out_moves)} = {my_forecast}")
-print(f"[Odoo core]     {virtual_avail}")
-print(f"[Chênh lệch]    {my_forecast - virtual_avail}")
+my_forecast_old = qty_hand_raw + sum(m.product_uom_qty for m in in_moves) - sum(m.product_uom_qty for m in out_moves)
+my_forecast_new = qty_hand_raw + sum(m.product_uom_qty for m in in_moves) - sum(m.product_uom_qty for m in so_out_moves)
+print(f"\n[Custom logic cũ]  {qty_hand_raw} + {sum(m.product_uom_qty for m in in_moves)} - {sum(m.product_uom_qty for m in out_moves)} = {my_forecast_old}  ← chỉ tính customer dest")
+print(f"[Custom logic mới] {qty_hand_raw} + {sum(m.product_uom_qty for m in in_moves)} - {sum(m.product_uom_qty for m in so_out_moves)} = {my_forecast_new}  ← tất cả SO moves")
+print(f"[Odoo core]        {virtual_avail}")
+print(f"[Chênh lệch mới]   {my_forecast_new - virtual_avail}")
 
 # ── 5. PHIẾU NHẬP TỪ ĐMH ──────────────────────────────────
 print(f"\n[Phiếu NHẬP từ ĐMH – state in {ACTIVE_STATES}]")
