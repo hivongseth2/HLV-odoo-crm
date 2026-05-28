@@ -107,7 +107,7 @@ class HLVMobileBarcodeController(http.Controller):
             is_putaway = True
 
         lines = []
-        for move in picking.move_ids_without_package:
+        for move in picking.move_ids:
             if move.move_line_ids:
                 for ml in move.move_line_ids:
                     if is_putaway:
@@ -396,7 +396,7 @@ class HLVMobileBarcodeController(http.Controller):
         if location:
             res = {'type': 'location', 'location_id': location.id, 'location_name': location.display_name, 'is_putaway': is_putaway}
             if last_product_id:
-                move = picking.move_ids_without_package.filtered(lambda m: m.product_id.id == last_product_id and m.state not in ['done', 'cancel'])
+                move = picking.move_ids.filtered(lambda m: m.product_id.id == last_product_id and m.state not in ['done', 'cancel'])
                 if move:
                     move_line = move.move_line_ids.filtered(lambda ml: not ml.result_package_id)
                     if move_line:
@@ -438,7 +438,7 @@ class HLVMobileBarcodeController(http.Controller):
                         continue
                     
                     # Find a move for this product in the picking
-                    move = picking.move_ids_without_package.filtered(
+                    move = picking.move_ids.filtered(
                         lambda m: m.product_id == product_in_pkg and m.state not in ['done', 'cancel']
                     )
                     if move:
@@ -485,7 +485,7 @@ class HLVMobileBarcodeController(http.Controller):
             return {'error': _('Không tìm thấy mã vạch hợp lệ (Sản phẩm hoặc Vị trí).')}
 
         # Find the move for this product
-        move = picking.move_ids_without_package.filtered(lambda m: m.product_id == product and m.state not in ['done', 'cancel'])
+        move = picking.move_ids.filtered(lambda m: m.product_id == product and m.state not in ['done', 'cancel'])
         
         if not move:
             # Create a new move on the fly
@@ -505,7 +505,7 @@ class HLVMobileBarcodeController(http.Controller):
             if picking.state == 'draft':
                 picking.action_confirm()
                 # Re-fetch move as action_confirm might replace/merge it
-                move = picking.move_ids_without_package.filtered(lambda m: m.product_id == product and m.state not in ['done', 'cancel'])
+                move = picking.move_ids.filtered(lambda m: m.product_id == product and m.state not in ['done', 'cancel'])
                 if not move:
                     return {'error': _('Lỗi hệ thống khi tạo sản phẩm mới.')}
                 move = move[0]
@@ -726,7 +726,7 @@ class HLVMobileBarcodeController(http.Controller):
                     })
                     
             # 2. Handle stock moves that were created dynamically on the fly (demand = 0)
-            dynamic_moves = picking.move_ids_without_package.filtered(lambda m: m.product_uom_qty == 0.0)
+            dynamic_moves = picking.move_ids.filtered(lambda m: m.product_uom_qty == 0.0)
             if dynamic_moves:
                 dynamic_moves._action_cancel()
                 dynamic_moves.unlink()
@@ -1140,7 +1140,7 @@ class HLVMobileBarcodeController(http.Controller):
         package_name = False
         if pack:
             # Set quantity so put_in_pack knows what to pack
-            for move in picking_int.move_ids_without_package:
+            for move in picking_int.move_ids:
                 move.quantity = move.product_uom_qty
             
             try:
@@ -1268,7 +1268,7 @@ class HLVMobileBarcodeController(http.Controller):
                 product_map[pid]['unassigned_scanned'] += qty
 
         # Quét từ Demand
-        for move in picking.move_ids_without_package:
+        for move in picking.move_ids:
              pid = move.product_id.id
              if pid in product_map:
                  product_map[pid]['demand'] += move.product_uom_qty
