@@ -531,9 +531,14 @@ export class BarcodeApp extends Component {
 
             // Tải vị trí nguồn mặc định của phiếu để hiển thị trực tiếp lên tiêu đề
             rpc("/hlv_mobile_barcode/get_picking_data", { picking_id: pickingId }).then((data) => {
-                if (data && !data.error && data.location_name) {
-                    this.state.scannedLocationId = data.location_id;
-                    this.state.scannedLocationName = data.location_name;
+                if (data && !data.error) {
+                    if (data.is_putaway && data.location_dest_name) {
+                        this.state.scannedLocationId = data.location_dest_id;
+                        this.state.scannedLocationName = data.location_dest_name;
+                    } else if (!data.is_putaway && data.location_name) {
+                        this.state.scannedLocationId = data.location_id;
+                        this.state.scannedLocationName = data.location_name;
+                    }
                 }
             }).catch(() => {});
             
