@@ -262,7 +262,7 @@
         #forecastDetailsBody .fc-badge { border-radius: 4px !important; font-weight: 600 !important; padding: 2px 8px !important; }
 
         /* ============================================================
-           DESKTOP >= 769px
+           DESKTOP &gt;= 769px
            ============================================================ */
         @media (min-width: 769px) {
           #wrap .card:has(#inv-table) {
@@ -373,7 +373,7 @@
         }
 
         /* ============================================================
-           MOBILE <= 768px
+           MOBILE &lt;= 768px
            ============================================================ */
         @media (max-width: 768px) {
           /* Natural page scroll */
