@@ -859,22 +859,6 @@ class HLVMobileBarcodeController(http.Controller):
         if not picking.exists():
             return {'error': _('Picking not found')}
 
-        # Nếu là phiếu chuyển nội bộ 2 bước (INT) và chưa có partner_id, tự động gán partner của kho nguồn (location_id)
-        if picking.picking_type_id.code == 'internal' and not picking.partner_id:
-            is_transit = False
-            complete_name = (picking.location_dest_id.complete_name or "").strip().lower()
-            accepted_names = ["physical locations/inter-warehouse transit", "vị trí vật lý/trung chuyển liên kho", "kho trung gian"]
-            if any(complete_name.endswith(name) or complete_name == name for name in accepted_names) or picking.location_dest_id.usage == 'transit':
-                is_transit = True
-                
-            if is_transit:
-                warehouse = picking.location_id.warehouse_id
-                if not warehouse:
-                    warehouse = request.env['stock.warehouse'].sudo().search([('view_location_id', 'parent_of', picking.location_id.id)], limit=1)
-                
-                if warehouse and warehouse.partner_id:
-                    picking.sudo().write({'partner_id': warehouse.partner_id.id})
-
         # Enforce warehouse validation permission (can_confirm)
         use_independent = request.env['ir.config_parameter'].sudo().get_param('hlv_mobile_barcode.hlv_barcode_use_independent_permissions') == 'True'
         if use_independent:
@@ -1044,34 +1028,12 @@ class HLVMobileBarcodeController(http.Controller):
         })
         
         picking_int.action_confirm()
-        if hasattr(picking_int, 'second_transfer_created'):
-            picking_int.write({'second_transfer_created': True})
         picking_int.button_validate()
         
-        # 2. Create IN picking (Transit -> Destination)
-        dest_loc = picking_type_in.default_location_dest_id
-        if not dest_loc:
-            dest_loc = request.env['stock.location'].sudo().search([('usage', '=', 'internal'), ('company_id', '=', company_id)], limit=1)
-            
-        picking_in = request.env['stock.picking'].create({
-            'picking_type_id': picking_type_in.id,
-            'location_id': transit_loc.id,
-            'location_dest_id': dest_loc.id,
-        })
+        picking_in = request.env['stock.picking'].search([('source_transfer_id', '=', picking_int.id)], limit=1)
+        in_picking_name = picking_in.name if picking_in else False
         
-        request.env['stock.move'].create({
-            'name': _('Mobile Move IN'),
-            'picking_id': picking_in.id,
-            'product_id': product.id,
-            'product_uom_qty': qty,
-            'product_uom': product.uom_id.id,
-            'location_id': transit_loc.id,
-            'location_dest_id': dest_loc.id,
-        })
-        
-        picking_in.action_confirm()
-        
-        return {'success': True, 'in_picking_name': picking_in.name}
+        return {'success': True, 'in_picking_name': in_picking_name}
 
     @http.route('/hlv_mobile_barcode/move_location_batch', type='json', auth='user')
     def move_location_batch(self, source_barcode, lines, pack=False):
@@ -1155,38 +1117,12 @@ class HLVMobileBarcodeController(http.Controller):
             except Exception as e:
                 return {'error': _('Lỗi khi đóng gói: %s', str(e))}
                 
-        if hasattr(picking_int, 'second_transfer_created'):
-            picking_int.write({'second_transfer_created': True})
         picking_int.button_validate()
         
-        # 2. Create IN picking (Transit -> Destination)
-        dest_loc = picking_type_in.default_location_dest_id
-        if not dest_loc:
-            dest_loc = request.env['stock.location'].sudo().search([('usage', '=', 'internal'), ('company_id', '=', company_id)], limit=1)
-            
-        picking_in = request.env['stock.picking'].create({
-            'picking_type_id': picking_type_in.id,
-            'location_id': transit_loc.id,
-            'location_dest_id': dest_loc.id,
-        })
+        picking_in = request.env['stock.picking'].search([('source_transfer_id', '=', picking_int.id)], limit=1)
+        in_picking_name = picking_in.name if picking_in else False
         
-        for line in lines:
-            product = request.env['product.product'].browse(line['product_id'])
-            if not product.exists():
-                continue
-            request.env['stock.move'].create({
-                'name': _('Mobile Batch Move IN: %s', product.display_name),
-                'picking_id': picking_in.id,
-                'product_id': product.id,
-                'product_uom_qty': line['qty'],
-                'product_uom': product.uom_id.id,
-                'location_id': transit_loc.id,
-                'location_dest_id': dest_loc.id,
-            })
-        
-        picking_in.action_confirm()
-        
-        return {'success': True, 'in_picking_name': picking_in.name, 'package_name': package_name}
+        return {'success': True, 'in_picking_name': in_picking_name, 'package_name': package_name}
 
     @http.route('/hlv_mobile_barcode/get_package_details', type='json', auth='user')
     def get_package_details(self, picking_id, package_id):
