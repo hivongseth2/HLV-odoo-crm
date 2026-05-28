@@ -293,6 +293,7 @@ class HLVMobileBarcodeController(http.Controller):
             'packages': packages,
             'linked_picking_id': linked_picking_id,
             'linked_picking_name': linked_picking_name,
+            'is_putaway': is_putaway,
         }
 
     @http.route('/hlv_mobile_barcode/get_warehouses', type='json', auth='user')
@@ -346,7 +347,11 @@ class HLVMobileBarcodeController(http.Controller):
             return {'error': _('Chưa cấu hình Operation Types (INT)')}
 
         partner_id = False
-        if warehouse and warehouse.partner_id:
+        if dest_warehouse_id:
+            dest_warehouse = request.env['stock.warehouse'].browse(dest_warehouse_id)
+            if dest_warehouse.exists() and dest_warehouse.partner_id:
+                partner_id = dest_warehouse.partner_id.id
+        elif warehouse and warehouse.partner_id:
             partner_id = warehouse.partner_id.id
 
         picking_int = request.env['stock.picking'].create({

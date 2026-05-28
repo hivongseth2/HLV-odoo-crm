@@ -261,6 +261,7 @@ export class BarcodeApp extends Component {
                 this.state.showCameraPopup = false;
 
                 if (result.type === 'picking') {
+                    this.state.isProcessing = false;
                     await this.selectPicking(result.id, result.name);
                 } else {
                     this.pushHistory();
@@ -464,13 +465,16 @@ export class BarcodeApp extends Component {
         if (!this.state.selectedWarehouseId) return;
         
         const destWarehouseId = this.state.selectedWarehouseId;
+        const pendingBatchMove = this.pendingBatchMove;
+        const pendingMove = this.pendingMove;
+        
         this.closeWarehousePopup();
         
-        if (this.pendingBatchMove) {
-            const { locBarcode, locName } = this.pendingBatchMove;
+        if (pendingBatchMove) {
+            const { locBarcode, locName } = pendingBatchMove;
             await this.goToBatchMove(locBarcode, locName, destWarehouseId);
-        } else if (this.pendingMove) {
-            const { productId, locBarcode, locName } = this.pendingMove;
+        } else if (pendingMove) {
+            const { productId, locBarcode, locName } = pendingMove;
             this.goToMove(productId, locBarcode, locName, destWarehouseId);
         }
     }
@@ -527,9 +531,14 @@ export class BarcodeApp extends Component {
 
             // Tải vị trí nguồn mặc định của phiếu để hiển thị trực tiếp lên tiêu đề
             rpc("/hlv_mobile_barcode/get_picking_data", { picking_id: pickingId }).then((data) => {
-                if (data && !data.error && data.location_name) {
-                    this.state.scannedLocationId = data.location_id;
-                    this.state.scannedLocationName = data.location_name;
+                if (data && !data.error) {
+                    if (data.is_putaway && data.location_dest_name) {
+                        this.state.scannedLocationId = data.location_dest_id;
+                        this.state.scannedLocationName = data.location_dest_name;
+                    } else if (!data.is_putaway && data.location_name) {
+                        this.state.scannedLocationId = data.location_id;
+                        this.state.scannedLocationName = data.location_name;
+                    }
                 }
             }).catch(() => {});
             
