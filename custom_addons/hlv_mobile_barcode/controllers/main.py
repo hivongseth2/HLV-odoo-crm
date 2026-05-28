@@ -295,8 +295,17 @@ class HLVMobileBarcodeController(http.Controller):
             'linked_picking_name': linked_picking_name,
         }
 
+    @http.route('/hlv_mobile_barcode/get_warehouses', type='json', auth='user')
+    def get_warehouses(self):
+        warehouses = request.env['stock.warehouse'].search([])
+        return [{
+            'id': w.id,
+            'name': w.name,
+            'code': w.code,
+        } for w in warehouses]
+
     @http.route('/hlv_mobile_barcode/create_empty_int', type='json', auth='user')
-    def create_empty_int(self, location_id):
+    def create_empty_int(self, location_id, dest_warehouse_id=False):
         source_loc = request.env['stock.location'].browse(location_id)
         if not source_loc.exists():
             return {'error': _('Không tìm thấy vị trí nguồn')}
@@ -976,7 +985,7 @@ class HLVMobileBarcodeController(http.Controller):
         return {'error': _('Không tìm thấy vị trí lấy hàng hợp lệ.')}
 
     @http.route('/hlv_mobile_barcode/move_location', type='json', auth='user')
-    def move_location(self, product_id, source_barcode, qty):
+    def move_location(self, product_id, source_barcode, qty, dest_warehouse_id=False):
         product = request.env['product.product'].sudo().browse(product_id)
         if not product.exists():
             return {'error': _('Không tìm thấy sản phẩm')}
@@ -1012,11 +1021,17 @@ class HLVMobileBarcodeController(http.Controller):
 
         # 1. Create and Validate INT picking (Source -> Transit)
         partner_id = False
-        actual_warehouse = warehouse
-        if not actual_warehouse:
-            actual_warehouse = request.env['stock.warehouse'].sudo().search([('view_location_id', 'parent_of', source_loc.id)], limit=1)
-        if actual_warehouse and actual_warehouse.partner_id:
-            partner_id = actual_warehouse.partner_id.id
+        if dest_warehouse_id:
+            dest_warehouse = request.env['stock.warehouse'].browse(dest_warehouse_id)
+            if dest_warehouse.exists() and dest_warehouse.partner_id:
+                partner_id = dest_warehouse.partner_id.id
+                
+        if not partner_id:
+            actual_warehouse = warehouse
+            if not actual_warehouse:
+                actual_warehouse = request.env['stock.warehouse'].sudo().search([('view_location_id', 'parent_of', source_loc.id)], limit=1)
+            if actual_warehouse and actual_warehouse.partner_id:
+                partner_id = actual_warehouse.partner_id.id
 
         picking_int = request.env['stock.picking'].create({
             'picking_type_id': picking_type_int.id,

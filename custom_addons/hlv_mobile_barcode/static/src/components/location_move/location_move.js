@@ -10,6 +10,7 @@ export class LocationMove extends Component {
         productId: Number,
         prefillLocationBarcode: { type: String, optional: true },
         prefillLocationName: { type: String, optional: true },
+        destWarehouseId: { type: [Number, Boolean], optional: true },
         onBack: Function,
         registerScanner: { type: Function, optional: true },
     };
@@ -185,7 +186,8 @@ export class LocationMove extends Component {
             const res = await rpc("/hlv_mobile_barcode/move_location", {
                 product_id: this.props.productId,
                 source_barcode: this.state.sourceLocationBarcode,
-                qty: this.state.qty
+                qty: this.state.qty,
+                dest_warehouse_id: this.props.destWarehouseId || false
             });
             
             if (res.error) {
