@@ -53,6 +53,9 @@ export class BarcodeApp extends Component {
             pickingRefreshTick: 0,
             pickingState: "",
             scanMode: savedState.scanMode || "source",
+            warehouses: [],
+            selectedWarehouseId: null,
+            showWarehouseSelectPopup: false,
         });
         
         useEffect(() => {
@@ -102,10 +105,18 @@ export class BarcodeApp extends Component {
 
         this.boundKeepFocus = this.keepFocusOnHiddenInput.bind(this);
         
-        onMounted(() => {
+        onMounted(async () => {
             document.addEventListener('keydown', this.handleKeyDown.bind(this));
+            this.keepFocusOnHiddenInput();
             document.addEventListener('click', this.boundKeepFocus);
             
+            try {
+                const warehouses = await rpc("/hlv_mobile_barcode/get_warehouses", {});
+                this.state.warehouses = warehouses;
+            } catch (e) {
+                console.error("Failed to load warehouses", e);
+            }
+
             this.focusInterval = setInterval(this.boundKeepFocus, 2000);
             setTimeout(this.boundKeepFocus, 500);
 
@@ -418,24 +429,60 @@ export class BarcodeApp extends Component {
         this.viewScannerCallback = null;
     }
 
-    goToMove(productId, locationBarcode = null, locationName = null) {
+    goToMove(productId, locationBarcode = null, locationName = null, destWarehouseId = false) {
         this.pushHistory();
         this.state.recordId = productId;
         this.state.prefillLocationBarcode = locationBarcode;
         this.state.prefillLocationName = locationName;
+        this.state.destWarehouseId = destWarehouseId;
         this.state.currentView = 'move';
     }
 
-    async goToBatchMove(locationBarcode, locationName) {
+    promptMoveWarehouse(productId, locBarcode, locName) {
+        this.pendingMove = { productId, locBarcode, locName };
+        this.state.selectedWarehouseId = null;
+        this.state.showWarehouseSelectPopup = true;
+    }
+
+    promptBatchMoveWarehouse(locBarcode, locName) {
+        this.pendingBatchMove = { locBarcode, locName };
+        this.state.selectedWarehouseId = null;
+        this.state.showWarehouseSelectPopup = true;
+    }
+
+    closeWarehousePopup() {
+        this.state.showWarehouseSelectPopup = false;
+        this.pendingBatchMove = null;
+        this.pendingMove = null;
+    }
+
+    selectWarehouse(whId) {
+        this.state.selectedWarehouseId = whId;
+    }
+
+    async confirmWarehouseSelection() {
+        if (!this.state.selectedWarehouseId) return;
+        
+        const destWarehouseId = this.state.selectedWarehouseId;
+        this.closeWarehousePopup();
+        
+        if (this.pendingBatchMove) {
+            const { locBarcode, locName } = this.pendingBatchMove;
+            await this.goToBatchMove(locBarcode, locName, destWarehouseId);
+        } else if (this.pendingMove) {
+            const { productId, locBarcode, locName } = this.pendingMove;
+            this.goToMove(productId, locBarcode, locName, destWarehouseId);
+        }
+    }
+
+    async goToBatchMove(locationBarcode, locationName, destWarehouseId = false) {
         // Now redirects to a newly created empty INT picking
         this.pushHistory();
         try {
             this.notification.add("Đang tạo phiếu xuất...", { type: "info" });
-            // For create_empty_int, we pass the location record id. 
-            // Wait, InventoryLookup state.location_barcode is just the barcode. We need the record_id.
-            // Let's pass the recordId which we have in this.state.recordId!
             const res = await rpc("/hlv_mobile_barcode/create_empty_int", {
-                location_id: this.state.recordId
+                location_id: this.state.recordId,
+                dest_warehouse_id: destWarehouseId
             });
             
             if (res.error) {

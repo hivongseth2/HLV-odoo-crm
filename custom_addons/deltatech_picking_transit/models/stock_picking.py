@@ -420,13 +420,14 @@ class StockPicking(models.Model):
                 if not warehouse:
                     raise UserError(_("Không tìm thấy kho tương ứng với Liên hệ %s") % picking.partner_id.name)
 
-                # Tìm loại hoạt động nội bộ của kho đích (ưu tiên 'reception'; nếu không có thì lấy bất kỳ 'internal')
-                ops = self.env["stock.picking.type"].search(
-                    [("warehouse_id", "=", warehouse.id), ("code", "=", "internal")]
-                )
-                next_operation = ops.filtered(lambda r: r.two_step_transfer_use == "reception")[:1] or ops[:1]
+                # Lấy loại hoạt động tương ứng với cấu hình nhập kho (reception_steps)
+                if warehouse.reception_steps == 'one_step':
+                    next_operation = warehouse.int_type_id
+                else:
+                    next_operation = warehouse.in_type_id
+
                 if not next_operation:
-                    raise UserError(_("Không tìm thấy loại hoạt động nội bộ cho kho %s") % warehouse.name)
+                    raise UserError(_("Không tìm thấy loại hoạt động tương ứng cho kho %s") % warehouse.name)
 
                 if not next_operation.default_location_dest_id:
                     raise UserError(_("Loại hoạt động '%s' chưa có Vị trí đích mặc định.") % next_operation.display_name)
@@ -461,7 +462,6 @@ class StockPicking(models.Model):
             picking.invalidate_recordset(['state'])
             _logger.warning(f"POST-VALIDATE: Picking {picking.id} state = {picking.state}")
             # Chỉ tạo phiếu bước 2 cho phiếu đã validate (state = done)
-            # Nếu có tách kiện, picking gốc là phiếu đã validate, backorder là phiếu chờ
             if picking.state == 'done':
                 _logger.warning(f"POST-VALIDATE: Tạo phiếu 2 cho picking {picking.id}")
                 picking.create_second_transfer_wizard(
