@@ -2065,7 +2065,21 @@ export class DeliveryPlannerDashboard extends Component {
     async togglePackingProgressDrawer() {
         this.state.isPackingProgressDrawerOpen = !this.state.isPackingProgressDrawerOpen;
         if (this.state.isPackingProgressDrawerOpen) {
+            await this._ensurePackerUsers();
             await this.loadPackingProgress();
+        }
+    }
+
+    async reassignDrawerPacker(pickId, newPackerUserId) {
+        const uid = parseInt(newPackerUserId, 10);
+        if (!uid || !pickId) return;
+        try {
+            await this.orm.call('stock.picking', 'action_assign_packer', [[pickId]], {
+                packer_user_id: uid,
+            });
+            await this.loadPackingProgress();
+        } catch (e) {
+            this.notification.add(e.message || 'Đổi packer thất bại', { type: 'danger' });
         }
     }
 

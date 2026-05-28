@@ -30,6 +30,14 @@
                             </t>
                         </select>
                     </div>
+                    <div class="flex-grow-1" style="min-width:160px;">
+                        <label class="form-label small text-muted mb-1">Tìm theo đơn / phiếu</label>
+                        <input type="text" class="form-control form-control-sm"
+                               t-att-value="state.searchText"
+                               t-on-input="(ev) => { this.state.searchText = ev.target.value; }"
+                               t-on-keydown="(ev) => { if (ev.key === 'Enter') this.fetchData(); }"
+                               placeholder="DH..., PICK..., PACK..."/>
+                    </div>
                     <button class="btn btn-sm btn-primary ms-auto" t-on-click="fetchData" t-att-disabled="state.loading">
                         <i t-attf-class="fa me-1 #{state.loading ? 'fa-spinner fa-spin' : 'fa-search'}"></i>Tìm kiếm
                     </button>

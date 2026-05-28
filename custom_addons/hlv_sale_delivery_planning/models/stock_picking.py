@@ -1,5 +1,6 @@
 import logging
 from datetime import timedelta
+from markupsafe import Markup, escape
 from odoo import api, models, fields, _
 from odoo.exceptions import UserError
 
@@ -180,7 +181,7 @@ class StockPicking(models.Model):
         }
 
     @api.model
-    def get_packing_kpi_dashboard(self, date_from=False, date_to=False, packer_user_id=False):
+    def get_packing_kpi_dashboard(self, date_from=False, date_to=False, packer_user_id=False, search_text=False):
         domain = [
             ('picking_type_id.sequence_code', 'ilike', 'PICK'),
             ('return_id', '=', False),
@@ -196,6 +197,26 @@ class StockPicking(models.Model):
             domain.append(('x_pack_packer_user_id', '=', int(packer_user_id)))
 
         picks = self.sudo().search(domain, order='x_pack_assigned_at desc, id desc')
+
+        # Filter by search_text: match PICK name, SO name, or linked PACK name
+        if search_text and picks:
+            q = search_text.strip().lower()
+            pack_domain_st = [
+                ('x_pack_source_pick_id', 'in', picks.ids),
+                ('name', 'ilike', q),
+            ]
+            matching_pack_pick_ids = set(
+                self.sudo().search(pack_domain_st).mapped('x_pack_source_pick_id').ids
+            )
+            picks = picks.filtered(
+                lambda p: (
+                    q in (p.name or '').lower()
+                    or q in (p.sale_id.name or '').lower()
+                    or q in (p.origin or '').lower()
+                    or p.id in matching_pack_pick_ids
+                )
+            )
+
         pack_domain = [('x_pack_source_pick_id', 'in', picks.ids)] if picks else [('id', '=', 0)]
         packs = self.sudo().search(pack_domain)
         packs_by_pick = {}
@@ -252,6 +273,7 @@ class StockPicking(models.Model):
             group['rows'].append({
                 'pick_id': pick.id,
                 'pick_name': pick.name,
+                'packer_user_id': packer.id,
                 'sale_order': pick.sale_id.name or pick.origin or '',
                 'pack_name': best_pack.name if best_pack else '',
                 'state': 'done' if is_done else ('in_progress' if is_in_progress else 'assigned'),
@@ -345,11 +367,32 @@ class StockPicking(models.Model):
         picks = self.filtered(lambda p: p._is_pick_slip_picking())
         if not picks:
             raise UserError(_('Không có phiếu lấy hàng hợp lệ để assign.'))
-        picks.write({
-            'x_pack_packer_user_id': packer.id,
-            'x_pack_assigned_by_id': self.env.context.get('pack_assigned_by_uid') or self.env.uid,
-            'x_pack_assigned_at': now,
-        })
+        assigner_name = self.env['res.users'].sudo().browse(
+            self.env.context.get('pack_assigned_by_uid') or self.env.uid
+        ).name or ''
+        local_now = now + timedelta(hours=7)
+        time_str = local_now.strftime('%H:%M %d/%m/%Y')
+        for pick in picks:
+            old_packer = pick.x_pack_packer_user_id
+            pick.write({
+                'x_pack_packer_user_id': packer.id,
+                'x_pack_assigned_by_id': self.env.context.get('pack_assigned_by_uid') or self.env.uid,
+                'x_pack_assigned_at': now,
+            })
+            if old_packer and old_packer.id != packer.id:
+                body = Markup('🔄 Đổi người đóng gói lúc {time}: {old} → <b>{new}</b> (bởi {by})').format(
+                    time=time_str,
+                    old=escape(old_packer.name or ''),
+                    new=escape(packer.name or ''),
+                    by=escape(assigner_name),
+                )
+            else:
+                body = Markup('👤 Assign người đóng gói lúc {time}: <b>{new}</b> (bởi {by})').format(
+                    time=time_str,
+                    new=escape(packer.name or ''),
+                    by=escape(assigner_name),
+                )
+            pick.message_post(body=body, message_type='comment', subtype_xmlid='mail.mt_note')
         return True
 
     def do_print_picking(self):
@@ -399,16 +442,12 @@ class StockPicking(models.Model):
             if print_time_mode == 'latest' or not pick.x_pick_print_start_at:
                 vals['x_pick_print_start_at'] = now
             pick.write(vals)
-            # Log to chatter
-            pick.message_post(
-                body=_(
-                    '🖨️ In phiếu lấy hàng lúc %(time)s bởi <b>%(user)s</b>',
-                    time=time_str,
-                    user=printer_name,
-                ),
-                message_type='comment',
-                subtype_xmlid='mail.mt_note',
+            # Log to chatter (use Markup so HTML is rendered, not shown as raw text)
+            body = Markup('🖨️ In phiếu lấy hàng lúc {time} bởi <b>{user}</b>').format(
+                time=time_str,
+                user=escape(printer_name),
             )
+            pick.message_post(body=body, message_type='comment', subtype_xmlid='mail.mt_note')
         return True
 
     def mark_picking_print_finished(self):

@@ -14,6 +14,7 @@ export class PackingKpiDashboard extends Component {
             dateFrom: today,
             dateTo: today,
             packerUserId: "all",
+            searchText: "",
             loading: true,
             summary: {},
             groups: [],
@@ -30,6 +31,7 @@ export class PackingKpiDashboard extends Component {
                 date_from: this.state.dateFrom,
                 date_to: this.state.dateTo,
                 packer_user_id: this.state.packerUserId,
+                search_text: this.state.searchText || false,
             });
             this.state.summary = result.summary || {};
             this.state.groups = result.groups || [];
