@@ -96,6 +96,19 @@ export class PackingKpiDashboard extends Component {
             console.error("Reassign packer failed:", e);
         }
     }
+
+    /**
+     * Convert UTC datetime string from Odoo to VN time (UTC+7).
+     * Input: "2026-04-22 07:30:00" (UTC), Output: "22/04 14:30"
+     */
+    formatTime(dateStr) {
+        if (!dateStr) return '-';
+        const utc = new Date(dateStr.replace(' ', 'T') + 'Z');
+        if (isNaN(utc.getTime())) return '-';
+        const vn = new Date(utc.getTime() + 7 * 3600 * 1000);
+        const pad = n => String(n).padStart(2, '0');
+        return `${pad(vn.getUTCDate())}/${pad(vn.getUTCMonth() + 1)} ${pad(vn.getUTCHours())}:${pad(vn.getUTCMinutes())}`;
+    }
 }
 
 registry.category("actions").add("hlv_sale_delivery_planning.packing_kpi", PackingKpiDashboard);

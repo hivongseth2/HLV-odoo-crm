@@ -352,6 +352,28 @@ class StockPicking(models.Model):
         })
         return True
 
+    def do_print_picking(self):
+        """Override: open packer selection wizard if no packer assigned (PICK slips only)."""
+        for picking in self:
+            if not picking.exists():
+                continue
+            if picking._is_pick_slip_picking() and not picking.x_pack_packer_user_id:
+                wizard = self.env['stock.picking.packer.print.wizard'].create({
+                    'picking_id': picking.id,
+                })
+                return {
+                    'type': 'ir.actions.act_window',
+                    'name': _('Chọn người đóng gói'),
+                    'res_model': 'stock.picking.packer.print.wizard',
+                    'res_id': wizard.id,
+                    'view_mode': 'form',
+                    'target': 'new',
+                    'context': {
+                        'form_view_ref': 'hlv_sale_delivery_planning.view_picking_packer_print_wizard',
+                    },
+                }
+        return super().do_print_picking()
+
     def mark_picking_print_started(self, packer_user_id=None):
         picks = self.filtered(lambda p: p._is_pick_slip_picking())
         if not picks:
@@ -360,10 +382,33 @@ class StockPicking(models.Model):
             picks.action_assign_packer(packer_user_id)
         elif any(not p.x_pack_packer_user_id for p in picks):
             raise UserError(_('Vui lòng chọn người đóng trước khi in phiếu lấy hàng.'))
-        picks.write({
-            'x_pick_print_start_at': fields.Datetime.now(),
-            'x_pick_printed_by_id': self.env.context.get('pack_printed_by_uid') or self.env.uid,
-        })
+
+        config_param = self.env['ir.config_parameter'].sudo()
+        print_time_mode = config_param.get_param(
+            'hlv_sale_delivery_planning.pick_print_time_mode', 'first'
+        )
+        now = fields.Datetime.now()
+        printed_by = self.env.context.get('pack_printed_by_uid') or self.env.uid
+        printer_name = self.env['res.users'].sudo().browse(printed_by).name or ''
+        local_now = now + timedelta(hours=7)
+        time_str = local_now.strftime('%H:%M %d/%m/%Y')
+
+        for pick in picks:
+            vals = {'x_pick_printed_by_id': printed_by}
+            # Only update print_start_at if not yet recorded, or mode is 'latest'
+            if print_time_mode == 'latest' or not pick.x_pick_print_start_at:
+                vals['x_pick_print_start_at'] = now
+            pick.write(vals)
+            # Log to chatter
+            pick.message_post(
+                body=_(
+                    '🖨️ In phiếu lấy hàng lúc %(time)s bởi <b>%(user)s</b>',
+                    time=time_str,
+                    user=printer_name,
+                ),
+                message_type='comment',
+                subtype_xmlid='mail.mt_note',
+            )
         return True
 
     def mark_picking_print_finished(self):

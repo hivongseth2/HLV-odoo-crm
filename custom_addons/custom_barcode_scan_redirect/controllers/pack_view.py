@@ -24,12 +24,93 @@ class PackViewController(http.Controller):
             picking.with_user(request.env.user).mark_pack_actual_started(user=request.env.user)
         except Exception as e:
             _logger.warning("[PACK_VIEW] Access blocked for %s: %s", picking.name, e)
+            packer_name_part = ''
+            if picking.x_pack_packer_user_id:
+                packer_name_part = f'<span class="packer-name">{picking.x_pack_packer_user_id.name}</span>'
             return request.make_response(
-                "<div style='font-family:Segoe UI,Arial;padding:24px'>"
-                "<h3>Không thể vào phiếu đóng gói</h3>"
-                f"<p>{str(e)}</p>"
-                "<a href='/custom_barcode_scan/ui'>Quay lại màn quét</a>"
-                "</div>",
+                f"""<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Không có quyền truy cập</title>
+<style>
+  *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+    background: #f0f4f8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 24px;
+  }}
+  .card {{
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+    padding: 40px 36px;
+    max-width: 480px;
+    width: 100%;
+    text-align: center;
+  }}
+  .icon {{
+    font-size: 56px;
+    margin-bottom: 16px;
+  }}
+  h3 {{
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #c0392b;
+    margin-bottom: 12px;
+  }}
+  .message {{
+    font-size: 1rem;
+    color: #444;
+    margin-bottom: 8px;
+    line-height: 1.6;
+  }}
+  .packer-name {{
+    font-weight: 700;
+    color: #2980b9;
+  }}
+  .error-detail {{
+    font-size: 0.85rem;
+    color: #888;
+    background: #f8f8f8;
+    border: 1px solid #eee;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin: 16px 0;
+    text-align: left;
+    word-break: break-word;
+  }}
+  .back-link {{
+    display: inline-block;
+    margin-top: 20px;
+    padding: 12px 28px;
+    background: #2980b9;
+    color: #fff;
+    text-decoration: none;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    transition: background 0.2s;
+  }}
+  .back-link:hover {{ background: #1a5f8a; }}
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">🔒</div>
+    <h3>Không thể vào phiếu đóng gói</h3>
+    <p class="message">Bạn không được assign đóng phiếu này.</p>
+    {"<p class='message'>Người đóng: " + packer_name_part + "</p>" if packer_name_part else ""}
+    <div class="error-detail">{str(e)}</div>
+    <a class="back-link" href="/custom_barcode_scan/ui">← Quay lại màn quét</a>
+  </div>
+</body>
+</html>""",
                 headers=[('Content-Type', 'text/html; charset=utf-8')],
             )
 

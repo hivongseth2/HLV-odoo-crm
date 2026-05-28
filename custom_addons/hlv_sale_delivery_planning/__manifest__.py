@@ -12,6 +12,7 @@
         'views/res_config_settings_views.xml',
         'views/res_users_views.xml',
         'views/delivery_planner_views.xml',
+        'views/picking_packer_wizard_views.xml',
     ],
     'assets': {
         'web.assets_backend': [

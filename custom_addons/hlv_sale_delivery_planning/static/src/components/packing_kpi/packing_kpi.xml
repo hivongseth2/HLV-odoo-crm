@@ -52,6 +52,7 @@
                                 <th>Trạng thái</th>
                                 <th>TG in</th>
                                 <th>TG đóng</th>
+                                <th>Kết thúc</th>
                                 <th>In → Done</th>
                                 <th>Thực tế</th>
                                 <th>Đổi packer</th>
@@ -59,16 +60,16 @@
                         </thead>
                         <tbody>
                             <t t-if="state.loading">
-                                <tr><td colspan="9" class="text-center text-muted py-4"><i class="fa fa-spinner fa-spin me-1"></i>Đang tải...</td></tr>
+                                <tr><td colspan="10" class="text-center text-muted py-4"><i class="fa fa-spinner fa-spin me-1"></i>Đang tải...</td></tr>
                             </t>
                             <t t-elif="!state.groups.length">
-                                <tr><td colspan="9" class="text-center text-muted py-4">Không có dữ liệu</td></tr>
+                                <tr><td colspan="10" class="text-center text-muted py-4">Không có dữ liệu</td></tr>
                             </t>
                             <t t-else="">
                                 <t t-foreach="state.groups" t-as="group" t-key="group.packer_user_id">
                                     <!-- Group header row — clickable to expand/collapse -->
                                     <tr class="table-primary" style="cursor:pointer;" t-on-click="() => this.toggleGroup(group.packer_user_id)">
-                                        <td colspan="9" class="fw-bold">
+                                        <td colspan="10" class="fw-bold">
                                             <i t-attf-class="fa me-2 #{this.isGroupExpanded(group.packer_user_id) ? 'fa-chevron-down' : 'fa-chevron-right'}"></i>
                                             <i class="fa fa-user me-1"></i><t t-esc="group.packer_name"/>
                                             <span class="badge bg-secondary ms-2">Tổng: <t t-esc="group.assigned_count"/></span>
@@ -79,7 +80,7 @@
                                     </tr>
                                     <!-- Comparison progress bar row -->
                                     <tr t-if="group.assigned_count" class="table-light">
-                                        <td colspan="9" class="py-1 px-3">
+                                        <td colspan="10" class="py-1 px-3">
                                             <div class="d-flex align-items-center gap-2 small">
                                                 <div class="flex-grow-1 bg-secondary bg-opacity-25 rounded" style="height:8px;">
                                                     <div class="rounded bg-success" t-att-style="'height:8px;width:' + this.groupDonePct(group) + '%'"></div>
@@ -98,8 +99,9 @@
                                                 <td><t t-esc="row.sale_order"/></td>
                                                 <td><t t-esc="row.pack_name || '-'"/></td>
                                                 <td><span class="badge" t-att-class="this.stateClass(row.state)"><t t-esc="this.stateLabel(row.state)"/></span></td>
-                                                <td class="small text-muted"><t t-esc="row.print_start_at || '-'"/></td>
-                                                <td class="small text-muted"><t t-esc="row.pack_start_at || '-'"/></td>
+                                                <td class="small text-muted"><t t-esc="this.formatTime(row.print_start_at)"/></td>
+                                                <td class="small text-muted"><t t-esc="this.formatTime(row.pack_start_at)"/></td>
+                                                <td class="small text-muted"><t t-esc="this.formatTime(row.pack_end_at)"/></td>
                                                 <td><t t-esc="this.formatDuration(row.print_to_done_seconds)"/></td>
                                                 <td><t t-esc="this.formatDuration(row.actual_seconds)"/></td>
                                                 <td>
