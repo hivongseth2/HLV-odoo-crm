@@ -116,8 +116,6 @@ class HLVMobileBarcodeController(http.Controller):
                     if total_qty > 0:
                         move.product_uom_qty = total_qty
                         for line in move.move_line_ids:
-                            # Preserve the original quantity demand for each specific line (vital for packages)
-                            line.quantity_product_uom = line.quantity
                             line.quantity = 0.0
 
         lines = []
@@ -130,13 +128,28 @@ class HLVMobileBarcodeController(http.Controller):
                         loc_name = ml.location_id.display_name
 
                     package_name = ml.result_package_id.name or ml.package_id.name or False
+                    
+                    # Calculate individual line demand for Step 2
+                    line_demand = move.product_uom_qty
+                    if picking.source_transfer_id:
+                        orig_mls = picking.source_transfer_id.move_line_ids.filtered(lambda l: l.product_id == ml.product_id)
+                        if ml.package_id or ml.result_package_id:
+                            pkg_id = ml.package_id or ml.result_package_id
+                            matched_orig = orig_mls.filtered(lambda l: l.result_package_id == pkg_id)
+                            if matched_orig:
+                                line_demand = sum(matched_orig.mapped('quantity'))
+                        else:
+                            matched_orig = orig_mls.filtered(lambda l: not l.result_package_id)
+                            if matched_orig:
+                                line_demand = sum(matched_orig.mapped('quantity'))
+
                     lines.append({
                         'id': ml.id,
                         'move_id': move.id,
                         'product_id': move.product_id.id,
                         'product_name': move.product_id.display_name,
                         'product_barcode': move.product_id.barcode,
-                        'product_uom_qty': ml.quantity_product_uom or move.product_uom_qty,
+                        'product_uom_qty': line_demand,
                         'qty_done': ml.quantity,
                         'uom_name': move.product_uom.name,
                         'state': move.state,
@@ -447,7 +460,15 @@ class HLVMobileBarcodeController(http.Controller):
             if move_lines:
                 processed_lines = []
                 for ml in move_lines:
-                    ml.quantity = ml.quantity_product_uom or ml.reserved_qty or 1.0
+                    line_demand = ml.move_id.product_uom_qty
+                    if picking.source_transfer_id:
+                        orig_mls = picking.source_transfer_id.move_line_ids.filtered(lambda l: l.product_id == ml.product_id)
+                        pkg_id = ml.package_id or ml.result_package_id
+                        matched_orig = orig_mls.filtered(lambda l: l.result_package_id == pkg_id)
+                        if matched_orig:
+                            line_demand = sum(matched_orig.mapped('quantity'))
+                    
+                    ml.quantity = line_demand
                     processed_lines.append(f"{ml.quantity} x {ml.product_id.display_name}")
                 return {
                     'success': True,
@@ -516,6 +537,13 @@ class HLVMobileBarcodeController(http.Controller):
         move = picking.move_ids.filtered(lambda m: m.product_id == product and m.state not in ['done', 'cancel'])
         
         if not move:
+            if picking.source_transfer_id:
+                return {'error': _('Không được quét thêm sản phẩm mới vào phiếu Bước 2! Chỉ được quét các sản phẩm đã có trong phiếu.')}
+            
+            allow_add = request.env['ir.config_parameter'].sudo().get_param('hlv_mobile_barcode.hlv_barcode_allow_add_product', 'True') == 'True'
+            if not allow_add:
+                return {'error': _('Tính năng thêm sản phẩm mới hiện đang bị tắt trong cấu hình hệ thống!')}
+                
             # Create a new move on the fly
             move = request.env['stock.move'].create({
                 'name': product.display_name,
@@ -541,9 +569,21 @@ class HLVMobileBarcodeController(http.Controller):
             move = move[0]
 
         # Check limit to prevent over-scanning (demand-based)
-        current_qty_done = sum(ml.quantity for ml in move.move_line_ids)
-        if move.product_uom_qty > 0.0 and current_qty_done + 1 > move.product_uom_qty:
-            return {'error': _('Sản phẩm "%s" đã quét đủ số lượng yêu cầu (%g/%g). Không thể quét thêm!', product.display_name, current_qty_done, move.product_uom_qty)}
+        if picking.source_transfer_id:
+            # In Step 2, we specifically restrict the LOOSE product quantity
+            line_demand = move.product_uom_qty
+            orig_mls = picking.source_transfer_id.move_line_ids.filtered(lambda l: l.product_id == product)
+            matched_orig = orig_mls.filtered(lambda l: not l.result_package_id)
+            if matched_orig:
+                line_demand = sum(matched_orig.mapped('quantity'))
+            
+            loose_qty_done = sum(ml.quantity for ml in move.move_line_ids if not ml.package_id and not ml.result_package_id)
+            if line_demand > 0.0 and loose_qty_done + 1 > line_demand:
+                return {'error': _('Sản phẩm rời "%s" đã quét đủ số lượng yêu cầu (%g/%g). Không thể quét thêm hàng rời!', product.display_name, loose_qty_done, line_demand)}
+        else:
+            current_qty_done = sum(ml.quantity for ml in move.move_line_ids)
+            if move.product_uom_qty > 0.0 and current_qty_done + 1 > move.product_uom_qty:
+                return {'error': _('Sản phẩm "%s" đã quét đủ số lượng yêu cầu (%g/%g). Không thể quét thêm!', product.display_name, current_qty_done, move.product_uom_qty)}
 
         # Find an unpacked move line that is not in any package
         move_line = move.move_line_ids.filtered(lambda ml: not ml.result_package_id and not ml.package_id)
@@ -653,6 +693,8 @@ class HLVMobileBarcodeController(http.Controller):
                 return {'error': _('Không tìm thấy dòng sản phẩm')}
             move_line = move.move_line_ids.filtered(lambda ml: not ml.result_package_id and not ml.package_id)
             if not move_line:
+                if move.picking_id.source_transfer_id:
+                    return {'error': _('Không được phép tự tạo dòng mới trong phiếu Bước 2!')}
                 move_line = request.env['stock.move.line'].create({
                     'move_id': move.id,
                     'picking_id': move.picking_id.id,
@@ -694,9 +736,25 @@ class HLVMobileBarcodeController(http.Controller):
             new_val = 0
 
         # Check limit to prevent over-scanning/updating
-        other_lines_qty = sum(ml.quantity for ml in move.move_line_ids if ml.id != move_line.id)
-        if move.product_uom_qty > 0.0 and (new_val + other_lines_qty) > move.product_uom_qty:
-            return {'error': _('Số lượng vượt quá yêu cầu cho phép (%g/%g).', (new_val + other_lines_qty), move.product_uom_qty)}
+        if move.picking_id.source_transfer_id:
+            # Step 2 specific limit check (strict per line)
+            line_demand = move.product_uom_qty
+            orig_mls = move.picking_id.source_transfer_id.move_line_ids.filtered(lambda l: l.product_id == move.product_id)
+            if move_line.package_id or move_line.result_package_id:
+                pkg_id = move_line.package_id or move_line.result_package_id
+                matched_orig = orig_mls.filtered(lambda l: l.result_package_id == pkg_id)
+            else:
+                matched_orig = orig_mls.filtered(lambda l: not l.result_package_id)
+            
+            if matched_orig:
+                line_demand = sum(matched_orig.mapped('quantity'))
+                
+            if line_demand > 0.0 and new_val > line_demand:
+                return {'error': _('Số lượng vượt quá yêu cầu cho phép của dòng này (%g/%g).', new_val, line_demand)}
+        else:
+            other_lines_qty = sum(ml.quantity for ml in move.move_line_ids if ml.id != move_line.id)
+            if move.product_uom_qty > 0.0 and (new_val + other_lines_qty) > move.product_uom_qty:
+                return {'error': _('Số lượng vượt quá yêu cầu cho phép (%g/%g).', (new_val + other_lines_qty), move.product_uom_qty)}
 
         # If we are picking from a location, validate physical stock
         pt_code = (move.picking_id.picking_type_id.sequence_code or '').upper()
@@ -740,22 +798,22 @@ class HLVMobileBarcodeController(http.Controller):
         if not picking.exists() or picking.state not in ['draft', 'confirmed', 'assigned']:
             return {'error': _('Không thể xoá số lượng của phiếu này')}
             
-        # Không cho phép clear_quantities trên phiếu Bước 2 vì các line được tạo tự động từ Bước 1
-        if picking.source_transfer_id:
-            return {'error': _('Không thể xóa số lượng trên phiếu Bước 2 được.')}
+        # Bỏ chặn xoá số lượng trên phiếu Bước 2 (để cho phép nút Làm lại)
+        # if picking.source_transfer_id:
+        #     return {'error': _('Không thể xóa số lượng trên phiếu Bước 2 được.')}
             
         try:
             # 1. Handle stock move lines
             for ml in picking.move_line_ids:
-                if ml.quantity_product_uom == 0.0 and not ml.move_id.move_orig_ids:
+                if ml.quantity == 0.0 and not ml.move_id.move_orig_ids and not picking.source_transfer_id:
                     # Dynamically created line -> delete it!
                     ml.unlink()
                 else:
-                    # Reserved line -> reset quantity and clear packaging
-                    ml.write({
-                        'quantity': 0.0,
-                        'result_package_id': False
-                    })
+                    # Reserved or Step 2 line -> reset quantity
+                    write_vals = {'quantity': 0.0}
+                    if not picking.source_transfer_id:
+                        write_vals['result_package_id'] = False
+                    ml.write(write_vals)
                     
             # 2. Handle stock moves that were created dynamically on the fly (demand = 0)
             # Only delete if it has no move_orig_ids (meaning it wasn't generated by a previous step)
