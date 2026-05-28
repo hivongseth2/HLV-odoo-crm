@@ -714,15 +714,39 @@ class PublicInventory(http.Controller):
             incoming_by_picking[key]["qty"] += move.product_uom_qty
 
         # --- Phiếu xuất từ ĐBH ---
-        # Dùng location_dest_id.usage = 'customer' để bắt đúng bước cuối trong xuất kho
-        # 1-bước: stock → customer
-        # 2-bước: output → customer (bước SHIP)
-        # 3-bước: packing/output → customer (bước SHIP cuối)
-        # → Không dùng picking_type_id.code = 'outgoing' vì bước 1/2 là internal
-        outgoing_domain = _wh_src_domain([
+        # Dùng logic giống Odoo virtual_available:
+        #   Outgoing = moves FROM lot_stock_id children TO outside lot_stock_id
+        # Điều này bắt được:
+        #   1-bước: stock → customer          (source inside lot_stock_id ✓)
+        #   2-bước: stock → output  (PICK)    (source inside lot_stock_id ✓)
+        #           output → customer (SHIP)  (source = output, NOT inside lot_stock_id → bỏ qua, tránh đếm 2 lần)
+        #   3-bước tùy chỉnh (KBC): pack_zone ⊂ lot_stock_id
+        #           stock → pack (PICK)       (dest inside lot_stock_id → bỏ qua, chỉ di chuyển nội bộ)
+        #           pack → output (PACK)      (source inside lot_stock_id ✓, dest ngoài ✓)
+        #           output → customer (SHIP)  (source = output, NOT inside lot_stock_id → bỏ qua)
+
+        def _wh_outgoing_domain(domain_list):
+            """
+            Filter SO-linked moves ra khỏi vùng lot_stock_id của kho.
+            Mirrors Odoo outgoing_qty: FROM child_of(lot_stock_id) TO NOT child_of(lot_stock_id).
+            """
+            if wid:
+                wh = Warehouse.browse(wid).exists()
+                if wh:
+                    stock_id = wh.lot_stock_id.id
+                    domain_list.append(("location_id", "child_of", stock_id))
+                    domain_list.append(("location_dest_id", "not child_of", stock_id))
+            else:
+                allowed_whs = _get_allowed_warehouses()
+                if allowed_whs:
+                    stock_ids = allowed_whs.mapped('lot_stock_id').ids
+                    domain_list.append(("location_id", "child_of", stock_ids))
+                    domain_list.append(("location_dest_id", "not child_of", stock_ids))
+            return domain_list
+
+        outgoing_domain = _wh_outgoing_domain([
             ("product_id", "=", pid),
             ("state", "not in", ["done", "cancel", "draft"]),
-            ("location_dest_id.usage", "=", "customer"),
             "|",
             ("sale_line_id", "!=", False),
             ("picking_id.sale_id", "!=", False),
