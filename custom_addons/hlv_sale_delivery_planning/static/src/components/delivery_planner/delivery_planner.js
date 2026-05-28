@@ -150,33 +150,6 @@ export class DeliveryPlannerDashboard extends Component {
             printMenuPos: null,       // { top, right } — vị trí fixed của dropdown
             selectedPrintMenuPos: null, // vị trí dropdown in cho các SO đã chọn
 
-            // Packing Slip Wizard
-            isPackingWizardOpen: false,
-            packingWizardPickingId: null,    // single picking (từ drawer)
-            packingWizardPickingIds: [],     // batch pickings (từ nút in hàng loạt)
-            packingWizardPickingName: '',
-            packingWizardPackerId: null,
-            packingWizardPackerName: '',
-            packingWizardUsers: [],
-            packingWizardLoading: false,
-            packingWizardPrinting: false,
-            packingWizardReportId: null,     // reportId dùng khi batch
-            packingWizardReportType: null,
-            packingReportId: null,    // ir.actions.report id cho "Phiếu Đóng Hàng"
-
-            // Packer Panel
-            packerPanelOpen: false,
-            packerStatsLoading: false,
-            packerStats: [],  // [{id, name, packing:[], packed_today:[], avg_minutes}]
-            packerCollapsed: {},  // {packerId: bool}
-            allPackersList: [],  // [{id, name}] for packer change modal
-            dashboardPackerModal: {
-                open: false,
-                pickingId: null,
-                pickingName: '',
-                selectedPackerId: null,
-            },
-
             // Inline editing: Ghi Chú Odoo
             inlineEditSOId: null,     // soId đang edit ghi chu
             inlineEditGhiChu: '',     // giá trị đang nhập
@@ -243,12 +216,6 @@ export class DeliveryPlannerDashboard extends Component {
                 { order: 'name' }
             );
             this.state.pickingReports = reports;
-            const packingSlipReport = reports.find(r =>
-                r.name === 'Phiếu Đóng Hàng'
-            );
-            if (packingSlipReport) {
-                this.state.packingReportId = packingSlipReport.id;
-            }
         });
 
         // fetchData runs AFTER mount so cached data shows instantly
@@ -534,10 +501,6 @@ export class DeliveryPlannerDashboard extends Component {
                 "Dữ liệu đã được cập nhật tự động",
                 { type: "info", title: "Cập nhật xong" }
             );
-            // Reload packer stats if panel is open
-            if (this.state.packerPanelOpen) {
-                this.loadPackerStats();
-            }
         }, 800);
     }
 
@@ -580,10 +543,19 @@ export class DeliveryPlannerDashboard extends Component {
             // Truyền filter_kwargs để backend loại các SO không khớp filter
             // hiện tại (vd: bus đẩy đơn kho A nhưng dashboard đang lọc kho B
             // → backend trả về removed_ids → FE skip / remove khỏi state).
+            // Capture filter key BEFORE the async RPC so we can detect stale
+            // responses: if the user changes filter while the request is in
+            // flight, the response belongs to the old filter and must be
+            // discarded — otherwise orders from the wrong warehouse get merged.
+            const filterKeyAtStart = this._buildFilterKey();
             const res = await this.orm.call(
                 "sale.order", "get_delivery_orders_subset", [],
                 { order_ids: soIds, filter_kwargs: this._buildFetchKwargs() }
             );
+            // Drop stale response if filter changed while RPC was in-flight
+            if (this._buildFilterKey() !== filterKeyAtStart) {
+                return;
+            }
             const fresh = (res && res.orders) || [];
             const removed = new Set((res && res.removed_ids) || []);
             this._mergeSubset(fresh, removed);
@@ -813,6 +785,20 @@ export class DeliveryPlannerDashboard extends Component {
 
     async _saveToCache(result) {
         try {
+            // Serialize through JSON to strip OWL reactive Proxy objects —
+            // IndexedDB's structured clone algorithm cannot clone Proxies and
+            // throws DataCloneError when state arrays are passed directly
+            // (e.g. from _refreshSubset or _autoLoadAllRemaining).
+            let orders, dashboardStats, warehouses, tags;
+            try {
+                orders = JSON.parse(JSON.stringify(result.orders || []));
+                dashboardStats = result.dashboard_stats ? JSON.parse(JSON.stringify(result.dashboard_stats)) : undefined;
+                warehouses = result.warehouses ? JSON.parse(JSON.stringify(result.warehouses)) : undefined;
+                tags = result.tags ? JSON.parse(JSON.stringify(result.tags)) : undefined;
+            } catch (serErr) {
+                console.warn('[DP Cache] _saveToCache serialization failed:', serErr);
+                return;
+            }
             const db = await this._openCacheDB();
             const tx = db.transaction(this._CACHE_STORE, 'readwrite');
             tx.objectStore(this._CACHE_STORE).put({
@@ -820,11 +806,11 @@ export class DeliveryPlannerDashboard extends Component {
                 timestamp: Date.now(),
                 kanbanBatchSize: this.state.kanbanBatchSize,
                 data: {
-                    dashboard_stats: result.dashboard_stats,
-                    orders: result.orders,
+                    dashboard_stats: dashboardStats,
+                    orders: orders,
                     total_count: result.total_count,
-                    warehouses: result.warehouses,
-                    tags: result.tags,
+                    warehouses: warehouses,
+                    tags: tags,
                 },
             }, 'latest');
             await new Promise((resolve, reject) => {
@@ -832,7 +818,7 @@ export class DeliveryPlannerDashboard extends Component {
                 tx.onerror = () => reject(tx.error);
             });
             db.close();
-            console.log('[DP Cache] Saved', (result.orders || []).length, 'orders to IndexedDB');
+            console.log('[DP Cache] Saved', orders.length, 'orders to IndexedDB');
         } catch (e) {
             console.warn('[DP Cache] _saveToCache failed:', e);
         }
@@ -2017,10 +2003,11 @@ export class DeliveryPlannerDashboard extends Component {
         if (this.selectedCount === 0) return;
         if (this.state.isPrintingPickingSlips) return;
 
+        const selectedIds = Array.from(this.state.selectedSOIds);
         const pickingIds = this.getSelectedPickingIds().filter((id) => {
-            const picking = this.state.saleOrders
-                .flatMap((so) => so.pickings || [])
-                .find((p) => p.id === id);
+        const picking = this.state.saleOrders
+            .flatMap((so) => so.pickings || [])
+            .find((p) => p.id === id);
             return picking && picking.state === 'assigned';
         });
 
@@ -2029,16 +2016,14 @@ export class DeliveryPlannerDashboard extends Component {
             return;
         }
         this.state.selectedPrintMenuPos = null;
-        this.state.isPrintingPickingSlips = true;
 
-        // Mở wizard chọn packer → confirm sẽ tự reserve + in
-        await this.openPackingWizardBatch(pickingIds, reportId, reportType);
-    }
-
-    async _doPrintSelectedPickingSlips(pickingIds, reportId, reportType) {
-        const selectedIds = Array.from(this.state.selectedSOIds);
         try {
-            // Giữ hàng trước khi in
+            // Local flag — KHÔNG dùng state.isLoading để tránh triệu hồi full-screen overlay
+            // / re-render kanban. Bus event sẽ tự động triệu hồi subset refresh.
+            this.state.isPrintingPickingSlips = true;
+
+            // Luôn gọi giữ hàng (check availability) trước khi in
+            // Backend sẽ tự xác định picking nào chưa assigned để reserve
             try {
                 const reserveResponse = await fetch('/hlv_sale_delivery_planning/reserve_stock', {
                     method: 'POST',
@@ -2416,265 +2401,6 @@ export class DeliveryPlannerDashboard extends Component {
                 active_model: 'stock.picking',
             }
         });
-    }
-
-    // ── Packing Slip Wizard ──────────────────────────────────────────────────
-
-    async openPackingWizard(pickingId, pickingName) {
-        this.state.packingWizardPickingId = pickingId;
-        this.state.packingWizardPickingIds = [];
-        this.state.packingWizardReportId = null;
-        this.state.packingWizardReportType = null;
-        this.state.packingWizardPickingName = pickingName || '';
-        this.state.packingWizardLoading = true;
-        this.state.packingWizardPrinting = false;
-        this.state.packingWizardUsers = [];
-        this.state.packingWizardPackerId = null;
-        this.state.packingWizardPackerName = '';
-        this.state.isPackingWizardOpen = true;
-        await this._loadPackingUsers();
-    }
-
-    async openPackingWizardBatch(pickingIds, reportId, reportType) {
-        this.state.packingWizardPickingId = null;
-        this.state.packingWizardPickingIds = pickingIds;
-        this.state.packingWizardReportId = reportId;
-        this.state.packingWizardReportType = reportType;
-        this.state.packingWizardPickingName = `${pickingIds.length} phiếu lấy hàng`;
-        this.state.packingWizardLoading = true;
-        this.state.packingWizardPrinting = false;
-        this.state.packingWizardUsers = [];
-        this.state.packingWizardPackerId = null;
-        this.state.packingWizardPackerName = '';
-        this.state.isPackingWizardOpen = true;
-        await this._loadPackingUsers();
-    }
-
-    async _loadPackingUsers() {
-        try {
-            const response = await fetch('/hlv_sale_delivery_planning/load_packing_users', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ jsonrpc: '2.0', method: 'call', params: {} }),
-            });
-            const json = await response.json();
-            const res = json.result || {};
-            if (res.users) {
-                this.state.packingWizardUsers = res.users;
-                const defaultUser = res.users.find(u => u.id === res.current_user_id);
-                if (defaultUser) {
-                    this.state.packingWizardPackerId = defaultUser.id;
-                    this.state.packingWizardPackerName = defaultUser.name;
-                }
-            }
-        } catch (e) {
-            console.warn('Failed to load packing users', e);
-        } finally {
-            this.state.packingWizardLoading = false;
-        }
-    }
-
-    closePackingWizard() {
-        this.state.isPackingWizardOpen = false;
-        this.state.packingWizardPickingId = null;
-        this.state.packingWizardPickingIds = [];
-        this.state.packingWizardPickingName = '';
-        this.state.packingWizardLoading = false;
-        this.state.packingWizardPrinting = false;
-        this.state.packingWizardReportId = null;
-        this.state.packingWizardReportType = null;
-    }
-
-    onPackerChange(ev) {
-        const selectedId = parseInt(ev.target.value, 10) || null;
-        this.state.packingWizardPackerId = selectedId;
-        const user = this.state.packingWizardUsers.find(u => u.id === selectedId);
-        this.state.packingWizardPackerName = user ? user.name : '';
-    }
-
-    async confirmPackingSlip() {
-        if (!this.state.packingWizardPackerId) return;
-        const isBatch = this.state.packingWizardPickingIds.length > 0;
-        const pickingIds = isBatch
-            ? this.state.packingWizardPickingIds
-            : (this.state.packingWizardPickingId ? [this.state.packingWizardPickingId] : []);
-        if (!pickingIds.length) return;
-
-        this.state.packingWizardPrinting = true;
-        const packerId = this.state.packingWizardPackerId;
-        const packerName = this.state.packingWizardPackerName;
-        const batchReportId = this.state.packingWizardReportId;
-        const batchReportType = this.state.packingWizardReportType;
-
-        try {
-            // Set packer + status='packing' cho tất cả pickings
-            for (const pid of pickingIds) {
-                await fetch('/hlv_sale_delivery_planning/confirm_packing_slip', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        jsonrpc: '2.0', method: 'call',
-                        params: { picking_id: pid, packer_id: packerId },
-                    }),
-                });
-            }
-
-            this.closePackingWizard();
-            this.notification.add(`Đã giao đóng hàng cho ${packerName}.`, { type: 'success' });
-
-            if (isBatch) {
-                // Batch: dùng lại hàm in gốc (reserve + in)
-                await this._doPrintSelectedPickingSlips(pickingIds, batchReportId, batchReportType);
-            } else {
-                // Single: load report cho picking này
-                const singleId = pickingIds[0];
-                const allowedIds = await this.orm.call(
-                    'ir.actions.actions',
-                    'get_allowed_picking_reports',
-                    [],
-                    { context: { active_ids: [singleId], active_id: singleId, active_model: 'stock.picking' } }
-                );
-                const allowedSet = new Set(allowedIds);
-                const reports = this.state.pickingReports.filter(r => allowedSet.has(r.id));
-                if (reports.length === 1) {
-                    await this.actionService.doAction(reports[0].id, {
-                        additionalContext: { active_ids: [singleId], active_id: singleId, active_model: 'stock.picking' }
-                    });
-                } else if (reports.length > 1) {
-                    this.state.printMenuPickingId = singleId;
-                    this.state.printMenuReports = reports;
-                    this.state.printMenuPos = { top: 200, right: 20 };
-                } else {
-                    this.notification.add('Không tìm thấy mẫu in cho phiếu này.', { type: 'warning' });
-                }
-            }
-
-            await this.fetchData();
-        } catch (e) {
-            console.error('confirmPackingSlip error', e);
-            this.notification.add('Lỗi: ' + (e.message || e), { type: 'danger' });
-        } finally {
-            this.state.packingWizardPrinting = false;
-            this.state.isPrintingPickingSlips = false;
-        }
-    }
-
-    async finishPacking(ev, pickingId) {
-        ev.stopPropagation();
-        try {
-            const response = await fetch('/hlv_sale_delivery_planning/finish_packing', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    jsonrpc: '2.0', method: 'call',
-                    params: { picking_id: pickingId },
-                }),
-            });
-            const json = await response.json();
-            if (json.result && json.result.success === false) {
-                this.notification.add(json.result.message || 'Lỗi', { type: 'danger' });
-                return;
-            }
-            this.notification.add('Đã đánh dấu hoàn thành đóng hàng.', { type: 'success' });
-            await this.fetchData();
-        } catch (e) {
-            this.notification.add('Lỗi: ' + (e.message || e), { type: 'danger' });
-        }
-    }
-
-    togglePackerPanel() {
-        this.state.packerPanelOpen = !this.state.packerPanelOpen;
-        if (this.state.packerPanelOpen) {
-            this.loadPackerStats();
-            if (!this.state.allPackersList.length) this.loadAllPackersList();
-        }
-    }
-
-    togglePackerCollapse(id) {
-        this.state.packerCollapsed[id] = !this.state.packerCollapsed[id];
-    }
-
-    async loadAllPackersList() {
-        try {
-            const res = await fetch('/hlv_sale_delivery_planning/get_packers', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ jsonrpc: '2.0', method: 'call', params: {} }),
-            }).then(r => r.json());
-            const data = res.result || {};
-            if (data.success !== false) {
-                this.state.allPackersList = data.packers || [];
-            }
-        } catch (e) {
-            console.warn('loadAllPackersList error', e);
-        }
-    }
-
-    openDashboardPackerModal(item) {
-        this.state.dashboardPackerModal = {
-            open: true,
-            pickingId: item.picking_id,
-            pickingName: item.picking_name,
-            selectedPackerId: null,
-        };
-    }
-
-    closeDashboardPackerModal() {
-        this.state.dashboardPackerModal.open = false;
-    }
-
-    onDashboardPackerChange(ev) {
-        this.state.dashboardPackerModal.selectedPackerId = ev.target.value ? parseInt(ev.target.value) : null;
-    }
-
-    async confirmDashboardChangePacker() {
-        const { pickingId, selectedPackerId } = this.state.dashboardPackerModal;
-        try {
-            const res = await fetch('/hlv_sale_delivery_planning/change_packer', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    jsonrpc: '2.0', method: 'call',
-                    params: { picking_id: pickingId, packer_id: selectedPackerId || false },
-                }),
-            }).then(r => r.json());
-            const data = res.result || {};
-            if (data.success) {
-                this.state.dashboardPackerModal.open = false;
-                this.notification.add('Đã đổi người đóng gói', { type: 'success' });
-                this.loadPackerStats();
-            } else {
-                this.notification.add('Lỗi: ' + (data.message || 'unknown'), { type: 'danger' });
-            }
-        } catch (e) {
-            this.notification.add('Không thể đổi người đóng gói', { type: 'danger' });
-        }
-    }
-
-    refreshPackerStats(ev) {
-        ev.stopPropagation();
-        this.loadPackerStats();
-    }
-
-    async loadPackerStats() {
-        if (this.state.packerStatsLoading) return;
-        this.state.packerStatsLoading = true;
-        try {
-            const response = await fetch('/hlv_sale_delivery_planning/packer_stats', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ jsonrpc: '2.0', method: 'call', params: {} }),
-            });
-            const json = await response.json();
-            const res = json.result || {};
-            if (res.success !== false) {
-                this.state.packerStats = res.packers || [];
-            }
-        } catch (e) {
-            console.warn('loadPackerStats error', e);
-        } finally {
-            this.state.packerStatsLoading = false;
-        }
     }
 
     openVideo(url) {

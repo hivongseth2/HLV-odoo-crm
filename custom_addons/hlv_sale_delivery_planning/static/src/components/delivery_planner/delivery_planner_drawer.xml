@@ -460,17 +460,6 @@
                                                 <span t-if="picking.bien_ban_printed" class="badge bg-info ms-1" style="font-size:0.6rem;" title="Đã in biên bản cho phiếu này">
                                                     <i class="fa fa-file-text-o me-1"></i>Đã in BB
                                                 </span>
-                                                <!-- Trạng thái đóng hàng (PACK) -->
-                                                <span t-if="picking.x_packing_status === 'packing'" class="badge bg-warning text-dark ms-1" style="font-size:0.6rem;">
-                                                    <i class="fa fa-spinner me-1"></i>Đang đóng<t t-if="picking.x_packer_id">: <t t-esc="picking.x_packer_id[1]"/></t>
-                                                </span>
-                                                <span t-elif="picking.x_packing_status === 'packed'" class="badge bg-success ms-1" style="font-size:0.6rem;">
-                                                    <i class="fa fa-check me-1"></i>Đã đóng gói
-                                                </span>
-                                                <!-- Thời gian in phiếu / giao đóng -->
-                                                <span t-if="picking.x_packing_print_time" class="badge bg-light text-secondary border ms-1" style="font-size:0.6rem;" t-att-title="'In lúc: ' + picking.x_packing_print_time">
-                                                    <i class="fa fa-print me-1"></i><t t-esc="picking.x_packing_print_time"/>
-                                                </span>
                                             </div>
                                             <div t-if="picking.return_of" class="small mt-1 text-danger">
                                                 <i class="fa fa-undo me-1" title="Trả hàng"></i>
@@ -504,16 +493,8 @@
                                                   t-att-class="this.getPickingStatusBadgeClass(picking.state)">
                                                 <t t-esc="this.translatePickingStatus(picking.state)"/>
                                             </span>
-                                            <!-- Nút In: PICK chưa done → mở wizard chọn packer trước khi in -->
-                                            <button t-if="picking.sequence_code and picking.sequence_code.indexOf('PICK') >= 0 and picking.state !== 'cancel' and picking.state !== 'done'"
-                                                    class="btn btn-sm btn-outline-secondary px-2 py-0 w-100 text-start"
-                                                    title="Chọn người đóng hàng rồi in phiếu lấy hàng"
-                                                    t-on-click.stop="() => this.openPackingWizard(picking.id, picking.name)">
-                                                <i class="fa fa-print me-1"></i>In
-                                            </button>
-                                            <!-- Nút In: các picking khác → menu báo cáo bình thường -->
-                                            <button t-elif="picking.state !== 'cancel'"
-                                                    class="btn btn-sm btn-outline-secondary px-2 py-0 w-100 text-start"
+                                            <!-- Nút in -->
+                                            <button class="btn btn-sm btn-outline-secondary px-2 py-0 w-100 text-start"
                                                     title="Menu in phiếu"
                                                     t-on-click="(ev) => this.togglePickingPrintMenu(ev, picking.id)">
                                                 <i class="fa fa-print me-1"></i>In

@@ -1,5 +1,5 @@
 import logging
-from odoo import models, api, fields
+from odoo import models, api
 
 _logger = logging.getLogger(__name__)
 
@@ -55,10 +55,7 @@ class IrActionsReport(models.Model):
                 pickings_bb = self.env['stock.picking'].browse(res_ids).exists()
                 pickings_bb = pickings_bb.filtered(lambda p: not p.x_bien_ban_printed)
                 if pickings_bb:
-                    pickings_bb.write({
-                        'x_bien_ban_printed': True,
-                        'x_bien_ban_print_time': fields.Datetime.now(),
-                    })
+                    pickings_bb.write({'x_bien_ban_printed': True})
                     _logger.info(
                         'Auto-marked %d pickings as bien_ban_printed (report: %s): %s',
                         len(pickings_bb), translated_name or report_technical,

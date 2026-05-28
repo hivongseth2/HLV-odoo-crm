@@ -22,17 +22,6 @@
               <span>Từ phiếu Pick:</span>
               <strong class="text-brand" t-esc="origin_pick_name"/>
             </div>
-            <t t-if="packer_name">
-              <div class="sub" style="margin-top:3px;">
-                <span>&#128100; Người đóng:</span>
-                <strong style="color:#2c7be5;" t-esc="packer_name"/>
-              </div>
-            </t>
-            <t t-if="not packer_name">
-              <div class="sub" style="margin-top:3px; color:#e67e22;">
-                <span>&#128100; Chưa assign người đóng gói</span>
-              </div>
-            </t>
     
           </div>
           <div class="right">

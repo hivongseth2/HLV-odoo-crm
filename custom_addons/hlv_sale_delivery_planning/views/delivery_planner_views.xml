@@ -6,40 +6,11 @@
         <field name="target">main</field>
     </record>
 
-    <record id="action_packing_kpi_dashboard" model="ir.actions.client">
-        <field name="name">KPI Đóng Hàng</field>
-        <field name="tag">hlv_sale_delivery_planning.packing_kpi</field>
-        <field name="target">main</field>
-    </record>
-
-    <menuitem id="menu_delivery_planner_root"
+    <menuitem id="menu_delivery_planner"
               name="Điều phối Giao hàng"
+              action="action_delivery_planner_dashboard"
               parent="sale.sale_order_menu"
               sequence="15"/>
-
-    <menuitem id="menu_delivery_planner"
-              name="Dashboard Giao Hàng"
-              action="action_delivery_planner_dashboard"
-              parent="menu_delivery_planner_root"
-              sequence="10"/>
-
-    <menuitem id="menu_packing_kpi"
-              name="KPI Đóng Hàng"
-              action="action_packing_kpi_dashboard"
-              parent="menu_delivery_planner_root"
-              sequence="20"/>
-
-    <!-- Tên hiển thị Packer trên form user -->
-    <record id="view_users_form_packer_name" model="ir.ui.view">
-        <field name="name">res.users.form.packer.name</field>
-        <field name="model">res.users</field>
-        <field name="inherit_id" ref="base.view_users_form"/>
-        <field name="arch" type="xml">
-            <xpath expr="//field[@name='name']" position="after">
-                <field name="x_packer_name" string="Tên hiển thị (Packer)" placeholder="Để trống = dùng tên tài khoản"/>
-            </xpath>
-        </field>
-    </record>
 
     <!-- Thêm cột + filter "Cần hủy" vào danh sách đơn bán -->
     <record id="view_sale_order_tree_need_cancel" model="ir.ui.view">

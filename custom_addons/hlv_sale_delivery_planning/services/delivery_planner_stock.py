@@ -94,26 +94,53 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
         ]) if all_tmpl_ids else self.env['mrp.bom']
         kit_tmpl_ids = set(kits.mapped('product_tmpl_id').ids)
 
-        # [D2] Old-style Combo (is_combo=True) — 1 query mỗi loại
-        combo_old_tmpl_ids = set()
-        combo_items_map = {}  # {tmpl_id: [(component_product_id, qty_per_combo), ...]}
-        if all_tmpl_ids:
-            _combo_recs = self.env['product.template'].sudo().search_read(
-                [('id', 'in', all_tmpl_ids), ('is_combo', '=', True)], ['id'],
+        # [D2] Kit BOM components — 1 query
+        # Xây kit_comp_map: {kit_tmpl_id: [(comp_pid, qty_per_kit), ...]}
+        kit_comp_map = {}
+        if kits:
+            _bom_line_recs = self.env['mrp.bom.line'].sudo().search_read(
+                [('bom_id', 'in', kits.ids)],
+                ['bom_id', 'product_id', 'product_qty'],
             )
-            # Bao gồm cả sản phẩm có phantom BOM: nếu BOM explosion thất bại
-            # (bom_line_id=NULL trên moves) thì qty_delivered=0 và cần fallback combo.
-            combo_old_tmpl_ids = {r['id'] for r in _combo_recs}
-        if combo_old_tmpl_ids:
-            _cp_recs = self.env['combo.product'].sudo().search_read(
-                [('product_template_id', 'in', list(combo_old_tmpl_ids))],
-                ['product_template_id', 'product_id', 'product_quantity'],
+            _bom_id_to_tmpl = {bom.id: bom.product_tmpl_id.id for bom in kits}
+            _bom_prod_qty = {bom.id: bom.product_qty or 1.0 for bom in kits}
+            for _bl in _bom_line_recs:
+                _bid = _bl['bom_id'][0] if isinstance(_bl['bom_id'], (list, tuple)) else _bl['bom_id']
+                _cpid = _bl['product_id'][0] if isinstance(_bl['product_id'], (list, tuple)) else _bl['product_id']
+                _tmpl = _bom_id_to_tmpl.get(_bid)
+                if _tmpl and _cpid:
+                    _qty_per_kit = (_bl.get('product_qty') or 0.0) / _bom_prod_qty.get(_bid, 1.0)
+                    if _qty_per_kit > 0:
+                        kit_comp_map.setdefault(_tmpl, []).append((_cpid, _qty_per_kit))
+
+        # [D3] Done outgoing moves cho kit SOLs có qty_delivered=0
+        # Trường hợp BOM explosion thành công nhưng bom_line_id=NULL →
+        # Odoo MRP không tính được qty_delivered → dùng done moves trực tiếp
+        kit_sol_id_set = set()
+        for _r in line_recs:
+            _pid_raw = _r.get('product_id')
+            _pid = _pid_raw[0] if isinstance(_pid_raw, (list, tuple)) else _pid_raw
+            if not _pid or (_r.get('qty_delivered') or 0) > 0:
+                continue
+            _tmpl_raw = product_map.get(_pid, {}).get('product_tmpl_id')
+            _tmpl_id = _tmpl_raw[0] if isinstance(_tmpl_raw, (list, tuple)) else _tmpl_raw
+            if _tmpl_id and _tmpl_id in kit_tmpl_ids:
+                kit_sol_id_set.add(_r['id'])
+        done_moves_by_kit_sol = {}  # {sol_id: {prod_id: total_done_qty}}
+        if kit_sol_id_set:
+            _done_mvs = self.env['stock.move'].sudo().search_read(
+                [
+                    ('sale_line_id', 'in', list(kit_sol_id_set)),
+                    ('state', '=', 'done'),
+                    ('picking_id.picking_type_code', '=', 'outgoing'),
+                ],
+                ['sale_line_id', 'product_id', 'quantity'],
             )
-            for cp in _cp_recs:
-                tmpl_id = cp['product_template_id'][0]
-                combo_items_map.setdefault(tmpl_id, []).append(
-                    (cp['product_id'][0], cp['product_quantity'])
-                )
+            for _mv in _done_mvs:
+                _sol_id = _mv['sale_line_id'][0] if isinstance(_mv['sale_line_id'], (list, tuple)) else _mv['sale_line_id']
+                _cpid = _mv['product_id'][0] if isinstance(_mv['product_id'], (list, tuple)) else _mv['product_id']
+                _done_map = done_moves_by_kit_sol.setdefault(_sol_id, {})
+                _done_map[_cpid] = _done_map.get(_cpid, 0.0) + (_mv.get('quantity') or 0.0)
 
         # [E] Active moves per sale line — 1 query
         move_recs = self.env['stock.move'].sudo().search_read(
@@ -129,10 +156,7 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
 
         # [F] Pickings (tất cả trạng thái) — 1 query
         pick_mf = set(self.env['stock.picking']._fields.keys())
-        pick_opt = [f for f in ['x_printed', 'shipper_received', 'shipper_returned',
-                                'x_packer_id', 'x_packing_print_time', 'x_packing_status',
-                                'x_bien_ban_print_time']
-                    if f in pick_mf]
+        pick_opt = [f for f in ['x_printed', 'shipper_received', 'shipper_returned'] if f in pick_mf]
         pick_fields = ['id', 'sale_id', 'state', 'picking_type_code', 'date_done',
                        'return_id', 'picking_type_id'] + pick_opt
         pick_recs = self.env['stock.picking'].sudo().search_read([('sale_id', 'in', so_ids)], pick_fields)
@@ -281,17 +305,6 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             is_fully_ready = True
             total_pending, total_avail = 0, 0
 
-            # Pre-build delivered qty map per product cho combo_old computation
-            sol_delivered_by_product = {}
-            if combo_old_tmpl_ids:
-                for _l in lines:
-                    _pid = _l['product_id'][0] if _l.get('product_id') else None
-                    if _pid:
-                        sol_delivered_by_product[_pid] = (
-                            sol_delivered_by_product.get(_pid, 0.0)
-                            + (_l.get('qty_delivered') or 0.0)
-                        )
-
             for line in lines:
                 pid = line['product_id'][0] if line.get('product_id') else None
                 if not pid:
@@ -303,29 +316,20 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 tmpl_raw = pdata.get('product_tmpl_id')
                 p_tmpl_id = tmpl_raw[0] if isinstance(tmpl_raw, (list, tuple)) else tmpl_raw
                 is_kit = bool(p_tmpl_id and p_tmpl_id in kit_tmpl_ids)
-                is_combo_old = (
-                    not is_kit
-                    and bool(p_tmpl_id)
-                    and p_tmpl_id in combo_old_tmpl_ids
-                )
                 qty_del = line.get('qty_delivered') or 0
                 qty_ord = line.get('product_uom_qty') or 0
-
-                if is_combo_old or (is_kit and qty_del == 0 and p_tmpl_id in combo_old_tmpl_ids):
-                    # Combo kiểu cũ hoặc kit với BOM explosion thất bại:
-                    # tính effective qty_delivered từ min ratio giao linh kiện.
-                    # Chỉ kích hoạt fallback kit khi qty_del=0 (tiết kiệm tài nguyên).
-                    _items = combo_items_map.get(p_tmpl_id, [])
-                    if _items and qty_ord > 0:
-                        _mr = float('inf')
-                        for _i_pid, _i_qty in _items:
-                            _needed = _i_qty * qty_ord
-                            if _needed > 0:
-                                _mr = min(_mr, sol_delivered_by_product.get(_i_pid, 0.0) / _needed)
-                        if _mr != float('inf'):
-                            qty_del = min(_mr, 1.0) * qty_ord
-                            if is_kit:
-                                is_kit = False  # treat as non-kit cho has_pending/has_delivered
+                # Kit Fallback: BOM explosion xảy ra nhưng bom_line_id=NULL →
+                # Odoo không tính qty_delivered. Dùng done outgoing moves trực tiếp.
+                if is_kit and qty_del == 0 and p_tmpl_id:
+                    _comp_defs = kit_comp_map.get(p_tmpl_id, [])
+                    _done_by_prod = done_moves_by_kit_sol.get(line['id'], {})
+                    if _comp_defs and _done_by_prod:
+                        _kits_ratio = float('inf')
+                        for _cpid, _qty_per_kit in _comp_defs:
+                            _kits_ratio = min(_kits_ratio, _done_by_prod.get(_cpid, 0.0) / _qty_per_kit)
+                        if _kits_ratio != float('inf') and _kits_ratio > 0:
+                            qty_del = min(_kits_ratio, qty_ord)
+                            is_kit = False  # Treat as non-kit: pending_qty sẽ xử lý đúng
                 if qty_del > 0:
                     has_delivered = True
                 pending_qty = qty_ord - qty_del
@@ -534,6 +538,15 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 is_new = order_date_raw == today_date if order_date_raw else False
             else:
                 is_new = True
+
+            # Đơn đã giao trong ngày → bypass MỌI filter (delivery/packing/stock/print/
+            # shipper/new/transfer). Đảm bảo cột "Đã giao trong ngày" luôn hiển thị
+            # đầy đủ kể cả khi user đang lọc "Chưa giao & Giao 1 phần" hoặc các trạng
+            # thái khác. Frontend sẽ tự xếp vào cột delivered_today dựa trên
+            # has_delivered_today.
+            if has_delivered_today:
+                matched_sale_ids.append(so_id)
+                continue
 
             if delivery_ok and packing_ok and is_new \
                     and (filter_stock_status == 'all' or stock_status == filter_stock_status) \
