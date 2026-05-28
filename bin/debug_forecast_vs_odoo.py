@@ -42,6 +42,25 @@ virtual_avail  = product.virtual_available   # = odoo core forecast
 print(f"\n[Odoo core]")
 print(f"  qty_available  (tồn thực tế) : {qty_available}")
 print(f"  virtual_available  (dự báo)  : {virtual_avail}")
+print(f"  incoming_qty                 : {product.incoming_qty}")
+print(f"  outgoing_qty                 : {product.outgoing_qty}")
+print(f"  free_qty                     : {product.free_qty}")
+
+# Check specific locations involved in PACK move
+loc_pack = env['stock.location'].sudo().search([('complete_name', 'ilike', 'Khu vực đóng gói')], limit=5)
+loc_out  = env['stock.location'].sudo().search([('complete_name', 'ilike', 'Đầu ra')], limit=5)
+print(f"\n[Location details for PACK move]")
+for loc in loc_pack:
+    print(f"  PACK src: id={loc.id}  name={loc.complete_name}  usage={loc.usage}  active={loc.active}")
+for loc in loc_out:
+    print(f"  OUT dst:  id={loc.id}  name={loc.complete_name}  usage={loc.usage}  active={loc.active}")
+
+# Per-warehouse virtual_available
+print(f"\n[Per-warehouse virtual_available]")
+all_whs_virt = env['stock.warehouse'].sudo().search([])
+for wh in all_whs_virt:
+    p_wh = product.with_context(warehouse=wh.id)
+    print(f"  WH={wh.name:25}  qty_available={p_wh.qty_available:6}  incoming={p_wh.incoming_qty:6}  outgoing={p_wh.outgoing_qty:6}  virtual={p_wh.virtual_available:6}")
 
 # ── 2. STOCK.QUANT (tồn thực tế thô) ──────────────────────
 quants = env['stock.quant'].sudo().search([
@@ -117,20 +136,48 @@ for v in sorted(inc_by_picking.values(), key=lambda x: x['picking']):
           f"NCC={v['partner']:30}  misa={v['misa_date']:12}  planned={v['date_planned']:12}  qty={v['qty']:.0f}")
 
 # ── 6. ODOO INTERNAL BREAKDOWN (_product_available) ────────────
-print(f"\n[Odoo _product_available() breakdown]")
-try:
-    avail = product._product_available()
-    d = avail.get(pid, {})
-    print(f"  qty_available      = {d.get('qty_available')}")
-    print(f"  virtual_available  = {d.get('virtual_available')}")
-    print(f"  incoming_qty       = {d.get('incoming_qty')}")
-    print(f"  outgoing_qty       = {d.get('outgoing_qty')}")
-    print(f"  free_qty           = {d.get('free_qty')}")
-except Exception as ex:
-    print(f"  [ERROR] {ex}")
+print(f"\n[Kho hàng & lot_stock_id]")
+all_whs = env['stock.warehouse'].sudo().search([])
+for wh in all_whs:
+    ls = wh.lot_stock_id
+    vl = wh.view_location_id
+    print(f"  WH={wh.name:20}  lot_stock={ls.complete_name:40}  id={ls.id}  view={vl.complete_name:40}  view_id={vl.id}")
 
-# ── 7. TẤT CẢ MOVES MỌI TRẠNG THÁI (kể cả draft) trừ done/cancel ──
-print(f"\n[TẤT CẢ moves (kể cả draft, waiting) – trừ done/cancel]")
+print(f"\n[child_of lot_stock_id per kho]")
+for wh in all_whs:
+    ls = wh.lot_stock_id
+    inner = env['stock.location'].sudo().search([('id', 'child_of', ls.id)]).ids
+    print(f"  WH={wh.name:20}  lot_stock_id={ls.id}  children_count={len(inner)}")
+    print(f"    children: {[env['stock.location'].browse(i).complete_name for i in inner[:10]]}")
+
+# Lấy location của move 154243 (PACK move) và kiểm tra
+print(f"\n[Kiểm tra move linked to SO: src location child_of lot_stock?]")
+sale_mvs_all = env['stock.move'].sudo().search([
+    ('product_id', '=', pid),
+    ('state', 'in', ACTIVE_STATES),
+    '|', ('sale_line_id', '!=', False), ('picking_id.sale_id', '!=', False),
+])
+for m in sale_mvs_all:
+    for wh in all_whs:
+        ls = wh.lot_stock_id
+        inner_ids = set(env['stock.location'].sudo().search([('id', 'child_of', ls.id)]).ids)
+        src_in  = m.location_id.id in inner_ids
+        dst_in  = m.location_dest_id.id in inner_ids
+        print(f"  move {m.id}  src={m.location_id.complete_name:40}  src_in_lot_stock={src_in}  dst_in_lot_stock={dst_in}  WH={wh.name}")
+
+# Thử đúng domain mà controller dùng
+print(f"\n[Test domain controller – SO moves FROM lot_stock children]")
+for wh in all_whs:
+    ls = wh.lot_stock_id
+    d = [
+        ('product_id', '=', pid),
+        ('state', 'in', ACTIVE_STATES),
+        '|', ('sale_line_id', '!=', False), ('picking_id.sale_id', '!=', False),
+        ('location_id', 'child_of', ls.id),
+    ]
+    found = env['stock.move'].sudo().search(d)
+    print(f"  WH={wh.name:20}  lot_stock={ls.complete_name}  → {len(found)} moves")
+
 all_moves_any = env['stock.move'].sudo().search([
     ('product_id', '=', pid),
     ('state', 'not in', ['done', 'cancel']),
