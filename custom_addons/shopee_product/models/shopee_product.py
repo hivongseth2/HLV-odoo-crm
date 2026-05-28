@@ -236,19 +236,17 @@ class ShopeeProduct(models.Model):
                 rec.edit_brand_id = rec.shopee_brand_id.brand_id
                 rec.edit_brand_name = rec.shopee_brand_id.brand_name
 
-    @api.depends('category_id', 'raw_data')
+    @api.depends('category_id', 'raw_data', 'shopee_category_id', 'shopee_category_id.full_path', 'shopee_category_id.display_name')
     def _compute_category_display(self):
         for rec in self:
-            cid = rec.category_id or 0
             name = ''
+            if rec.shopee_category_id:
+                name = rec.shopee_category_id.full_path or rec.shopee_category_id.display_name or ''
             raw = rec.raw_data if isinstance(rec.raw_data, dict) else {}
             cat_info = raw.get('category_info') or raw.get('category') or {}
-            if isinstance(cat_info, dict):
+            if not name and isinstance(cat_info, dict):
                 name = cat_info.get('display_name') or cat_info.get('name') or ''
-            if name:
-                rec.category_display = f"{cid} — {name}"
-            else:
-                rec.category_display = str(cid) if cid else ''
+            rec.category_display = name or _('Chưa tải tên danh mục')
 
 
 
@@ -447,6 +445,8 @@ class ShopeeProduct(models.Model):
         loaded_count = self.env['shopee.product.model'].sudo().search_count([
             ('shopee_product_id', '=', self.id),
         ])
+        if loaded_count and not self.has_model:
+            self.with_context(skip_shopee_auto_quality=True).write({'has_model': True})
 
         return {
             'type': 'ir.actions.client',
@@ -890,6 +890,7 @@ class ShopeeProduct(models.Model):
         item = (items or [{}])[0] if isinstance(items, list) else items
         if not isinstance(item, dict):
             raise UserError(_('Shopee trả về dữ liệu không hợp lệ: %s') % item)
+        _update_record_from_api(self, item)
 
         # Trích xuất các phần thường dùng
         desc = item.get('description') or ''
@@ -1618,8 +1619,24 @@ class ShopeeProduct(models.Model):
                     'extra_summary': _('Không tải được thông tin thêm: %s') % str(e),
                 })
 
+    def _auto_fetch_form_data(self):
+        """Best-effort product editor hydration before the form is rendered."""
+        for rec in self:
+            if not rec.shopee_item_id:
+                continue
+            safe_rec = rec.with_context(skip_shopee_auto_quality=True)
+            try:
+                safe_rec.action_fetch_full_content()
+            except Exception as e:
+                _logger.warning('Auto-fetch full content failed for %s: %s', rec.id, e)
+            try:
+                safe_rec.action_load_models()
+            except Exception as e:
+                _logger.warning('Auto-fetch variants failed for %s: %s', rec.id, e)
+
     def web_read(self, specification):
         if not self.env.context.get('skip_shopee_auto_quality') and len(self) <= 3:
+            self._auto_fetch_form_data()
             self._auto_refresh_quality_panels()
         return super().web_read(specification)
 

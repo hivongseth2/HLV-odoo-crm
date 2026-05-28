@@ -256,7 +256,7 @@
 }
 .o_shopee_logi_kanban .sp-logi-card {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
     gap: 12px;
     padding: 12px 16px;
@@ -264,6 +264,10 @@
     border-radius: 8px;
     background: #fff;
     transition: all .15s ease;
+}
+.o_shopee_logi_kanban .sp-logi-main {
+    flex: 1 1 auto;
+    min-width: 0;
 }
 .o_shopee_logi_kanban .sp-logi-card.sp-logi-on {
     border-color: #ee4d2d;
@@ -282,6 +286,10 @@
     flex-wrap: wrap;
 }
 .o_shopee_logi_kanban .sp-logi-chip {
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+    line-height: 1.4;
     font-size: 11px;
     color: #6b7280;
     background: #f3f4f6;
@@ -342,7 +350,7 @@
     gap: 10px;
 }
 .sp-model-link span,
-.sp-model-edit label {
+.sp-model-edit .o_form_label {
     color: #6b7280;
     font-size: 12px;
     font-weight: 600;
@@ -415,13 +423,37 @@
     max-width: 88px;
 }
 .sp-logi-edit {
-    display: grid;
-    grid-template-columns: auto auto auto auto;
+    display: flex;
     gap: 8px;
     align-items: center;
     color: #6b7280;
     font-size: 12px;
     white-space: nowrap;
+    flex: 0 0 auto;
+}
+.sp-logi-edit .o_form_label {
+    margin: 0;
+    color: #6b7280;
+    font-size: 12px;
+    font-weight: 600;
+}
+.sp-empty-state {
+    border: 1px dashed #f5b8ac;
+    border-radius: 6px;
+    background: #fff7f4;
+    padding: 18px;
+    margin-bottom: 12px;
+    text-align: center;
+}
+.sp-empty-title {
+    font-weight: 700;
+    color: #c0341b;
+    margin-bottom: 4px;
+}
+.sp-empty-text {
+    color: #6b7280;
+    font-size: 13px;
+    margin-bottom: 10px;
 }
 
 /* ───── Content editor: media tiles ───── */

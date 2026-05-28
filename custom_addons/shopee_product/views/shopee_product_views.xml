@@ -147,7 +147,7 @@
                         <div class="row g-3 mb-3">
                             <div class="col-lg-4">
                                 <div class="rounded-3 p-3 h-100 shadow-sm" style="background:#fef7f3; box-shadow:0 8px 20px rgba(15,23,42,.06);">
-                                    <div class="fw-semibold mb-3" style="color:#ee4d2d;"><i class="fa fa-id-card-o me-1"/> Định danh</div>
+                                    <div class="fw-semibold mb-3" style="color:#ee4d2d;"><i class="fa fa-id-card-o me-1" title="Định danh" role="img" aria-label="Định danh"/> Định danh</div>
                                     <div class="mb-3">
                                         <span class="d-block text-muted small">Danh mục Shopee</span>
                                         <field name="category_id" invisible="1"/>
@@ -165,7 +165,7 @@
                             </div>
                             <div class="col-lg-4">
                                 <div class="rounded-3 p-3 h-100 shadow-sm" style="background:#f8fafc; box-shadow:0 8px 20px rgba(15,23,42,.06);">
-                                    <div class="fw-semibold mb-3" style="color:#ee4d2d;"><i class="fa fa-line-chart me-1"/> Giá &amp; tồn</div>
+                                    <div class="fw-semibold mb-3" style="color:#ee4d2d;"><i class="fa fa-line-chart me-1" title="Giá và tồn" role="img" aria-label="Giá và tồn"/> Giá &amp; tồn</div>
                                     <div class="mb-3">
                                         <span class="d-block text-muted small">Giá gốc</span>
                                         <field name="original_price" nolabel="1" widget="integer"/>
@@ -182,7 +182,7 @@
                             </div>
                             <div class="col-lg-4">
                                 <div class="rounded-3 p-3 h-100 shadow-sm" style="background:#fef7f3; box-shadow:0 8px 20px rgba(15,23,42,.06);">
-                                    <div class="fw-semibold mb-3" style="color:#ee4d2d;"><i class="fa fa-link me-1"/> Liên kết Odoo</div>
+                                    <div class="fw-semibold mb-3" style="color:#ee4d2d;"><i class="fa fa-link me-1" title="Liên kết Odoo" role="img" aria-label="Liên kết Odoo"/> Liên kết Odoo</div>
                                     <div class="mb-3">
                                         <div class="d-flex justify-content-between align-items-center mb-1">
                                             <span class="text-muted small">Liên kết shopee.item</span>
@@ -209,9 +209,9 @@
                         <div class="row g-3 mb-3">
                             <div class="col-lg-6">
                                 <div class="rounded-3 p-3 h-100 shadow-sm" style="background:#fef7f3; box-shadow:0 8px 20px rgba(15,23,42,.06);">
-                                    <div class="fw-semibold mb-2" style="color:#ee4d2d;"><i class="fa fa-cubes me-1"/> Tồn kho — phương thức cập nhật
+                                    <div class="fw-semibold mb-2" style="color:#ee4d2d;"><i class="fa fa-cubes me-1" title="Tồn kho" role="img" aria-label="Tồn kho"/> Tồn kho — phương thức cập nhật
                                         <span class="badge bg-warning text-dark small ms-2" invisible="not pending_stock_sync">
-                                            <i class="fa fa-clock-o me-1"/> Chờ đồng bộ
+                                            <i class="fa fa-clock-o me-1" title="Chờ đồng bộ" role="img" aria-label="Chờ đồng bộ"/> Chờ đồng bộ
                                         </span>
                                     </div>
                                     <field name="stock_update_mode" nolabel="1" widget="radio"/>
@@ -271,8 +271,15 @@
                                             <button name="action_fetch_variation_tree" type="object" string="Cây phân loại" class="btn btn-shopee-soft" icon="fa-sitemap"/>
                                         </div>
                                     </div>
+                                    <div class="sp-empty-state" invisible="model_count">
+                                        <div class="sp-empty-title">Chưa có dữ liệu biến thể</div>
+                                        <div class="sp-empty-text">Mở form sẽ tự tải từ Shopee. Nếu vẫn trống, bấm tải lại để đồng bộ ngay.</div>
+                                        <button name="action_load_models" type="object"
+                                                string="Tải lại biến thể" class="btn btn-shopee-soft btn-sm"
+                                                icon="fa-refresh"/>
+                                    </div>
                                     <field name="model_ids" nolabel="1" mode="kanban">
-                                        <kanban class="o_shopee_model_kanban" create="false" group_create="false" records_draggable="false">
+                                        <kanban class="o_shopee_model_kanban" create="false" delete="false" group_create="false" records_draggable="false">
                                             <field name="tier_label"/>
                                             <field name="model_sku"/>
                                             <field name="odoo_product_id"/>
@@ -337,7 +344,7 @@
                                     <div class="rounded-3 p-4 shadow-sm" style="background:#fef7f3; border-left:4px solid #ee4d2d; box-shadow:0 8px 20px rgba(15,23,42,.06);">
                                         <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
                                             <div class="d-flex align-items-center gap-2">
-                                                <span class="rounded-circle d-inline-flex align-items-center justify-content-center flex-shrink-0" style="width:34px;height:34px;background:#fde8e2;color:#ee4d2d;font-size:15px;"><i class="fa fa-comments" title="Bình luậ3n" role="img" aria-label="Bình luậ3n"/></span>
+                                                <span class="rounded-circle d-inline-flex align-items-center justify-content-center flex-shrink-0" style="width:34px;height:34px;background:#fde8e2;color:#ee4d2d;font-size:15px;"><i class="fa fa-comments" title="Bình luận" role="img" aria-label="Bình luận"/></span>
                                                 <span class="fw-semibold fs-5" style="color:#222;">Bình luận</span>
                                             </div>
                                             <div class="d-flex flex-wrap gap-2">
@@ -356,7 +363,7 @@
                                 <div class="o_shopee_content_editor">
                                     <div class="o_shopee_content_section">
                                         <div class="o_shopee_content_title">
-                                            <h3><i class="fa fa-pencil me-2" style="color:#ee4d2d;"/>Mô tả, ảnh, video</h3>
+                                            <h3><i class="fa fa-pencil me-2" style="color:#ee4d2d;" title="Nội dung" role="img" aria-label="Nội dung"/>Mô tả, ảnh, video</h3>
                                             <div class="d-flex flex-wrap gap-2">
                                                 <button name="action_fetch_full_content" type="object" string="Tải từ Shopee" class="btn btn-shopee-soft" icon="fa-download"/>
                                                 <button name="action_push_content_update" type="object" string="Đẩy nội dung" class="btn btn-shopee" icon="fa-upload" confirm="Cập nhật mô tả/ảnh/video lên Shopee?"/>
@@ -584,7 +591,7 @@
                                                                     <t t-if="record.cod_enabled.raw_value">
                                                                         <span class="sp-logi-chip sp-logi-cod"><i class="fa fa-money me-1" title="Hỗ trợ COD" role="img" aria-label="COD"/>COD</span>
                                                                     </t>
-                                                                    <span class="sp-logi-chip">Phí: <field name="shipping_fee" widget="integer"/> đ</span>
+                                                                    <span class="sp-logi-chip">Phí: <t t-esc="record.shipping_fee.value or '0'"/> đ</span>
                                                                 </div>
                                                             </div>
                                                             <div class="sp-logi-edit">
@@ -622,7 +629,7 @@
                                         <div class="col-lg-8">
                                             <div class="rounded-3 p-4 h-100 shadow-sm o_shopee_quality_card">
                                                 <div class="d-flex align-items-center gap-2 mb-3">
-                                                    <span class="rounded-circle d-inline-flex align-items-center justify-content-center flex-shrink-0" style="width:34px;height:34px;background:#fde8e2;color:#ee4d2d;font-size:15px;"><i class="fa fa-check-circle"/></span>
+                                                    <span class="rounded-circle d-inline-flex align-items-center justify-content-center flex-shrink-0" style="width:34px;height:34px;background:#fde8e2;color:#ee4d2d;font-size:15px;"><i class="fa fa-check-circle" title="Chất lượng" role="img" aria-label="Chất lượng"/></span>
                                                     <span class="fw-semibold fs-5" style="color:#222;">Chất lượng nội dung</span>
                                                 </div>
                                                 <span class="d-block text-muted small mb-1">Tên sản phẩm</span>
@@ -636,7 +643,7 @@
                                         <div class="col-lg-4">
                                             <div class="rounded-3 p-4 h-100 shadow-sm o_shopee_violation_card">
                                                 <div class="d-flex align-items-center gap-2 mb-3">
-                                                    <span class="rounded-circle d-inline-flex align-items-center justify-content-center flex-shrink-0" style="width:34px;height:34px;background:#fde8e2;color:#ee4d2d;font-size:15px;"><i class="fa fa-ban"/></span>
+                                                    <span class="rounded-circle d-inline-flex align-items-center justify-content-center flex-shrink-0" style="width:34px;height:34px;background:#fde8e2;color:#ee4d2d;font-size:15px;"><i class="fa fa-ban" title="Vi phạm" role="img" aria-label="Vi phạm"/></span>
                                                     <span class="fw-semibold fs-5" style="color:#222;">Vi phạm</span>
                                                 </div>
                                                 <span class="d-block text-muted small mb-1">Trạng thái</span>
@@ -663,7 +670,7 @@
                                         <div class="col-lg-6">
                                             <div class="rounded-3 p-4 h-100 shadow-sm" style="background:#f8fafc; box-shadow:0 8px 20px rgba(15,23,42,.06);">
                                                 <div class="d-flex align-items-center gap-2 mb-3">
-                                                    <span class="rounded-circle d-inline-flex align-items-center justify-content-center flex-shrink-0" style="width:30px;height:30px;background:#fde8e2;color:#ee4d2d;font-size:13px;"><i class="fa fa-rocket"/></span>
+                                                    <span class="rounded-circle d-inline-flex align-items-center justify-content-center flex-shrink-0" style="width:30px;height:30px;background:#fde8e2;color:#ee4d2d;font-size:13px;"><i class="fa fa-rocket" title="Thông tin thêm" role="img" aria-label="Thông tin thêm"/></span>
                                                     <span class="fw-semibold" style="color:#222;">Đẩy hiển thị</span>
                                                 </div>
                                                 <div class="d-flex flex-wrap gap-2">
@@ -677,7 +684,7 @@
                                         <div class="col-lg-6">
                                             <div class="rounded-3 p-4 h-100 shadow-sm" style="background:#f8fafc; box-shadow:0 8px 20px rgba(15,23,42,.06);">
                                                 <div class="d-flex align-items-center gap-2 mb-3">
-                                                    <span class="rounded-circle d-inline-flex align-items-center justify-content-center flex-shrink-0" style="width:30px;height:30px;background:#fde8e2;color:#ee4d2d;font-size:13px;"><i class="fa fa-clock-o"/></span>
+                                                    <span class="rounded-circle d-inline-flex align-items-center justify-content-center flex-shrink-0" style="width:30px;height:30px;background:#fde8e2;color:#ee4d2d;font-size:13px;"><i class="fa fa-clock-o" title="Lần kiểm tra" role="img" aria-label="Lần kiểm tra"/></span>
                                                     <span class="fw-semibold" style="color:#222;">Đồng bộ</span>
                                                 </div>
                                                 <div class="text-muted small mb-2"><field name="last_synced" nolabel="1" readonly="1"/></div>
@@ -694,9 +701,9 @@
                                     <!-- Dữ liệu JSON -->
                                     <div class="rounded-3 p-3 shadow-sm" style="background:#f8fafc; box-shadow:0 8px 20px rgba(15,23,42,.06);">
                                         <div class="d-flex justify-content-between align-items-center mb-3">
-                                            <div class="fw-semibold" style="color:#ee4d2d;"><i class="fa fa-code me-1"/> Dữ liệu JSON</div>
+                                            <div class="fw-semibold" style="color:#ee4d2d;"><i class="fa fa-code me-1" title="Dữ liệu JSON" role="img" aria-label="Dữ liệu JSON"/> Dữ liệu JSON</div>
                                             <div class="text-muted small" invisible="not last_api_synced_at">
-                                                <i class="fa fa-clock-o me-1"/>
+                                                <i class="fa fa-clock-o me-1" title="Cập nhật API" role="img" aria-label="Cập nhật API"/>
                                                 Section: <field name="last_api_section" nolabel="1" readonly="1" class="d-inline"/>
                                                 · Cập nhật: <field name="last_api_synced_at" nolabel="1" readonly="1" class="d-inline"/>
                                             </div>
