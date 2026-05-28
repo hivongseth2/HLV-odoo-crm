@@ -20,6 +20,11 @@ class PackScanController(http.Controller):
         move_id = kwargs.get("move_id")
         _logger.info(f"SCAN_ITEM START: barcode={barcode}, delta={delta}, line_id={line_id}, move_id={move_id}")
         picking = request.env['stock.picking'].sudo().browse(picking_id)
+        if picking.exists():
+            try:
+                picking.with_user(request.env.user).mark_pack_actual_started(user=request.env.user)
+            except Exception as e:
+                return {"error": str(e)}
         # Tìm move dựa trên barcode
         moves = picking.move_ids.filtered(lambda m: m.product_id.barcode == barcode)
 
@@ -419,6 +424,10 @@ class PackScanController(http.Controller):
 
         if not picking.exists():
             return {"error": "Phiếu không tồn tại."}
+        try:
+            picking.with_user(request.env.user)._check_pack_assignment_access(user=request.env.user)
+        except Exception as e:
+            return {"error": str(e)}
         if picking.state not in ['assigned', 'confirmed', 'in_progress']:
             return {"error": f"Phiếu không ở trạng thái cho phép xác nhận (hiện tại: {picking.state})."}
         for move in picking.move_ids_without_package:
@@ -427,6 +436,7 @@ class PackScanController(http.Controller):
                 return {"error": f"⚠️ Sản phẩm '{move.product_id.display_name}' chưa đủ số lượng!"}
         try:
             picking.button_validate()
+            picking.with_user(request.env.user).mark_pack_done(user=request.env.user)
             return {"success": True, "message": f"✅ Phiếu {picking.name} đã được xác nhận!"}
         except Exception as e:
             return {"error": str(e)}

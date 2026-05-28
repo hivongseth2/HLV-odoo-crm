@@ -65,6 +65,10 @@ class RecordingController(http.Controller):
     @http.route('/pack_scan/start_upload', type='json', auth='user', csrf=False)
     def start_upload(self, **kw):
         picking_id = int(kw.get('picking_id') or 0)
+        if picking_id:
+            picking = request.env['stock.picking'].sudo().browse(picking_id).exists()
+            if picking:
+                picking.with_user(request.env.user).mark_pack_actual_started(user=request.env.user)
         ext = (kw.get('ext') or 'webm').strip('.')
         mimetype = kw.get('mimetype') or 'video/webm'
         upload_id = uuid.uuid4().hex

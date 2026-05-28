@@ -20,6 +20,19 @@ class PackViewController(http.Controller):
             _logger.error("❌ Không tìm thấy phiếu pack!")
             return request.not_found()
 
+        try:
+            picking.with_user(request.env.user).mark_pack_actual_started(user=request.env.user)
+        except Exception as e:
+            _logger.warning("[PACK_VIEW] Access blocked for %s: %s", picking.name, e)
+            return request.make_response(
+                "<div style='font-family:Segoe UI,Arial;padding:24px'>"
+                "<h3>Không thể vào phiếu đóng gói</h3>"
+                f"<p>{str(e)}</p>"
+                "<a href='/custom_barcode_scan/ui'>Quay lại màn quét</a>"
+                "</div>",
+                headers=[('Content-Type', 'text/html; charset=utf-8')],
+            )
+
         # Block truy cập phiếu đã hoàn tất hoặc đã hủy
         if picking.state in ('done', 'cancel'):
             _logger.warning(f"[PACK_VIEW] Blocked: picking {picking.name} is {picking.state}")

@@ -1,7 +1,7 @@
 /** @odoo-module **/
 
 import { registry } from "@web/core/registry";
-import { Component, useState, onWillStart, onMounted, onWillDestroy, markup,useEffect  } from "@odoo/owl";
+import { Component, useState, onWillStart, onMounted, onWillDestroy, markup, useEffect } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
 import {
     translateDeliveryStatus, translatePickingState, translatePickingStatus,
@@ -22,6 +22,13 @@ export class DeliveryPlannerDashboard extends Component {
             printMenuReports: [],
             // menu in nhiều hard theo tên lấy hàng
             selectedPrintMenuReports: [],
+            packerUsers: [],
+            packerUsersLoading: false,
+            isPackerAssignModalOpen: false,
+            selectedPackerUserId: null,
+            pendingPrintReportId: null,
+            pendingPrintReportType: 'qweb-pdf',
+            pendingSinglePrintPickingId: null,
 
             saleOrders: [],
             warehouses: [],
@@ -65,14 +72,17 @@ export class DeliveryPlannerDashboard extends Component {
             dashboardStats: { total: 0, ready: 0, partial: 0, out_of_stock: 0 },
             statsLoading: false,
             isLoadingMore: false,
+            isPackingProgressDrawerOpen: false,
+            packingProgressLoading: false,
+            packingProgress: { summary: {}, groups: [] },
 
             // Pagination
             currentPage: 1,
-            itemsPerPage: (function(){
-                try{
-                    var v=parseInt(localStorage.getItem('hlv_dp_items_per_page'),10);
-                    return [12,25,50,100,200].indexOf(v)>=0 ? v : 12;
-                }catch(e){return 12;}
+            itemsPerPage: (function () {
+                try {
+                    var v = parseInt(localStorage.getItem('hlv_dp_items_per_page'), 10);
+                    return [12, 25, 50, 100, 200].indexOf(v) >= 0 ? v : 12;
+                } catch (e) { return 12; }
             })(),
             totalCount: 0,
 
@@ -175,14 +185,14 @@ export class DeliveryPlannerDashboard extends Component {
 
         // click ra ngoài thì dóng menu
         useEffect(() => {
-                const handler = () => {
-                    if (this.state.selectedPrintMenuPos) {
-                        this.state.selectedPrintMenuPos = null;
-                    }
-                };
-                document.addEventListener('click', handler);
-                return () => document.removeEventListener('click', handler);
-            }, () => []);
+            const handler = () => {
+                if (this.state.selectedPrintMenuPos) {
+                    this.state.selectedPrintMenuPos = null;
+                }
+            };
+            document.addEventListener('click', handler);
+            return () => document.removeEventListener('click', handler);
+        }, () => []);
 
         onWillStart(async () => {
             if (this.busService) {
@@ -212,7 +222,7 @@ export class DeliveryPlannerDashboard extends Component {
             const reports = await this.orm.searchRead(
                 'ir.actions.report',
                 [['model', '=', 'stock.picking'], ['binding_model_id', '!=', false]],
-                ['id', 'name', 'report_type'],
+                ['id', 'name', 'report_type', 'report_name'],
                 { order: 'name' }
             );
             this.state.pickingReports = reports;
@@ -221,6 +231,7 @@ export class DeliveryPlannerDashboard extends Component {
         // fetchData runs AFTER mount so cached data shows instantly
         onMounted(async () => {
             await this.fetchData();
+            this.loadPackingProgress();
             this._isCacheRestored = false;
         });
 
@@ -285,7 +296,7 @@ export class DeliveryPlannerDashboard extends Component {
             }
 
             this.state.globalUnreadOrders = merged;
-            
+
             const shouldNotifyFromPolling = !isInitial;
             if (shouldNotifyFromPolling) {
                 for (const notification of notifications.filter((n) => !n.is_read)) {
@@ -297,7 +308,7 @@ export class DeliveryPlannerDashboard extends Component {
                     if (!prev || prev._isRead) {
                         const so = this.state.saleOrders.find(o => o.id === orderId);
                         if (so) so.has_unread_message = true;
-                        
+
                         this.notification.add(
                             `Đơn hàng ${notification.sale_order_id ? notification.sale_order_id[1] : ''} vừa có tin nhắn mới.`,
                             {
@@ -415,7 +426,7 @@ export class DeliveryPlannerDashboard extends Component {
             headItem,
             ...this.state.globalUnreadOrders.filter(o => !((o.sale_order_id && o.sale_order_id[0] === payload.so_id) || o.id === payload.so_id)),
         ].slice(0, 100);
-        
+
         // Show toaster notification
         const rawBody = (payload.body || '').replace(/<[^>]+>/g, '').substring(0, 80);
         const so = this.state.saleOrders.find(o => o.id === payload.so_id);
@@ -1561,16 +1572,16 @@ export class DeliveryPlannerDashboard extends Component {
         const dir = this.state.tableSortDir === 'asc' ? 1 : -1;
         const getVal = (so) => {
             switch (field) {
-                case 'name':              return so.name || '';
-                case 'misa_order_date':   return so.misa_order_date || '';
-                case 'partner':           return (so.partner_id && so.partner_id[1]) || '';
-                case 'warehouse':         return (so.warehouse_id && so.warehouse_id[1]) || '';
-                case 'delivery_status':   return so.real_delivery_status || so.delivery_status || '';
-                case 'stock_status':      return so.stock_status || '';
-                case 'packing_status':    return so.packing_status || '';
-                case 'commitment_date':   return so.commitment_date || '';
-                case 'amount_total':      return Number(so.amount_total) || 0;
-                default:                  return '';
+                case 'name': return so.name || '';
+                case 'misa_order_date': return so.misa_order_date || '';
+                case 'partner': return (so.partner_id && so.partner_id[1]) || '';
+                case 'warehouse': return (so.warehouse_id && so.warehouse_id[1]) || '';
+                case 'delivery_status': return so.real_delivery_status || so.delivery_status || '';
+                case 'stock_status': return so.stock_status || '';
+                case 'packing_status': return so.packing_status || '';
+                case 'commitment_date': return so.commitment_date || '';
+                case 'amount_total': return Number(so.amount_total) || 0;
+                default: return '';
             }
         };
         // Copy first to avoid mutating the reactive proxy in-place
@@ -1682,22 +1693,22 @@ export class DeliveryPlannerDashboard extends Component {
     get kanbanColumnDefs() {
         switch (this.state.kanbanGroupBy) {
             case 'delivery_status': return [
-                { value: 'pending',  label: 'Chưa Giao',    badgeClass: 'bg-danger',             textClass: 'text-danger',   iconClass: 'fa fa-clock-o',        progressClass: 'bg-danger' },
-                { value: 'partial',  label: 'Giao 1 Phần',  badgeClass: 'bg-warning text-dark',  textClass: 'text-warning',  iconClass: 'fa fa-truck',          progressClass: 'bg-warning' },
-                { value: 'full',     label: 'Đã Giao Đủ',   badgeClass: 'bg-success',            textClass: 'text-success',  iconClass: 'fa fa-check-circle',   progressClass: 'bg-success' },
+                { value: 'pending', label: 'Chưa Giao', badgeClass: 'bg-danger', textClass: 'text-danger', iconClass: 'fa fa-clock-o', progressClass: 'bg-danger' },
+                { value: 'partial', label: 'Giao 1 Phần', badgeClass: 'bg-warning text-dark', textClass: 'text-warning', iconClass: 'fa fa-truck', progressClass: 'bg-warning' },
+                { value: 'full', label: 'Đã Giao Đủ', badgeClass: 'bg-success', textClass: 'text-success', iconClass: 'fa fa-check-circle', progressClass: 'bg-success' },
             ];
             case 'stock_status': return [
-                { value: 'out_of_stock',   label: 'Không Có Hàng',   badgeClass: 'bg-danger',            textClass: 'text-danger',   iconClass: 'fa fa-times-circle',   progressClass: 'bg-danger' },
-                { value: 'partial_ready',  label: 'Có Hàng 1 Phần',  badgeClass: 'bg-warning text-dark', textClass: 'text-warning',  iconClass: 'fa fa-exclamation-circle', progressClass: 'bg-warning' },
-                { value: 'ready',          label: 'Đủ Hàng Xuất',    badgeClass: 'bg-success',           textClass: 'text-success',  iconClass: 'fa fa-check',          progressClass: 'bg-success' },
+                { value: 'out_of_stock', label: 'Không Có Hàng', badgeClass: 'bg-danger', textClass: 'text-danger', iconClass: 'fa fa-times-circle', progressClass: 'bg-danger' },
+                { value: 'partial_ready', label: 'Có Hàng 1 Phần', badgeClass: 'bg-warning text-dark', textClass: 'text-warning', iconClass: 'fa fa-exclamation-circle', progressClass: 'bg-warning' },
+                { value: 'ready', label: 'Đủ Hàng Xuất', badgeClass: 'bg-success', textClass: 'text-success', iconClass: 'fa fa-check', progressClass: 'bg-success' },
             ];
             case 'packing_status': return [
-                { value: 'waiting_stock',    label: 'Không Có Hàng Đóng',      badgeClass: 'bg-secondary',          textClass: 'text-secondary', iconClass: 'fa fa-hourglass-start', progressClass: 'bg-secondary' },
-                { value: 'unpacked',         label: 'Có Hàng Chưa Đóng Gói',   badgeClass: 'bg-warning text-dark',  textClass: 'text-warning',   iconClass: 'fa fa-exclamation-triangle', progressClass: 'bg-warning' },
-                { value: 'printed_waiting',  label: 'Đã In, Chờ Đóng Gói',     badgeClass: 'bg-info',               textClass: 'text-info',      iconClass: 'fa fa-print', progressClass: 'bg-info' },
-                { value: 'packed_waiting_ship', label: 'Đã Gói, Chờ Nhận Giao', badgeClass: 'bg-primary',           textClass: 'text-primary',   iconClass: 'fa fa-archive', progressClass: 'bg-primary' },
-                { value: 'shipping',         label: 'Đang Giao',               badgeClass: 'bg-success',            textClass: 'text-success',   iconClass: 'fa fa-motorcycle', progressClass: 'bg-success' },
-                { value: 'delivered_today',  label: 'Đã Giao Trong Ngày',      badgeClass: 'bg-success bg-opacity-75', textClass: 'text-success', iconClass: 'fa fa-calendar-check-o', progressClass: 'bg-success' },
+                { value: 'waiting_stock', label: 'Không Có Hàng Đóng', badgeClass: 'bg-secondary', textClass: 'text-secondary', iconClass: 'fa fa-hourglass-start', progressClass: 'bg-secondary' },
+                { value: 'unpacked', label: 'Có Hàng Chưa Đóng Gói', badgeClass: 'bg-warning text-dark', textClass: 'text-warning', iconClass: 'fa fa-exclamation-triangle', progressClass: 'bg-warning' },
+                { value: 'printed_waiting', label: 'Đã In, Chờ Đóng Gói', badgeClass: 'bg-info', textClass: 'text-info', iconClass: 'fa fa-print', progressClass: 'bg-info' },
+                { value: 'packed_waiting_ship', label: 'Đã Gói, Chờ Nhận Giao', badgeClass: 'bg-primary', textClass: 'text-primary', iconClass: 'fa fa-archive', progressClass: 'bg-primary' },
+                { value: 'shipping', label: 'Đang Giao', badgeClass: 'bg-success', textClass: 'text-success', iconClass: 'fa fa-motorcycle', progressClass: 'bg-success' },
+                { value: 'delivered_today', label: 'Đã Giao Trong Ngày', badgeClass: 'bg-success bg-opacity-75', textClass: 'text-success', iconClass: 'fa fa-calendar-check-o', progressClass: 'bg-success' },
             ];
             default: return [];
         }
@@ -1708,8 +1719,8 @@ export class DeliveryPlannerDashboard extends Component {
         const dim = this.state.kanbanGroupBy;
         const fieldMap = {
             delivery_status: 'real_delivery_status',
-            stock_status:    'stock_status',
-            packing_status:  'packing_status',
+            stock_status: 'stock_status',
+            packing_status: 'packing_status',
         };
         const field = fieldMap[dim];
 
@@ -1999,20 +2010,117 @@ export class DeliveryPlannerDashboard extends Component {
         this.state.selectedPrintMenuPos = null;
     }
 
-    async printSelectedPickingSlips(reportId = null, reportType = 'qweb-pdf') {
+    async _ensurePackerUsers() {
+        if (this.state.packerUsers.length || this.state.packerUsersLoading) return;
+        this.state.packerUsersLoading = true;
+        try {
+            const users = await this.orm.call('stock.picking', 'get_packer_users_for_assignment', [], {});
+            this.state.packerUsers = (users || []).map((u) => ({
+                id: u.id,
+                name: u.name,
+                packer_name: u.packer_name || u.name,
+            }));
+            if (!this.state.selectedPackerUserId && this.state.packerUsers.length) {
+                this.state.selectedPackerUserId = this.state.packerUsers[0].id;
+            }
+        } catch (e) {
+            console.error('Load packer users failed:', e);
+            this.notification.add('Không tải được danh sách người đóng', { type: 'danger' });
+        } finally {
+            this.state.packerUsersLoading = false;
+        }
+    }
+
+    formatPackDuration(seconds) {
+        seconds = Math.round(seconds || 0);
+        if (!seconds) return '-';
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        if (hours) return `${hours}h ${minutes}m`;
+        return `${minutes}m`;
+    }
+
+    async loadPackingProgress() {
+        if (this.state.packingProgressLoading) return;
+        this.state.packingProgressLoading = true;
+        try {
+            const today = new Date().toISOString().slice(0, 10);
+            const result = await this.orm.call('stock.picking', 'get_packing_kpi_dashboard', [], {
+                date_from: today,
+                date_to: today,
+                packer_user_id: 'all',
+            });
+            this.state.packingProgress = result || { summary: {}, groups: [] };
+        } catch (e) {
+            console.warn('Load packing progress failed:', e);
+        } finally {
+            this.state.packingProgressLoading = false;
+        }
+    }
+
+    async togglePackingProgressDrawer() {
+        this.state.isPackingProgressDrawerOpen = !this.state.isPackingProgressDrawerOpen;
+        if (this.state.isPackingProgressDrawerOpen) {
+            await this.loadPackingProgress();
+        }
+    }
+
+    async openPackerAssignModal(reportId = null, reportType = 'qweb-pdf', pickingId = null) {
+        this.state.pendingPrintReportId = reportId;
+        this.state.pendingPrintReportType = reportType || 'qweb-pdf';
+        this.state.pendingSinglePrintPickingId = pickingId || null;
+        this.state.selectedPrintMenuPos = null;
+        await this._ensurePackerUsers();
+        this.state.isPackerAssignModalOpen = true;
+    }
+
+    closePackerAssignModal() {
+        if (this.state.isPrintingPickingSlips) return;
+        this.state.isPackerAssignModalOpen = false;
+        this.state.pendingPrintReportId = null;
+        this.state.pendingPrintReportType = 'qweb-pdf';
+        this.state.pendingSinglePrintPickingId = null;
+    }
+
+    async confirmPackerAssignAndPrint() {
+        if (!this.state.selectedPackerUserId) {
+            this.notification.add('Vui lòng chọn người đóng', { type: 'warning' });
+            return;
+        }
+        const reportId = this.state.pendingPrintReportId;
+        const reportType = this.state.pendingPrintReportType || 'qweb-pdf';
+        const pickingId = this.state.pendingSinglePrintPickingId;
+        this.state.isPackerAssignModalOpen = false;
+        if (pickingId) {
+            await this.doPrintPickingReport(null, pickingId, reportId, this.state.selectedPackerUserId, true);
+        } else {
+            await this.printSelectedPickingSlips(reportId, reportType, this.state.selectedPackerUserId, true);
+        }
+    }
+
+    async printSelectedPickingSlips(reportId = null, reportType = 'qweb-pdf', packerUserId = null, skipPackerModal = false) {
         if (this.selectedCount === 0) return;
         if (this.state.isPrintingPickingSlips) return;
 
         const selectedIds = Array.from(this.state.selectedSOIds);
         const pickingIds = this.getSelectedPickingIds().filter((id) => {
-        const picking = this.state.saleOrders
-            .flatMap((so) => so.pickings || [])
-            .find((p) => p.id === id);
+            const picking = this.state.saleOrders
+                .flatMap((so) => so.pickings || [])
+                .find((p) => p.id === id);
             return picking && picking.state === 'assigned';
         });
 
         if (!pickingIds.length) {
             alert('Không có phiếu lấy hàng nào ở trạng thái sẵn sàng để in');
+            return;
+        }
+        if (!skipPackerModal) {
+            await this.openPackerAssignModal(reportId, reportType);
+            return;
+        }
+        if (!packerUserId) {
+            this.notification.add('Vui lòng chọn người đóng trước khi in', { type: 'warning' });
+            await this.openPackerAssignModal(reportId, reportType);
             return;
         }
         this.state.selectedPrintMenuPos = null;
@@ -2072,6 +2180,7 @@ export class DeliveryPlannerDashboard extends Component {
                         params: {
                             sale_order_ids: selectedIds,
                             report_id: reportId,
+                            packer_user_id: packerUserId,
                         },
                     }),
                 });
@@ -2093,6 +2202,12 @@ export class DeliveryPlannerDashboard extends Component {
                     for (const so of this.state.saleOrders) {
                         if (selectedIds.includes(so.id)) {
                             so.has_active_pick_printed = true;
+                            for (const pk of (so.pickings || [])) {
+                                if (pickingIds.includes(pk.id)) {
+                                    pk.printed = true;
+                                    pk.packer_user = [result.result.packer_user_id, result.result.packer_name];
+                                }
+                            }
                         }
                     }
                     this.clearAllSelections();
@@ -2136,8 +2251,8 @@ export class DeliveryPlannerDashboard extends Component {
         const dim = this.state.kanbanGroupBy;
         const fieldMap = {
             delivery_status: 'real_delivery_status',
-            stock_status:    'stock_status',
-            packing_status:  'packing_status',
+            stock_status: 'stock_status',
+            packing_status: 'packing_status',
         };
         const field = fieldMap[dim];
 
@@ -2377,7 +2492,7 @@ export class DeliveryPlannerDashboard extends Component {
             'ir.actions.actions',
             'get_allowed_picking_reports',
             [],
-            { 
+            {
                 context: {
                     active_ids: [pickingId],
                     active_id: pickingId,
@@ -2391,14 +2506,46 @@ export class DeliveryPlannerDashboard extends Component {
         );
     }
 
-    async doPrintPickingReport(ev, pickingId, reportId) {
-        ev.stopPropagation();
+    _isPickingSlipReport(reportId) {
+        const report = (this.state.pickingReports || []).find((r) => r.id === reportId);
+        const name = ((report && report.name) || '').toLowerCase();
+        const reportName = ((report && report.report_name) || '').toLowerCase();
+        return name.includes('lấy hàng') || name.includes('hoạt động lấy hàng') || reportName.startsWith('stock.report_picking');
+    }
+
+    _isPickPickingId(pickingId) {
+        for (const so of this.state.saleOrders || []) {
+            const picking = (so.pickings || []).find((p) => p.id === pickingId);
+            if (picking) {
+                return (picking.sequence_code || '').toUpperCase().includes('PICK') && !picking.return_of_id && picking.state !== 'cancel';
+            }
+        }
+        return false;
+    }
+
+    async doPrintPickingReport(ev, pickingId, reportId, packerUserId = null, skipPackerModal = false) {
+        if (ev && ev.stopPropagation) ev.stopPropagation();
         this.state.printMenuPickingId = null;
+        if (!skipPackerModal && this._isPickPickingId(pickingId) && this._isPickingSlipReport(reportId)) {
+            await this.openPackerAssignModal(reportId, 'qweb-pdf', pickingId);
+            return;
+        }
+        if (packerUserId && this._isPickPickingId(pickingId) && this._isPickingSlipReport(reportId)) {
+            const result = await this.orm.call('stock.picking', 'assign_picking_print_packer', [], {
+                picking_ids: [pickingId],
+                packer_user_id: packerUserId,
+            });
+            if (!result.success) {
+                this.notification.add(result.message || 'Không assign được người đóng', { type: 'danger' });
+                return;
+            }
+        }
         await this.actionService.doAction(reportId, {
             additionalContext: {
                 active_ids: [pickingId],
                 active_id: pickingId,
                 active_model: 'stock.picking',
+                hlv_skip_packer_assignment_dialog: true,
             }
         });
     }
@@ -2412,19 +2559,19 @@ export class DeliveryPlannerDashboard extends Component {
         switch (receiptStatus) {
             case "pending": return "bg-secondary";
             case "partial": return "bg-warning text-dark";
-            case "full":    return "bg-success";
-            default:        return "bg-light text-muted border";
+            case "full": return "bg-success";
+            default: return "bg-light text-muted border";
         }
     }
 
     // --- Translations (delegate to utils) ---
-    translatePOStatus(s)         { return translatePOStatus(s); }
-    translateDeliveryStatus(s)   { return translateDeliveryStatus(s); }
-    translatePickingState(s)     { return translatePickingState(s); }
-    translatePickingStatus(s)    { return translatePickingStatus(s); }
-    translateStockStatus(s)      { return translateStockStatus(s); }
-    translatePackingStatus(s)    { return translatePackingStatus(s); }
-    translateSOStatus(s)         { return translateSOStatus(s); }
+    translatePOStatus(s) { return translatePOStatus(s); }
+    translateDeliveryStatus(s) { return translateDeliveryStatus(s); }
+    translatePickingState(s) { return translatePickingState(s); }
+    translatePickingStatus(s) { return translatePickingStatus(s); }
+    translateStockStatus(s) { return translateStockStatus(s); }
+    translatePackingStatus(s) { return translatePackingStatus(s); }
+    translateSOStatus(s) { return translateSOStatus(s); }
 
     formatPackageGroupStatus(so, group) {
         if (group.picking_state !== 'done') {
@@ -2507,17 +2654,17 @@ export class DeliveryPlannerDashboard extends Component {
     }
 
     // --- Badge Classes (delegate to utils) ---
-    getPickingStateBadgeClass(s)            { return getPickingStateBadgeClass(s); }
-    getPickingStatusBadgeClass(s)           { return getPickingStatusBadgeClass(s); }
-    getDeliveryStatusBadgeClass(s)          { return getDeliveryStatusBadgeClass(s); }
-    getStockStatusBadgeClass(s)             { return getStockStatusBadgeClass(s); }
-    getPackingStatusBadgeClass(s)           { return getPackingStatusBadgeClass(s); }
-    getPOStatusBadgeClass(state, receipt)   { return getPOStatusBadgeClass(state, receipt); }
-    getSOCardColorClass(so)                 { return getSOCardColorClass(so); }
+    getPickingStateBadgeClass(s) { return getPickingStateBadgeClass(s); }
+    getPickingStatusBadgeClass(s) { return getPickingStatusBadgeClass(s); }
+    getDeliveryStatusBadgeClass(s) { return getDeliveryStatusBadgeClass(s); }
+    getStockStatusBadgeClass(s) { return getStockStatusBadgeClass(s); }
+    getPackingStatusBadgeClass(s) { return getPackingStatusBadgeClass(s); }
+    getPOStatusBadgeClass(state, receipt) { return getPOStatusBadgeClass(state, receipt); }
+    getSOCardColorClass(so) { return getSOCardColorClass(so); }
 
     // --- Formatting (delegate to utils) ---
-    formatCurrency(v)                       { return formatCurrency(v); }
-    formatQty(v)                            { return formatQty(v); }
+    formatCurrency(v) { return formatCurrency(v); }
+    formatQty(v) { return formatQty(v); }
     getDatesComparisonClass(soDate, poDate) { return getDatesComparisonClass(soDate, poDate); }
 
     // --- Group duplicate product lines ---
@@ -2536,13 +2683,15 @@ export class DeliveryPlannerDashboard extends Component {
                 map[pid].delivered_tax += (l.delivered_tax || 0);
                 map[pid].delivered_total += (l.delivered_total || 0);
             } else {
-                map[pid] = { ...l, product_uom_qty: l.product_uom_qty || 0,
+                map[pid] = {
+                    ...l, product_uom_qty: l.product_uom_qty || 0,
                     qty_delivered: l.qty_delivered || 0, qty_packed: l.qty_packed || 0,
                     qty_available: l.qty_available || 0, qty_warehouse_free: l.qty_warehouse_free || 0,
                     qty_reserved_here: l.qty_reserved_here || 0,
                     delivered_subtotal: l.delivered_subtotal || 0,
                     delivered_tax: l.delivered_tax || 0,
-                    delivered_total: l.delivered_total || 0 };
+                    delivered_total: l.delivered_total || 0
+                };
                 order.push(pid);
             }
         }
@@ -3080,12 +3229,12 @@ export class DeliveryPlannerDashboard extends Component {
             filter_tag_ids: this.state.filterTagIds.join(','),
             show_completed: this.state.showCompleted ? '1' : '',
         });
-        
+
         const selectedIds = Array.from(this.state.selectedSOIds);
         if (selectedIds.length > 0) {
             params.set('selected_ids', selectedIds.join(','));
         }
-        
+
         window.open(`/hlv_sale_delivery_planning/export_excel?${params.toString()}`, '_blank');
     }
 

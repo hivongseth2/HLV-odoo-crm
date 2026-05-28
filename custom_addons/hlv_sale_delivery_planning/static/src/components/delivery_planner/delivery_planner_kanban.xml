@@ -520,6 +520,7 @@
                                   t-att-title="pk.name + ' — ' + (pk.printed ? 'Đã in' : 'Chưa in')">
                                 <i t-att-class="pk.printed ? 'fa fa-check-circle' : 'fa fa-exclamation-circle'"></i>
                                 <t t-esc="pk.name"/>
+                                <t t-if="pk.packer_user"> · <t t-esc="pk.packer_user[1]"/></t>
                             </span>
                         </t>
                     </div>

@@ -69,6 +69,10 @@
                                     <t t-esc="this.unreadMessageCount"/>
                                 </span>
                             </button>
+                            <button class="btn btn-outline-primary shadow-sm ms-2"
+                                    t-on-click="togglePackingProgressDrawer">
+                                <i class="fa fa-tasks me-1"></i> Tiến độ đóng
+                            </button>
                         </div>
                     </div>
 
@@ -199,6 +203,63 @@
 
             <!-- Relocation Modal -->
             <t t-call="hlv_sale_delivery_planning.RelocationModal"/>
+
+            <!-- Assign packer before printing picking slips -->
+            <t t-call="hlv_sale_delivery_planning.PackerAssignModal"/>
+
+            <div t-if="state.isPackingProgressDrawerOpen"
+                 class="position-fixed start-0 end-0 bottom-0 bg-white border-top shadow-lg"
+                 style="z-index: 2050; max-height: 45vh; overflow:auto;">
+                <div class="d-flex align-items-center gap-2 px-3 py-2 border-bottom bg-light position-sticky top-0">
+                    <h6 class="m-0 fw-bold text-primary me-auto">
+                        <i class="fa fa-tasks me-2"></i>Tiến Độ Đóng Hàng Hôm Nay
+                    </h6>
+                    <span class="badge bg-secondary">Assign: <t t-esc="state.packingProgress.summary.assigned_count || 0"/></span>
+                    <span class="badge bg-warning text-dark">Đang: <t t-esc="state.packingProgress.summary.in_progress_count || 0"/></span>
+                    <span class="badge bg-success">Xong: <t t-esc="state.packingProgress.summary.done_count || 0"/></span>
+                    <button class="btn btn-sm btn-outline-secondary" t-on-click="loadPackingProgress" t-att-disabled="state.packingProgressLoading">
+                        <i t-attf-class="fa #{state.packingProgressLoading ? 'fa-spinner fa-spin' : 'fa-refresh'}"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" t-on-click="togglePackingProgressDrawer">
+                        <i class="fa fa-times"></i>
+                    </button>
+                </div>
+                <div class="p-3">
+                    <div t-if="state.packingProgressLoading" class="text-center text-muted py-3">
+                        <i class="fa fa-spinner fa-spin me-1"></i>Đang tải...
+                    </div>
+                    <div t-elif="!(state.packingProgress.groups || []).length" class="text-center text-muted py-3">
+                        Chưa có phiếu đóng được assign hôm nay.
+                    </div>
+                    <div t-else="" class="row g-2">
+                        <t t-foreach="state.packingProgress.groups" t-as="group" t-key="group.packer_user_id">
+                            <div class="col-12 col-md-6 col-xl-3">
+                                <div class="border rounded bg-light p-2 h-100">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <span class="fw-bold text-dark me-auto"><i class="fa fa-user me-1 text-primary"></i><t t-esc="group.packer_name"/></span>
+                                        <span class="badge bg-secondary"><t t-esc="group.assigned_count"/></span>
+                                    </div>
+                                    <div class="d-flex gap-1 mb-2 small">
+                                        <span class="badge bg-warning text-dark">Đang <t t-esc="group.in_progress_count"/></span>
+                                        <span class="badge bg-success">Xong <t t-esc="group.done_count"/></span>
+                                        <span class="badge bg-info">TB <t t-esc="this.formatPackDuration(group.avg_actual_seconds || group.avg_print_to_done_seconds)"/></span>
+                                    </div>
+                                    <div style="max-height:130px; overflow:auto;" class="small">
+                                        <t t-foreach="(group.rows || []).slice(0, 8)" t-as="row" t-key="row.pick_id">
+                                            <div class="d-flex align-items-center gap-1 border-top py-1">
+                                                <span class="text-muted flex-grow-1"><t t-esc="row.pick_name"/></span>
+                                                <span t-att-class="row.state === 'done' ? 'text-success' : row.state === 'in_progress' ? 'text-warning' : 'text-secondary'">
+                                                    <t t-esc="row.state === 'done' ? 'Xong' : row.state === 'in_progress' ? 'Đang' : 'Assign'"/>
+                                                </span>
+                                            </div>
+                                        </t>
+                                    </div>
+                                </div>
+                            </div>
+                        </t>
+                    </div>
+                </div>
+            </div>
 
             <!-- Message Drawer (Left) -->
             <t t-call="hlv_sale_delivery_planning.MessageDrawer"/>

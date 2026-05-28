@@ -476,6 +476,20 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                 'return_of_id': p.return_id.id if p.return_id else False,
                 'return_of': p.return_id.name if p.return_id else False,
                 'printed': bool(p.x_printed),
+                'packer_user': (
+                    [p.x_pack_packer_user_id.id,
+                     getattr(p.x_pack_packer_user_id, 'packer_name', None) or p.x_pack_packer_user_id.name]
+                    if getattr(p, 'x_pack_packer_user_id', False) and p.x_pack_packer_user_id
+                    else False
+                ),
+                'pack_assigned_at': p.x_pack_assigned_at.strftime('%Y-%m-%d %H:%M:%S') if p.x_pack_assigned_at else False,
+                'pick_print_start_at': p.x_pick_print_start_at.strftime('%Y-%m-%d %H:%M:%S') if p.x_pick_print_start_at else False,
+                'pick_print_end_at': p.x_pick_print_end_at.strftime('%Y-%m-%d %H:%M:%S') if p.x_pick_print_end_at else False,
+                'pack_source_pick_id': p.x_pack_source_pick_id.id if p.x_pack_source_pick_id else False,
+                'pack_actual_start_at': p.x_pack_actual_start_at.strftime('%Y-%m-%d %H:%M:%S') if p.x_pack_actual_start_at else False,
+                'pack_actual_end_at': p.x_pack_actual_end_at.strftime('%Y-%m-%d %H:%M:%S') if p.x_pack_actual_end_at else False,
+                'pack_actual_seconds': p.x_pack_actual_seconds or 0,
+                'pack_print_to_done_seconds': p.x_pack_print_to_done_seconds or 0,
                 'bien_ban_printed': bool(getattr(p, 'x_bien_ban_printed', False)),
                 'shipper_scanned': bool(getattr(p, 'shipper_scanned', False)),
                 'shipper_received': bool(getattr(p, 'shipper_received', False)),
