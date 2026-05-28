@@ -739,6 +739,7 @@ class PublicInventory(http.Controller):
                 incoming_by_picking[key] = {
                     "picking_name": picking.name or "",
                     "po_name": po.name if po else (picking.origin or ""),
+                    "po_origin": (po.origin or "") if po else "",
                     "scheduled_date": sched.strftime('%d/%m/%Y') if sched else "",
                     "state": _STATE_VN.get(picking.state, picking.state),
                     "qty": 0.0,
@@ -750,21 +751,29 @@ class PublicInventory(http.Controller):
             incoming_by_picking[key]["qty"] += move.product_uom_qty
 
         # --- Phiếu xuất từ ĐBH ---
-        # Dùng location_dest_id.usage = 'customer' để bắt đúng bước cuối trong xuất kho
-        # 1-bước: stock → customer
-        # 2-bước: output → customer (bước SHIP)
-        # 3-bước: packing/output → customer (bước SHIP cuối)
-        # → Không dùng picking_type_id.code = 'outgoing' vì bước 1/2 là internal
-        outgoing_domain = _wh_src_domain([
-            ("product_id", "=", pid),
-            ("state", "not in", ["done", "cancel", "draft"]),
-            ("location_dest_id.usage", "=", "customer"),
-            "|",
-            ("sale_line_id", "!=", False),
-            ("picking_id.sale_id", "!=", False),
-        ])
+        # Strategy: search ALL active SO-linked moves, no location filter.
+        #
+        # Why no location filter?
+        # KBC uses a 3-step custom flow:
+        #   PICK (stock → pack_zone, done) → PACK (pack_zone → output, confirmed) → SHIP (pending)
+        # KBC/Khu vực đóng gói is a SIBLING of lot_stock_id (not a child), so
+        # child_of lot_stock_id never catches the PACK move. Any location-based
+        # approach (lot_stock_id OR view_location_id) leaves outgoing=0.
+        #
+        # By searching all active SO moves without location constraint we get:
+        # - 1-step: stock→customer (captured ✓)
+        # - 2-step: active SHIP (output→customer, captured ✓); PICK already done
+        # - 3-step: active PACK (pack→output, captured ✓); PICK done, SHIP not yet active
+        # Double-counting (PACK + SHIP both active) is practically impossible in this
+        # Odoo setup since SHIP is created lazily after PACK completes.
         try:
-            outgoing_moves = StockMove.search(outgoing_domain, order="date asc")
+            outgoing_moves = StockMove.search([
+                ("product_id", "=", pid),
+                ("state", "not in", ["done", "cancel", "draft"]),
+                "|",
+                ("sale_line_id", "!=", False),
+                ("picking_id.sale_id", "!=", False),
+            ], order="date asc")
         except Exception:
             outgoing_moves = StockMove.browse([])
 

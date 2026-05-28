@@ -3,12 +3,13 @@
   <template id="inventory_page" name="Public Inventory Page">
     <t t-call="website.layout">
       <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;display=swap');
         /* --- GIỮ NGUYÊN CSS --- */
         .search-wrapper { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid #ced4da; border-radius: 0.375rem; background-color: #fff; min-height: 45px; cursor: text; transition: border-color .15s ease-in-out,box-shadow .15s ease-in-out; }
         .search-wrapper:focus-within { border-color: #86b7fe; outline: 0; box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25); }
         .search-chip { display: inline-flex; align-items: center; background-color: #e9ecef; color: #495057; font-size: 0.9rem; padding: 4px 10px; border-radius: 16px; user-select: none; max-width: 100%; }
         .search-chip span { text-overflow: ellipsis; max-width: 300px; white-space: nowrap; overflow: hidden; }
-        .search-chip .btn-close-chip { margin-left: 6px; cursor: pointer; color: #adb5bd; font-weight: bold; line-height: 1; font-size: 16px; }
+        .search-chip .btn-close-chip { margin-left: 6px; cursor: pointer; color: #adb5bd; font-weight: 600; line-height: 1; font-size: 16px; }
         .search-input-field { border: none; outline: none; flex-grow: 1; min-width: 120px; font-size: 16px; padding: 0; margin: 0; background: transparent; color: #212529; }
         #search-suggestions { border-radius: 0.5rem; box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15); border: 1px solid rgba(0,0,0,.05); max-height: 60vh; }
         /* Sticky Header for Desktop */
@@ -81,7 +82,7 @@
             #inv-table tbody tr.main-row td:nth-child(4) { 
                 grid-column: 2 / 3; display: flex; flex-direction: column; padding: 0 !important; border: none; 
             }
-            #inv-table tbody tr.main-row td:nth-child(4) .text-wrap { font-weight: 700; color: #0d6efd; font-size: 1rem; line-height: 1.3; margin-right: 30px; }
+            #inv-table tbody tr.main-row td:nth-child(4) .text-wrap { font-weight: 600; color: #0d6efd; font-size: 1rem; line-height: 1.5; margin-right: 30px; }
             
             #inv-table tbody tr.main-row td:nth-child(1) { position: absolute; top: 8px; right: 8px; padding: 0 !important; border: none; z-index: 10; }
 
@@ -134,7 +135,7 @@
             #inv-table tbody tr.main-row td:nth-child(12):before { content: "Giá TM:"; color: #6c757d; font-size: 0.9rem; }
             #inv-table tbody tr.main-row td:nth-child(13):before { content: "Giá bán:"; color: #6c757d; font-size: 0.9rem; }
             
-            #inv-table tbody tr.main-row td:nth-child(13) { font-weight: bold; color: #198754; }
+            #inv-table tbody tr.main-row td:nth-child(13) { font-weight: 500; color: #198754; }
 
             /* Hide extended info but KEEP prices visible */
             #inv-table tbody tr.main-row td:nth-child(5), #inv-table tbody tr.main-row td:nth-child(6), 
@@ -162,7 +163,7 @@
             }
             .wh-header {
                 padding: 8px 12px;
-                font-weight: 700;
+                font-weight: 600;
                 color: #495057;
                 background: #fff;
                 border-bottom: 1px solid #f0f0f0;
@@ -196,8 +197,666 @@
             .wh-stat-col.highlight .wh-label { color: #198754; opacity: 0.8; }
             .wh-stat-col.highlight .wh-val { color: #198754; font-size: 1.2rem; font-weight: 800; }
             .wh-stat-col.dim .wh-val { color: #ced4da; }
-            .combo-comp-title { font-size: 0.9rem; font-weight: bold; color: #d63384; margin-bottom: 4px; padding-left: 4px; }
+            .combo-comp-title { font-size: 0.9rem; font-weight: 600; color: #d63384; margin-bottom: 4px; padding-left: 4px; }
         }
+
+          /* ==========================================================
+             Modern Inventory UI Refactor
+             Layers: Global, Filters, Tabs, Table, Details, Badges, Modal
+             ========================================================== */
+
+          /* Global */
+          :root {
+            --inv-primary: #2563eb;
+            --inv-primary-soft: #eff6ff;
+            --inv-primary-ring: rgba(37, 99, 235, 0.16);
+            --inv-text: #1e293b;
+            --inv-muted: #64748b;
+            --inv-subtle: #94a3b8;
+            --inv-border: #e2e8f0;
+            --inv-border-soft: #f1f5f9;
+            --inv-bg: #f8fafc;
+            --inv-surface: #ffffff;
+            --inv-glass: rgba(255, 255, 255, 0.78);
+            --inv-glass-strong: rgba(255, 255, 255, 0.92);
+            --inv-surface-2: #f8fafc;
+            --inv-success: #15803d;
+            --inv-success-bg: #dcfce7;
+            --inv-danger: #b91c1c;
+            --inv-danger-bg: #fee2e2;
+            --inv-warning: #a16207;
+            --inv-warning-bg: #fef3c7;
+            --inv-shadow-sm: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
+            --inv-shadow-md: 0 10px 25px -5px rgba(15, 23, 42, 0.10), 0 8px 10px -6px rgba(15, 23, 42, 0.10);
+          }
+
+          #wrap {
+            color: var(--inv-text);
+            font-family: "Inter", Roboto, "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+            font-size: 14px;
+            font-weight: 400;
+            line-height: 1.5;
+            letter-spacing: -0.01em;
+            background:
+              radial-gradient(circle at 14% 8%, rgba(37, 99, 235, 0.06), transparent 28%),
+              linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+            -webkit-font-smoothing: antialiased;
+            text-rendering: geometricPrecision;
+          }
+
+          #wrap input,
+          #wrap select,
+          #wrap button,
+          #wrap textarea,
+          #wrap table {
+            font-family: inherit;
+            letter-spacing: inherit;
+          }
+
+          #wrap .container-fluid {
+            color: var(--inv-text);
+          }
+
+          #wrap .text-dark,
+          #wrap .fw-bold,
+          #wrap label,
+          #wrap .form-label {
+            color: var(--inv-text) !important;
+          }
+
+          #wrap .text-muted,
+          #wrap small {
+            color: var(--inv-muted) !important;
+          }
+
+          #wrap .fw-bold,
+          #wrap .fw-semibold,
+          #wrap strong,
+          #wrap [style*="font-weight:700"],
+          #wrap [style*="font-weight: 700"],
+          #wrap [style*="font-weight:800"],
+          #wrap [style*="font-weight: 800"],
+          #wrap [style*="font-weight:900"],
+          #wrap [style*="font-weight: 900"],
+          #wrap [style*="font-weight:bold"],
+          #wrap [style*="font-weight: bold"] {
+            font-weight: 600 !important;
+          }
+
+          #wrap .text-primary,
+          #wrap a.text-primary,
+          #wrap .btn-forecast-detail {
+            color: var(--inv-primary) !important;
+          }
+
+          #wrap .card {
+            border: 1px solid var(--inv-border-soft) !important;
+            border-radius: 12px !important;
+            box-shadow: var(--inv-shadow-sm) !important;
+            background: var(--inv-glass-strong) !important;
+            backdrop-filter: blur(14px);
+          }
+
+          /* Filters */
+          #search-form {
+            align-items: stretch;
+          }
+
+          .search-wrapper,
+          #search-form .form-select,
+          #search-form .form-control {
+            min-height: 47px;
+            border: 1px solid #cbd5e1 !important;
+            border-radius: 8px !important;
+            background: var(--inv-glass-strong) !important;
+            color: var(--inv-text) !important;
+            box-shadow: var(--inv-shadow-sm);
+            transition: border-color .18s ease, box-shadow .18s ease, background-color .18s ease;
+            backdrop-filter: blur(12px);
+          }
+
+          .search-wrapper {
+            padding: 7px 12px;
+            gap: 7px;
+          }
+
+          .search-wrapper:focus-within,
+          #search-form .form-select:focus,
+          #search-form .form-control:focus {
+            border-color: var(--inv-primary) !important;
+            box-shadow: 0 0 0 4px var(--inv-primary-ring), var(--inv-shadow-sm) !important;
+            outline: none !important;
+          }
+
+          .search-input-field {
+            color: var(--inv-text) !important;
+            font-size: 15px;
+            font-weight: 400;
+          }
+
+          .search-input-field::placeholder {
+            color: var(--inv-subtle);
+          }
+
+          .search-chip {
+            background: var(--inv-primary-soft) !important;
+            color: #1d4ed8 !important;
+            border: 1px solid #bfdbfe;
+            border-radius: 999px;
+            font-size: .86rem;
+            font-weight: 500;
+            padding: 4px 10px;
+          }
+
+          .search-chip .btn-close-chip {
+            color: #60a5fa !important;
+            font-weight: 600;
+          }
+
+          #search-form .col-md-3 {
+            min-height: 47px;
+            padding-inline: 12px;
+            border: 1px solid var(--inv-border-soft);
+            border-radius: 8px;
+            background: rgba(248, 250, 252, 0.72) !important;
+            backdrop-filter: blur(12px);
+          }
+
+          #search-form .form-check-label {
+            color: var(--inv-muted) !important;
+            font-size: .9rem;
+            font-weight: 500;
+          }
+
+          #search-form .form-check-input {
+            border-color: #cbd5e1;
+            box-shadow: none !important;
+          }
+
+          #search-form .form-check-input:checked {
+            background-color: var(--inv-primary);
+            border-color: var(--inv-primary);
+          }
+
+          #search-suggestions {
+            border: 1px solid var(--inv-border) !important;
+            border-radius: 12px !important;
+            box-shadow: var(--inv-shadow-md) !important;
+            overflow: hidden;
+            background: var(--inv-glass-strong) !important;
+            backdrop-filter: blur(16px);
+          }
+
+          #search-suggestions .suggestion-item {
+            border-bottom-color: var(--inv-border-soft) !important;
+            transition: background-color .16s ease;
+          }
+
+          #search-suggestions .suggestion-item:hover {
+            background: var(--inv-bg);
+          }
+
+          /* Tabs */
+          #wrap .nav.nav-pills {
+            gap: 8px !important;
+          }
+
+          #wrap .nav-pills .nav-link {
+            border: 1px solid transparent !important;
+            border-radius: 999px !important;
+            background: rgba(255, 255, 255, .54) !important;
+            color: var(--inv-muted) !important;
+            font-size: .9rem !important;
+            font-weight: 500 !important;
+            box-shadow: none !important;
+            transition: color .16s ease, background-color .16s ease, border-color .16s ease, box-shadow .16s ease;
+          }
+
+          #wrap .nav-pills .nav-link:hover {
+            color: var(--inv-primary) !important;
+            background: var(--inv-primary-soft) !important;
+            border-color: #dbeafe !important;
+          }
+
+          #wrap .nav-pills .nav-link.active,
+          #wrap .nav-pills .show > .nav-link {
+            color: var(--inv-primary) !important;
+            background: var(--inv-primary-soft) !important;
+            border-color: #bfdbfe !important;
+            box-shadow: var(--inv-shadow-sm) !important;
+          }
+
+          /* Buttons */
+          #wrap .btn {
+            border-radius: 8px !important;
+            font-weight: 500 !important;
+            box-shadow: var(--inv-shadow-sm);
+            transition: transform .12s ease, box-shadow .16s ease, background-color .16s ease, border-color .16s ease, color .16s ease;
+          }
+
+          #wrap .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 10px rgba(15, 23, 42, 0.08);
+          }
+
+          #wrap .btn-primary,
+          #search-form .btn-primary {
+            background: var(--inv-primary) !important;
+            border-color: var(--inv-primary) !important;
+            color: #ffffff !important;
+          }
+
+          #wrap .btn-light,
+          #wrap .btn-secondary {
+            background: #f8fafc !important;
+            border: 1px solid var(--inv-border) !important;
+            color: var(--inv-text) !important;
+          }
+
+          #wrap .btn-expand {
+            width: 32px;
+            height: 32px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px !important;
+            color: var(--inv-primary) !important;
+            background: var(--inv-primary-soft) !important;
+            border: 1px solid #dbeafe !important;
+            box-shadow: none;
+          }
+
+          /* Table */
+          #inv-table {
+            width: 100%;
+            border: 0 !important;
+            border-collapse: separate !important;
+            border-spacing: 0 !important;
+            color: var(--inv-text);
+            font-size: .9rem;
+            font-weight: 400;
+            line-height: 1.5;
+          }
+
+          #inv-table th,
+          #inv-table td {
+            border-left: 0 !important;
+            border-right: 0 !important;
+            border-top: 0 !important;
+            border-bottom: 1px solid var(--inv-border-soft) !important;
+            padding: 12px 16px !important;
+            vertical-align: middle !important;
+          }
+
+          #inv-table thead th {
+            background: rgba(248, 250, 252, 0.96) !important;
+            color: var(--inv-muted) !important;
+            font-size: .74rem;
+            font-weight: 500 !important;
+            letter-spacing: -0.01em;
+            text-transform: uppercase;
+            box-shadow: 0 1px 0 var(--inv-border) !important;
+            border-bottom: 1px solid var(--inv-border) !important;
+            backdrop-filter: blur(8px);
+          }
+
+          #inv-table tbody tr.main-row {
+            transition: background-color .16s ease, box-shadow .16s ease;
+          }
+
+          #inv-table tbody tr.main-row:hover {
+            background: var(--inv-bg) !important;
+            cursor: pointer;
+          }
+
+          #inv-table tbody tr.main-row:hover td {
+            background: transparent !important;
+          }
+
+          #inv-table tbody tr.main-row td:nth-child(4) .text-wrap {
+            color: var(--inv-text) !important;
+            font-weight: 600 !important;
+            line-height: 1.5;
+          }
+
+          #inv-table tbody tr.main-row td:nth-child(3) {
+            color: var(--inv-primary) !important;
+            font-weight: 600 !important;
+          }
+
+          #inv-table tbody tr.main-row td:nth-child(5),
+          #inv-table tbody tr.main-row td:nth-child(6),
+          #inv-table tbody tr.main-row td:nth-child(9),
+          #inv-table tbody tr.main-row td:nth-child(10),
+          #inv-table tbody tr.main-row td:nth-child(11),
+          #inv-table tbody tr.main-row td:nth-child(12),
+          #inv-table tbody tr.main-row td:nth-child(13) {
+            color: var(--inv-muted) !important;
+            font-weight: 400 !important;
+          }
+
+          #inv-table tbody tr.main-row td:nth-child(2) img {
+            border-radius: 8px;
+            border: 1px solid var(--inv-border-soft);
+            background: #fff;
+          }
+
+          #inv-table tbody tr.main-row td:nth-child(8) > span,
+          #inv-table tbody tr.main-row td:nth-child(7) a,
+          #inv-table .wh-stat-col.highlight .wh-val {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 24px;
+            border-radius: 6px;
+            padding: 2px 8px;
+            font-weight: 600 !important;
+            line-height: 1.2;
+          }
+
+          #inv-table tbody tr.main-row td:nth-child(8) > span.text-success,
+          #inv-table .wh-stat-col.highlight .wh-val,
+          #inv-table td.text-success {
+            color: var(--inv-success) !important;
+          }
+
+          #inv-table tbody tr.main-row td:nth-child(8) > span.text-success,
+          #inv-table .wh-stat-col.highlight .wh-val {
+            background: var(--inv-success-bg) !important;
+          }
+
+          #inv-table tbody tr.main-row td:nth-child(8) > span.text-danger,
+          #inv-table td.text-danger {
+            color: var(--inv-danger) !important;
+          }
+
+          #inv-table tbody tr.main-row td:nth-child(8) > span.text-danger {
+            background: var(--inv-danger-bg) !important;
+          }
+
+          #inv-table tbody tr.main-row td:nth-child(7) a {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 24px;
+            border-radius: 6px;
+            padding: 2px 8px;
+            color: var(--inv-muted) !important;
+            background: #f1f5f9;
+            font-weight: 600;
+          }
+
+          #inv-table .badge {
+            border-radius: 999px;
+            font-weight: 600 !important;
+            letter-spacing: 0;
+            box-shadow: none !important;
+          }
+
+          #inv-table .bg-warning {
+            background: var(--inv-warning-bg) !important;
+            color: var(--inv-warning) !important;
+          }
+
+          /* Details */
+          #inv-table tbody tr.detail-row > td {
+            padding: 0 !important;
+            background: #ffffff !important;
+            border-bottom: 1px solid var(--inv-border) !important;
+          }
+
+          .detail-container-mobile,
+          #inv-table .detail-container-mobile {
+            background: var(--inv-bg) !important;
+            border: 1px solid var(--inv-border-soft) !important;
+            border-radius: 12px !important;
+            padding: 12px !important;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, .9);
+          }
+
+          .detail-container-mobile .table,
+          .detail-container-mobile table {
+            color: var(--inv-text);
+            border-color: var(--inv-border-soft) !important;
+          }
+
+          .detail-container-mobile thead th {
+            background: #f8fafc !important;
+            color: var(--inv-muted) !important;
+            font-weight: 500 !important;
+            box-shadow: none !important;
+          }
+
+          .detail-container-mobile td,
+          .detail-container-mobile th {
+            border-color: var(--inv-border-soft) !important;
+          }
+
+          .wh-card,
+          .detail-container-mobile .card {
+            border: 1px solid var(--inv-border-soft) !important;
+            border-radius: 10px !important;
+            box-shadow: var(--inv-shadow-sm) !important;
+            overflow: hidden;
+          }
+
+          .wh-header,
+          .detail-container-mobile .card-header {
+            color: var(--inv-text) !important;
+            background: #ffffff !important;
+            border-bottom: 1px solid var(--inv-border-soft) !important;
+            font-weight: 600 !important;
+          }
+
+          .wh-label {
+            color: var(--inv-subtle) !important;
+            font-weight: 500 !important;
+            letter-spacing: -0.01em;
+          }
+
+          .wh-val {
+            color: var(--inv-text) !important;
+            font-weight: 600 !important;
+          }
+
+          .wh-stat-col {
+            border-right-color: var(--inv-border-soft) !important;
+          }
+
+          .wh-stat-col.highlight .wh-label,
+          .wh-stat-col.highlight .wh-val {
+            color: var(--inv-success) !important;
+          }
+
+          .combo-comp-title {
+            color: #be185d !important;
+            font-weight: 600 !important;
+          }
+
+          /* Modal */
+          #forecastDetailsModal .modal-content,
+          #locationDetailsModal .modal-content {
+            border: 1px solid rgba(226, 232, 240, .85) !important;
+            border-radius: 16px !important;
+            box-shadow: var(--inv-shadow-md) !important;
+            overflow: hidden;
+            color: var(--inv-text);
+            background: rgba(255, 255, 255, .86) !important;
+            backdrop-filter: blur(18px);
+          }
+
+          #forecastDetailsModal .modal-header,
+          #locationDetailsModal .modal-header {
+            background: #ffffff !important;
+            border-bottom: 1px solid var(--inv-border-soft) !important;
+            padding: 18px 24px !important;
+          }
+
+          #forecastDetailsModal .modal-title,
+          #locationDetailsModal .modal-title,
+          #forecastDetailsModal [style*="font-weight:700"],
+          #locationDetailsModal [style*="font-weight:700"] {
+            color: var(--inv-text) !important;
+            font-weight: 600 !important;
+          }
+
+          #forecastDetailsModal .modal-body,
+          #locationDetailsModal .modal-body {
+            background: #ffffff;
+          }
+
+          #forecastDetailsModal .modal-footer,
+          #locationDetailsModal .modal-footer {
+            background: #f8fafc !important;
+            border-top: 1px solid var(--inv-border-soft) !important;
+            padding: 12px 24px !important;
+          }
+
+          #forecastDetailsModal .btn-close,
+          #locationDetailsModal .btn-close {
+            width: .85rem;
+            height: .85rem;
+            border-radius: 999px;
+            opacity: .58;
+            transition: opacity .16s ease, background-color .16s ease;
+          }
+
+          #forecastDetailsModal .btn-close:hover,
+          #locationDetailsModal .btn-close:hover {
+            opacity: .9;
+            background-color: #f1f5f9;
+          }
+
+          #forecastDetailsBody > div:first-child {
+            background: var(--inv-bg) !important;
+            border-bottom: 1px solid var(--inv-border-soft) !important;
+          }
+
+          #forecastDetailsBody > div:first-child > div:first-child {
+            gap: 10px !important;
+          }
+
+          #forecastDetailsBody > div:first-child > div:first-child > div[style*="border-radius:12px"] {
+            border: 1px solid var(--inv-border-soft) !important;
+            border-radius: 12px !important;
+            box-shadow: var(--inv-shadow-sm) !important;
+            background: #ffffff !important;
+            min-width: 104px !important;
+          }
+
+          #forecastDetailsBody > div:first-child > div:first-child > span {
+            color: var(--inv-muted) !important;
+            font-weight: 600 !important;
+          }
+
+          #forecastDetailsBody .fc-table {
+            color: var(--inv-text) !important;
+            font-size: .84rem !important;
+          }
+
+          #forecastDetailsBody .fc-table th {
+            background: var(--inv-bg) !important;
+            color: var(--inv-muted) !important;
+            border-bottom: 1px solid var(--inv-border) !important;
+            font-weight: 500 !important;
+            letter-spacing: -0.01em !important;
+            padding: 10px 12px !important;
+          }
+
+          #forecastDetailsBody .fc-table td {
+            border-bottom: 1px solid var(--inv-border-soft) !important;
+            padding: 12px !important;
+          }
+
+          #forecastDetailsBody .fc-table tr:hover td {
+            background: var(--inv-bg) !important;
+          }
+
+          #forecastDetailsBody .fc-badge {
+            border-radius: 999px !important;
+            font-weight: 600 !important;
+            padding: 3px 9px !important;
+          }
+
+          /* Responsive */
+          @media (min-width: 769px) {
+            #inv-table {
+              border-left: 0 !important;
+            }
+
+            #inv-table th,
+            #inv-table td {
+              text-align: center !important;
+            }
+
+            #inv-table tbody tr.main-row td:nth-child(4) {
+              text-align: left !important;
+            }
+
+            .table-responsive {
+              border: 1px solid var(--inv-border-soft);
+              border-radius: 12px;
+              background: #ffffff;
+              box-shadow: var(--inv-shadow-sm);
+            }
+          }
+
+          @media (max-width: 768px) {
+            #wrap {
+              background: #ffffff;
+            }
+
+            #search-form .col-md-3 {
+              background: var(--inv-bg) !important;
+              border-color: var(--inv-border-soft) !important;
+            }
+
+            #inv-table tbody tr.main-row {
+              border: 1px solid var(--inv-border-soft) !important;
+              border-radius: 12px !important;
+              box-shadow: var(--inv-shadow-sm) !important;
+              background: #ffffff !important;
+            }
+
+            #inv-table tbody tr.main-row td {
+              border-bottom: 0 !important;
+            }
+
+            #inv-table tbody tr.main-row td:nth-child(4) .text-wrap {
+              color: var(--inv-primary) !important;
+              font-weight: 600 !important;
+            }
+
+            #inv-table tbody tr.main-row td:nth-child(8),
+            #inv-table tbody tr.main-row td:nth-child(9),
+            #inv-table tbody tr.main-row td:nth-child(10),
+            #inv-table tbody tr.main-row td:nth-child(11),
+            #inv-table tbody tr.main-row td:nth-child(12),
+            #inv-table tbody tr.main-row td:nth-child(13) {
+              border-top: 1px dashed var(--inv-border) !important;
+              color: var(--inv-text);
+            }
+
+            #inv-table tbody tr.main-row td:nth-child(8):before,
+            #inv-table tbody tr.main-row td:nth-child(9):before,
+            #inv-table tbody tr.main-row td:nth-child(10):before,
+            #inv-table tbody tr.main-row td:nth-child(11):before,
+            #inv-table tbody tr.main-row td:nth-child(12):before,
+            #inv-table tbody tr.main-row td:nth-child(13):before {
+              color: var(--inv-muted) !important;
+              font-weight: 500;
+            }
+
+            .detail-container-mobile,
+            #inv-table .detail-container-mobile {
+              border-radius: 0 0 12px 12px !important;
+            }
+
+            #forecastDetailsModal .modal-dialog,
+            #locationDetailsModal .modal-dialog {
+              margin: 10px !important;
+            }
+          }
       </style>
 
       <main id="wrap" class="oe_structure">
@@ -222,7 +881,7 @@
           <section>
             <div class="container-fluid mt-3 mb-6" style="max-width: 1550px;">
               <!-- Navigation Tabs -->
-              <div style="border-bottom: 2px solid #e9ecef; padding-bottom: 16px; margin-bottom: 1.5rem;">
+              <div style="border: 1px solid rgba(226, 232, 240, .72); border-radius: 16px; background: rgba(255, 255, 255, .64); backdrop-filter: blur(16px); padding: 12px; margin-bottom: 1.25rem; box-shadow: 0 1px 2px rgba(15, 23, 42, .04);">
                 <ul class="nav nav-pills justify-content-center flex-wrap gap-2">
                   <li class="nav-item">
                     <a class="nav-link active bg-primary text-white px-3 py-2" href="/search_stock" style="font-weight:600;font-size:.9rem;">
@@ -488,8 +1147,8 @@
 
             <!-- Modal Forecast Details -->
             <div class="modal fade" id="forecastDetailsModal" tabindex="-1" aria-hidden="true" style="z-index:1060;">
-              <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" style="max-width:min(780px,96vw);width:100%;margin:auto;">
-                <div class="modal-content" style="border:none;border-radius:16px;box-shadow:0 24px 64px rgba(0,0,0,.18);overflow:hidden;">
+              <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" style="max-width:min(1100px,96vw);width:100%;margin:auto;">
+                <div class="modal-content" style="border:none; max-width : 100%!important;border-radius:16px;box-shadow:0 24px 64px rgba(0,0,0,.18);overflow:hidden;">
                   <div class="modal-header" style="background:#fff;border-bottom:1px solid #e5e7eb;padding:18px 24px 14px;align-items:flex-start;">
                     <div>
                       <div style="display:flex;align-items:center;gap:9px;">
@@ -880,110 +1539,178 @@
                       + '</div>';
               }
 
+              // Dùng CSS class để responsive: card trên mobile, table trên desktop
+              var _fcss = '<style id="fc-style">';
+              _fcss += '.fc-table{width:100%;border-collapse:collapse;font-size:.82rem;}';
+              _fcss += '.fc-table th{background:#f9fafb;padding:8px 12px;font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#9ca3af;border-bottom:2px solid #e5e7eb;white-space:nowrap;}';
+              _fcss += '.fc-table td{padding:10px 12px;border-bottom:1px solid #f3f4f6;vertical-align:middle;}';
+              _fcss += '.fc-table tr:last-child td{border-bottom:none;}';
+              _fcss += '.fc-table tr:hover td{background:#fafafa;}';
+              _fcss += '.fc-table .fc-num{font-weight:600;font-size:.95rem;}';
+              _fcss += '.fc-table .fc-pick{font-weight:700;color:#374151;}';
+              _fcss += '.fc-badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:5px;font-size:.68rem;font-weight:700;border-width:1px;border-style:solid;}';
+              _fcss += '@media(max-width:640px){.fc-desktop{display:none!important;}.fc-mobile{display:block!important;}}';
+              _fcss += '@media(min-width:641px){.fc-mobile{display:none!important;}.fc-desktop{display:block!important;}}';
+              _fcss += '</style>';
+
               function buildForecastHtml(data) {
-                  var html = '';
+                  var html = _fcss;
                   var isPos = data.qty_forecast >= 0;
                   var fqColor = isPos ? '#16a34a' : '#dc2626';
 
-                  // === FORMULA SECTION ===
-                  var fqBg    = isPos ? '#f0fdf4' : '#fef2f2';
-                  var fqBord  = isPos ? '#4ade80' : '#f87171';
-                  html += '<div style="padding:20px 24px 18px;border-bottom:1px solid #f3f4f6;background:#fafafa;">';
-                  html += '<div style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;">';
+                  // === FORMULA ROW ===
+                  var fqBg   = isPos ? '#f0fdf4' : '#fef2f2';
+                  var fqBord = isPos ? '#4ade80' : '#f87171';
+                  var fqSh   = isPos ? 'rgba(22,163,74,.18)' : 'rgba(220,38,38,.18)';
+                  html += '<div style="padding:20px 28px 18px;border-bottom:2px solid #f3f4f6;background:#fafafa;">';
+                  html += '<div style="display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;">';
+                  html += _pill('Tồn kho',   fmt(data.qty_on_hand),    '#fff',   '#e5e7eb',  '#111827', '#9ca3af');
+                  html += '<span style="font-size:24px;font-weight:700;color:#16a34a;">+</span>';
+                  html += _pill('Nhập ĐMH', '+'+fmt(data.total_incoming), '#f0fdf4','#86efac','#16a34a','#16a34a');
+                  html += '<span style="font-size:24px;font-weight:700;color:#dc2626;">−</span>';
+                  html += _pill('Xuất ĐBH', '−'+fmt(data.total_outgoing), '#fef2f2','#fca5a5','#dc2626','#dc2626');
+                  html += '<span style="font-size:24px;font-weight:700;color:#6b7280;">=</span>';
+                  html += _pill('Dự báo',   fmt(data.qty_forecast),    fqBg, fqBord, fqColor, fqColor, true, fqSh);
+                  html += '</div></div>';
 
-                  // Tồn kho
-                  html += '<div style="text-align:center;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:12px 20px;min-width:90px;box-shadow:0 1px 4px rgba(0,0,0,.07);">';
-                  html += '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#9ca3af;margin-bottom:4px;">Tồn kho</div>';
-                  html += '<div style="font-size:26px;font-weight:800;color:#111827;line-height:1;">' + fmt(data.qty_on_hand) + '</div>';
-                  html += '</div>';
-                  html += '<div style="font-size:22px;font-weight:700;color:#16a34a;">+</div>';
-                  // Nhập ĐMH
-                  html += '<div style="text-align:center;background:#f0fdf4;border:1.5px solid #86efac;border-radius:12px;padding:12px 20px;min-width:90px;box-shadow:0 1px 4px rgba(22,163,74,.12);">';
-                  html += '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#16a34a;margin-bottom:4px;">Nhập ĐMH</div>';
-                  html += '<div style="font-size:26px;font-weight:800;color:#16a34a;line-height:1;">+' + fmt(data.total_incoming) + '</div>';
-                  html += '</div>';
-                  html += '<div style="font-size:22px;font-weight:700;color:#dc2626;">−</div>';
-                  // Xuất ĐBH
-                  html += '<div style="text-align:center;background:#fef2f2;border:1.5px solid #fca5a5;border-radius:12px;padding:12px 20px;min-width:90px;box-shadow:0 1px 4px rgba(220,38,38,.12);">';
-                  html += '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#dc2626;margin-bottom:4px;">Xuất ĐBH</div>';
-                  html += '<div style="font-size:26px;font-weight:800;color:#dc2626;line-height:1;">−' + fmt(data.total_outgoing) + '</div>';
-                  html += '</div>';
-                  html += '<div style="font-size:22px;font-weight:700;color:#6b7280;">=</div>';
-                  // Dự báo
-                  html += '<div style="text-align:center;background:'+fqBg+';border:2px solid '+fqBord+';border-radius:12px;padding:12px 20px;min-width:90px;box-shadow:0 2px 8px '+(isPos?'rgba(22,163,74,.18)':'rgba(220,38,38,.18)')+';">';
-                  html += '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:'+fqColor+';margin-bottom:4px;">Dự báo</div>';
-                  html += '<div style="font-size:28px;font-weight:900;color:'+fqColor+';line-height:1;">' + fmt(data.qty_forecast) + '</div>';
-                  html += '</div>';
-
-                  html += '</div></div>'; // end formula
-
-                  // === INCOMING SECTION ===
                   var inCount  = data.incoming.length;
                   var outCount = data.outgoing.length;
 
-                  html += '<div style="padding:20px 24px 6px;">';
-                  html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">';
-                  html += '  <div style="width:4px;height:20px;background:#16a34a;border-radius:3px;"></div>';
-                  html += '  <span style="font-size:.95rem;font-weight:700;color:#111827;">Phiếu nhập kho từ ĐMH</span>';
-                  html += '  <span style="background:'+(inCount>0?'#16a34a':'#9ca3af')+';color:#fff;border-radius:999px;font-size:.72rem;font-weight:700;padding:2px 9px;">'+inCount+'</span>';
-                  html += '</div>';
+                  // ── INCOMING ────────────────────────────────────────────────
+                  html += '<div style="padding:20px 28px 6px;">';
+                  html += _sectionHeader('Phiếu nhập kho từ ĐMH', inCount, '#16a34a');
+
                   if (inCount > 0) {
+                      // Desktop: table
+                      html += '<div class="fc-desktop">';
+                      html += '<div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">';
+                      html += '<table class="fc-table">';
+                      html += '<thead><tr>';
+                      html += '<th>Phiếu nhập</th><th>Đơn mua</th><th>Đơn hàng gốc</th><th>Nhà cung cấp</th>';
+                      html += '<th>Ngày ĐH MISA</th><th>Ngày hàng về DK</th><th style="text-align:right;">SL nhập</th>';
+                      html += '</tr></thead><tbody>';
                       data.incoming.forEach(function(r) {
                           var ss = _stateStyle(r.state);
-                          html += '<div style="background:#fff;border:1px solid #e5e7eb;border-left:4px solid #16a34a;border-radius:10px;margin-bottom:10px;overflow:hidden;">';
-                          html += '  <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:#f0fdf4;">';
-                          html += '    <div style="display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap;">';
-                          html += '      <span style="font-size:.9rem;font-weight:700;color:#15803d;">'+r.picking_name+'</span>';
-                          html += '      <span style="background:'+ss.bg+';color:'+ss.color+';border:1px solid '+ss.border+';border-radius:6px;font-size:.7rem;font-weight:700;padding:1px 8px;">'+r.state+'</span>';
-                          html += '    </div>';
-                          html += '    <span style="font-size:1.1rem;font-weight:800;color:#16a34a;flex-shrink:0;margin-left:12px;">+'+fmt(r.qty)+'</span>';
-                          html += '  </div>';
-                          html += '  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:14px;padding:14px 16px;">';
-                          if (r.po_name)   html += _metaCell('Đơn mua',        r.po_name,   '#2563eb', true);
-                          if (r.partner)   html += _metaCell('Nhà cung cấp',   r.partner,   '#374151');
-                          if (r.misa_date) html += _metaCell('Ngày ĐH MISA',  r.misa_date, '#374151');
-                          var dLabel = r.date_planned ? 'Ngày hàng về DK' : (r.scheduled_date ? 'Ngày dự kiến' : '');
-                          var dVal   = r.date_planned || r.scheduled_date || '';
-                          if (dVal)        html += _metaCell(dLabel,            dVal,        '#2563eb', true);
-                          html += '  </div></div>';
+                          html += '<tr>';
+                          html += '<td><span class="fc-pick">'+r.picking_name+'</span><br>';
+                          html += '    <span class="fc-badge" style="background:'+ss.bg+';color:'+ss.color+';border-color:'+ss.border+';margin-top:3px;">'+r.state+'</span></td>';
+                          html += '<td class="fw-bold" style="color:#2563eb;">'+r.po_name+'</td>';
+                          html += '<td style="color:#6b7280;">'+((r.po_origin)||'—')+'</td>';
+                          html += '<td>'+r.partner+'</td>';
+                          html += '<td>'+r.misa_date+'</td>';
+                          html += '<td style="font-weight:700;color:#2563eb;">'+((r.date_planned||r.scheduled_date)||'—')+'</td>';
+                          html += '<td style="text-align:right;"><span class="fc-num" style="color:#16a34a;">+'+fmt(r.qty)+'</span></td>';
+                          html += '</tr>';
                       });
-                      html += '<div style="text-align:right;font-size:.78rem;font-weight:700;color:#16a34a;padding-bottom:14px;">Tổng nhập: +'+fmt(data.total_incoming)+'</div>';
+                      html += '</tbody><tfoot><tr>';
+                      html += '<td colspan="6" style="text-align:right;font-weight:700;color:#6b7280;font-size:.78rem;padding:8px 12px;">Tổng nhập:</td>';
+                      html += '<td style="text-align:right;"><span class="fc-num" style="color:#16a34a;">+'+fmt(data.total_incoming)+'</span></td>';
+                      html += '</tr></tfoot></table></div></div>';
+
+                      // Mobile: cards
+                      html += '<div class="fc-mobile">';
+                      data.incoming.forEach(function(r) {
+                          var ss = _stateStyle(r.state);
+                          html += _pickingCard(r.picking_name, r.state, ss, '+'+fmt(r.qty), '#16a34a', '#f0fdf4', [
+                              ['Đơn mua',       r.po_name,                        '#2563eb', true],
+                              ['Đơn hàng gốc',  r.po_origin,                      '#6b7280', false],
+                              ['NCC',           r.partner,                        '#374151', false],
+                              ['MISA',          r.misa_date,                      '#374151', false],
+                              ['Hàng về',       r.date_planned||r.scheduled_date, '#2563eb', true],
+                          ]);
+                      });
+                      html += '<div style="text-align:right;font-size:.78rem;font-weight:700;color:#16a34a;padding-bottom:10px;">Tổng nhập: +'+fmt(data.total_incoming)+'</div>';
+                      html += '</div>';
+
                   } else {
-                      html += '<div style="background:#f9fafb;border:1.5px dashed #e5e7eb;border-radius:10px;padding:20px;text-align:center;color:#9ca3af;font-size:.85rem;margin-bottom:16px;">Không có phiếu nhập nào từ đơn mua hàng</div>';
+                      html += _empty('Không có phiếu nhập nào từ đơn mua hàng');
                   }
                   html += '</div>';
 
-                  // === OUTGOING SECTION ===
-                  html += '<div style="padding:4px 24px 24px;">';
-                  html += '<div style="border-top:1px solid #f3f4f6;padding-top:18px;margin-bottom:14px;display:flex;align-items:center;gap:8px;">';
-                  html += '  <div style="width:4px;height:20px;background:#dc2626;border-radius:3px;"></div>';
-                  html += '  <span style="font-size:.95rem;font-weight:700;color:#111827;">Phiếu xuất kho từ ĐBH</span>';
-                  html += '  <span style="background:'+(outCount>0?'#dc2626':'#9ca3af')+';color:#fff;border-radius:999px;font-size:.72rem;font-weight:700;padding:2px 9px;">'+outCount+'</span>';
-                  html += '</div>';
+                  // ── OUTGOING ────────────────────────────────────────────────
+                  html += '<div style="padding:4px 28px 24px;">';
+                  html += '<div style="border-top:1px solid #f3f4f6;padding-top:18px;">';
+                  html += _sectionHeader('Phiếu xuất kho từ ĐBH', outCount, '#dc2626');
+
                   if (outCount > 0) {
+                      // Desktop: table
+                      html += '<div class="fc-desktop">';
+                      html += '<div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">';
+                      html += '<table class="fc-table">';
+                      html += '<thead><tr>';
+                      html += '<th>Phiếu xuất</th><th>Đơn bán</th><th>Khách hàng</th>';
+                      html += '<th>Giao hàng DK</th><th style="text-align:right;">SL xuất</th>';
+                      html += '</tr></thead><tbody>';
                       data.outgoing.forEach(function(r) {
                           var ss = _stateStyle(r.state);
-                          html += '<div style="background:#fff;border:1px solid #e5e7eb;border-left:4px solid #dc2626;border-radius:10px;margin-bottom:10px;overflow:hidden;">';
-                          html += '  <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:#fef2f2;">';
-                          html += '    <div style="display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap;">';
-                          html += '      <span style="font-size:.9rem;font-weight:700;color:#b91c1c;">'+r.picking_name+'</span>';
-                          html += '      <span style="background:'+ss.bg+';color:'+ss.color+';border:1px solid '+ss.border+';border-radius:6px;font-size:.7rem;font-weight:700;padding:1px 8px;">'+r.state+'</span>';
-                          html += '    </div>';
-                          html += '    <span style="font-size:1.1rem;font-weight:800;color:#dc2626;flex-shrink:0;margin-left:12px;">−'+fmt(r.qty)+'</span>';
-                          html += '  </div>';
-                          html += '  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:14px;padding:14px 16px;">';
-                          if (r.so_name)        html += _metaCell('Đơn bán',       r.so_name,        '#2563eb', true);
-                          if (r.partner)        html += _metaCell('Khách hàng',    r.partner,        '#374151');
-                          if (r.scheduled_date) html += _metaCell('Giao hàng DK', r.scheduled_date, '#2563eb', true);
-                          html += '  </div></div>';
+                          html += '<tr>';
+                          html += '<td><span class="fc-pick">'+r.picking_name+'</span><br>';
+                          html += '    <span class="fc-badge" style="background:'+ss.bg+';color:'+ss.color+';border-color:'+ss.border+';margin-top:3px;">'+r.state+'</span></td>';
+                          html += '<td class="fw-bold" style="color:#2563eb;">'+r.so_name+'</td>';
+                          html += '<td>'+r.partner+'</td>';
+                          html += '<td style="font-weight:700;color:#2563eb;">'+(r.scheduled_date||'—')+'</td>';
+                          html += '<td style="text-align:right;"><span class="fc-num" style="color:#dc2626;">−'+fmt(r.qty)+'</span></td>';
+                          html += '</tr>';
                       });
-                      html += '<div style="text-align:right;font-size:.78rem;font-weight:700;color:#dc2626;">Tổng xuất: −'+fmt(data.total_outgoing)+'</div>';
+                      html += '</tbody><tfoot><tr>';
+                      html += '<td colspan="4" style="text-align:right;font-weight:700;color:#6b7280;font-size:.78rem;padding:8px 12px;">Tổng xuất:</td>';
+                      html += '<td style="text-align:right;"><span class="fc-num" style="color:#dc2626;">−'+fmt(data.total_outgoing)+'</span></td>';
+                      html += '</tr></tfoot></table></div></div>';
+
+                      // Mobile: cards
+                      html += '<div class="fc-mobile">';
+                      data.outgoing.forEach(function(r) {
+                          var ss = _stateStyle(r.state);
+                          html += _pickingCard(r.picking_name, r.state, ss, '−'+fmt(r.qty), '#dc2626', '#fef2f2', [
+                              ['Đơn bán',    r.so_name,        '#2563eb', true],
+                              ['Khách hàng', r.partner,        '#374151', false],
+                              ['Giao hàng',  r.scheduled_date, '#2563eb', true],
+                          ]);
+                      });
+                      html += '<div style="text-align:right;font-size:.78rem;font-weight:700;color:#dc2626;padding-bottom:10px;">Tổng xuất: −'+fmt(data.total_outgoing)+'</div>';
+                      html += '</div>';
+
                   } else {
-                      html += '<div style="background:#f9fafb;border:1.5px dashed #e5e7eb;border-radius:10px;padding:20px;text-align:center;color:#9ca3af;font-size:.85rem;">Không có phiếu xuất nào từ đơn bán hàng</div>';
+                      html += _empty('Không có phiếu xuất nào từ đơn bán hàng');
                   }
-                  html += '</div>';
+                  html += '</div></div>';
 
                   return html;
+              }
+
+              function _pill(label, val, bg, border, valColor, labelColor, large, shadow) {
+                  var sz = large ? '28px' : '26px';
+                  var fw = large ? '900' : '800';
+                  return '<div style="text-align:center;background:'+bg+';border:1.5px solid '+border
+                      +';border-radius:12px;padding:12px 22px;min-width:90px;box-shadow:0 1px 4px '+(shadow||'rgba(0,0,0,.07)')+';"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:'+(labelColor||'#9ca3af')+';margin-bottom:4px;">'+label+'</div>'
+                      +'<div style="font-size:'+sz+';font-weight:'+fw+';color:'+(valColor||'#111827')+';line-height:1;">'+val+'</div></div>';
+              }
+
+              function _sectionHeader(title, count, color) {
+                  return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">'
+                      + '<div style="width:4px;height:20px;background:'+color+';border-radius:3px;"></div>'
+                      + '<span style="font-size:.95rem;font-weight:700;color:#111827;">'+title+'</span>'
+                      + '<span style="background:'+(count>0?color:'#9ca3af')+';color:#fff;border-radius:999px;font-size:.72rem;font-weight:700;padding:2px 9px;">'+count+'</span>'
+                      + '</div>';
+              }
+              function _empty(msg) {
+                  return '<div style="background:#f9fafb;border:1.5px dashed #e5e7eb;border-radius:10px;padding:20px;text-align:center;color:#9ca3af;font-size:.85rem;margin-bottom:14px;">'+msg+'</div>';
+              }
+              function _pickingCard(name, state, ss, qty, qColor, hBg, meta) {
+                  var h = '<div style="background:#fff;border:1px solid #e5e7eb;border-left:4px solid '+qColor+';border-radius:10px;margin-bottom:10px;overflow:hidden;">';
+                  h += '<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;background:'+hBg+';">';
+                  h += '<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;">';
+                  h += '<span style="font-weight:700;color:#374151;">'+name+'</span>';
+                  h += '<span class="fc-badge" style="background:'+ss.bg+';color:'+ss.color+';border-color:'+ss.border+';">'+state+'</span>';
+                  h += '</div><span style="font-weight:600;color:'+qColor+';font-size:1rem;">'+qty+'</span></div>';
+                  h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px 14px;">';
+                  meta.forEach(function(c) {
+                      if (!c[1]) return;
+                      h += '<div><div style="font-size:.63rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#9ca3af;margin-bottom:2px;">'+c[0]+'</div>'
+                          +'<div style="font-size:.82rem;color:'+(c[2]||'#374151')+';font-weight:'+(c[3]?'700':'500')+';">'+c[1]+'</div></div>';
+                  });
+                  h += '</div></div>';
+                  return h;
               }
 
             })();
