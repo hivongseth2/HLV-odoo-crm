@@ -261,6 +261,7 @@ export class BarcodeApp extends Component {
                 this.state.showCameraPopup = false;
 
                 if (result.type === 'picking') {
+                    this.state.isProcessing = false;
                     await this.selectPicking(result.id, result.name);
                 } else {
                     this.pushHistory();
