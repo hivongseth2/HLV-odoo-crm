@@ -182,7 +182,7 @@ class HLVMobileBarcodeController(http.Controller):
                     msg.id, msg.res_id, target_picking.exists(), target_picking.name if target_picking.exists() else 'N/A',
                     target_picking.state if target_picking.exists() else 'N/A'
                 )
-                if target_picking.exists() and target_picking.id != picking.id and target_picking.state not in ['cancel']:
+                if target_picking.exists() and target_picking.id > picking.id and target_picking.state not in ['cancel']:
                     linked_picking_id = target_picking.id
                     linked_picking_name = target_picking.name
                     _logger.info("[LINKED_PICKING_SEARCH] Method 1 (Chatter): ✅ FOUND linked picking %s (id=%s)", linked_picking_name, linked_picking_id)
@@ -191,7 +191,7 @@ class HLVMobileBarcodeController(http.Controller):
             # Method 2: Via stock moves chain (Odoo native stock move chain)
             if not linked_picking_id:
                 dest_pickings = picking.move_ids.mapped('move_dest_ids.picking_id').filtered(
-                    lambda p: p.id != picking.id and p.state not in ['cancel']
+                    lambda p: p.id > picking.id and p.state not in ['cancel']
                 )
                 _logger.info(
                     "[LINKED_PICKING_SEARCH] Method 2 (Move Chain): move_ids=%s, move_dest_ids=%s, dest_pickings=%s",
@@ -209,9 +209,9 @@ class HLVMobileBarcodeController(http.Controller):
             if not linked_picking_id and picking.group_id:
                 group_pickings = request.env['stock.picking'].sudo().search([
                     ('group_id', '=', picking.group_id.id),
-                    ('id', '!=', picking.id),
+                    ('id', '>', picking.id),
                     ('state', 'not in', ['cancel'])
-                ])
+                ], order='id asc')
                 _logger.info(
                     "[LINKED_PICKING_SEARCH] Method 3 (Group): group_id=%s, group_pickings=%s",
                     picking.group_id.id,
@@ -241,9 +241,9 @@ class HLVMobileBarcodeController(http.Controller):
                     '|',
                     ('origin', '=', picking.name),
                     ('origin', 'ilike', picking.name),
-                    ('id', '!=', picking.id),
+                    ('id', '>', picking.id),
                     ('state', 'not in', ['cancel'])
-                ], limit=1)
+                ], order='id asc', limit=1)
                 _logger.info(
                     "[LINKED_PICKING_SEARCH] Method 4 (Origin): searching origin='%s', found=%s",
                     picking.name,

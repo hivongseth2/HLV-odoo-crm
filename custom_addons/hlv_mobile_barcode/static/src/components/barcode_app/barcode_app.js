@@ -464,28 +464,34 @@ export class BarcodeApp extends Component {
     }
 
     async selectPicking(pickingId, pickingName) {
-        await this.closeCamera();
-        this.pushHistory();
-        this.state.pickingId = pickingId;
-        this.state.pickingName = pickingName;
-        this.state.currentView = 'picking';
-        this.state.scannedLocationId = null;
-        this.state.scannedLocationName = "";
-        this.state.lastScannedProduct = null;
-        this.state.pickingState = "";
-        this.state.pickingRefreshTick += 1;
+        if (this.state.isProcessing) return;
+        this.state.isProcessing = true;
+        try {
+            await this.closeCamera();
+            this.pushHistory();
+            this.state.pickingId = pickingId;
+            this.state.pickingName = pickingName;
+            this.state.currentView = 'picking';
+            this.state.scannedLocationId = null;
+            this.state.scannedLocationName = "";
+            this.state.lastScannedProduct = null;
+            this.state.pickingState = "";
+            this.state.pickingRefreshTick += 1;
 
-        // Tải vị trí nguồn mặc định của phiếu để hiển thị trực tiếp lên tiêu đề
-        rpc("/hlv_mobile_barcode/get_picking_data", { picking_id: pickingId }).then((data) => {
-            if (data && !data.error && data.location_name) {
-                this.state.scannedLocationId = data.location_id;
-                this.state.scannedLocationName = data.location_name;
-            }
-        }).catch(() => {});
-        
-        setTimeout(async () => {
-            await this.startPersistentCamera(false);
-        }, 150);
+            // Tải vị trí nguồn mặc định của phiếu để hiển thị trực tiếp lên tiêu đề
+            rpc("/hlv_mobile_barcode/get_picking_data", { picking_id: pickingId }).then((data) => {
+                if (data && !data.error && data.location_name) {
+                    this.state.scannedLocationId = data.location_id;
+                    this.state.scannedLocationName = data.location_name;
+                }
+            }).catch(() => {});
+            
+            setTimeout(async () => {
+                await this.startPersistentCamera(false);
+            }, 150);
+        } finally {
+            this.state.isProcessing = false;
+        }
     }
 
     onPickingStateLoaded(pickingState) {
