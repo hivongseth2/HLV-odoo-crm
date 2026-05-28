@@ -1,6 +1,10 @@
+import logging
+
 from odoo import http, _
 # pyrefly: ignore [missing-import]
 from odoo.http import request
+
+_logger = logging.getLogger(__name__)
 
 class HLVMobileBarcodeController(http.Controller):
 
@@ -153,6 +157,11 @@ class HLVMobileBarcodeController(http.Controller):
         linked_picking_name = False
         
         if picking.picking_type_id.code == 'internal':
+            _logger.info(
+                "[LINKED_PICKING_SEARCH] === START for picking %s (id=%s, state=%s, dest_loc=%s) ===",
+                picking.name, picking.id, picking.state, picking.location_dest_id.display_name
+            )
+
             # Method 1 (highest priority per user rule): Chatter message
             # Odoo automatically posts a message in chatter when a step-2 picking is created from a step-1 picking.
             # e.g., "This transfer has been created from: KBC/INT/02042"
@@ -161,12 +170,22 @@ class HLVMobileBarcodeController(http.Controller):
                 ('model', '=', 'stock.picking'),
                 ('body', 'like', picking.name)
             ], order='id desc', limit=10)
+            _logger.info(
+                "[LINKED_PICKING_SEARCH] Method 1 (Chatter): found %d messages for picking.name='%s' with model='stock.picking'",
+                len(messages), picking.name
+            )
             
             for msg in messages:
                 target_picking = request.env['stock.picking'].sudo().browse(msg.res_id)
+                _logger.info(
+                    "[LINKED_PICKING_SEARCH] Method 1 (Chatter): msg.id=%s, res_id=%s, target exists=%s, target.name=%s, target.state=%s",
+                    msg.id, msg.res_id, target_picking.exists(), target_picking.name if target_picking.exists() else 'N/A',
+                    target_picking.state if target_picking.exists() else 'N/A'
+                )
                 if target_picking.exists() and target_picking.id != picking.id and target_picking.state not in ['cancel']:
                     linked_picking_id = target_picking.id
                     linked_picking_name = target_picking.name
+                    _logger.info("[LINKED_PICKING_SEARCH] Method 1 (Chatter): ✅ FOUND linked picking %s (id=%s)", linked_picking_name, linked_picking_id)
                     break
 
             # Method 2: Via stock moves chain (Odoo native stock move chain)
@@ -174,10 +193,17 @@ class HLVMobileBarcodeController(http.Controller):
                 dest_pickings = picking.move_ids.mapped('move_dest_ids.picking_id').filtered(
                     lambda p: p.id != picking.id and p.state not in ['cancel']
                 )
+                _logger.info(
+                    "[LINKED_PICKING_SEARCH] Method 2 (Move Chain): move_ids=%s, move_dest_ids=%s, dest_pickings=%s",
+                    picking.move_ids.ids,
+                    picking.move_ids.mapped('move_dest_ids').ids,
+                    [(p.id, p.name, p.state) for p in dest_pickings] if dest_pickings else 'NONE'
+                )
                 if dest_pickings:
                     linked_picking = dest_pickings[0]
                     linked_picking_id = linked_picking.id
                     linked_picking_name = linked_picking.name
+                    _logger.info("[LINKED_PICKING_SEARCH] Method 2 (Move Chain): ✅ FOUND linked picking %s (id=%s)", linked_picking_name, linked_picking_id)
                     
             # Method 3: Same procurement group (sharing group_id)
             if not linked_picking_id and picking.group_id:
@@ -186,6 +212,11 @@ class HLVMobileBarcodeController(http.Controller):
                     ('id', '!=', picking.id),
                     ('state', 'not in', ['cancel'])
                 ])
+                _logger.info(
+                    "[LINKED_PICKING_SEARCH] Method 3 (Group): group_id=%s, group_pickings=%s",
+                    picking.group_id.id,
+                    [(p.id, p.name, p.picking_type_id.sequence_code, p.state) for p in group_pickings] if group_pickings else 'NONE'
+                )
                 in_pickings = group_pickings.filtered(
                     lambda p: 'IN' in (p.picking_type_id.sequence_code or '').upper() 
                     or 'STOR' in (p.picking_type_id.sequence_code or '').upper()
@@ -195,10 +226,14 @@ class HLVMobileBarcodeController(http.Controller):
                     linked_picking = in_pickings[0]
                     linked_picking_id = linked_picking.id
                     linked_picking_name = linked_picking.name
+                    _logger.info("[LINKED_PICKING_SEARCH] Method 3 (Group): ✅ FOUND linked picking %s (id=%s)", linked_picking_name, linked_picking_id)
                 elif group_pickings:
                     linked_picking = group_pickings[0]
                     linked_picking_id = linked_picking.id
                     linked_picking_name = linked_picking.name
+                    _logger.info("[LINKED_PICKING_SEARCH] Method 3 (Group fallback): ✅ FOUND linked picking %s (id=%s)", linked_picking_name, linked_picking_id)
+            elif not linked_picking_id:
+                _logger.info("[LINKED_PICKING_SEARCH] Method 3 (Group): SKIPPED - no group_id on picking")
                     
             # Method 4: Origin matching current picking name (case-insensitive substring or exact match)
             if not linked_picking_id:
@@ -209,9 +244,20 @@ class HLVMobileBarcodeController(http.Controller):
                     ('id', '!=', picking.id),
                     ('state', 'not in', ['cancel'])
                 ], limit=1)
+                _logger.info(
+                    "[LINKED_PICKING_SEARCH] Method 4 (Origin): searching origin='%s', found=%s",
+                    picking.name,
+                    [(p.id, p.name, p.origin, p.state) for p in origin_pickings] if origin_pickings else 'NONE'
+                )
                 if origin_pickings:
                     linked_picking_id = origin_pickings.id
                     linked_picking_name = origin_pickings.name
+                    _logger.info("[LINKED_PICKING_SEARCH] Method 4 (Origin): ✅ FOUND linked picking %s (id=%s)", linked_picking_name, linked_picking_id)
+            
+            _logger.info(
+                "[LINKED_PICKING_SEARCH] === END for picking %s: result linked_picking_id=%s, linked_picking_name=%s ===",
+                picking.name, linked_picking_id, linked_picking_name
+            )
             
         packages = []
         all_result_pkgs = picking.move_line_ids.mapped('result_package_id')
