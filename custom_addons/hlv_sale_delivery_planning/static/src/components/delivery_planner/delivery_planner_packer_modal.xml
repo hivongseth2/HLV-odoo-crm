@@ -27,7 +27,7 @@
                             <label class="form-label small fw-bold text-muted text-uppercase">Người đóng</label>
                             <select class="form-select"
                                     t-att-value="state.selectedPackerUserId"
-                                    t-on-change="(ev) => { this.state.selectedPackerUserId = parseInt(ev.target.value || '0', 10); }">
+                                    t-on-change="onPackerSelectChange">
                                 <t t-foreach="state.packerUsers" t-as="packer" t-key="packer.id">
                                     <option t-att-value="packer.id">
                                         <t t-esc="packer.packer_name"/>

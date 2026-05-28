@@ -295,8 +295,7 @@ class StockPicking(models.Model):
         user = user or self.env.user
         return bool(
             user._is_superuser()
-            or user.has_group('stock.group_stock_manager')
-            or user.has_group('base.group_system')
+            or user.has_group('hlv_sale_delivery_planning.group_pack_manager')
         )
 
     def _resolve_assigned_pick_for_pack(self):

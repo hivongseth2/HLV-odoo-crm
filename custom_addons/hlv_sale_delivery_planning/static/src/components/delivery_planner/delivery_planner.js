@@ -2078,6 +2078,10 @@ export class DeliveryPlannerDashboard extends Component {
         this.state.isPackerAssignModalOpen = true;
     }
 
+    onPackerSelectChange(ev) {
+        this.state.selectedPackerUserId = parseInt(ev.target.value || '0', 10) || null;
+    }
+
     closePackerAssignModal() {
         if (this.state.isPrintingPickingSlips) return;
         this.state.isPackerAssignModalOpen = false;
