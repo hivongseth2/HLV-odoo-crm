@@ -116,7 +116,8 @@
                                                     <t t-if="row.state !== 'done'">
                                                     <select class="form-select form-select-sm" style="min-width:110px;"
                                                             t-att-value="group.packer_user_id"
-                                                            t-on-change="(ev) => this.reassignPackerForPick(row.pick_id, ev.target.value)">
+                                                            t-att-data-pick-id="row.pick_id"
+                                                            t-on-change="onReassignPackerChange">
                                                         <option value="">-- Đổi --</option>
                                                         <t t-foreach="state.packers" t-as="packer" t-key="packer.id">
                                                             <option t-att-value="packer.id"

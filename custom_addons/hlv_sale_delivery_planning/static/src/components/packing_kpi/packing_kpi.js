@@ -102,6 +102,11 @@ export class PackingKpiDashboard extends Component {
         }
     }
 
+    onReassignPackerChange(ev) {
+        const pickId = parseInt(ev.target.dataset.pickId, 10);
+        this.reassignPackerForPick(pickId, ev.target.value);
+    }
+
     /**
      * Convert UTC datetime string from Odoo to VN time (UTC+7).
      * Input: "2026-04-22 07:30:00" (UTC), Output: "22/04 14:30"
