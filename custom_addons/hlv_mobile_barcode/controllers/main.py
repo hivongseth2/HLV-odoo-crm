@@ -116,6 +116,8 @@ class HLVMobileBarcodeController(http.Controller):
                     if total_qty > 0:
                         move.product_uom_qty = total_qty
                         for line in move.move_line_ids:
+                            # Preserve the original quantity demand for each specific line (vital for packages)
+                            line.quantity_product_uom = line.quantity
                             line.quantity = 0.0
 
         lines = []
@@ -134,7 +136,7 @@ class HLVMobileBarcodeController(http.Controller):
                         'product_id': move.product_id.id,
                         'product_name': move.product_id.display_name,
                         'product_barcode': move.product_id.barcode,
-                        'product_uom_qty': move.product_uom_qty,
+                        'product_uom_qty': ml.quantity_product_uom or move.product_uom_qty,
                         'qty_done': ml.quantity,
                         'uom_name': move.product_uom.name,
                         'state': move.state,
