@@ -489,7 +489,7 @@
             <!-- Modal Forecast Details -->
             <div class="modal fade" id="forecastDetailsModal" tabindex="-1" aria-hidden="true" style="z-index:1060;">
               <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" style="max-width:min(1100px,96vw);width:100%;margin:auto;">
-                <div class="modal-content" style="border:none;border-radius:16px;box-shadow:0 24px 64px rgba(0,0,0,.18);overflow:hidden;">
+                <div class="modal-content" style="border:none; max-width : 100%!important;border-radius:16px;box-shadow:0 24px 64px rgba(0,0,0,.18);overflow:hidden;">
                   <div class="modal-header" style="background:#fff;border-bottom:1px solid #e5e7eb;padding:18px 24px 14px;align-items:flex-start;">
                     <div>
                       <div style="display:flex;align-items:center;gap:9px;">
@@ -923,16 +923,16 @@
                       html += '<div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">';
                       html += '<table class="fc-table">';
                       html += '<thead><tr>';
-                      html += '<th>Phiếu nhập</th><th>Đơn mua (Origin)</th><th>Nhà cung cấp</th>';
+                      html += '<th>Phiếu nhập</th><th>Đơn mua</th><th>Đơn hàng gốc</th><th>Nhà cung cấp</th>';
                       html += '<th>Ngày ĐH MISA</th><th>Ngày hàng về DK</th><th style="text-align:right;">SL nhập</th>';
                       html += '</tr></thead><tbody>';
                       data.incoming.forEach(function(r) {
                           var ss = _stateStyle(r.state);
-                          var originPart = r.origin && r.origin !== r.po_name ? ' <span style="color:#9ca3af;font-weight:400;font-size:.75rem;">/ '+r.origin+'</span>' : '';
                           html += '<tr>';
                           html += '<td><span class="fc-pick">'+r.picking_name+'</span><br>';
                           html += '    <span class="fc-badge" style="background:'+ss.bg+';color:'+ss.color+';border-color:'+ss.border+';margin-top:3px;">'+r.state+'</span></td>';
-                          html += '<td class="fw-bold" style="color:#2563eb;">'+r.po_name+originPart+'</td>';
+                          html += '<td class="fw-bold" style="color:#2563eb;">'+r.po_name+'</td>';
+                          html += '<td style="color:#6b7280;">'+((r.po_origin)||'—')+'</td>';
                           html += '<td>'+r.partner+'</td>';
                           html += '<td>'+r.misa_date+'</td>';
                           html += '<td style="font-weight:700;color:#2563eb;">'+((r.date_planned||r.scheduled_date)||'—')+'</td>';
@@ -940,7 +940,7 @@
                           html += '</tr>';
                       });
                       html += '</tbody><tfoot><tr>';
-                      html += '<td colspan="5" style="text-align:right;font-weight:700;color:#6b7280;font-size:.78rem;padding:8px 12px;">Tổng nhập:</td>';
+                      html += '<td colspan="6" style="text-align:right;font-weight:700;color:#6b7280;font-size:.78rem;padding:8px 12px;">Tổng nhập:</td>';
                       html += '<td style="text-align:right;"><span class="fc-num" style="color:#16a34a;">+'+fmt(data.total_incoming)+'</span></td>';
                       html += '</tr></tfoot></table></div></div>';
 
@@ -949,11 +949,11 @@
                       data.incoming.forEach(function(r) {
                           var ss = _stateStyle(r.state);
                           html += _pickingCard(r.picking_name, r.state, ss, '+'+fmt(r.qty), '#16a34a', '#f0fdf4', [
-                              ['Đơn mua', r.po_name, '#2563eb', true],
-                              ['Origin',  r.origin,  '#374151', false],
-                              ['NCC',     r.partner, '#374151', false],
-                              ['MISA',    r.misa_date,'#374151',false],
-                              ['Hàng về', r.date_planned||r.scheduled_date, '#2563eb', true],
+                              ['Đơn mua',       r.po_name,                        '#2563eb', true],
+                              ['Đơn hàng gốc',  r.po_origin,                      '#6b7280', false],
+                              ['NCC',           r.partner,                        '#374151', false],
+                              ['MISA',          r.misa_date,                      '#374151', false],
+                              ['Hàng về',       r.date_planned||r.scheduled_date, '#2563eb', true],
                           ]);
                       });
                       html += '<div style="text-align:right;font-size:.78rem;font-weight:700;color:#16a34a;padding-bottom:10px;">Tổng nhập: +'+fmt(data.total_incoming)+'</div>';
