@@ -133,6 +133,18 @@ class ShopeeProduct(models.Model):
 
     # ── Editor nội dung ─────────────────────────────────
     edit_description = fields.Text(string='Mô tả Shopee')
+    shopee_category_id = fields.Many2one(
+        'shopee.category',
+        string='Ngành hàng Shopee',
+        domain="[('shop_id','=',shop_id),('has_children','=',False)]",
+        help='Chọn ngành hàng bằng tên. Hệ thống tự lấy mã ngành hàng khi đẩy lên Shopee.',
+    )
+    shopee_brand_id = fields.Many2one(
+        'shopee.brand',
+        string='Thương hiệu Shopee',
+        domain="[('shop_id','=',shop_id),('category_id','=',category_id)]",
+        help='Chọn thương hiệu từ danh sách Shopee theo ngành hàng.',
+    )
     edit_brand_id = fields.Integer(string='Mã thương hiệu Shopee')
     edit_brand_name = fields.Char(string='Tên thương hiệu')
     edit_weight = fields.Float(string='Cân nặng (kg)', help='Cân nặng sau khi đóng gói, tính theo kg.')
@@ -144,6 +156,12 @@ class ShopeeProduct(models.Model):
     )
     video_line_ids = fields.One2many(
         'shopee.product.video', 'shopee_product_id', string='Video Shopee',
+    )
+    logistic_line_ids = fields.One2many(
+        'shopee.product.logistic', 'shopee_product_id', string='Đơn vị vận chuyển',
+    )
+    edit_attribute_line_ids = fields.One2many(
+        'shopee.product.attribute.line', 'shopee_product_id', string='Thuộc tính Shopee',
     )
     quality_summary = fields.Text(string='Chất lượng nội dung', readonly=True)
     violation_summary = fields.Text(string='Vi phạm', readonly=True)
@@ -201,6 +219,22 @@ class ShopeeProduct(models.Model):
     def _compute_model_count(self):
         for rec in self:
             rec.model_count = len(rec.model_ids)
+
+    @api.onchange('shopee_category_id')
+    def _onchange_shopee_category_id(self):
+        for rec in self:
+            if rec.shopee_category_id:
+                rec.category_id = rec.shopee_category_id.category_id
+                rec.shopee_brand_id = False
+                rec.edit_brand_id = 0
+                rec.edit_brand_name = ''
+
+    @api.onchange('shopee_brand_id')
+    def _onchange_shopee_brand_id(self):
+        for rec in self:
+            if rec.shopee_brand_id:
+                rec.edit_brand_id = rec.shopee_brand_id.brand_id
+                rec.edit_brand_name = rec.shopee_brand_id.brand_name
 
     @api.depends('category_id', 'raw_data')
     def _compute_category_display(self):
@@ -325,6 +359,26 @@ class ShopeeProduct(models.Model):
         _update_record_from_api(self, items[0])
         self.with_context(skip_shopee_auto_quality=True).action_fetch_full_content()
         self._auto_refresh_quality_panels()
+        return {'type': 'ir.actions.client', 'tag': 'reload'}
+
+    def action_reload_edit_choices(self):
+        """Tải lại danh mục/brand/vận chuyển để người dùng chọn bằng tên."""
+        self.ensure_one()
+        if not self.shop_id:
+            raise UserError(_('Sản phẩm chưa có shop Shopee.'))
+        if not self.category_id and self.shopee_category_id:
+            self.category_id = self.shopee_category_id.category_id
+        self.env['shopee.category']._sync_from_shopee(self.shop_id)
+        self._sync_edit_category_brand_refs(sync_brand=True)
+        self.write({
+            'logistic_line_ids': self._prepare_edit_logistic_commands(),
+            'edit_attribute_line_ids': self._prepare_edit_attribute_commands(),
+        })
+        return {'type': 'ir.actions.client', 'tag': 'reload'}
+
+    def action_reload_edit_logistics(self):
+        self.ensure_one()
+        self.write({'logistic_line_ids': self._prepare_edit_logistic_commands()})
         return {'type': 'ir.actions.client', 'tag': 'reload'}
 
     def action_open_sync_wizard(self):
@@ -863,6 +917,8 @@ class ShopeeProduct(models.Model):
         image_id_list = images.get('image_id_list') or []
         image_url_list = images.get('image_url_list') or []
         video_info_list = item.get('video_info') or []
+        logistic_info_list = item.get('logistic_info') or []
+        attribute_info_list = item.get('attribute_list') or []
 
         image_commands = [(5, 0, 0)]
         for seq, image_id in enumerate(image_id_list, 1):
@@ -882,8 +938,10 @@ class ShopeeProduct(models.Model):
                 'duration': video.get('duration') or 0,
                 'active': True,
             }))
+        self._sync_edit_category_brand_refs(item=item, sync_brand=True)
         self.write({
             'edit_description': desc,
+            'category_id': item.get('category_id') or self.category_id,
             'edit_brand_id': (item.get('brand') or {}).get('brand_id') or 0,
             'edit_brand_name': (item.get('brand') or {}).get('original_brand_name') or '',
             'edit_weight': item.get('weight') or 0.0,
@@ -892,7 +950,10 @@ class ShopeeProduct(models.Model):
             'edit_package_height': (item.get('dimension') or {}).get('package_height') or 0.0,
             'image_line_ids': image_commands,
             'video_line_ids': video_commands,
+            'logistic_line_ids': self._prepare_edit_logistic_commands(logistic_info_list),
+            'edit_attribute_line_ids': self._prepare_edit_attribute_commands(attribute_info_list),
         })
+        self._sync_edit_category_brand_refs(item=item, sync_brand=False)
 
         summary_lines = [
             _('Tên: %s') % (item.get('item_name') or ''),
@@ -919,12 +980,166 @@ class ShopeeProduct(models.Model):
                 'image_id_list': image_id_list,
                 'image_url_list': image_url_list,
                 'video_info_list': video_info_list,
+                'logistic_info': logistic_info_list,
+                'attribute_list': attribute_info_list,
                 'item_name': item.get('item_name'),
                 'category_id': item.get('category_id'),
             },
             _('Nội dung sản phẩm Shopee'),
             '\n'.join(summary_lines),
         )
+
+    def _sync_edit_category_brand_refs(self, item=None, sync_brand=False):
+        """Map Shopee numeric values to cached selector records for the edit UI."""
+        for rec in self:
+            category_id = int((item or {}).get('category_id') or rec.category_id or 0)
+            if category_id and rec.shop_id:
+                Category = rec.env['shopee.category'].sudo()
+                category = Category.search([
+                    ('shop_id', '=', rec.shop_id.id),
+                    ('category_id', '=', category_id),
+                ], limit=1)
+                if not category:
+                    try:
+                        Category._sync_from_shopee(rec.shop_id)
+                        category = Category.search([
+                            ('shop_id', '=', rec.shop_id.id),
+                            ('category_id', '=', category_id),
+                        ], limit=1)
+                    except Exception as e:
+                        _logger.warning('Không đồng bộ được danh mục Shopee: %s', e)
+                if category and rec.shopee_category_id != category:
+                    rec.sudo().write({'shopee_category_id': category.id})
+
+            brand = (item or {}).get('brand') or {}
+            brand_id = int(brand.get('brand_id') if brand.get('brand_id') is not None else (rec.edit_brand_id or 0))
+            brand_name = brand.get('original_brand_name') or rec.edit_brand_name or ''
+            if rec.shop_id and category_id and sync_brand:
+                try:
+                    rec.env['shopee.brand']._sync_from_shopee(rec.shop_id, category_id)
+                except Exception as e:
+                    _logger.warning('Không đồng bộ được thương hiệu Shopee: %s', e)
+            if rec.shop_id and category_id:
+                brand_rec = rec.env['shopee.brand'].sudo().search([
+                    ('shop_id', '=', rec.shop_id.id),
+                    ('category_id', '=', category_id),
+                    ('brand_id', '=', brand_id),
+                ], limit=1)
+                if not brand_rec and brand_name:
+                    brand_rec = rec.env['shopee.brand'].sudo().search([
+                        ('shop_id', '=', rec.shop_id.id),
+                        ('category_id', '=', category_id),
+                        ('brand_name', '=ilike', brand_name),
+                    ], limit=1)
+                if brand_rec and rec.shopee_brand_id != brand_rec:
+                    rec.sudo().write({
+                        'shopee_brand_id': brand_rec.id,
+                        'edit_brand_id': brand_rec.brand_id,
+                        'edit_brand_name': brand_rec.brand_name,
+                    })
+
+    def _prepare_edit_logistic_commands(self, item_logistic_info=None):
+        """Build O2M commands for logistics selector cards without exposing IDs."""
+        self.ensure_one()
+        current_by_id = {}
+        for line in item_logistic_info or []:
+            logistic_id = int(line.get('logistic_id') or line.get('logistics_channel_id') or 0)
+            if logistic_id:
+                current_by_id[logistic_id] = line
+
+        channels = []
+        try:
+            channels = self._call_with_token_refresh(
+                lambda creds: shopee_product_api.call_get_logistics_channels(creds)
+            )
+        except Exception as e:
+            _logger.warning('Không tải được danh sách vận chuyển Shopee: %s', e)
+
+        seen = set()
+        commands = [(5, 0, 0)]
+        for channel in channels:
+            channel_id = int(
+                channel.get('logistics_channel_id')
+                or channel.get('logistic_id')
+                or channel.get('channel_id')
+                or channel.get('id')
+                or 0
+            )
+            if not channel_id or channel_id in seen:
+                continue
+            seen.add(channel_id)
+            current = current_by_id.get(channel_id, {})
+            selected = bool(current.get('enabled')) if current else False
+            channel_name = (
+                current.get('logistic_name')
+                or channel.get('logistics_channel_name')
+                or channel.get('logistic_name')
+                or channel.get('channel_name')
+                or channel.get('name')
+                or _('Đơn vị vận chuyển')
+            )
+            commands.append((0, 0, {
+                'channel_id': channel_id,
+                'channel_name': channel_name,
+                'selected': selected,
+                'cod_enabled': bool(channel.get('cod_enabled')),
+                'shipping_fee': current.get('shipping_fee') or current.get('estimated_shipping_fee') or 0.0,
+                'is_free': bool(current.get('is_free')),
+                'size_id': int(current.get('size_id') or 0),
+            }))
+
+        for channel_id, current in current_by_id.items():
+            if channel_id in seen:
+                continue
+            commands.append((0, 0, {
+                'channel_id': channel_id,
+                'channel_name': current.get('logistic_name') or _('Đơn vị vận chuyển'),
+                'selected': bool(current.get('enabled')),
+                'cod_enabled': False,
+                'shipping_fee': current.get('shipping_fee') or current.get('estimated_shipping_fee') or 0.0,
+                'is_free': bool(current.get('is_free')),
+                'size_id': int(current.get('size_id') or 0),
+            }))
+        return commands
+
+    def _prepare_edit_attribute_commands(self, item_attribute_info=None):
+        self.ensure_one()
+        category_id = int(self.category_id or (self.shopee_category_id.category_id if self.shopee_category_id else 0) or 0)
+        commands = [(5, 0, 0)]
+        if not self.shop_id or not category_id:
+            return commands
+        try:
+            self.env['shopee.attribute']._sync_from_shopee(self.shop_id, category_id)
+        except Exception as e:
+            _logger.warning('Không đồng bộ được thuộc tính Shopee: %s', e)
+
+        current_by_attr = {}
+        for item_attr in item_attribute_info or []:
+            attr_id = int(item_attr.get('attribute_id') or 0)
+            values = item_attr.get('attribute_value_list') or []
+            if attr_id:
+                current_by_attr[attr_id] = values[0] if values else {}
+
+        attributes = self.env['shopee.attribute'].sudo().search([
+            ('shop_id', '=', self.shop_id.id),
+            ('category_id', '=', category_id),
+        ])
+        for attr in attributes:
+            current = current_by_attr.get(attr.attribute_id, {})
+            value_id = int(current.get('value_id') or 0)
+            value_name = current.get('original_value_name') or ''
+            value_rec = self.env['shopee.attribute.value'].sudo().search([
+                ('attribute_id_ref', '=', attr.id),
+                ('value_id', '=', value_id),
+            ], limit=1) if value_id else False
+            commands.append((0, 0, {
+                'shopee_attribute_id': attr.id,
+                'is_mandatory': attr.is_mandatory,
+                'input_type': attr.input_type,
+                'value_id': value_rec.id if value_rec else False,
+                'value_text': '' if value_rec else value_name,
+            }))
+        return commands
 
     def action_push_content_update(self):
         """Đẩy mô tả, ảnh, video đã chỉnh trên form về Shopee qua update_item."""
@@ -1007,7 +1222,17 @@ class ShopeeProduct(models.Model):
             payload['description_type'] = 'normal'
 
         # Các trường khác có thể update qua update_item
-        if self.edit_brand_id:
+        if self.shopee_category_id:
+            payload['category_id'] = int(self.shopee_category_id.category_id)
+        elif self.category_id:
+            payload['category_id'] = int(self.category_id)
+
+        if self.shopee_brand_id:
+            payload['brand'] = {
+                'brand_id': int(self.shopee_brand_id.brand_id or 0),
+                'original_brand_name': self.shopee_brand_id.brand_name or '',
+            }
+        elif self.edit_brand_name or self.edit_brand_id:
             payload['brand'] = {
                 'brand_id': int(self.edit_brand_id),
                 'original_brand_name': self.edit_brand_name or '',
@@ -1020,11 +1245,37 @@ class ShopeeProduct(models.Model):
                 'package_width': int(self.edit_package_width or 0),
                 'package_height': int(self.edit_package_height or 0),
             }
-        if self.category_id:
-            try:
-                payload['category_id'] = int(self.category_id)
-            except (TypeError, ValueError):
-                pass
+        if self.logistic_line_ids:
+            logistic_info = []
+            for line in self.logistic_line_ids:
+                entry = {
+                    'logistic_id': int(line.channel_id),
+                    'enabled': bool(line.selected),
+                }
+                if line.shipping_fee:
+                    entry['shipping_fee'] = float(line.shipping_fee)
+                if line.is_free:
+                    entry['is_free'] = True
+                if line.size_id:
+                    entry['size_id'] = int(line.size_id)
+                logistic_info.append(entry)
+            if logistic_info:
+                payload['logistic_info'] = logistic_info
+        attribute_list = []
+        missing_required = []
+        for line in self.edit_attribute_line_ids:
+            values = line._to_shopee_values()
+            if line.is_mandatory and not values:
+                missing_required.append(line.attribute_name)
+            if values:
+                attribute_list.append({
+                    'attribute_id': int(line.attribute_id),
+                    'attribute_value_list': values,
+                })
+        if missing_required:
+            raise UserError(_('Vui lòng nhập thuộc tính bắt buộc: %s') % ', '.join(missing_required))
+        if attribute_list:
+            payload['attribute_list'] = attribute_list
         item_id = int(self.shopee_item_id)
         _logger.info('Shopee update_item content payload keys=%s', list(payload.keys()))
         result = self._call_with_token_refresh(
@@ -1347,11 +1598,6 @@ class ShopeeProduct(models.Model):
                     rec.with_context(skip_shopee_auto_quality=True).action_fetch_full_content()
                 except Exception as e:
                     _logger.warning('Auto-fetch content failed for %s: %s', rec.id, e)
-            # Tránh gọi API chẩn đoán/vi phạm liên tục khi web client read nhiều lần.
-            if rec.quality_last_checked:
-                age = fields.Datetime.now() - rec.quality_last_checked
-                if age.total_seconds() < 15 * 60:
-                    continue
             try:
                 rec.with_context(skip_shopee_auto_quality=True).action_fetch_content_diagnosis()
             except Exception as e:
@@ -1661,6 +1907,60 @@ class ShopeeProductVideo(models.Model):
     duration = fields.Integer(string='Thời lượng (giây)', readonly=True)
     upload_video = fields.Binary(string='Video mới')
     upload_filename = fields.Char(string='Tên file')
+
+
+class ShopeeProductLogistic(models.Model):
+    _name = 'shopee.product.logistic'
+    _description = 'Đơn vị vận chuyển Shopee của sản phẩm'
+    _order = 'selected desc, channel_name'
+
+    shopee_product_id = fields.Many2one(
+        'shopee.product', required=True, ondelete='cascade', index=True,
+    )
+    selected = fields.Boolean(string='Bật', default=False)
+    channel_id = fields.Integer(string='Channel ID', readonly=True)
+    channel_name = fields.Char(string='Đơn vị vận chuyển', readonly=True)
+    cod_enabled = fields.Boolean(string='Hỗ trợ COD', readonly=True)
+    shipping_fee = fields.Float(string='Phí vận chuyển', digits=(16, 0), default=0)
+    is_free = fields.Boolean(string='Miễn phí vận chuyển')
+    size_id = fields.Integer(string='Size ID')
+
+
+class ShopeeProductAttributeLine(models.Model):
+    _name = 'shopee.product.attribute.line'
+    _description = 'Thuộc tính chỉnh sửa của sản phẩm Shopee'
+    _order = 'is_mandatory desc, attribute_name'
+
+    shopee_product_id = fields.Many2one(
+        'shopee.product', required=True, ondelete='cascade', index=True,
+    )
+    shopee_attribute_id = fields.Many2one(
+        'shopee.attribute', string='Thuộc tính', required=True, readonly=True,
+    )
+    attribute_id = fields.Integer(related='shopee_attribute_id.attribute_id', readonly=True)
+    attribute_name = fields.Char(related='shopee_attribute_id.attribute_name', readonly=True)
+    is_mandatory = fields.Boolean(string='Bắt buộc', readonly=True)
+    input_type = fields.Char(string='Kiểu nhập', readonly=True)
+    value_id = fields.Many2one(
+        'shopee.attribute.value', string='Giá trị',
+        domain="[('attribute_id_ref','=',shopee_attribute_id)]",
+    )
+    value_text = fields.Char(string='Giá trị nhập tay')
+
+    def _to_shopee_values(self):
+        self.ensure_one()
+        if self.value_id:
+            value = {
+                'value_id': int(self.value_id.value_id or 0),
+                'original_value_name': self.value_id.value_name,
+            }
+            if self.value_id.value_unit:
+                value['value_unit'] = self.value_id.value_unit
+            return [value]
+        text = (self.value_text or '').strip()
+        if text:
+            return [{'value_id': 0, 'original_value_name': text}]
+        return []
 
 
 # ── Private helpers ──────────────────────────────────────

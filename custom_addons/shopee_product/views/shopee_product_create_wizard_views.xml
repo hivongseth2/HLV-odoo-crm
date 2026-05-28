@@ -131,7 +131,6 @@
                                                 <div class="sp-logi-main">
                                                     <div class="sp-logi-name"><field name="channel_name"/></div>
                                                     <div class="sp-logi-meta">
-                                                        <span class="sp-logi-chip">ID <field name="channel_id"/></span>
                                                         <t t-if="record.cod_enabled.raw_value">
                                                             <span class="sp-logi-chip sp-logi-cod"><i class="fa fa-money me-1" title="Hỗ trợ COD" role="img" aria-label="COD"/>COD</span>
                                                         </t>

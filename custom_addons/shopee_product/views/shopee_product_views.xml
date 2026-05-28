@@ -108,7 +108,6 @@
                                 </h1>
                                 <div class="d-flex flex-wrap gap-3" style="color:#6b7280;">
                                     <span><i class="fa fa-barcode me-1" style="color:#ee4d2d;"/> <field name="item_sku" nolabel="1" placeholder="SKU"/></span>
-                                    <span><i class="fa fa-hashtag me-1" style="color:#ee4d2d;" title="Mã sản phẩm Shopee" role="img" aria-label="Mã sản phẩm Shopee"/> <field name="shopee_item_id" nolabel="1" readonly="1"/></span>
                                     <span><i class="fa fa-shopping-bag me-1" style="color:#ee4d2d;" title="Cửa hàng" role="img" aria-label="Cửa hàng"/> <field name="shop_id" nolabel="1" readonly="1" options="{'no_open': False}"/></span>
                                 </div>
                             </div>
@@ -272,34 +271,62 @@
                                             <button name="action_fetch_variation_tree" type="object" string="Cây phân loại" class="btn btn-shopee-soft" icon="fa-sitemap"/>
                                         </div>
                                     </div>
-                                    <field name="model_ids" nolabel="1">
-                                        <list editable="bottom"
-                                              decoration-danger="available_stock == 0"
-                                              decoration-warning="available_stock &lt; 5 and available_stock &gt; 0">
-                                            <field name="tier_label" string="Phân loại" readonly="1"/>
-                                            <field name="model_sku" string="SKU"/>
-                                            <field name="odoo_product_id" string="Sản phẩm Odoo (biến thể)"
-                                                   options="{'no_create': True}"/>
-                                            <field name="mapped_product_id" string="Từ mapping" readonly="1" optional="hide"/>
-                                            <field name="model_status" string="Trạng thái" readonly="1" widget="badge"
-                                                   decoration-success="model_status == 'MODEL_NORMAL'"
-                                                   decoration-muted="model_status == 'MODEL_UNAVAILABLE'"/>
-                                            <field name="current_price" string="Giá hiện tại" readonly="1" widget="integer"/>
-                                            <field name="new_price" string="Giá mới" widget="integer"/>
-                                            <field name="available_stock" string="Tồn hiện tại" readonly="1"/>
-                                            <field name="new_stock" string="Tồn mới"/>
-                                            <field name="shopee_model_id" string="Mã biến thể" readonly="1" optional="show"/>
-                                            <field name="shopee_item_mapping_id" string="Liên kết" readonly="1" optional="hide"/>
-                                            <field name="last_synced" string="Đồng bộ lần cuối" readonly="1" optional="hide"/>
-                                            <button name="action_push_model_update" type="object"
-                                                    string="Đẩy biến thể" class="btn-link"
-                                                    icon="fa-upload"
-                                                    confirm="Cập nhật SKU/Giá mới/Tồn mới của biến thể này lên Shopee?"/>
-                                            <button name="action_delete_model_from_shopee" type="object"
-                                                    string="Xóa khỏi Shopee" class="btn-link text-danger"
-                                                    icon="fa-trash"
-                                                    confirm="Xóa biến thể này khỏi Shopee? Hành động không thể hoàn tác."/>
-                                        </list>
+                                    <field name="model_ids" nolabel="1" mode="kanban">
+                                        <kanban class="o_shopee_model_kanban" create="false" group_create="false" records_draggable="false">
+                                            <field name="tier_label"/>
+                                            <field name="model_sku"/>
+                                            <field name="odoo_product_id"/>
+                                            <field name="model_status"/>
+                                            <field name="current_price"/>
+                                            <field name="new_price"/>
+                                            <field name="available_stock"/>
+                                            <field name="new_stock"/>
+                                            <templates>
+                                                <t t-name="card">
+                                                    <div class="sp-model-card">
+                                                        <div class="sp-model-head">
+                                                            <div>
+                                                                <div class="sp-model-name"><field name="tier_label"/></div>
+                                                                <div class="sp-model-sku"><field name="model_sku" placeholder="SKU biến thể"/></div>
+                                                            </div>
+                                                            <field name="model_status" widget="badge"
+                                                                   decoration-success="model_status == 'MODEL_NORMAL'"
+                                                                   decoration-muted="model_status == 'MODEL_UNAVAILABLE'"/>
+                                                        </div>
+                                                        <div class="sp-model-link">
+                                                            <span>Sản phẩm Odoo</span>
+                                                            <field name="odoo_product_id" options="{'no_create': True, 'no_open': False}" placeholder="Chọn sản phẩm Odoo cho biến thể"/>
+                                                        </div>
+                                                        <div class="sp-model-metrics">
+                                                            <div class="sp-model-metric">
+                                                                <span>Giá hiện tại</span>
+                                                                <strong><field name="current_price" widget="integer"/> đ</strong>
+                                                            </div>
+                                                            <div class="sp-model-metric">
+                                                                <span>Tồn hiện tại</span>
+                                                                <strong><field name="available_stock"/></strong>
+                                                            </div>
+                                                        </div>
+                                                        <div class="sp-model-edit">
+                                                            <label>Giá mới</label>
+                                                            <field name="new_price" widget="integer"/>
+                                                            <label>Tồn mới</label>
+                                                            <field name="new_stock"/>
+                                                        </div>
+                                                        <div class="sp-model-actions">
+                                                            <button name="action_push_model_update" type="object"
+                                                                    string="Đẩy biến thể" class="btn btn-shopee btn-sm"
+                                                                    icon="fa-upload"
+                                                                    confirm="Cập nhật SKU/Giá mới/Tồn mới của biến thể này lên Shopee?"/>
+                                                            <button name="action_delete_model_from_shopee" type="object"
+                                                                    string="Xóa" class="btn btn-shopee-soft btn-sm"
+                                                                    icon="fa-trash"
+                                                                    confirm="Xóa biến thể này khỏi Shopee? Hành động không thể hoàn tác."/>
+                                                        </div>
+                                                    </div>
+                                                </t>
+                                            </templates>
+                                        </kanban>
                                     </field>
                                 </div>
                             </page>
@@ -368,7 +395,7 @@
                                                                     </div>
                                                                     <div class="sp-media-meta">
                                                                         <div class="sp-media-id">
-                                                                            <t t-if="record.image_id.raw_value">ID: <field name="image_id"/></t>
+                                                                            <t t-if="record.image_id.raw_value">Đã có ảnh Shopee</t>
                                                                             <t t-else=""><span class="text-muted">Chưa upload</span></t>
                                                                         </div>
                                                                         <div class="sp-media-actions">
@@ -388,8 +415,8 @@
                                                             <group>
                                                                 <field name="sequence"/>
                                                                 <field name="active" widget="boolean_toggle"/>
-                                                                <field name="image_id" readonly="1"/>
-                                                                <field name="image_url" widget="url" readonly="1"/>
+                                                                <field name="image_id" invisible="1"/>
+                                                                <field name="image_url" widget="url" readonly="1" string="Link ảnh Shopee"/>
                                                                 <field name="upload_image" widget="image" filename="upload_filename"/>
                                                                 <field name="upload_filename" invisible="1"/>
                                                             </group>
@@ -422,8 +449,8 @@
                                                                     </div>
                                                                     <div class="sp-media-meta">
                                                                         <div class="sp-media-id">
-                                                                            <t t-if="record.video_id.raw_value">ID: <field name="video_id"/></t>
-                                                                            <t t-elif="record.video_upload_id.raw_value">Upload: <field name="video_upload_id"/></t>
+                                                                            <t t-if="record.video_id.raw_value">Đã có video Shopee</t>
+                                                                            <t t-elif="record.video_upload_id.raw_value">Video mới đã upload</t>
                                                                             <t t-else=""><span class="text-muted">Chưa upload</span></t>
                                                                         </div>
                                                                         <div class="sp-media-extra">
@@ -446,9 +473,9 @@
                                                             <group>
                                                                 <field name="sequence"/>
                                                                 <field name="active" widget="boolean_toggle"/>
-                                                                <field name="video_id" readonly="1"/>
-                                                                <field name="video_upload_id" readonly="1"/>
-                                                                <field name="video_url" widget="url" readonly="1"/>
+                                                                <field name="video_id" invisible="1"/>
+                                                                <field name="video_upload_id" invisible="1"/>
+                                                                <field name="video_url" widget="url" readonly="1" string="Link video Shopee"/>
                                                                 <field name="duration" readonly="1"/>
                                                                 <field name="upload_video" widget="binary" filename="upload_filename"/>
                                                                 <field name="upload_filename" invisible="1"/>
@@ -465,38 +492,123 @@
                             <!-- ===== Tab Thuộc tính &amp; Vận chuyển ===== -->
                             <page string="Thuộc tính &amp; Vận chuyển" name="tab_attrs_shipping">
                                 <div class="p-3">
-                                    <div class="rounded-3 p-3 mb-3 shadow-sm" style="background:#fff;">
+                                    <div class="sp-edit-panel">
                                         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
                                             <div class="fw-semibold fs-5" style="color:#ee4d2d;"><i class="fa fa-tags me-1" title="Thuộc tính" role="img" aria-label="Thuộc tính"/> Ngành hàng &amp; Thương hiệu</div>
                                             <div class="d-flex flex-wrap gap-2">
-                                                <button name="action_fetch_full_content" type="object" string="Tải từ Shopee" class="btn btn-shopee-soft" icon="fa-download"/>
-                                                <button name="action_push_content_update" type="object" string="Đẩy thuộc tính" class="btn btn-shopee" icon="fa-upload" confirm="Cập nhật ngành hàng, thương hiệu, cân nặng, kích thước lên Shopee?"/>
+                                                <button name="action_reload_edit_choices" type="object" string="Tải danh sách chọn" class="btn btn-shopee-soft" icon="fa-refresh"/>
+                                                <button name="action_fetch_full_content" type="object" string="Tải dữ liệu hiện tại" class="btn btn-shopee-soft" icon="fa-download"/>
+                                                <button name="action_push_content_update" type="object" string="Đẩy cập nhật" class="btn btn-shopee" icon="fa-upload" confirm="Cập nhật ngành hàng, thương hiệu, cân nặng, kích thước và vận chuyển lên Shopee?"/>
                                             </div>
                                         </div>
-                                        <group>
-                                            <group string="Ngành hàng / Thương hiệu">
-                                                <field name="category_id" string="Mã ngành hàng (Shopee)"/>
-                                                <field name="edit_brand_id" string="Mã thương hiệu"/>
-                                                <field name="edit_brand_name" string="Tên thương hiệu" placeholder="No brand"/>
-                                            </group>
-                                            <group string="Vận chuyển — Cân nặng &amp; Kích thước">
-                                                <field name="edit_weight" string="Cân nặng (kg)"/>
-                                                <label for="edit_package_length" string="Kích thước (D × R × C, cm)"/>
-                                                <div class="o_row d-flex gap-2 align-items-center">
-                                                    <field name="edit_package_length" nolabel="1" class="oe_inline" style="max-width:80px"/>
-                                                    <span>×</span>
-                                                    <field name="edit_package_width" nolabel="1" class="oe_inline" style="max-width:80px"/>
-                                                    <span>×</span>
-                                                    <field name="edit_package_height" nolabel="1" class="oe_inline" style="max-width:80px"/>
-                                                    <span class="text-muted">cm</span>
+                                        <field name="category_id" invisible="1"/>
+                                        <field name="edit_brand_id" invisible="1"/>
+                                        <field name="edit_brand_name" invisible="1"/>
+                                        <div class="sp-edit-grid">
+                                            <div class="sp-edit-card">
+                                                <div class="sp-edit-card-title">Ngành hàng</div>
+                                                <field name="shopee_category_id" nolabel="1"
+                                                       options="{'no_create': True, 'no_open': True}"
+                                                       placeholder="Chọn ngành hàng Shopee"/>
+                                            </div>
+                                            <div class="sp-edit-card">
+                                                <div class="sp-edit-card-title">Thương hiệu</div>
+                                                <field name="shopee_brand_id" nolabel="1"
+                                                       options="{'no_create': True, 'no_open': True}"
+                                                       placeholder="Chọn thương hiệu"/>
+                                            </div>
+                                            <div class="sp-edit-card">
+                                                <div class="sp-edit-card-title">Cân nặng sau đóng gói</div>
+                                                <div class="sp-inline-unit">
+                                                    <field name="edit_weight" nolabel="1"/>
+                                                    <span>kg</span>
                                                 </div>
-                                            </group>
-                                        </group>
-                                        <div class="alert alert-info mt-3 mb-0" role="alert">
-                                            <i class="fa fa-info-circle me-1" title="Lưu ý" role="img" aria-label="Lưu ý"/>
-                                            <b>Lưu ý:</b> Thuộc tính chi tiết (màu sắc, xuất xứ, hạn bảo hành…) và phí vận chuyển từng kênh hiện cần chỉnh sửa trên Shopee Seller Center.
-                                            Module sẽ bổ sung biểu mẫu chỉnh sửa các trường này trong bản kế tiếp.
+                                            </div>
+                                            <div class="sp-edit-card">
+                                                <div class="sp-edit-card-title">Kích thước đóng gói</div>
+                                                <div class="sp-dimension-row">
+                                                    <field name="edit_package_length" nolabel="1" placeholder="Dài"/>
+                                                    <span>×</span>
+                                                    <field name="edit_package_width" nolabel="1" placeholder="Rộng"/>
+                                                    <span>×</span>
+                                                    <field name="edit_package_height" nolabel="1" placeholder="Cao"/>
+                                                    <span>cm</span>
+                                                </div>
+                                            </div>
                                         </div>
+                                        <div class="sp-attr-block">
+                                            <div class="sp-edit-card-title">Thuộc tính chi tiết</div>
+                                            <field name="edit_attribute_line_ids" nolabel="1" mode="kanban">
+                                                <kanban class="o_shopee_attr_kanban" create="false" delete="false" group_create="false" records_draggable="false">
+                                                    <field name="attribute_name"/>
+                                                    <field name="is_mandatory"/>
+                                                    <field name="value_id"/>
+                                                    <field name="value_text"/>
+                                                    <templates>
+                                                        <t t-name="card">
+                                                            <div class="sp-attr-card">
+                                                                <div class="sp-attr-label">
+                                                                    <t t-if="record.is_mandatory.raw_value"><span class="sp-req">*</span></t>
+                                                                    <field name="attribute_name"/>
+                                                                </div>
+                                                                <div class="sp-attr-input">
+                                                                    <field name="value_id" options="{'no_create': True, 'no_open': True}" placeholder="Chọn giá trị"/>
+                                                                    <field name="value_text" placeholder="Hoặc nhập tay"/>
+                                                                </div>
+                                                            </div>
+                                                        </t>
+                                                    </templates>
+                                                </kanban>
+                                            </field>
+                                        </div>
+                                    </div>
+
+                                    <div class="sp-edit-panel">
+                                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                                            <div class="fw-semibold fs-5" style="color:#ee4d2d;"><i class="fa fa-truck me-1" title="Vận chuyển" role="img" aria-label="Vận chuyển"/> Đơn vị vận chuyển</div>
+                                            <button name="action_reload_edit_logistics" type="object" string="Tải lại vận chuyển" class="btn btn-shopee-soft" icon="fa-refresh"/>
+                                        </div>
+                                        <field name="logistic_line_ids" nolabel="1" mode="kanban">
+                                            <kanban class="o_shopee_logi_kanban" create="false" delete="false" group_create="false" records_draggable="false">
+                                                <field name="channel_name"/>
+                                                <field name="cod_enabled"/>
+                                                <field name="selected"/>
+                                                <field name="shipping_fee"/>
+                                                <field name="is_free"/>
+                                                <templates>
+                                                    <t t-name="card">
+                                                        <div class="sp-logi-card" t-att-class="record.selected.raw_value ? 'sp-logi-on' : ''">
+                                                            <div class="sp-logi-main">
+                                                                <div class="sp-logi-name"><field name="channel_name"/></div>
+                                                                <div class="sp-logi-meta">
+                                                                    <t t-if="record.cod_enabled.raw_value">
+                                                                        <span class="sp-logi-chip sp-logi-cod"><i class="fa fa-money me-1" title="Hỗ trợ COD" role="img" aria-label="COD"/>COD</span>
+                                                                    </t>
+                                                                    <span class="sp-logi-chip">Phí: <field name="shipping_fee" widget="integer"/> đ</span>
+                                                                </div>
+                                                            </div>
+                                                            <div class="sp-logi-edit">
+                                                                <label>Bật</label>
+                                                                <field name="selected" widget="boolean_toggle" nolabel="1"/>
+                                                                <label>Miễn phí</label>
+                                                                <field name="is_free" widget="boolean_toggle" nolabel="1"/>
+                                                            </div>
+                                                        </div>
+                                                    </t>
+                                                </templates>
+                                            </kanban>
+                                            <form>
+                                                <sheet>
+                                                    <group>
+                                                        <field name="channel_name" readonly="1"/>
+                                                        <field name="selected" widget="boolean_toggle"/>
+                                                        <field name="shipping_fee"/>
+                                                        <field name="is_free" widget="boolean_toggle"/>
+                                                        <field name="cod_enabled" readonly="1"/>
+                                                    </group>
+                                                </sheet>
+                                            </form>
+                                        </field>
                                     </div>
                                 </div>
                             </page>

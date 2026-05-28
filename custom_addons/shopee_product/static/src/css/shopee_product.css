@@ -296,6 +296,134 @@
     transform: scale(1.1);
 }
 
+/* ───── Product form: variant cards ───── */
+.o_shopee_model_kanban.o_kanban_view {
+    background: transparent !important;
+    padding: 0 !important;
+}
+.o_shopee_model_kanban .o_kanban_record {
+    width: calc(50% - 12px) !important;
+    margin: 6px !important;
+    padding: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+.sp-model-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.sp-model-head,
+.sp-model-actions {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+}
+.sp-model-name {
+    font-weight: 700;
+    color: #1f2937;
+    font-size: 15px;
+}
+.sp-model-sku {
+    color: #6b7280;
+    font-size: 12px;
+    margin-top: 2px;
+}
+.sp-model-link {
+    display: grid;
+    grid-template-columns: 120px minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+}
+.sp-model-link span,
+.sp-model-edit label {
+    color: #6b7280;
+    font-size: 12px;
+    font-weight: 600;
+}
+.sp-model-metrics {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+.sp-model-metric {
+    background: #f9fafb;
+    border: 1px solid #edf0f3;
+    border-radius: 6px;
+    padding: 8px 10px;
+}
+.sp-model-metric span {
+    display: block;
+    color: #6b7280;
+    font-size: 11px;
+}
+.sp-model-metric strong {
+    color: #111827;
+    font-size: 16px;
+}
+.sp-model-edit {
+    display: grid;
+    grid-template-columns: 70px 1fr 70px 1fr;
+    gap: 8px;
+    align-items: center;
+}
+
+/* ───── Product form: selectors and shipping editor ───── */
+.sp-edit-panel {
+    background: #fff;
+    border: 1px solid #ececec;
+    border-radius: 6px;
+    padding: 18px 20px;
+    margin-bottom: 14px;
+}
+.sp-edit-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+.sp-edit-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    padding: 12px;
+    background: #fff;
+}
+.sp-edit-card-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: #374151;
+    margin-bottom: 8px;
+}
+.sp-attr-block {
+    margin-top: 16px;
+}
+.sp-inline-unit,
+.sp-dimension-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.sp-inline-unit .o_field_widget {
+    flex: 1;
+}
+.sp-dimension-row .o_field_widget {
+    max-width: 88px;
+}
+.sp-logi-edit {
+    display: grid;
+    grid-template-columns: auto auto auto auto;
+    gap: 8px;
+    align-items: center;
+    color: #6b7280;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
 /* ───── Content editor: media tiles ───── */
 .sp-content-desc-wrap {
     background: #fff;
@@ -441,5 +569,8 @@
 
 @media (max-width: 1100px) {
     .o_shopee_attr_kanban .o_kanban_record { width: 100% !important; }
+    .o_shopee_model_kanban .o_kanban_record { width: 100% !important; }
+    .sp-edit-grid { grid-template-columns: 1fr; }
+    .sp-model-edit { grid-template-columns: 70px 1fr; }
     .sp-media-row { grid-template-columns: 1fr; }
 }
