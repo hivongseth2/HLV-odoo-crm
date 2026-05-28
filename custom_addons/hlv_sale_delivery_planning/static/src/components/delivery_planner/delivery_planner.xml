@@ -277,8 +277,8 @@
                                                     <t t-esc="row.state === 'done' ? 'Xong' : row.state === 'in_progress' ? 'Đang' : 'Assign'"/>
                                                 </span>
                                             </div>
-                                            <!-- Packer reassign inline select -->
-                                            <div t-if="state.packerUsers.length" class="mt-1">
+                                            <!-- Packer reassign inline select (only for non-done rows) -->
+                                            <div t-if="state.packerUsers.length and row.state !== 'done'" class="mt-1">
                                                 <select class="form-select form-select-sm"
                                                         style="font-size:0.7rem; padding:1px 4px; height:auto;"
                                                         t-att-value="row.packer_user_id || ''"

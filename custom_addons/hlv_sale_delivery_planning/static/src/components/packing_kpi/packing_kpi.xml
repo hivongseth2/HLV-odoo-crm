@@ -113,6 +113,7 @@
                                                 <td><t t-esc="this.formatDuration(row.print_to_done_seconds)"/></td>
                                                 <td><t t-esc="this.formatDuration(row.actual_seconds)"/></td>
                                                 <td>
+                                                    <t t-if="row.state !== 'done'">
                                                     <select class="form-select form-select-sm" style="min-width:110px;"
                                                             t-att-value="group.packer_user_id"
                                                             t-on-change="(ev) => this.reassignPackerForPick(row.pick_id, ev.target.value)">
@@ -124,6 +125,10 @@
                                                             </option>
                                                         </t>
                                                     </select>
+                                                    </t>
+                                                    <t t-else="">
+                                                        <span class="text-muted small"><i class="fa fa-lock me-1"></i>Đã xong</span>
+                                                    </t>
                                                 </td>
                                             </tr>
                                         </t>
