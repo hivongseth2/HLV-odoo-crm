@@ -715,52 +715,29 @@ class PublicInventory(http.Controller):
             incoming_by_picking[key]["qty"] += move.product_uom_qty
 
         # --- Phiếu xuất từ ĐBH ---
-        # Dùng logic giống Odoo virtual_available:
-        #   Outgoing = moves FROM lot_stock_id children TO outside lot_stock_id
-        # Điều này bắt được:
-        #   1-bước: stock → customer          (source inside lot_stock_id ✓)
-        #   2-bước: stock → output  (PICK)    (source inside lot_stock_id ✓)
-        #           output → customer (SHIP)  (source = output, NOT inside lot_stock_id → bỏ qua, tránh đếm 2 lần)
-        #   3-bước tùy chỉnh (KBC): pack_zone ⊂ lot_stock_id
-        #           stock → pack (PICK)       (dest inside lot_stock_id → bỏ qua, chỉ di chuyển nội bộ)
-        #           pack → output (PACK)      (source inside lot_stock_id ✓, dest ngoài ✓)
-        #           output → customer (SHIP)  (source = output, NOT inside lot_stock_id → bỏ qua)
-
-        # Outgoing = SO-linked moves FROM inside lot_stock_id TO outside lot_stock_id
-        # (mirrors Odoo outgoing_qty logic)
-        # 'not child_of' is NOT a valid Odoo ORM operator → we filter in Python after search
-        if wid:
-            out_wh = Warehouse.browse(wid).exists()
-            _out_stock_ids = [out_wh.lot_stock_id.id] if out_wh else []
-        else:
-            _out_whs = _get_allowed_warehouses()
-            _out_stock_ids = _out_whs.mapped('lot_stock_id').ids if _out_whs else []
-
-        # Pre-compute the full set of location ids that are INSIDE lot_stock_id
-        # so we can exclude moves where dest is also inside
-        if _out_stock_ids:
-            _inner_locs = set(
-                env['stock.location'].sudo()
-                .search([('id', 'child_of', _out_stock_ids)]).ids
-            )
-        else:
-            _inner_locs = set()
-
-        outgoing_domain_base = [
-            ("product_id", "=", pid),
-            ("state", "not in", ["done", "cancel", "draft"]),
-            "|",
-            ("sale_line_id", "!=", False),
-            ("picking_id.sale_id", "!=", False),
-        ]
-        if _out_stock_ids:
-            outgoing_domain_base.append(("location_id", "child_of", _out_stock_ids))
+        # Strategy: search ALL active SO-linked moves, no location filter.
+        #
+        # Why no location filter?
+        # KBC uses a 3-step custom flow:
+        #   PICK (stock → pack_zone, done) → PACK (pack_zone → output, confirmed) → SHIP (pending)
+        # KBC/Khu vực đóng gói is a SIBLING of lot_stock_id (not a child), so
+        # child_of lot_stock_id never catches the PACK move. Any location-based
+        # approach (lot_stock_id OR view_location_id) leaves outgoing=0.
+        #
+        # By searching all active SO moves without location constraint we get:
+        # - 1-step: stock→customer (captured ✓)
+        # - 2-step: active SHIP (output→customer, captured ✓); PICK already done
+        # - 3-step: active PACK (pack→output, captured ✓); PICK done, SHIP not yet active
+        # Double-counting (PACK + SHIP both active) is practically impossible in this
+        # Odoo setup since SHIP is created lazily after PACK completes.
         try:
-            _out_raw = StockMove.search(outgoing_domain_base, order="date asc")
-            # Keep only moves whose destination is OUTSIDE lot_stock_id
-            outgoing_moves = _out_raw.filtered(
-                lambda m: m.location_dest_id.id not in _inner_locs
-            ) if _inner_locs else _out_raw
+            outgoing_moves = StockMove.search([
+                ("product_id", "=", pid),
+                ("state", "not in", ["done", "cancel", "draft"]),
+                "|",
+                ("sale_line_id", "!=", False),
+                ("picking_id.sale_id", "!=", False),
+            ], order="date asc")
         except Exception:
             outgoing_moves = StockMove.browse([])
 
