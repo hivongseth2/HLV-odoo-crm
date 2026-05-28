@@ -10,8 +10,9 @@
                 <div class="modal-content shadow border-0">
                     <div class="modal-header py-2 bg-light">
                         <h6 class="modal-title fw-bold mb-0">
-                            <i class="fa fa-user-plus me-2 text-primary"></i>
-                            Chọn người đóng gói
+                            <i t-attf-class="fa me-2 text-primary #{state.changePackerPickingId ? 'fa-exchange' : 'fa-user-plus'}"></i>
+                            <t t-if="state.changePackerPickingId">Đổi người đóng gói</t>
+                            <t t-else="">Chọn người đóng gói</t>
                         </h6>
                         <button type="button" class="btn-close" aria-label="Close" t-on-click="closePackerAssignModal"/>
                     </div>
@@ -26,7 +27,7 @@
                             <label class="form-label small fw-bold text-muted text-uppercase">Người đóng</label>
                             <select class="form-select"
                                     t-att-value="state.selectedPackerUserId"
-                                    t-on-change="(ev) => { state.selectedPackerUserId = parseInt(ev.target.value || '0'); }">
+                                    t-on-change="(ev) => { this.state.selectedPackerUserId = parseInt(ev.target.value || '0', 10); }">
                                 <t t-foreach="state.packerUsers" t-as="packer" t-key="packer.id">
                                     <option t-att-value="packer.id">
                                         <t t-esc="packer.packer_name"/>
@@ -35,7 +36,12 @@
                                 </t>
                             </select>
                             <div class="text-muted small mt-2">
-                                Người này sẽ được gắn vào các phiếu PICK đang in và dùng để kiểm tra quyền vào phiếu PACK.
+                                <t t-if="state.changePackerPickingId">
+                                    Chọn người đóng mới cho phiếu này.
+                                </t>
+                                <t t-else="">
+                                    Người này sẽ được gắn vào các phiếu PICK đang in và dùng để kiểm tra quyền vào phiếu PACK.
+                                </t>
                             </div>
                         </div>
                     </div>
@@ -46,8 +52,9 @@
                         <button class="btn btn-sm btn-primary"
                                 t-att-disabled="state.packerUsersLoading || !state.packerUsers.length || state.isPrintingPickingSlips"
                                 t-on-click="confirmPackerAssignAndPrint">
-                            <i t-attf-class="fa me-1 #{state.isPrintingPickingSlips ? 'fa-spinner fa-spin' : 'fa-print'}"></i>
-                            Assign và in
+                            <i t-attf-class="fa me-1 #{state.changePackerPickingId ? 'fa-check' : (state.isPrintingPickingSlips ? 'fa-spinner fa-spin' : 'fa-print')}"></i>
+                            <t t-if="state.changePackerPickingId">Đổi người đóng</t>
+                            <t t-else="">Assign và in</t>
                         </button>
                     </div>
                 </div>

@@ -15,15 +15,15 @@
                 <div class="bg-white border shadow-sm p-2 mb-3 d-flex flex-wrap align-items-end gap-2">
                     <div>
                         <label class="form-label small text-muted mb-1">Từ ngày</label>
-                        <input type="date" class="form-control form-control-sm" t-att-value="state.dateFrom" t-on-change="(ev) => { state.dateFrom = ev.target.value; }"/>
+                        <input type="date" class="form-control form-control-sm" t-att-value="state.dateFrom" t-on-change="(ev) => { this.state.dateFrom = ev.target.value; }"/>
                     </div>
                     <div>
                         <label class="form-label small text-muted mb-1">Đến ngày</label>
-                        <input type="date" class="form-control form-control-sm" t-att-value="state.dateTo" t-on-change="(ev) => { state.dateTo = ev.target.value; }"/>
+                        <input type="date" class="form-control form-control-sm" t-att-value="state.dateTo" t-on-change="(ev) => { this.state.dateTo = ev.target.value; }"/>
                     </div>
                     <div>
                         <label class="form-label small text-muted mb-1">Người đóng</label>
-                        <select class="form-select form-select-sm" t-att-value="state.packerUserId" t-on-change="(ev) => { state.packerUserId = ev.target.value; }">
+                        <select class="form-select form-select-sm" t-att-value="state.packerUserId" t-on-change="(ev) => { this.state.packerUserId = ev.target.value; }">
                             <option value="all">Tất cả packer</option>
                             <t t-foreach="state.packers" t-as="packer" t-key="packer.id">
                                 <option t-att-value="packer.id"><t t-esc="packer.packer_name"/></option>
@@ -54,36 +54,69 @@
                                 <th>TG đóng</th>
                                 <th>In → Done</th>
                                 <th>Thực tế</th>
+                                <th>Đổi packer</th>
                             </tr>
                         </thead>
                         <tbody>
                             <t t-if="state.loading">
-                                <tr><td colspan="8" class="text-center text-muted py-4"><i class="fa fa-spinner fa-spin me-1"></i>Đang tải...</td></tr>
+                                <tr><td colspan="9" class="text-center text-muted py-4"><i class="fa fa-spinner fa-spin me-1"></i>Đang tải...</td></tr>
                             </t>
                             <t t-elif="!state.groups.length">
-                                <tr><td colspan="8" class="text-center text-muted py-4">Không có dữ liệu</td></tr>
+                                <tr><td colspan="9" class="text-center text-muted py-4">Không có dữ liệu</td></tr>
                             </t>
                             <t t-else="">
                                 <t t-foreach="state.groups" t-as="group" t-key="group.packer_user_id">
-                                    <tr class="table-primary">
-                                        <td colspan="8" class="fw-bold">
+                                    <!-- Group header row — clickable to expand/collapse -->
+                                    <tr class="table-primary" style="cursor:pointer;" t-on-click="() => this.toggleGroup(group.packer_user_id)">
+                                        <td colspan="9" class="fw-bold">
+                                            <i t-attf-class="fa me-2 #{this.isGroupExpanded(group.packer_user_id) ? 'fa-chevron-down' : 'fa-chevron-right'}"></i>
                                             <i class="fa fa-user me-1"></i><t t-esc="group.packer_name"/>
                                             <span class="badge bg-secondary ms-2">Tổng: <t t-esc="group.assigned_count"/></span>
                                             <span class="badge bg-success ms-1">Xong: <t t-esc="group.done_count"/></span>
                                             <span class="badge bg-warning text-dark ms-1">Đang: <t t-esc="group.in_progress_count"/></span>
+                                            <span t-if="group.avg_actual_seconds" class="badge bg-info text-dark ms-1">TB: <t t-esc="this.formatDuration(group.avg_actual_seconds)"/></span>
                                         </td>
                                     </tr>
-                                    <t t-foreach="group.rows" t-as="row" t-key="row.pick_id">
-                                        <tr>
-                                            <td><i class="fa fa-file-text-o me-1 text-muted"></i><t t-esc="row.pick_name"/></td>
-                                            <td><t t-esc="row.sale_order"/></td>
-                                            <td><t t-esc="row.pack_name || '-'"/></td>
-                                            <td><span class="badge" t-att-class="this.stateClass(row.state)"><t t-esc="this.stateLabel(row.state)"/></span></td>
-                                            <td><t t-esc="row.print_start_at || '-'"/></td>
-                                            <td><t t-esc="row.pack_start_at || '-'"/></td>
-                                            <td><t t-esc="this.formatDuration(row.print_to_done_seconds)"/></td>
-                                            <td><t t-esc="this.formatDuration(row.actual_seconds)"/></td>
-                                        </tr>
+                                    <!-- Comparison progress bar row -->
+                                    <tr t-if="group.assigned_count" class="table-light">
+                                        <td colspan="9" class="py-1 px-3">
+                                            <div class="d-flex align-items-center gap-2 small">
+                                                <div class="flex-grow-1 bg-secondary bg-opacity-25 rounded" style="height:8px;">
+                                                    <div class="rounded bg-success" t-att-style="'height:8px;width:' + this.groupDonePct(group) + '%'"></div>
+                                                </div>
+                                                <span class="text-muted fw-bold" style="white-space:nowrap;min-width:48px;">
+                                                    <t t-esc="this.groupDonePct(group)"/>% xong
+                                                </span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <!-- Row detail (only when group is expanded) -->
+                                    <t t-if="this.isGroupExpanded(group.packer_user_id)">
+                                        <t t-foreach="group.rows" t-as="row" t-key="row.pick_id">
+                                            <tr>
+                                                <td><i class="fa fa-file-text-o me-1 text-muted"></i><t t-esc="row.pick_name"/></td>
+                                                <td><t t-esc="row.sale_order"/></td>
+                                                <td><t t-esc="row.pack_name || '-'"/></td>
+                                                <td><span class="badge" t-att-class="this.stateClass(row.state)"><t t-esc="this.stateLabel(row.state)"/></span></td>
+                                                <td class="small text-muted"><t t-esc="row.print_start_at || '-'"/></td>
+                                                <td class="small text-muted"><t t-esc="row.pack_start_at || '-'"/></td>
+                                                <td><t t-esc="this.formatDuration(row.print_to_done_seconds)"/></td>
+                                                <td><t t-esc="this.formatDuration(row.actual_seconds)"/></td>
+                                                <td>
+                                                    <select class="form-select form-select-sm" style="min-width:110px;"
+                                                            t-att-value="group.packer_user_id"
+                                                            t-on-change="(ev) => this.reassignPackerForPick(row.pick_id, ev.target.value)">
+                                                        <option value="">-- Đổi --</option>
+                                                        <t t-foreach="state.packers" t-as="packer" t-key="packer.id">
+                                                            <option t-att-value="packer.id"
+                                                                    t-att-selected="packer.id === group.packer_user_id">
+                                                                <t t-esc="packer.packer_name"/>
+                                                            </option>
+                                                        </t>
+                                                    </select>
+                                                </td>
+                                            </tr>
+                                        </t>
                                     </t>
                                 </t>
                             </t>

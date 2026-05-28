@@ -29,6 +29,7 @@ export class DeliveryPlannerDashboard extends Component {
             pendingPrintReportId: null,
             pendingPrintReportType: 'qweb-pdf',
             pendingSinglePrintPickingId: null,
+            changePackerPickingId: null,
 
             saleOrders: [],
             warehouses: [],
@@ -512,6 +513,9 @@ export class DeliveryPlannerDashboard extends Component {
                 "Dữ liệu đã được cập nhật tự động",
                 { type: "info", title: "Cập nhật xong" }
             );
+            if (this.state.isPackingProgressDrawerOpen) {
+                this.loadPackingProgress();
+            }
         }, 800);
     }
 
@@ -2080,6 +2084,23 @@ export class DeliveryPlannerDashboard extends Component {
         this.state.pendingPrintReportId = null;
         this.state.pendingPrintReportType = 'qweb-pdf';
         this.state.pendingSinglePrintPickingId = null;
+        this.state.changePackerPickingId = null;
+    }
+
+    async openChangePackerModal(pickingId) {
+        this.state.changePackerPickingId = pickingId;
+        this.state.pendingPrintReportId = null;
+        this.state.pendingSinglePrintPickingId = null;
+        // Pre-select current packer if known
+        const allPickings = this.state.saleOrders.flatMap(so => so.pickings || []);
+        const picking = allPickings.find(p => p.id === pickingId);
+        if (picking && picking.packer_user && picking.packer_user[0]) {
+            this.state.selectedPackerUserId = picking.packer_user[0];
+        } else {
+            this.state.selectedPackerUserId = null;
+        }
+        await this._ensurePackerUsers();
+        this.state.isPackerAssignModalOpen = true;
     }
 
     async confirmPackerAssignAndPrint() {
@@ -2087,14 +2108,40 @@ export class DeliveryPlannerDashboard extends Component {
             this.notification.add('Vui lòng chọn người đóng', { type: 'warning' });
             return;
         }
+        const packerUserId = this.state.selectedPackerUserId;
+        const changePickingId = this.state.changePackerPickingId;
         const reportId = this.state.pendingPrintReportId;
         const reportType = this.state.pendingPrintReportType || 'qweb-pdf';
         const pickingId = this.state.pendingSinglePrintPickingId;
         this.state.isPackerAssignModalOpen = false;
+
+        if (changePickingId) {
+            // Change packer only mode (no print)
+            this.state.changePackerPickingId = null;
+            try {
+                await this.orm.call('stock.picking', 'action_assign_packer', [[changePickingId]], { packer_user_id: packerUserId });
+                const packer = this.state.packerUsers.find(u => u.id === packerUserId);
+                const packerLabel = packer ? (packer.packer_name || packer.name || '') : '';
+                for (const so of this.state.saleOrders) {
+                    const pk = (so.pickings || []).find(p => p.id === changePickingId);
+                    if (pk) { pk.packer_user = [packerUserId, packerLabel]; break; }
+                }
+                if (this.state.selectedOrder) {
+                    const pk = (this.state.selectedOrder.pickings || []).find(p => p.id === changePickingId);
+                    if (pk) pk.packer_user = [packerUserId, packerLabel];
+                }
+                this.notification.add('Đã đổi người đóng thành công', { type: 'success' });
+            } catch (e) {
+                console.error('Change packer failed:', e);
+                this.notification.add('Không thể đổi người đóng', { type: 'danger' });
+            }
+            return;
+        }
+
         if (pickingId) {
-            await this.doPrintPickingReport(null, pickingId, reportId, this.state.selectedPackerUserId, true);
+            await this.doPrintPickingReport(null, pickingId, reportId, packerUserId, true);
         } else {
-            await this.printSelectedPickingSlips(reportId, reportType, this.state.selectedPackerUserId, true);
+            await this.printSelectedPickingSlips(reportId, reportType, packerUserId, true);
         }
     }
 

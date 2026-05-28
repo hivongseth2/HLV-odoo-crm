@@ -18,6 +18,7 @@ export class PackingKpiDashboard extends Component {
             summary: {},
             groups: [],
             packers: [],
+            expandedGroups: {},
         });
         onWillStart(() => this.fetchData());
     }
@@ -70,6 +71,30 @@ export class PackingKpiDashboard extends Component {
         if (state === "done") return "text-bg-success";
         if (state === "in_progress") return "text-bg-warning";
         return "text-bg-secondary";
+    }
+
+    toggleGroup(packerId) {
+        // Default is expanded; toggle to collapsed (false) and back
+        this.state.expandedGroups[packerId] = this.state.expandedGroups[packerId] === false ? true : false;
+    }
+
+    isGroupExpanded(packerId) {
+        return this.state.expandedGroups[packerId] !== false;
+    }
+
+    groupDonePct(group) {
+        return group.assigned_count ? Math.round((group.done_count / group.assigned_count) * 100) : 0;
+    }
+
+    async reassignPackerForPick(pickId, newPackerUserId) {
+        const uid = parseInt(newPackerUserId, 10);
+        if (!uid) return;
+        try {
+            await this.orm.call("stock.picking", "action_assign_packer", [[pickId]], { packer_user_id: uid });
+            await this.fetchData();
+        } catch (e) {
+            console.error("Reassign packer failed:", e);
+        }
     }
 }
 

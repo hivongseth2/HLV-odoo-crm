@@ -247,8 +247,13 @@
                                     <div style="max-height:130px; overflow:auto;" class="small">
                                         <t t-foreach="(group.rows || []).slice(0, 8)" t-as="row" t-key="row.pick_id">
                                             <div class="d-flex align-items-center gap-1 border-top py-1">
-                                                <span class="text-muted flex-grow-1"><t t-esc="row.pick_name"/></span>
-                                                <span t-att-class="row.state === 'done' ? 'text-success' : row.state === 'in_progress' ? 'text-warning' : 'text-secondary'">
+                                                <div class="flex-grow-1" style="min-width:0;">
+                                                    <span class="text-muted d-block text-truncate"><t t-esc="row.pick_name"/></span>
+                                                    <span t-if="row.pack_name" class="text-muted d-block text-truncate" style="font-size:0.7rem;">
+                                                        <i class="fa fa-archive me-1 text-info"></i><t t-esc="row.pack_name"/>
+                                                    </span>
+                                                </div>
+                                                <span class="text-nowrap" t-att-class="row.state === 'done' ? 'text-success' : row.state === 'in_progress' ? 'text-warning' : 'text-secondary'">
                                                     <t t-esc="row.state === 'done' ? 'Xong' : row.state === 'in_progress' ? 'Đang' : 'Assign'"/>
                                                 </span>
                                             </div>
