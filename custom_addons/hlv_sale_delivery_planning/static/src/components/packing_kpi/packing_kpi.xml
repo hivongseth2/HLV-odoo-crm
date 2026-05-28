@@ -10,6 +10,9 @@
                     <button class="btn btn-sm btn-outline-secondary" t-on-click="() => this.setRange('today')">Hôm nay</button>
                     <button class="btn btn-sm btn-outline-secondary" t-on-click="() => this.setRange('week')">Tuần này</button>
                     <button class="btn btn-sm btn-outline-secondary" t-on-click="() => this.setRange('month')">Tháng này</button>
+                    <button class="btn btn-sm" t-att-class="state.showCharts ? 'btn-primary' : 'btn-outline-primary'" t-on-click="toggleCharts">
+                        <i class="fa fa-line-chart me-1"></i><t t-esc="state.showCharts ? 'Ẩn biểu đồ' : 'Hiện biểu đồ'"/>
+                    </button>
                 </div>
 
                 <div class="bg-white border shadow-sm p-2 mb-3 d-flex flex-wrap align-items-end gap-2">
@@ -49,6 +52,29 @@
                     <div class="col-md-3"><div class="bg-white border shadow-sm p-3 text-center"><div class="small text-muted fw-bold">Đã hoàn thành</div><div class="fs-2 fw-bold text-success"><t t-esc="state.summary.done_count || 0"/></div></div></div>
                     <div class="col-md-3"><div class="bg-white border shadow-sm p-3 text-center"><div class="small text-muted fw-bold">TB thời lượng</div><div class="fs-2 fw-bold text-info"><t t-esc="this.formatDuration(state.summary.avg_actual_seconds || state.summary.avg_print_to_done_seconds)"/></div></div></div>
                 </div>
+
+                <!-- Charts Section -->
+                <t t-if="state.showCharts and !state.loading and (state.dailyChartData or state.groups.length)">
+                    <div class="bg-white border shadow-sm mb-3">
+                        <div class="d-flex align-items-center px-3 py-2 border-bottom">
+                            <span class="fw-bold small text-secondary"><i class="fa fa-line-chart me-2"></i>Biểu Đồ Phân Tích</span>
+                        </div>
+                        <div class="row g-0 p-2">
+                            <div class="col-lg-5 col-md-12 p-2">
+                                <div class="small fw-bold text-center text-muted mb-1">Xu hướng theo ngày</div>
+                                <canvas t-ref="chartDaily" style="max-height:200px;"/>
+                            </div>
+                            <div class="col-lg-4 col-md-6 p-2">
+                                <div class="small fw-bold text-center text-muted mb-1">Năng suất theo packer</div>
+                                <canvas t-ref="chartPacker" style="max-height:200px;"/>
+                            </div>
+                            <div class="col-lg-3 col-md-6 p-2">
+                                <div class="small fw-bold text-center text-muted mb-1">Thời gian TB (phút)</div>
+                                <canvas t-ref="chartDuration" style="max-height:200px;"/>
+                            </div>
+                        </div>
+                    </div>
+                </t>
 
                 <div class="bg-white border shadow-sm">
                     <table class="table table-sm table-hover align-middle mb-0">

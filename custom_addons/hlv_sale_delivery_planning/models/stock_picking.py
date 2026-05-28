@@ -308,6 +308,56 @@ class StockPicking(models.Model):
             'packers': self.get_packer_users_for_assignment(),
         }
 
+    @api.model
+    def get_packing_kpi_daily_chart(self, date_from=False, date_to=False, packer_user_id=False):
+        """Return daily breakdown for chart rendering: labels + done/in_progress/assigned arrays."""
+        domain = [
+            ('picking_type_id.sequence_code', 'ilike', 'PICK'),
+            ('return_id', '=', False),
+            ('x_pack_packer_user_id', '!=', False),
+        ]
+        if date_from:
+            start = fields.Datetime.to_datetime(date_from)
+            domain.append(('x_pack_assigned_at', '>=', start))
+        if date_to:
+            end = fields.Datetime.to_datetime(date_to) + timedelta(days=1)
+            domain.append(('x_pack_assigned_at', '<', end))
+        if packer_user_id and str(packer_user_id) != 'all':
+            domain.append(('x_pack_packer_user_id', '=', int(packer_user_id)))
+
+        picks = self.sudo().search(domain)
+        pack_domain = [('x_pack_source_pick_id', 'in', picks.ids)] if picks else [('id', '=', 0)]
+        packs = self.sudo().search(pack_domain)
+        packs_by_pick = {}
+        for pack in packs:
+            packs_by_pick.setdefault(pack.x_pack_source_pick_id.id, self.env['stock.picking'])
+            packs_by_pick[pack.x_pack_source_pick_id.id] |= pack
+
+        daily = {}
+        for pick in picks:
+            if not pick.x_pack_assigned_at:
+                continue
+            vn_dt = pick.x_pack_assigned_at + timedelta(hours=7)
+            day = vn_dt.strftime('%Y-%m-%d')
+            if day not in daily:
+                daily[day] = {'assigned': 0, 'done': 0, 'in_progress': 0}
+            daily[day]['assigned'] += 1
+            related_packs = packs_by_pick.get(pick.id, self.env['stock.picking'])
+            done_packs = related_packs.filtered(lambda p: p.state == 'done')
+            active_packs = related_packs.filtered(lambda p: p.state not in ('done', 'cancel'))
+            if done_packs:
+                daily[day]['done'] += 1
+            elif active_packs.filtered(lambda p: p.x_pack_actual_start_at or p.state == 'in_progress'):
+                daily[day]['in_progress'] += 1
+
+        labels = sorted(daily.keys())
+        return {
+            'labels': labels,
+            'assigned': [daily[d]['assigned'] for d in labels],
+            'done': [daily[d]['done'] for d in labels],
+            'in_progress': [daily[d]['in_progress'] for d in labels],
+        }
+
     def _is_pack_restriction_enabled(self):
         return self.env['ir.config_parameter'].sudo().get_param(
             'hlv_sale_delivery_planning.restrict_pack_to_assigned_user'
