@@ -131,8 +131,8 @@ class HLVMobileBarcodeController(http.Controller):
                     
                     # Calculate individual line demand for Step 2
                     line_demand = move.product_uom_qty
-                    if picking.source_transfer_id and move.move_orig_ids:
-                        orig_mls = move.move_orig_ids.move_line_ids
+                    if picking.source_transfer_id:
+                        orig_mls = picking.source_transfer_id.move_line_ids.filtered(lambda l: l.product_id == ml.product_id)
                         if ml.package_id or ml.result_package_id:
                             pkg_id = ml.package_id or ml.result_package_id
                             matched_orig = orig_mls.filtered(lambda l: l.result_package_id == pkg_id)
@@ -461,11 +461,12 @@ class HLVMobileBarcodeController(http.Controller):
                 processed_lines = []
                 for ml in move_lines:
                     line_demand = ml.move_id.product_uom_qty
-                    if picking.source_transfer_id and ml.move_id.move_orig_ids:
+                    if picking.source_transfer_id:
+                        orig_mls = picking.source_transfer_id.move_line_ids.filtered(lambda l: l.product_id == ml.product_id)
                         pkg_id = ml.package_id or ml.result_package_id
-                        orig_mls = ml.move_id.move_orig_ids.move_line_ids.filtered(lambda l: l.result_package_id == pkg_id)
-                        if orig_mls:
-                            line_demand = sum(orig_mls.mapped('quantity'))
+                        matched_orig = orig_mls.filtered(lambda l: l.result_package_id == pkg_id)
+                        if matched_orig:
+                            line_demand = sum(matched_orig.mapped('quantity'))
                     
                     ml.quantity = line_demand
                     processed_lines.append(f"{ml.quantity} x {ml.product_id.display_name}")

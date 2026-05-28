@@ -1,7 +1,7 @@
 /** @odoo-module **/
 
 import { registry } from "@web/core/registry";
-import { Component, useState, onWillStart, onMounted, onWillDestroy, markup,useEffect  } from "@odoo/owl";
+import { Component, useState, onWillStart, onMounted, onWillDestroy, markup, useEffect } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
 import {
     translateDeliveryStatus, translatePickingState, translatePickingStatus,
@@ -22,6 +22,13 @@ export class DeliveryPlannerDashboard extends Component {
             printMenuReports: [],
             // menu in nhiều hard theo tên lấy hàng
             selectedPrintMenuReports: [],
+            packerUsers: [],
+            packerUsersLoading: false,
+            isPackerAssignModalOpen: false,
+            selectedPackerUserId: null,
+            pendingPrintReportId: null,
+            pendingPrintReportType: 'qweb-pdf',
+            pendingSinglePrintPickingId: null,
 
             saleOrders: [],
             warehouses: [],
@@ -65,14 +72,17 @@ export class DeliveryPlannerDashboard extends Component {
             dashboardStats: { total: 0, ready: 0, partial: 0, out_of_stock: 0 },
             statsLoading: false,
             isLoadingMore: false,
+            isPackingProgressDrawerOpen: false,
+            packingProgressLoading: false,
+            packingProgress: { summary: {}, groups: [] },
 
             // Pagination
             currentPage: 1,
-            itemsPerPage: (function(){
-                try{
-                    var v=parseInt(localStorage.getItem('hlv_dp_items_per_page'),10);
-                    return [12,25,50,100,200].indexOf(v)>=0 ? v : 12;
-                }catch(e){return 12;}
+            itemsPerPage: (function () {
+                try {
+                    var v = parseInt(localStorage.getItem('hlv_dp_items_per_page'), 10);
+                    return [12, 25, 50, 100, 200].indexOf(v) >= 0 ? v : 12;
+                } catch (e) { return 12; }
             })(),
             totalCount: 0,
 
@@ -150,33 +160,6 @@ export class DeliveryPlannerDashboard extends Component {
             printMenuPos: null,       // { top, right } — vị trí fixed của dropdown
             selectedPrintMenuPos: null, // vị trí dropdown in cho các SO đã chọn
 
-            // Packing Slip Wizard
-            isPackingWizardOpen: false,
-            packingWizardPickingId: null,    // single picking (từ drawer)
-            packingWizardPickingIds: [],     // batch pickings (từ nút in hàng loạt)
-            packingWizardPickingName: '',
-            packingWizardPackerId: null,
-            packingWizardPackerName: '',
-            packingWizardUsers: [],
-            packingWizardLoading: false,
-            packingWizardPrinting: false,
-            packingWizardReportId: null,     // reportId dùng khi batch
-            packingWizardReportType: null,
-            packingReportId: null,    // ir.actions.report id cho "Phiếu Đóng Hàng"
-
-            // Packer Panel
-            packerPanelOpen: false,
-            packerStatsLoading: false,
-            packerStats: [],  // [{id, name, packing:[], packed_today:[], avg_minutes}]
-            packerCollapsed: {},  // {packerId: bool}
-            allPackersList: [],  // [{id, name}] for packer change modal
-            dashboardPackerModal: {
-                open: false,
-                pickingId: null,
-                pickingName: '',
-                selectedPackerId: null,
-            },
-
             // Inline editing: Ghi Chú Odoo
             inlineEditSOId: null,     // soId đang edit ghi chu
             inlineEditGhiChu: '',     // giá trị đang nhập
@@ -202,14 +185,14 @@ export class DeliveryPlannerDashboard extends Component {
 
         // click ra ngoài thì dóng menu
         useEffect(() => {
-                const handler = () => {
-                    if (this.state.selectedPrintMenuPos) {
-                        this.state.selectedPrintMenuPos = null;
-                    }
-                };
-                document.addEventListener('click', handler);
-                return () => document.removeEventListener('click', handler);
-            }, () => []);
+            const handler = () => {
+                if (this.state.selectedPrintMenuPos) {
+                    this.state.selectedPrintMenuPos = null;
+                }
+            };
+            document.addEventListener('click', handler);
+            return () => document.removeEventListener('click', handler);
+        }, () => []);
 
         onWillStart(async () => {
             if (this.busService) {
@@ -239,21 +222,16 @@ export class DeliveryPlannerDashboard extends Component {
             const reports = await this.orm.searchRead(
                 'ir.actions.report',
                 [['model', '=', 'stock.picking'], ['binding_model_id', '!=', false]],
-                ['id', 'name', 'report_type'],
+                ['id', 'name', 'report_type', 'report_name'],
                 { order: 'name' }
             );
             this.state.pickingReports = reports;
-            const packingSlipReport = reports.find(r =>
-                r.name === 'Phiếu Đóng Hàng'
-            );
-            if (packingSlipReport) {
-                this.state.packingReportId = packingSlipReport.id;
-            }
         });
 
         // fetchData runs AFTER mount so cached data shows instantly
         onMounted(async () => {
             await this.fetchData();
+            this.loadPackingProgress();
             this._isCacheRestored = false;
         });
 
@@ -318,7 +296,7 @@ export class DeliveryPlannerDashboard extends Component {
             }
 
             this.state.globalUnreadOrders = merged;
-            
+
             const shouldNotifyFromPolling = !isInitial;
             if (shouldNotifyFromPolling) {
                 for (const notification of notifications.filter((n) => !n.is_read)) {
@@ -330,7 +308,7 @@ export class DeliveryPlannerDashboard extends Component {
                     if (!prev || prev._isRead) {
                         const so = this.state.saleOrders.find(o => o.id === orderId);
                         if (so) so.has_unread_message = true;
-                        
+
                         this.notification.add(
                             `Đơn hàng ${notification.sale_order_id ? notification.sale_order_id[1] : ''} vừa có tin nhắn mới.`,
                             {
@@ -448,7 +426,7 @@ export class DeliveryPlannerDashboard extends Component {
             headItem,
             ...this.state.globalUnreadOrders.filter(o => !((o.sale_order_id && o.sale_order_id[0] === payload.so_id) || o.id === payload.so_id)),
         ].slice(0, 100);
-        
+
         // Show toaster notification
         const rawBody = (payload.body || '').replace(/<[^>]+>/g, '').substring(0, 80);
         const so = this.state.saleOrders.find(o => o.id === payload.so_id);
@@ -534,10 +512,6 @@ export class DeliveryPlannerDashboard extends Component {
                 "Dữ liệu đã được cập nhật tự động",
                 { type: "info", title: "Cập nhật xong" }
             );
-            // Reload packer stats if panel is open
-            if (this.state.packerPanelOpen) {
-                this.loadPackerStats();
-            }
         }, 800);
     }
 
@@ -580,10 +554,19 @@ export class DeliveryPlannerDashboard extends Component {
             // Truyền filter_kwargs để backend loại các SO không khớp filter
             // hiện tại (vd: bus đẩy đơn kho A nhưng dashboard đang lọc kho B
             // → backend trả về removed_ids → FE skip / remove khỏi state).
+            // Capture filter key BEFORE the async RPC so we can detect stale
+            // responses: if the user changes filter while the request is in
+            // flight, the response belongs to the old filter and must be
+            // discarded — otherwise orders from the wrong warehouse get merged.
+            const filterKeyAtStart = this._buildFilterKey();
             const res = await this.orm.call(
                 "sale.order", "get_delivery_orders_subset", [],
                 { order_ids: soIds, filter_kwargs: this._buildFetchKwargs() }
             );
+            // Drop stale response if filter changed while RPC was in-flight
+            if (this._buildFilterKey() !== filterKeyAtStart) {
+                return;
+            }
             const fresh = (res && res.orders) || [];
             const removed = new Set((res && res.removed_ids) || []);
             this._mergeSubset(fresh, removed);
@@ -813,6 +796,20 @@ export class DeliveryPlannerDashboard extends Component {
 
     async _saveToCache(result) {
         try {
+            // Serialize through JSON to strip OWL reactive Proxy objects —
+            // IndexedDB's structured clone algorithm cannot clone Proxies and
+            // throws DataCloneError when state arrays are passed directly
+            // (e.g. from _refreshSubset or _autoLoadAllRemaining).
+            let orders, dashboardStats, warehouses, tags;
+            try {
+                orders = JSON.parse(JSON.stringify(result.orders || []));
+                dashboardStats = result.dashboard_stats ? JSON.parse(JSON.stringify(result.dashboard_stats)) : undefined;
+                warehouses = result.warehouses ? JSON.parse(JSON.stringify(result.warehouses)) : undefined;
+                tags = result.tags ? JSON.parse(JSON.stringify(result.tags)) : undefined;
+            } catch (serErr) {
+                console.warn('[DP Cache] _saveToCache serialization failed:', serErr);
+                return;
+            }
             const db = await this._openCacheDB();
             const tx = db.transaction(this._CACHE_STORE, 'readwrite');
             tx.objectStore(this._CACHE_STORE).put({
@@ -820,11 +817,11 @@ export class DeliveryPlannerDashboard extends Component {
                 timestamp: Date.now(),
                 kanbanBatchSize: this.state.kanbanBatchSize,
                 data: {
-                    dashboard_stats: result.dashboard_stats,
-                    orders: result.orders,
+                    dashboard_stats: dashboardStats,
+                    orders: orders,
                     total_count: result.total_count,
-                    warehouses: result.warehouses,
-                    tags: result.tags,
+                    warehouses: warehouses,
+                    tags: tags,
                 },
             }, 'latest');
             await new Promise((resolve, reject) => {
@@ -832,7 +829,7 @@ export class DeliveryPlannerDashboard extends Component {
                 tx.onerror = () => reject(tx.error);
             });
             db.close();
-            console.log('[DP Cache] Saved', (result.orders || []).length, 'orders to IndexedDB');
+            console.log('[DP Cache] Saved', orders.length, 'orders to IndexedDB');
         } catch (e) {
             console.warn('[DP Cache] _saveToCache failed:', e);
         }
@@ -1575,16 +1572,16 @@ export class DeliveryPlannerDashboard extends Component {
         const dir = this.state.tableSortDir === 'asc' ? 1 : -1;
         const getVal = (so) => {
             switch (field) {
-                case 'name':              return so.name || '';
-                case 'misa_order_date':   return so.misa_order_date || '';
-                case 'partner':           return (so.partner_id && so.partner_id[1]) || '';
-                case 'warehouse':         return (so.warehouse_id && so.warehouse_id[1]) || '';
-                case 'delivery_status':   return so.real_delivery_status || so.delivery_status || '';
-                case 'stock_status':      return so.stock_status || '';
-                case 'packing_status':    return so.packing_status || '';
-                case 'commitment_date':   return so.commitment_date || '';
-                case 'amount_total':      return Number(so.amount_total) || 0;
-                default:                  return '';
+                case 'name': return so.name || '';
+                case 'misa_order_date': return so.misa_order_date || '';
+                case 'partner': return (so.partner_id && so.partner_id[1]) || '';
+                case 'warehouse': return (so.warehouse_id && so.warehouse_id[1]) || '';
+                case 'delivery_status': return so.real_delivery_status || so.delivery_status || '';
+                case 'stock_status': return so.stock_status || '';
+                case 'packing_status': return so.packing_status || '';
+                case 'commitment_date': return so.commitment_date || '';
+                case 'amount_total': return Number(so.amount_total) || 0;
+                default: return '';
             }
         };
         // Copy first to avoid mutating the reactive proxy in-place
@@ -1696,22 +1693,22 @@ export class DeliveryPlannerDashboard extends Component {
     get kanbanColumnDefs() {
         switch (this.state.kanbanGroupBy) {
             case 'delivery_status': return [
-                { value: 'pending',  label: 'Chưa Giao',    badgeClass: 'bg-danger',             textClass: 'text-danger',   iconClass: 'fa fa-clock-o',        progressClass: 'bg-danger' },
-                { value: 'partial',  label: 'Giao 1 Phần',  badgeClass: 'bg-warning text-dark',  textClass: 'text-warning',  iconClass: 'fa fa-truck',          progressClass: 'bg-warning' },
-                { value: 'full',     label: 'Đã Giao Đủ',   badgeClass: 'bg-success',            textClass: 'text-success',  iconClass: 'fa fa-check-circle',   progressClass: 'bg-success' },
+                { value: 'pending', label: 'Chưa Giao', badgeClass: 'bg-danger', textClass: 'text-danger', iconClass: 'fa fa-clock-o', progressClass: 'bg-danger' },
+                { value: 'partial', label: 'Giao 1 Phần', badgeClass: 'bg-warning text-dark', textClass: 'text-warning', iconClass: 'fa fa-truck', progressClass: 'bg-warning' },
+                { value: 'full', label: 'Đã Giao Đủ', badgeClass: 'bg-success', textClass: 'text-success', iconClass: 'fa fa-check-circle', progressClass: 'bg-success' },
             ];
             case 'stock_status': return [
-                { value: 'out_of_stock',   label: 'Không Có Hàng',   badgeClass: 'bg-danger',            textClass: 'text-danger',   iconClass: 'fa fa-times-circle',   progressClass: 'bg-danger' },
-                { value: 'partial_ready',  label: 'Có Hàng 1 Phần',  badgeClass: 'bg-warning text-dark', textClass: 'text-warning',  iconClass: 'fa fa-exclamation-circle', progressClass: 'bg-warning' },
-                { value: 'ready',          label: 'Đủ Hàng Xuất',    badgeClass: 'bg-success',           textClass: 'text-success',  iconClass: 'fa fa-check',          progressClass: 'bg-success' },
+                { value: 'out_of_stock', label: 'Không Có Hàng', badgeClass: 'bg-danger', textClass: 'text-danger', iconClass: 'fa fa-times-circle', progressClass: 'bg-danger' },
+                { value: 'partial_ready', label: 'Có Hàng 1 Phần', badgeClass: 'bg-warning text-dark', textClass: 'text-warning', iconClass: 'fa fa-exclamation-circle', progressClass: 'bg-warning' },
+                { value: 'ready', label: 'Đủ Hàng Xuất', badgeClass: 'bg-success', textClass: 'text-success', iconClass: 'fa fa-check', progressClass: 'bg-success' },
             ];
             case 'packing_status': return [
-                { value: 'waiting_stock',    label: 'Không Có Hàng Đóng',      badgeClass: 'bg-secondary',          textClass: 'text-secondary', iconClass: 'fa fa-hourglass-start', progressClass: 'bg-secondary' },
-                { value: 'unpacked',         label: 'Có Hàng Chưa Đóng Gói',   badgeClass: 'bg-warning text-dark',  textClass: 'text-warning',   iconClass: 'fa fa-exclamation-triangle', progressClass: 'bg-warning' },
-                { value: 'printed_waiting',  label: 'Đã In, Chờ Đóng Gói',     badgeClass: 'bg-info',               textClass: 'text-info',      iconClass: 'fa fa-print', progressClass: 'bg-info' },
-                { value: 'packed_waiting_ship', label: 'Đã Gói, Chờ Nhận Giao', badgeClass: 'bg-primary',           textClass: 'text-primary',   iconClass: 'fa fa-archive', progressClass: 'bg-primary' },
-                { value: 'shipping',         label: 'Đang Giao',               badgeClass: 'bg-success',            textClass: 'text-success',   iconClass: 'fa fa-motorcycle', progressClass: 'bg-success' },
-                { value: 'delivered_today',  label: 'Đã Giao Trong Ngày',      badgeClass: 'bg-success bg-opacity-75', textClass: 'text-success', iconClass: 'fa fa-calendar-check-o', progressClass: 'bg-success' },
+                { value: 'waiting_stock', label: 'Không Có Hàng Đóng', badgeClass: 'bg-secondary', textClass: 'text-secondary', iconClass: 'fa fa-hourglass-start', progressClass: 'bg-secondary' },
+                { value: 'unpacked', label: 'Có Hàng Chưa Đóng Gói', badgeClass: 'bg-warning text-dark', textClass: 'text-warning', iconClass: 'fa fa-exclamation-triangle', progressClass: 'bg-warning' },
+                { value: 'printed_waiting', label: 'Đã In, Chờ Đóng Gói', badgeClass: 'bg-info', textClass: 'text-info', iconClass: 'fa fa-print', progressClass: 'bg-info' },
+                { value: 'packed_waiting_ship', label: 'Đã Gói, Chờ Nhận Giao', badgeClass: 'bg-primary', textClass: 'text-primary', iconClass: 'fa fa-archive', progressClass: 'bg-primary' },
+                { value: 'shipping', label: 'Đang Giao', badgeClass: 'bg-success', textClass: 'text-success', iconClass: 'fa fa-motorcycle', progressClass: 'bg-success' },
+                { value: 'delivered_today', label: 'Đã Giao Trong Ngày', badgeClass: 'bg-success bg-opacity-75', textClass: 'text-success', iconClass: 'fa fa-calendar-check-o', progressClass: 'bg-success' },
             ];
             default: return [];
         }
@@ -1722,8 +1719,8 @@ export class DeliveryPlannerDashboard extends Component {
         const dim = this.state.kanbanGroupBy;
         const fieldMap = {
             delivery_status: 'real_delivery_status',
-            stock_status:    'stock_status',
-            packing_status:  'packing_status',
+            stock_status: 'stock_status',
+            packing_status: 'packing_status',
         };
         const field = fieldMap[dim];
 
@@ -2013,10 +2010,99 @@ export class DeliveryPlannerDashboard extends Component {
         this.state.selectedPrintMenuPos = null;
     }
 
-    async printSelectedPickingSlips(reportId = null, reportType = 'qweb-pdf') {
+    async _ensurePackerUsers() {
+        if (this.state.packerUsers.length || this.state.packerUsersLoading) return;
+        this.state.packerUsersLoading = true;
+        try {
+            const users = await this.orm.call('stock.picking', 'get_packer_users_for_assignment', [], {});
+            this.state.packerUsers = (users || []).map((u) => ({
+                id: u.id,
+                name: u.name,
+                packer_name: u.packer_name || u.name,
+            }));
+            if (!this.state.selectedPackerUserId && this.state.packerUsers.length) {
+                this.state.selectedPackerUserId = this.state.packerUsers[0].id;
+            }
+        } catch (e) {
+            console.error('Load packer users failed:', e);
+            this.notification.add('Không tải được danh sách người đóng', { type: 'danger' });
+        } finally {
+            this.state.packerUsersLoading = false;
+        }
+    }
+
+    formatPackDuration(seconds) {
+        seconds = Math.round(seconds || 0);
+        if (!seconds) return '-';
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        if (hours) return `${hours}h ${minutes}m`;
+        return `${minutes}m`;
+    }
+
+    async loadPackingProgress() {
+        if (this.state.packingProgressLoading) return;
+        this.state.packingProgressLoading = true;
+        try {
+            const today = new Date().toISOString().slice(0, 10);
+            const result = await this.orm.call('stock.picking', 'get_packing_kpi_dashboard', [], {
+                date_from: today,
+                date_to: today,
+                packer_user_id: 'all',
+            });
+            this.state.packingProgress = result || { summary: {}, groups: [] };
+        } catch (e) {
+            console.warn('Load packing progress failed:', e);
+        } finally {
+            this.state.packingProgressLoading = false;
+        }
+    }
+
+    async togglePackingProgressDrawer() {
+        this.state.isPackingProgressDrawerOpen = !this.state.isPackingProgressDrawerOpen;
+        if (this.state.isPackingProgressDrawerOpen) {
+            await this.loadPackingProgress();
+        }
+    }
+
+    async openPackerAssignModal(reportId = null, reportType = 'qweb-pdf', pickingId = null) {
+        this.state.pendingPrintReportId = reportId;
+        this.state.pendingPrintReportType = reportType || 'qweb-pdf';
+        this.state.pendingSinglePrintPickingId = pickingId || null;
+        this.state.selectedPrintMenuPos = null;
+        await this._ensurePackerUsers();
+        this.state.isPackerAssignModalOpen = true;
+    }
+
+    closePackerAssignModal() {
+        if (this.state.isPrintingPickingSlips) return;
+        this.state.isPackerAssignModalOpen = false;
+        this.state.pendingPrintReportId = null;
+        this.state.pendingPrintReportType = 'qweb-pdf';
+        this.state.pendingSinglePrintPickingId = null;
+    }
+
+    async confirmPackerAssignAndPrint() {
+        if (!this.state.selectedPackerUserId) {
+            this.notification.add('Vui lòng chọn người đóng', { type: 'warning' });
+            return;
+        }
+        const reportId = this.state.pendingPrintReportId;
+        const reportType = this.state.pendingPrintReportType || 'qweb-pdf';
+        const pickingId = this.state.pendingSinglePrintPickingId;
+        this.state.isPackerAssignModalOpen = false;
+        if (pickingId) {
+            await this.doPrintPickingReport(null, pickingId, reportId, this.state.selectedPackerUserId, true);
+        } else {
+            await this.printSelectedPickingSlips(reportId, reportType, this.state.selectedPackerUserId, true);
+        }
+    }
+
+    async printSelectedPickingSlips(reportId = null, reportType = 'qweb-pdf', packerUserId = null, skipPackerModal = false) {
         if (this.selectedCount === 0) return;
         if (this.state.isPrintingPickingSlips) return;
 
+        const selectedIds = Array.from(this.state.selectedSOIds);
         const pickingIds = this.getSelectedPickingIds().filter((id) => {
             const picking = this.state.saleOrders
                 .flatMap((so) => so.pickings || [])
@@ -2028,17 +2114,24 @@ export class DeliveryPlannerDashboard extends Component {
             alert('Không có phiếu lấy hàng nào ở trạng thái sẵn sàng để in');
             return;
         }
+        if (!skipPackerModal) {
+            await this.openPackerAssignModal(reportId, reportType);
+            return;
+        }
+        if (!packerUserId) {
+            this.notification.add('Vui lòng chọn người đóng trước khi in', { type: 'warning' });
+            await this.openPackerAssignModal(reportId, reportType);
+            return;
+        }
         this.state.selectedPrintMenuPos = null;
-        this.state.isPrintingPickingSlips = true;
 
-        // Mở wizard chọn packer → confirm sẽ tự reserve + in
-        await this.openPackingWizardBatch(pickingIds, reportId, reportType);
-    }
-
-    async _doPrintSelectedPickingSlips(pickingIds, reportId, reportType) {
-        const selectedIds = Array.from(this.state.selectedSOIds);
         try {
-            // Giữ hàng trước khi in
+            // Local flag — KHÔNG dùng state.isLoading để tránh triệu hồi full-screen overlay
+            // / re-render kanban. Bus event sẽ tự động triệu hồi subset refresh.
+            this.state.isPrintingPickingSlips = true;
+
+            // Luôn gọi giữ hàng (check availability) trước khi in
+            // Backend sẽ tự xác định picking nào chưa assigned để reserve
             try {
                 const reserveResponse = await fetch('/hlv_sale_delivery_planning/reserve_stock', {
                     method: 'POST',
@@ -2087,6 +2180,7 @@ export class DeliveryPlannerDashboard extends Component {
                         params: {
                             sale_order_ids: selectedIds,
                             report_id: reportId,
+                            packer_user_id: packerUserId,
                         },
                     }),
                 });
@@ -2108,6 +2202,12 @@ export class DeliveryPlannerDashboard extends Component {
                     for (const so of this.state.saleOrders) {
                         if (selectedIds.includes(so.id)) {
                             so.has_active_pick_printed = true;
+                            for (const pk of (so.pickings || [])) {
+                                if (pickingIds.includes(pk.id)) {
+                                    pk.printed = true;
+                                    pk.packer_user = [result.result.packer_user_id, result.result.packer_name];
+                                }
+                            }
                         }
                     }
                     this.clearAllSelections();
@@ -2151,8 +2251,8 @@ export class DeliveryPlannerDashboard extends Component {
         const dim = this.state.kanbanGroupBy;
         const fieldMap = {
             delivery_status: 'real_delivery_status',
-            stock_status:    'stock_status',
-            packing_status:  'packing_status',
+            stock_status: 'stock_status',
+            packing_status: 'packing_status',
         };
         const field = fieldMap[dim];
 
@@ -2392,7 +2492,7 @@ export class DeliveryPlannerDashboard extends Component {
             'ir.actions.actions',
             'get_allowed_picking_reports',
             [],
-            { 
+            {
                 context: {
                     active_ids: [pickingId],
                     active_id: pickingId,
@@ -2406,275 +2506,48 @@ export class DeliveryPlannerDashboard extends Component {
         );
     }
 
-    async doPrintPickingReport(ev, pickingId, reportId) {
-        ev.stopPropagation();
+    _isPickingSlipReport(reportId) {
+        const report = (this.state.pickingReports || []).find((r) => r.id === reportId);
+        const name = ((report && report.name) || '').toLowerCase();
+        const reportName = ((report && report.report_name) || '').toLowerCase();
+        return name.includes('lấy hàng') || name.includes('hoạt động lấy hàng') || reportName.startsWith('stock.report_picking');
+    }
+
+    _isPickPickingId(pickingId) {
+        for (const so of this.state.saleOrders || []) {
+            const picking = (so.pickings || []).find((p) => p.id === pickingId);
+            if (picking) {
+                return (picking.sequence_code || '').toUpperCase().includes('PICK') && !picking.return_of_id && picking.state !== 'cancel';
+            }
+        }
+        return false;
+    }
+
+    async doPrintPickingReport(ev, pickingId, reportId, packerUserId = null, skipPackerModal = false) {
+        if (ev && ev.stopPropagation) ev.stopPropagation();
         this.state.printMenuPickingId = null;
+        if (!skipPackerModal && this._isPickPickingId(pickingId) && this._isPickingSlipReport(reportId)) {
+            await this.openPackerAssignModal(reportId, 'qweb-pdf', pickingId);
+            return;
+        }
+        if (packerUserId && this._isPickPickingId(pickingId) && this._isPickingSlipReport(reportId)) {
+            const result = await this.orm.call('stock.picking', 'assign_picking_print_packer', [], {
+                picking_ids: [pickingId],
+                packer_user_id: packerUserId,
+            });
+            if (!result.success) {
+                this.notification.add(result.message || 'Không assign được người đóng', { type: 'danger' });
+                return;
+            }
+        }
         await this.actionService.doAction(reportId, {
             additionalContext: {
                 active_ids: [pickingId],
                 active_id: pickingId,
                 active_model: 'stock.picking',
+                hlv_skip_packer_assignment_dialog: true,
             }
         });
-    }
-
-    // ── Packing Slip Wizard ──────────────────────────────────────────────────
-
-    async openPackingWizard(pickingId, pickingName) {
-        this.state.packingWizardPickingId = pickingId;
-        this.state.packingWizardPickingIds = [];
-        this.state.packingWizardReportId = null;
-        this.state.packingWizardReportType = null;
-        this.state.packingWizardPickingName = pickingName || '';
-        this.state.packingWizardLoading = true;
-        this.state.packingWizardPrinting = false;
-        this.state.packingWizardUsers = [];
-        this.state.packingWizardPackerId = null;
-        this.state.packingWizardPackerName = '';
-        this.state.isPackingWizardOpen = true;
-        await this._loadPackingUsers();
-    }
-
-    async openPackingWizardBatch(pickingIds, reportId, reportType) {
-        this.state.packingWizardPickingId = null;
-        this.state.packingWizardPickingIds = pickingIds;
-        this.state.packingWizardReportId = reportId;
-        this.state.packingWizardReportType = reportType;
-        this.state.packingWizardPickingName = `${pickingIds.length} phiếu lấy hàng`;
-        this.state.packingWizardLoading = true;
-        this.state.packingWizardPrinting = false;
-        this.state.packingWizardUsers = [];
-        this.state.packingWizardPackerId = null;
-        this.state.packingWizardPackerName = '';
-        this.state.isPackingWizardOpen = true;
-        await this._loadPackingUsers();
-    }
-
-    async _loadPackingUsers() {
-        try {
-            const response = await fetch('/hlv_sale_delivery_planning/load_packing_users', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ jsonrpc: '2.0', method: 'call', params: {} }),
-            });
-            const json = await response.json();
-            const res = json.result || {};
-            if (res.users) {
-                this.state.packingWizardUsers = res.users;
-                const defaultUser = res.users.find(u => u.id === res.current_user_id);
-                if (defaultUser) {
-                    this.state.packingWizardPackerId = defaultUser.id;
-                    this.state.packingWizardPackerName = defaultUser.name;
-                }
-            }
-        } catch (e) {
-            console.warn('Failed to load packing users', e);
-        } finally {
-            this.state.packingWizardLoading = false;
-        }
-    }
-
-    closePackingWizard() {
-        this.state.isPackingWizardOpen = false;
-        this.state.packingWizardPickingId = null;
-        this.state.packingWizardPickingIds = [];
-        this.state.packingWizardPickingName = '';
-        this.state.packingWizardLoading = false;
-        this.state.packingWizardPrinting = false;
-        this.state.packingWizardReportId = null;
-        this.state.packingWizardReportType = null;
-    }
-
-    onPackerChange(ev) {
-        const selectedId = parseInt(ev.target.value, 10) || null;
-        this.state.packingWizardPackerId = selectedId;
-        const user = this.state.packingWizardUsers.find(u => u.id === selectedId);
-        this.state.packingWizardPackerName = user ? user.name : '';
-    }
-
-    async confirmPackingSlip() {
-        if (!this.state.packingWizardPackerId) return;
-        const isBatch = this.state.packingWizardPickingIds.length > 0;
-        const pickingIds = isBatch
-            ? this.state.packingWizardPickingIds
-            : (this.state.packingWizardPickingId ? [this.state.packingWizardPickingId] : []);
-        if (!pickingIds.length) return;
-
-        this.state.packingWizardPrinting = true;
-        const packerId = this.state.packingWizardPackerId;
-        const packerName = this.state.packingWizardPackerName;
-        const batchReportId = this.state.packingWizardReportId;
-        const batchReportType = this.state.packingWizardReportType;
-
-        try {
-            // Set packer + status='packing' cho tất cả pickings
-            for (const pid of pickingIds) {
-                await fetch('/hlv_sale_delivery_planning/confirm_packing_slip', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        jsonrpc: '2.0', method: 'call',
-                        params: { picking_id: pid, packer_id: packerId },
-                    }),
-                });
-            }
-
-            this.closePackingWizard();
-            this.notification.add(`Đã giao đóng hàng cho ${packerName}.`, { type: 'success' });
-
-            if (isBatch) {
-                // Batch: dùng lại hàm in gốc (reserve + in)
-                await this._doPrintSelectedPickingSlips(pickingIds, batchReportId, batchReportType);
-            } else {
-                // Single: load report cho picking này
-                const singleId = pickingIds[0];
-                const allowedIds = await this.orm.call(
-                    'ir.actions.actions',
-                    'get_allowed_picking_reports',
-                    [],
-                    { context: { active_ids: [singleId], active_id: singleId, active_model: 'stock.picking' } }
-                );
-                const allowedSet = new Set(allowedIds);
-                const reports = this.state.pickingReports.filter(r => allowedSet.has(r.id));
-                if (reports.length === 1) {
-                    await this.actionService.doAction(reports[0].id, {
-                        additionalContext: { active_ids: [singleId], active_id: singleId, active_model: 'stock.picking' }
-                    });
-                } else if (reports.length > 1) {
-                    this.state.printMenuPickingId = singleId;
-                    this.state.printMenuReports = reports;
-                    this.state.printMenuPos = { top: 200, right: 20 };
-                } else {
-                    this.notification.add('Không tìm thấy mẫu in cho phiếu này.', { type: 'warning' });
-                }
-            }
-
-            await this.fetchData();
-        } catch (e) {
-            console.error('confirmPackingSlip error', e);
-            this.notification.add('Lỗi: ' + (e.message || e), { type: 'danger' });
-        } finally {
-            this.state.packingWizardPrinting = false;
-            this.state.isPrintingPickingSlips = false;
-        }
-    }
-
-    async finishPacking(ev, pickingId) {
-        ev.stopPropagation();
-        try {
-            const response = await fetch('/hlv_sale_delivery_planning/finish_packing', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    jsonrpc: '2.0', method: 'call',
-                    params: { picking_id: pickingId },
-                }),
-            });
-            const json = await response.json();
-            if (json.result && json.result.success === false) {
-                this.notification.add(json.result.message || 'Lỗi', { type: 'danger' });
-                return;
-            }
-            this.notification.add('Đã đánh dấu hoàn thành đóng hàng.', { type: 'success' });
-            await this.fetchData();
-        } catch (e) {
-            this.notification.add('Lỗi: ' + (e.message || e), { type: 'danger' });
-        }
-    }
-
-    togglePackerPanel() {
-        this.state.packerPanelOpen = !this.state.packerPanelOpen;
-        if (this.state.packerPanelOpen) {
-            this.loadPackerStats();
-            if (!this.state.allPackersList.length) this.loadAllPackersList();
-        }
-    }
-
-    togglePackerCollapse(id) {
-        this.state.packerCollapsed[id] = !this.state.packerCollapsed[id];
-    }
-
-    async loadAllPackersList() {
-        try {
-            const res = await fetch('/hlv_sale_delivery_planning/get_packers', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ jsonrpc: '2.0', method: 'call', params: {} }),
-            }).then(r => r.json());
-            const data = res.result || {};
-            if (data.success !== false) {
-                this.state.allPackersList = data.packers || [];
-            }
-        } catch (e) {
-            console.warn('loadAllPackersList error', e);
-        }
-    }
-
-    openDashboardPackerModal(item) {
-        this.state.dashboardPackerModal = {
-            open: true,
-            pickingId: item.picking_id,
-            pickingName: item.picking_name,
-            selectedPackerId: null,
-        };
-    }
-
-    closeDashboardPackerModal() {
-        this.state.dashboardPackerModal.open = false;
-    }
-
-    onDashboardPackerChange(ev) {
-        this.state.dashboardPackerModal.selectedPackerId = ev.target.value ? parseInt(ev.target.value) : null;
-    }
-
-    async confirmDashboardChangePacker() {
-        const { pickingId, selectedPackerId } = this.state.dashboardPackerModal;
-        try {
-            const res = await fetch('/hlv_sale_delivery_planning/change_packer', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    jsonrpc: '2.0', method: 'call',
-                    params: { picking_id: pickingId, packer_id: selectedPackerId || false },
-                }),
-            }).then(r => r.json());
-            const data = res.result || {};
-            if (data.success) {
-                this.state.dashboardPackerModal.open = false;
-                this.notification.add('Đã đổi người đóng gói', { type: 'success' });
-                this.loadPackerStats();
-            } else {
-                this.notification.add('Lỗi: ' + (data.message || 'unknown'), { type: 'danger' });
-            }
-        } catch (e) {
-            this.notification.add('Không thể đổi người đóng gói', { type: 'danger' });
-        }
-    }
-
-    refreshPackerStats(ev) {
-        ev.stopPropagation();
-        this.loadPackerStats();
-    }
-
-    async loadPackerStats() {
-        if (this.state.packerStatsLoading) return;
-        this.state.packerStatsLoading = true;
-        try {
-            const response = await fetch('/hlv_sale_delivery_planning/packer_stats', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ jsonrpc: '2.0', method: 'call', params: {} }),
-            });
-            const json = await response.json();
-            const res = json.result || {};
-            if (res.success !== false) {
-                this.state.packerStats = res.packers || [];
-            }
-        } catch (e) {
-            console.warn('loadPackerStats error', e);
-        } finally {
-            this.state.packerStatsLoading = false;
-        }
     }
 
     openVideo(url) {
@@ -2686,19 +2559,19 @@ export class DeliveryPlannerDashboard extends Component {
         switch (receiptStatus) {
             case "pending": return "bg-secondary";
             case "partial": return "bg-warning text-dark";
-            case "full":    return "bg-success";
-            default:        return "bg-light text-muted border";
+            case "full": return "bg-success";
+            default: return "bg-light text-muted border";
         }
     }
 
     // --- Translations (delegate to utils) ---
-    translatePOStatus(s)         { return translatePOStatus(s); }
-    translateDeliveryStatus(s)   { return translateDeliveryStatus(s); }
-    translatePickingState(s)     { return translatePickingState(s); }
-    translatePickingStatus(s)    { return translatePickingStatus(s); }
-    translateStockStatus(s)      { return translateStockStatus(s); }
-    translatePackingStatus(s)    { return translatePackingStatus(s); }
-    translateSOStatus(s)         { return translateSOStatus(s); }
+    translatePOStatus(s) { return translatePOStatus(s); }
+    translateDeliveryStatus(s) { return translateDeliveryStatus(s); }
+    translatePickingState(s) { return translatePickingState(s); }
+    translatePickingStatus(s) { return translatePickingStatus(s); }
+    translateStockStatus(s) { return translateStockStatus(s); }
+    translatePackingStatus(s) { return translatePackingStatus(s); }
+    translateSOStatus(s) { return translateSOStatus(s); }
 
     formatPackageGroupStatus(so, group) {
         if (group.picking_state !== 'done') {
@@ -2781,17 +2654,17 @@ export class DeliveryPlannerDashboard extends Component {
     }
 
     // --- Badge Classes (delegate to utils) ---
-    getPickingStateBadgeClass(s)            { return getPickingStateBadgeClass(s); }
-    getPickingStatusBadgeClass(s)           { return getPickingStatusBadgeClass(s); }
-    getDeliveryStatusBadgeClass(s)          { return getDeliveryStatusBadgeClass(s); }
-    getStockStatusBadgeClass(s)             { return getStockStatusBadgeClass(s); }
-    getPackingStatusBadgeClass(s)           { return getPackingStatusBadgeClass(s); }
-    getPOStatusBadgeClass(state, receipt)   { return getPOStatusBadgeClass(state, receipt); }
-    getSOCardColorClass(so)                 { return getSOCardColorClass(so); }
+    getPickingStateBadgeClass(s) { return getPickingStateBadgeClass(s); }
+    getPickingStatusBadgeClass(s) { return getPickingStatusBadgeClass(s); }
+    getDeliveryStatusBadgeClass(s) { return getDeliveryStatusBadgeClass(s); }
+    getStockStatusBadgeClass(s) { return getStockStatusBadgeClass(s); }
+    getPackingStatusBadgeClass(s) { return getPackingStatusBadgeClass(s); }
+    getPOStatusBadgeClass(state, receipt) { return getPOStatusBadgeClass(state, receipt); }
+    getSOCardColorClass(so) { return getSOCardColorClass(so); }
 
     // --- Formatting (delegate to utils) ---
-    formatCurrency(v)                       { return formatCurrency(v); }
-    formatQty(v)                            { return formatQty(v); }
+    formatCurrency(v) { return formatCurrency(v); }
+    formatQty(v) { return formatQty(v); }
     getDatesComparisonClass(soDate, poDate) { return getDatesComparisonClass(soDate, poDate); }
 
     // --- Group duplicate product lines ---
@@ -2810,13 +2683,15 @@ export class DeliveryPlannerDashboard extends Component {
                 map[pid].delivered_tax += (l.delivered_tax || 0);
                 map[pid].delivered_total += (l.delivered_total || 0);
             } else {
-                map[pid] = { ...l, product_uom_qty: l.product_uom_qty || 0,
+                map[pid] = {
+                    ...l, product_uom_qty: l.product_uom_qty || 0,
                     qty_delivered: l.qty_delivered || 0, qty_packed: l.qty_packed || 0,
                     qty_available: l.qty_available || 0, qty_warehouse_free: l.qty_warehouse_free || 0,
                     qty_reserved_here: l.qty_reserved_here || 0,
                     delivered_subtotal: l.delivered_subtotal || 0,
                     delivered_tax: l.delivered_tax || 0,
-                    delivered_total: l.delivered_total || 0 };
+                    delivered_total: l.delivered_total || 0
+                };
                 order.push(pid);
             }
         }
@@ -3354,12 +3229,12 @@ export class DeliveryPlannerDashboard extends Component {
             filter_tag_ids: this.state.filterTagIds.join(','),
             show_completed: this.state.showCompleted ? '1' : '',
         });
-        
+
         const selectedIds = Array.from(this.state.selectedSOIds);
         if (selectedIds.length > 0) {
             params.set('selected_ids', selectedIds.join(','));
         }
-        
+
         window.open(`/hlv_sale_delivery_planning/export_excel?${params.toString()}`, '_blank');
     }
 

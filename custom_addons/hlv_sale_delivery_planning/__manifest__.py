@@ -5,12 +5,12 @@
     'description': 'Dashboard trực quan bằng OWL quản lý kế hoạch giao hàng từ đơn bán và tiến độ hàng từ đơn mua.',
     'category': 'Sales',
     'author': 'HLV',
-    'depends': ['sale_management', 'purchase_stock', 'bus', 'llm_thread', 'llm_assistant', 'llm_tool_file_export'],
+    'depends': ['sale_management', 'purchase_stock', 'bus'],
     'data': [
         'security/ir.model.access.csv',
+        'views/res_config_settings_views.xml',
+        'views/res_users_views.xml',
         'views/delivery_planner_views.xml',
-        'views/delivery_planner_vehicle_views.xml',
-        'report/packing_slip.xml',
     ],
     'assets': {
         'web.assets_backend': [
@@ -25,20 +25,15 @@
             'hlv_sale_delivery_planning/static/src/components/delivery_planner/delivery_planner_table.xml',
             'hlv_sale_delivery_planning/static/src/components/delivery_planner/delivery_planner_transfer_modal.xml',
             'hlv_sale_delivery_planning/static/src/components/delivery_planner/delivery_planner_relocation_modal.xml',
-            'hlv_sale_delivery_planning/static/src/components/delivery_planner/delivery_planner_packing_wizard.xml',
+            'hlv_sale_delivery_planning/static/src/components/delivery_planner/delivery_planner_packer_modal.xml',
+            'hlv_sale_delivery_planning/static/src/components/packing_kpi/packing_kpi.xml',
             # Main template
             'hlv_sale_delivery_planning/static/src/components/delivery_planner/delivery_planner.xml',
             # JS utils (phải đăng ký trước main component)
             'hlv_sale_delivery_planning/static/src/components/delivery_planner/delivery_planner_utils.js',
+            'hlv_sale_delivery_planning/static/src/report/picking_packer_assignment_handler.js',
             'hlv_sale_delivery_planning/static/src/components/delivery_planner/delivery_planner.js',
-            # Packing KPI page (component độc lập)
-            'hlv_sale_delivery_planning/static/src/components/packing_kpi/packing_kpi.xml',
             'hlv_sale_delivery_planning/static/src/components/packing_kpi/packing_kpi.js',
-            # Floating AI chat (component độc lập, nhúng vào dashboard mà không
-            # đụng tới bất kỳ file nào của delivery_planner)
-            'hlv_sale_delivery_planning/static/src/components/delivery_planner_chat/delivery_planner_chat.scss',
-            'hlv_sale_delivery_planning/static/src/components/delivery_planner_chat/delivery_planner_chat.xml',
-            'hlv_sale_delivery_planning/static/src/components/delivery_planner_chat/delivery_planner_chat.js',
         ],
     },
     'installable': True,

@@ -138,9 +138,7 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
         self, so, po_by_origin, product_availabilities,
         att_by_picking, so_packages_dict, so_status_dict,
         transfer_suggestions=None,
-        page_kit_tmpl_ids=None, page_kit_bom_map=None,
-        page_combo_old_tmpl_ids=None,
-        page_blocking_by_so=None,
+        page_kit_tmpl_ids=None, page_kit_bom_map=None, page_blocking_by_so=None,
         with_flows=False,
     ):
         """
@@ -191,43 +189,6 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             kit_tmpl_ids = set(kits.mapped('product_tmpl_id').ids)
             kit_bom_map = {bom.product_tmpl_id.id: bom for bom in kits}
 
-        # --- Nhận diện Old-style Combo (is_combo=True, không có phantom BOM) ---
-        # Khi bán combo kiểu cũ: combo parent SOL có qty_delivered=0 (không có stock move),
-        # các linh kiện được bán riêng lẻ như SOL độc lập với qty_delivered của riêng chúng.
-        # Để tính đúng trạng thái giao hàng, ta tính effective_qty_delivered từ min ratio
-        # giao hàng của các linh kiện combo.
-        if page_combo_old_tmpl_ids is not None:
-            combo_old_tmpl_ids = page_combo_old_tmpl_ids
-        else:
-            all_tmpl = so.order_line.mapped('product_id.product_tmpl_id')
-            # Bao gồm sản phẩm có phantom BOM: fallback khi BOM explosion thất bại
-            combo_old_tmpl_ids = set(
-                t.id for t in all_tmpl
-                if getattr(t, 'is_combo', False)
-            )
-
-        # Build combo_items_map: {tmpl_id: [(component_product_id, qty_per_combo), ...]}
-        combo_items_map = {}
-        if combo_old_tmpl_ids:
-            combo_recs = self.env['combo.product'].sudo().search([
-                ('product_template_id', 'in', list(combo_old_tmpl_ids)),
-            ])
-            for cp in combo_recs:
-                tmpl_id = cp.product_template_id.id
-                if tmpl_id not in combo_items_map:
-                    combo_items_map[tmpl_id] = []
-                combo_items_map[tmpl_id].append((cp.product_id.id, cp.product_quantity))
-
-        # Pre-build delivered qty map từ các SOL trong đơn này (để tra nhanh cho combo)
-        sol_delivered_by_product = {}
-        if combo_old_tmpl_ids:
-            for sol in so.order_line:
-                if not sol.display_type and sol.product_id:
-                    pid = sol.product_id.id
-                    sol_delivered_by_product[pid] = (
-                        sol_delivered_by_product.get(pid, 0.0) + sol.qty_delivered
-                    )
-
         # --- Batch load tồn kho thực cho TẤT CẢ Kit components (Fix N+1) ---
         # Dùng kit_bom_map.values() thay vì ORM recordset 'kits' (hoạt động cả 2 nhánh)
         kit_comp_true_free = {}
@@ -273,20 +234,6 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             p_name = line.product_id.display_name if line.product_id else 'Unknown'
             p_type = line.product_id.type if line.product_id else 'service'
             is_kit = line.product_id.product_tmpl_id.id in kit_tmpl_ids
-            is_combo_old = (
-                not is_kit
-                and bool(line.product_id)
-                and line.product_id.product_tmpl_id.id in combo_old_tmpl_ids
-            )
-            # Fallback: kit product có phantom BOM nhưng BOM explosion thất bại
-            # (bom_line_id=NULL trên moves) → qty_delivered=0 dù linh kiện đã giao.
-            # Chỉ kích hoạt khi qty_delivered=0 (tiết kiệm tài nguyên).
-            kit_fallback = (
-                is_kit
-                and line.qty_delivered == 0
-                and bool(line.product_id)
-                and line.product_id.product_tmpl_id.id in combo_old_tmpl_ids
-            )
 
             if is_kit:
                 # Phantom BOM kit: tính số kit hoàn chỉnh từ linh kiện
@@ -355,6 +302,37 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                 raw_free = 0.0
                 reserved_line = 0.0
 
+            # Kit Fallback: BOM explosion xảy ra nhưng bom_line_id=NULL →
+            # Odoo không tính qty_delivered. Dùng done outgoing moves của kit SOL.
+            eff_qty_del = line.qty_delivered
+            if is_kit and line.qty_delivered == 0 and line.product_id:
+                _fb_bom = kit_bom_map.get(line.product_id.product_tmpl_id.id)
+                if _fb_bom:
+                    _done_out_mvs = self.env['stock.move'].sudo().search_read(
+                        [
+                            ('sale_line_id', '=', line.id),
+                            ('state', '=', 'done'),
+                            ('picking_id.picking_type_code', '=', 'outgoing'),
+                        ],
+                        ['product_id', 'quantity'],
+                    )
+                    _done_by_prod = {}
+                    for _m in _done_out_mvs:
+                        _mpid = _m['product_id'][0] if isinstance(_m.get('product_id'), (list, tuple)) else _m.get('product_id')
+                        if _mpid:
+                            _done_by_prod[_mpid] = _done_by_prod.get(_mpid, 0.0) + (_m.get('quantity') or 0.0)
+                    if _done_by_prod:
+                        _bom_qty = _fb_bom.product_qty or 1.0
+                        _kits_ratio = float('inf')
+                        for _comp in _fb_bom.bom_line_ids:
+                            _qty_per_kit = (_comp.product_qty or 0.0) / _bom_qty
+                            if _qty_per_kit > 0 and _comp.product_id:
+                                _kits_ratio = min(
+                                    _kits_ratio,
+                                    _done_by_prod.get(_comp.product_id.id, 0.0) / _qty_per_kit,
+                                )
+                        if _kits_ratio != float('inf') and _kits_ratio > 0:
+                            eff_qty_del = min(_kits_ratio, line.product_uom_qty)
             # --- Price / financial fields ---
             price_unit = line.price_unit
             discount = line.discount
@@ -384,15 +362,13 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                 'id': line.id,
                 'product_id': [line.product_id.id, p_name] if line.product_id else False,
                 'product_uom_qty': line.product_uom_qty,
-                'qty_delivered': line.qty_delivered,
+                'qty_delivered': eff_qty_del,
                 'qty_packed': qty_packed,
                 'qty_available': qty_avail,
                 'qty_warehouse_free': raw_free,
                 'qty_reserved_here': reserved_line,
                 'product_type': p_type,
                 'is_kit': is_kit,
-                'is_combo_old': is_combo_old,
-                'kit_combo_fallback': kit_fallback,
                 'price_unit': price_unit,
                 'discount': discount,
                 'delivered_subtotal': round(delivered_subtotal, 0),
@@ -400,35 +376,13 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                 'delivered_total': round(delivered_total, 0),
             })
 
-            if p_type != 'service' and (not is_kit or kit_fallback):
-                # Tính effective_qty_delivered cho combo (kiểu cũ hoặc kit fallback):
-                # combo parent không có stock move riêng → qty_delivered=0,
-                # nhưng linh kiện được giao dưới dạng SOL độc lập.
-                # effective = min(ratio giao của từng linh kiện) * qty_ordered.
-                if is_combo_old or kit_fallback:
-                    combo_items = combo_items_map.get(line.product_id.product_tmpl_id.id, [])
-                    if combo_items and line.product_uom_qty > 0:
-                        min_ratio = float('inf')
-                        for item_pid, item_qty_per in combo_items:
-                            needed = item_qty_per * line.product_uom_qty
-                            if needed > 0:
-                                delivered_comp = sol_delivered_by_product.get(item_pid, 0.0)
-                                min_ratio = min(min_ratio, delivered_comp / needed)
-                        effective_qty_del = (
-                            min(min_ratio, 1.0) * line.product_uom_qty
-                            if min_ratio != float('inf') else 0.0
-                        )
-                    else:
-                        effective_qty_del = line.qty_delivered
-                else:
-                    effective_qty_del = line.qty_delivered
-
-                pending_qty = line.product_uom_qty - effective_qty_del
+            if p_type != 'service' and not is_kit:
+                pending_qty = line.product_uom_qty - line.qty_delivered
                 if pending_qty > 0:
                     has_pending = True
                     if qty_avail < pending_qty:
                         is_fully_ready = False
-                if effective_qty_del > 0:
+                if line.qty_delivered > 0:
                     has_delivered = True
 
         # --- Stock + packing status từ dict đã tính sẵn ---
@@ -522,6 +476,20 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                 'return_of_id': p.return_id.id if p.return_id else False,
                 'return_of': p.return_id.name if p.return_id else False,
                 'printed': bool(p.x_printed),
+                'packer_user': (
+                    [p.x_pack_packer_user_id.id,
+                     getattr(p.x_pack_packer_user_id, 'x_packer_name', None) or p.x_pack_packer_user_id.name]
+                    if getattr(p, 'x_pack_packer_user_id', False) and p.x_pack_packer_user_id
+                    else False
+                ),
+                'pack_assigned_at': p.x_pack_assigned_at.strftime('%Y-%m-%d %H:%M:%S') if p.x_pack_assigned_at else False,
+                'pick_print_start_at': p.x_pick_print_start_at.strftime('%Y-%m-%d %H:%M:%S') if p.x_pick_print_start_at else False,
+                'pick_print_end_at': p.x_pick_print_end_at.strftime('%Y-%m-%d %H:%M:%S') if p.x_pick_print_end_at else False,
+                'pack_source_pick_id': p.x_pack_source_pick_id.id if p.x_pack_source_pick_id else False,
+                'pack_actual_start_at': p.x_pack_actual_start_at.strftime('%Y-%m-%d %H:%M:%S') if p.x_pack_actual_start_at else False,
+                'pack_actual_end_at': p.x_pack_actual_end_at.strftime('%Y-%m-%d %H:%M:%S') if p.x_pack_actual_end_at else False,
+                'pack_actual_seconds': p.x_pack_actual_seconds or 0,
+                'pack_print_to_done_seconds': p.x_pack_print_to_done_seconds or 0,
                 'bien_ban_printed': bool(getattr(p, 'x_bien_ban_printed', False)),
                 'shipper_scanned': bool(getattr(p, 'shipper_scanned', False)),
                 'shipper_received': bool(getattr(p, 'shipper_received', False)),
@@ -529,22 +497,6 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                     [p.shipper_user_id.id,
                      getattr(p.shipper_user_id, 'shipper_name', None) or p.shipper_user_id.name]
                     if getattr(p, 'shipper_user_id', False) and p.shipper_user_id
-                    else False
-                ),
-                'x_packing_status': getattr(p, 'x_packing_status', 'pending') or 'pending',
-                'x_packer_id': (
-                    [p.x_packer_id.id, p.x_packer_id.name]
-                    if getattr(p, 'x_packer_id', False) and p.x_packer_id
-                    else False
-                ),
-                'x_packing_print_time': (
-                    p.x_packing_print_time.strftime('%d/%m/%Y %H:%M')
-                    if getattr(p, 'x_packing_print_time', False) and p.x_packing_print_time
-                    else False
-                ),
-                'x_bien_ban_print_time': (
-                    p.x_bien_ban_print_time.strftime('%d/%m/%Y %H:%M')
-                    if getattr(p, 'x_bien_ban_print_time', False) and p.x_bien_ban_print_time
                     else False
                 ),
                 'videos': att_by_picking.get(p.id, []),
