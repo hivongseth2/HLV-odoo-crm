@@ -880,8 +880,9 @@ class HLVMobileBarcodeController(http.Controller):
                         for move in picking.move_ids:
                             if move.state == 'cancel':
                                 continue
-                            qty_done = sum(ml.quantity for ml in move.move_line_ids)
-                            if qty_done <= 0:
+                            # Only include quantities that actually went to transit location
+                            qty_done = sum(ml.quantity for ml in move.move_line_ids if ml.location_dest_id.usage == 'transit')
+                            if qty_done <= 0 and not move.move_line_ids:
                                 qty_done = move.product_uom_qty
                             if qty_done <= 0:
                                 continue
