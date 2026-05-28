@@ -833,9 +833,18 @@ class HLVMobileBarcodeController(http.Controller):
                 if not linked_exists:
                     warehouse = picking.picking_type_id.warehouse_id
                     picking_type_in = False
-                    if warehouse and warehouse.in_type_id:
-                        picking_type_in = warehouse.in_type_id
-                    else:
+                    
+                    # Force step 2 to be Receipts (incoming type / sequence code IN)
+                    if warehouse:
+                        picking_type_in = request.env['stock.picking.type'].sudo().search([
+                            ('code', '=', 'incoming'),
+                            ('warehouse_id', '=', warehouse.id),
+                            ('company_id', '=', picking.company_id.id)
+                        ], limit=1)
+                        if not picking_type_in and warehouse.in_type_id and warehouse.in_type_id.code == 'incoming':
+                            picking_type_in = warehouse.in_type_id
+                    
+                    if not picking_type_in:
                         picking_type_in = request.env['stock.picking.type'].sudo().search([
                             ('code', '=', 'incoming'), 
                             ('company_id', '=', picking.company_id.id),
