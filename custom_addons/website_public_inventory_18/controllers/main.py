@@ -620,3 +620,151 @@ class PublicInventory(http.Controller):
         results = results[:10]
         
         return {"ok": True, "products": results}
+
+    @http.route(["/search_stock/forecast_details"], type="json", auth="public", methods=["POST"])
+    def forecast_details(self, product_id=None, warehouse_id=None):
+        """Trả về chi tiết cấu thành số dự báo: phiếu nhập từ ĐMH + phiếu xuất từ ĐBH."""
+        if not _pw_allowed():
+            return {"ok": False, "error": "access_denied"}
+
+        env = request.env
+        params = request.jsonrequest.get("params") if hasattr(request, "jsonrequest") else {}
+        if params:
+            if product_id is None: product_id = params.get("product_id")
+            if warehouse_id is None: warehouse_id = params.get("warehouse_id")
+
+        pid = _as_int_or_none(product_id)
+        wid = _as_int_or_none(warehouse_id)
+        if not pid:
+            return {"ok": False, "error": "invalid_product_id"}
+
+        company_ids = _companies_for_context(wid)
+        if not company_ids:
+            company_ids = env.companies.ids
+
+        Product = env["product.product"].sudo().with_context(allowed_company_ids=company_ids)
+        StockMove = env["stock.move"].sudo().with_context(allowed_company_ids=company_ids)
+        Warehouse = env["stock.warehouse"].sudo().with_context(allowed_company_ids=company_ids)
+        Quant = env["stock.quant"].sudo().with_context(allowed_company_ids=company_ids)
+
+        product = Product.browse(pid).exists()
+        if not product:
+            return {"ok": False, "error": "product_not_found"}
+
+        # --- Tồn thực tế ---
+        quant_domain = [("product_id", "=", pid), ("location_id.usage", "=", "internal")]
+        if wid:
+            wh = Warehouse.browse(wid).exists()
+            if wh:
+                quant_domain.append(("location_id", "child_of", wh.view_location_id.id))
+        else:
+            allowed_whs = _get_allowed_warehouses()
+            if allowed_whs:
+                quant_domain.append(("location_id", "child_of", allowed_whs.mapped('view_location_id').ids))
+        quant_groups = Quant.read_group(quant_domain, ["product_id", "quantity:sum"], ["product_id"], lazy=False)
+        qty_on_hand = sum(_rg_sum(g, "quantity") for g in quant_groups)
+
+        # State labels tiếng Việt
+        _STATE_VN = {
+            'draft': 'Nháp', 'waiting': 'Đang chờ', 'confirmed': 'Xác nhận',
+            'assigned': 'Sẵn sàng', 'done': 'Hoàn tất', 'cancel': 'Đã hủy',
+        }
+
+        def _wh_dest_domain(domain_list):
+            """Thêm filter kho cho location đích (nhập)."""
+            if wid:
+                wh = Warehouse.browse(wid).exists()
+                if wh:
+                    domain_list.append(("location_dest_id", "child_of", wh.view_location_id.id))
+            else:
+                allowed_whs = _get_allowed_warehouses()
+                if allowed_whs:
+                    domain_list.append(("location_dest_id", "child_of", allowed_whs.mapped('view_location_id').ids))
+            return domain_list
+
+        def _wh_src_domain(domain_list):
+            """Thêm filter kho cho location nguồn (xuất)."""
+            if wid:
+                wh = Warehouse.browse(wid).exists()
+                if wh:
+                    domain_list.append(("location_id", "child_of", wh.view_location_id.id))
+            else:
+                allowed_whs = _get_allowed_warehouses()
+                if allowed_whs:
+                    domain_list.append(("location_id", "child_of", allowed_whs.mapped('view_location_id').ids))
+            return domain_list
+
+        # --- Phiếu nhập từ ĐMH (picking type = incoming, có purchase_id) ---
+        incoming_domain = _wh_dest_domain([
+            ("product_id", "=", pid),
+            ("state", "not in", ["done", "cancel", "draft"]),
+            ("picking_type_id.code", "=", "incoming"),
+            ("picking_id.purchase_id", "!=", False),
+        ])
+        try:
+            incoming_moves = StockMove.search(incoming_domain, order="date asc")
+        except Exception:
+            incoming_moves = StockMove.browse([])
+
+        incoming_by_picking = {}
+        for move in incoming_moves:
+            picking = move.picking_id
+            if not picking:
+                continue
+            key = picking.id
+            if key not in incoming_by_picking:
+                po = getattr(picking, 'purchase_id', None)
+                sched = picking.scheduled_date
+                incoming_by_picking[key] = {
+                    "picking_name": picking.name or "",
+                    "po_name": po.name if po else (picking.origin or ""),
+                    "scheduled_date": sched.strftime('%d/%m/%Y') if sched else "",
+                    "state": _STATE_VN.get(picking.state, picking.state),
+                    "qty": 0.0,
+                }
+            incoming_by_picking[key]["qty"] += move.product_uom_qty
+
+        # --- Phiếu xuất từ ĐBH (picking type = outgoing, có sale_id) ---
+        outgoing_domain = _wh_src_domain([
+            ("product_id", "=", pid),
+            ("state", "not in", ["done", "cancel", "draft"]),
+            ("picking_type_id.code", "=", "outgoing"),
+            ("picking_id.sale_id", "!=", False),
+        ])
+        try:
+            outgoing_moves = StockMove.search(outgoing_domain, order="date asc")
+        except Exception:
+            outgoing_moves = StockMove.browse([])
+
+        outgoing_by_picking = {}
+        for move in outgoing_moves:
+            picking = move.picking_id
+            if not picking:
+                continue
+            key = picking.id
+            if key not in outgoing_by_picking:
+                so = getattr(picking, 'sale_id', None)
+                sched = picking.scheduled_date
+                outgoing_by_picking[key] = {
+                    "picking_name": picking.name or "",
+                    "so_name": so.name if so else (picking.origin or ""),
+                    "scheduled_date": sched.strftime('%d/%m/%Y') if sched else "",
+                    "state": _STATE_VN.get(picking.state, picking.state),
+                    "qty": 0.0,
+                }
+            outgoing_by_picking[key]["qty"] += move.product_uom_qty
+
+        total_incoming = sum(v["qty"] for v in incoming_by_picking.values())
+        total_outgoing = sum(v["qty"] for v in outgoing_by_picking.values())
+        qty_forecast = qty_on_hand + total_incoming - total_outgoing
+
+        return {
+            "ok": True,
+            "product_name": product.display_name,
+            "qty_on_hand": qty_on_hand,
+            "total_incoming": total_incoming,
+            "total_outgoing": total_outgoing,
+            "qty_forecast": qty_forecast,
+            "incoming": sorted(incoming_by_picking.values(), key=lambda x: x["scheduled_date"]),
+            "outgoing": sorted(outgoing_by_picking.values(), key=lambda x: x["scheduled_date"]),
+        }
