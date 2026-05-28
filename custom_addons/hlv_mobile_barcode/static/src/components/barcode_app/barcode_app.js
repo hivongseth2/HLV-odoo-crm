@@ -52,6 +52,7 @@ export class BarcodeApp extends Component {
             showCameraPopup: false,
             pickingRefreshTick: 0,
             pickingState: "",
+            scanMode: savedState.scanMode || "source",
         });
         
         useEffect(() => {
@@ -67,7 +68,8 @@ export class BarcodeApp extends Component {
                 lookupTitle: this.state.lookupTitle,
                 prefillLocationBarcode: this.state.prefillLocationBarcode,
                 prefillLocationName: this.state.prefillLocationName,
-                history: this.history
+                history: this.history,
+                scanMode: this.state.scanMode
             }));
         }, () => [
             this.state.currentView,
@@ -80,7 +82,8 @@ export class BarcodeApp extends Component {
             this.state.recordId,
             this.state.lookupTitle,
             this.state.prefillLocationBarcode,
-            this.state.prefillLocationName
+            this.state.prefillLocationName,
+            this.state.scanMode
         ]);
 
         this.barcodeBuffer = "";
@@ -167,6 +170,14 @@ export class BarcodeApp extends Component {
         this.viewScannerCallback = cb;
     }
 
+    toggleScanMode(mode) {
+        if (mode) {
+            this.state.scanMode = mode;
+        } else {
+            this.state.scanMode = this.state.scanMode === 'source' ? 'dest' : 'source';
+        }
+    }
+
     async processBarcode(barcode) {
         if (!barcode) return;
         
@@ -192,7 +203,8 @@ export class BarcodeApp extends Component {
                     picking_id: this.state.pickingId, 
                     barcode: barcode,
                     destination_location_id: this.state.scannedLocationId,
-                    last_product_id: this.state.lastScannedProduct
+                    last_product_id: this.state.lastScannedProduct,
+                    location_mode: this.state.scanMode
                 });
                 if (res.error) {
                     this.playSound('error');

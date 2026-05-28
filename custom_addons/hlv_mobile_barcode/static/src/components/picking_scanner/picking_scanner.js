@@ -14,6 +14,8 @@ export class PickingScanner extends Component {
         lastScannedProduct: { type: Number, optional: true },
         scannedLocationName: { type: String, optional: true },
         refreshTick: { type: Number, optional: true },
+        scanMode: { type: String, optional: true },
+        onToggleScanMode: { type: Function, optional: true },
     };
 
     setup() {

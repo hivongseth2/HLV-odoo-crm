@@ -292,7 +292,7 @@ class HLVMobileBarcodeController(http.Controller):
         }
 
     @http.route('/hlv_mobile_barcode/process_barcode', type='json', auth='user')
-    def process_barcode(self, picking_id, barcode, destination_location_id=None, last_product_id=None):
+    def process_barcode(self, picking_id, barcode, destination_location_id=None, last_product_id=None, location_mode=None):
         picking = request.env['stock.picking'].browse(picking_id)
         if not picking.exists() or picking.state not in ['draft', 'confirmed', 'assigned']:
             return {'error': _('Phiếu này không thể xử lý thêm sản phẩm.')}
@@ -317,8 +317,13 @@ class HLVMobileBarcodeController(http.Controller):
         pt_code = (picking.picking_type_id.sequence_code or '').upper()
         pt_type = picking.picking_type_id.code
         is_putaway = False
-        if pt_type == 'incoming' or (pt_type == 'internal' and 'INT' not in pt_code and 'IN' in pt_code) or picking.location_id.usage == 'transit':
+        if location_mode == 'dest':
             is_putaway = True
+        elif location_mode == 'source':
+            is_putaway = False
+        else:
+            if pt_type == 'incoming' or (pt_type == 'internal' and 'INT' not in pt_code and 'IN' in pt_code) or picking.location_id.usage == 'transit':
+                is_putaway = True
         
         # 1. Try to find location first
         location = request.env['stock.location'].sudo().search(['|', ('barcode', '=', barcode), ('name', '=', barcode)], limit=1)

@@ -15,6 +15,20 @@
             
                 <!-- Scrollable product list area -->
                 <div class="picking-scroll-area">
+                    <!-- Location Scanning Mode Toggle (only for internal INT transfers) -->
+                    <div t-if="state.picking and state.picking.picking_type_code === 'internal'" class="scan-mode-container">
+                        <div class="scan-mode-label">
+                            <i class="fa fa-sliders-h"></i> Chế độ quét vị trí:
+                        </div>
+                        <div class="scan-mode-toggle-group">
+                            <button t-attf-class="btn-toggle-item #{props.scanMode === 'source' ? 'active' : ''}" t-on-click="() => props.onToggleScanMode('source')">
+                                <i class="fa fa-sign-out-alt"></i> Nguồn
+                            </button>
+                            <button t-attf-class="btn-toggle-item #{props.scanMode === 'dest' ? 'active' : ''}" t-on-click="() => props.onToggleScanMode('dest')">
+                                <i class="fa fa-sign-in-alt"></i> Đích nhận
+                            </button>
+                        </div>
+                    </div>
 
                     
                     <!-- Collapsible Packages Section -->
