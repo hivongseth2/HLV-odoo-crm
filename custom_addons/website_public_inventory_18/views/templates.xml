@@ -1271,6 +1271,303 @@
               padding: 10px !important;
             }
           }
+
+          /* ==========================================================
+             Inventory UI V3 Compact: fewer rounded corners, natural mobile scroll
+             ========================================================== */
+
+          body:has(#inv-table),
+          body:has(#inv-table) html,
+          body:has(#inv-table) #wrapwrap,
+          body:has(#inv-table) #wrap {
+            height: auto !important;
+            min-height: 100vh !important;
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
+          }
+
+          #wrap .container-fluid > div:first-child,
+          #search-form,
+          .search-wrapper,
+          #search-form .form-select,
+          #search-form .btn,
+          #search-form .col-md-3,
+          .table-responsive,
+          #wrap .card,
+          .detail-container-mobile,
+          .wh-card,
+          #forecastDetailsModal .modal-content,
+          #locationDetailsModal .modal-content {
+            border-radius: 10px !important;
+          }
+
+          #wrap .nav-pills .nav-link,
+          #wrap .btn-expand,
+          .search-chip,
+          #inv-table .badge {
+            border-radius: 999px !important;
+          }
+
+          @media (min-width: 769px) {
+            #wrap .table-responsive {
+              max-height: calc(100vh - 172px) !important;
+              overflow: auto !important;
+            }
+
+            #inv-table thead th {
+              position: sticky !important;
+              top: 0 !important;
+              z-index: 50 !important;
+            }
+          }
+
+          @media (max-width: 768px) {
+            body:has(#inv-table),
+            body:has(#inv-table) #wrapwrap,
+            body:has(#inv-table) #wrap,
+            body:has(#inv-table) main,
+            body:has(#inv-table) section,
+            body:has(#inv-table) .container-fluid,
+            body:has(#inv-table) .card,
+            body:has(#inv-table) .table-responsive {
+              height: auto !important;
+              min-height: 0 !important;
+              max-height: none !important;
+              overflow-y: visible !important;
+            }
+
+            body:has(#inv-table) {
+              overflow-y: auto !important;
+              -webkit-overflow-scrolling: touch;
+              background: #f7f9fc !important;
+            }
+
+            #wrap .container-fluid {
+              width: 100% !important;
+              max-width: none !important;
+              padding: 8px 10px 88px !important;
+            }
+
+            #wrap .container-fluid > div:first-child {
+              display: none !important;
+            }
+
+            #search-form {
+              display: grid !important;
+              grid-template-columns: 1fr !important;
+              position: relative !important;
+              top: auto !important;
+              z-index: 1 !important;
+              gap: 8px !important;
+              padding: 10px !important;
+              margin: 0 0 10px !important;
+              border: 1px solid rgba(226,232,240,.72) !important;
+              background: rgba(255,255,255,.78) !important;
+              box-shadow: 0 10px 28px -24px rgba(15,23,42,.45) !important;
+              backdrop-filter: blur(14px) saturate(140%) !important;
+            }
+
+            #search-form > [class*="col-"] {
+              width: 100% !important;
+              max-width: none !important;
+              padding: 0 !important;
+              margin: 0 !important;
+            }
+
+            .search-wrapper,
+            #search-form .form-select,
+            #search-form .btn {
+              height: 42px !important;
+              min-height: 42px !important;
+            }
+
+            #search-form .col-md-3 {
+              height: auto !important;
+              min-height: 42px !important;
+              padding: 8px 10px !important;
+              justify-content: space-between !important;
+              gap: 8px !important;
+            }
+
+            #wrap .table-responsive {
+              display: block !important;
+              max-height: none !important;
+              overflow: visible !important;
+              border: 0 !important;
+              border-radius: 0 !important;
+              background: transparent !important;
+              box-shadow: none !important;
+              backdrop-filter: none !important;
+            }
+
+            #inv-table,
+            #inv-table tbody {
+              display: block !important;
+              width: 100% !important;
+              min-width: 0 !important;
+              max-width: 100% !important;
+              border: 0 !important;
+              background: transparent !important;
+            }
+
+            #inv-table thead {
+              display: none !important;
+            }
+
+            #inv-table tbody tr.main-row {
+              display: grid !important;
+              grid-template-columns: 64px minmax(0, 1fr) 32px !important;
+              grid-template-rows: auto auto auto auto auto auto auto !important;
+              gap: 7px 10px !important;
+              margin: 0 0 8px !important;
+              padding: 10px !important;
+              border: 1px solid rgba(226,232,240,.72) !important;
+              border-radius: 10px !important;
+              background: rgba(255,255,255,.86) !important;
+              box-shadow: 0 8px 22px -18px rgba(15,23,42,.45) !important;
+              backdrop-filter: blur(12px) saturate(130%) !important;
+            }
+
+            #inv-table tbody tr.main-row td {
+              padding: 0 !important;
+              border: 0 !important;
+              background: transparent !important;
+              min-width: 0 !important;
+              max-width: 100% !important;
+            }
+
+            #inv-table tbody tr.main-row td:nth-child(1) {
+              display: flex !important;
+              position: static !important;
+              grid-column: 3 !important;
+              grid-row: 1 !important;
+              align-self: start;
+              justify-self: end;
+            }
+
+            #inv-table tbody tr.main-row td:nth-child(2) {
+              display: block !important;
+              grid-column: 1 !important;
+              grid-row: 1 / 3 !important;
+              width: 64px !important;
+            }
+
+            #inv-table tbody tr.main-row td:nth-child(2) > div {
+              width: 58px !important;
+              height: 58px !important;
+            }
+
+            #inv-table tbody tr.main-row td:nth-child(2) img {
+              border-radius: 8px !important;
+            }
+
+            #inv-table tbody tr.main-row td:nth-child(3) {
+              display: none !important;
+            }
+
+            #inv-table tbody tr.main-row td:nth-child(4) {
+              display: block !important;
+              grid-column: 2 / 3 !important;
+              grid-row: 1 / 3 !important;
+            }
+
+            #inv-table tbody tr.main-row td:nth-child(4) .text-wrap {
+              min-width: 0 !important;
+              max-width: none !important;
+              margin: 0 !important;
+              color: #1e293b !important;
+              font-size: 14px !important;
+              line-height: 1.38 !important;
+            }
+
+            #inv-table tbody tr.main-row td:nth-child(4) .d-md-none {
+              display: block !important;
+              color: #64748b !important;
+              font-size: 12px !important;
+              margin-top: 4px !important;
+            }
+
+            #inv-table tbody tr.main-row td:nth-child(5),
+            #inv-table tbody tr.main-row td:nth-child(6),
+            #inv-table tbody tr.main-row td:nth-child(7),
+            #inv-table tbody tr.main-row td:nth-child(14) {
+              display: none !important;
+            }
+
+            #inv-table tbody tr.main-row td:nth-child(8),
+            #inv-table tbody tr.main-row td:nth-child(9),
+            #inv-table tbody tr.main-row td:nth-child(10),
+            #inv-table tbody tr.main-row td:nth-child(11),
+            #inv-table tbody tr.main-row td:nth-child(12),
+            #inv-table tbody tr.main-row td:nth-child(13) {
+              grid-column: 1 / 4 !important;
+              display: flex !important;
+              justify-content: space-between !important;
+              align-items: center !important;
+              min-height: 28px !important;
+              padding: 5px 0 0 !important;
+              border-top: 1px solid #e2e8f0 !important;
+              color: #1e293b !important;
+              font-size: 13px !important;
+            }
+
+            #inv-table tbody tr.main-row td:nth-child(8) {
+              margin-top: 4px !important;
+              padding-top: 9px !important;
+            }
+
+            #inv-table tbody tr.main-row td:nth-child(8) > span,
+            #inv-table tbody tr.main-row td:nth-child(7) a {
+              min-height: 24px !important;
+              border-radius: 6px !important;
+              padding: 2px 8px !important;
+            }
+
+            #inv-table tbody tr.detail-row {
+              display: block !important;
+              margin: 0 0 10px !important;
+              padding: 0 !important;
+              border: 0 !important;
+              background: transparent !important;
+            }
+
+            #inv-table tbody tr.detail-row > td {
+              display: block !important;
+              width: 100% !important;
+              padding: 0 !important;
+              border: 0 !important;
+              background: transparent !important;
+            }
+
+            #inv-table .detail-container-mobile {
+              display: block !important;
+              max-height: none !important;
+              overflow: visible !important;
+              margin: 0 0 10px !important;
+              padding: 0 !important;
+              border: 0 !important;
+              border-radius: 0 !important;
+              background: transparent !important;
+              box-shadow: none !important;
+              backdrop-filter: none !important;
+            }
+
+            .wh-card,
+            .detail-container-mobile .card {
+              border-radius: 8px !important;
+              border: 1px solid #e2e8f0 !important;
+              box-shadow: 0 5px 16px -14px rgba(15,23,42,.45) !important;
+              margin-bottom: 8px !important;
+            }
+
+            .wh-header {
+              padding: 8px 10px !important;
+            }
+
+            .wh-stats {
+              padding: 8px 0 !important;
+            }
+          }
       </style>
 
       <main id="wrap" class="oe_structure">
@@ -1293,9 +1590,9 @@
 
         <t t-if="pw_ok">
           <section>
-            <div class="container-fluid mt-3 mb-6" style="max-width: min(1920px, calc(100vw - 32px));">
+            <div class="container-fluid mt-3 mb-6">
               <!-- Navigation Tabs -->
-              <div style="border: 1px solid rgba(226, 232, 240, .72); border-radius: 16px; background: rgba(255, 255, 255, .64); backdrop-filter: blur(16px); padding: 12px; margin-bottom: 1.25rem; box-shadow: 0 1px 2px rgba(15, 23, 42, .04);">
+              <div>
                 <ul class="nav nav-pills justify-content-center flex-wrap gap-2">
                   <li class="nav-item">
                     <a class="nav-link active bg-primary text-white px-3 py-2" href="/search_stock" style="font-weight:600;font-size:.9rem;">
@@ -1329,7 +1626,7 @@
                     <div id="search-suggestions" class="position-absolute w-100 bg-white overflow-auto" style="display:none; z-index:1050; top:100%; left:0; margin-top:4px;"></div>
                 </div>
                 <div class="col-md-2">
-                  <select name="warehouse_id" class="form-select" style="height: 47px;"> <option t-att-selected="not warehouse_id" value="">Tất cả kho</option>
+                  <select name="warehouse_id" class="form-select"> <option t-att-selected="not warehouse_id" value="">Tất cả kho</option>
                     <t t-foreach="warehouses" t-as="w">
                       <option t-att-value="w.id" t-att-selected="int(warehouse_id)==w.id if warehouse_id else False"><t t-esc="w.name"/></option>
                     </t>
@@ -1346,14 +1643,14 @@
                   </div>
                 </div>
                 <div class="col-md-2">
-                  <button class="btn btn-primary w-100 fw-bold" style="height: 47px;" type="submit"><i class="fa fa-search me-1"></i> Tìm kiếm</button>
+                  <button class="btn btn-primary w-100 fw-bold" type="submit"><i class="fa fa-search me-1"></i> Tìm kiếm</button>
                 </div>
               </form>
 
               <t t-if="rows">
                 <div class="card shadow-sm border-0 bg-transparent">
-                    <div class="table-responsive" style="overflow-x: auto;">
-                      <table class="table table-sm table-hover align-middle mb-0" id="inv-table" style="border-collapse: separate; border-spacing: 0;">
+                    <div class="table-responsive">
+                      <table class="table table-sm table-hover align-middle mb-0" id="inv-table">
                         <thead class="bg-light">
                           <tr>
                             <th style="width:40px;"></th>
