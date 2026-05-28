@@ -487,28 +487,27 @@
             </div>
 
             <!-- Modal Forecast Details -->
-            <div class="modal fade" id="forecastDetailsModal" tabindex="-1" aria-labelledby="forecastDetailsModalLabel" aria-hidden="true" style="z-index: 1060;">
-              <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
-                <div class="modal-content">
-                  <div class="modal-header py-2">
-                    <h6 class="modal-title fw-bold" id="forecastDetailsModalLabel">
-                      <i class="fa fa-bar-chart me-1 text-primary"></i>
-                      Chi tiết dự báo tồn kho
-                    </h6>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                  </div>
-                  <div class="modal-body p-0">
-                    <div id="forecastDetailsProductName" class="px-3 py-2 border-bottom fw-bold text-primary small" style="background:#eef6ff;"></div>
-                    <div id="forecastDetailsBody">
-                      <div class="text-center py-4">
-                        <div class="spinner-border text-primary" role="status">
-                          <span class="visually-hidden">Loading...</span>
-                        </div>
+            <div class="modal fade" id="forecastDetailsModal" tabindex="-1" aria-hidden="true" style="z-index:1060;">
+              <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" style="max-width:min(780px,96vw);width:100%;margin:auto;">
+                <div class="modal-content" style="border:none;border-radius:16px;box-shadow:0 24px 64px rgba(0,0,0,.18);overflow:hidden;">
+                  <div class="modal-header" style="background:#fff;border-bottom:1px solid #e5e7eb;padding:18px 24px 14px;align-items:flex-start;">
+                    <div>
+                      <div style="display:flex;align-items:center;gap:9px;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2.5" style="flex-shrink:0;"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                        <span style="font-size:1rem;font-weight:700;color:#111827;">Chi tiết dự báo tồn kho</span>
                       </div>
+                      <div id="forecastDetailsProductName" style="font-size:.82rem;color:#6b7280;margin-top:5px;padding-left:27px;font-weight:500;"></div>
+                    </div>
+                    <button type="button" class="btn-close ms-auto" data-bs-dismiss="modal" aria-label="Close"></button>
+                  </div>
+                  <div class="modal-body p-0" id="forecastDetailsBody">
+                    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:56px 24px;gap:14px;">
+                      <div class="spinner-border" style="color:#6366f1;" role="status"><span class="visually-hidden">Loading...</span></div>
+                      <div style="color:#9ca3af;font-size:.85rem;">Đang tải...</div>
                     </div>
                   </div>
-                  <div class="modal-footer py-2">
-                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Đóng</button>
+                  <div class="modal-footer" style="border-top:1px solid #e5e7eb;padding:12px 24px;background:#fafafa;">
+                    <button type="button" class="btn btn-sm" style="background:#f3f4f6;border:1px solid #e5e7eb;color:#374151;padding:6px 20px;border-radius:8px;font-weight:600;" data-bs-dismiss="modal">Đóng</button>
                   </div>
                 </div>
               </div>
@@ -824,8 +823,9 @@
 
                   $('#forecastDetailsProductName').text(name);
                   $('#forecastDetailsBody').html(
-                      '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div>' +
-                      '<div class="mt-2 text-muted small">Đang tải...</div></div>'
+                      '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:56px 24px;gap:14px;">'+
+                      '<div class="spinner-border" style="color:#6366f1;" role="status"></div>'+
+                      '<div style="color:#9ca3af;font-size:.85rem;">Đang tải...</div></div>'
                   );
 
                   var modalElem = document.getElementById('forecastDetailsModal');
@@ -859,162 +859,125 @@
                   });
               });
 
+              function _stateStyle(state) {
+                  var m = {
+                      'Sẵn sàng': {bg:'#f0fdf4',color:'#16a34a',border:'#86efac'},
+                      'Xác nhận': {bg:'#eff6ff',color:'#2563eb',border:'#93c5fd'},
+                      'Đang chờ': {bg:'#fffbeb',color:'#b45309',border:'#fcd34d'},
+                      'Hoàn tất': {bg:'#f3f4f6',color:'#6b7280',border:'#d1d5db'},
+                      'Đã hủy':   {bg:'#fef2f2',color:'#dc2626',border:'#fca5a5'},
+                  };
+                  return m[state] || {bg:'#eff6ff',color:'#2563eb',border:'#93c5fd'};
+              }
+              function _metaCell(label, val, color, bold) {
+                  return '<div>'
+                      + '<div style="font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#9ca3af;margin-bottom:3px;">'+label+'</div>'
+                      + '<div style="font-size:.85rem;color:'+(color||'#374151')+';font-weight:'+(bold?'700':'500')+';word-break:break-word;">'+val+'</div>'
+                      + '</div>';
+              }
+
               function buildForecastHtml(data) {
                   var html = '';
                   var isPos = data.qty_forecast >= 0;
-                  var fqColor = isPos ? '#198754' : '#dc3545';
+                  var fqColor = isPos ? '#16a34a' : '#dc2626';
 
-                  // === FORMULA ROW ===
-                  html += '<div style="background:#f8f9fa;border-bottom:1px solid #e9ecef;padding:12px 16px;">';
-                  html += '<div class="d-flex align-items-center justify-content-center gap-2 flex-wrap">';
+                  // === FORMULA SECTION ===
+                  var fqBg    = isPos ? '#f0fdf4' : '#fef2f2';
+                  var fqBord  = isPos ? '#4ade80' : '#f87171';
+                  html += '<div style="padding:20px 24px 18px;border-bottom:1px solid #f3f4f6;background:#fafafa;">';
+                  html += '<div style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;">';
 
-                  html += '<div class="text-center rounded-3 border bg-white px-3 py-2" style="min-width:80px;">';
-                  html += '  <div style="font-size:.7rem;color:#6c757d;font-weight:600;text-transform:uppercase;">Tồn kho</div>';
-                  html += '  <div style="font-size:1.3rem;font-weight:700;">' + fmt(data.qty_on_hand) + '</div>';
+                  // Tồn kho
+                  html += '<div style="text-align:center;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:12px 20px;min-width:90px;box-shadow:0 1px 4px rgba(0,0,0,.07);">';
+                  html += '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#9ca3af;margin-bottom:4px;">Tồn kho</div>';
+                  html += '<div style="font-size:26px;font-weight:800;color:#111827;line-height:1;">' + fmt(data.qty_on_hand) + '</div>';
+                  html += '</div>';
+                  html += '<div style="font-size:22px;font-weight:700;color:#16a34a;">+</div>';
+                  // Nhập ĐMH
+                  html += '<div style="text-align:center;background:#f0fdf4;border:1.5px solid #86efac;border-radius:12px;padding:12px 20px;min-width:90px;box-shadow:0 1px 4px rgba(22,163,74,.12);">';
+                  html += '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#16a34a;margin-bottom:4px;">Nhập ĐMH</div>';
+                  html += '<div style="font-size:26px;font-weight:800;color:#16a34a;line-height:1;">+' + fmt(data.total_incoming) + '</div>';
+                  html += '</div>';
+                  html += '<div style="font-size:22px;font-weight:700;color:#dc2626;">−</div>';
+                  // Xuất ĐBH
+                  html += '<div style="text-align:center;background:#fef2f2;border:1.5px solid #fca5a5;border-radius:12px;padding:12px 20px;min-width:90px;box-shadow:0 1px 4px rgba(220,38,38,.12);">';
+                  html += '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#dc2626;margin-bottom:4px;">Xuất ĐBH</div>';
+                  html += '<div style="font-size:26px;font-weight:800;color:#dc2626;line-height:1;">−' + fmt(data.total_outgoing) + '</div>';
+                  html += '</div>';
+                  html += '<div style="font-size:22px;font-weight:700;color:#6b7280;">=</div>';
+                  // Dự báo
+                  html += '<div style="text-align:center;background:'+fqBg+';border:2px solid '+fqBord+';border-radius:12px;padding:12px 20px;min-width:90px;box-shadow:0 2px 8px '+(isPos?'rgba(22,163,74,.18)':'rgba(220,38,38,.18)')+';">';
+                  html += '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:'+fqColor+';margin-bottom:4px;">Dự báo</div>';
+                  html += '<div style="font-size:28px;font-weight:900;color:'+fqColor+';line-height:1;">' + fmt(data.qty_forecast) + '</div>';
                   html += '</div>';
 
-                  html += '<div style="font-size:1.4rem;font-weight:700;color:#198754;">+</div>';
-
-                  html += '<div class="text-center rounded-3 border border-success px-3 py-2" style="min-width:80px;background:rgba(25,135,84,.07);">';
-                  html += '  <div style="font-size:.7rem;color:#198754;font-weight:600;text-transform:uppercase;">Nhập ĐMH</div>';
-                  html += '  <div style="font-size:1.3rem;font-weight:700;color:#198754;">+' + fmt(data.total_incoming) + '</div>';
-                  html += '</div>';
-
-                  html += '<div style="font-size:1.4rem;font-weight:700;color:#dc3545;">−</div>';
-
-                  html += '<div class="text-center rounded-3 border border-danger px-3 py-2" style="min-width:80px;background:rgba(220,53,69,.07);">';
-                  html += '  <div style="font-size:.7rem;color:#dc3545;font-weight:600;text-transform:uppercase;">Xuất ĐBH</div>';
-                  html += '  <div style="font-size:1.3rem;font-weight:700;color:#dc3545;">−' + fmt(data.total_outgoing) + '</div>';
-                  html += '</div>';
-
-                  html += '<div style="font-size:1.4rem;font-weight:700;color:#495057;">=</div>';
-
-                  html += '<div class="text-center rounded-3 border px-3 py-2" style="min-width:80px;border-color:' + fqColor + ' !important;background:' + (isPos ? 'rgba(25,135,84,.1)' : 'rgba(220,53,69,.1)') + ';">';
-                  html += '  <div style="font-size:.7rem;font-weight:600;text-transform:uppercase;color:' + fqColor + ';">Dự báo</div>';
-                  html += '  <div style="font-size:1.3rem;font-weight:800;color:' + fqColor + ';">' + fmt(data.qty_forecast) + '</div>';
-                  html += '</div>';
-
-                  html += '</div></div>'; // end formula row
+                  html += '</div></div>'; // end formula
 
                   // === INCOMING SECTION ===
-                  html += '<div class="p-3">';
-                  html += '<div class="d-flex align-items-center gap-2 mb-2">';
-                  html += '  <i class="fa fa-arrow-circle-down text-success"></i>';
-                  html += '  <span class="fw-bold" style="color:#198754;">Phiếu nhập kho từ ĐMH</span>';
-                  html += '  <span class="badge rounded-pill ' + (data.incoming.length > 0 ? 'bg-success' : 'bg-secondary') + '">' + data.incoming.length + '</span>';
+                  var inCount  = data.incoming.length;
+                  var outCount = data.outgoing.length;
+
+                  html += '<div style="padding:20px 24px 6px;">';
+                  html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">';
+                  html += '  <div style="width:4px;height:20px;background:#16a34a;border-radius:3px;"></div>';
+                  html += '  <span style="font-size:.95rem;font-weight:700;color:#111827;">Phiếu nhập kho từ ĐMH</span>';
+                  html += '  <span style="background:'+(inCount>0?'#16a34a':'#9ca3af')+';color:#fff;border-radius:999px;font-size:.72rem;font-weight:700;padding:2px 9px;">'+inCount+'</span>';
                   html += '</div>';
-
-                  if (data.incoming.length > 0) {
+                  if (inCount > 0) {
                       data.incoming.forEach(function(r) {
-                          var stateMap = {'Sẵn sàng':'success','Xác nhận':'info','Đang chờ':'warning','Hoàn tất':'secondary','Đã hủy':'secondary','Nháp':'light'};
-                          var sc = stateMap[r.state] || 'info';
-                          html += '<div class="rounded-3 border mb-2 overflow-hidden" style="border-left:4px solid #198754 !important;">';
-
-                          // Header
-                          html += '<div class="d-flex align-items-center justify-content-between px-3 py-2" style="background:rgba(25,135,84,.06);">';
-                          html += '  <div class="d-flex align-items-center gap-2">';
-                          html += '    <i class="fa fa-file-text-o text-success"></i>';
-                          html += '    <span class="fw-bold text-success">' + r.picking_name + '</span>';
-                          if (r.state) html += '    <span class="badge bg-' + sc + (sc==='warning'||sc==='light'?' text-dark':'') + ' small">' + r.state + '</span>';
+                          var ss = _stateStyle(r.state);
+                          html += '<div style="background:#fff;border:1px solid #e5e7eb;border-left:4px solid #16a34a;border-radius:10px;margin-bottom:10px;overflow:hidden;">';
+                          html += '  <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:#f0fdf4;">';
+                          html += '    <div style="display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap;">';
+                          html += '      <span style="font-size:.9rem;font-weight:700;color:#15803d;">'+r.picking_name+'</span>';
+                          html += '      <span style="background:'+ss.bg+';color:'+ss.color+';border:1px solid '+ss.border+';border-radius:6px;font-size:.7rem;font-weight:700;padding:1px 8px;">'+r.state+'</span>';
+                          html += '    </div>';
+                          html += '    <span style="font-size:1.1rem;font-weight:800;color:#16a34a;flex-shrink:0;margin-left:12px;">+'+fmt(r.qty)+'</span>';
                           html += '  </div>';
-                          html += '  <span class="fw-bold text-success" style="font-size:1.1rem;">+' + fmt(r.qty) + '</span>';
-                          html += '</div>';
-
-                          // Body grid
-                          html += '<div class="px-3 py-2 row g-2" style="font-size:.82rem;">';
-
-                          if (r.po_name) {
-                              html += '<div class="col-6 col-sm-3">';
-                              html += '  <div style="color:#6c757d;font-size:.7rem;font-weight:600;text-transform:uppercase;">Đơn mua</div>';
-                              html += '  <div class="fw-bold text-primary">' + r.po_name + '</div>';
-                              html += '</div>';
-                          }
-                          if (r.partner) {
-                              html += '<div class="col-6 col-sm-3">';
-                              html += '  <div style="color:#6c757d;font-size:.7rem;font-weight:600;text-transform:uppercase;">Nhà cung cấp</div>';
-                              html += '  <div>' + r.partner + '</div>';
-                              html += '</div>';
-                          }
-                          if (r.misa_date) {
-                              html += '<div class="col-6 col-sm-3">';
-                              html += '  <div style="color:#6c757d;font-size:.7rem;font-weight:600;text-transform:uppercase;">Ngày ĐH MISA</div>';
-                              html += '  <div>' + r.misa_date + '</div>';
-                              html += '</div>';
-                          }
-                          var dateLabel = r.date_planned ? 'Ngày hàng về' : (r.scheduled_date ? 'Ngày DK' : '');
-                          var dateVal = r.date_planned || r.scheduled_date || '';
-                          if (dateVal) {
-                              html += '<div class="col-6 col-sm-3">';
-                              html += '  <div style="color:#6c757d;font-size:.7rem;font-weight:600;text-transform:uppercase;">' + dateLabel + '</div>';
-                              html += '  <div class="fw-bold" style="color:#0d6efd;">' + dateVal + '</div>';
-                              html += '</div>';
-                          }
-
-                          html += '</div>'; // end row
-                          html += '</div>'; // end card
+                          html += '  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:14px;padding:14px 16px;">';
+                          if (r.po_name)   html += _metaCell('Đơn mua',        r.po_name,   '#2563eb', true);
+                          if (r.partner)   html += _metaCell('Nhà cung cấp',   r.partner,   '#374151');
+                          if (r.misa_date) html += _metaCell('Ngày ĐH MISA',  r.misa_date, '#374151');
+                          var dLabel = r.date_planned ? 'Ngày hàng về DK' : (r.scheduled_date ? 'Ngày dự kiến' : '');
+                          var dVal   = r.date_planned || r.scheduled_date || '';
+                          if (dVal)        html += _metaCell(dLabel,            dVal,        '#2563eb', true);
+                          html += '  </div></div>';
                       });
-                      html += '<div class="text-end small fw-bold" style="color:#198754;">Tổng nhập: +' + fmt(data.total_incoming) + '</div>';
+                      html += '<div style="text-align:right;font-size:.78rem;font-weight:700;color:#16a34a;padding-bottom:14px;">Tổng nhập: +'+fmt(data.total_incoming)+'</div>';
                   } else {
-                      html += '<div class="rounded-3 border text-muted text-center py-3 small" style="background:#f8f9fa;">Không có phiếu nhập nào từ đơn mua hàng</div>';
+                      html += '<div style="background:#f9fafb;border:1.5px dashed #e5e7eb;border-radius:10px;padding:20px;text-align:center;color:#9ca3af;font-size:.85rem;margin-bottom:16px;">Không có phiếu nhập nào từ đơn mua hàng</div>';
                   }
-
-                  html += '</div>'; // end incoming p-3
+                  html += '</div>';
 
                   // === OUTGOING SECTION ===
-                  html += '<div class="px-3 pb-3 pt-0">';
-                  html += '<div class="border-top pt-3 mb-2 d-flex align-items-center gap-2">';
-                  html += '  <i class="fa fa-arrow-circle-up text-danger"></i>';
-                  html += '  <span class="fw-bold text-danger">Phiếu xuất kho từ ĐBH</span>';
-                  html += '  <span class="badge rounded-pill ' + (data.outgoing.length > 0 ? 'bg-danger' : 'bg-secondary') + '">' + data.outgoing.length + '</span>';
+                  html += '<div style="padding:4px 24px 24px;">';
+                  html += '<div style="border-top:1px solid #f3f4f6;padding-top:18px;margin-bottom:14px;display:flex;align-items:center;gap:8px;">';
+                  html += '  <div style="width:4px;height:20px;background:#dc2626;border-radius:3px;"></div>';
+                  html += '  <span style="font-size:.95rem;font-weight:700;color:#111827;">Phiếu xuất kho từ ĐBH</span>';
+                  html += '  <span style="background:'+(outCount>0?'#dc2626':'#9ca3af')+';color:#fff;border-radius:999px;font-size:.72rem;font-weight:700;padding:2px 9px;">'+outCount+'</span>';
                   html += '</div>';
-
-                  if (data.outgoing.length > 0) {
+                  if (outCount > 0) {
                       data.outgoing.forEach(function(r) {
-                          var stateMap = {'Sẵn sàng':'success','Xác nhận':'info','Đang chờ':'warning','Hoàn tất':'secondary','Đã hủy':'secondary','Nháp':'light'};
-                          var sc = stateMap[r.state] || 'warning';
-                          html += '<div class="rounded-3 border mb-2 overflow-hidden" style="border-left:4px solid #dc3545 !important;">';
-
-                          // Header
-                          html += '<div class="d-flex align-items-center justify-content-between px-3 py-2" style="background:rgba(220,53,69,.06);">';
-                          html += '  <div class="d-flex align-items-center gap-2">';
-                          html += '    <i class="fa fa-file-text-o text-danger"></i>';
-                          html += '    <span class="fw-bold text-danger">' + r.picking_name + '</span>';
-                          if (r.state) html += '    <span class="badge bg-' + sc + (sc==='warning'||sc==='light'?' text-dark':'') + ' small">' + r.state + '</span>';
+                          var ss = _stateStyle(r.state);
+                          html += '<div style="background:#fff;border:1px solid #e5e7eb;border-left:4px solid #dc2626;border-radius:10px;margin-bottom:10px;overflow:hidden;">';
+                          html += '  <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:#fef2f2;">';
+                          html += '    <div style="display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap;">';
+                          html += '      <span style="font-size:.9rem;font-weight:700;color:#b91c1c;">'+r.picking_name+'</span>';
+                          html += '      <span style="background:'+ss.bg+';color:'+ss.color+';border:1px solid '+ss.border+';border-radius:6px;font-size:.7rem;font-weight:700;padding:1px 8px;">'+r.state+'</span>';
+                          html += '    </div>';
+                          html += '    <span style="font-size:1.1rem;font-weight:800;color:#dc2626;flex-shrink:0;margin-left:12px;">−'+fmt(r.qty)+'</span>';
                           html += '  </div>';
-                          html += '  <span class="fw-bold text-danger" style="font-size:1.1rem;">−' + fmt(r.qty) + '</span>';
-                          html += '</div>';
-
-                          // Body grid
-                          html += '<div class="px-3 py-2 row g-2" style="font-size:.82rem;">';
-
-                          if (r.so_name) {
-                              html += '<div class="col-6 col-sm-4">';
-                              html += '  <div style="color:#6c757d;font-size:.7rem;font-weight:600;text-transform:uppercase;">Đơn bán</div>';
-                              html += '  <div class="fw-bold text-primary">' + r.so_name + '</div>';
-                              html += '</div>';
-                          }
-                          if (r.partner) {
-                              html += '<div class="col-6 col-sm-4">';
-                              html += '  <div style="color:#6c757d;font-size:.7rem;font-weight:600;text-transform:uppercase;">Khách hàng</div>';
-                              html += '  <div>' + r.partner + '</div>';
-                              html += '</div>';
-                          }
-                          if (r.scheduled_date) {
-                              html += '<div class="col-6 col-sm-4">';
-                              html += '  <div style="color:#6c757d;font-size:.7rem;font-weight:600;text-transform:uppercase;">Giao hàng DK</div>';
-                              html += '  <div class="fw-bold" style="color:#0d6efd;">' + r.scheduled_date + '</div>';
-                              html += '</div>';
-                          }
-
-                          html += '</div>'; // end row
-                          html += '</div>'; // end card
+                          html += '  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:14px;padding:14px 16px;">';
+                          if (r.so_name)        html += _metaCell('Đơn bán',       r.so_name,        '#2563eb', true);
+                          if (r.partner)        html += _metaCell('Khách hàng',    r.partner,        '#374151');
+                          if (r.scheduled_date) html += _metaCell('Giao hàng DK', r.scheduled_date, '#2563eb', true);
+                          html += '  </div></div>';
                       });
-                      html += '<div class="text-end small fw-bold text-danger">Tổng xuất: −' + fmt(data.total_outgoing) + '</div>';
+                      html += '<div style="text-align:right;font-size:.78rem;font-weight:700;color:#dc2626;">Tổng xuất: −'+fmt(data.total_outgoing)+'</div>';
                   } else {
-                      html += '<div class="rounded-3 border text-muted text-center py-3 small" style="background:#f8f9fa;">Không có phiếu xuất nào từ đơn bán hàng</div>';
+                      html += '<div style="background:#f9fafb;border:1.5px dashed #e5e7eb;border-radius:10px;padding:20px;text-align:center;color:#9ca3af;font-size:.85rem;">Không có phiếu xuất nào từ đơn bán hàng</div>';
                   }
-
-                  html += '</div>'; // end outgoing px-3
+                  html += '</div>';
 
                   return html;
               }

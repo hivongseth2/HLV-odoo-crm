@@ -713,12 +713,16 @@ class PublicInventory(http.Controller):
                 }
             incoming_by_picking[key]["qty"] += move.product_uom_qty
 
-        # --- Phiếu xuất từ ĐBH (picking type = outgoing, có sale_id hoặc sale_line_id) ---
-        # Dùng | để bắt cả trường hợp chưa assigned (waiting/confirmed) lẫn assigned
+        # --- Phiếu xuất từ ĐBH ---
+        # Dùng location_dest_id.usage = 'customer' để bắt đúng bước cuối trong xuất kho
+        # 1-bước: stock → customer
+        # 2-bước: output → customer (bước SHIP)
+        # 3-bước: packing/output → customer (bước SHIP cuối)
+        # → Không dùng picking_type_id.code = 'outgoing' vì bước 1/2 là internal
         outgoing_domain = _wh_src_domain([
             ("product_id", "=", pid),
             ("state", "not in", ["done", "cancel", "draft"]),
-            ("picking_type_id.code", "=", "outgoing"),
+            ("location_dest_id.usage", "=", "customer"),
             "|",
             ("sale_line_id", "!=", False),
             ("picking_id.sale_id", "!=", False),
