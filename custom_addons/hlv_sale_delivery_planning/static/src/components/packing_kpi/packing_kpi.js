@@ -102,6 +102,14 @@ export class PackingKpiDashboard extends Component {
         }
     }
 
+    onSearchInput(ev) {
+        this.state.searchText = ev.target.value;
+    }
+
+    onSearchKeydown(ev) {
+        if (ev.key === 'Enter') this.fetchData();
+    }
+
     onReassignPackerChange(ev) {
         const pickId = parseInt(ev.target.dataset.pickId, 10);
         this.reassignPackerForPick(pickId, ev.target.value);
