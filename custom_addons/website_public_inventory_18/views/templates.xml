@@ -498,8 +498,8 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                   </div>
                   <div class="modal-body p-0">
-                    <div id="forecastDetailsProductName" class="bg-light px-3 py-2 border-bottom fw-bold text-primary small"></div>
-                    <div id="forecastDetailsBody" class="p-3">
+                    <div id="forecastDetailsProductName" class="px-3 py-2 border-bottom fw-bold text-primary small" style="background:#eef6ff;"></div>
+                    <div id="forecastDetailsBody">
                       <div class="text-center py-4">
                         <div class="spinner-border text-primary" role="status">
                           <span class="visually-hidden">Loading...</span>
@@ -861,88 +861,160 @@
 
               function buildForecastHtml(data) {
                   var html = '';
-                  var fqClass = data.qty_forecast >= 0 ? 'text-success' : 'text-danger';
-                  var fqBadge = data.qty_forecast >= 0 ? 'bg-success' : 'bg-danger';
+                  var isPos = data.qty_forecast >= 0;
+                  var fqColor = isPos ? '#198754' : '#dc3545';
 
-                  // --- Tóm tắt ---
-                  html += '<div class="row g-2 mb-3 text-center">';
-                  html += '  <div class="col-4"><div class="border rounded p-2">';
-                  html += '    <div class="small text-muted">Tồn thực tế</div>';
-                  html += '    <div class="fw-bold fs-6">' + fmt(data.qty_on_hand) + '</div>';
-                  html += '  </div></div>';
-                  html += '  <div class="col-4"><div class="border rounded p-2 border-success">';
-                  html += '    <div class="small text-success">+ Nhập ĐMH</div>';
-                  html += '    <div class="fw-bold fs-6 text-success">+' + fmt(data.total_incoming) + '</div>';
-                  html += '  </div></div>';
-                  html += '  <div class="col-4"><div class="border rounded p-2 border-danger">';
-                  html += '    <div class="small text-danger">− Xuất ĐBH</div>';
-                  html += '    <div class="fw-bold fs-6 text-danger">−' + fmt(data.total_outgoing) + '</div>';
-                  html += '  </div></div>';
-                  html += '</div>';
-                  html += '<div class="text-center mb-3">';
-                  html += '  <span class="badge ' + fqBadge + ' fs-6 px-3">= Dự báo: ' + fmt(data.qty_forecast) + '</span>';
-                  html += '</div>';
-                  html += '<hr class="my-2">';
+                  // === FORMULA ROW ===
+                  html += '<div style="background:#f8f9fa;border-bottom:1px solid #e9ecef;padding:12px 16px;">';
+                  html += '<div class="d-flex align-items-center justify-content-center gap-2 flex-wrap">';
 
-                  // --- Phiếu nhập ---
-                  html += '<h6 class="fw-bold text-success mb-2"><i class="fa fa-arrow-circle-down me-1"></i>Phiếu nhập kho từ ĐMH';
-                  if (data.incoming.length) html += ' <span class="badge bg-success ms-1">' + data.incoming.length + '</span>';
-                  html += '</h6>';
+                  html += '<div class="text-center rounded-3 border bg-white px-3 py-2" style="min-width:80px;">';
+                  html += '  <div style="font-size:.7rem;color:#6c757d;font-weight:600;text-transform:uppercase;">Tồn kho</div>';
+                  html += '  <div style="font-size:1.3rem;font-weight:700;">' + fmt(data.qty_on_hand) + '</div>';
+                  html += '</div>';
+
+                  html += '<div style="font-size:1.4rem;font-weight:700;color:#198754;">+</div>';
+
+                  html += '<div class="text-center rounded-3 border border-success px-3 py-2" style="min-width:80px;background:rgba(25,135,84,.07);">';
+                  html += '  <div style="font-size:.7rem;color:#198754;font-weight:600;text-transform:uppercase;">Nhập ĐMH</div>';
+                  html += '  <div style="font-size:1.3rem;font-weight:700;color:#198754;">+' + fmt(data.total_incoming) + '</div>';
+                  html += '</div>';
+
+                  html += '<div style="font-size:1.4rem;font-weight:700;color:#dc3545;">−</div>';
+
+                  html += '<div class="text-center rounded-3 border border-danger px-3 py-2" style="min-width:80px;background:rgba(220,53,69,.07);">';
+                  html += '  <div style="font-size:.7rem;color:#dc3545;font-weight:600;text-transform:uppercase;">Xuất ĐBH</div>';
+                  html += '  <div style="font-size:1.3rem;font-weight:700;color:#dc3545;">−' + fmt(data.total_outgoing) + '</div>';
+                  html += '</div>';
+
+                  html += '<div style="font-size:1.4rem;font-weight:700;color:#495057;">=</div>';
+
+                  html += '<div class="text-center rounded-3 border px-3 py-2" style="min-width:80px;border-color:' + fqColor + ' !important;background:' + (isPos ? 'rgba(25,135,84,.1)' : 'rgba(220,53,69,.1)') + ';">';
+                  html += '  <div style="font-size:.7rem;font-weight:600;text-transform:uppercase;color:' + fqColor + ';">Dự báo</div>';
+                  html += '  <div style="font-size:1.3rem;font-weight:800;color:' + fqColor + ';">' + fmt(data.qty_forecast) + '</div>';
+                  html += '</div>';
+
+                  html += '</div></div>'; // end formula row
+
+                  // === INCOMING SECTION ===
+                  html += '<div class="p-3">';
+                  html += '<div class="d-flex align-items-center gap-2 mb-2">';
+                  html += '  <i class="fa fa-arrow-circle-down text-success"></i>';
+                  html += '  <span class="fw-bold" style="color:#198754;">Phiếu nhập kho từ ĐMH</span>';
+                  html += '  <span class="badge rounded-pill ' + (data.incoming.length > 0 ? 'bg-success' : 'bg-secondary') + '">' + data.incoming.length + '</span>';
+                  html += '</div>';
+
                   if (data.incoming.length > 0) {
-                      html += '<div class="table-responsive mb-3"><table class="table table-sm table-hover align-middle mb-0 border">';
-                      html += '<thead class="table-light"><tr>';
-                      html += '  <th class="small">Phiếu nhập</th>';
-                      html += '  <th class="small">Đơn mua</th>';
-                      html += '  <th class="small text-center">Ngày DK</th>';
-                      html += '  <th class="small text-center">Trạng thái</th>';
-                      html += '  <th class="small text-end">SL nhập</th>';
-                      html += '</tr></thead><tbody>';
                       data.incoming.forEach(function(r) {
-                          html += '<tr>';
-                          html += '  <td class="small text-muted">' + r.picking_name + '</td>';
-                          html += '  <td class="small fw-bold text-primary">' + r.po_name + '</td>';
-                          html += '  <td class="small text-center">' + (r.scheduled_date || '—') + '</td>';
-                          html += '  <td class="small text-center"><span class="badge bg-info text-dark">' + r.state + '</span></td>';
-                          html += '  <td class="small text-end fw-bold text-success">' + fmt(r.qty) + '</td>';
-                          html += '</tr>';
+                          var stateMap = {'Sẵn sàng':'success','Xác nhận':'info','Đang chờ':'warning','Hoàn tất':'secondary','Đã hủy':'secondary','Nháp':'light'};
+                          var sc = stateMap[r.state] || 'info';
+                          html += '<div class="rounded-3 border mb-2 overflow-hidden" style="border-left:4px solid #198754 !important;">';
+
+                          // Header
+                          html += '<div class="d-flex align-items-center justify-content-between px-3 py-2" style="background:rgba(25,135,84,.06);">';
+                          html += '  <div class="d-flex align-items-center gap-2">';
+                          html += '    <i class="fa fa-file-text-o text-success"></i>';
+                          html += '    <span class="fw-bold text-success">' + r.picking_name + '</span>';
+                          if (r.state) html += '    <span class="badge bg-' + sc + (sc==='warning'||sc==='light'?' text-dark':'') + ' small">' + r.state + '</span>';
+                          html += '  </div>';
+                          html += '  <span class="fw-bold text-success" style="font-size:1.1rem;">+' + fmt(r.qty) + '</span>';
+                          html += '</div>';
+
+                          // Body grid
+                          html += '<div class="px-3 py-2 row g-2" style="font-size:.82rem;">';
+
+                          if (r.po_name) {
+                              html += '<div class="col-6 col-sm-3">';
+                              html += '  <div style="color:#6c757d;font-size:.7rem;font-weight:600;text-transform:uppercase;">Đơn mua</div>';
+                              html += '  <div class="fw-bold text-primary">' + r.po_name + '</div>';
+                              html += '</div>';
+                          }
+                          if (r.partner) {
+                              html += '<div class="col-6 col-sm-3">';
+                              html += '  <div style="color:#6c757d;font-size:.7rem;font-weight:600;text-transform:uppercase;">Nhà cung cấp</div>';
+                              html += '  <div>' + r.partner + '</div>';
+                              html += '</div>';
+                          }
+                          if (r.misa_date) {
+                              html += '<div class="col-6 col-sm-3">';
+                              html += '  <div style="color:#6c757d;font-size:.7rem;font-weight:600;text-transform:uppercase;">Ngày ĐH MISA</div>';
+                              html += '  <div>' + r.misa_date + '</div>';
+                              html += '</div>';
+                          }
+                          var dateLabel = r.date_planned ? 'Ngày hàng về' : (r.scheduled_date ? 'Ngày DK' : '');
+                          var dateVal = r.date_planned || r.scheduled_date || '';
+                          if (dateVal) {
+                              html += '<div class="col-6 col-sm-3">';
+                              html += '  <div style="color:#6c757d;font-size:.7rem;font-weight:600;text-transform:uppercase;">' + dateLabel + '</div>';
+                              html += '  <div class="fw-bold" style="color:#0d6efd;">' + dateVal + '</div>';
+                              html += '</div>';
+                          }
+
+                          html += '</div>'; // end row
+                          html += '</div>'; // end card
                       });
-                      html += '</tbody><tfoot class="table-light"><tr>';
-                      html += '  <td colspan="4" class="small fw-bold text-end">Tổng nhập:</td>';
-                      html += '  <td class="small text-end fw-bold text-success">' + fmt(data.total_incoming) + '</td>';
-                      html += '</tr></tfoot></table></div>';
+                      html += '<div class="text-end small fw-bold" style="color:#198754;">Tổng nhập: +' + fmt(data.total_incoming) + '</div>';
                   } else {
-                      html += '<div class="alert alert-light border text-muted small text-center mb-3">Không có phiếu nhập nào đang chờ từ đơn mua hàng</div>';
+                      html += '<div class="rounded-3 border text-muted text-center py-3 small" style="background:#f8f9fa;">Không có phiếu nhập nào từ đơn mua hàng</div>';
                   }
 
-                  // --- Phiếu xuất ---
-                  html += '<h6 class="fw-bold text-danger mb-2"><i class="fa fa-arrow-circle-up me-1"></i>Phiếu xuất kho từ ĐBH';
-                  if (data.outgoing.length) html += ' <span class="badge bg-danger ms-1">' + data.outgoing.length + '</span>';
-                  html += '</h6>';
+                  html += '</div>'; // end incoming p-3
+
+                  // === OUTGOING SECTION ===
+                  html += '<div class="px-3 pb-3 pt-0">';
+                  html += '<div class="border-top pt-3 mb-2 d-flex align-items-center gap-2">';
+                  html += '  <i class="fa fa-arrow-circle-up text-danger"></i>';
+                  html += '  <span class="fw-bold text-danger">Phiếu xuất kho từ ĐBH</span>';
+                  html += '  <span class="badge rounded-pill ' + (data.outgoing.length > 0 ? 'bg-danger' : 'bg-secondary') + '">' + data.outgoing.length + '</span>';
+                  html += '</div>';
+
                   if (data.outgoing.length > 0) {
-                      html += '<div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0 border">';
-                      html += '<thead class="table-light"><tr>';
-                      html += '  <th class="small">Phiếu xuất</th>';
-                      html += '  <th class="small">Đơn bán</th>';
-                      html += '  <th class="small text-center">Ngày DK</th>';
-                      html += '  <th class="small text-center">Trạng thái</th>';
-                      html += '  <th class="small text-end">SL xuất</th>';
-                      html += '</tr></thead><tbody>';
                       data.outgoing.forEach(function(r) {
-                          html += '<tr>';
-                          html += '  <td class="small text-muted">' + r.picking_name + '</td>';
-                          html += '  <td class="small fw-bold text-primary">' + r.so_name + '</td>';
-                          html += '  <td class="small text-center">' + (r.scheduled_date || '—') + '</td>';
-                          html += '  <td class="small text-center"><span class="badge bg-warning text-dark">' + r.state + '</span></td>';
-                          html += '  <td class="small text-end fw-bold text-danger">' + fmt(r.qty) + '</td>';
-                          html += '</tr>';
+                          var stateMap = {'Sẵn sàng':'success','Xác nhận':'info','Đang chờ':'warning','Hoàn tất':'secondary','Đã hủy':'secondary','Nháp':'light'};
+                          var sc = stateMap[r.state] || 'warning';
+                          html += '<div class="rounded-3 border mb-2 overflow-hidden" style="border-left:4px solid #dc3545 !important;">';
+
+                          // Header
+                          html += '<div class="d-flex align-items-center justify-content-between px-3 py-2" style="background:rgba(220,53,69,.06);">';
+                          html += '  <div class="d-flex align-items-center gap-2">';
+                          html += '    <i class="fa fa-file-text-o text-danger"></i>';
+                          html += '    <span class="fw-bold text-danger">' + r.picking_name + '</span>';
+                          if (r.state) html += '    <span class="badge bg-' + sc + (sc==='warning'||sc==='light'?' text-dark':'') + ' small">' + r.state + '</span>';
+                          html += '  </div>';
+                          html += '  <span class="fw-bold text-danger" style="font-size:1.1rem;">−' + fmt(r.qty) + '</span>';
+                          html += '</div>';
+
+                          // Body grid
+                          html += '<div class="px-3 py-2 row g-2" style="font-size:.82rem;">';
+
+                          if (r.so_name) {
+                              html += '<div class="col-6 col-sm-4">';
+                              html += '  <div style="color:#6c757d;font-size:.7rem;font-weight:600;text-transform:uppercase;">Đơn bán</div>';
+                              html += '  <div class="fw-bold text-primary">' + r.so_name + '</div>';
+                              html += '</div>';
+                          }
+                          if (r.partner) {
+                              html += '<div class="col-6 col-sm-4">';
+                              html += '  <div style="color:#6c757d;font-size:.7rem;font-weight:600;text-transform:uppercase;">Khách hàng</div>';
+                              html += '  <div>' + r.partner + '</div>';
+                              html += '</div>';
+                          }
+                          if (r.scheduled_date) {
+                              html += '<div class="col-6 col-sm-4">';
+                              html += '  <div style="color:#6c757d;font-size:.7rem;font-weight:600;text-transform:uppercase;">Giao hàng DK</div>';
+                              html += '  <div class="fw-bold" style="color:#0d6efd;">' + r.scheduled_date + '</div>';
+                              html += '</div>';
+                          }
+
+                          html += '</div>'; // end row
+                          html += '</div>'; // end card
                       });
-                      html += '</tbody><tfoot class="table-light"><tr>';
-                      html += '  <td colspan="4" class="small fw-bold text-end">Tổng xuất:</td>';
-                      html += '  <td class="small text-end fw-bold text-danger">' + fmt(data.total_outgoing) + '</td>';
-                      html += '</tr></tfoot></table></div>';
+                      html += '<div class="text-end small fw-bold text-danger">Tổng xuất: −' + fmt(data.total_outgoing) + '</div>';
                   } else {
-                      html += '<div class="alert alert-light border text-muted small text-center">Không có phiếu xuất nào đang chờ từ đơn bán hàng</div>';
+                      html += '<div class="rounded-3 border text-muted text-center py-3 small" style="background:#f8f9fa;">Không có phiếu xuất nào từ đơn bán hàng</div>';
                   }
+
+                  html += '</div>'; // end outgoing px-3
 
                   return html;
               }

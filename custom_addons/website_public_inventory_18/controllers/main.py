@@ -658,11 +658,13 @@ class PublicInventory(http.Controller):
                     domain_list.append(("location_id", "child_of", allowed_whs.mapped('view_location_id').ids))
             return domain_list
 
-        # --- Phiếu nhập từ ĐMH (picking type = incoming, có purchase_id) ---
+        # --- Phiếu nhập từ ĐMH (picking type = incoming, có purchase_id hoặc purchase_line_id) ---
         incoming_domain = _wh_dest_domain([
             ("product_id", "=", pid),
             ("state", "not in", ["done", "cancel", "draft"]),
             ("picking_type_id.code", "=", "incoming"),
+            "|",
+            ("purchase_line_id", "!=", False),
             ("picking_id.purchase_id", "!=", False),
         ])
         try:
@@ -677,22 +679,48 @@ class PublicInventory(http.Controller):
                 continue
             key = picking.id
             if key not in incoming_by_picking:
-                po = getattr(picking, 'purchase_id', None)
+                po = getattr(picking, 'purchase_id', None) or None
                 sched = picking.scheduled_date
+
+                partner_name = ""
+                if po and po.partner_id:
+                    partner_name = po.partner_id.name or ""
+                if not partner_name and picking.partner_id:
+                    partner_name = picking.partner_id.name or ""
+
+                misa_date = ""
+                date_planned = ""
+                if po:
+                    raw_misa = getattr(po, 'x_studio_misa_date', None)
+                    if raw_misa:
+                        try: misa_date = raw_misa.strftime('%d/%m/%Y')
+                        except: misa_date = str(raw_misa)
+                    raw_planned = getattr(po, 'date_planned', None)
+                    if raw_planned:
+                        try: date_planned = raw_planned.strftime('%d/%m/%Y')
+                        except: date_planned = str(raw_planned)
+
                 incoming_by_picking[key] = {
                     "picking_name": picking.name or "",
                     "po_name": po.name if po else (picking.origin or ""),
                     "scheduled_date": sched.strftime('%d/%m/%Y') if sched else "",
                     "state": _STATE_VN.get(picking.state, picking.state),
                     "qty": 0.0,
+                    "partner": partner_name,
+                    "origin": picking.origin or "",
+                    "misa_date": misa_date,
+                    "date_planned": date_planned,
                 }
             incoming_by_picking[key]["qty"] += move.product_uom_qty
 
-        # --- Phiếu xuất từ ĐBH (picking type = outgoing, có sale_id) ---
+        # --- Phiếu xuất từ ĐBH (picking type = outgoing, có sale_id hoặc sale_line_id) ---
+        # Dùng | để bắt cả trường hợp chưa assigned (waiting/confirmed) lẫn assigned
         outgoing_domain = _wh_src_domain([
             ("product_id", "=", pid),
             ("state", "not in", ["done", "cancel", "draft"]),
             ("picking_type_id.code", "=", "outgoing"),
+            "|",
+            ("sale_line_id", "!=", False),
             ("picking_id.sale_id", "!=", False),
         ])
         try:
@@ -707,14 +735,23 @@ class PublicInventory(http.Controller):
                 continue
             key = picking.id
             if key not in outgoing_by_picking:
-                so = getattr(picking, 'sale_id', None)
+                so = getattr(picking, 'sale_id', None) or None
                 sched = picking.scheduled_date
+
+                partner_name = ""
+                if so and so.partner_id:
+                    partner_name = so.partner_id.name or ""
+                if not partner_name and picking.partner_id:
+                    partner_name = picking.partner_id.name or ""
+
                 outgoing_by_picking[key] = {
                     "picking_name": picking.name or "",
                     "so_name": so.name if so else (picking.origin or ""),
                     "scheduled_date": sched.strftime('%d/%m/%Y') if sched else "",
                     "state": _STATE_VN.get(picking.state, picking.state),
                     "qty": 0.0,
+                    "partner": partner_name,
+                    "origin": picking.origin or "",
                 }
             outgoing_by_picking[key]["qty"] += move.product_uom_qty
 
