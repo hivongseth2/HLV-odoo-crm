@@ -327,7 +327,14 @@
                               <td><t t-esc="r['uom']"/></td>
                               <td class="text-end text-muted">
                                 <t t-if="is_combo">-</t>
-                                <t t-else=""><t t-esc="'{:,.0f}'.format(r.get('qty_forecasted', 0))"/></t>
+                                <t t-else="">
+                                  <a href="#" class="text-muted text-decoration-none btn-forecast-detail"
+                                     t-att-data-pid="r['id']"
+                                     t-att-data-name="r['name']"
+                                     title="Xem chi tiết dự báo">
+                                    <t t-esc="'{:,.0f}'.format(r.get('qty_forecasted', 0))"/>
+                                  </a>
+                                </t>
                               </td>
                               <td class="text-end fw-bold fs-6">
                                 <t t-if="is_combo">-</t>
@@ -477,6 +484,34 @@
                     <p class="mt-3 text-muted">Không tìm thấy sản phẩm nào phù hợp.</p>
                 </div>
               </t>
+            </div>
+
+            <!-- Modal Forecast Details -->
+            <div class="modal fade" id="forecastDetailsModal" tabindex="-1" aria-labelledby="forecastDetailsModalLabel" aria-hidden="true" style="z-index: 1060;">
+              <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
+                <div class="modal-content">
+                  <div class="modal-header py-2">
+                    <h6 class="modal-title fw-bold" id="forecastDetailsModalLabel">
+                      <i class="fa fa-bar-chart me-1 text-primary"></i>
+                      Chi tiết dự báo tồn kho
+                    </h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                  </div>
+                  <div class="modal-body p-0">
+                    <div id="forecastDetailsProductName" class="bg-light px-3 py-2 border-bottom fw-bold text-primary small"></div>
+                    <div id="forecastDetailsBody" class="p-3">
+                      <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                          <span class="visually-hidden">Loading...</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Đóng</button>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <!-- Modal Location Details -->
@@ -777,6 +812,138 @@
                       html += '</div>';
                   }
                   
+                  return html;
+              }
+
+              // --- FORECAST DETAILS ---
+              $(document).on('click', '.btn-forecast-detail', function(e) {
+                  e.preventDefault();
+                  var pid = $(this).data('pid');
+                  var name = $(this).data('name');
+                  var wid = $('select[name="warehouse_id"]').val() || '';
+
+                  $('#forecastDetailsProductName').text(name);
+                  $('#forecastDetailsBody').html(
+                      '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div>' +
+                      '<div class="mt-2 text-muted small">Đang tải...</div></div>'
+                  );
+
+                  var modalElem = document.getElementById('forecastDetailsModal');
+                  if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                      var modal = bootstrap.Modal.getInstance(modalElem) || new bootstrap.Modal(modalElem);
+                      modal.show();
+                  } else {
+                      $(modalElem).show().addClass('show');
+                      $('body').append('<div class="modal-backdrop fade show" id="forecastBackdrop"></div>');
+                      $(modalElem).find('[data-bs-dismiss="modal"]').off('click.forecast').on('click.forecast', function() {
+                          $(modalElem).hide().removeClass('show');
+                          $('#forecastBackdrop').remove();
+                      });
+                  }
+
+                  $.ajax({
+                      url: "/search_stock/forecast_details",
+                      type: "POST", dataType: "json", contentType: "application/json",
+                      data: JSON.stringify({ jsonrpc: "2.0", method: "call", params: { product_id: pid, warehouse_id: wid }, id: new Date().getTime() }),
+                      success: function(resp) {
+                          var data = resp && resp.result;
+                          if (!data || !data.ok) {
+                              $('#forecastDetailsBody').html('<div class="alert alert-danger m-2">Lỗi: ' + (data ? data.error : 'Không tải được dữ liệu') + '</div>');
+                              return;
+                          }
+                          $('#forecastDetailsBody').html(buildForecastHtml(data));
+                      },
+                      error: function() {
+                          $('#forecastDetailsBody').html('<div class="alert alert-danger m-2">Lỗi kết nối. Vui lòng thử lại.</div>');
+                      }
+                  });
+              });
+
+              function buildForecastHtml(data) {
+                  var html = '';
+                  var fqClass = data.qty_forecast >= 0 ? 'text-success' : 'text-danger';
+                  var fqBadge = data.qty_forecast >= 0 ? 'bg-success' : 'bg-danger';
+
+                  // --- Tóm tắt ---
+                  html += '<div class="row g-2 mb-3 text-center">';
+                  html += '  <div class="col-4"><div class="border rounded p-2">';
+                  html += '    <div class="small text-muted">Tồn thực tế</div>';
+                  html += '    <div class="fw-bold fs-6">' + fmt(data.qty_on_hand) + '</div>';
+                  html += '  </div></div>';
+                  html += '  <div class="col-4"><div class="border rounded p-2 border-success">';
+                  html += '    <div class="small text-success">+ Nhập ĐMH</div>';
+                  html += '    <div class="fw-bold fs-6 text-success">+' + fmt(data.total_incoming) + '</div>';
+                  html += '  </div></div>';
+                  html += '  <div class="col-4"><div class="border rounded p-2 border-danger">';
+                  html += '    <div class="small text-danger">− Xuất ĐBH</div>';
+                  html += '    <div class="fw-bold fs-6 text-danger">−' + fmt(data.total_outgoing) + '</div>';
+                  html += '  </div></div>';
+                  html += '</div>';
+                  html += '<div class="text-center mb-3">';
+                  html += '  <span class="badge ' + fqBadge + ' fs-6 px-3">= Dự báo: ' + fmt(data.qty_forecast) + '</span>';
+                  html += '</div>';
+                  html += '<hr class="my-2">';
+
+                  // --- Phiếu nhập ---
+                  html += '<h6 class="fw-bold text-success mb-2"><i class="fa fa-arrow-circle-down me-1"></i>Phiếu nhập kho từ ĐMH';
+                  if (data.incoming.length) html += ' <span class="badge bg-success ms-1">' + data.incoming.length + '</span>';
+                  html += '</h6>';
+                  if (data.incoming.length > 0) {
+                      html += '<div class="table-responsive mb-3"><table class="table table-sm table-hover align-middle mb-0 border">';
+                      html += '<thead class="table-light"><tr>';
+                      html += '  <th class="small">Phiếu nhập</th>';
+                      html += '  <th class="small">Đơn mua</th>';
+                      html += '  <th class="small text-center">Ngày DK</th>';
+                      html += '  <th class="small text-center">Trạng thái</th>';
+                      html += '  <th class="small text-end">SL nhập</th>';
+                      html += '</tr></thead><tbody>';
+                      data.incoming.forEach(function(r) {
+                          html += '<tr>';
+                          html += '  <td class="small text-muted">' + r.picking_name + '</td>';
+                          html += '  <td class="small fw-bold text-primary">' + r.po_name + '</td>';
+                          html += '  <td class="small text-center">' + (r.scheduled_date || '—') + '</td>';
+                          html += '  <td class="small text-center"><span class="badge bg-info text-dark">' + r.state + '</span></td>';
+                          html += '  <td class="small text-end fw-bold text-success">' + fmt(r.qty) + '</td>';
+                          html += '</tr>';
+                      });
+                      html += '</tbody><tfoot class="table-light"><tr>';
+                      html += '  <td colspan="4" class="small fw-bold text-end">Tổng nhập:</td>';
+                      html += '  <td class="small text-end fw-bold text-success">' + fmt(data.total_incoming) + '</td>';
+                      html += '</tr></tfoot></table></div>';
+                  } else {
+                      html += '<div class="alert alert-light border text-muted small text-center mb-3">Không có phiếu nhập nào đang chờ từ đơn mua hàng</div>';
+                  }
+
+                  // --- Phiếu xuất ---
+                  html += '<h6 class="fw-bold text-danger mb-2"><i class="fa fa-arrow-circle-up me-1"></i>Phiếu xuất kho từ ĐBH';
+                  if (data.outgoing.length) html += ' <span class="badge bg-danger ms-1">' + data.outgoing.length + '</span>';
+                  html += '</h6>';
+                  if (data.outgoing.length > 0) {
+                      html += '<div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0 border">';
+                      html += '<thead class="table-light"><tr>';
+                      html += '  <th class="small">Phiếu xuất</th>';
+                      html += '  <th class="small">Đơn bán</th>';
+                      html += '  <th class="small text-center">Ngày DK</th>';
+                      html += '  <th class="small text-center">Trạng thái</th>';
+                      html += '  <th class="small text-end">SL xuất</th>';
+                      html += '</tr></thead><tbody>';
+                      data.outgoing.forEach(function(r) {
+                          html += '<tr>';
+                          html += '  <td class="small text-muted">' + r.picking_name + '</td>';
+                          html += '  <td class="small fw-bold text-primary">' + r.so_name + '</td>';
+                          html += '  <td class="small text-center">' + (r.scheduled_date || '—') + '</td>';
+                          html += '  <td class="small text-center"><span class="badge bg-warning text-dark">' + r.state + '</span></td>';
+                          html += '  <td class="small text-end fw-bold text-danger">' + fmt(r.qty) + '</td>';
+                          html += '</tr>';
+                      });
+                      html += '</tbody><tfoot class="table-light"><tr>';
+                      html += '  <td colspan="4" class="small fw-bold text-end">Tổng xuất:</td>';
+                      html += '  <td class="small text-end fw-bold text-danger">' + fmt(data.total_outgoing) + '</td>';
+                      html += '</tr></tfoot></table></div>';
+                  } else {
+                      html += '<div class="alert alert-light border text-muted small text-center">Không có phiếu xuất nào đang chờ từ đơn bán hàng</div>';
+                  }
+
                   return html;
               }
 
