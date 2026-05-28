@@ -116,8 +116,6 @@ class HLVMobileBarcodeController(http.Controller):
                     if total_qty > 0:
                         move.product_uom_qty = total_qty
                         for line in move.move_line_ids:
-                            # Preserve the original quantity demand for each specific line (vital for packages)
-                            line.quantity_product_uom = line.quantity
                             line.quantity = 0.0
 
         lines = []
@@ -130,13 +128,28 @@ class HLVMobileBarcodeController(http.Controller):
                         loc_name = ml.location_id.display_name
 
                     package_name = ml.result_package_id.name or ml.package_id.name or False
+                    
+                    # Calculate individual line demand for Step 2
+                    line_demand = move.product_uom_qty
+                    if picking.source_transfer_id and move.move_orig_ids:
+                        orig_mls = move.move_orig_ids.move_line_ids
+                        if ml.package_id or ml.result_package_id:
+                            pkg_id = ml.package_id or ml.result_package_id
+                            matched_orig = orig_mls.filtered(lambda l: l.result_package_id == pkg_id)
+                            if matched_orig:
+                                line_demand = sum(matched_orig.mapped('quantity'))
+                        else:
+                            matched_orig = orig_mls.filtered(lambda l: not l.result_package_id)
+                            if matched_orig:
+                                line_demand = sum(matched_orig.mapped('quantity'))
+
                     lines.append({
                         'id': ml.id,
                         'move_id': move.id,
                         'product_id': move.product_id.id,
                         'product_name': move.product_id.display_name,
                         'product_barcode': move.product_id.barcode,
-                        'product_uom_qty': ml.quantity_product_uom or move.product_uom_qty,
+                        'product_uom_qty': line_demand,
                         'qty_done': ml.quantity,
                         'uom_name': move.product_uom.name,
                         'state': move.state,
@@ -447,7 +460,14 @@ class HLVMobileBarcodeController(http.Controller):
             if move_lines:
                 processed_lines = []
                 for ml in move_lines:
-                    ml.quantity = ml.quantity_product_uom or ml.reserved_qty or 1.0
+                    line_demand = ml.move_id.product_uom_qty
+                    if picking.source_transfer_id and ml.move_id.move_orig_ids:
+                        pkg_id = ml.package_id or ml.result_package_id
+                        orig_mls = ml.move_id.move_orig_ids.move_line_ids.filtered(lambda l: l.result_package_id == pkg_id)
+                        if orig_mls:
+                            line_demand = sum(orig_mls.mapped('quantity'))
+                    
+                    ml.quantity = line_demand
                     processed_lines.append(f"{ml.quantity} x {ml.product_id.display_name}")
                 return {
                     'success': True,
@@ -740,22 +760,22 @@ class HLVMobileBarcodeController(http.Controller):
         if not picking.exists() or picking.state not in ['draft', 'confirmed', 'assigned']:
             return {'error': _('Không thể xoá số lượng của phiếu này')}
             
-        # Không cho phép clear_quantities trên phiếu Bước 2 vì các line được tạo tự động từ Bước 1
-        if picking.source_transfer_id:
-            return {'error': _('Không thể xóa số lượng trên phiếu Bước 2 được.')}
+        # Bỏ chặn xoá số lượng trên phiếu Bước 2 (để cho phép nút Làm lại)
+        # if picking.source_transfer_id:
+        #     return {'error': _('Không thể xóa số lượng trên phiếu Bước 2 được.')}
             
         try:
             # 1. Handle stock move lines
             for ml in picking.move_line_ids:
-                if ml.quantity_product_uom == 0.0 and not ml.move_id.move_orig_ids:
+                if ml.quantity == 0.0 and not ml.move_id.move_orig_ids and not picking.source_transfer_id:
                     # Dynamically created line -> delete it!
                     ml.unlink()
                 else:
-                    # Reserved line -> reset quantity and clear packaging
-                    ml.write({
-                        'quantity': 0.0,
-                        'result_package_id': False
-                    })
+                    # Reserved or Step 2 line -> reset quantity
+                    write_vals = {'quantity': 0.0}
+                    if not picking.source_transfer_id:
+                        write_vals['result_package_id'] = False
+                    ml.write(write_vals)
                     
             # 2. Handle stock moves that were created dynamically on the fly (demand = 0)
             # Only delete if it has no move_orig_ids (meaning it wasn't generated by a previous step)
