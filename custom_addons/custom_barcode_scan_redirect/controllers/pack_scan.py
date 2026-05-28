@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """Core pack scanning routes: scan_item, complete_picking, check_and_print_label."""
-from odoo import http, fields
+from odoo import http
 from odoo.http import request
 import logging
 
@@ -20,6 +20,11 @@ class PackScanController(http.Controller):
         move_id = kwargs.get("move_id")
         _logger.info(f"SCAN_ITEM START: barcode={barcode}, delta={delta}, line_id={line_id}, move_id={move_id}")
         picking = request.env['stock.picking'].sudo().browse(picking_id)
+        if picking.exists():
+            try:
+                picking.with_user(request.env.user).mark_pack_actual_started(user=request.env.user)
+            except Exception as e:
+                return {"error": str(e)}
         # Tìm move dựa trên barcode
         moves = picking.move_ids.filtered(lambda m: m.product_id.barcode == barcode)
 
@@ -419,6 +424,10 @@ class PackScanController(http.Controller):
 
         if not picking.exists():
             return {"error": "Phiếu không tồn tại."}
+        try:
+            picking.with_user(request.env.user)._check_pack_assignment_access(user=request.env.user)
+        except Exception as e:
+            return {"error": str(e)}
         if picking.state not in ['assigned', 'confirmed', 'in_progress']:
             return {"error": f"Phiếu không ở trạng thái cho phép xác nhận (hiện tại: {picking.state})."}
         for move in picking.move_ids_without_package:
@@ -426,20 +435,9 @@ class PackScanController(http.Controller):
             if total_done < move.product_uom_qty:
                 return {"error": f"⚠️ Sản phẩm '{move.product_id.display_name}' chưa đủ số lượng!"}
         try:
-            # Tính thời lượng thực tế trước khi validate (vì _action_done sẽ thay đổi state)
-            actual_duration = None
-            if picking.x_pack_start_time:
-                now = fields.Datetime.now()
-                delta_sec = (now - picking.x_pack_start_time).total_seconds()
-                actual_duration = max(1, round(delta_sec / 60))
-                picking.sudo().write({'x_pack_actual_duration': actual_duration})
-
             picking.button_validate()
-
-            msg = f"✅ Phiếu {picking.name} đã được xác nhận!"
-            if actual_duration is not None:
-                msg += f" Thời lượng thực tế: {actual_duration} phút."
-            return {"success": True, "message": msg, "actual_duration": actual_duration}
+            picking.with_user(request.env.user).mark_pack_done(user=request.env.user)
+            return {"success": True, "message": f"✅ Phiếu {picking.name} đã được xác nhận!"}
         except Exception as e:
             return {"error": str(e)}
 

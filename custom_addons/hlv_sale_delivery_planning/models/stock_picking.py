@@ -1,5 +1,7 @@
 import logging
-from odoo import models, fields
+from datetime import timedelta
+from odoo import api, models, fields, _
+from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
 
@@ -8,7 +10,10 @@ _PICK_NOTIFY_FIELDS = {
     'state', 'x_printed', 'carrier_id', 'carrier_tracking_ref',
     'scheduled_date', 'date_done', 'x_bien_ban_printed',
     'shipper_received', 'shipper_returned', 'shipper_user_id', 'shipper_received_by',
-    'x_packer_id', 'x_packing_status', 'x_packing_print_time', 'x_bien_ban_print_time',
+    'x_pack_packer_user_id', 'x_pack_assigned_by_id', 'x_pack_assigned_at',
+    'x_pick_print_start_at', 'x_pick_print_end_at', 'x_pick_printed_by_id',
+    'x_pack_actual_start_at', 'x_pack_actual_end_at', 'x_pack_actual_user_id',
+    'x_pack_print_to_done_seconds', 'x_pack_actual_seconds', 'x_pack_source_pick_id',
 }
 
 
@@ -29,38 +34,393 @@ class StockPicking(models.Model):
         help='Đánh dấu tự động khi in các report như: biên bản giao nhận/bàn giao, BBGN, BBBG, PXBH, phiếu xuất, phiếu bàn giao... cho phiếu này.',
     )
 
-    x_bien_ban_print_time = fields.Datetime(
-        string='Thời gian in biên bản',
-        copy=False,
-        help='Thời điểm in biên bản lần đầu tiên cho phiếu này.',
-    )
-
-    x_packer_id = fields.Many2one(
+    x_pack_packer_user_id = fields.Many2one(
         'res.users',
-        string='Người đóng hàng',
+        string='Người đóng được assign',
         copy=False,
-        help='Nhân viên phụ trách đóng gói đơn hàng này',
+        index=True,
+        help='Người đóng gói được chọn khi in phiếu lấy hàng. Lưu trên phiếu PICK.',
+    )
+    x_pack_assigned_by_id = fields.Many2one(
+        'res.users',
+        string='Người assign đóng gói',
+        copy=False,
+        readonly=True,
+    )
+    x_pack_assigned_at = fields.Datetime(
+        string='Thời gian assign đóng gói',
+        copy=False,
+        readonly=True,
+        index=True,
+    )
+    x_pick_print_start_at = fields.Datetime(
+        string='Bắt đầu in phiếu lấy hàng',
+        copy=False,
+        index=True,
+    )
+    x_pick_print_end_at = fields.Datetime(
+        string='Kết thúc in phiếu lấy hàng',
+        copy=False,
+        index=True,
+    )
+    x_pick_printed_by_id = fields.Many2one(
+        'res.users',
+        string='Người in phiếu lấy hàng',
+        copy=False,
+        readonly=True,
+    )
+    x_pack_source_pick_id = fields.Many2one(
+        'stock.picking',
+        string='Phiếu PICK nguồn',
+        copy=False,
+        index=True,
+        help='Phiếu lấy hàng dùng để assign người đóng cho phiếu PACK này.',
+    )
+    x_pack_actual_start_at = fields.Datetime(
+        string='Bắt đầu đóng thực tế',
+        copy=False,
+        index=True,
+    )
+    x_pack_actual_end_at = fields.Datetime(
+        string='Kết thúc đóng thực tế',
+        copy=False,
+        index=True,
+    )
+    x_pack_actual_user_id = fields.Many2one(
+        'res.users',
+        string='Người thao tác đóng thực tế',
+        copy=False,
+        readonly=True,
+    )
+    x_pack_print_to_done_seconds = fields.Float(
+        string='TG từ in PICK đến done PACK (giây)',
+        copy=False,
+        readonly=True,
+    )
+    x_pack_actual_seconds = fields.Float(
+        string='TG đóng thực tế (giây)',
+        copy=False,
+        readonly=True,
     )
 
-    x_packing_print_time = fields.Datetime(
-        string='Thời gian in phiếu',
-        copy=False,
-        help='Thời điểm bắt đầu in phiếu đóng hàng',
-    )
+    def _is_pick_slip_picking(self):
+        self.ensure_one()
+        return (
+            'PICK' in ((self.picking_type_id.sequence_code or '').upper())
+            and not self.return_id
+        )
 
-    x_packing_finish_time = fields.Datetime(
-        string='Thời gian hoàn thành đóng hàng',
-        copy=False,
-        help='Thời điểm xác nhận hoàn thành đóng hàng',
-    )
+    def _is_pack_picking(self):
+        self.ensure_one()
+        return (
+            'PACK' in ((self.picking_type_id.sequence_code or '').upper())
+            and not self.return_id
+        )
 
-    x_packing_status = fields.Selection(
-        [('pending', 'Đang chờ'), ('packing', 'Đang đóng'), ('packed', 'Đã hoàn thành')],
-        string='Trạng thái đóng hàng',
-        default='pending',
-        copy=False,
-        help='Trạng thái đóng gói để theo dõi tiến độ và biết ai đang rảnh/bận',
-    )
+    def _packer_display_name(self, user):
+        return getattr(user, 'x_packer_name', None) or user.name or ''
+
+    @api.model
+    def get_packer_users_for_assignment(self):
+        users = self.env['res.users'].sudo().search([
+            ('share', '=', False),
+            ('active', '=', True),
+        ], order='name')
+        return [
+            {
+                'id': user.id,
+                'name': user.name,
+                'packer_name': self._packer_display_name(user),
+            }
+            for user in users
+        ]
+
+    @api.model
+    def prepare_picking_print_assignment_data(self, picking_ids):
+        pickings = self.sudo().browse([int(pid) for pid in (picking_ids or []) if pid]).exists()
+        pickings = pickings.filtered(
+            lambda p: p._is_pick_slip_picking() and p.state not in ('done', 'cancel')
+        )
+        return {
+            'required': bool(pickings),
+            'picking_ids': pickings.ids,
+            'pickings': [
+                {
+                    'id': picking.id,
+                    'name': picking.name,
+                    'origin': picking.origin or '',
+                    'packer_user': (
+                        [picking.x_pack_packer_user_id.id, self._packer_display_name(picking.x_pack_packer_user_id)]
+                        if picking.x_pack_packer_user_id else False
+                    ),
+                }
+                for picking in pickings
+            ],
+            'packers': self.get_packer_users_for_assignment(),
+        }
+
+    @api.model
+    def assign_picking_print_packer(self, picking_ids, packer_user_id):
+        pickings = self.sudo().browse([int(pid) for pid in (picking_ids or []) if pid]).exists()
+        pickings = pickings.filtered(
+            lambda p: p._is_pick_slip_picking() and p.state not in ('done', 'cancel')
+        )
+        if not pickings:
+            return {'success': False, 'message': _('Không có phiếu lấy hàng hợp lệ để assign.')}
+        pickings.sudo().with_context(
+            pack_assigned_by_uid=self.env.uid,
+            pack_printed_by_uid=self.env.uid,
+        ).mark_picking_print_started(packer_user_id=packer_user_id)
+        packer = self.env['res.users'].sudo().browse(int(packer_user_id)).exists()
+        return {
+            'success': True,
+            'picking_ids': pickings.ids,
+            'packer_user_id': packer.id,
+            'packer_name': self._packer_display_name(packer),
+        }
+
+    @api.model
+    def get_packing_kpi_dashboard(self, date_from=False, date_to=False, packer_user_id=False):
+        domain = [
+            ('picking_type_id.sequence_code', 'ilike', 'PICK'),
+            ('return_id', '=', False),
+            ('x_pack_packer_user_id', '!=', False),
+        ]
+        if date_from:
+            start = fields.Datetime.to_datetime(date_from)
+            domain.append(('x_pack_assigned_at', '>=', start))
+        if date_to:
+            end = fields.Datetime.to_datetime(date_to) + timedelta(days=1)
+            domain.append(('x_pack_assigned_at', '<', end))
+        if packer_user_id and str(packer_user_id) != 'all':
+            domain.append(('x_pack_packer_user_id', '=', int(packer_user_id)))
+
+        picks = self.sudo().search(domain, order='x_pack_assigned_at desc, id desc')
+        pack_domain = [('x_pack_source_pick_id', 'in', picks.ids)] if picks else [('id', '=', 0)]
+        packs = self.sudo().search(pack_domain)
+        packs_by_pick = {}
+        for pack in packs:
+            packs_by_pick.setdefault(pack.x_pack_source_pick_id.id, self.env['stock.picking'])
+            packs_by_pick[pack.x_pack_source_pick_id.id] |= pack
+
+        groups = {}
+        total_assigned = len(picks)
+        total_done = 0
+        total_in_progress = 0
+        print_to_done_values = []
+        actual_values = []
+
+        for pick in picks:
+            packer = pick.x_pack_packer_user_id
+            key = packer.id
+            group = groups.setdefault(key, {
+                'packer_user_id': packer.id,
+                'packer_name': self._packer_display_name(packer),
+                'assigned_count': 0,
+                'in_progress_count': 0,
+                'done_count': 0,
+                'avg_print_to_done_seconds': 0,
+                'avg_actual_seconds': 0,
+                'rows': [],
+                '_print_values': [],
+                '_actual_values': [],
+            })
+            related_packs = packs_by_pick.get(pick.id, self.env['stock.picking'])
+            done_packs = related_packs.filtered(lambda p: p.state == 'done')
+            active_packs = related_packs.filtered(lambda p: p.state not in ('done', 'cancel'))
+            best_pack = done_packs[:1] or active_packs[:1] or related_packs[:1]
+            is_done = bool(done_packs)
+            is_in_progress = bool(active_packs.filtered(lambda p: p.x_pack_actual_start_at or p.state == 'in_progress'))
+
+            group['assigned_count'] += 1
+            if is_done:
+                group['done_count'] += 1
+                total_done += 1
+            elif is_in_progress:
+                group['in_progress_count'] += 1
+                total_in_progress += 1
+
+            print_seconds = best_pack.x_pack_print_to_done_seconds if best_pack else 0
+            actual_seconds = best_pack.x_pack_actual_seconds if best_pack else 0
+            if print_seconds:
+                group['_print_values'].append(print_seconds)
+                print_to_done_values.append(print_seconds)
+            if actual_seconds:
+                group['_actual_values'].append(actual_seconds)
+                actual_values.append(actual_seconds)
+
+            group['rows'].append({
+                'pick_id': pick.id,
+                'pick_name': pick.name,
+                'sale_order': pick.sale_id.name or pick.origin or '',
+                'pack_name': best_pack.name if best_pack else '',
+                'state': 'done' if is_done else ('in_progress' if is_in_progress else 'assigned'),
+                'assigned_at': pick.x_pack_assigned_at.strftime('%Y-%m-%d %H:%M:%S') if pick.x_pack_assigned_at else False,
+                'print_start_at': pick.x_pick_print_start_at.strftime('%Y-%m-%d %H:%M:%S') if pick.x_pick_print_start_at else False,
+                'print_end_at': pick.x_pick_print_end_at.strftime('%Y-%m-%d %H:%M:%S') if pick.x_pick_print_end_at else False,
+                'pack_start_at': best_pack.x_pack_actual_start_at.strftime('%Y-%m-%d %H:%M:%S') if best_pack and best_pack.x_pack_actual_start_at else False,
+                'pack_end_at': best_pack.x_pack_actual_end_at.strftime('%Y-%m-%d %H:%M:%S') if best_pack and best_pack.x_pack_actual_end_at else False,
+                'print_to_done_seconds': print_seconds or 0,
+                'actual_seconds': actual_seconds or 0,
+            })
+
+        def avg(values):
+            return sum(values) / len(values) if values else 0
+
+        group_list = []
+        for group in groups.values():
+            group['avg_print_to_done_seconds'] = avg(group.pop('_print_values'))
+            group['avg_actual_seconds'] = avg(group.pop('_actual_values'))
+            group_list.append(group)
+        group_list.sort(key=lambda g: (g['assigned_count'], g['done_count']), reverse=True)
+
+        return {
+            'summary': {
+                'assigned_count': total_assigned,
+                'in_progress_count': total_in_progress,
+                'done_count': total_done,
+                'avg_print_to_done_seconds': avg(print_to_done_values),
+                'avg_actual_seconds': avg(actual_values),
+            },
+            'groups': group_list,
+            'packers': self.get_packer_users_for_assignment(),
+        }
+
+    def _is_pack_restriction_enabled(self):
+        return self.env['ir.config_parameter'].sudo().get_param(
+            'hlv_sale_delivery_planning.restrict_pack_to_assigned_user'
+        ) in ('1', 'True', 'true', True)
+
+    def _is_pack_manager(self, user=None):
+        user = user or self.env.user
+        return bool(
+            user._is_superuser()
+            or user.has_group('stock.group_stock_manager')
+            or user.has_group('base.group_system')
+        )
+
+    def _resolve_assigned_pick_for_pack(self):
+        self.ensure_one()
+        if self._is_pick_slip_picking():
+            return self
+        if self.x_pack_source_pick_id.exists():
+            return self.x_pack_source_pick_id
+        domain = [
+            ('id', '!=', self.id),
+            ('return_id', '=', False),
+            ('picking_type_id.sequence_code', 'ilike', 'PICK'),
+            ('state', '!=', 'cancel'),
+        ]
+        if self.group_id:
+            domain.append(('group_id', '=', self.group_id.id))
+        elif self.sale_id:
+            domain.append(('sale_id', '=', self.sale_id.id))
+        elif self.origin:
+            domain.append(('origin', '=', self.origin))
+        else:
+            return self.env['stock.picking']
+        return self.sudo().search(domain, order='x_pick_print_end_at desc, date_done desc, id desc', limit=1)
+
+    def _check_pack_assignment_access(self, user=None, raise_exception=True):
+        self.ensure_one()
+        user = user or self.env.user
+        if not self._is_pack_picking() or not self._is_pack_restriction_enabled():
+            return True
+        if self._is_pack_manager(user):
+            return True
+        source_pick = self._resolve_assigned_pick_for_pack()
+        assigned_user = source_pick.x_pack_packer_user_id if source_pick else False
+        if assigned_user and assigned_user.id == user.id:
+            return True
+        assigned_name = self._packer_display_name(assigned_user) if assigned_user else _('chưa assign')
+        message = _('Bạn không được assign đóng phiếu này. Người đóng: %s') % assigned_name
+        if raise_exception:
+            raise UserError(message)
+        return False
+
+    def action_assign_packer(self, packer_user_id):
+        packer = self.env['res.users'].sudo().browse(int(packer_user_id)).exists()
+        if not packer:
+            raise UserError(_('Không tìm thấy người đóng được chọn.'))
+        now = fields.Datetime.now()
+        picks = self.filtered(lambda p: p._is_pick_slip_picking())
+        if not picks:
+            raise UserError(_('Không có phiếu lấy hàng hợp lệ để assign.'))
+        picks.write({
+            'x_pack_packer_user_id': packer.id,
+            'x_pack_assigned_by_id': self.env.context.get('pack_assigned_by_uid') or self.env.uid,
+            'x_pack_assigned_at': now,
+        })
+        return True
+
+    def mark_picking_print_started(self, packer_user_id=None):
+        picks = self.filtered(lambda p: p._is_pick_slip_picking())
+        if not picks:
+            return False
+        if packer_user_id:
+            picks.action_assign_packer(packer_user_id)
+        elif any(not p.x_pack_packer_user_id for p in picks):
+            raise UserError(_('Vui lòng chọn người đóng trước khi in phiếu lấy hàng.'))
+        picks.write({
+            'x_pick_print_start_at': fields.Datetime.now(),
+            'x_pick_printed_by_id': self.env.context.get('pack_printed_by_uid') or self.env.uid,
+        })
+        return True
+
+    def mark_picking_print_finished(self):
+        picks = self.filtered(lambda p: p._is_pick_slip_picking())
+        if not picks:
+            return False
+        picks.write({
+            'x_pick_print_end_at': fields.Datetime.now(),
+            'x_printed': True,
+        })
+        return True
+
+    def mark_pack_actual_started(self, user=None):
+        user = user or self.env.user
+        for picking in self:
+            if not picking._is_pack_picking():
+                continue
+            picking._check_pack_assignment_access(user=user)
+            source_pick = picking._resolve_assigned_pick_for_pack()
+            vals = {
+                'x_pack_actual_user_id': user.id,
+            }
+            if source_pick:
+                vals['x_pack_source_pick_id'] = source_pick.id
+            if not picking.x_pack_actual_start_at:
+                vals['x_pack_actual_start_at'] = fields.Datetime.now()
+            picking.write(vals)
+        return True
+
+    def mark_pack_done(self, user=None):
+        user = user or self.env.user
+        now = fields.Datetime.now()
+        for picking in self:
+            if not picking._is_pack_picking():
+                continue
+            source_pick = picking._resolve_assigned_pick_for_pack()
+            start_at = picking.x_pack_actual_start_at or now
+            vals = {
+                'x_pack_actual_user_id': user.id,
+                'x_pack_actual_end_at': now,
+                'x_pack_actual_start_at': start_at,
+                'x_pack_actual_seconds': max((now - start_at).total_seconds(), 0.0),
+            }
+            if source_pick:
+                vals['x_pack_source_pick_id'] = source_pick.id
+                print_start = source_pick.x_pick_print_start_at or source_pick.x_pick_print_end_at
+                if print_start:
+                    vals['x_pack_print_to_done_seconds'] = max((now - print_start).total_seconds(), 0.0)
+            picking.write(vals)
+        return True
+
+    def button_validate(self):
+        for picking in self:
+            if picking._is_pack_picking():
+                picking._check_pack_assignment_access()
+        return super().button_validate()
 
     def write(self, vals):
         res = super().write(vals)
@@ -70,48 +430,17 @@ class StockPicking(models.Model):
 
     def _action_done(self):
         res = super()._action_done()
-        now = fields.Datetime.now()
-        # Khi validate PACK picking → tự động set PICK upstream thành 'packed'
-        pack_pickings = self.filtered(
-            lambda p: 'PACK' in (p.picking_type_id.sequence_code or '').upper()
-        )
-        if pack_pickings:
-            for pack in pack_pickings:
-                origin_pick_pickings = pack.move_ids.mapped('move_orig_ids.picking_id').filtered(
-                    lambda p: 'PICK' in (p.picking_type_id.sequence_code or '').upper()
-                    and p.x_packing_status == 'packing'
-                )
-                if origin_pick_pickings:
-                    origin_pick_pickings.write({
-                        'x_packing_status': 'packed',
-                        'x_packing_finish_time': now,
-                    })
         self._notify_delivery_planner_changed()
         return res
 
     def _notify_delivery_planner_changed(self):
         """Send bus notification with the affected SO ids so the dashboard can
         do a partial subset refresh instead of a full reload."""
-        so_ids = list(set(self.mapped('sale_id').ids))
-        if not so_ids:
-            return
-        try:
-            from ..services.delivery_planner_stats import bump_stats_cache_version
-            bump_stats_cache_version()
-        except Exception:
-            pass
-        try:
-            self.env['bus.bus']._sendone(
-                'delivery_planner_channel',
-                'delivery_planner_data_changed',
-                {'source': 'stock.picking', 'sale_order_ids': so_ids},
-            )
-        except Exception:
-            _logger.debug('Failed to send delivery_planner_data_changed notification', exc_info=True)
-
-        """Send bus notification with the affected SO ids so the dashboard can
-        do a partial subset refresh instead of a full reload."""
-        so_ids = list(set(self.mapped('sale_id').ids))
+        sale_orders = self.mapped('sale_id') | self.mapped('move_ids.sale_line_id.order_id')
+        source_picks = self.mapped('x_pack_source_pick_id')
+        if source_picks:
+            sale_orders |= source_picks.mapped('sale_id') | source_picks.mapped('move_ids.sale_line_id.order_id')
+        so_ids = list(set(sale_orders.ids))
         if not so_ids:
             return
         try:

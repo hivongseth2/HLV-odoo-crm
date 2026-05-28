@@ -55,10 +55,7 @@ class IrActionsReport(models.Model):
                 pickings_bb = self.env['stock.picking'].browse(res_ids).exists()
                 pickings_bb = pickings_bb.filtered(lambda p: not p.x_bien_ban_printed)
                 if pickings_bb:
-                    pickings_bb.write({
-                        'x_bien_ban_printed': True,
-                        'x_bien_ban_print_time': fields.Datetime.now(),
-                    })
+                    pickings_bb.write({'x_bien_ban_printed': True})
                     _logger.info(
                         'Auto-marked %d pickings as bien_ban_printed (report: %s): %s',
                         len(pickings_bb), translated_name or report_technical,
@@ -77,7 +74,12 @@ class IrActionsReport(models.Model):
                               and not p.x_printed
                 )
                 if pick_pickings:
-                    pick_pickings.write({'x_printed': True})
+                    if any(not p.x_pick_print_start_at for p in pick_pickings):
+                        pick_pickings.filtered(lambda p: not p.x_pick_print_start_at).write({
+                            'x_pick_print_start_at': fields.Datetime.now(),
+                            'x_pick_printed_by_id': self.env.uid,
+                        })
+                    pick_pickings.mark_picking_print_finished()
                     _logger.info(
                         'Auto-marked %d pick pickings as printed: %s',
                         len(pick_pickings),

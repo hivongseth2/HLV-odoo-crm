@@ -95,15 +95,6 @@ class DeliveryPlannerService(models.AbstractModel):
         page_kit_tmpl_ids = set(page_kits.mapped('product_tmpl_id').ids)
         # Kit BOM map: {tmpl_id: bom} để tra nhanh
         page_kit_bom_map = {bom.product_tmpl_id.id: bom for bom in page_kits}
-        # Old-style combo (is_combo=True) batch detect — exclude products already in phantom BOM
-        if page_tmpl_ids:
-            _combo_recs = self.env['product.template'].sudo().search_read(
-                [('id', 'in', page_tmpl_ids), ('is_combo', '=', True)], ['id']
-            )
-            # Bao gồm sản phẩm có phantom BOM để fallback khi BOM explosion thất bại
-            page_combo_old_tmpl_ids = {r['id'] for r in _combo_recs}
-        else:
-            page_combo_old_tmpl_ids = set()
 
         # Batch load blocking moves cho tất cả 12 SO trang (thay thế 12× stock.move.search per-SO)
         # Chỉ load khi có kho, gom theo (so_id, product_id)
@@ -146,7 +137,6 @@ class DeliveryPlannerService(models.AbstractModel):
                 transfer_suggestions=transfer_map.get(so.id),
                 page_kit_tmpl_ids=page_kit_tmpl_ids,
                 page_kit_bom_map=page_kit_bom_map,
-                page_combo_old_tmpl_ids=page_combo_old_tmpl_ids,
                 page_blocking_by_so=page_blocking_by_so,
             )
             for so in page_sales
@@ -299,14 +289,6 @@ class DeliveryPlannerService(models.AbstractModel):
         ]) if page_tmpl_ids else self.env['mrp.bom']
         page_kit_tmpl_ids = set(page_kits.mapped('product_tmpl_id').ids)
         page_kit_bom_map = {bom.product_tmpl_id.id: bom for bom in page_kits}
-        if page_tmpl_ids:
-            _combo_recs = self.env['product.template'].sudo().search_read(
-                [('id', 'in', page_tmpl_ids), ('is_combo', '=', True)], ['id']
-            )
-            # Bao gồm sản phẩm có phantom BOM để fallback khi BOM explosion thất bại
-            page_combo_old_tmpl_ids = {r['id'] for r in _combo_recs}
-        else:
-            page_combo_old_tmpl_ids = set()
 
         page_blocking_by_so = self._batch_blocking_moves(page_sales)
         transfer_map = self._batch_transfer_suggestions(page_sales, product_availabilities)
@@ -334,7 +316,6 @@ class DeliveryPlannerService(models.AbstractModel):
                 transfer_suggestions=transfer_map.get(so.id),
                 page_kit_tmpl_ids=page_kit_tmpl_ids,
                 page_kit_bom_map=page_kit_bom_map,
-                page_combo_old_tmpl_ids=page_combo_old_tmpl_ids,
                 page_blocking_by_so=page_blocking_by_so,
             )
             for so in page_sales
