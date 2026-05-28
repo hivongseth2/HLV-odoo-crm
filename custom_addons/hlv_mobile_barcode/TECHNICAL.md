@@ -59,12 +59,13 @@ hlv_mobile_barcode/
   * Quét hoặc tra cứu Kiện hàng/Gói hàng (`stock.quant.package`) tự động phân tích vị trí hiện tại của gói hoặc các `stock.quant` chứa bên trong để truy xuất đúng mã kho thực tế (`warehouse_code`), cập nhật tiêu đề Header thay vì hiển thị "Kho HLV" tĩnh.
   * Tự động cắt bỏ các khoảng trắng thừa (`.strip()`) ở hai đầu chuỗi quét ở tất cả các router backend, ngăn lỗi do máy quét cầm tay tự động nối thêm phím Enter/Tab.
 - **Dynamic Warehouse Header**: API tự động trả về `warehouse_code` thực tế của phiếu kho (`picking.picking_type_id.warehouse_id.code` hoặc `location.warehouse_id.code`), hiển thị động lên Header dạng "Kho KBC", "Kho TSN"... thay vì "Kho HLV" tĩnh.
-- **Liên kết & Chuyển đổi trực tiếp Quy trình 2 bước (INT -> IN)**:
+- **Liên kết & Chuyển đổi trực tiếp Quy trình 2 bước (INT -> IN / STOR)**:
   - Khi hoàn thành hoặc quét một phiếu chuyển kho Bước 1 (`INT` - Internal Transfer) có trạng thái `done` (hoàn tất), ứng dụng hiển thị chi tiết thông tin phiếu và cung cấp một nút bấm nổi bật **"Chuyển sang Bước 2 (<Tên phiếu bước 2>)"** ngay phía trên chân trang.
-  - *Cơ chế tìm kiếm liên kết*: Backend tự động tìm kiếm phiếu Bước 2 (`IN`) thông qua 3 lớp fallback:
-    1. **Chuỗi dịch chuyển (Stock Moves Chain)**: Sử dụng quan hệ `move_dest_ids.picking_id` để tìm các stock.picking đích hợp lệ.
-    2. **Nhóm cung ứng (Procurement Group)**: Tìm kiếm các stock.picking khác có cùng `group_id` và có mã sequence chứa ký tự `'IN'` hoặc thuộc loại `incoming`/`internal`.
-    3. **Nguồn gốc tài liệu (Origin)**: Tìm kiếm các phiếu có trường `origin` khớp chính xác với tên của phiếu Bước 1.
+  - *Cơ chế tìm kiếm liên kết*: Backend tự động tìm kiếm phiếu Bước 2 (`IN` hoặc `STOR`) thông qua 4 phương pháp ưu tiên (gọn gàng, tin cậy):
+    1. **Tin nhắn Chatter (Chatter Message - Ưu tiên cao nhất)**: Khi Odoo tạo phiếu Bước 2 từ phiếu Bước 1 thông qua push rules, hệ thống sẽ tự động đăng tin nhắn trong Chatter (ví dụ: "This transfer has been created from: KBC/INT/02042"). Backend tìm kiếm trong `mail.message` với `model='stock.picking'` và `body` chứa tên của phiếu Bước 1 để lấy ID phiếu mới.
+    2. **Chuỗi dịch chuyển (Stock Moves Chain)**: Sử dụng quan hệ `move_dest_ids.picking_id` để tìm các stock.picking đích hợp lệ (Odoo native chain).
+    3. **Nhóm cung ứng (Procurement Group)**: Tìm kiếm các stock.picking khác có cùng `group_id` và có mã sequence chứa ký tự `'IN'` hoặc `'STOR'` hoặc thuộc loại `incoming`/`internal`.
+    4. **Nguồn gốc tài liệu (Origin)**: Tìm kiếm các phiếu có trường `origin` khớp chính xác hoặc chứa tên của phiếu Bước 1.
   - Khi người dùng nhấp nút chuyển đổi, ứng dụng thực hiện giải phóng camera cũ, lưu lịch sử duyệt (`pushHistory()`), cập nhật trạng thái mục tiêu và kích hoạt lại camera trên phiếu Bước 2 mới một cách mượt mà không bị lỗi gắn kết DOM.
 
 ## API / Controllers

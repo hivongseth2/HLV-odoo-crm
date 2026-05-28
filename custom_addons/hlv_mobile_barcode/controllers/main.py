@@ -148,21 +148,38 @@ class HLVMobileBarcodeController(http.Controller):
                     'result_package_id': False,
                     'package_id': False,
                 })
-        # Find linked Step 2 picking (only active for pure internal transfers e.g. INT -> IN)
+        # Find linked Step 2 picking (only active for pure internal transfers e.g. INT -> IN / STOR)
         linked_picking_id = False
         linked_picking_name = False
         
         if picking.picking_type_id.code == 'internal':
-            # Method 1: Via stock moves chain
-            dest_pickings = picking.move_ids.mapped('move_dest_ids.picking_id').filtered(
-                lambda p: p.id != picking.id and p.state not in ['cancel']
-            )
-            if dest_pickings:
-                linked_picking = dest_pickings[0]
-                linked_picking_id = linked_picking.id
-                linked_picking_name = linked_picking.name
-                
-            # Method 2: Fallback to same procurement group (sharing group_id)
+            # Method 1 (highest priority per user rule): Chatter message
+            # Odoo automatically posts a message in chatter when a step-2 picking is created from a step-1 picking.
+            # e.g., "This transfer has been created from: KBC/INT/02042"
+            # We search for mail.message containing the source picking name in model='stock.picking' and retrieve res_id.
+            messages = request.env['mail.message'].sudo().search([
+                ('model', '=', 'stock.picking'),
+                ('body', 'like', picking.name)
+            ], order='id desc', limit=10)
+            
+            for msg in messages:
+                target_picking = request.env['stock.picking'].sudo().browse(msg.res_id)
+                if target_picking.exists() and target_picking.id != picking.id and target_picking.state not in ['cancel']:
+                    linked_picking_id = target_picking.id
+                    linked_picking_name = target_picking.name
+                    break
+
+            # Method 2: Via stock moves chain (Odoo native stock move chain)
+            if not linked_picking_id:
+                dest_pickings = picking.move_ids.mapped('move_dest_ids.picking_id').filtered(
+                    lambda p: p.id != picking.id and p.state not in ['cancel']
+                )
+                if dest_pickings:
+                    linked_picking = dest_pickings[0]
+                    linked_picking_id = linked_picking.id
+                    linked_picking_name = linked_picking.name
+                    
+            # Method 3: Same procurement group (sharing group_id)
             if not linked_picking_id and picking.group_id:
                 group_pickings = request.env['stock.picking'].sudo().search([
                     ('group_id', '=', picking.group_id.id),
@@ -183,7 +200,7 @@ class HLVMobileBarcodeController(http.Controller):
                     linked_picking_id = linked_picking.id
                     linked_picking_name = linked_picking.name
                     
-            # Method 3: Fallback to origin matching current picking name (case-insensitive substring)
+            # Method 4: Origin matching current picking name (case-insensitive substring or exact match)
             if not linked_picking_id:
                 origin_pickings = request.env['stock.picking'].sudo().search([
                     '|',
@@ -195,63 +212,6 @@ class HLVMobileBarcodeController(http.Controller):
                 if origin_pickings:
                     linked_picking_id = origin_pickings.id
                     linked_picking_name = origin_pickings.name
-            
-            # Method 4: Shared origin fallback (sharing same SO/purchase/reference name)
-            if not linked_picking_id and picking.origin:
-                shared_pickings = request.env['stock.picking'].sudo().search([
-                    ('origin', '=', picking.origin),
-                    ('id', '!=', picking.id),
-                    ('state', 'not in', ['cancel'])
-                ])
-                # Filter to find the next logical step (source location is our destination)
-                transit_pickings = shared_pickings.filtered(
-                    lambda p: p.location_id == picking.location_dest_id
-                )
-                if transit_pickings:
-                    linked_picking_id = transit_pickings[0].id
-                    linked_picking_name = transit_pickings[0].name
-
-            # Method 5: Product & Location matching fallback (for manually created push rule pickings)
-            if not linked_picking_id:
-                # Find pickings created recently (in the last 2 hours)
-                # that move from our destination location (Transit) and contain at least one of our products.
-                # To prevent concurrency issues when multiple workers are processing at the same time,
-                # we strictly filter to pickings created by the same user session (create_uid = current user).
-                from datetime import datetime, timedelta
-                two_hours_ago = datetime.now() - timedelta(hours=2)
-                
-                product_ids = picking.move_ids.mapped('product_id').ids
-                if product_ids:
-                    recent_pickings = request.env['stock.picking'].sudo().search([
-                        ('location_id', '=', picking.location_dest_id.id),
-                        ('id', '!=', picking.id),
-                        ('state', 'not in', ['cancel', 'done']),
-                        ('create_date', '>=', two_hours_ago),
-                        ('create_uid', '=', request.env.user.id)
-                    ], order='id desc')
-                    
-                    for rp in recent_pickings:
-                        rp_product_ids = rp.move_ids.mapped('product_id').ids
-                        # If there is an overlap in products, this is our linked Step 2!
-                        if set(product_ids) & set(rp_product_ids):
-                            linked_picking_id = rp.id
-                            linked_picking_name = rp.name
-                            break
-
-            # Method 6: Chatter message fallback (specifically for messages linking source picking name)
-            if not linked_picking_id:
-                # Search for mail.message containing the source picking name in res_model='stock.picking'
-                messages = request.env['mail.message'].sudo().search([
-                    ('res_model', '=', 'stock.picking'),
-                    ('body', 'like', picking.name)
-                ], order='id desc', limit=10)
-                
-                for msg in messages:
-                    target_picking = request.env['stock.picking'].sudo().browse(msg.res_id)
-                    if target_picking.exists() and target_picking.id != picking.id and target_picking.state not in ['cancel']:
-                        linked_picking_id = target_picking.id
-                        linked_picking_name = target_picking.name
-                        break
             
         packages = []
         all_result_pkgs = picking.move_line_ids.mapped('result_package_id')
