@@ -270,7 +270,7 @@
             background: transparent !important; box-shadow: none !important;
           }
           .table-responsive {
-            overflow: auto !important; max-height: calc(100vh - 155px);
+            overflow: auto !important; 
             border: 1px solid rgba(226,232,240,.76); border-radius: 4px;
             background: rgba(255,255,255,.78); box-shadow: var(--inv-sh-gl);
             backdrop-filter: blur(18px) saturate(145%);
@@ -343,7 +343,7 @@
           }
           .detail-container-mobile {
             background: rgba(248,250,252,.8); border: 1px solid var(--inv-bd-s);
-            border-radius: 4px; padding: 10px;
+            border-radius: 4px;
           }
           .wh-card,.detail-container-mobile .card {
             border: 1px solid var(--inv-bd-s) !important; border-radius: 4px !important;
@@ -491,7 +491,7 @@
           /* ── Warehouse detail nested under product card ── */
           #inv-table tbody tr.detail-row {
             display: block !important;
-            margin: 0 0 10px 20px !important; padding: 7px 0 0 10px !important;
+            margin: 0 20px !important; padding: 10px !important;
             border: 0 !important; border-left: 2px solid #cbd5e1 !important;
             background: transparent !important;
           }
