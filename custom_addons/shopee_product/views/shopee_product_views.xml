@@ -107,7 +107,7 @@
                                     <field name="item_name" nolabel="1" class="d-block w-100" placeholder="Tên sản phẩm Shopee" style="font-size:1.5rem;"/>
                                 </h1>
                                 <div class="d-flex flex-wrap gap-3" style="color:#6b7280;">
-                                    <span><i class="fa fa-barcode me-1" style="color:#ee4d2d;"/> <field name="item_sku" nolabel="1" placeholder="SKU"/></span>
+                                    <span><i class="fa fa-barcode me-1" style="color:#ee4d2d;" title="SKU" role="img" aria-label="SKU"/> <field name="item_sku" nolabel="1" placeholder="SKU"/></span>
                                     <span><i class="fa fa-shopping-bag me-1" style="color:#ee4d2d;" title="Cửa hàng" role="img" aria-label="Cửa hàng"/> <field name="shop_id" nolabel="1" readonly="1" options="{'no_open': False}"/></span>
                                 </div>
                             </div>
@@ -232,7 +232,7 @@
                             </div>
                             <div class="col-lg-6">
                                 <div class="rounded-3 p-3 h-100 shadow-sm" style="background:#f8fafc; box-shadow:0 8px 20px rgba(15,23,42,.06);">
-                                    <div class="fw-semibold mb-2" style="color:#ee4d2d;"><i class="fa fa-tag me-1"/> Giá — phương thức cập nhật</div>
+                                    <div class="fw-semibold mb-2" style="color:#ee4d2d;"><i class="fa fa-tag me-1" title="Giá" role="img" aria-label="Giá"/> Giá — phương thức cập nhật</div>
                                     <field name="price_update_mode" nolabel="1" widget="radio"/>
                                     <div invisible="price_update_mode != 'price_field'" class="mt-2">
                                         <field name="price_field_id"
@@ -308,9 +308,9 @@
                                                             </div>
                                                         </div>
                                                         <div class="sp-model-edit">
-                                                            <label>Giá mới</label>
+                                                            <span class="o_form_label">Giá mới</span>
                                                             <field name="new_price" widget="integer"/>
-                                                            <label>Tồn mới</label>
+                                                            <span class="o_form_label">Tồn mới</span>
                                                             <field name="new_stock"/>
                                                         </div>
                                                         <div class="sp-model-actions">
@@ -588,9 +588,9 @@
                                                                 </div>
                                                             </div>
                                                             <div class="sp-logi-edit">
-                                                                <label>Bật</label>
+                                                                <span class="o_form_label">Bật</span>
                                                                 <field name="selected" widget="boolean_toggle" nolabel="1"/>
-                                                                <label>Miễn phí</label>
+                                                                <span class="o_form_label">Miễn phí</span>
                                                                 <field name="is_free" widget="boolean_toggle" nolabel="1"/>
                                                             </div>
                                                         </div>
