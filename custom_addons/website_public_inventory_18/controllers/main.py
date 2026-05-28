@@ -739,6 +739,7 @@ class PublicInventory(http.Controller):
                 incoming_by_picking[key] = {
                     "picking_name": picking.name or "",
                     "po_name": po.name if po else (picking.origin or ""),
+                    "po_origin": (po.origin or "") if po else "",
                     "scheduled_date": sched.strftime('%d/%m/%Y') if sched else "",
                     "state": _STATE_VN.get(picking.state, picking.state),
                     "qty": 0.0,
@@ -761,34 +762,41 @@ class PublicInventory(http.Controller):
         #           pack → output (PACK)      (source inside lot_stock_id ✓, dest ngoài ✓)
         #           output → customer (SHIP)  (source = output, NOT inside lot_stock_id → bỏ qua)
 
-        def _wh_outgoing_domain(domain_list):
-            """
-            Filter SO-linked moves ra khỏi vùng lot_stock_id của kho.
-            Mirrors Odoo outgoing_qty: FROM child_of(lot_stock_id) TO NOT child_of(lot_stock_id).
-            """
-            if wid:
-                wh = Warehouse.browse(wid).exists()
-                if wh:
-                    stock_id = wh.lot_stock_id.id
-                    domain_list.append(("location_id", "child_of", stock_id))
-                    domain_list.append(("location_dest_id", "not child_of", stock_id))
-            else:
-                allowed_whs = _get_allowed_warehouses()
-                if allowed_whs:
-                    stock_ids = allowed_whs.mapped('lot_stock_id').ids
-                    domain_list.append(("location_id", "child_of", stock_ids))
-                    domain_list.append(("location_dest_id", "not child_of", stock_ids))
-            return domain_list
+        # Outgoing = SO-linked moves FROM inside lot_stock_id TO outside lot_stock_id
+        # (mirrors Odoo outgoing_qty logic)
+        # 'not child_of' is NOT a valid Odoo ORM operator → we filter in Python after search
+        if wid:
+            out_wh = Warehouse.browse(wid).exists()
+            _out_stock_ids = [out_wh.lot_stock_id.id] if out_wh else []
+        else:
+            _out_whs = _get_allowed_warehouses()
+            _out_stock_ids = _out_whs.mapped('lot_stock_id').ids if _out_whs else []
 
-        outgoing_domain = _wh_outgoing_domain([
+        # Pre-compute the full set of location ids that are INSIDE lot_stock_id
+        # so we can exclude moves where dest is also inside
+        if _out_stock_ids:
+            _inner_locs = set(
+                env['stock.location'].sudo()
+                .search([('id', 'child_of', _out_stock_ids)]).ids
+            )
+        else:
+            _inner_locs = set()
+
+        outgoing_domain_base = [
             ("product_id", "=", pid),
             ("state", "not in", ["done", "cancel", "draft"]),
             "|",
             ("sale_line_id", "!=", False),
             ("picking_id.sale_id", "!=", False),
-        ])
+        ]
+        if _out_stock_ids:
+            outgoing_domain_base.append(("location_id", "child_of", _out_stock_ids))
         try:
-            outgoing_moves = StockMove.search(outgoing_domain, order="date asc")
+            _out_raw = StockMove.search(outgoing_domain_base, order="date asc")
+            # Keep only moves whose destination is OUTSIDE lot_stock_id
+            outgoing_moves = _out_raw.filtered(
+                lambda m: m.location_dest_id.id not in _inner_locs
+            ) if _inner_locs else _out_raw
         except Exception:
             outgoing_moves = StockMove.browse([])
 
