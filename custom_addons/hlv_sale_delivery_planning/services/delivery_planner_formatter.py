@@ -478,7 +478,7 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                 'printed': bool(p.x_printed),
                 'packer_user': (
                     [p.x_pack_packer_user_id.id,
-                     getattr(p.x_pack_packer_user_id, 'packer_name', None) or p.x_pack_packer_user_id.name]
+                     getattr(p.x_pack_packer_user_id, 'x_packer_name', None) or p.x_pack_packer_user_id.name]
                     if getattr(p, 'x_pack_packer_user_id', False) and p.x_pack_packer_user_id
                     else False
                 ),

@@ -118,7 +118,7 @@ class StockPicking(models.Model):
         )
 
     def _packer_display_name(self, user):
-        return getattr(user, 'packer_name', None) or user.name or ''
+        return getattr(user, 'x_packer_name', None) or user.name or ''
 
     @api.model
     def get_packer_users_for_assignment(self):

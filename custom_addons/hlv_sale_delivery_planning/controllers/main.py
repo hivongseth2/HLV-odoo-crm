@@ -150,7 +150,7 @@ class DeliveryPlannerController(http.Controller):
                 'url': f'/web/content/{attachment.id}?download=true',
                 'picking_count': len(all_pickings),
                 'packer_user_id': packer.id,
-                'packer_name': getattr(packer, 'packer_name', None) or packer.name,
+                'packer_name': getattr(packer, 'x_packer_name', None) or packer.name,
                 'message': f'Đã tạo PDF cho {len(all_pickings)} phiếu lấy hàng',
             }
         except Exception as e:
