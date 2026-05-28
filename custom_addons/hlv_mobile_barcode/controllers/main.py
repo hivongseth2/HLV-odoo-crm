@@ -712,10 +712,14 @@ class HLVMobileBarcodeController(http.Controller):
         if not picking.exists() or picking.state not in ['draft', 'confirmed', 'assigned']:
             return {'error': _('Không thể xoá số lượng của phiếu này')}
             
+        # Không cho phép clear_quantities trên phiếu Bước 2 vì các line được tạo tự động từ Bước 1
+        if picking.source_transfer_id:
+            return {'error': _('Không thể xóa số lượng trên phiếu Bước 2 được.')}
+            
         try:
             # 1. Handle stock move lines
             for ml in picking.move_line_ids:
-                if ml.quantity_product_uom == 0.0:
+                if ml.quantity_product_uom == 0.0 and not ml.move_id.move_orig_ids:
                     # Dynamically created line -> delete it!
                     ml.unlink()
                 else:
@@ -744,6 +748,10 @@ class HLVMobileBarcodeController(http.Controller):
             
         if picking.state == 'done':
             return {'error': _('Phiếu đã hoàn thành, không thể hủy.')}
+
+        # Không cho phép tự động hủy phiếu Bước 2
+        if picking.source_transfer_id:
+            return {'error': _('Không thể hủy phiếu Bước 2 được tự động sinh ra. Bạn sẽ thoát khỏi phiếu mà không hủy.')}
             
         try:
             # 1. Clear quantities first to release any dynamic scanning
