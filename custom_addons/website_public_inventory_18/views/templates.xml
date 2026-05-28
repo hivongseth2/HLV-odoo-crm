@@ -1568,6 +1568,148 @@
               padding: 8px 0 !important;
             }
           }
+
+          /* ==========================================================
+             Inventory UI V4 Mobile Hierarchy: product card first, warehouse details nested
+             ========================================================== */
+
+          #wrap .container-fluid > div:first-child,
+          #search-form,
+          .search-wrapper,
+          #search-form .form-select,
+          #search-form .btn,
+          #search-form .col-md-3,
+          .table-responsive,
+          #wrap .card,
+          .detail-container-mobile,
+          .wh-card,
+          #forecastDetailsModal .modal-content,
+          #locationDetailsModal .modal-content {
+            border-radius: 4px !important;
+          }
+
+          #inv-table tbody tr.main-row td:nth-child(8) > span,
+          #inv-table tbody tr.main-row td:nth-child(7) a,
+          #forecastDetailsBody .fc-badge,
+          #inv-table .badge {
+            border-radius: 4px !important;
+          }
+
+          @media (max-width: 768px) {
+            #wrap .container-fluid {
+              padding-inline: 8px !important;
+            }
+
+            #search-form {
+              border-radius: 4px !important;
+              box-shadow: 0 8px 18px -16px rgba(15,23,42,.42) !important;
+            }
+
+            #inv-table tbody tr.main-row {
+              margin-bottom: 0 !important;
+              border-radius: 4px !important;
+              background: #ffffff !important;
+              box-shadow: 0 1px 2px rgba(15,23,42,.06) !important;
+            }
+
+            #inv-table tbody tr.main-row td:nth-child(2) img {
+              border-radius: 4px !important;
+            }
+
+            #inv-table tbody tr.main-row td:nth-child(4) .text-wrap {
+              font-size: 13.5px !important;
+              line-height: 1.35 !important;
+            }
+
+            #inv-table tbody tr.main-row td:nth-child(8),
+            #inv-table tbody tr.main-row td:nth-child(9),
+            #inv-table tbody tr.main-row td:nth-child(10),
+            #inv-table tbody tr.main-row td:nth-child(11),
+            #inv-table tbody tr.main-row td:nth-child(12),
+            #inv-table tbody tr.main-row td:nth-child(13) {
+              min-height: 26px !important;
+              padding-top: 4px !important;
+              font-size: 12.8px !important;
+            }
+
+            #inv-table tbody tr.detail-row {
+              position: relative;
+              width: calc(100% - 18px) !important;
+              margin: 0 0 12px 18px !important;
+              padding: 8px 0 0 10px !important;
+              border-left: 2px solid #cbd5e1 !important;
+              background: transparent !important;
+            }
+
+            #inv-table tbody tr.detail-row:before {
+              content: "Tồn theo kho";
+              display: block;
+              margin: 0 0 6px -2px;
+              color: #64748b;
+              font-size: 11px;
+              font-weight: 600;
+              letter-spacing: .02em;
+              text-transform: uppercase;
+            }
+
+            #inv-table tbody tr.detail-row > td {
+              display: block !important;
+              width: 100% !important;
+            }
+
+            #inv-table .detail-container-mobile {
+              margin: 0 !important;
+              padding: 0 !important;
+              background: transparent !important;
+            }
+
+            .wh-card,
+            .detail-container-mobile .card {
+              border-radius: 4px !important;
+              border: 1px solid #e2e8f0 !important;
+              background: #f8fafc !important;
+              box-shadow: none !important;
+              margin-bottom: 6px !important;
+              overflow: hidden;
+            }
+
+            .wh-header,
+            .detail-container-mobile .card-header {
+              min-height: 36px;
+              padding: 7px 9px !important;
+              background: #ffffff !important;
+              font-size: 13px !important;
+              font-weight: 600 !important;
+            }
+
+            .wh-header .btn-view-location,
+            .detail-container-mobile .btn-view-location {
+              padding: 3px 8px !important;
+              border-radius: 4px !important;
+              background: #ffffff !important;
+              border: 1px solid #e2e8f0 !important;
+              box-shadow: none !important;
+              font-size: 12px !important;
+            }
+
+            .wh-stats {
+              padding: 7px 0 !important;
+              background: #f8fafc !important;
+            }
+
+            .wh-label {
+              font-size: 10px !important;
+            }
+
+            .wh-val {
+              font-size: 14px !important;
+            }
+
+            .wh-stat-col.highlight .wh-val {
+              border-radius: 4px !important;
+              padding: 1px 8px !important;
+            }
+          }
       </style>
 
       <main id="wrap" class="oe_structure">
@@ -1981,8 +2123,7 @@
                    var qtyInfo = (q > 0) ? ('<span class="badge ' + badgeClass + ' text-white border ms-2">Tồn: ' + fmt(q) + '</span>') : '<span class="badge bg-light text-muted border ms-2">Hết hàng</span>';
                    if (q > 0 && q <= 5) qtyInfo = '<span class="badge ' + badgeClass + ' border ms-2">Tồn: ' + fmt(q) + '</span>';
                    
-                   // data-code: dùng default_code để search chính xác, tránh ilike 'Dù' match 'dùng'
-                   var searchTerm = (p.default_code && p.default_code.trim()) ? p.default_code.trim() : displayName;
+                   var searchTerm = displayName;
                    html += '<div class="suggestion-item border-bottom p-2" data-name="' + displayName + '" data-code="' + (p.default_code || '') + '" data-search-term="' + searchTerm + '" style="cursor:pointer;">';
                    html += '  <div class="d-flex align-items-center">';
                    html += '    <img src="' + imgUrl + '" class=" me-2 flex-shrink-0" style="width:40px; height:40px; object-fit:cover;"/>';
@@ -2043,9 +2184,7 @@
                   else $dropdown.hide();
                 }, 300));
                 $(document).on('click', '.suggestion-item', function() {
-                  // Dùng default_code (ví dụ: DU_MIL) để search, không dùng name (Dù MILWAUKEE)
-                  // vì ilike 'Dù' sẽ match cả 'từ dùng' → hàng trăm sản phẩm MILWAUKEE
-                  var term = $(this).data('search-term') || $(this).data('name');
+                  var term = $(this).data('name') || $(this).data('search-term');
                   if (term) { window.addSearchChip(term); $dropdown.hide(); $('#search-form').submit(); }
                 });
                 $(document).on('click', function(e) { if (!$(e.target).closest('#chip-container, #search-suggestions').length) $dropdown.hide(); });
