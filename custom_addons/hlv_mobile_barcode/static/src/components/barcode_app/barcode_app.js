@@ -465,13 +465,16 @@ export class BarcodeApp extends Component {
         if (!this.state.selectedWarehouseId) return;
         
         const destWarehouseId = this.state.selectedWarehouseId;
+        const pendingBatchMove = this.pendingBatchMove;
+        const pendingMove = this.pendingMove;
+        
         this.closeWarehousePopup();
         
-        if (this.pendingBatchMove) {
-            const { locBarcode, locName } = this.pendingBatchMove;
+        if (pendingBatchMove) {
+            const { locBarcode, locName } = pendingBatchMove;
             await this.goToBatchMove(locBarcode, locName, destWarehouseId);
-        } else if (this.pendingMove) {
-            const { productId, locBarcode, locName } = this.pendingMove;
+        } else if (pendingMove) {
+            const { productId, locBarcode, locName } = pendingMove;
             this.goToMove(productId, locBarcode, locName, destWarehouseId);
         }
     }
