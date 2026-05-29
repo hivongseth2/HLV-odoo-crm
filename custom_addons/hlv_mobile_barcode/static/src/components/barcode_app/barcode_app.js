@@ -492,6 +492,9 @@ export class BarcodeApp extends Component {
             } else if (result.type === 'location') {
                 this.state.destLocationName = result.name;
                 this.state.destLocationId = result.id;
+                
+                // Tự động xác nhận chuyển trang nếu vị trí đúng
+                await this.confirmWarehouseSelection();
             } else {
                 this.notification.add("Mã vạch không phải là vị trí", { type: "danger" });
                 this.state.destLocationName = "";
