@@ -3,19 +3,19 @@
     <t t-name="hlv_mobile_barcode.InventoryLookup">
         <div class="subview-root">
             <!-- Compact header row -->
-            <div class="shipper-header" style="flex-shrink: 0; padding: 10px 0;">
-                <div class="header-title" style="font-size: 0.95rem;">
+            <div class="shipper-header" style="display: flex; flex-direction: column; gap: 10px; flex-shrink: 0; padding: 10px 0; border-bottom: 1px solid var(--border-color); margin-bottom: 10px;">
+                <div class="header-title" style="font-size: 0.95rem; font-weight: bold;">
                     <i class="fa fa-search"></i> <t t-esc="state.title"/>
                 </div>
-                <div style="display: flex; gap: 6px;">
-                    <button t-if="props.lookupType === 'product'" class="btn btn-primary" style="padding: 5px 10px; font-size: 0.8rem;" t-on-click="() => props.onMove(props.recordId)">
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <button class="btn btn-outline" style="padding: 6px 12px; font-size: 0.85rem;" t-on-click="props.onBack">
+                        <i class="fa fa-arrow-left"></i> Quay lại
+                    </button>
+                    <button t-if="props.lookupType === 'product'" class="btn btn-primary" style="padding: 6px 12px; font-size: 0.85rem; flex: 1;" t-on-click="() => props.onMove(props.recordId)">
                         <i class="fa fa-exchange-alt"></i> Chuyển
                     </button>
-                    <button t-if="props.lookupType === 'location'" class="btn btn-primary" style="padding: 5px 10px; font-size: 0.8rem;" t-on-click="() => props.onBatchMove(state.location_barcode, state.location_name)">
+                    <button t-if="props.lookupType === 'location'" class="btn btn-primary" style="padding: 6px 12px; font-size: 0.85rem; flex: 1;" t-on-click="() => props.onBatchMove(state.location_barcode, state.location_name)">
                         <i class="fa fa-boxes"></i> Tạo chuyển kho
-                    </button>
-                    <button class="btn btn-outline" style="padding: 5px 10px; font-size: 0.8rem;" t-on-click="props.onBack">
-                        <i class="fa fa-arrow-left"></i> Quay lại
                     </button>
                 </div>
             </div>
