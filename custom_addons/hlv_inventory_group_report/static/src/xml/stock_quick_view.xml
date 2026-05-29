@@ -868,10 +868,11 @@
                                             <th style="padding:6px 8px; text-align:left;">Ngày</th>
                                             <th style="padding:6px 8px; text-align:left;">Số chứng từ</th>
                                             <th style="padding:6px 8px; text-align:left;">Đơn mua (PO)</th>
-                                            <th style="padding:6px 8px; text-align:right;">Đơn giá</th>
                                             <th style="padding:6px 8px; text-align:right;">Số lượng</th>
+                                            <th style="padding:6px 8px; text-align:right;">Đơn giá trước thuế</th>
                                             <th style="padding:6px 8px; text-align:right;">Thuế</th>
-                                            <th style="padding:6px 8px; text-align:right;">Thành tiền</th>
+                                            <th style="padding:6px 8px; text-align:right;">Đơn giá sau thuế</th>
+                                            <th style="padding:6px 8px; text-align:right;">Thành tiền sau thuế</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -882,12 +883,13 @@
                                                 </td>
                                                 <td style="padding:5px 8px; font-family:monospace; font-size:11px; font-weight:700;"><t t-esc="lyr.reference"/></td>
                                                 <td style="padding:5px 8px; font-size:11px; color:#546e7a;"><t t-esc="lyr.po_name"/></td>
-                                                <td style="padding:5px 8px; text-align:right; font-weight:700; color:#880e4f;"><t t-esc="formatPrice(lyr.unit_cost)"/></td>
                                                 <td style="padding:5px 8px; text-align:right; font-weight:600; color:#880e4f;">
                                                     <t t-esc="formatQty(lyr.qty)"/>
                                                     <span style="font-weight:400; color:#adb5bd; margin-left:3px; font-size:10px;"><t t-esc="lyr.uom"/></span>
                                                 </td>
+                                                <td style="padding:5px 8px; text-align:right; font-weight:700; color:#880e4f;"><t t-esc="formatPrice(lyr.unit_cost_before_tax)"/></td>
                                                 <td style="padding:5px 8px; text-align:right; color:#b71c1c;"><t t-esc="formatPrice(lyr.tax_value)"/></td>
+                                                <td style="padding:5px 8px; text-align:right; font-weight:700; color:#880e4f;"><t t-esc="formatPrice(lyr.unit_cost)"/></td>
                                                 <td style="padding:5px 8px; text-align:right; color:#5d4037;">
                                                     <div style="display:flex; gap:4px; align-items:center; justify-content:flex-end;">
                                                         <input type="text"
@@ -906,13 +908,15 @@
                                             </tr>
                                         </t>
                                         <tr style="background:#fce4ec; border-top:2px solid #880e4f; font-weight:700;">
-                                            <td colspan="4" style="padding:6px 8px; color:#880e4f; font-size:11px; font-style:italic;">Tổng</td>
+                                            <td colspan="3" style="padding:6px 8px; color:#880e4f; font-size:11px; font-style:italic;">Tổng</td>
                                             <td style="padding:6px 8px; text-align:right; color:#1a2639;">
                                                 <t t-esc="formatQty(cpData.total_qty)"/>
                                             </td>
+                                            <td style="padding:6px 8px;"></td>
                                             <td style="padding:6px 8px; text-align:right; color:#b71c1c;">
                                                 <t t-esc="formatPrice(cpData.total_tax)"/>
                                             </td>
+                                            <td style="padding:6px 8px;"></td>
                                             <td style="padding:6px 8px; text-align:right; color:#5d4037;">
                                                 <t t-esc="formatMoneyVND(cpData.total_value)"/>
                                             </td>

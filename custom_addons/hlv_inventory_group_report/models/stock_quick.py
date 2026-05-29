@@ -425,6 +425,7 @@ class HlvStockQuick(models.TransientModel):
             allocated_tax = tax_amount * qty_take / line_qty if line_qty else 0.0
             allocated_value = line_total * qty_take / line_qty if line_qty else 0.0
             unit_cost = line_total / line_qty if line_qty else 0.0
+            unit_cost_before_tax = subtotal / line_qty if line_qty else 0.0
 
             manual_amount = manual_layer_amounts.get(po_line.id)
             if manual_amount is not None:
@@ -450,6 +451,7 @@ class HlvStockQuick(models.TransientModel):
                 "po_name": po_line.order_id.partner_id.display_name if po_line.order_id.partner_id else "",
                 "qty": round(qty_take, 2),
                 "line_qty": round(line_qty, 2),
+                "unit_cost_before_tax": round(unit_cost_before_tax, 2),
                 "unit_cost": round(unit_cost, 2),
                 "value": round(allocated_value, 2),
                 "tax_value": round(allocated_tax, 2),
