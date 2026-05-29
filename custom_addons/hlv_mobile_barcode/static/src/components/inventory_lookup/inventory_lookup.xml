@@ -12,7 +12,7 @@
                         <i class="fa fa-exchange-alt"></i> Chuyển
                     </button>
                     <button t-if="props.lookupType === 'location'" class="btn btn-primary" style="padding: 5px 10px; font-size: 0.8rem;" t-on-click="() => props.onBatchMove(state.location_barcode, state.location_name)">
-                        <i class="fa fa-boxes"></i> Tạo phiếu xuất
+                        <i class="fa fa-boxes"></i> Tạo chuyển kho
                     </button>
                     <button class="btn btn-outline" style="padding: 5px 10px; font-size: 0.8rem;" t-on-click="props.onBack">
                         <i class="fa fa-arrow-left"></i> Quay lại

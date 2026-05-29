@@ -36,6 +36,12 @@ class ResConfigSettings(models.TransientModel):
         config_parameter='hlv_mobile_barcode.hlv_barcode_allow_package_scan',
         help='Nếu bật, cho phép quét mã vạch của kiện hàng (PACKxxx) để tự động nhận dạng và xử lý hàng loạt tất cả sản phẩm bên trong kiện.'
     )
+    hlv_barcode_show_qty_buttons = fields.Boolean(
+        string='Hiển thị nút điều chỉnh số lượng nhanh',
+        config_parameter='hlv_mobile_barcode.hlv_barcode_show_qty_buttons',
+        default=True,
+        help='Nếu bật, sẽ hiển thị các nút -10, -1, +1, +10 để chỉnh số lượng nhanh trong ứng dụng quét mã vạch.'
+    )
 
     def action_open_warehouse_permissions(self):
         self.ensure_one()

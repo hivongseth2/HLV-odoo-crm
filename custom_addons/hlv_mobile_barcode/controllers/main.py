@@ -308,6 +308,8 @@ class HLVMobileBarcodeController(http.Controller):
                     'lines': package_lines,
                 })
 
+        show_qty_buttons = request.env['ir.config_parameter'].sudo().get_param('hlv_mobile_barcode.hlv_barcode_show_qty_buttons', 'True') == 'True'
+
         return {
             'id': picking.id,
             'name': picking.name,
@@ -321,6 +323,7 @@ class HLVMobileBarcodeController(http.Controller):
             'linked_picking_id': linked_picking_id,
             'linked_picking_name': linked_picking_name,
             'is_putaway': is_putaway,
+            'show_qty_buttons': show_qty_buttons,
         }
 
     @http.route('/hlv_mobile_barcode/get_warehouses', type='json', auth='user')
