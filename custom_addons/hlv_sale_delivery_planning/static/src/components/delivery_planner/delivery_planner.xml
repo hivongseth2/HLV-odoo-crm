@@ -235,24 +235,65 @@
                         <t t-foreach="state.packingProgress.groups" t-as="group" t-key="group.packer_user_id">
                             <div class="col-12 col-md-6 col-xl-3">
                                 <div class="border rounded bg-light p-2 h-100">
-                                    <div class="d-flex align-items-center mb-2">
-                                        <span class="fw-bold text-dark me-auto"><i class="fa fa-user me-1 text-primary"></i><t t-esc="group.packer_name"/></span>
-                                        <span class="badge bg-secondary"><t t-esc="group.assigned_count"/></span>
+                                    <!-- Packer header -->
+                                    <div class="d-flex align-items-center mb-1">
+                                        <span class="fw-bold text-dark me-auto small">
+                                            <i class="fa fa-user me-1 text-primary"></i><t t-esc="group.packer_name"/>
+                                        </span>
+                                        <span class="badge bg-secondary ms-1" title="Tổng assign"><t t-esc="group.assigned_count"/></span>
                                     </div>
-                                    <div class="d-flex gap-1 mb-2 small">
-                                        <span class="badge bg-warning text-dark">Đang <t t-esc="group.in_progress_count"/></span>
-                                        <span class="badge bg-success">Xong <t t-esc="group.done_count"/></span>
-                                        <span class="badge bg-info">TB <t t-esc="this.formatPackDuration(group.avg_actual_seconds || group.avg_print_to_done_seconds)"/></span>
+                                    <!-- Progress bar -->
+                                    <div t-if="group.assigned_count" class="mb-1">
+                                        <div class="bg-secondary bg-opacity-25 rounded" style="height:5px;">
+                                            <div class="rounded bg-success"
+                                                 t-att-style="'height:5px;width:' + Math.round((group.done_count / group.assigned_count) * 100) + '%'"></div>
+                                        </div>
                                     </div>
-                                    <div style="max-height:130px; overflow:auto;" class="small">
-                                        <t t-foreach="(group.rows || []).slice(0, 8)" t-as="row" t-key="row.pick_id">
-                                            <div class="d-flex align-items-center gap-1 border-top py-1">
-                                                <span class="text-muted flex-grow-1"><t t-esc="row.pick_name"/></span>
-                                                <span t-att-class="row.state === 'done' ? 'text-success' : row.state === 'in_progress' ? 'text-warning' : 'text-secondary'">
+                                    <!-- Stats badges -->
+                                    <div class="d-flex gap-1 mb-2 small flex-wrap">
+                                        <span class="badge bg-warning text-dark">Đang: <t t-esc="group.in_progress_count"/></span>
+                                        <span class="badge bg-success">Xong: <t t-esc="group.done_count"/></span>
+                                        <span t-if="group.avg_actual_seconds or group.avg_print_to_done_seconds"
+                                              class="badge bg-info text-dark">TB: <t t-esc="this.formatPackDuration(group.avg_actual_seconds || group.avg_print_to_done_seconds)"/></span>
+                                    </div>
+                                    <!-- Row list -->
+                                    <div style="max-height:150px; overflow-y:auto;" class="small">
+                                       <t t-foreach="(group.rows || []).slice(0, 10)" t-as="row" t-key="row.pick_id">
+                                        <div class="d-flex flex-column border-top py-1 px-1 rounded-1"
+                                            t-att-style="row.state === 'done' ? 'background-color: #e8f5e9;' : row.state === 'in_progress' ? 'background-color: #fffde7;' : ''">
+                                            <div class="d-flex align-items-center gap-1">
+                                                <div class="flex-grow-1" style="min-width:0;">
+                                                    <span class="d-block text-truncate fw-semibold"
+                                                        t-att-class="row.state === 'done' ? 'text-success' : row.state === 'in_progress' ? 'text-warning' : 'text-secondary'">
+                                                        <i t-att-class="row.state === 'done' ? 'fa fa-check-circle me-1' : row.state === 'in_progress' ? 'fa fa-circle-o-notch fa-spin me-1' : 'fa fa-clock-o me-1'"></i>
+                                                        <t t-esc="row.pick_name"/>
+                                                    </span>
+                                                    <span t-if="row.pack_name" class="text-muted d-block text-truncate" style="font-size:0.7rem; padding-left:1.1rem;">
+                                                        <i class="fa fa-archive me-1 text-info"></i><t t-esc="row.pack_name"/>
+                                                    </span>
+                                                </div>
+                                                <span class="badge text-nowrap"
+                                                    t-att-class="row.state === 'done' ? 'text-bg-success' : row.state === 'in_progress' ? 'text-bg-warning' : 'text-bg-secondary'">
                                                     <t t-esc="row.state === 'done' ? 'Xong' : row.state === 'in_progress' ? 'Đang' : 'Assign'"/>
                                                 </span>
                                             </div>
-                                        </t>
+                                            <!-- Packer reassign inline select (only for non-done rows) -->
+                                            <div t-if="state.packerUsers.length and row.state !== 'done'" class="mt-1">
+                                                <select class="form-select form-select-sm"
+                                                        style="font-size:0.7rem; padding:1px 4px; height:auto;"
+                                                        t-att-value="row.packer_user_id || ''"
+                                                        t-on-change="(ev) => this.reassignDrawerPacker(row.pick_id, ev.target.value)">
+                                                    <option value="">-- Đổi packer --</option>
+                                                    <t t-foreach="state.packerUsers" t-as="pu" t-key="pu.id">
+                                                        <option t-att-value="pu.id"
+                                                                t-att-selected="pu.id === row.packer_user_id">
+                                                            <t t-esc="pu.packer_name || pu.name"/>
+                                                        </option>
+                                                    </t>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </t>
                                     </div>
                                 </div>
                             </div>

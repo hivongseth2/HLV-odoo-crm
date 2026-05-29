@@ -1,3 +1,4 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_hlv_sale_plan_message_user,access.hlv.sale.plan.message.user,model_hlv_sale_plan_message,base.group_user,1,1,1,1
 access_hlv_dp_user_pref_user,access.hlv.dp.user.pref.user,model_hlv_delivery_planner_user_pref,base.group_user,1,1,1,1
+access_stock_picking_packer_print_wizard_user,access.stock.picking.packer.print.wizard.user,model_stock_picking_packer_print_wizard,base.group_user,1,1,1,1

@@ -12,6 +12,10 @@
                                  help="Khi bật, người không được chọn lúc in phiếu lấy hàng sẽ không vào/validate được phiếu PACK. Quản lý kho và admin được bỏ qua.">
                             <field name="restrict_pack_to_assigned_user"/>
                         </setting>
+                        <setting string="Chế độ ghi nhận thời gian in phiếu"
+                                 help="'Lần đầu in': chỉ ghi nhận thời gian in đầu tiên. 'Lần in gần nhất': luôn cập nhật với mỗi lần in mới.">
+                            <field name="pick_print_time_mode" widget="radio"/>
+                        </setting>
                     </block>
                 </app>
             </xpath>

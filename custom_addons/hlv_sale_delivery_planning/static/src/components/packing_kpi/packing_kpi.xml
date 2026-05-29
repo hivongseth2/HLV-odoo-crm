@@ -10,25 +10,36 @@
                     <button class="btn btn-sm btn-outline-secondary" t-on-click="() => this.setRange('today')">Hôm nay</button>
                     <button class="btn btn-sm btn-outline-secondary" t-on-click="() => this.setRange('week')">Tuần này</button>
                     <button class="btn btn-sm btn-outline-secondary" t-on-click="() => this.setRange('month')">Tháng này</button>
+                    <button class="btn btn-sm" t-att-class="state.showCharts ? 'btn-primary' : 'btn-outline-primary'" t-on-click="toggleCharts">
+                        <i class="fa fa-line-chart me-1"></i><t t-esc="state.showCharts ? 'Ẩn biểu đồ' : 'Hiện biểu đồ'"/>
+                    </button>
                 </div>
 
                 <div class="bg-white border shadow-sm p-2 mb-3 d-flex flex-wrap align-items-end gap-2">
                     <div>
                         <label class="form-label small text-muted mb-1">Từ ngày</label>
-                        <input type="date" class="form-control form-control-sm" t-att-value="state.dateFrom" t-on-change="(ev) => { state.dateFrom = ev.target.value; }"/>
+                        <input type="date" class="form-control form-control-sm" t-att-value="state.dateFrom" t-on-change="onDateFromChange"/>
                     </div>
                     <div>
                         <label class="form-label small text-muted mb-1">Đến ngày</label>
-                        <input type="date" class="form-control form-control-sm" t-att-value="state.dateTo" t-on-change="(ev) => { state.dateTo = ev.target.value; }"/>
+                        <input type="date" class="form-control form-control-sm" t-att-value="state.dateTo" t-on-change="onDateToChange"/>
                     </div>
                     <div>
                         <label class="form-label small text-muted mb-1">Người đóng</label>
-                        <select class="form-select form-select-sm" t-att-value="state.packerUserId" t-on-change="(ev) => { state.packerUserId = ev.target.value; }">
+                        <select class="form-select form-select-sm" t-att-value="state.packerUserId" t-on-change="onPackerUserIdChange">
                             <option value="all">Tất cả packer</option>
                             <t t-foreach="state.packers" t-as="packer" t-key="packer.id">
                                 <option t-att-value="packer.id"><t t-esc="packer.packer_name"/></option>
                             </t>
                         </select>
+                    </div>
+                    <div class="flex-grow-1" style="min-width:160px;">
+                        <label class="form-label small text-muted mb-1">Tìm theo đơn / phiếu</label>
+                        <input type="text" class="form-control form-control-sm"
+                               t-att-value="state.searchText"
+                               t-on-input="onSearchInput"
+                               t-on-keydown="onSearchKeydown"
+                               placeholder="DH..., PICK..., PACK..."/>
                     </div>
                     <button class="btn btn-sm btn-primary ms-auto" t-on-click="fetchData" t-att-disabled="state.loading">
                         <i t-attf-class="fa me-1 #{state.loading ? 'fa-spinner fa-spin' : 'fa-search'}"></i>Tìm kiếm
@@ -42,6 +53,29 @@
                     <div class="col-md-3"><div class="bg-white border shadow-sm p-3 text-center"><div class="small text-muted fw-bold">TB thời lượng</div><div class="fs-2 fw-bold text-info"><t t-esc="this.formatDuration(state.summary.avg_actual_seconds || state.summary.avg_print_to_done_seconds)"/></div></div></div>
                 </div>
 
+                <!-- Charts Section -->
+                <t t-if="state.showCharts and !state.loading and (state.dailyChartData or state.groups.length)">
+                    <div class="bg-white border shadow-sm mb-3">
+                        <div class="d-flex align-items-center px-3 py-2 border-bottom">
+                            <span class="fw-bold small text-secondary"><i class="fa fa-line-chart me-2"></i>Biểu Đồ Phân Tích</span>
+                        </div>
+                        <div class="row g-0 p-2">
+                            <div class="col-lg-5 col-md-12 p-2">
+                                <div class="small fw-bold text-center text-muted mb-1">Xu hướng theo ngày</div>
+                                <canvas t-ref="chartDaily" style="max-height:200px;"/>
+                            </div>
+                            <div class="col-lg-4 col-md-6 p-2">
+                                <div class="small fw-bold text-center text-muted mb-1">Năng suất theo packer</div>
+                                <canvas t-ref="chartPacker" style="max-height:200px;"/>
+                            </div>
+                            <div class="col-lg-3 col-md-6 p-2">
+                                <div class="small fw-bold text-center text-muted mb-1">Thời gian TB (phút)</div>
+                                <canvas t-ref="chartDuration" style="max-height:200px;"/>
+                            </div>
+                        </div>
+                    </div>
+                </t>
+
                 <div class="bg-white border shadow-sm">
                     <table class="table table-sm table-hover align-middle mb-0">
                         <thead class="table-light">
@@ -52,38 +86,79 @@
                                 <th>Trạng thái</th>
                                 <th>TG in</th>
                                 <th>TG đóng</th>
+                                <th>Kết thúc</th>
                                 <th>In → Done</th>
                                 <th>Thực tế</th>
+                                <th>Đổi packer</th>
                             </tr>
                         </thead>
                         <tbody>
                             <t t-if="state.loading">
-                                <tr><td colspan="8" class="text-center text-muted py-4"><i class="fa fa-spinner fa-spin me-1"></i>Đang tải...</td></tr>
+                                <tr><td colspan="10" class="text-center text-muted py-4"><i class="fa fa-spinner fa-spin me-1"></i>Đang tải...</td></tr>
                             </t>
                             <t t-elif="!state.groups.length">
-                                <tr><td colspan="8" class="text-center text-muted py-4">Không có dữ liệu</td></tr>
+                                <tr><td colspan="10" class="text-center text-muted py-4">Không có dữ liệu</td></tr>
                             </t>
                             <t t-else="">
                                 <t t-foreach="state.groups" t-as="group" t-key="group.packer_user_id">
-                                    <tr class="table-primary">
-                                        <td colspan="8" class="fw-bold">
+                                    <!-- Group header row — clickable to expand/collapse -->
+                                    <tr class="table-primary" style="cursor:pointer;" t-on-click="() => this.toggleGroup(group.packer_user_id)">
+                                        <td colspan="10" class="fw-bold">
+                                            <i t-attf-class="fa me-2 #{this.isGroupExpanded(group.packer_user_id) ? 'fa-chevron-down' : 'fa-chevron-right'}"></i>
                                             <i class="fa fa-user me-1"></i><t t-esc="group.packer_name"/>
                                             <span class="badge bg-secondary ms-2">Tổng: <t t-esc="group.assigned_count"/></span>
                                             <span class="badge bg-success ms-1">Xong: <t t-esc="group.done_count"/></span>
                                             <span class="badge bg-warning text-dark ms-1">Đang: <t t-esc="group.in_progress_count"/></span>
+                                            <span t-if="group.avg_actual_seconds" class="badge bg-info text-dark ms-1">TB: <t t-esc="this.formatDuration(group.avg_actual_seconds)"/></span>
                                         </td>
                                     </tr>
-                                    <t t-foreach="group.rows" t-as="row" t-key="row.pick_id">
-                                        <tr>
-                                            <td><i class="fa fa-file-text-o me-1 text-muted"></i><t t-esc="row.pick_name"/></td>
-                                            <td><t t-esc="row.sale_order"/></td>
-                                            <td><t t-esc="row.pack_name || '-'"/></td>
-                                            <td><span class="badge" t-att-class="this.stateClass(row.state)"><t t-esc="this.stateLabel(row.state)"/></span></td>
-                                            <td><t t-esc="row.print_start_at || '-'"/></td>
-                                            <td><t t-esc="row.pack_start_at || '-'"/></td>
-                                            <td><t t-esc="this.formatDuration(row.print_to_done_seconds)"/></td>
-                                            <td><t t-esc="this.formatDuration(row.actual_seconds)"/></td>
-                                        </tr>
+                                    <!-- Comparison progress bar row -->
+                                    <tr t-if="group.assigned_count" class="table-light">
+                                        <td colspan="10" class="py-1 px-3">
+                                            <div class="d-flex align-items-center gap-2 small">
+                                                <div class="flex-grow-1 bg-secondary bg-opacity-25 rounded" style="height:8px;">
+                                                    <div class="rounded bg-success" t-att-style="'height:8px;width:' + this.groupDonePct(group) + '%'"></div>
+                                                </div>
+                                                <span class="text-muted fw-bold" style="white-space:nowrap;min-width:48px;">
+                                                    <t t-esc="this.groupDonePct(group)"/>% xong
+                                                </span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <!-- Row detail (only when group is expanded) -->
+                                    <t t-if="this.isGroupExpanded(group.packer_user_id)">
+                                        <t t-foreach="group.rows" t-as="row" t-key="row.pick_id">
+                                            <tr>
+                                                <td><i class="fa fa-file-text-o me-1 text-muted"></i><t t-esc="row.pick_name"/></td>
+                                                <td><t t-esc="row.sale_order"/></td>
+                                                <td><t t-esc="row.pack_name || '-'"/></td>
+                                                <td><span class="badge" t-att-class="this.stateClass(row.state)"><t t-esc="this.stateLabel(row.state)"/></span></td>
+                                                <td class="small text-muted"><t t-esc="this.formatTime(row.print_start_at)"/></td>
+                                                <td class="small text-muted"><t t-esc="this.formatTime(row.pack_start_at)"/></td>
+                                                <td class="small text-muted"><t t-esc="this.formatTime(row.pack_end_at)"/></td>
+                                                <td><t t-esc="this.formatDuration(row.print_to_done_seconds)"/></td>
+                                                <td><t t-esc="this.formatDuration(row.actual_seconds)"/></td>
+                                                <td>
+                                                    <t t-if="row.state !== 'done'">
+                                                    <select class="form-select form-select-sm" style="min-width:110px;"
+                                                            t-att-value="group.packer_user_id"
+                                                            t-att-data-pick-id="row.pick_id"
+                                                            t-on-change="onReassignPackerChange">
+                                                        <option value="">-- Đổi --</option>
+                                                        <t t-foreach="state.packers" t-as="packer" t-key="packer.id">
+                                                            <option t-att-value="packer.id"
+                                                                    t-att-selected="packer.id === group.packer_user_id">
+                                                                <t t-esc="packer.packer_name"/>
+                                                            </option>
+                                                        </t>
+                                                    </select>
+                                                    </t>
+                                                    <t t-else="">
+                                                        <span class="text-muted small"><i class="fa fa-lock me-1"></i>Đã xong</span>
+                                                    </t>
+                                                </td>
+                                            </tr>
+                                        </t>
                                     </t>
                                 </t>
                             </t>

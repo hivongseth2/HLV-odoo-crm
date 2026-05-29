@@ -1,5 +1,6 @@
 import logging
 from datetime import timedelta
+from markupsafe import Markup, escape
 from odoo import api, models, fields, _
 from odoo.exceptions import UserError
 
@@ -180,7 +181,7 @@ class StockPicking(models.Model):
         }
 
     @api.model
-    def get_packing_kpi_dashboard(self, date_from=False, date_to=False, packer_user_id=False):
+    def get_packing_kpi_dashboard(self, date_from=False, date_to=False, packer_user_id=False, search_text=False):
         domain = [
             ('picking_type_id.sequence_code', 'ilike', 'PICK'),
             ('return_id', '=', False),
@@ -196,6 +197,26 @@ class StockPicking(models.Model):
             domain.append(('x_pack_packer_user_id', '=', int(packer_user_id)))
 
         picks = self.sudo().search(domain, order='x_pack_assigned_at desc, id desc')
+
+        # Filter by search_text: match PICK name, SO name, or linked PACK name
+        if search_text and picks:
+            q = search_text.strip().lower()
+            pack_domain_st = [
+                ('x_pack_source_pick_id', 'in', picks.ids),
+                ('name', 'ilike', q),
+            ]
+            matching_pack_pick_ids = set(
+                self.sudo().search(pack_domain_st).mapped('x_pack_source_pick_id').ids
+            )
+            picks = picks.filtered(
+                lambda p: (
+                    q in (p.name or '').lower()
+                    or q in (p.sale_id.name or '').lower()
+                    or q in (p.origin or '').lower()
+                    or p.id in matching_pack_pick_ids
+                )
+            )
+
         pack_domain = [('x_pack_source_pick_id', 'in', picks.ids)] if picks else [('id', '=', 0)]
         packs = self.sudo().search(pack_domain)
         packs_by_pick = {}
@@ -252,6 +273,7 @@ class StockPicking(models.Model):
             group['rows'].append({
                 'pick_id': pick.id,
                 'pick_name': pick.name,
+                'packer_user_id': packer.id,
                 'sale_order': pick.sale_id.name or pick.origin or '',
                 'pack_name': best_pack.name if best_pack else '',
                 'state': 'done' if is_done else ('in_progress' if is_in_progress else 'assigned'),
@@ -286,6 +308,56 @@ class StockPicking(models.Model):
             'packers': self.get_packer_users_for_assignment(),
         }
 
+    @api.model
+    def get_packing_kpi_daily_chart(self, date_from=False, date_to=False, packer_user_id=False):
+        """Return daily breakdown for chart rendering: labels + done/in_progress/assigned arrays."""
+        domain = [
+            ('picking_type_id.sequence_code', 'ilike', 'PICK'),
+            ('return_id', '=', False),
+            ('x_pack_packer_user_id', '!=', False),
+        ]
+        if date_from:
+            start = fields.Datetime.to_datetime(date_from)
+            domain.append(('x_pack_assigned_at', '>=', start))
+        if date_to:
+            end = fields.Datetime.to_datetime(date_to) + timedelta(days=1)
+            domain.append(('x_pack_assigned_at', '<', end))
+        if packer_user_id and str(packer_user_id) != 'all':
+            domain.append(('x_pack_packer_user_id', '=', int(packer_user_id)))
+
+        picks = self.sudo().search(domain)
+        pack_domain = [('x_pack_source_pick_id', 'in', picks.ids)] if picks else [('id', '=', 0)]
+        packs = self.sudo().search(pack_domain)
+        packs_by_pick = {}
+        for pack in packs:
+            packs_by_pick.setdefault(pack.x_pack_source_pick_id.id, self.env['stock.picking'])
+            packs_by_pick[pack.x_pack_source_pick_id.id] |= pack
+
+        daily = {}
+        for pick in picks:
+            if not pick.x_pack_assigned_at:
+                continue
+            vn_dt = pick.x_pack_assigned_at + timedelta(hours=7)
+            day = vn_dt.strftime('%Y-%m-%d')
+            if day not in daily:
+                daily[day] = {'assigned': 0, 'done': 0, 'in_progress': 0}
+            daily[day]['assigned'] += 1
+            related_packs = packs_by_pick.get(pick.id, self.env['stock.picking'])
+            done_packs = related_packs.filtered(lambda p: p.state == 'done')
+            active_packs = related_packs.filtered(lambda p: p.state not in ('done', 'cancel'))
+            if done_packs:
+                daily[day]['done'] += 1
+            elif active_packs.filtered(lambda p: p.x_pack_actual_start_at or p.state == 'in_progress'):
+                daily[day]['in_progress'] += 1
+
+        labels = sorted(daily.keys())
+        return {
+            'labels': labels,
+            'assigned': [daily[d]['assigned'] for d in labels],
+            'done': [daily[d]['done'] for d in labels],
+            'in_progress': [daily[d]['in_progress'] for d in labels],
+        }
+
     def _is_pack_restriction_enabled(self):
         return self.env['ir.config_parameter'].sudo().get_param(
             'hlv_sale_delivery_planning.restrict_pack_to_assigned_user'
@@ -295,8 +367,7 @@ class StockPicking(models.Model):
         user = user or self.env.user
         return bool(
             user._is_superuser()
-            or user.has_group('stock.group_stock_manager')
-            or user.has_group('base.group_system')
+            or user.has_group('hlv_sale_delivery_planning.group_pack_manager')
         )
 
     def _resolve_assigned_pick_for_pack(self):
@@ -346,12 +417,55 @@ class StockPicking(models.Model):
         picks = self.filtered(lambda p: p._is_pick_slip_picking())
         if not picks:
             raise UserError(_('Không có phiếu lấy hàng hợp lệ để assign.'))
-        picks.write({
-            'x_pack_packer_user_id': packer.id,
-            'x_pack_assigned_by_id': self.env.context.get('pack_assigned_by_uid') or self.env.uid,
-            'x_pack_assigned_at': now,
-        })
+        assigner_name = self.env['res.users'].sudo().browse(
+            self.env.context.get('pack_assigned_by_uid') or self.env.uid
+        ).name or ''
+        local_now = now + timedelta(hours=7)
+        time_str = local_now.strftime('%H:%M %d/%m/%Y')
+        for pick in picks:
+            old_packer = pick.x_pack_packer_user_id
+            pick.write({
+                'x_pack_packer_user_id': packer.id,
+                'x_pack_assigned_by_id': self.env.context.get('pack_assigned_by_uid') or self.env.uid,
+                'x_pack_assigned_at': now,
+            })
+            if old_packer and old_packer.id != packer.id:
+                body = Markup('🔄 Đổi người đóng gói lúc {time}: {old} → <b>{new}</b> (bởi {by})').format(
+                    time=time_str,
+                    old=escape(old_packer.name or ''),
+                    new=escape(packer.name or ''),
+                    by=escape(assigner_name),
+                )
+            else:
+                body = Markup('👤 Assign người đóng gói lúc {time}: <b>{new}</b> (bởi {by})').format(
+                    time=time_str,
+                    new=escape(packer.name or ''),
+                    by=escape(assigner_name),
+                )
+            pick.message_post(body=body, message_type='comment', subtype_xmlid='mail.mt_note')
         return True
+
+    def do_print_picking(self):
+        """Override: open packer selection wizard if no packer assigned (PICK slips only)."""
+        for picking in self:
+            if not picking.exists():
+                continue
+            if picking._is_pick_slip_picking() and not picking.x_pack_packer_user_id:
+                wizard = self.env['stock.picking.packer.print.wizard'].create({
+                    'picking_id': picking.id,
+                })
+                return {
+                    'type': 'ir.actions.act_window',
+                    'name': _('Chọn người đóng gói'),
+                    'res_model': 'stock.picking.packer.print.wizard',
+                    'res_id': wizard.id,
+                    'view_mode': 'form',
+                    'target': 'new',
+                    'context': {
+                        'form_view_ref': 'hlv_sale_delivery_planning.view_picking_packer_print_wizard',
+                    },
+                }
+        return super().do_print_picking()
 
     def mark_picking_print_started(self, packer_user_id=None):
         picks = self.filtered(lambda p: p._is_pick_slip_picking())
@@ -361,10 +475,29 @@ class StockPicking(models.Model):
             picks.action_assign_packer(packer_user_id)
         elif any(not p.x_pack_packer_user_id for p in picks):
             raise UserError(_('Vui lòng chọn người đóng trước khi in phiếu lấy hàng.'))
-        picks.write({
-            'x_pick_print_start_at': fields.Datetime.now(),
-            'x_pick_printed_by_id': self.env.context.get('pack_printed_by_uid') or self.env.uid,
-        })
+
+        config_param = self.env['ir.config_parameter'].sudo()
+        print_time_mode = config_param.get_param(
+            'hlv_sale_delivery_planning.pick_print_time_mode', 'first'
+        )
+        now = fields.Datetime.now()
+        printed_by = self.env.context.get('pack_printed_by_uid') or self.env.uid
+        printer_name = self.env['res.users'].sudo().browse(printed_by).name or ''
+        local_now = now + timedelta(hours=7)
+        time_str = local_now.strftime('%H:%M %d/%m/%Y')
+
+        for pick in picks:
+            vals = {'x_pick_printed_by_id': printed_by}
+            # Only update print_start_at if not yet recorded, or mode is 'latest'
+            if print_time_mode == 'latest' or not pick.x_pick_print_start_at:
+                vals['x_pick_print_start_at'] = now
+            pick.write(vals)
+            # Log to chatter (use Markup so HTML is rendered, not shown as raw text)
+            body = Markup('🖨️ In phiếu lấy hàng lúc {time} bởi <b>{user}</b>').format(
+                time=time_str,
+                user=escape(printer_name),
+            )
+            pick.message_post(body=body, message_type='comment', subtype_xmlid='mail.mt_note')
         return True
 
     def mark_picking_print_finished(self):
