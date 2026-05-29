@@ -328,7 +328,7 @@ class HlvStockQuick(models.TransientModel):
         value = self.env["ir.config_parameter"].sudo().get_param(
             f"hlv_inventory_group_report.manual_avg_cost.{product_id}"
         )
-        if value in (None, ""):
+        if not value:
             return None
         try:
             return float(value)
