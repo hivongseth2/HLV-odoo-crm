@@ -1,4 +1,32 @@
-﻿/** @odoo-module **/
+﻿// Format tiền VND
+formatMoneyVND(val) {
+    if (val === null || val === undefined || isNaN(val)) return '';
+    return Number(val).toLocaleString('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 2 });
+}
+
+// Format ngày UTC+7
+formatDateVN(dateStr) {
+    if (!dateStr) return '';
+    let d, m, y;
+    if (dateStr.includes('/')) {
+        [d, m, y] = dateStr.split('/').map(Number);
+        const dt = new Date(Date.UTC(y, m - 1, d, 7, 0, 0));
+        return dt.toLocaleDateString('vi-VN');
+    } else if (dateStr.includes('-')) {
+        [y, m, d] = dateStr.split('-').map(Number);
+        const dt = new Date(Date.UTC(y, m - 1, d, 7, 0, 0));
+        return dt.toLocaleDateString('vi-VN');
+    }
+    return dateStr;
+}
+
+    // Reset manual avg cost về mặc định
+    async resetManualAvgCost(productId) {
+    this.state.manualAvgCosts = Object.assign({}, this.state.manualAvgCosts, { [productId]: undefined });
+    await this.persistManualOverrides(productId);
+    await this.toggleCellPanel(productId, 'avg_cost');
+}
+/** @odoo-module **/
 import { registry } from "@web/core/registry";
 import { Component, useState, onWillStart, markup } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
