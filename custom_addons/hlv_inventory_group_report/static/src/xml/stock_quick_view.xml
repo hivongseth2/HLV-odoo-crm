@@ -802,7 +802,7 @@
                         <div style="text-align:center; padding:20px 16px 12px;">
                             <div style="font-size:10px; color:#adb5bd; letter-spacing:.5px; text-transform:uppercase; margin-bottom:6px;">Giá vốn hiện tại</div>
                             <div style="font-size:34px; font-weight:800; color:#880e4f; line-height:1.1;">
-                                <t t-esc="formatPrice(state.cellPanel.avgCost !== undefined && state.cellPanel.avgCost !== null ? state.cellPanel.avgCost : 0)"/>
+                                <t t-esc="formatPrice(state.cellPanel.avgCost !== undefined &amp;&amp; state.cellPanel.avgCost !== null ? state.cellPanel.avgCost : 0)"/>
                             </div>
                             <div style="margin-top:12px; display:flex; flex-direction:column; align-items:center; gap:6px;">
                                 <label style="font-size:10px; color:#6c757d; text-transform:uppercase; letter-spacing:.4px;">Nhập tay giá vốn TB</label>
