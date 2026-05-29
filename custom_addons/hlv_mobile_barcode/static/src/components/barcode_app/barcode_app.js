@@ -56,6 +56,11 @@ export class BarcodeApp extends Component {
             warehouses: [],
             selectedWarehouseId: null,
             showWarehouseSelectPopup: false,
+            destSelectionMode: 'location',
+            destLocationBarcode: "",
+            destLocationName: "",
+            destLocationId: null,
+            isLocatingDest: false,
             showExitOptions: false,
             pendingExitAction: null,
         });
@@ -438,25 +443,65 @@ export class BarcodeApp extends Component {
         }
     }
 
-    goToMove(productId, locationBarcode = null, locationName = null, destWarehouseId = false) {
+    goToMove(productId, locationBarcode = null, locationName = null, destWarehouseId = false, destLocationId = false) {
         this.pushHistory();
         this.state.recordId = productId;
         this.state.prefillLocationBarcode = locationBarcode;
         this.state.prefillLocationName = locationName;
         this.state.destWarehouseId = destWarehouseId;
+        this.state.destLocationId = destLocationId;
         this.state.currentView = 'move';
     }
 
     promptMoveWarehouse(productId, locBarcode, locName) {
         this.pendingMove = { productId, locBarcode, locName };
-        this.state.selectedWarehouseId = null;
+        this.resetDestPopupState();
         this.state.showWarehouseSelectPopup = true;
     }
 
     promptBatchMoveWarehouse(locBarcode, locName) {
         this.pendingBatchMove = { locBarcode, locName };
-        this.state.selectedWarehouseId = null;
+        this.resetDestPopupState();
         this.state.showWarehouseSelectPopup = true;
+    }
+
+    resetDestPopupState() {
+        this.state.selectedWarehouseId = null;
+        this.state.destSelectionMode = 'location';
+        this.state.destLocationBarcode = "";
+        this.state.destLocationName = "";
+        this.state.destLocationId = null;
+    }
+
+    setDestSelectionMode(mode) {
+        this.state.destSelectionMode = mode;
+    }
+
+    async validateDestLocation() {
+        if (!this.state.destLocationBarcode) return;
+        this.state.isLocatingDest = true;
+        try {
+            const result = await rpc("/hlv_mobile_barcode/smart_scan", { 
+                barcode: this.state.destLocationBarcode 
+            });
+            
+            if (result.error) {
+                this.notification.add(result.error, { type: "danger" });
+                this.state.destLocationName = "";
+                this.state.destLocationId = null;
+            } else if (result.type === 'location') {
+                this.state.destLocationName = result.name;
+                this.state.destLocationId = result.id;
+            } else {
+                this.notification.add("Mã vạch không phải là vị trí", { type: "danger" });
+                this.state.destLocationName = "";
+                this.state.destLocationId = null;
+            }
+        } catch (error) {
+            this.notification.add("Lỗi kết nối", { type: "danger" });
+        } finally {
+            this.state.isLocatingDest = false;
+        }
     }
 
     closeWarehousePopup() {
@@ -470,9 +515,20 @@ export class BarcodeApp extends Component {
     }
 
     async confirmWarehouseSelection() {
-        if (!this.state.selectedWarehouseId) return;
+        const isLoc = this.state.destSelectionMode === 'location';
         
-        const destWarehouseId = this.state.selectedWarehouseId;
+        if (isLoc && !this.state.destLocationId) {
+            this.notification.add("Vui lòng quét hoặc nhập vị trí đích hợp lệ", { type: "warning" });
+            return;
+        }
+        if (!isLoc && !this.state.selectedWarehouseId) {
+            this.notification.add("Vui lòng chọn kho đích", { type: "warning" });
+            return;
+        }
+        
+        const destWarehouseId = isLoc ? false : this.state.selectedWarehouseId;
+        const destLocationId = isLoc ? this.state.destLocationId : false;
+        
         const pendingBatchMove = this.pendingBatchMove;
         const pendingMove = this.pendingMove;
         
@@ -480,21 +536,22 @@ export class BarcodeApp extends Component {
         
         if (pendingBatchMove) {
             const { locBarcode, locName } = pendingBatchMove;
-            await this.goToBatchMove(locBarcode, locName, destWarehouseId);
+            await this.goToBatchMove(locBarcode, locName, destWarehouseId, destLocationId);
         } else if (pendingMove) {
             const { productId, locBarcode, locName } = pendingMove;
-            this.goToMove(productId, locBarcode, locName, destWarehouseId);
+            this.goToMove(productId, locBarcode, locName, destWarehouseId, destLocationId);
         }
     }
 
-    async goToBatchMove(locationBarcode, locationName, destWarehouseId = false) {
+    async goToBatchMove(locationBarcode, locationName, destWarehouseId = false, destLocationId = false) {
         // Now redirects to a newly created empty INT picking
         this.pushHistory();
         try {
             this.notification.add("Đang tạo phiếu xuất...", { type: "info" });
             const res = await rpc("/hlv_mobile_barcode/create_empty_int", {
                 location_id: this.state.recordId,
-                dest_warehouse_id: destWarehouseId
+                dest_warehouse_id: destWarehouseId,
+                dest_location_id: destLocationId
             });
             
             if (res.error) {

@@ -336,7 +336,7 @@ class HLVMobileBarcodeController(http.Controller):
         } for w in warehouses]
 
     @http.route('/hlv_mobile_barcode/create_empty_int', type='json', auth='user')
-    def create_empty_int(self, location_id, dest_warehouse_id=False):
+    def create_empty_int(self, location_id, dest_warehouse_id=False, dest_location_id=False):
         source_loc = request.env['stock.location'].browse(location_id)
         if not source_loc.exists():
             return {'error': _('Không tìm thấy vị trí nguồn')}
@@ -377,19 +377,40 @@ class HLVMobileBarcodeController(http.Controller):
             return {'error': _('Chưa cấu hình Operation Types (INT)')}
 
         partner_id = False
-        if dest_warehouse_id:
+        target_location_dest_id = transit_loc.id
+        override_dest_loc_id = False
+        
+        if dest_location_id:
+            dest_loc = request.env['stock.location'].browse(dest_location_id)
+            if dest_loc.exists():
+                if dest_loc.warehouse_id and dest_loc.warehouse_id == warehouse:
+                    # Same warehouse -> direct 1 step move
+                    target_location_dest_id = dest_loc.id
+                else:
+                    # Different warehouse -> use transit, but we need to override step 2
+                    override_dest_loc_id = dest_loc.id
+                    if dest_loc.warehouse_id and dest_loc.warehouse_id.partner_id:
+                        partner_id = dest_loc.warehouse_id.partner_id.id
+                        
+        if not partner_id and dest_warehouse_id:
             dest_warehouse = request.env['stock.warehouse'].browse(dest_warehouse_id)
             if dest_warehouse.exists() and dest_warehouse.partner_id:
                 partner_id = dest_warehouse.partner_id.id
-        elif warehouse and warehouse.partner_id:
+                
+        if not partner_id and warehouse and warehouse.partner_id:
             partner_id = warehouse.partner_id.id
 
-        picking_int = request.env['stock.picking'].create({
+        picking_vals = {
             'picking_type_id': picking_type_int.id,
             'location_id': source_loc.id,
-            'location_dest_id': transit_loc.id,
+            'location_dest_id': target_location_dest_id,
             'partner_id': partner_id,
-        })
+        }
+        
+        if override_dest_loc_id:
+            picking_vals['note'] = f"DEST_LOC_OVERRIDE:{override_dest_loc_id}\n"
+            
+        picking_int = request.env['stock.picking'].create(picking_vals)
         
         # Keep it in draft so user can add lines
         return {
@@ -997,7 +1018,30 @@ class HLVMobileBarcodeController(http.Controller):
                 if not Permission.check_picking_operation(request.env.user, warehouse, code, 'can_confirm'):
                     return {'error': _('Bạn không có quyền xác nhận phiếu %s tại kho "%s". Vui lòng liên hệ Admin!', code, warehouse.name)}
         try:
+            note = picking.note or ''
+            dest_loc_id = None
+            if 'DEST_LOC_OVERRIDE:' in note:
+                import re
+                match = re.search(r'DEST_LOC_OVERRIDE:(\d+)', note)
+                if match:
+                    dest_loc_id = int(match.group(1))
+
             picking.button_validate()
+            
+            # Override destination location for Step 2 if requested
+            if dest_loc_id:
+                step2_picking = request.env['stock.picking'].sudo().search([('source_transfer_id', '=', picking.id)], limit=1)
+                if step2_picking:
+                    request.env.cr.execute("""
+                        UPDATE stock_picking SET location_dest_id = %s WHERE id = %s
+                    """, (dest_loc_id, step2_picking.id))
+                    request.env.cr.execute("""
+                        UPDATE stock_move SET location_dest_id = %s WHERE picking_id = %s
+                    """, (dest_loc_id, step2_picking.id))
+                    request.env.cr.execute("""
+                        UPDATE stock_move_line SET location_dest_id = %s WHERE picking_id = %s
+                    """, (dest_loc_id, step2_picking.id))
+                    
             return {'success': True}
         except Exception as e:
             return {'error': str(e)}
@@ -1093,7 +1137,7 @@ class HLVMobileBarcodeController(http.Controller):
         return {'error': _('Không tìm thấy vị trí lấy hàng hợp lệ.')}
 
     @http.route('/hlv_mobile_barcode/move_location', type='json', auth='user')
-    def move_location(self, product_id, source_barcode, qty, dest_warehouse_id=False):
+    def move_location(self, product_id, source_barcode, qty, dest_warehouse_id=False, dest_location_id=False):
         product = request.env['product.product'].sudo().browse(product_id)
         if not product.exists():
             return {'error': _('Không tìm thấy sản phẩm')}
@@ -1129,7 +1173,21 @@ class HLVMobileBarcodeController(http.Controller):
 
         # 1. Create and Validate INT picking (Source -> Transit)
         partner_id = False
-        if dest_warehouse_id:
+        target_location_dest_id = transit_loc.id
+        override_dest_loc_id = False
+        
+        if dest_location_id:
+            dest_loc = request.env['stock.location'].sudo().browse(dest_location_id)
+            if dest_loc.exists():
+                if dest_loc.warehouse_id and dest_loc.warehouse_id == warehouse:
+                    # Same warehouse
+                    target_location_dest_id = dest_loc.id
+                else:
+                    override_dest_loc_id = dest_loc.id
+                    if dest_loc.warehouse_id and dest_loc.warehouse_id.partner_id:
+                        partner_id = dest_loc.warehouse_id.partner_id.id
+                        
+        if not partner_id and dest_warehouse_id:
             dest_warehouse = request.env['stock.warehouse'].browse(dest_warehouse_id)
             if dest_warehouse.exists() and dest_warehouse.partner_id:
                 partner_id = dest_warehouse.partner_id.id
@@ -1141,26 +1199,51 @@ class HLVMobileBarcodeController(http.Controller):
             if actual_warehouse and actual_warehouse.partner_id:
                 partner_id = actual_warehouse.partner_id.id
 
-        picking_int = request.env['stock.picking'].create({
+        picking_vals = {
             'picking_type_id': picking_type_int.id,
             'location_id': source_loc.id,
-            'location_dest_id': transit_loc.id,
+            'location_dest_id': target_location_dest_id,
             'partner_id': partner_id,
-        })
+        }
         
-        request.env['stock.move'].create({
-            'name': _('Mobile Move OUT'),
-            'picking_id': picking_int.id,
+        if override_dest_loc_id:
+            picking_vals['note'] = f"DEST_LOC_OVERRIDE:{override_dest_loc_id}\n"
+            
+        picking_int = request.env['stock.picking'].create(picking_vals)
+        
+        move_int = request.env['stock.move'].create({
+            'name': product.name,
             'product_id': product.id,
-            'product_uom_qty': qty,
             'product_uom': product.uom_id.id,
+            'product_uom_qty': qty,
             'location_id': source_loc.id,
-            'location_dest_id': transit_loc.id,
+            'location_dest_id': target_location_dest_id,
+            'picking_id': picking_int.id,
+            'picking_type_id': picking_type_int.id,
         })
         
         picking_int.action_confirm()
+        picking_int.action_assign()
+        
+        for ml in picking_int.move_line_ids:
+            ml.quantity = qty
+            
         picking_int.button_validate()
         
+        # Override step 2 destination if requested
+        if override_dest_loc_id:
+            step2_picking = request.env['stock.picking'].sudo().search([('source_transfer_id', '=', picking_int.id)], limit=1)
+            if step2_picking:
+                request.env.cr.execute("""
+                    UPDATE stock_picking SET location_dest_id = %s WHERE id = %s
+                """, (override_dest_loc_id, step2_picking.id))
+                request.env.cr.execute("""
+                    UPDATE stock_move SET location_dest_id = %s WHERE picking_id = %s
+                """, (override_dest_loc_id, step2_picking.id))
+                request.env.cr.execute("""
+                    UPDATE stock_move_line SET location_dest_id = %s WHERE picking_id = %s
+                """, (override_dest_loc_id, step2_picking.id))
+                
         picking_in = request.env['stock.picking'].search([('source_transfer_id', '=', picking_int.id)], limit=1)
         in_picking_name = picking_in.name if picking_in else False
         
