@@ -1,7 +1,8 @@
-﻿from odoo import models, api, fields
+from odoo import models, api, fields
 from odoo.exceptions import UserError
 import io
 import base64
+import json
 
 
 class HlvStockQuick(models.TransientModel):
@@ -76,10 +77,15 @@ class HlvStockQuick(models.TransientModel):
                 extra_data.setdefault(pid, {})["sales_cycle"] = round(90.0 / count, 1) if count > 0 else None
         if "avg_cost" in extra_cols:
             for product in group.product_ids:
-                # Compute avg cost from PO valuation layers (same as drawer)
                 layers_data = self.get_product_cost_layers(product.id)
                 computed_avg = layers_data.get("computed_avg") or None
-                extra_data.setdefault(product.id, {})["avg_cost"] = computed_avg
+                manual_avg_override = self._get_saved_manual_avg_override(product.id)
+                if manual_avg_override is not None:
+                    computed_avg = manual_avg_override
+                    extra_data.setdefault(product.id, {})["avg_cost"] = manual_avg_override
+                    extra_data[product.id]["manual_avg_override"] = True
+                else:
+                    extra_data.setdefault(product.id, {})["avg_cost"] = computed_avg
         if "incoming_qty" in extra_cols:
             # Only purchase order inbound moves not yet done
             in_moves = self.env["stock.move"].read_group(
@@ -159,6 +165,7 @@ class HlvStockQuick(models.TransientModel):
             total += prod_total
             outgoing_total += prod_outgoing
             line_extra = {key: extra_data.get(product.id, {}).get(key) for key in extra_cols}
+            line_extra["manual_avg_override"] = extra_data.get(product.id, {}).get("manual_avg_override", False)
             # incoming_qty column shows on_hand + pending PO qty (projected after receiving)
             if "incoming_qty" in line_extra and line_extra["incoming_qty"] is not None:
                 line_extra["incoming_pending"] = line_extra["incoming_qty"]  # raw pending for breakdown display
@@ -315,61 +322,152 @@ class HlvStockQuick(models.TransientModel):
         return att.id
 
     @api.model
+    def _get_saved_manual_avg_override(self, product_id):
+        value = self.env["ir.config_parameter"].sudo().get_param(
+            f"hlv_inventory_group_report.manual_avg_cost.{product_id}"
+        )
+        if value in (None, ""):
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    @api.model
+    def _get_saved_manual_layer_amounts(self, product_id):
+        raw = self.env["ir.config_parameter"].sudo().get_param(
+            f"hlv_inventory_group_report.manual_layer_amounts.{product_id}", "{}"
+        )
+        try:
+            data = json.loads(raw or "{}")
+        except json.JSONDecodeError:
+            data = {}
+        if not isinstance(data, dict):
+            data = {}
+        overrides = {}
+        for key, value in data.items():
+            try:
+                overrides[int(key)] = float(value)
+            except (TypeError, ValueError):
+                continue
+        return overrides
+
+    @api.model
+    def save_manual_overrides(self, product_id, avg_cost=None, layer_amounts=None):
+        config = self.env["ir.config_parameter"].sudo()
+        avg_key = f"hlv_inventory_group_report.manual_avg_cost.{product_id}"
+        layers_key = f"hlv_inventory_group_report.manual_layer_amounts.{product_id}"
+
+        if avg_cost is None:
+            config.set_param(avg_key, "")
+        else:
+            config.set_param(avg_key, str(float(avg_cost)))
+
+        normalized_layers = {}
+        if isinstance(layer_amounts, dict):
+            for layer_id, amount in layer_amounts.items():
+                try:
+                    normalized_layers[str(int(layer_id))] = float(amount)
+                except (TypeError, ValueError):
+                    continue
+        config.set_param(layers_key, json.dumps(normalized_layers))
+
+        return {
+            "avg_cost": self._get_saved_manual_avg_override(product_id),
+            "layer_amounts": self._get_saved_manual_layer_amounts(product_id),
+        }
+
+    @api.model
     def get_product_cost_layers(self, product_id):
-        """Return most recent PO-linked inbound layers that account for current on-hand qty."""
+        """Return PO-line layers for avg cost using gross line total (incl. tax), preserving manual overrides."""
         product = self.env["product.product"].browse(product_id)
         on_hand_qty = product.qty_available
+        manual_layer_amounts = self._get_saved_manual_layer_amounts(product_id)
+        manual_avg_override = self._get_saved_manual_avg_override(product_id)
 
-        # Newest first — accumulate until we reach on_hand_qty
-        layers = self.env["stock.valuation.layer"].search(
+        po_lines = self.env["purchase.order.line"].search(
             [
                 ("product_id", "=", product_id),
-                ("quantity", ">", 0),
-                ("stock_move_id.purchase_line_id", "!=", False),
+                ("state", "in", ["purchase", "done"]),
+                ("product_qty", ">", 0),
             ],
-            order="create_date desc",
+            order="date_planned desc, id desc",
         )
+
         rows = []
         remaining = on_hand_qty
-        company_currency = self.env.company.currency_id
-        for lyr in layers:
+        for po_line in po_lines:
+            line_qty = float(po_line.product_qty or 0.0)
+            if line_qty <= 0:
+                continue
             if remaining <= 0.001:
                 break
-            qty_take = min(lyr.quantity, remaining)
+
+            qty_take = min(line_qty, remaining)
             remaining -= qty_take
 
-            move = lyr.stock_move_id
-            po_line = move.purchase_line_id if move else None
-            picking = move.picking_id if move else None
-            if po_line:
-                currency = po_line.currency_id
-                price_unit = po_line.price_unit
-                if currency and currency != company_currency:
-                    price_unit = currency._convert(
-                        price_unit, company_currency,
-                        self.env.company, lyr.create_date or fields.Date.today()
-                    )
+            subtotal = float(po_line.price_subtotal or 0.0)
+            line_total = float(po_line.price_total or 0.0)
+            tax_amount = float(po_line.price_tax or (line_total - subtotal))
+            if not line_total:
+                line_total = subtotal + tax_amount
+            if not tax_amount and line_total:
+                tax_amount = line_total - subtotal
+
+            allocated_subtotal = subtotal * qty_take / line_qty if line_qty else 0.0
+            allocated_tax = tax_amount * qty_take / line_qty if line_qty else 0.0
+            allocated_value = line_total * qty_take / line_qty if line_qty else 0.0
+            unit_cost = line_total / line_qty if line_qty else 0.0
+
+            manual_amount = manual_layer_amounts.get(po_line.id)
+            if manual_amount is not None:
+                line_total = float(manual_amount)
+                tax_amount = max(line_total - allocated_subtotal, 0.0)
+                allocated_tax = tax_amount * qty_take / line_qty if line_qty else 0.0
+                allocated_value = line_total * qty_take / line_qty if line_qty else 0.0
+                unit_cost = line_total / line_qty if line_qty else 0.0
+                is_manual = True
+                stored_manual_amount = round(line_total, 2)
             else:
-                price_unit = lyr.unit_cost
+                is_manual = False
+                stored_manual_amount = None
+
             rows.append({
-                "date": lyr.create_date.strftime("%d/%m/%Y") if lyr.create_date else "",
-                "reference": picking.name if picking else "",
-                "po_name": po_line.order_id.name if po_line else "",
-                "qty": qty_take,
-                "unit_cost": price_unit,
-                "value": round(qty_take * price_unit, 2),
-                "uom": lyr.uom_id.name if lyr.uom_id else "",
+                "id": po_line.id,
+                "date": po_line.date_planned.strftime("%d/%m/%Y") if po_line.date_planned else (po_line.order_id.date_order.strftime("%d/%m/%Y") if po_line.order_id.date_order else ""),
+                "reference": po_line.order_id.name or "",
+                "po_name": po_line.order_id.partner_id.display_name if po_line.order_id.partner_id else "",
+                "qty": round(qty_take, 2),
+                "line_qty": round(line_qty, 2),
+                "unit_cost": round(unit_cost, 2),
+                "value": round(allocated_value, 2),
+                "tax_value": round(allocated_tax, 2),
+                "price_total": round(line_total, 2),
+                "price_tax": round(tax_amount, 2),
+                "price_subtotal": round(subtotal, 2),
+                "uom": po_line.product_uom.name if po_line.product_uom else "",
+                "allocated_subtotal": round(allocated_subtotal, 2),
+                "is_manual": is_manual,
+                "manual_amount": stored_manual_amount,
             })
 
-        # Show newest first (already newest-first from the loop)
         total_qty = sum(r["qty"] for r in rows)
+        total_tax = sum(r["tax_value"] for r in rows)
         total_value = sum(r["value"] for r in rows)
-        computed_avg = total_value / total_qty if total_qty else 0.0
+        if manual_avg_override is not None:
+            computed_avg = float(manual_avg_override)
+            total_value = round(computed_avg * total_qty, 2)
+        else:
+            computed_avg = total_value / total_qty if total_qty else 0.0
+            total_value = round(total_value, 2)
+
         return {
             "layers": rows,
             "total_qty": total_qty,
             "total_value": round(total_value, 2),
+            "total_tax": round(total_tax, 2),
             "computed_avg": round(computed_avg, 2),
+            "manual_avg_override": manual_avg_override,
         }
 
     @api.model

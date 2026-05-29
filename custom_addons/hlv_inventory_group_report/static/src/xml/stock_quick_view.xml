@@ -804,6 +804,14 @@
                             <div style="font-size:34px; font-weight:800; color:#880e4f; line-height:1.1;">
                                 <t t-esc="formatPrice(state.cellPanel.avgCost)"/>
                             </div>
+                            <div style="margin-top:12px; display:flex; flex-direction:column; align-items:center; gap:6px;">
+                                <label style="font-size:10px; color:#6c757d; text-transform:uppercase; letter-spacing:.4px;">Nhập tay giá vốn TB</label>
+                                <input type="number" step="0.01" min="0"
+                                       t-att-value="getManualAvgCostInput(state.cellPanel.productId)"
+                                       t-on-change="(ev) => this.updateManualAvgCost(state.cellPanel.productId, ev.target.value)"
+                                       style="width:100%; max-width:220px; border:1px solid #f8bbd0; border-radius:6px; padding:8px 10px; font-size:14px; font-weight:700; text-align:center; color:#880e4f;"/>
+                                <div style="font-size:10px; color:#880e4f; font-weight:700;">Số nhập tay</div>
+                            </div>
                         </div>
                         <t t-set="_ck" t-value="state.cellPanel.productId + '-avg_cost'"/>
                         <t t-if="state.cellPanelData[_ck] === null or state.cellPanelData[_ck] === undefined">
@@ -817,7 +825,7 @@
                             <!-- Formula box -->
                             <t t-if="cpData.layers.length > 0">
                                 <div style="background:#fce4ec; border:1px solid #f48fb1; border-radius:8px; padding:14px 16px; margin-bottom:16px;">
-                                    <div style="font-size:10px; font-weight:700; color:#880e4f; margin-bottom:10px; text-transform:uppercase; letter-spacing:.5px;">Công thức tính giá vốn TB</div>
+                                    <div style="font-size:10px; font-weight:700; color:#880e4f; margin-bottom:10px; text-transform:uppercase; letter-spacing:.5px;">Công thức tính giá vốn TB (theo thành tiền sau thuế)</div>
                                     <div style="display:flex; flex-wrap:wrap; align-items:center; gap:4px; line-height:2; font-size:13px;">
                                         <span style="color:#880e4f; font-size:20px; font-weight:300; line-height:1;">(</span>
                                         <t t-foreach="cpData.layers" t-as="lyr" t-key="lyr_index">
@@ -854,6 +862,7 @@
                                             <th style="padding:6px 8px; text-align:left;">Đơn mua (PO)</th>
                                             <th style="padding:6px 8px; text-align:right;">Số lượng</th>
                                             <th style="padding:6px 8px; text-align:right;">Đơn giá</th>
+                                            <th style="padding:6px 8px; text-align:right;">Thuế</th>
                                             <th style="padding:6px 8px; text-align:right;">Thành tiền</th>
                                         </tr>
                                     </thead>
@@ -868,7 +877,16 @@
                                                     <span style="font-weight:400; color:#adb5bd; margin-left:3px; font-size:10px;"><t t-esc="lyr.uom"/></span>
                                                 </td>
                                                 <td style="padding:5px 8px; text-align:right; font-weight:700; color:#880e4f;"><t t-esc="formatPrice(lyr.unit_cost)"/></td>
-                                                <td style="padding:5px 8px; text-align:right; color:#5d4037;"><t t-esc="formatPrice(lyr.value)"/></td>
+                                                <td style="padding:5px 8px; text-align:right; color:#b71c1c;"><t t-esc="formatPrice(lyr.tax_value)"/></td>
+                                                <td style="padding:5px 8px; text-align:right; color:#5d4037;">
+                                                    <input type="number" step="0.01" min="0"
+                                                           t-att-value="getLayerInputValue(lyr)"
+                                                           t-on-change="(ev) => this.updateLayerManualAmount(state.cellPanel.productId, lyr.id, ev.target.value)"
+                                                           style="width:100%; min-width:110px; border:1px solid #f8bbd0; border-radius:5px; padding:4px 6px; text-align:right; font-size:11px; color:#5d4037; font-weight:700;"/>
+                                                    <t t-if="lyr.is_manual">
+                                                        <div style="font-size:9px; color:#880e4f; margin-top:3px; font-weight:700;">Số nhập tay</div>
+                                                    </t>
+                                                </td>
                                             </tr>
                                         </t>
                                         <tr style="background:#fce4ec; border-top:2px solid #880e4f; font-weight:700;">
@@ -876,8 +894,8 @@
                                             <td style="padding:6px 8px; text-align:right; color:#1a2639;">
                                                 <t t-esc="formatQty(cpData.total_qty)"/>
                                             </td>
-                                            <td style="padding:6px 8px; text-align:right; color:#880e4f;">
-                                                <t t-esc="formatPrice(cpData.computed_avg)"/>
+                                            <td style="padding:6px 8px; text-align:right; color:#b71c1c;">
+                                                <t t-esc="formatPrice(cpData.total_tax)"/>
                                             </td>
                                             <td style="padding:6px 8px; text-align:right; color:#5d4037;">
                                                 <t t-esc="formatPrice(cpData.total_value)"/>
