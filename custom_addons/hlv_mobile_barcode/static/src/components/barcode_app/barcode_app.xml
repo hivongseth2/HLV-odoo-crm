@@ -203,6 +203,38 @@
                     </div>
                 </div>
             </div>
+            <!-- POPUP EXIT OPTIONS -->
+            <div class="modal-overlay" t-if="state.showExitOptions">
+                <div class="modal-content" style="max-width: 400px; width: 90%;">
+                    <div class="modal-header">
+                        <div class="modal-title">
+                            Tùy chọn thoát phiếu
+                        </div>
+                        <button class="modal-close" t-on-click="() => this.confirmExit('cancel')">
+                            <i class="fa fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="modal-body" style="padding: 15px;">
+                        <p style="margin-bottom: 15px; color: var(--text-color);">Bạn muốn thực hiện hành động nào khi thoát phiếu này?</p>
+                        
+                        <button class="btn btn-danger" style="width: 100%; padding: 12px; font-weight: bold; margin-bottom: 10px;"
+                                t-on-click="() => this.confirmExit('clear')">
+                            Thoát và xóa (Hủy phiếu)
+                        </button>
+
+                        <button class="btn btn-primary" style="width: 100%; padding: 12px; font-weight: bold; margin-bottom: 10px;"
+                                t-on-click="() => this.confirmExit('keep')">
+                            Thoát và giữ (Lưu tạm)
+                        </button>
+                        
+                        <button class="btn btn-secondary" style="width: 100%; padding: 12px; font-weight: bold;"
+                                t-on-click="() => this.confirmExit('cancel')">
+                            Hủy thoát
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <!-- POPUP WAREHOUSE SELECT -->
             <div class="modal-overlay" t-if="state.showWarehouseSelectPopup">
                 <div class="modal-content" style="max-width: 400px; width: 90%;">

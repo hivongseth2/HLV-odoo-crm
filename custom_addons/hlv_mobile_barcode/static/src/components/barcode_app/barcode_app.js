@@ -56,6 +56,8 @@ export class BarcodeApp extends Component {
             warehouses: [],
             selectedWarehouseId: null,
             showWarehouseSelectPopup: false,
+            showExitOptions: false,
+            pendingExitAction: null,
         });
         
         useEffect(() => {
@@ -315,30 +317,9 @@ export class BarcodeApp extends Component {
         const currentView = this.state.currentView;
 
         if (currentView === 'picking' && this.state.pickingState !== 'done' && currentPickingId) {
-            const confirmed = confirm("Bạn có chắc chắn muốn thoát khỏi phiếu này không? Hành động này sẽ XÓA HẾT số lượng đã quét và HỦY PHIẾU");
-            if (!confirmed) {
-                return;
-            }
-            this.state.isProcessing = true;
-            try {
-                const res = await rpc("/hlv_mobile_barcode/clear_and_cancel_picking", { picking_id: currentPickingId });
-                if (res && res.error) {
-                    this.notification.add(res.error, { type: "danger" });
-                } else {
-                    this.notification.add("Đã hủy phiếu và giải phóng sản phẩm thành công.", { type: "success" });
-                }
-            } catch (e) {
-                console.error("Cancel error:", e);
-            } finally {
-                this.state.isProcessing = false;
-            }
-            
-            const storageKey = 'hlv_opened_pickings';
-            try {
-                let opened = JSON.parse(localStorage.getItem(storageKey) || '[]');
-                opened = opened.filter(id => id !== currentPickingId);
-                localStorage.setItem(storageKey, JSON.stringify(opened));
-            } catch (e) {}
+            this.state.pendingExitAction = 'back';
+            this.state.showExitOptions = true;
+            return;
         } else if (currentView === 'picking' && currentPickingId) {
             const storageKey = 'hlv_opened_pickings';
             try {
@@ -348,6 +329,10 @@ export class BarcodeApp extends Component {
             } catch (e) {}
         }
 
+        await this._executeGoBack();
+    }
+
+    async _executeGoBack() {
         await this.closeCamera();
         this.state.showCameraPopup = false;
 
@@ -366,46 +351,24 @@ export class BarcodeApp extends Component {
             this.state.pickingState = "";
             this.viewScannerCallback = null;
 
-            // If the restored view is not main, start the inline camera
             if (this.state.currentView !== 'main') {
                 setTimeout(async () => {
                     await this.startPersistentCamera(false);
                 }, 150);
             }
         } else {
-            await this.goToMain(true);
+            await this._executeGoToMain();
         }
     }
 
-    async goToMain(skipConfirm = false) {
+    async goToMain(ev) {
         const currentPickingId = this.state.pickingId;
         const currentView = this.state.currentView;
 
-        if (!skipConfirm && currentView === 'picking' && this.state.pickingState !== 'done' && currentPickingId) {
-            const confirmed = confirm("Bạn có chắc chắn muốn thoát khỏi phiếu này không? Hành động này sẽ XÓA HẾT số lượng đã quét và HỦY PHIẾU");
-            if (!confirmed) {
-                return;
-            }
-            this.state.isProcessing = true;
-            try {
-                const res = await rpc("/hlv_mobile_barcode/clear_and_cancel_picking", { picking_id: currentPickingId });
-                if (res && res.error) {
-                    this.notification.add(res.error, { type: "danger" });
-                } else {
-                    this.notification.add("Đã hủy phiếu và giải phóng sản phẩm thành công.", { type: "success" });
-                }
-            } catch (e) {
-                console.error("Cancel error:", e);
-            } finally {
-                this.state.isProcessing = false;
-            }
-            
-            const storageKey = 'hlv_opened_pickings';
-            try {
-                let opened = JSON.parse(localStorage.getItem(storageKey) || '[]');
-                opened = opened.filter(id => id !== currentPickingId);
-                localStorage.setItem(storageKey, JSON.stringify(opened));
-            } catch (e) {}
+        if (currentView === 'picking' && this.state.pickingState !== 'done' && currentPickingId) {
+            this.state.pendingExitAction = 'main';
+            this.state.showExitOptions = true;
+            return;
         } else if (currentView === 'picking' && currentPickingId) {
             const storageKey = 'hlv_opened_pickings';
             try {
@@ -415,6 +378,10 @@ export class BarcodeApp extends Component {
             } catch (e) {}
         }
 
+        await this._executeGoToMain();
+    }
+
+    async _executeGoToMain() {
         await this.closeCamera();
         this.state.showCameraPopup = false;
 
@@ -428,6 +395,47 @@ export class BarcodeApp extends Component {
         this.state.prefillLocationName = null;
         this.state.pickingState = "";
         this.viewScannerCallback = null;
+    }
+
+    async confirmExit(actionType) {
+        this.state.showExitOptions = false;
+        if (actionType === 'cancel') {
+            this.state.pendingExitAction = null;
+            return;
+        }
+
+        const isClear = actionType === 'clear';
+        const targetAction = this.state.pendingExitAction;
+        this.state.pendingExitAction = null;
+
+        if (isClear) {
+            this.state.isProcessing = true;
+            try {
+                const res = await rpc("/hlv_mobile_barcode/clear_and_cancel_picking", { picking_id: this.state.pickingId });
+                if (res && res.error) {
+                    this.notification.add(res.error, { type: "danger" });
+                } else {
+                    this.notification.add("Đã hủy phiếu và giải phóng sản phẩm thành công.", { type: "success" });
+                }
+            } catch (e) {
+                console.error("Cancel error:", e);
+            } finally {
+                this.state.isProcessing = false;
+            }
+        }
+        
+        const storageKey = 'hlv_opened_pickings';
+        try {
+            let opened = JSON.parse(localStorage.getItem(storageKey) || '[]');
+            opened = opened.filter(id => id !== this.state.pickingId);
+            localStorage.setItem(storageKey, JSON.stringify(opened));
+        } catch (e) {}
+
+        if (targetAction === 'back') {
+            await this._executeGoBack();
+        } else {
+            await this._executeGoToMain();
+        }
     }
 
     goToMove(productId, locationBarcode = null, locationName = null, destWarehouseId = false) {
