@@ -1,4 +1,4 @@
-﻿/** @odoo-module **/
+/** @odoo-module **/
 import { registry } from "@web/core/registry";
 import { Component, useState, onWillStart, markup } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
@@ -13,19 +13,9 @@ export class StockQuickView extends Component {
         return Number(val).toLocaleString('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 2 });
     }
 
-    // Format ngày UTC+7
+    // Format ngày UTC+7 (da duoc format san tu python)
     formatDateVN(dateStr) {
         if (!dateStr) return '';
-        let d, m, y;
-        if (dateStr.includes('/')) {
-            [d, m, y] = dateStr.split('/').map(Number);
-            const dt = new Date(Date.UTC(y, m - 1, d, 7, 0, 0));
-            return dt.toLocaleDateString('vi-VN');
-        } else if (dateStr.includes('-')) {
-            [y, m, d] = dateStr.split('-').map(Number);
-            const dt = new Date(Date.UTC(y, m - 1, d, 7, 0, 0));
-            return dt.toLocaleDateString('vi-VN');
-        }
         return dateStr;
     }
 
@@ -472,18 +462,18 @@ export class StockQuickView extends Component {
     getLayerInputValue(layer) {
         const manualAmount = layer.manual_amount;
         const value = manualAmount !== null && manualAmount !== undefined ? manualAmount : layer.value;
-        if (value === null || value === undefined) return "0.00";
-        return Number(value).toFixed(2);
+        if (value === null || value === undefined) return "";
+        return Number(value).toLocaleString('vi-VN', { maximumFractionDigits: 2 });
     }
 
     getManualAvgCostInput(productId) {
         const manualAvg = this.state.manualAvgCosts[productId];
         if (manualAvg !== undefined && manualAvg !== null) {
-            return Number(manualAvg).toFixed(2);
+            return Number(manualAvg).toLocaleString('vi-VN', { maximumFractionDigits: 2 });
         }
         const line = this.state.lines.find((l) => l.id === productId);
         const value = line && line.extra ? line.extra.avg_cost : 0;
-        return Number(value || 0).toFixed(2);
+        return Number(value || 0).toLocaleString('vi-VN', { maximumFractionDigits: 2 });
     }
 
     async persistManualOverrides(productId) {
@@ -496,8 +486,18 @@ export class StockQuickView extends Component {
         );
     }
 
+    async resetLayerManualAmount(productId, layerId) {
+        const productOverrides = Object.assign({}, this.state.manualLayerAmounts[productId] || {});
+        delete productOverrides[layerId];
+        this.state.manualLayerAmounts = Object.assign({}, this.state.manualLayerAmounts, { [productId]: productOverrides });
+        await this.persistManualOverrides(productId);
+        this.recalculateCostPanel(productId);
+    }
+
     async updateLayerManualAmount(productId, layerId, rawValue) {
-        const amount = Number(rawValue);
+        let rawStr = String(rawValue).replace(/[^\d.,]/g, '');
+        rawStr = rawStr.replace(/\./g, '').replace(/,/g, '.');
+        const amount = Number(rawStr);
         if (Number.isNaN(amount) || amount < 0) return;
         const productOverrides = Object.assign({}, this.state.manualLayerAmounts[productId] || {});
         productOverrides[layerId] = amount;
@@ -507,7 +507,9 @@ export class StockQuickView extends Component {
     }
 
     async updateManualAvgCost(productId, rawValue) {
-        const amount = Number(rawValue);
+        let rawStr = String(rawValue).replace(/[^\d.,]/g, '');
+        rawStr = rawStr.replace(/\./g, '').replace(/,/g, '.');
+        const amount = Number(rawStr);
         if (Number.isNaN(amount) || amount < 0) return;
         this.state.manualAvgCosts = Object.assign({}, this.state.manualAvgCosts, { [productId]: amount });
         this.state.cellPanel = this.state.cellPanel && this.state.cellPanel.productId === productId

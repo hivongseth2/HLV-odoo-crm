@@ -86,6 +86,7 @@ class HlvStockQuick(models.TransientModel):
                     extra_data[product.id]["manual_avg_override"] = True
                 else:
                     extra_data.setdefault(product.id, {})["avg_cost"] = computed_avg
+                extra_data.setdefault(product.id, {})["has_manual_layer"] = layers_data.get("has_manual_layer", False)
         if "incoming_qty" in extra_cols:
             # Only purchase order inbound moves not yet done
             in_moves = self.env["stock.move"].read_group(
@@ -166,6 +167,7 @@ class HlvStockQuick(models.TransientModel):
             outgoing_total += prod_outgoing
             line_extra = {key: extra_data.get(product.id, {}).get(key) for key in extra_cols}
             line_extra["manual_avg_override"] = extra_data.get(product.id, {}).get("manual_avg_override", False)
+            line_extra["has_manual_layer"] = extra_data.get(product.id, {}).get("has_manual_layer", False)
             # incoming_qty column shows on_hand + pending PO qty (projected after receiving)
             if "incoming_qty" in line_extra and line_extra["incoming_qty"] is not None:
                 line_extra["incoming_pending"] = line_extra["incoming_qty"]  # raw pending for breakdown display
@@ -396,6 +398,7 @@ class HlvStockQuick(models.TransientModel):
 
         rows = []
         remaining = on_hand_qty
+        from datetime import timedelta
         for po_line in po_lines:
             line_qty = float(po_line.product_qty or 0.0)
             if line_qty <= 0:
@@ -432,9 +435,13 @@ class HlvStockQuick(models.TransientModel):
                 is_manual = False
                 stored_manual_amount = None
 
+            dt_planned = po_line.date_planned + timedelta(hours=7) if po_line.date_planned else None
+            dt_order = po_line.order_id.date_order + timedelta(hours=7) if po_line.order_id.date_order else None
+            date_str = dt_planned.strftime("%d/%m/%Y") if dt_planned else (dt_order.strftime("%d/%m/%Y") if dt_order else "")
+
             rows.append({
                 "id": po_line.id,
-                "date": po_line.date_planned.strftime("%d/%m/%Y") if po_line.date_planned else (po_line.order_id.date_order.strftime("%d/%m/%Y") if po_line.order_id.date_order else ""),
+                "date": date_str,
                 "reference": po_line.order_id.name or "",
                 "po_name": po_line.order_id.partner_id.display_name if po_line.order_id.partner_id else "",
                 "qty": round(qty_take, 2),
@@ -468,6 +475,7 @@ class HlvStockQuick(models.TransientModel):
             "total_tax": round(total_tax, 2),
             "computed_avg": round(computed_avg, 2),
             "manual_avg_override": manual_avg_override,
+            "has_manual_layer": any(r.get("is_manual") for r in rows),
         }
 
     @api.model
