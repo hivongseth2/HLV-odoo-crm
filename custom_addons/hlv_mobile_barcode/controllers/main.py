@@ -599,7 +599,9 @@ class HLVMobileBarcodeController(http.Controller):
             # Find the actual physical stock available at this source location (including all sub-locations)
             quants = request.env['stock.quant'].sudo().search([
                 ('product_id', '=', product.id),
-                ('location_id', 'child_of', ml_src_id)
+                ('location_id', 'child_of', ml_src_id),
+                ('company_id', '=', picking.company_id.id),
+                ('package_id', '=', False)
             ])
             available_qty = sum(q.quantity for q in quants)
             
@@ -777,7 +779,9 @@ class HLVMobileBarcodeController(http.Controller):
             
             quants = request.env['stock.quant'].sudo().search([
                 ('product_id', '=', move.product_id.id),
-                ('location_id', 'child_of', ml_src_id)
+                ('location_id', 'child_of', ml_src_id),
+                ('company_id', '=', move.company_id.id),
+                ('package_id', '=', move_line.package_id.id if move_line.package_id else False)
             ])
             available_qty = sum(q.quantity for q in quants)
             
