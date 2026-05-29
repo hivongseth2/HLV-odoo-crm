@@ -802,14 +802,17 @@
                         <div style="text-align:center; padding:20px 16px 12px;">
                             <div style="font-size:10px; color:#adb5bd; letter-spacing:.5px; text-transform:uppercase; margin-bottom:6px;">Giá vốn hiện tại</div>
                             <div style="font-size:34px; font-weight:800; color:#880e4f; line-height:1.1;">
-                                <t t-esc="formatPrice(state.cellPanel.avgCost)"/>
+                                <t t-esc="formatPrice(state.cellPanel.avgCost !== undefined && state.cellPanel.avgCost !== null ? state.cellPanel.avgCost : 0)"/>
                             </div>
                             <div style="margin-top:12px; display:flex; flex-direction:column; align-items:center; gap:6px;">
                                 <label style="font-size:10px; color:#6c757d; text-transform:uppercase; letter-spacing:.4px;">Nhập tay giá vốn TB</label>
-                                <input type="number" step="0.01" min="0"
-                                       t-att-value="getManualAvgCostInput(state.cellPanel.productId)"
-                                       t-on-change="(ev) => this.updateManualAvgCost(state.cellPanel.productId, ev.target.value)"
-                                       style="width:100%; max-width:220px; border:1px solid #f8bbd0; border-radius:6px; padding:8px 10px; font-size:14px; font-weight:700; text-align:center; color:#880e4f;"/>
+                                <div style="display:flex; gap:8px; align-items:center;">
+                                    <input type="number" step="0.01" min="0"
+                                           t-att-value="getManualAvgCostInput(state.cellPanel.productId)"
+                                           t-on-change="(ev) => this.updateManualAvgCost(state.cellPanel.productId, ev.target.value)"
+                                           style="width:100%; max-width:140px; border:1px solid #f8bbd0; border-radius:6px; padding:8px 10px; font-size:14px; font-weight:700; text-align:center; color:#880e4f;"/>
+                                    <button t-on-click="() => this.resetManualAvgCost(state.cellPanel.productId)" style="background:#fff; color:#880e4f; border:1px solid #f8bbd0; border-radius:6px; padding:7px 14px; font-size:13px; font-weight:700; cursor:pointer;">Reset</button>
+                                </div>
                                 <div style="font-size:10px; color:#880e4f; font-weight:700;">Số nhập tay</div>
                             </div>
                         </div>
@@ -869,7 +872,9 @@
                                     <tbody>
                                         <t t-foreach="cpData.layers" t-as="lyr" t-key="lyr_index">
                                             <tr t-att-style="'border-bottom:1px solid #f8bbd0; ' + (lyr_index % 2 === 1 ? 'background:#fff0f5;' : '')">
-                                                <td style="padding:5px 8px; color:#6c757d; white-space:nowrap; font-size:11px;"><t t-esc="lyr.date"/></td>
+                                                <td style="padding:5px 8px; color:#6c757d; white-space:nowrap; font-size:11px;">
+                                                    <t t-esc="formatDateVN(lyr.date)"/>
+                                                </td>
                                                 <td style="padding:5px 8px; font-family:monospace; font-size:11px; font-weight:700;"><t t-esc="lyr.reference"/></td>
                                                 <td style="padding:5px 8px; font-size:11px; color:#546e7a;"><t t-esc="lyr.po_name"/></td>
                                                 <td style="padding:5px 8px; text-align:right; font-weight:600; color:#880e4f;">
@@ -882,10 +887,14 @@
                                                     <input type="number" step="0.01" min="0"
                                                            t-att-value="getLayerInputValue(lyr)"
                                                            t-on-change="(ev) => this.updateLayerManualAmount(state.cellPanel.productId, lyr.id, ev.target.value)"
-                                                           style="width:100%; min-width:110px; border:1px solid #f8bbd0; border-radius:5px; padding:4px 6px; text-align:right; font-size:11px; color:#5d4037; font-weight:700;"/>
+                                                           t-att-style="'width:100%; min-width:110px; border:1px solid #f8bbd0; border-radius:5px; padding:4px 6px; text-align:right; font-size:11px; font-weight:700;' + (lyr.is_manual ? ' background:#fff3e0; color:#d84315; border:2px solid #ff9800;' : '')"
+                                                    />
                                                     <t t-if="lyr.is_manual">
-                                                        <div style="font-size:9px; color:#880e4f; margin-top:3px; font-weight:700;">Số nhập tay</div>
+                                                        <div style="font-size:9px; color:#d84315; margin-top:3px; font-weight:700;">Số nhập tay</div>
                                                     </t>
+                                                    <div style="font-size:12px; color:#5d4037; margin-top:2px;">
+                                                        <t t-esc="formatMoneyVND(getLayerInputValue(lyr))"/>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         </t>
@@ -898,7 +907,7 @@
                                                 <t t-esc="formatPrice(cpData.total_tax)"/>
                                             </td>
                                             <td style="padding:6px 8px; text-align:right; color:#5d4037;">
-                                                <t t-esc="formatPrice(cpData.total_value)"/>
+                                                <t t-esc="formatMoneyVND(cpData.total_value)"/>
                                             </td>
                                         </tr>
                                     </tbody>
