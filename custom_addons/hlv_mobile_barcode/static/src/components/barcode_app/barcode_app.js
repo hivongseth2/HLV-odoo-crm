@@ -414,6 +414,10 @@ export class BarcodeApp extends Component {
         this.history = [];
         this.state.currentView = 'main';
         this.state.pickingId = null;
+        this.state.pickingName = "";
+        this.state.scannedLocationId = null;
+        this.state.scannedLocationName = "";
+        this.state.lastScannedProduct = null;
         this.state.warehouseCode = "";
         this.state.lookupType = null;
         this.state.recordId = null;

@@ -11,11 +11,8 @@
                     <button class="btn btn-outline" style="padding: 6px 12px; font-size: 0.85rem;" t-on-click="props.onBack">
                         <i class="fa fa-arrow-left"></i> Quay lại
                     </button>
-                    <button t-if="props.lookupType === 'product'" class="btn btn-primary" style="padding: 6px 12px; font-size: 0.85rem; flex: 1;" t-on-click="() => props.onMove(props.recordId)">
-                        <i class="fa fa-exchange-alt"></i> Chuyển
-                    </button>
                     <button t-if="props.lookupType === 'location'" class="btn btn-primary" style="padding: 6px 12px; font-size: 0.85rem; flex: 1;" t-on-click="() => props.onBatchMove(state.location_barcode, state.location_name)">
-                        <i class="fa fa-boxes"></i> Tạo chuyển kho
+                        <i class="fa fa-boxes"></i> Chuyển toàn bộ
                     </button>
                 </div>
             </div>
