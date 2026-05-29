@@ -130,13 +130,13 @@
                     <PickingScanner t-if="state.currentView === 'picking'" t-key="state.pickingId" pickingId="state.pickingId" onBack="() => this.goBack()" onSelectPicking="(id, name) => this.selectPicking(id, name)" onStateLoaded="(state) => this.onPickingStateLoaded(state)" lastScannedProduct="state.lastScannedProduct" scannedLocationName="state.scannedLocationName" refreshTick="state.pickingRefreshTick" scanMode="state.scanMode" onToggleScanMode="(mode) => this.toggleScanMode(mode)"/>
                     
                     <!-- Move Component -->
-                    <LocationMove t-if="state.currentView === 'move'" productId="state.recordId" prefillLocationBarcode="state.prefillLocationBarcode" prefillLocationName="state.prefillLocationName" destWarehouseId="state.destWarehouseId" onBack="() => this.goBack()" registerScanner="(cb) => this.registerScanner(cb)"/>
+                    <LocationMove t-if="state.currentView === 'move'" productId="state.recordId" prefillLocationBarcode="state.prefillLocationBarcode" prefillLocationName="state.prefillLocationName" sourceQty="state.sourceQty" productName="state.productName" destWarehouseId="state.destWarehouseId" destLocationId="state.destLocationId" onBack="() => this.goBack()" onSuccess="() => this.onMoveSuccess()" registerScanner="(cb) => this.registerScanner(cb)"/>
                     
                     <!-- Batch Move Component -->
                     <BatchLocationMove t-if="state.currentView === 'batch_move'" sourceLocationBarcode="state.prefillLocationBarcode" sourceLocationName="state.prefillLocationName" onBack="() => this.goBack()" registerScanner="(cb) => this.registerScanner(cb)"/>
                     
                     <!-- Lookup Component -->
-                    <InventoryLookup t-if="state.currentView === 'lookup'" t-key="state.lookupType + '_' + state.recordId" lookupType="state.lookupType" recordId="state.recordId" onBack="() => this.goBack()" onMove="(productId, locBarcode, locName) => this.promptMoveWarehouse(productId, locBarcode, locName)" onBatchMove="(locBarcode, locName) => this.promptBatchMoveWarehouse(locBarcode, locName)" onProductSelect="(productId, productName) => this.goToProductLookup(productId, productName)"/>
+                    <InventoryLookup t-if="state.currentView === 'lookup'" t-key="state.lookupType + '_' + state.recordId + '_' + (state.lookupRefreshTick || 0)" lookupType="state.lookupType" recordId="state.recordId" onBack="() => this.goBack()" onMove="(productId, locBarcode, locName, qty, productName) => this.promptMoveWarehouse(productId, locBarcode, locName, qty, productName)" onBatchMove="(locBarcode, locName) => this.promptBatchMoveWarehouse(locBarcode, locName)" onProductSelect="(productId, productName) => this.goToProductLookup(productId, productName)"/>
                 </div>
             </div>
 
@@ -203,33 +203,102 @@
                     </div>
                 </div>
             </div>
-            <!-- POPUP WAREHOUSE SELECT -->
+            <!-- POPUP EXIT OPTIONS -->
+            <div class="modal-overlay" t-if="state.showExitOptions">
+                <div class="modal-content" style="max-width: 400px; width: 90%;">
+                    <div class="modal-header">
+                        <div class="modal-title">
+                            Tùy chọn thoát phiếu
+                        </div>
+                        <button class="modal-close" t-on-click="() => this.confirmExit('cancel')">
+                            <i class="fa fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="modal-body" style="padding: 15px;">
+                        <p style="margin-bottom: 15px; color: var(--text-color);">Bạn muốn thực hiện hành động nào khi thoát phiếu này?</p>
+                        
+                        <button class="btn btn-danger" style="width: 100%; padding: 12px; font-weight: bold; margin-bottom: 10px;"
+                                t-on-click="() => this.confirmExit('clear')">
+                            Thoát và xóa (Hủy phiếu)
+                        </button>
+
+                        <button class="btn btn-primary" style="width: 100%; padding: 12px; font-weight: bold; margin-bottom: 10px;"
+                                t-on-click="() => this.confirmExit('keep')">
+                            Thoát và giữ (Lưu tạm)
+                        </button>
+                        
+                        <button class="btn btn-secondary" style="width: 100%; padding: 12px; font-weight: bold;"
+                                t-on-click="() => this.confirmExit('cancel')">
+                            Hủy thoát
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- POPUP DESTINATION SELECT -->
             <div class="modal-overlay" t-if="state.showWarehouseSelectPopup">
                 <div class="modal-content" style="max-width: 400px; width: 90%;">
                     <div class="modal-header">
                         <div class="modal-title">
-                            <i class="fa fa-building"></i> Chọn kho đích
+                            <i class="fa fa-map-marker-alt"></i> Chọn đích chuyển kho
                         </div>
                         <button class="modal-close" t-on-click="closeWarehousePopup">
                             <i class="fa fa-times"></i>
                         </button>
                     </div>
+                    <div class="modal-body" style="padding: 15px; padding-bottom: 0;">
+                        <!-- Popup body now just shows the tabs below -->
+                    </div>
+                    
+                    <!-- Tabs Selection -->
+                    <div style="display: flex; border-bottom: 1px solid var(--border-color);">
+                        <div t-attf-style="flex: 1; text-align: center; padding: 12px; cursor: pointer; font-weight: 600; border-bottom: 3px solid {{ state.destSelectionMode === 'location' ? 'var(--primary-color)' : 'transparent' }}; color: {{ state.destSelectionMode === 'location' ? 'var(--primary-color)' : 'var(--text-muted)' }};"
+                             t-on-click="() => this.setDestSelectionMode('location')">
+                            <i class="fa fa-barcode"></i> Quét vị trí
+                        </div>
+                        <div t-attf-style="flex: 1; text-align: center; padding: 12px; cursor: pointer; font-weight: 600; border-bottom: 3px solid {{ state.destSelectionMode === 'warehouse' ? 'var(--primary-color)' : 'transparent' }}; color: {{ state.destSelectionMode === 'warehouse' ? 'var(--primary-color)' : 'var(--text-muted)' }};"
+                             t-on-click="() => this.setDestSelectionMode('warehouse')">
+                            <i class="fa fa-building"></i> Chọn kho
+                        </div>
+                    </div>
+                    
                     <div class="modal-body" style="padding: 15px;">
-                        <p style="margin-bottom: 15px; color: var(--text-color);">Bạn muốn chuyển hàng đến kho nào?</p>
+                        <!-- Location Selection Mode -->
+                        <div t-if="state.destSelectionMode === 'location'">
+                            <p style="margin-bottom: 15px; color: var(--text-color);">Nhập hoặc quét mã vị trí đích:</p>
+                            
+                            <div class="input-group" style="margin-bottom: 15px; display: flex;">
+                                <input type="text" class="form-control" placeholder="Mã vị trí..." 
+                                       t-model="state.destLocationBarcode" 
+                                       t-on-change="validateDestLocation"
+                                       style="flex: 1; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px 0 0 6px;" />
+                                <button class="btn btn-secondary" t-on-click="validateDestLocation" t-att-disabled="state.isLocatingDest"
+                                        style="border-radius: 0 6px 6px 0; padding: 10px 15px;">
+                                    <i t-attf-class="fa {{ state.isLocatingDest ? 'fa-spinner fa-spin' : 'fa-search' }}"></i>
+                                </button>
+                            </div>
+                            
+                            <div t-if="state.destLocationName" class="alert alert-success" style="padding: 10px; border-radius: 6px; margin-bottom: 15px; background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9;">
+                                <strong><i class="fa fa-check-circle"></i> Vị trí:</strong> <t t-esc="state.destLocationName" />
+                            </div>
+                        </div>
                         
-                        <div style="max-height: 300px; overflow-y: auto; margin-bottom: 15px;">
-                            <t t-foreach="state.warehouses" t-as="wh" t-key="wh.id">
-                                <div class="card-box" 
-                                     t-attf-style="padding: 12px; margin-bottom: 8px; cursor: pointer; border: 2px solid {{ state.selectedWarehouseId === wh.id ? 'var(--primary-color)' : 'transparent' }};"
-                                     t-on-click="() => this.selectWarehouse(wh.id)">
-                                    <div style="font-weight: 600; font-size: 1rem;"><t t-esc="wh.name"/></div>
-                                    <div style="font-size: 0.85rem; color: var(--text-muted);">Mã kho: <t t-esc="wh.code"/></div>
-                                </div>
-                            </t>
+                        <!-- Warehouse Selection Mode -->
+                        <div t-if="state.destSelectionMode === 'warehouse'">
+                            <p style="margin-bottom: 15px; color: var(--text-color);">Chọn kho đích từ danh sách:</p>
+                            <div style="max-height: 250px; overflow-y: auto; margin-bottom: 15px;">
+                                <t t-foreach="state.warehouses" t-as="wh" t-key="wh.id">
+                                    <div class="card-box" 
+                                         t-attf-style="padding: 12px; margin-bottom: 8px; cursor: pointer; border: 2px solid {{ state.selectedWarehouseId === wh.id ? 'var(--primary-color)' : 'transparent' }};"
+                                         t-on-click="() => this.selectWarehouse(wh.id)">
+                                        <div style="font-weight: 600; font-size: 1rem;"><t t-esc="wh.name"/></div>
+                                        <div style="font-size: 0.85rem; color: var(--text-muted);">Mã kho: <t t-esc="wh.code"/></div>
+                                    </div>
+                                </t>
+                            </div>
                         </div>
                         
                         <button class="btn btn-primary" style="width: 100%; padding: 12px; font-weight: bold;"
-                                t-att-disabled="!state.selectedWarehouseId"
                                 t-on-click="confirmWarehouseSelection">
                             <i class="fa fa-check"></i> Xác nhận
                         </button>

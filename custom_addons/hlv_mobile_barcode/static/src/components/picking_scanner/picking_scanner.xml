@@ -15,20 +15,7 @@
             
                 <!-- Scrollable product list area -->
                 <div class="picking-scroll-area">
-                    <!-- Location Scanning Mode Toggle (only for internal INT transfers) -->
-                    <div t-if="state.picking and state.picking.picking_type_code === 'internal'" class="scan-mode-container">
-                        <div class="scan-mode-label">
-                            <i class="fa fa-sliders-h"></i> Chế độ quét vị trí:
-                        </div>
-                        <div class="scan-mode-toggle-group">
-                            <button t-attf-class="btn-toggle-item #{props.scanMode === 'source' ? 'active' : ''}" t-on-click="() => props.onToggleScanMode('source')">
-                                <i class="fa fa-sign-out-alt"></i> Nguồn
-                            </button>
-                            <button t-attf-class="btn-toggle-item #{props.scanMode === 'dest' ? 'active' : ''}" t-on-click="() => props.onToggleScanMode('dest')">
-                                <i class="fa fa-sign-in-alt"></i> Đích nhận
-                            </button>
-                        </div>
-                    </div>
+                    <!-- Location Scanning Mode Toggle removed due to Deltatech conflict -->
 
                     
                     <!-- Collapsible Packages Section -->
@@ -104,18 +91,27 @@
                                         <i t-if="line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0" class="fa fa-check-circle item-status-icon" style="margin-right: 8px;"></i>
                                     </div>
                                 </div>
-                                <div t-if="state.picking.state !== 'done'" style="background-color: var(--light-bg); padding: 6px; border-top: 1px solid var(--border-color); display: flex; gap: 4px; align-items: center; justify-content: center;">
-                                    <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, -10)">-10</button>
-                                    <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 24px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, -1)">-1</button>
-                                    <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, -0.1)">-0.1</button>
-                                    <input type="number" class="form-control" style="width: 48px; text-align: center; font-weight: bold; padding: 4px 2px; font-size: 0.85rem;" t-model="line.qty_done" t-on-change="(ev) => this.saveQty(line, ev)" min="0" step="any"/>
-                                    <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, 0.1)">+0.1</button>
-                                    <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 24px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, 1)">+1</button>
-                                    <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, 10)">+10</button>
-                                    <button class="btn btn-danger btn-sm" style="padding: 4px 8px; font-size: 0.78rem; min-width: 28px;" t-on-click="() => this.deleteLine(line)">
-                                        <i class="fa fa-trash"></i>
-                                    </button>
-                                </div>
+                                <t t-if="state.picking.show_qty_buttons">
+                                    <div t-if="state.picking.state !== 'done'" style="background-color: var(--light-bg); padding: 6px; border-top: 1px solid var(--border-color); display: flex; gap: 4px; align-items: center; justify-content: center;">
+                                        <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, -10)">-10</button>
+                                        <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 24px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, -1)">-1</button>
+                                        <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, -0.1)">-0.1</button>
+                                        <input type="number" class="form-control" style="width: 48px; text-align: center; font-weight: bold; padding: 4px 2px; font-size: 0.85rem;" t-model="line.qty_done" t-on-change="(ev) => this.saveQty(line, ev)" min="0" step="any"/>
+                                        <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, 0.1)">+0.1</button>
+                                        <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 24px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, 1)">+1</button>
+                                        <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, 10)">+10</button>
+                                        <button class="btn btn-danger btn-sm" style="padding: 4px 8px; font-size: 0.78rem; min-width: 28px;" t-on-click="() => this.deleteLine(line)">
+                                            <i class="fa fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </t>
+                                <t t-else="">
+                                    <div t-if="state.picking.state !== 'done'" style="background-color: var(--light-bg); padding: 6px; border-top: 1px solid var(--border-color); display: flex; gap: 4px; align-items: center; justify-content: flex-end;">
+                                        <button class="btn btn-danger btn-sm" style="padding: 4px 12px; font-size: 0.85rem; min-width: 28px;" t-on-click="() => this.deleteLine(line)">
+                                            <i class="fa fa-trash"></i> Xóa
+                                        </button>
+                                    </div>
+                                </t>
                             </div>
                         </t>
                     </div>

@@ -10,8 +10,11 @@ export class LocationMove extends Component {
         productId: Number,
         prefillLocationBarcode: { type: String, optional: true },
         prefillLocationName: { type: String, optional: true },
+        sourceQty: { type: Number, optional: true },
+        productName: { type: String, optional: true },
         destWarehouseId: { type: [Number, Boolean], optional: true },
         onBack: Function,
+        onSuccess: { type: Function, optional: true },
         registerScanner: { type: Function, optional: true },
     };
 
@@ -20,35 +23,51 @@ export class LocationMove extends Component {
         this.notification = useService("notification");
         
         this.state = useState({
-            productName: "Loading...",
+            productName: this.props.productName || "Loading...",
             productBarcode: "",
             sourceLocationBarcode: this.props.prefillLocationBarcode || "",
             sourceLocationName: this.props.prefillLocationName || "",
-            locationInput: "",
+            destLocationBarcode: "",
+            destLocationName: "",
+            destLocationId: false,
+            destLocationInput: "",
             qty: 0,
             loading: false,
-            inPickingName: "",
-            showLocalCamera: false,
         });
 
         this.localScanner = null;
 
         onWillStart(async () => {
-            try {
-                const product = await rpc("/web/dataset/call_kw/product.product/read", {
-                    model: 'product.product',
-                    method: 'read',
-                    args: [[this.props.productId], ['display_name', 'barcode']],
-                    kwargs: {}
-                });
-                if (product && product.length) {
-                    this.state.productName = product[0].display_name;
-                    this.state.productBarcode = product[0].barcode || "";
-                } else {
-                    this.state.productName = "Unknown Product";
+            if (!this.props.productName) {
+                try {
+                    const product = await rpc("/web/dataset/call_kw/product.product/read", {
+                        model: 'product.product',
+                        method: 'read',
+                        args: [[this.props.productId], ['display_name', 'barcode']],
+                        kwargs: {}
+                    });
+                    if (product && product.length) {
+                        this.state.productName = product[0].display_name;
+                        this.state.productBarcode = product[0].barcode || "";
+                    } else {
+                        this.state.productName = "Unknown Product";
+                    }
+                } catch(e) {
+                    this.state.productName = "Product #" + this.props.productId;
                 }
-            } catch(e) {
-                this.state.productName = "Product #" + this.props.productId;
+            } else {
+                // Fetch product barcode for comparison
+                try {
+                    const product = await rpc("/web/dataset/call_kw/product.product/read", {
+                        model: 'product.product',
+                        method: 'read',
+                        args: [[this.props.productId], ['barcode']],
+                        kwargs: {}
+                    });
+                    if (product && product.length) {
+                        this.state.productBarcode = product[0].barcode || "";
+                    }
+                } catch(e) {}
             }
             
             if (this.props.registerScanner) {
@@ -57,105 +76,51 @@ export class LocationMove extends Component {
         });
     }
 
-    onLocationInputKeyup(ev) {
-        if (ev.key === 'Enter' && this.state.locationInput) {
-            this.handleScannedBarcode(this.state.locationInput);
-            this.state.locationInput = "";
+    onDestLocationInputKeyup(ev) {
+        if (ev.key === 'Enter' && this.state.destLocationInput) {
+            this.handleScannedBarcode(this.state.destLocationInput);
+            this.state.destLocationInput = "";
         }
     }
 
     async handleScannedBarcode(decodedText) {
-        if (!this.state.sourceLocationBarcode) {
-            if (this.state.productBarcode && decodedText === this.state.productBarcode) {
+        if (this.state.productBarcode && decodedText === this.state.productBarcode) {
+            if (this.state.qty >= this.props.sourceQty) {
                 this.playSound('error');
-                this.notification.add("Vui lòng quét vị trí lấy hàng trước khi quét sản phẩm", { type: "danger" });
+                this.notification.add(`Vượt quá số lượng tồn tại vị trí này (${this.props.sourceQty})`, { type: "warning" });
             } else {
-                try {
-                    const res = await rpc("/hlv_mobile_barcode/validate_location", { barcode: decodedText });
-                    if (res.error) {
-                        this.playSound('error');
-                        this.notification.add(res.error, { type: "danger" });
-                    } else {
-                        this.state.sourceLocationBarcode = res.location_barcode;
-                        this.state.sourceLocationName = res.location_name;
-                        this.playSound('success');
-                        this.notification.add("Đã nhận vị trí: " + res.location_name, { type: "success" });
-                    }
-                } catch (e) {
-                    this.playSound('error');
-                    this.notification.add("Lỗi kết nối", { type: "danger" });
-                }
-            }
-        } else {
-            if (this.state.productBarcode && decodedText === this.state.productBarcode) {
                 this.state.qty += 1;
                 this.playSound('success');
-                this.notification.add("Đã tăng số lượng lên " + this.state.qty, { type: "success" });
-            } else {
-                try {
-                    const res = await rpc("/hlv_mobile_barcode/validate_location", { barcode: decodedText });
-                    if (res.error) {
+                this.notification.add(`Đã tăng số lượng lên ${this.state.qty}`, { type: "success" });
+            }
+        } else {
+            try {
+                const res = await rpc("/hlv_mobile_barcode/smart_scan", { barcode: decodedText });
+                if (res && res.type === 'product' && res.id === this.props.productId) {
+                    if (this.state.qty >= this.props.sourceQty) {
                         this.playSound('error');
-                        this.notification.add(res.error, { type: "danger" });
+                        this.notification.add(`Vượt quá số lượng tồn tại vị trí này (${this.props.sourceQty})`, { type: "warning" });
                     } else {
-                        this.state.sourceLocationBarcode = res.location_barcode;
-                        this.state.sourceLocationName = res.location_name;
+                        this.state.qty += 1;
                         this.playSound('success');
-                        this.notification.add("Đã đổi vị trí thành: " + res.location_name, { type: "success" });
+                        this.notification.add(`Đã tăng số lượng lên ${this.state.qty}`, { type: "success" });
                     }
-                } catch (e) {
+                } else if (res && res.type === 'location') {
+                    this.state.destLocationBarcode = decodedText;
+                    this.state.destLocationName = res.name;
+                    this.state.destLocationId = res.id;
+                    this.state.destLocationInput = "";
+                    this.playSound('success');
+                    this.notification.add(`Đã nhận vị trí đích: ${res.name}`, { type: "success" });
+                } else {
                     this.playSound('error');
-                    this.notification.add("Lỗi kết nối", { type: "danger" });
+                    this.notification.add("Mã vạch không hợp lệ", { type: "warning" });
                 }
-            }
-        }
-    }
-
-    async openLocalCamera() {
-        this.state.showLocalCamera = true;
-        await new Promise(r => setTimeout(r, 100)); // wait for DOM element
-
-        if (!window.Html5Qrcode) {
-            try {
-                await new Promise((resolve, reject) => {
-                    const script = document.createElement("script");
-                    script.src = "https://unpkg.com/html5-qrcode";
-                    script.onload = resolve;
-                    script.onerror = reject;
-                    document.head.appendChild(script);
-                });
             } catch (e) {
-                this.notification.add("Không thể tải thư viện camera.", { type: "danger" });
-                this.state.showLocalCamera = false;
-                return;
+                this.playSound('error');
+                this.notification.add("Lỗi kết nối", { type: "danger" });
             }
         }
-
-        try {
-            this.localScanner = new window.Html5Qrcode("location-move-camera-reader");
-            await this.localScanner.start(
-                { facingMode: "environment" },
-                { fps: 15, disableFlip: false, aspectRatio: 1.0 },
-                async (decodedText) => {
-                    this.handleScannedBarcode(decodedText);
-                },
-                (errorMessage) => {}
-            );
-        } catch (err) {
-            this.notification.add("Lỗi mở Camera: " + err, { type: "warning" });
-            this.closeLocalCamera();
-        }
-    }
-
-    async closeLocalCamera() {
-        if (this.localScanner) {
-            try {
-                await this.localScanner.stop();
-                this.localScanner.clear();
-            } catch(e) {}
-            this.localScanner = null;
-        }
-        this.state.showLocalCamera = false;
     }
 
     playSound(type) {
@@ -169,40 +134,43 @@ export class LocationMove extends Component {
     }
 
     async doMove() {
-        if (!this.state.sourceLocationBarcode) {
-            if (this.state.locationInput) {
-                await this.handleScannedBarcode(this.state.locationInput);
-                this.state.locationInput = "";
-                if (!this.state.sourceLocationBarcode) return;
-            } else {
-                this.notification.add("Yêu cầu nhập vị trí lấy hàng", { type: "danger" });
-                return;
-            }
+        if (!this.state.qty || this.state.qty <= 0) {
+            this.notification.add("Số lượng chuyển không hợp lệ", { type: "danger" });
+            return;
+        }
+        if (this.state.qty > this.props.sourceQty) {
+            this.notification.add(`Số lượng chuyển không được vượt quá số lượng tồn (${this.props.sourceQty})`, { type: "danger" });
+            return;
+        }
+        if (!this.state.destLocationBarcode) {
+            this.notification.add("Vui lòng quét vị trí đích", { type: "danger" });
+            return;
         }
         
         this.state.loading = true;
-        this.state.inPickingName = "";
         try {
             const res = await rpc("/hlv_mobile_barcode/move_location", {
                 product_id: this.props.productId,
                 source_barcode: this.state.sourceLocationBarcode,
                 qty: this.state.qty,
-                dest_warehouse_id: this.props.destWarehouseId || false
+                dest_warehouse_id: this.props.destWarehouseId || false,
+                dest_location_id: this.state.destLocationId
             });
             
             if (res.error) {
                 this.notification.add(res.error, { type: "danger" });
             } else {
-                this.notification.add("Tạo lệnh chuyển thành công", { type: "success" });
-                if (res.in_picking_name) {
-                    this.state.inPickingName = res.in_picking_name;
+                this.notification.add("Chuyển kho thành công!", { type: "success" });
+                if (this.props.onSuccess) {
+                    this.props.onSuccess();
                 } else {
                     this.props.onBack();
                 }
             }
         } catch (e) {
             this.notification.add("Lỗi kết nối máy chủ", { type: "danger" });
+        } finally {
+            this.state.loading = false;
         }
-        this.state.loading = false;
     }
 }
