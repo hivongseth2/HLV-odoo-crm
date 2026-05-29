@@ -375,17 +375,13 @@ export class StockQuickView extends Component {
         const cacheKey = productId + "-" + key;
         if (this.state.cellPanelData[cacheKey] !== undefined) {
             if (key === "avg_cost") {
-                this.recalculateCostPanel(productId);
+                await this.refreshCostPanelFromServer(productId);
             }
             return;
         }
         this.state.cellPanelData = Object.assign({}, this.state.cellPanelData, { [cacheKey]: null });
         if (key === "avg_cost") {
-            const result = await this.orm.call(
-                "hlv.stock.quick", "get_product_cost_layers", [productId]
-            );
-            this.state.cellPanelData = Object.assign({}, this.state.cellPanelData, { [cacheKey]: result });
-            this.recalculateCostPanel(productId);
+            await this.refreshCostPanelFromServer(productId);
             return;
         }
         const result = await this.orm.call(
@@ -395,68 +391,23 @@ export class StockQuickView extends Component {
         this.state.cellPanelData = Object.assign({}, this.state.cellPanelData, { [cacheKey]: result });
     }
 
-    recalculateCostPanel(productId) {
+    async refreshCostPanelFromServer(productId) {
+        const result = await this.orm.call(
+            "hlv.stock.quick", "get_product_cost_layers", [productId, this.state.warehouseIds]
+        );
         const cacheKey = productId + "-avg_cost";
-        const panelData = this.state.cellPanelData[cacheKey];
-        if (!panelData || !Array.isArray(panelData.layers)) return;
-
-        const manualLayerAmounts = this.state.manualLayerAmounts[productId] || {};
-        const recalculatedLayers = panelData.layers.map((layer) => {
-            const manualAmount = manualLayerAmounts[layer.id];
-            const lineQty = Number(layer.line_qty || 0);
-            const allocatedQty = Number(layer.qty || 0);
-            const subtotal = Number(layer.price_subtotal || 0);
-            const lineTotal = Number(layer.price_total || 0);
-            const taxAmount = Number(layer.price_tax || 0);
-
-            let finalAmount = Number.isFinite(manualAmount) ? manualAmount : lineTotal;
-            let appliedInternalTax = taxAmount;
-            if (Number.isFinite(manualAmount)) {
-                const allocatedSubtotal = subtotal * allocatedQty / (lineQty || 1);
-                appliedInternalTax = Math.max(finalAmount - allocatedSubtotal, 0);
-            }
-
-            const allocatedValue = lineQty > 0 ? (finalAmount * allocatedQty / lineQty) : 0;
-            const allocatedTax = lineQty > 0 ? (appliedInternalTax * allocatedQty / lineQty) : 0;
-            const unitCost = lineQty > 0 ? (finalAmount / lineQty) : 0;
-
-            return Object.assign({}, layer, {
-                unit_cost: Number(unitCost.toFixed(2)),
-                value: Number(allocatedValue.toFixed(2)),
-                tax_value: Number(allocatedTax.toFixed(2)),
-                manual_amount: Number.isFinite(manualAmount) ? Number(manualAmount.toFixed(2)) : (layer.manual_amount !== null && layer.manual_amount !== undefined ? Number(layer.manual_amount) : null),
-                is_manual: Number.isFinite(manualAmount) || layer.is_manual === true,
-            });
-        });
-
-        const totalQty = recalculatedLayers.reduce((sum, layer) => sum + Number(layer.qty || 0), 0);
-        const totalValueFromLines = recalculatedLayers.reduce((sum, layer) => sum + Number(layer.value || 0), 0);
-        const totalTax = recalculatedLayers.reduce((sum, layer) => sum + Number(layer.tax_value || 0), 0);
-        const computedAvg = totalQty > 0 ? Number((totalValueFromLines / totalQty).toFixed(2)) : 0;
-        const manualAvg = this.state.manualAvgCosts[productId];
-        const effectiveAvg = (manualAvg !== undefined && manualAvg !== null) ? Number(manualAvg) : computedAvg;
-        const totalValue = (manualAvg !== undefined && manualAvg !== null) ? Number((effectiveAvg * totalQty).toFixed(2)) : Number(totalValueFromLines.toFixed(2));
-
-        panelData.layers = recalculatedLayers;
-        panelData.total_qty = Number(totalQty.toFixed(2));
-        panelData.total_value = totalValue;
-        panelData.total_tax = Number(totalTax.toFixed(2));
-        panelData.computed_avg = effectiveAvg;
-
-        this.state.cellPanelData = Object.assign({}, this.state.cellPanelData, { [cacheKey]: panelData });
-        this.state.cellPanel = this.state.cellPanel && this.state.cellPanel.productId === productId
-            ? Object.assign({}, this.state.cellPanel, { avgCost: effectiveAvg })
-            : this.state.cellPanel;
-
+        this.state.cellPanelData = Object.assign({}, this.state.cellPanelData, { [cacheKey]: result });
         this.state.lines = this.state.lines.map((line) => {
             if (line.id !== productId) return line;
             const extra = Object.assign({}, line.extra || {});
-            extra.avg_cost = effectiveAvg;
-            if (this.state.manualAvgCosts[productId] !== undefined) {
-                extra.manual_avg_override = true;
-            }
+            extra.avg_cost = result.computed_avg;
+            extra.manual_avg_override = result.manual_avg_override !== null && result.manual_avg_override !== undefined && result.manual_avg_override !== false;
+            extra.has_manual_layer = result.has_manual_layer;
             return Object.assign({}, line, { extra });
         });
+        this.state.cellPanel = this.state.cellPanel && this.state.cellPanel.productId === productId
+            ? Object.assign({}, this.state.cellPanel, { avgCost: result.computed_avg })
+            : this.state.cellPanel;
     }
 
     getLayerInputValue(layer) {
@@ -491,7 +442,7 @@ export class StockQuickView extends Component {
         delete productOverrides[layerId];
         this.state.manualLayerAmounts = Object.assign({}, this.state.manualLayerAmounts, { [productId]: productOverrides });
         await this.persistManualOverrides(productId);
-        this.recalculateCostPanel(productId);
+        await this.refreshCostPanelFromServer(productId);
     }
 
     async updateLayerManualAmount(productId, layerId, rawValue) {
@@ -503,7 +454,7 @@ export class StockQuickView extends Component {
         productOverrides[layerId] = amount;
         this.state.manualLayerAmounts = Object.assign({}, this.state.manualLayerAmounts, { [productId]: productOverrides });
         await this.persistManualOverrides(productId);
-        this.recalculateCostPanel(productId);
+        await this.refreshCostPanelFromServer(productId);
     }
 
     async updateManualAvgCost(productId, rawValue) {
@@ -512,26 +463,14 @@ export class StockQuickView extends Component {
         const amount = Number(rawStr);
         if (Number.isNaN(amount) || amount < 0) return;
         this.state.manualAvgCosts = Object.assign({}, this.state.manualAvgCosts, { [productId]: amount });
-        this.state.cellPanel = this.state.cellPanel && this.state.cellPanel.productId === productId
-            ? Object.assign({}, this.state.cellPanel, { avgCost: amount })
-            : this.state.cellPanel;
-        this.state.lines = this.state.lines.map((line) => {
-            if (line.id !== productId) return line;
-            const extra = Object.assign({}, line.extra || {});
-            extra.avg_cost = amount;
-            extra.manual_avg_override = true;
-            return Object.assign({}, line, { extra });
-        });
         await this.persistManualOverrides(productId);
-        const cacheKey = productId + "-avg_cost";
-        const panelData = this.state.cellPanelData[cacheKey];
-        if (panelData) {
-            panelData.computed_avg = amount;
-            panelData.total_value = Number((amount * Number(panelData.total_qty || 0)).toFixed(2));
-            panelData.total_tax = Number((panelData.total_tax || 0).toFixed(2));
-            this.state.cellPanelData = Object.assign({}, this.state.cellPanelData, { [cacheKey]: panelData });
-        }
-        this.recalculateCostPanel(productId);
+        await this.refreshCostPanelFromServer(productId);
+    }
+
+    async resetManualAvgCost(productId) {
+        this.state.manualAvgCosts = Object.assign({}, this.state.manualAvgCosts, { [productId]: undefined });
+        await this.persistManualOverrides(productId);
+        await this.refreshCostPanelFromServer(productId);
     }
 
     getColTotal(index) {

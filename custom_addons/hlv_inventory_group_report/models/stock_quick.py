@@ -77,8 +77,8 @@ class HlvStockQuick(models.TransientModel):
                 extra_data.setdefault(pid, {})["sales_cycle"] = round(90.0 / count, 1) if count > 0 else None
         if "avg_cost" in extra_cols:
             for product in group.product_ids:
-                layers_data = self.get_product_cost_layers(product.id)
-                computed_avg = layers_data.get("computed_avg") or None
+                layers_data = self.get_product_cost_layers(product.id, warehouse_ids)
+                computed_avg = layers_data.get("computed_avg") or 0.0
                 manual_avg_override = self._get_saved_manual_avg_override(product.id)
                 if manual_avg_override is not None:
                     computed_avg = manual_avg_override
@@ -380,10 +380,14 @@ class HlvStockQuick(models.TransientModel):
         }
 
     @api.model
-    def get_product_cost_layers(self, product_id):
+    def get_product_cost_layers(self, product_id, warehouse_ids=None):
         """Return PO-line layers for avg cost using gross line total (incl. tax), preserving manual overrides."""
         product = self.env["product.product"].browse(product_id)
-        on_hand_qty = product.qty_available
+        if warehouse_ids:
+            warehouses = self.env["stock.warehouse"].browse(warehouse_ids)
+            on_hand_qty = sum(product.with_context(location=wh.lot_stock_id.id).qty_available for wh in warehouses)
+        else:
+            on_hand_qty = product.qty_available
         manual_layer_amounts = self._get_saved_manual_layer_amounts(product_id)
         manual_avg_override = self._get_saved_manual_avg_override(product_id)
 
