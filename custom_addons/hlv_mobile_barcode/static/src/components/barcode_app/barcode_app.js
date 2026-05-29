@@ -215,6 +215,31 @@ export class BarcodeApp extends Component {
             return;
         }
 
+        if (this.state.showWarehouseSelectPopup) {
+            try {
+                const res = await rpc("/hlv_mobile_barcode/smart_scan", { barcode: barcode });
+                if (this.pendingMove && res && res.type === 'product' && res.id === this.pendingMove.productId) {
+                    this.state.moveQty += 1;
+                    this.playSound('success');
+                    this.notification.add(`Đã tăng số lượng lên ${this.state.moveQty}`, { type: "success" });
+                } else if (res && res.type === 'location') {
+                    this.state.destLocationBarcode = barcode;
+                    this.state.destLocationName = res.name;
+                    this.state.destLocationId = res.id;
+                    this.playSound('success');
+                    this.notification.add(`Đã nhận vị trí đích: ${res.name}`, { type: "success" });
+                } else {
+                    this.playSound('error');
+                    this.notification.add("Mã vạch không hợp lệ", { type: "warning" });
+                }
+            } catch (e) {
+                this.playSound('error');
+                this.notification.add("Lỗi kết nối", { type: "danger" });
+            }
+            this.state.isProcessing = false;
+            return;
+        }
+
         if (this.state.currentView === 'picking') {
             try {
                 const res = await rpc("/hlv_mobile_barcode/process_barcode", { 
@@ -453,9 +478,11 @@ export class BarcodeApp extends Component {
         this.state.currentView = 'move';
     }
 
-    promptMoveWarehouse(productId, locBarcode, locName) {
-        this.pendingMove = { productId, locBarcode, locName };
+    promptMoveWarehouse(productId, locBarcode, locName, qty, productName) {
+        this.pendingMove = { productId, locBarcode, locName, qty, productName };
         this.resetDestPopupState();
+        this.state.sourceQty = qty;
+        this.state.moveQty = qty;
         this.state.showWarehouseSelectPopup = true;
     }
 
@@ -471,6 +498,8 @@ export class BarcodeApp extends Component {
         this.state.destLocationBarcode = "";
         this.state.destLocationName = "";
         this.state.destLocationId = null;
+        this.state.moveQty = 0;
+        this.state.sourceQty = 0;
     }
 
     setDestSelectionMode(mode) {
@@ -534,6 +563,7 @@ export class BarcodeApp extends Component {
         
         const pendingBatchMove = this.pendingBatchMove;
         const pendingMove = this.pendingMove;
+        const moveQty = this.state.moveQty;
         
         this.closeWarehousePopup();
         
@@ -542,7 +572,32 @@ export class BarcodeApp extends Component {
             await this.goToBatchMove(locBarcode, locName, destWarehouseId, destLocationId);
         } else if (pendingMove) {
             const { productId, locBarcode, locName } = pendingMove;
-            this.goToMove(productId, locBarcode, locName, destWarehouseId, destLocationId);
+            if (!moveQty || moveQty <= 0) {
+                this.notification.add("Số lượng chuyển không hợp lệ", { type: "danger" });
+                return;
+            }
+            this.state.isProcessing = true;
+            try {
+                this.notification.add("Đang xử lý chuyển kho...", { type: "info" });
+                const res = await rpc("/hlv_mobile_barcode/move_location", {
+                    product_id: productId,
+                    source_barcode: locBarcode,
+                    qty: moveQty,
+                    dest_warehouse_id: destWarehouseId,
+                    dest_location_id: destLocationId
+                });
+                
+                if (res.error) {
+                    this.notification.add(res.error, { type: "danger" });
+                } else {
+                    this.notification.add("Chuyển kho thành công!", { type: "success" });
+                    this.state.lookupRefreshTick = (this.state.lookupRefreshTick || 0) + 1;
+                }
+            } catch (e) {
+                this.notification.add("Lỗi kết nối máy chủ", { type: "danger" });
+            } finally {
+                this.state.isProcessing = false;
+            }
         }
     }
 

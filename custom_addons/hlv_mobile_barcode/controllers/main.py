@@ -1041,6 +1041,7 @@ class HLVMobileBarcodeController(http.Controller):
                     request.env.cr.execute("""
                         UPDATE stock_move_line SET location_dest_id = %s WHERE picking_id = %s
                     """, (dest_loc_id, step2_picking.id))
+                    step2_picking.invalidate_recordset()
                     
             return {'success': True}
         except Exception as e:
@@ -1063,6 +1064,7 @@ class HLVMobileBarcodeController(http.Controller):
                     'location_id': q.location_id.id,
                     'quant_id': q.id,
                     'location_name': q.location_id.display_name,
+                    'location_barcode': q.location_id.barcode or q.location_id.name,
                     'quantity': q.quantity,
                     'package_name': q.package_id.name if q.package_id else '',
                 })
@@ -1243,6 +1245,7 @@ class HLVMobileBarcodeController(http.Controller):
                 request.env.cr.execute("""
                     UPDATE stock_move_line SET location_dest_id = %s WHERE picking_id = %s
                 """, (override_dest_loc_id, step2_picking.id))
+                step2_picking.invalidate_recordset()
                 
         picking_in = request.env['stock.picking'].search([('source_transfer_id', '=', picking_int.id)], limit=1)
         in_picking_name = picking_in.name if picking_in else False
