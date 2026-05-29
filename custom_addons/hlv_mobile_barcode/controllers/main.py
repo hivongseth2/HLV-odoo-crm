@@ -591,8 +591,8 @@ class HLVMobileBarcodeController(http.Controller):
         # Find an unpacked move line that is not in any package
         move_line = move.move_line_ids.filtered(lambda ml: not ml.result_package_id and not ml.package_id)
         
-        ml_dest_id = destination_location_id if (destination_location_id and is_putaway) else picking.location_dest_id.id
-        ml_src_id = destination_location_id if (destination_location_id and not is_putaway) else picking.location_id.id
+        ml_dest_id = destination_location_id if (destination_location_id and is_putaway) else (move_line[0].location_dest_id.id if move_line else picking.location_dest_id.id)
+        ml_src_id = destination_location_id if (destination_location_id and not is_putaway) else (move_line[0].location_id.id if move_line else picking.location_id.id)
         
         # Check actual physical stock in the source location to prevent over-picking (only when picking, i.e., not is_putaway)
         if not is_putaway:
@@ -603,33 +603,46 @@ class HLVMobileBarcodeController(http.Controller):
                 ('company_id', '=', picking.company_id.id),
                 ('package_id', '=', False)
             ])
-            available_qty = sum(q.quantity for q in quants)
+            free_qty = sum(q.quantity - q.reserved_quantity for q in quants)
             
-            # Calculate total processed qty for this product across ALL moves in this picking
-            # that source from the same location tree (parent + children)
             source_loc = request.env['stock.location'].sudo().browse(ml_src_id)
             child_loc_ids = request.env['stock.location'].sudo().search([('id', 'child_of', ml_src_id)]).ids
-            processed_qty_from_loc = sum(
-                ml.quantity for ml in picking.move_line_ids
+            
+            # Add back quantity reserved by this picking in this location tree
+            reserved_by_this = sum(
+                ml.product_uom_id._compute_quantity(ml.quantity_product_uom, product.uom_id)
+                for ml in picking.move_line_ids
+                if ml.product_id == product and ml.location_id.id in child_loc_ids and not ml.package_id
+            )
+            available_qty = free_qty + reserved_by_this
+            
+            # Calculate total processed qty in Base UOM
+            processed_qty_from_loc_base = sum(
+                ml.product_uom_id._compute_quantity(ml.quantity, product.uom_id)
+                for ml in picking.move_line_ids
                 if ml.product_id == product and ml.location_id.id in child_loc_ids
             )
             
             if available_qty <= 0:
                 return {
                     'error': _(
-                        'Sản phẩm "%s" không có tồn kho tại vị trí "%s" (bao gồm các vị trí con). Không thể quét!',
+                        'Sản phẩm "%s" không có tồn kho khả dụng tại vị trí "%s" (bao gồm các vị trí con). Không thể quét!',
                         product.display_name,
                         source_loc.display_name
                     )
                 }
+                
+            scan_qty_base = 1.0
+            if move and move.product_uom:
+                scan_qty_base = move.product_uom._compute_quantity(1.0, product.uom_id)
             
-            if processed_qty_from_loc + 1 > available_qty:
+            if processed_qty_from_loc_base + scan_qty_base > available_qty:
                 return {
                     'error': _(
-                        'Số lượng quét (%g) vượt quá tồn kho thực tế tại vị trí "%s" (%g). Không thể quét thêm!',
-                        processed_qty_from_loc + 1,
+                        'Số lượng quét vượt quá tồn kho thực tế khả dụng tại vị trí "%s" (Tối đa: %g %s). Không thể quét thêm!',
                         source_loc.display_name,
-                        available_qty
+                        available_qty,
+                        product.uom_id.name
                     )
                 }
             
@@ -770,12 +783,7 @@ class HLVMobileBarcodeController(http.Controller):
             
         if not is_putaway:
             ml_src_id = move_line.location_id.id
-            # Check across ALL move lines in the picking for this product (not just this one move)
             child_loc_ids = request.env['stock.location'].sudo().search([('id', 'child_of', ml_src_id)]).ids
-            processed_qty_from_loc = sum(
-                ml.quantity for ml in move.picking_id.move_line_ids
-                if ml.product_id == move.product_id and ml.location_id.id in child_loc_ids and ml.id != move_line.id
-            )
             
             quants = request.env['stock.quant'].sudo().search([
                 ('product_id', '=', move.product_id.id),
@@ -783,15 +791,31 @@ class HLVMobileBarcodeController(http.Controller):
                 ('company_id', '=', move.company_id.id),
                 ('package_id', '=', move_line.package_id.id if move_line.package_id else False)
             ])
-            available_qty = sum(q.quantity for q in quants)
+            free_qty = sum(q.quantity - q.reserved_quantity for q in quants)
             
-            if (new_val + processed_qty_from_loc) > available_qty:
+            reserved_by_this = sum(
+                ml.product_uom_id._compute_quantity(ml.quantity_product_uom, move.product_id.uom_id)
+                for ml in move.picking_id.move_line_ids
+                if ml.product_id == move.product_id and ml.location_id.id in child_loc_ids
+                and (ml.package_id.id if ml.package_id else False) == (move_line.package_id.id if move_line.package_id else False)
+            )
+            available_qty = free_qty + reserved_by_this
+            
+            new_val_base = move_line.product_uom_id._compute_quantity(new_val, move.product_id.uom_id)
+            
+            processed_qty_from_loc_base = sum(
+                ml.product_uom_id._compute_quantity(ml.quantity, move.product_id.uom_id)
+                for ml in move.picking_id.move_line_ids
+                if ml.product_id == move.product_id and ml.location_id.id in child_loc_ids and ml.id != move_line.id
+            )
+            
+            if (new_val_base + processed_qty_from_loc_base) > available_qty:
                 return {
                     'error': _(
-                        'Số lượng cập nhật (%g) vượt quá tồn kho thực tế tại vị trí "%s" (%g).',
-                        new_val + processed_qty_from_loc,
+                        'Số lượng cập nhật vượt quá tồn kho thực tế khả dụng tại vị trí "%s" (Tối đa: %g %s).',
                         move_line.location_id.display_name,
-                        available_qty
+                        available_qty,
+                        move.product_id.uom_id.name
                     )
                 }
 
