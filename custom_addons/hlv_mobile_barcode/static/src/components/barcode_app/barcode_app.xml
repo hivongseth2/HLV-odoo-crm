@@ -130,7 +130,7 @@
                     <PickingScanner t-if="state.currentView === 'picking'" t-key="state.pickingId" pickingId="state.pickingId" onBack="() => this.goBack()" onSelectPicking="(id, name) => this.selectPicking(id, name)" onStateLoaded="(state) => this.onPickingStateLoaded(state)" lastScannedProduct="state.lastScannedProduct" scannedLocationName="state.scannedLocationName" refreshTick="state.pickingRefreshTick" scanMode="state.scanMode" onToggleScanMode="(mode) => this.toggleScanMode(mode)"/>
                     
                     <!-- Move Component -->
-                    <LocationMove t-if="state.currentView === 'move'" productId="state.recordId" prefillLocationBarcode="state.prefillLocationBarcode" prefillLocationName="state.prefillLocationName" destWarehouseId="state.destWarehouseId" destLocationId="state.destLocationId" onBack="() => this.goBack()" registerScanner="(cb) => this.registerScanner(cb)"/>
+                    <LocationMove t-if="state.currentView === 'move'" productId="state.recordId" prefillLocationBarcode="state.prefillLocationBarcode" prefillLocationName="state.prefillLocationName" sourceQty="state.sourceQty" productName="state.productName" destWarehouseId="state.destWarehouseId" destLocationId="state.destLocationId" onBack="() => this.goBack()" onSuccess="() => this.onMoveSuccess()" registerScanner="(cb) => this.registerScanner(cb)"/>
                     
                     <!-- Batch Move Component -->
                     <BatchLocationMove t-if="state.currentView === 'batch_move'" sourceLocationBarcode="state.prefillLocationBarcode" sourceLocationName="state.prefillLocationName" onBack="() => this.goBack()" registerScanner="(cb) => this.registerScanner(cb)"/>
@@ -247,27 +247,7 @@
                         </button>
                     </div>
                     <div class="modal-body" style="padding: 15px; padding-bottom: 0;">
-                        <t t-if="pendingMove">
-                            <div style="background: var(--light-bg); border-radius: 6px; padding: 12px; margin-bottom: 15px; border: 1px solid var(--border-color);">
-                                <div style="color: var(--text-color); font-weight: 600; margin-bottom: 6px; font-size: 0.95rem;">
-                                    Sản phẩm: <span style="font-weight: 400;"><t t-esc="pendingMove.productName"/></span>
-                                </div>
-                                <div style="color: var(--text-color); font-weight: 600; font-size: 0.9rem;">
-                                    Từ vị trí: <span style="color: var(--primary-color); font-weight: 700;"><t t-esc="pendingMove.locName || pendingMove.locBarcode"/></span>
-                                </div>
-                                
-                                <div style="margin-top: 15px; border-top: 1px dashed var(--border-color); padding-top: 12px; display: flex; align-items: center; justify-content: space-between;">
-                                    <label style="font-weight: 600; color: var(--text-color); margin-bottom: 0;">Số lượng chuyển:</label>
-                                    <div style="display: flex; gap: 8px;">
-                                        <button class="btn btn-sm btn-outline" t-on-click="() => state.moveQty = state.sourceQty" style="font-weight: bold; font-size: 0.8rem; padding: 4px 8px;">Max: <t t-esc="state.sourceQty"/></button>
-                                        <input type="number" class="form-control" style="width: 100px; font-weight: bold; font-size: 1.1rem; text-align: right;" t-model="state.moveQty" min="0" t-att-max="state.sourceQty" step="0.01"/>
-                                    </div>
-                                </div>
-                                <div style="font-size: 0.8rem; color: var(--info-color); margin-top: 6px; text-align: right;">
-                                    <i class="fa fa-info-circle"></i> Quét mã sản phẩm để tăng số lượng
-                                </div>
-                            </div>
-                        </t>
+                        <!-- Popup body now just shows the tabs below -->
                     </div>
                     
                     <!-- Tabs Selection -->

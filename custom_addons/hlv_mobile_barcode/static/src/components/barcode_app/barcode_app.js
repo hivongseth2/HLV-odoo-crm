@@ -218,16 +218,7 @@ export class BarcodeApp extends Component {
         if (this.state.showWarehouseSelectPopup) {
             try {
                 const res = await rpc("/hlv_mobile_barcode/smart_scan", { barcode: barcode });
-                if (this.pendingMove && res && res.type === 'product' && res.id === this.pendingMove.productId) {
-                    if (this.state.moveQty >= this.state.sourceQty) {
-                        this.playSound('error');
-                        this.notification.add(`Vượt quá số lượng tồn tại vị trí này (${this.state.sourceQty})`, { type: "warning" });
-                    } else {
-                        this.state.moveQty += 1;
-                        this.playSound('success');
-                        this.notification.add(`Đã tăng số lượng lên ${this.state.moveQty}`, { type: "success" });
-                    }
-                } else if (res && res.type === 'location') {
+                if (res && res.type === 'location') {
                     this.state.destLocationBarcode = barcode;
                     this.state.destLocationName = res.name;
                     this.state.destLocationId = res.id;
@@ -484,11 +475,18 @@ export class BarcodeApp extends Component {
     }
 
     promptMoveWarehouse(productId, locBarcode, locName, qty, productName) {
-        this.pendingMove = { productId, locBarcode, locName, qty, productName };
-        this.resetDestPopupState();
+        this.pushHistory();
+        this.state.recordId = productId;
+        this.state.prefillLocationBarcode = locBarcode;
+        this.state.prefillLocationName = locName;
         this.state.sourceQty = qty;
-        this.state.moveQty = 0;
-        this.state.showWarehouseSelectPopup = true;
+        this.state.productName = productName;
+        this.state.currentView = 'move';
+        
+        // Start persistent inline camera on the newly loaded view
+        setTimeout(async () => {
+            await this.startPersistentCamera(false);
+        }, 200);
     }
 
     promptBatchMoveWarehouse(locBarcode, locName) {
@@ -575,38 +573,6 @@ export class BarcodeApp extends Component {
         if (pendingBatchMove) {
             const { locBarcode, locName } = pendingBatchMove;
             await this.goToBatchMove(locBarcode, locName, destWarehouseId, destLocationId);
-        } else if (pendingMove) {
-            const { productId, locBarcode, locName } = pendingMove;
-            if (!moveQty || moveQty <= 0) {
-                this.notification.add("Số lượng chuyển không hợp lệ", { type: "danger" });
-                return;
-            }
-            if (moveQty > this.state.sourceQty) {
-                this.notification.add(`Số lượng chuyển không được vượt quá số lượng tồn (${this.state.sourceQty})`, { type: "danger" });
-                return;
-            }
-            this.state.isProcessing = true;
-            try {
-                this.notification.add("Đang xử lý chuyển kho...", { type: "info" });
-                const res = await rpc("/hlv_mobile_barcode/move_location", {
-                    product_id: productId,
-                    source_barcode: locBarcode,
-                    qty: moveQty,
-                    dest_warehouse_id: destWarehouseId,
-                    dest_location_id: destLocationId
-                });
-                
-                if (res.error) {
-                    this.notification.add(res.error, { type: "danger" });
-                } else {
-                    this.notification.add("Chuyển kho thành công!", { type: "success" });
-                    this.state.lookupRefreshTick = (this.state.lookupRefreshTick || 0) + 1;
-                }
-            } catch (e) {
-                this.notification.add("Lỗi kết nối máy chủ", { type: "danger" });
-            } finally {
-                this.state.isProcessing = false;
-            }
         }
     }
 
@@ -644,6 +610,21 @@ export class BarcodeApp extends Component {
         this.state.recordId = productId;
         this.state.lookupTitle = productName;
         this.state.currentView = 'lookup';
+    }
+
+    goBack() {
+        if (this.state.history.length > 0) {
+            this.state.currentView = this.state.history.pop();
+            this.state.cameraFallback = false;
+        } else {
+            this.state.currentView = 'main';
+            this.state.cameraFallback = false;
+        }
+    }
+
+    onMoveSuccess() {
+        this.state.lookupRefreshTick = (this.state.lookupRefreshTick || 0) + 1;
+        this.goBack();
     }
 
     async selectPicking(pickingId, pickingName) {
