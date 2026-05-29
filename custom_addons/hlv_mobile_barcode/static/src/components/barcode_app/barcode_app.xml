@@ -258,7 +258,10 @@
                                 
                                 <div style="margin-top: 15px; border-top: 1px dashed var(--border-color); padding-top: 12px; display: flex; align-items: center; justify-content: space-between;">
                                     <label style="font-weight: 600; color: var(--text-color); margin-bottom: 0;">Số lượng chuyển:</label>
-                                    <input type="number" class="form-control" style="width: 120px; font-weight: bold; font-size: 1.1rem; text-align: right;" t-model="state.moveQty" min="0.01" step="0.01"/>
+                                    <div style="display: flex; gap: 8px;">
+                                        <button class="btn btn-sm btn-outline" t-on-click="() => state.moveQty = state.sourceQty" style="font-weight: bold; font-size: 0.8rem; padding: 4px 8px;">Max: <t t-esc="state.sourceQty"/></button>
+                                        <input type="number" class="form-control" style="width: 100px; font-weight: bold; font-size: 1.1rem; text-align: right;" t-model="state.moveQty" min="0" t-att-max="state.sourceQty" step="0.01"/>
+                                    </div>
                                 </div>
                                 <div style="font-size: 0.8rem; color: var(--info-color); margin-top: 6px; text-align: right;">
                                     <i class="fa fa-info-circle"></i> Quét mã sản phẩm để tăng số lượng

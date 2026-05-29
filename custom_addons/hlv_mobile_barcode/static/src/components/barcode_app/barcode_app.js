@@ -219,9 +219,14 @@ export class BarcodeApp extends Component {
             try {
                 const res = await rpc("/hlv_mobile_barcode/smart_scan", { barcode: barcode });
                 if (this.pendingMove && res && res.type === 'product' && res.id === this.pendingMove.productId) {
-                    this.state.moveQty += 1;
-                    this.playSound('success');
-                    this.notification.add(`Đã tăng số lượng lên ${this.state.moveQty}`, { type: "success" });
+                    if (this.state.moveQty >= this.state.sourceQty) {
+                        this.playSound('error');
+                        this.notification.add(`Vượt quá số lượng tồn tại vị trí này (${this.state.sourceQty})`, { type: "warning" });
+                    } else {
+                        this.state.moveQty += 1;
+                        this.playSound('success');
+                        this.notification.add(`Đã tăng số lượng lên ${this.state.moveQty}`, { type: "success" });
+                    }
                 } else if (res && res.type === 'location') {
                     this.state.destLocationBarcode = barcode;
                     this.state.destLocationName = res.name;
@@ -482,7 +487,7 @@ export class BarcodeApp extends Component {
         this.pendingMove = { productId, locBarcode, locName, qty, productName };
         this.resetDestPopupState();
         this.state.sourceQty = qty;
-        this.state.moveQty = qty;
+        this.state.moveQty = 0;
         this.state.showWarehouseSelectPopup = true;
     }
 
@@ -574,6 +579,10 @@ export class BarcodeApp extends Component {
             const { productId, locBarcode, locName } = pendingMove;
             if (!moveQty || moveQty <= 0) {
                 this.notification.add("Số lượng chuyển không hợp lệ", { type: "danger" });
+                return;
+            }
+            if (moveQty > this.state.sourceQty) {
+                this.notification.add(`Số lượng chuyển không được vượt quá số lượng tồn (${this.state.sourceQty})`, { type: "danger" });
                 return;
             }
             this.state.isProcessing = true;
