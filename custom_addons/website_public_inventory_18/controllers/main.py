@@ -156,6 +156,68 @@ class PublicInventory(http.Controller):
                 rows.append({"warehouse_id": wh.id, "warehouse_name": wh.name, "qty_available": qt - qr, "qty_total": qt, "qty_reserved": qr})
             return {"mode": "warehouses", "rows": rows}
 
+    def _compute_custom_forecast_breakdown(self, env, product, warehouse_id, company_ids):
+        if not product:
+            return {
+                "qty_on_hand": 0.0,
+                "total_incoming": 0.0,
+                "total_outgoing": 0.0,
+                "qty_forecast": 0.0,
+            }
+
+        Quant = env["stock.quant"].sudo().with_context(allowed_company_ids=company_ids)
+        StockMove = env["stock.move"].sudo().with_context(allowed_company_ids=company_ids)
+        Warehouse = env["stock.warehouse"].sudo().with_context(allowed_company_ids=company_ids)
+
+        quant_domain = [("product_id", "=", product.id), ("location_id.usage", "=", "internal")]
+        if warehouse_id:
+            wh = Warehouse.browse(int(warehouse_id)).exists()
+            if wh:
+                quant_domain.append(("location_id", "child_of", wh.view_location_id.id))
+        else:
+            allowed_whs = _get_allowed_warehouses()
+            if allowed_whs:
+                quant_domain.append(("location_id", "child_of", allowed_whs.mapped('view_location_id').ids))
+        quant_groups = Quant.read_group(quant_domain, ["product_id", "quantity:sum"], ["product_id"], lazy=False)
+        qty_on_hand = sum(_rg_sum(g, "quantity") for g in quant_groups)
+
+        incoming_domain = [
+            ("product_id", "=", product.id),
+            ("state", "not in", ["done", "cancel", "draft"]),
+            ("picking_type_id.code", "=", "incoming"),
+            "|",
+            ("purchase_line_id", "!=", False),
+            ("picking_id.purchase_id", "!=", False),
+        ]
+        if warehouse_id:
+            wh = Warehouse.browse(int(warehouse_id)).exists()
+            if wh:
+                incoming_domain.append(("location_dest_id", "child_of", wh.view_location_id.id))
+        else:
+            allowed_whs = _get_allowed_warehouses()
+            if allowed_whs:
+                incoming_domain.append(("location_dest_id", "child_of", allowed_whs.mapped('view_location_id').ids))
+        incoming_moves = StockMove.search(incoming_domain, order="date asc")
+        total_incoming = sum(move.product_uom_qty for move in incoming_moves)
+
+        outgoing_moves = StockMove.search([
+            ("product_id", "=", product.id),
+            ("state", "not in", ["done", "cancel", "draft"]),
+            "|",
+            ("sale_line_id", "!=", False),
+            ("picking_id.sale_id", "!=", False),
+        ], order="date asc")
+        total_outgoing = sum(move.product_uom_qty for move in outgoing_moves)
+
+        qty_forecast = qty_on_hand + total_incoming - total_outgoing
+
+        return {
+            "qty_on_hand": qty_on_hand,
+            "total_incoming": total_incoming,
+            "total_outgoing": total_outgoing,
+            "qty_forecast": qty_forecast,
+        }
+
     @http.route(["/search_stock"], type="http", auth="public", website=True, sitemap=True)
     def inventory_page(self, q="", warehouse_id=None, page=1, **kw):
         # 1. AUTH
@@ -309,9 +371,9 @@ class PublicInventory(http.Controller):
 
             qty_forecasted = 0.0
             if not is_combo:
-                p_ctx = p.with_context(warehouse=wid) if wid else p
-                qty_forecasted = p_ctx.virtual_available
-            else: qty_forecasted = qty_total
+                qty_forecasted = self._compute_custom_forecast_breakdown(env, p, wid, company_ids)["qty_forecast"]
+            else:
+                qty_forecasted = qty_total
 
             rows.append({
                 "id": pid,
@@ -804,9 +866,11 @@ class PublicInventory(http.Controller):
                 }
             outgoing_by_picking[key]["qty"] += move.product_uom_qty
 
-        total_incoming = sum(v["qty"] for v in incoming_by_picking.values())
-        total_outgoing = sum(v["qty"] for v in outgoing_by_picking.values())
-        qty_forecast = qty_on_hand + total_incoming - total_outgoing
+        forecast = self._compute_custom_forecast_breakdown(env, product, wid, company_ids)
+        qty_on_hand = forecast["qty_on_hand"]
+        total_incoming = forecast["total_incoming"]
+        total_outgoing = forecast["total_outgoing"]
+        qty_forecast = forecast["qty_forecast"]
 
         return {
             "ok": True,
