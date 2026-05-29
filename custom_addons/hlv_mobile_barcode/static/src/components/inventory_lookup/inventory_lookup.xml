@@ -3,7 +3,7 @@
     <t t-name="hlv_mobile_barcode.InventoryLookup">
         <div class="subview-root">
             <!-- Compact header row -->
-            <div class="shipper-header" style="display: flex; flex-direction: column; gap: 10px; flex-shrink: 0; padding: 10px 0; border-bottom: 1px solid var(--border-color); margin-bottom: 10px;">
+            <div class="shipper-header" style="display: flex; flex-direction: column; align-items: flex-start; gap: 10px; flex-shrink: 0; padding: 10px 0; border-bottom: 1px solid var(--border-color); margin-bottom: 10px;">
                 <div class="header-title" style="font-size: 0.95rem; font-weight: bold;">
                     <i class="fa fa-search"></i> <t t-esc="state.title"/>
                 </div>
