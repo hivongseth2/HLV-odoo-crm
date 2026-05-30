@@ -72,22 +72,27 @@ export class PickingScanner extends Component {
                     }
                     
                     if (!openedPickings.includes(this.props.pickingId)) {
-                        const clearRes = await rpc("/hlv_mobile_barcode/clear_quantities", { picking_id: this.props.pickingId });
-                        if (!clearRes.error) {
+                        // Prevent infinite loop since the button clears localStorage
+                        const autoClearKey = 'hlv_auto_cleared_' + this.props.pickingId;
+                        if (!sessionStorage.getItem(autoClearKey)) {
+                            sessionStorage.setItem(autoClearKey, '1');
+                            
+                            // Thực hiện chính xác những gì nút làm lại thực hiện: click vào nút
+                            setTimeout(() => {
+                                const btn = document.querySelector('.fa-undo');
+                                if (btn && btn.parentElement) {
+                                    const originalConfirm = window.confirm;
+                                    window.confirm = () => true; // Bypass confirm dialog
+                                    btn.parentElement.click();
+                                    window.confirm = originalConfirm;
+                                }
+                            }, 50);
+                            return;
+                        } else {
+                            // Đã tự động nhấn nút trong phiên này, lưu lại vào localStorage để sau này không bị lặp
                             openedPickings.push(this.props.pickingId);
                             if (openedPickings.length > 200) openedPickings = openedPickings.slice(openedPickings.length - 200);
                             localStorage.setItem(storageKey, JSON.stringify(openedPickings));
-                            
-                            // Re-fetch data after clearing
-                            const newData = await rpc("/hlv_mobile_barcode/get_picking_data", { picking_id: this.props.pickingId });
-                            if (!newData.error) {
-                                if (this.props.onStateLoaded) {
-                                    this.props.onStateLoaded(newData.state);
-                                }
-                                this.state.picking = newData;
-                                this.state.loading = false;
-                                return;
-                            }
                         }
                     }
                 }
