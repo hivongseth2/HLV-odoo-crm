@@ -616,16 +616,6 @@ export class BarcodeApp extends Component {
         this.state.currentView = 'lookup';
     }
 
-    goBack() {
-        if (this.state.history.length > 0) {
-            this.state.currentView = this.state.history.pop();
-            this.state.cameraFallback = false;
-        } else {
-            this.state.currentView = 'main';
-            this.state.cameraFallback = false;
-        }
-    }
-
     onMoveSuccess() {
         this.state.lookupRefreshTick = (this.state.lookupRefreshTick || 0) + 1;
         this.goBack();
