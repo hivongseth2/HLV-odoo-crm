@@ -1,4 +1,4 @@
-﻿/** @odoo-module **/
+/** @odoo-module **/
 import { registry } from "@web/core/registry";
 import { Component, useState, onWillStart, markup } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
@@ -6,6 +6,24 @@ import { useService } from "@web/core/utils/hooks";
 export class StockQuickView extends Component {
     static template = "hlv_inventory_group_report.StockQuickView";
     static props = ["*"];
+
+    // Format tiền VND
+    formatMoneyVND(val) {
+        if (val === null || val === undefined || isNaN(val)) return '';
+        return Number(val).toLocaleString('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 2 });
+    }
+
+    // Format ngày UTC+7 (da duoc format san tu python)
+    formatDateVN(dateStr) {
+        if (!dateStr) return '';
+        return dateStr;
+    }
+
+    async resetManualAvgCost(productId) {
+        this.state.manualAvgCosts = Object.assign({}, this.state.manualAvgCosts, { [productId]: undefined });
+        await this.persistManualOverrides(productId);
+        await this.toggleCellPanel(productId, 'avg_cost');
+    }
 
     setup() {
         this.orm = useService("orm");
@@ -48,6 +66,8 @@ export class StockQuickView extends Component {
             infoPanel: null,
             cellPanel: null,
             cellPanelData: {},
+            manualLayerAmounts: {},
+            manualAvgCosts: {},
             movesData: {},
             expandedMovesId: false,
             movesDateFrom: _firstDay,
@@ -111,7 +131,16 @@ export class StockQuickView extends Component {
                 "hlv.stock.quick", "get_data",
                 [this.state.groupId, this.state.warehouseIds, this.state.showZero, this.state.includeOutgoing, _allExtraCols]
             );
-            this.state.lines = result.lines;
+            const restoredManualAvgCosts = Object.assign({}, this.state.manualAvgCosts);
+            this.state.lines = result.lines.map((line) => {
+                const extra = Object.assign({}, line.extra || {});
+                if (extra.manual_avg_override === true && extra.avg_cost !== undefined && extra.avg_cost !== null) {
+                    restoredManualAvgCosts[line.id] = Number(extra.avg_cost);
+                    extra.avg_cost = Number(extra.avg_cost);
+                }
+                return Object.assign({}, line, { extra });
+            });
+            this.state.manualAvgCosts = restoredManualAvgCosts;
             this.state.columns = result.columns;
             this.state.total = result.total;
             this.state.outgoingTotal = result.outgoing_total || 0;
@@ -340,17 +369,19 @@ export class StockQuickView extends Component {
         }
         const line = this.state.lines.find(l => l.id === productId);
         const lineName = line ? line.name : "";
-        const avgCost = (line && key === "avg_cost") ? (line.extra && line.extra.avg_cost || 0) : 0;
+        const avgCost = (line && key === "avg_cost") ? (this.state.manualAvgCosts[productId] !== undefined ? this.state.manualAvgCosts[productId] : (line.extra && line.extra.avg_cost || 0)) : 0;
         const onHand = line ? (line.total || 0) : 0;
         this.state.cellPanel = { productId, key, lineName, avgCost, onHand };
         const cacheKey = productId + "-" + key;
-        if (this.state.cellPanelData[cacheKey] !== undefined) return;
+        if (this.state.cellPanelData[cacheKey] !== undefined) {
+            if (key === "avg_cost") {
+                await this.refreshCostPanelFromServer(productId);
+            }
+            return;
+        }
         this.state.cellPanelData = Object.assign({}, this.state.cellPanelData, { [cacheKey]: null });
         if (key === "avg_cost") {
-            const result = await this.orm.call(
-                "hlv.stock.quick", "get_product_cost_layers", [productId]
-            );
-            this.state.cellPanelData = Object.assign({}, this.state.cellPanelData, { [cacheKey]: result });
+            await this.refreshCostPanelFromServer(productId);
             return;
         }
         const result = await this.orm.call(
@@ -358,6 +389,88 @@ export class StockQuickView extends Component {
             [productId, key, this.state.warehouseIds]
         );
         this.state.cellPanelData = Object.assign({}, this.state.cellPanelData, { [cacheKey]: result });
+    }
+
+    async refreshCostPanelFromServer(productId) {
+        const result = await this.orm.call(
+            "hlv.stock.quick", "get_product_cost_layers", [productId, this.state.warehouseIds]
+        );
+        const cacheKey = productId + "-avg_cost";
+        this.state.cellPanelData = Object.assign({}, this.state.cellPanelData, { [cacheKey]: result });
+        this.state.lines = this.state.lines.map((line) => {
+            if (line.id !== productId) return line;
+            const extra = Object.assign({}, line.extra || {});
+            extra.avg_cost = result.computed_avg;
+            extra.manual_avg_override = result.manual_avg_override !== null && result.manual_avg_override !== undefined && result.manual_avg_override !== false;
+            extra.has_manual_layer = result.has_manual_layer;
+            return Object.assign({}, line, { extra });
+        });
+        this.state.cellPanel = this.state.cellPanel && this.state.cellPanel.productId === productId
+            ? Object.assign({}, this.state.cellPanel, { avgCost: result.computed_avg })
+            : this.state.cellPanel;
+    }
+
+    getLayerInputValue(layer) {
+        const manualAmount = layer.manual_amount;
+        const value = manualAmount !== null && manualAmount !== undefined ? manualAmount : layer.value;
+        if (value === null || value === undefined) return "";
+        return Number(value).toLocaleString('vi-VN', { maximumFractionDigits: 2 });
+    }
+
+    getManualAvgCostInput(productId) {
+        const manualAvg = this.state.manualAvgCosts[productId];
+        if (manualAvg !== undefined && manualAvg !== null) {
+            return Number(manualAvg).toLocaleString('vi-VN', { maximumFractionDigits: 2 });
+        }
+        const line = this.state.lines.find((l) => l.id === productId);
+        const value = line && line.extra ? line.extra.avg_cost : 0;
+        return Number(value || 0).toLocaleString('vi-VN', { maximumFractionDigits: 2 });
+    }
+
+    async persistManualOverrides(productId) {
+        const avgValue = this.state.manualAvgCosts[productId];
+        const layerOverrides = Object.assign({}, this.state.manualLayerAmounts[productId] || {});
+        await this.orm.call(
+            "hlv.stock.quick",
+            "save_manual_overrides",
+            [productId, avgValue !== undefined && avgValue !== null ? Number(avgValue) : null, layerOverrides]
+        );
+    }
+
+    async resetLayerManualAmount(productId, layerId) {
+        const productOverrides = Object.assign({}, this.state.manualLayerAmounts[productId] || {});
+        delete productOverrides[layerId];
+        this.state.manualLayerAmounts = Object.assign({}, this.state.manualLayerAmounts, { [productId]: productOverrides });
+        await this.persistManualOverrides(productId);
+        await this.refreshCostPanelFromServer(productId);
+    }
+
+    async updateLayerManualAmount(productId, layerId, rawValue) {
+        let rawStr = String(rawValue).replace(/[^\d.,]/g, '');
+        rawStr = rawStr.replace(/\./g, '').replace(/,/g, '.');
+        const amount = Number(rawStr);
+        if (Number.isNaN(amount) || amount < 0) return;
+        const productOverrides = Object.assign({}, this.state.manualLayerAmounts[productId] || {});
+        productOverrides[layerId] = amount;
+        this.state.manualLayerAmounts = Object.assign({}, this.state.manualLayerAmounts, { [productId]: productOverrides });
+        await this.persistManualOverrides(productId);
+        await this.refreshCostPanelFromServer(productId);
+    }
+
+    async updateManualAvgCost(productId, rawValue) {
+        let rawStr = String(rawValue).replace(/[^\d.,]/g, '');
+        rawStr = rawStr.replace(/\./g, '').replace(/,/g, '.');
+        const amount = Number(rawStr);
+        if (Number.isNaN(amount) || amount < 0) return;
+        this.state.manualAvgCosts = Object.assign({}, this.state.manualAvgCosts, { [productId]: amount });
+        await this.persistManualOverrides(productId);
+        await this.refreshCostPanelFromServer(productId);
+    }
+
+    async resetManualAvgCost(productId) {
+        this.state.manualAvgCosts = Object.assign({}, this.state.manualAvgCosts, { [productId]: undefined });
+        await this.persistManualOverrides(productId);
+        await this.refreshCostPanelFromServer(productId);
     }
 
     getColTotal(index) {
@@ -393,13 +506,13 @@ export class StockQuickView extends Component {
 
     get colOptions() {
         return [
-            { key: "sale_price",       label: "Gi\u00e1 b\u00e1n (ch\u01b0a VAT)" },
-            { key: "price_web",        label: "Gi\u00e1 Web" },
-            { key: "price_listed",     label: "Gi\u00e1 Ni\u00eam Y\u1ebft" },
-            { key: "price_tmdt",       label: "Gi\u00e1 S\u00e0n TM\u0110T" },
+            { key: "sale_price", label: "Gi\u00e1 b\u00e1n (ch\u01b0a VAT)" },
+            { key: "price_web", label: "Gi\u00e1 Web" },
+            { key: "price_listed", label: "Gi\u00e1 Ni\u00eam Y\u1ebft" },
+            { key: "price_tmdt", label: "Gi\u00e1 S\u00e0n TM\u0110T" },
             { key: "price_commercial", label: "Gi\u00e1 Th\u01b0\u01a1ng M\u1ea1i" },
-            { key: "purchase_price",   label: "Gi\u00e1 mua" },
-            { key: "sales_cycle",      label: "Chu k\u1ef3 b\u00e1n (ng\u00e0y/\u0111\u01a1n)" },
+            { key: "purchase_price", label: "Gi\u00e1 mua" },
+            { key: "sales_cycle", label: "Chu k\u1ef3 b\u00e1n (ng\u00e0y/\u0111\u01a1n)" },
         ];
     }
 
@@ -452,6 +565,9 @@ export class StockQuickView extends Component {
             return val.toLocaleString("vi-VN", { maximumFractionDigits: 2 });
         }
         // All price keys
+        if (key === "avg_cost") {
+            return val.toLocaleString("vi-VN", { maximumFractionDigits: 2 }) + " \u20ab";
+        }
         return val.toLocaleString("vi-VN", { maximumFractionDigits: 0 }) + " \u20ab";
     }
 
@@ -535,7 +651,7 @@ export class StockQuickView extends Component {
 
     formatPrice(val) {
         if (!val || val === 0) return "-";
-        return val.toLocaleString("vi-VN", { maximumFractionDigits: 0 }) + " \u20ab";
+        return val.toLocaleString("vi-VN", { maximumFractionDigits: 2 }) + " \u20ab";
     }
 
     async handleImportFile(ev) {

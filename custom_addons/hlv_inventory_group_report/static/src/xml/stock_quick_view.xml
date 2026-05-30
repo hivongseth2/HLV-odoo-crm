@@ -309,8 +309,11 @@
                                                         </t>
                                                         <t t-foreach="fixedColDefs" t-as="fc" t-key="fc.key">
                                                             <td t-on-click.stop="() => this.toggleCellPanel(line.id, fc.key)"
-                                                                t-att-style="'padding:8px 12px; text-align:right; vertical-align:middle; border-left:2px solid ' + fc.color + '; font-size:13px; font-weight:700; background:' + fc.bg + '; color:' + fc.color + '; ' + (fc.key !== 'avg_cost' ? 'cursor:pointer;' : '')">
+                                                                t-att-style="'padding:8px 12px; text-align:right; vertical-align:middle; border-left:2px solid ' + fc.color + '; font-size:13px; font-weight:700; background:' + fc.bg + '; color:' + fc.color + '; ' + (fc.key !== 'avg_cost' ? 'cursor:pointer;' : '') + (fc.key === 'avg_cost' and (line.extra.manual_avg_override or line.extra.has_manual_layer) ? ' border:2px solid #ff9800; background:#fff3e0;' : '')">
                                                                 <t t-esc="formatExtraVal(fc.key, line.extra[fc.key])"/>
+                                                                <t t-if="fc.key === 'avg_cost' and (line.extra.manual_avg_override or line.extra.has_manual_layer)">
+                                                                    <i class="fa fa-pencil" style="margin-left:4px; font-size:10px; color:#ff9800;" title="Đã chỉnh sửa thủ công"/>
+                                                                </t>
                                                                 <t t-if="fc.key === 'incoming_qty' &amp;&amp; line.extra.incoming_pending > 0">
                                                                     <span style="font-size:10px; color:#78909c; font-weight:400; display:block; margin-top:1px; white-space:nowrap;">
                                                                         (<t t-esc="formatQty(line.total)"/>+<t t-esc="formatQty(line.extra.incoming_pending)"/>)
@@ -332,8 +335,11 @@
                                                         </t>
                                                         <t t-foreach="fixedColDefs" t-as="fc" t-key="fc.key">
                                                             <td t-on-click.stop="() => this.toggleCellPanel(line.id, fc.key)"
-                                                                t-att-style="'padding:8px 12px; text-align:right; vertical-align:middle; border-left:2px solid ' + fc.color + '; font-size:13px; font-weight:700; background:' + fc.bg + '; color:' + fc.color + '; ' + (fc.key !== 'avg_cost' ? 'cursor:pointer;' : '')">
+                                                                t-att-style="'padding:8px 12px; text-align:right; vertical-align:middle; border-left:2px solid ' + fc.color + '; font-size:13px; font-weight:700; background:' + fc.bg + '; color:' + fc.color + '; ' + (fc.key !== 'avg_cost' ? 'cursor:pointer;' : '') + (fc.key === 'avg_cost' and (line.extra.manual_avg_override or line.extra.has_manual_layer) ? ' border:2px solid #ff9800; background:#fff3e0;' : '')">
                                                                 <t t-esc="formatExtraVal(fc.key, line.extra[fc.key])"/>
+                                                                <t t-if="fc.key === 'avg_cost' and (line.extra.manual_avg_override or line.extra.has_manual_layer)">
+                                                                    <i class="fa fa-pencil" style="margin-left:4px; font-size:10px; color:#ff9800;" title="Đã chỉnh sửa thủ công"/>
+                                                                </t>
                                                                 <t t-if="fc.key === 'incoming_qty' &amp;&amp; line.extra.incoming_pending > 0">
                                                                     <span style="font-size:10px; color:#78909c; font-weight:400; display:block; margin-top:1px; white-space:nowrap;">
                                                                         (<t t-esc="formatQty(line.total)"/>+<t t-esc="formatQty(line.extra.incoming_pending)"/>)
@@ -776,7 +782,7 @@
             <div t-on-click="closeDrawer"
                  style="position:fixed; inset:0; background:rgba(0,0,0,0.22); z-index:9998;"/>
             <!-- Drawer panel -->
-            <div style="position:fixed; top:0; right:0; bottom:0; width:700px; max-width:95vw; background:#fff; z-index:9999; display:flex; flex-direction:column; box-shadow:-6px 0 32px rgba(0,0,0,0.18);">
+            <div style="position:fixed; top:0; right:0; bottom:0; width:1100px; max-width:95vw; background:#fff; z-index:9999; display:flex; flex-direction:column; box-shadow:-6px 0 32px rgba(0,0,0,0.18);">
                 <!-- Header -->
                 <div t-att-style="'padding:16px 20px; color:#fff; display:flex; align-items:center; gap:12px; flex-shrink:0; ' + (state.cellPanel.key === 'avg_cost' ? 'background:#880e4f;' : state.cellPanel.key === 'incoming_qty' ? 'background:#1565c0;' : 'background:#e65100;')">
                     <i t-att-class="'fa fa-fw ' + (state.cellPanel.key === 'avg_cost' ? 'fa-balance-scale' : state.cellPanel.key === 'incoming_qty' ? 'fa-truck' : 'fa-paper-plane')"
@@ -802,7 +808,17 @@
                         <div style="text-align:center; padding:20px 16px 12px;">
                             <div style="font-size:10px; color:#adb5bd; letter-spacing:.5px; text-transform:uppercase; margin-bottom:6px;">Giá vốn hiện tại</div>
                             <div style="font-size:34px; font-weight:800; color:#880e4f; line-height:1.1;">
-                                <t t-esc="formatPrice(state.cellPanel.avgCost)"/>
+                                <t t-esc="formatPrice(state.cellPanel.avgCost !== undefined &amp;&amp; state.cellPanel.avgCost !== null ? state.cellPanel.avgCost : 0)"/>
+                            </div>
+                            <div style="margin-top:12px; display:flex; flex-direction:column; align-items:center; gap:6px;">
+                                <label style="font-size:10px; color:#6c757d; text-transform:uppercase; letter-spacing:.4px;">Nhập tay giá vốn TB</label>
+                                <div style="display:flex; gap:8px; align-items:center;">
+                                    <input type="text"
+                                           t-att-value="getManualAvgCostInput(state.cellPanel.productId)"
+                                           t-on-change="(ev) => this.updateManualAvgCost(state.cellPanel.productId, ev.target.value)"
+                                           style="width:100%; max-width:140px; border:1px solid #f8bbd0; border-radius:6px; padding:8px 10px; font-size:14px; font-weight:700; text-align:center; color:#880e4f;"/>
+                                    <button t-on-click="() => this.resetManualAvgCost(state.cellPanel.productId)" style="background:#fff; color:#880e4f; border:1px solid #f8bbd0; border-radius:6px; padding:7px 14px; font-size:13px; font-weight:700; cursor:pointer;">Reset</button>
+                                </div>
                             </div>
                         </div>
                         <t t-set="_ck" t-value="state.cellPanel.productId + '-avg_cost'"/>
@@ -817,17 +833,17 @@
                             <!-- Formula box -->
                             <t t-if="cpData.layers.length > 0">
                                 <div style="background:#fce4ec; border:1px solid #f48fb1; border-radius:8px; padding:14px 16px; margin-bottom:16px;">
-                                    <div style="font-size:10px; font-weight:700; color:#880e4f; margin-bottom:10px; text-transform:uppercase; letter-spacing:.5px;">Công thức tính giá vốn TB</div>
+                                    <div style="font-size:10px; font-weight:700; color:#880e4f; margin-bottom:10px; text-transform:uppercase; letter-spacing:.5px;">Công thức tính giá vốn TB (theo thành tiền sau thuế)</div>
                                     <div style="display:flex; flex-wrap:wrap; align-items:center; gap:4px; line-height:2; font-size:13px;">
                                         <span style="color:#880e4f; font-size:20px; font-weight:300; line-height:1;">(</span>
                                         <t t-foreach="cpData.layers" t-as="lyr" t-key="lyr_index">
                                             <t t-if="lyr_index > 0">
                                                 <span style="color:#adb5bd; font-weight:700; font-size:16px; margin:0 2px;">+</span>
                                             </t>
-                                            <span style="white-space:nowrap; background:#fff; border:1px solid #f8bbd0; border-radius:5px; padding:3px 8px; font-size:12px;">
+                                            <span t-att-style="'white-space:nowrap; border-radius:5px; padding:3px 8px; font-size:12px; ' + (lyr.is_manual ? 'background:#fff3e0; border:2px solid #ff9800;' : 'background:#fff; border:1px solid #f8bbd0;')">
                                                 <b style="color:#1a2639;"><t t-esc="formatQty(lyr.qty)"/></b>
                                                 <span style="color:#adb5bd; margin:0 3px;">×</span>
-                                                <b style="color:#880e4f;"><t t-esc="formatPrice(lyr.unit_cost)"/></b>
+                                                <b t-att-style="lyr.is_manual ? 'color:#d84315;' : 'color:#880e4f;'"><t t-esc="formatPrice(lyr.unit_cost)"/></b>
                                             </span>
                                         </t>
                                         <span style="color:#880e4f; font-size:20px; font-weight:300; line-height:1;">)</span>
@@ -850,25 +866,53 @@
                                     <thead>
                                         <tr style="background:#880e4f; color:#fff;">
                                             <th style="padding:6px 8px; text-align:left;">Ngày</th>
-                                            <th style="padding:6px 8px; text-align:left;">Phiếu nhập</th>
+                                            <th style="padding:6px 8px; text-align:left;">Số chứng từ</th>
                                             <th style="padding:6px 8px; text-align:left;">Đơn mua (PO)</th>
                                             <th style="padding:6px 8px; text-align:right;">Số lượng</th>
-                                            <th style="padding:6px 8px; text-align:right;">Đơn giá</th>
-                                            <th style="padding:6px 8px; text-align:right;">Thành tiền</th>
+                                            <th style="padding:6px 8px; text-align:right;">Đơn giá trước thuế</th>
+                                            <th style="padding:6px 8px; text-align:right;">Thuế</th>
+                                            <th style="padding:6px 8px; text-align:right;">Đơn giá sau thuế</th>
+                                            <th style="padding:6px 8px; text-align:right;">Thành tiền sau thuế</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         <t t-foreach="cpData.layers" t-as="lyr" t-key="lyr_index">
                                             <tr t-att-style="'border-bottom:1px solid #f8bbd0; ' + (lyr_index % 2 === 1 ? 'background:#fff0f5;' : '')">
-                                                <td style="padding:5px 8px; color:#6c757d; white-space:nowrap; font-size:11px;"><t t-esc="lyr.date"/></td>
+                                                <td style="padding:5px 8px; color:#6c757d; white-space:nowrap; font-size:11px;">
+                                                    <t t-esc="formatDateVN(lyr.date)"/>
+                                                </td>
                                                 <td style="padding:5px 8px; font-family:monospace; font-size:11px; font-weight:700;"><t t-esc="lyr.reference"/></td>
                                                 <td style="padding:5px 8px; font-size:11px; color:#546e7a;"><t t-esc="lyr.po_name"/></td>
                                                 <td style="padding:5px 8px; text-align:right; font-weight:600; color:#880e4f;">
                                                     <t t-esc="formatQty(lyr.qty)"/>
                                                     <span style="font-weight:400; color:#adb5bd; margin-left:3px; font-size:10px;"><t t-esc="lyr.uom"/></span>
                                                 </td>
+                                                <td style="padding:5px 8px; text-align:right; font-weight:700; color:#880e4f;"><t t-esc="formatPrice(lyr.unit_cost_before_tax)"/></td>
+                                                <!-- <td style="padding:5px 8px; text-align:right; color:#b71c1c;"><t t-esc="formatPrice(lyr.tax_value)"/></td> -->
+                                                <td style="padding:5px 8px; text-align:right; color:#b71c1c;">
+                                                        <div>
+                                                            <t t-esc="formatPrice(lyr.tax_value)"/>
+                                                        </div>
+                                                        <small style="display:block; color:#888; font-size:9px;">
+                                                            (<t t-esc="formatPrice(lyr.tax_per_unit)"/>/đv)
+                                                        </small>
+                                                    </td>
                                                 <td style="padding:5px 8px; text-align:right; font-weight:700; color:#880e4f;"><t t-esc="formatPrice(lyr.unit_cost)"/></td>
-                                                <td style="padding:5px 8px; text-align:right; color:#5d4037;"><t t-esc="formatPrice(lyr.value)"/></td>
+                                                <td style="padding:5px 8px; text-align:right; color:#5d4037;">
+                                                    <div style="display:flex; gap:4px; align-items:center; justify-content:flex-end;">
+                                                        <input type="text"
+                                                               t-att-value="getLayerInputValue(lyr)"
+                                                               t-on-change="(ev) => this.updateLayerManualAmount(state.cellPanel.productId, lyr.id, ev.target.value)"
+                                                               t-att-style="'width:100%; min-width:110px; border:1px solid #f8bbd0; border-radius:5px; padding:4px 6px; text-align:right; font-size:11px; font-weight:700;' + (lyr.is_manual ? ' background:#fff3e0; color:#d84315; border:2px solid #ff9800;' : '')"
+                                                        />
+                                                        <button t-on-click="() => this.resetLayerManualAmount(state.cellPanel.productId, lyr.id)" style="background:#fff; color:#880e4f; border:1px solid #ced4da; padding:4px 6px; border-radius:4px; font-size:10px; cursor:pointer;" title="Reset thành tiền">
+                                                            <i class="fa fa-undo"/>
+                                                        </button>
+                                                    </div>
+                                                    <t t-if="lyr.is_manual">
+                                                        <div style="font-size:9px; color:#d84315; margin-top:3px; font-weight:700;">Số nhập tay</div>
+                                                    </t>
+                                                </td>
                                             </tr>
                                         </t>
                                         <tr style="background:#fce4ec; border-top:2px solid #880e4f; font-weight:700;">
@@ -876,11 +920,13 @@
                                             <td style="padding:6px 8px; text-align:right; color:#1a2639;">
                                                 <t t-esc="formatQty(cpData.total_qty)"/>
                                             </td>
-                                            <td style="padding:6px 8px; text-align:right; color:#880e4f;">
-                                                <t t-esc="formatPrice(cpData.computed_avg)"/>
+                                            <td style="padding:6px 8px;"></td>
+                                            <td style="padding:6px 8px; text-align:right; color:#b71c1c;">
+                                                <t t-esc="formatPrice(cpData.total_tax)"/>
                                             </td>
+                                            <td style="padding:6px 8px;"></td>
                                             <td style="padding:6px 8px; text-align:right; color:#5d4037;">
-                                                <t t-esc="formatPrice(cpData.total_value)"/>
+                                                <t t-esc="formatMoneyVND(cpData.total_value)"/>
                                             </td>
                                         </tr>
                                     </tbody>
