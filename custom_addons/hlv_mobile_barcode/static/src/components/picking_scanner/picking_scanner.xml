@@ -71,8 +71,11 @@
                                             </t>
                                         </div>
                                         <div class="package-card-footer" t-if="state.picking.state !== 'done'">
-                                            <button class="btn btn-outline btn-sm btn-pkg-edit" t-on-click="() => this.openPackageEdit(pkg)">
+                                            <button t-if="!state.picking.is_putaway" class="btn btn-outline btn-sm btn-pkg-edit" t-on-click="() => this.openPackageEdit(pkg)">
                                                 <i class="fa fa-edit"></i> Chỉnh sửa
+                                            </button>
+                                            <button t-else="" class="btn btn-outline btn-sm btn-pkg-edit" t-on-click="() => this.openPackageEdit(pkg)">
+                                                <i class="fa fa-eye"></i> Xem bên trong
                                             </button>
                                             <button class="btn btn-danger btn-sm" style="margin-left: 8px; padding: 4px 12px; font-size: 0.85rem;" t-on-click="() => this.unpackPackage(pkg)">
                                                 <i class="fa fa-box-open"></i> Bỏ kiện
@@ -200,14 +203,14 @@
                                             <div class="pkg-edit-item-ops">
                                                 <!-- Qty controls -->
                                                 <div class="pkg-qty-control-row">
-                                                    <button class="btn btn-outline btn-sm" t-on-click="() => this.pkgAdjustQty(item, -1)">-1</button>
-                                                    <span class="pkg-qty-val">
+                                                    <button t-if="!state.picking.is_putaway" class="btn btn-outline btn-sm" t-on-click="() => this.pkgAdjustQty(item, -1)">-1</button>
+                                                    <span class="pkg-qty-val" t-attf-style="#{state.picking.is_putaway ? 'font-weight: bold; font-size: 1.1rem;' : ''}">
                                                         <t t-esc="item.qty_done"/> <t t-esc="item.uom"/>
                                                     </span>
-                                                    <button class="btn btn-outline btn-sm" t-on-click="() => this.pkgAdjustQty(item, 1)">+1</button>
+                                                    <button t-if="!state.picking.is_putaway" class="btn btn-outline btn-sm" t-on-click="() => this.pkgAdjustQty(item, 1)">+1</button>
                                                 </div>
                                                 
-                                                <div class="pkg-action-buttons-row">
+                                                <div class="pkg-action-buttons-row" t-if="!state.picking.is_putaway">
                                                     <!-- Unpack -->
                                                     <button class="btn btn-danger btn-sm btn-pkg-action" style="padding: 4px 8px; font-size: 0.78rem;" t-on-click="() => this.pkgRemoveItem(item)">
                                                         <i class="fa fa-sign-out-alt"></i> Gỡ kiện
@@ -237,7 +240,7 @@
                             </div>
                             
                             <!-- Add Item to Package section -->
-                            <div t-if="state.packageAvailableItems.length > 0" class="pkg-add-section-container">
+                            <div t-if="!state.picking.is_putaway and state.packageAvailableItems.length > 0" class="pkg-add-section-container">
                                 <div class="modal-section-title" style="margin-top: 20px;">THÊM SẢN PHẨM LẺ VÀO KIỆN</div>
                                 <div class="pkg-add-form">
                                     <select class="form-select form-select-sm" t-model="state.addItemMoveLineId">
@@ -259,8 +262,8 @@
                         
                         <!-- Modal Footer -->
                         <div class="modal-footer-custom">
-                            <button class="btn btn-outline" style="flex: 1;" t-on-click="closePackageEdit">Hủy</button>
-                            <button class="btn btn-success" style="flex: 1;" t-on-click="savePackageChanges">Lưu thay đổi</button>
+                            <button class="btn btn-outline" style="flex: 1;" t-on-click="closePackageEdit">Đóng</button>
+                            <button t-if="!state.picking.is_putaway" class="btn btn-success" style="flex: 1;" t-on-click="savePackageChanges">Lưu thay đổi</button>
                         </div>
                     </div>
                 </div>
