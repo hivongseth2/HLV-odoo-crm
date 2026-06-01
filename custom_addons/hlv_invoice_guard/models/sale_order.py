@@ -20,8 +20,6 @@ class SaleOrder(models.Model):
         self.ensure_one()
         payload = self.hlv_invoice_guard_payload()
         sale_by_code = self._hlv_invoice_guard_line_map(payload["sale_order"]["lines"])
-        po_lines = (payload.get("purchase_order") or {}).get("lines") or []
-        po_by_code = self._hlv_invoice_guard_line_map(po_lines)
 
         issues = []
         normalized_crm_lines = []
@@ -32,30 +30,17 @@ class SaleOrder(models.Model):
             normalized_crm_lines.append(crm_line)
             code = crm_line["product_code"]
             sale_line = sale_by_code.get(code)
-            po_line = po_by_code.get(code)
 
             if not code:
-                issues.append(self._hlv_invoice_guard_issue(index, "", "missing_product_code", "Dòng AMIS thiếu mã hàng hóa."))
+                issues.append(self._hlv_invoice_guard_issue(index, "", "product_code", "Dòng AMIS thiếu mã hàng hóa."))
                 continue
             if not sale_line:
-                issues.append(self._hlv_invoice_guard_issue(index, code, "sale_line_not_found", "Mã hàng không có trong đơn bán Odoo."))
+                issues.append(self._hlv_invoice_guard_issue(index, code, "product_code", "Mã hàng không có trong đơn bán Odoo."))
                 continue
 
-            self._hlv_invoice_guard_compare_number(issues, index, code, "qty", "Số lượng", crm_line["qty"], sale_line["qty"], precision)
-            self._hlv_invoice_guard_compare_number(issues, index, code, "price_unit", "Đơn giá", crm_line["price_unit"], sale_line["price_unit"], precision)
             self._hlv_invoice_guard_compare_number(issues, index, code, "tax_percent", "VAT", crm_line["tax_percent"], sale_line["tax_percent"], 0.01)
-
-            if crm_line.get("price_after_tax") is not None:
-                self._hlv_invoice_guard_compare_number(
-                    issues, index, code, "price_after_tax", "Đơn giá sau thuế",
-                    crm_line["price_after_tax"], sale_line["price_after_tax"], precision,
-                )
-
-            if not po_line:
-                issues.append(self._hlv_invoice_guard_issue(index, code, "purchase_line_not_found", "Mã hàng không có trong đơn mua liên kết."))
-                continue
-            self._hlv_invoice_guard_compare_number(issues, index, code, "purchase_qty", "Số lượng đơn mua", sale_line["qty"], po_line["qty"], precision)
-            self._hlv_invoice_guard_compare_number(issues, index, code, "purchase_tax_percent", "VAT đơn mua", sale_line["tax_percent"], po_line["tax_percent"], 0.01)
+            self._hlv_invoice_guard_compare_number(issues, index, code, "tax", "Tiền thuế", crm_line["tax"], sale_line["tax"], precision)
+            self._hlv_invoice_guard_compare_number(issues, index, code, "total", "Tổng tiền", crm_line["total"], sale_line["total"], precision)
 
         return {
             **payload,
@@ -118,6 +103,7 @@ class SaleOrder(models.Model):
                 continue
             grouped[code]["qty"] += line.get("qty") or 0.0
             grouped[code]["subtotal"] += line.get("subtotal") or 0.0
+            grouped[code]["tax"] += line.get("tax") or 0.0
             grouped[code]["total"] += line.get("total") or 0.0
         return grouped
 
@@ -181,6 +167,7 @@ class SaleOrderLine(models.Model):
         helper = self.env["sale.order"]
         tax_percent = helper._hlv_invoice_guard_tax_percent(self.tax_id)
         price_after_tax = self.price_unit * (1.0 + tax_percent / 100.0)
+        tax_amount = self.price_total - self.price_subtotal
         return {
             "id": self.id,
             "product_code": self.product_id.default_code or "",
@@ -193,5 +180,6 @@ class SaleOrderLine(models.Model):
             "discount": self.discount,
             "tax_percent": tax_percent,
             "subtotal": self.price_subtotal,
+            "tax": tax_amount,
             "total": self.price_total,
         }
