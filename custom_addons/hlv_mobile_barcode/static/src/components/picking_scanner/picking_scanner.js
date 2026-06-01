@@ -276,7 +276,7 @@ export class PickingScanner extends Component {
     }
     
     async unpackPackage(pkg) {
-        if (!confirm(`Bạn có chắc chắn muốn bỏ đóng gói toàn bộ kiện "${pkg.name}"?`)) {
+        if (!confirm(`Bạn có chắc chắn muốn gỡ đóng gói kiện "${pkg.name}" thành hàng lẻ không?`)) {
             return;
         }
         this.state.loading = true;
@@ -288,7 +288,7 @@ export class PickingScanner extends Component {
             if (res.error) {
                 this.notification.add(res.error, { type: "danger" });
             } else {
-                this.notification.add("Đã bỏ kiện thành công", { type: "success" });
+                this.notification.add("Đã gỡ đóng gói thành công", { type: "success" });
                 this.playSound('success');
                 await this.loadPicking();
             }
