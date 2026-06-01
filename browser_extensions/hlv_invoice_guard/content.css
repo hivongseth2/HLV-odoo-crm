@@ -1,0 +1,60 @@
+.hlv-invoice-guard-panel {
+  position: fixed;
+  right: 18px;
+  bottom: 74px;
+  z-index: 2147483000;
+  width: 360px;
+  box-sizing: border-box;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.22);
+  color: #111827;
+  font: 13px Arial, sans-serif;
+}
+.hlv-invoice-guard-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #e5e7eb;
+  font-weight: 700;
+}
+.hlv-invoice-guard-body { padding: 10px 12px; }
+.hlv-invoice-guard-row { display: flex; gap: 8px; margin-bottom: 8px; }
+.hlv-invoice-guard-panel input {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+}
+.hlv-invoice-guard-panel button {
+  border: 0;
+  border-radius: 4px;
+  padding: 7px 10px;
+  background: #0f766e;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 600;
+}
+.hlv-invoice-guard-close {
+  background: #f1f5f9 !important;
+  color: #334155 !important;
+  padding: 3px 8px !important;
+}
+.hlv-invoice-guard-status { color: #475569; min-height: 18px; line-height: 1.35; }
+.hlv-invoice-guard-issues {
+  max-height: 220px;
+  overflow: auto;
+  margin-top: 8px;
+  border-top: 1px solid #e5e7eb;
+}
+.hlv-invoice-guard-issue {
+  padding: 7px 0;
+  border-bottom: 1px solid #f1f5f9;
+  color: #991b1b;
+}
+.hlv-invoice-guard-ok { color: #0f766e; font-weight: 700; }
+.hlv-invoice-guard-bad-row { outline: 2px solid #dc2626 !important; outline-offset: -2px; }
