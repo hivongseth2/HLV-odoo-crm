@@ -17,6 +17,7 @@ export class DeliveryPlannerDashboard extends Component {
     setup() {
         this.orm = useService("orm");
         this.actionService = useService("action");
+        const today = new Date().toISOString().slice(0, 10);
         this.state = useState({
             // menu print từng phiếu lấy theo axenor rule
             printMenuReports: [],
@@ -76,6 +77,9 @@ export class DeliveryPlannerDashboard extends Component {
             isPackingProgressDrawerOpen: false,
             packingProgressLoading: false,
             packingProgress: { summary: {}, groups: [] },
+            packingProgressDateFrom: today,
+            packingProgressDateTo: today,
+            packingProgressState: 'all',
 
             // Pagination
             currentPage: 1,
@@ -2048,11 +2052,11 @@ export class DeliveryPlannerDashboard extends Component {
         if (this.state.packingProgressLoading) return;
         this.state.packingProgressLoading = true;
         try {
-            const today = new Date().toISOString().slice(0, 10);
             const result = await this.orm.call('stock.picking', 'get_packing_kpi_dashboard', [], {
-                date_from: today,
-                date_to: today,
+                date_from: this.state.packingProgressDateFrom,
+                date_to: this.state.packingProgressDateTo,
                 packer_user_id: 'all',
+                packing_state: this.state.packingProgressState,
             });
             this.state.packingProgress = result || { summary: {}, groups: [] };
         } catch (e) {
@@ -2060,6 +2064,18 @@ export class DeliveryPlannerDashboard extends Component {
         } finally {
             this.state.packingProgressLoading = false;
         }
+    }
+
+    onPackingProgressDateFromChange(ev) {
+        this.state.packingProgressDateFrom = ev.target.value;
+    }
+
+    onPackingProgressDateToChange(ev) {
+        this.state.packingProgressDateTo = ev.target.value;
+    }
+
+    onPackingProgressStateChange(ev) {
+        this.state.packingProgressState = ev.target.value;
     }
 
     async togglePackingProgressDrawer() {

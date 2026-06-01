@@ -217,6 +217,25 @@
                     <span class="badge bg-secondary">Assign: <t t-esc="state.packingProgress.summary.assigned_count || 0"/></span>
                     <span class="badge bg-warning text-dark">Đang: <t t-esc="state.packingProgress.summary.in_progress_count || 0"/></span>
                     <span class="badge bg-success">Xong: <t t-esc="state.packingProgress.summary.done_count || 0"/></span>
+                    <input type="date"
+                           class="form-control form-control-sm"
+                           style="width: 135px;"
+                           t-att-value="state.packingProgressDateFrom"
+                           t-on-change="onPackingProgressDateFromChange"/>
+                    <input type="date"
+                           class="form-control form-control-sm"
+                           style="width: 135px;"
+                           t-att-value="state.packingProgressDateTo"
+                           t-on-change="onPackingProgressDateToChange"/>
+                    <select class="form-select form-select-sm"
+                            style="width: 150px;"
+                            t-att-value="state.packingProgressState"
+                            t-on-change="onPackingProgressStateChange">
+                        <option value="all">Tất cả trạng thái</option>
+                        <option value="assigned">Đã assign</option>
+                        <option value="in_progress">Đang đóng</option>
+                        <option value="done">Hoàn thành</option>
+                    </select>
                     <button class="btn btn-sm btn-outline-secondary" t-on-click="loadPackingProgress" t-att-disabled="state.packingProgressLoading">
                         <i t-attf-class="fa #{state.packingProgressLoading ? 'fa-spinner fa-spin' : 'fa-refresh'}"></i>
                     </button>

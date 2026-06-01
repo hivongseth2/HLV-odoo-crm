@@ -14,6 +14,7 @@ export class PackingKpiDashboard extends Component {
             dateFrom: today,
             dateTo: today,
             packerUserId: "all",
+            packingState: "all",
             searchText: "",
             loading: true,
             summary: {},
@@ -32,7 +33,7 @@ export class PackingKpiDashboard extends Component {
 
         useEffect(
             () => { this._renderCharts(); },
-            () => [this.state._chartVersion, this.state.showCharts]
+            () => [this.state._chartVersion, this.state.showCharts, this.state.loading]
         );
 
         onWillUnmount(() => this._destroyCharts());
@@ -46,6 +47,7 @@ export class PackingKpiDashboard extends Component {
                 date_from: this.state.dateFrom,
                 date_to: this.state.dateTo,
                 packer_user_id: this.state.packerUserId,
+                packing_state: this.state.packingState,
             };
             const [result, daily] = await Promise.all([
                 this.orm.call("stock.picking", "get_packing_kpi_dashboard", [], {
@@ -71,8 +73,13 @@ export class PackingKpiDashboard extends Component {
 
     _renderCharts() {
         if (!this.state.showCharts) { this._destroyCharts(); return; }
+        if (this.state.loading) return;
         const Chart = window.Chart;
-        if (!Chart) return;
+        if (!Chart) {
+            this._destroyCharts();
+            this._renderCanvasFallbackCharts();
+            return;
+        }
 
         this._destroyCharts();
 
@@ -99,7 +106,7 @@ export class PackingKpiDashboard extends Component {
                     datasets: [
                         { label: 'Hoàn thành', data: cd.done, backgroundColor: COLORS.green, borderRadius: 4 },
                         { label: 'Đang đóng', data: cd.in_progress, backgroundColor: COLORS.yellow, borderRadius: 4 },
-                        { label: 'Mới assign', data: cd.assigned.map((a, i) => a - (cd.done[i] || 0) - (cd.in_progress[i] || 0)), backgroundColor: COLORS.grey, borderRadius: 4 },
+                        { label: 'Mới assign', data: cd.assigned.map((a, i) => Math.max(a - (cd.done[i] || 0) - (cd.in_progress[i] || 0), 0)), backgroundColor: COLORS.grey, borderRadius: 4 },
                     ],
                 },
                 options: {
@@ -126,7 +133,7 @@ export class PackingKpiDashboard extends Component {
                     datasets: [
                         { label: 'Hoàn thành', data: groups.map(g => g.done_count), backgroundColor: COLORS.green, borderRadius: 4 },
                         { label: 'Đang đóng', data: groups.map(g => g.in_progress_count), backgroundColor: COLORS.yellow, borderRadius: 4 },
-                        { label: 'Chưa bắt đầu', data: groups.map(g => g.assigned_count - g.done_count - g.in_progress_count), backgroundColor: COLORS.grey, borderRadius: 4 },
+                        { label: 'Chưa bắt đầu', data: groups.map(g => Math.max(g.assigned_count - g.done_count - g.in_progress_count, 0)), backgroundColor: COLORS.grey, borderRadius: 4 },
                     ],
                 },
                 options: {
@@ -166,6 +173,106 @@ export class PackingKpiDashboard extends Component {
         }
     }
 
+    _renderCanvasFallbackCharts() {
+        const colors = {
+            green: 'rgba(76,175,80,0.85)',
+            yellow: 'rgba(255,193,7,0.85)',
+            grey: 'rgba(158,158,158,0.7)',
+            blue: 'rgba(33,150,243,0.85)',
+        };
+        const cd = this.state.dailyChartData || {};
+        if (this.chartDailyRef.el && cd.labels && cd.labels.length) {
+            this._drawStackedBars(this.chartDailyRef.el, cd.labels.map(d => d.slice(5)), [
+                { values: cd.done || [], color: colors.green },
+                { values: cd.in_progress || [], color: colors.yellow },
+                { values: (cd.assigned || []).map((a, i) => Math.max(a - (cd.done?.[i] || 0) - (cd.in_progress?.[i] || 0), 0)), color: colors.grey },
+            ]);
+        }
+        const groups = this.state.groups || [];
+        if (!groups.length) return;
+        const labels = groups.map(g => g.packer_name);
+        if (this.chartPackerRef.el) {
+            this._drawStackedBars(this.chartPackerRef.el, labels, [
+                { values: groups.map(g => g.done_count || 0), color: colors.green },
+                { values: groups.map(g => g.in_progress_count || 0), color: colors.yellow },
+                { values: groups.map(g => Math.max((g.assigned_count || 0) - (g.done_count || 0) - (g.in_progress_count || 0), 0)), color: colors.grey },
+            ]);
+        }
+        if (this.chartDurationRef.el) {
+            this._drawBars(
+                this.chartDurationRef.el,
+                labels,
+                groups.map(g => Math.round((g.avg_actual_seconds || g.avg_print_to_done_seconds || 0) / 60)),
+                colors.blue
+            );
+        }
+    }
+
+    _prepareCanvas(canvas) {
+        const width = Math.max(canvas.parentElement?.clientWidth || 320, 240);
+        const height = 200;
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, width, height);
+        ctx.font = '11px sans-serif';
+        ctx.fillStyle = '#6c757d';
+        return { ctx, width, height, pad: { top: 12, right: 10, bottom: 34, left: 28 } };
+    }
+
+    _drawStackedBars(canvas, labels, datasets) {
+        const { ctx, width, height, pad } = this._prepareCanvas(canvas);
+        const totals = labels.map((_, i) => datasets.reduce((sum, ds) => sum + (ds.values[i] || 0), 0));
+        const max = Math.max(...totals, 1);
+        this._drawBarFrame(ctx, width, height, pad, max);
+        this._drawBarSeries(ctx, width, height, pad, labels, datasets, max, true);
+    }
+
+    _drawBars(canvas, labels, values, color) {
+        const { ctx, width, height, pad } = this._prepareCanvas(canvas);
+        const max = Math.max(...values, 1);
+        this._drawBarFrame(ctx, width, height, pad, max);
+        this._drawBarSeries(ctx, width, height, pad, labels, [{ values, color }], max, false);
+    }
+
+    _drawBarFrame(ctx, width, height, pad, max) {
+        ctx.strokeStyle = '#dee2e6';
+        ctx.beginPath();
+        ctx.moveTo(pad.left, pad.top);
+        ctx.lineTo(pad.left, height - pad.bottom);
+        ctx.lineTo(width - pad.right, height - pad.bottom);
+        ctx.stroke();
+        ctx.fillStyle = '#6c757d';
+        ctx.fillText(String(max), 4, pad.top + 8);
+        ctx.fillText('0', 12, height - pad.bottom);
+    }
+
+    _drawBarSeries(ctx, width, height, pad, labels, datasets, max, stacked) {
+        const plotW = width - pad.left - pad.right;
+        const plotH = height - pad.top - pad.bottom;
+        const slot = plotW / Math.max(labels.length, 1);
+        const barW = Math.min(slot * 0.62, 34);
+        labels.forEach((label, i) => {
+            const x = pad.left + slot * i + (slot - barW) / 2;
+            let yBase = height - pad.bottom;
+            datasets.forEach(ds => {
+                const value = ds.values[i] || 0;
+                const h = Math.round((value / max) * plotH);
+                const y = stacked ? yBase - h : height - pad.bottom - h;
+                ctx.fillStyle = ds.color;
+                ctx.fillRect(x, y, barW, h);
+                if (stacked) yBase = y;
+            });
+            ctx.save();
+            ctx.translate(x + barW / 2, height - 8);
+            ctx.rotate(-Math.PI / 8);
+            ctx.fillStyle = '#6c757d';
+            ctx.textAlign = 'center';
+            ctx.fillText(String(label || '').slice(0, 10), 0, 0);
+            ctx.restore();
+        });
+    }
+
     toggleCharts() {
         this.state.showCharts = !this.state.showCharts;
     }
@@ -173,6 +280,7 @@ export class PackingKpiDashboard extends Component {
     onDateFromChange(ev) { this.state.dateFrom = ev.target.value; }
     onDateToChange(ev) { this.state.dateTo = ev.target.value; }
     onPackerUserIdChange(ev) { this.state.packerUserId = ev.target.value; }
+    onPackingStateChange(ev) { this.state.packingState = ev.target.value; }
 
     setRange(mode) {
         const now = new Date();
