@@ -658,6 +658,7 @@ export class BarcodeApp extends Component {
             this.state.scannedLocationName = "";
             this.state.lastScannedProduct = null;
             this.state.pickingState = "";
+            this.state.isMultiLocationMode = false;
             this.state.pickingRefreshTick += 1;
 
             // Tải vị trí nguồn mặc định của phiếu để hiển thị trực tiếp lên tiêu đề
