@@ -287,19 +287,20 @@ class HLVMobileBarcodeController(http.Controller):
             )
             
         packages = []
-        all_result_pkgs = picking.move_line_ids.mapped('result_package_id')
-        for pkg in all_result_pkgs:
+        # Hỗ trợ cả result_package_id (khi đóng gói ở Bước 1) và package_id (kiện hàng đi kèm ở Bước 2)
+        all_pkgs = picking.move_line_ids.mapped('result_package_id') | picking.move_line_ids.mapped('package_id')
+        for pkg in all_pkgs:
             pkg_mls = picking.move_line_ids.filtered(
-                lambda ml: ml.result_package_id.id == pkg.id
+                lambda ml: ml.result_package_id.id == pkg.id or ml.package_id.id == pkg.id
             )
             total_done = sum(ml.quantity for ml in pkg_mls)
             package_lines = [{
                 'move_line_id': ml.id,
                 'product_name': ml.product_id.display_name,
                 'product_barcode': ml.product_id.barcode or '',
-                'qty_done': ml.quantity,
+                'qty_done': ml.quantity or ml.product_uom_id._compute_quantity(ml.move_id.product_uom_qty, ml.product_id.uom_id) if ml.move_id else 0,
                 'uom': ml.product_uom_id.name,
-            } for ml in pkg_mls if ml.quantity > 0]
+            } for ml in pkg_mls]
             if package_lines:
                 packages.append({
                     'id': pkg.id,
@@ -1018,6 +1019,28 @@ class HLVMobileBarcodeController(http.Controller):
             
         # Clear packages
         ml.write({
+            'result_package_id': False,
+            'package_id': False
+        })
+        return {'success': True}
+
+    @http.route('/hlv_mobile_barcode/unpack_package', type='json', auth='user')
+    def unpack_package(self, picking_id, package_id):
+        picking = request.env['stock.picking'].browse(picking_id)
+        if not picking.exists() or picking.state in ['done', 'cancel']:
+            return {'error': _('Phiếu không tồn tại hoặc đã hoàn thành/hủy.')}
+            
+        move_lines = request.env['stock.move.line'].search([
+            ('picking_id', '=', picking.id),
+            '|',
+            ('result_package_id', '=', package_id),
+            ('package_id', '=', package_id)
+        ])
+        
+        if not move_lines:
+            return {'error': _('Không tìm thấy sản phẩm nào trong kiện này.')}
+            
+        move_lines.write({
             'result_package_id': False,
             'package_id': False
         })

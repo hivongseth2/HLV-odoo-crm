@@ -274,8 +274,32 @@ export class PickingScanner extends Component {
             this.notification.add("Lỗi kết nối", { type: "danger" });
         }
     }
+    
+    async unpackPackage(pkg) {
+        if (!confirm(`Bạn có chắc chắn muốn bỏ đóng gói toàn bộ kiện "${pkg.name}"?`)) {
+            return;
+        }
+        this.state.loading = true;
+        try {
+            const res = await rpc("/hlv_mobile_barcode/unpack_package", {
+                picking_id: this.props.pickingId,
+                package_id: pkg.id
+            });
+            if (res.error) {
+                this.notification.add(res.error, { type: "danger" });
+            } else {
+                this.notification.add("Đã bỏ kiện thành công", { type: "success" });
+                this.playSound('success');
+                await this.loadPicking();
+            }
+        } catch (e) {
+            this.notification.add("Lỗi kết nối", { type: "danger" });
+        } finally {
+            this.state.loading = false;
+        }
+    }
 
-    togglePackages() {
+    async togglePackages() {
         this.state.packagesExpanded = !this.state.packagesExpanded;
     }
 
