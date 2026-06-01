@@ -1,0 +1,220 @@
+<t t-name="hlv_pack_sequence.report_package_label_document">
+    <t t-call="web.basic_layout">
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+
+        <style type="text/css">
+            /* Khai báo Font HLV-TNR */
+            @font-face {
+                font-family: 'HLV-TNR';
+                src: url('/hlv_a4_report/static/fonts/times-new-roman.ttf') format('truetype');
+                font-weight: 400; font-style: normal; font-display: swap;
+            }
+            @font-face {
+                font-family: 'HLV-TNR';
+                src: url('/hlv_a4_report/static/fonts/times-new-roman-bold.ttf') format('truetype');
+                font-weight: 700; font-style: normal; font-display: swap;
+            }
+            @font-face {
+                font-family: 'HLV-TNR';
+                src: url('/hlv_a4_report/static/fonts/times-new-roman-italic.ttf') format('truetype');
+                font-weight: 400; font-style: italic; font-display: swap;
+            }
+            @font-face {
+                font-family: 'HLV-TNR';
+                src: url('/hlv_a4_report/static/fonts/times-new-roman-bolditalic.ttf') format('truetype');
+                font-weight: 700; font-style: italic; font-display: swap;
+            }
+
+            @page { 
+                margin: 0; 
+            }
+
+            html, body,
+            body.container, div.container,
+            .container, .container-fluid,
+            .row, main, article,
+            .o_report_body, .o_report_layout {
+                margin: 0 !important;
+                padding: 0 !important;
+                max-width: none !important;
+                width: 100% !important;
+                height: 100% !important;
+                border: none !important;
+                box-sizing: border-box;
+            }
+            
+            .header, .footer { display: none !important; }
+
+            .label-tbl {
+                width: 100%;
+                border-collapse: collapse;
+                table-layout: fixed;
+                border: 0.3mm solid #111;
+                /* Áp dụng font mới cho toàn bộ bảng */
+                font-family: 'HLV-TNR', Times, serif; 
+                color: #111;
+                background: #fff;
+                page-break-after: always;
+                page-break-inside: avoid;
+                box-sizing: border-box;
+            }
+
+            .sec-address {
+                height: 32mm; 
+                padding: 2mm 3.5mm;
+                vertical-align: top;
+                border-bottom: 0.3mm solid #111;
+                box-sizing: border-box;
+            }
+            .lbl-title   { font-size: 4.5mm; font-weight: 700; line-height: 1.15; margin-bottom: 1.2mm; }
+            .lbl-company { font-size: 4.2mm; line-height: 1.2; margin-bottom: 0.8mm; word-break: break-word; }
+            .lbl-addr    { font-size: 3.6mm; line-height: 1.2; margin-bottom: 0.8mm; word-break: break-word; }
+            .lbl-phone   { font-size: 3.7mm; font-weight: 700; line-height: 1.15; }
+
+            .sec-info {
+                height: 25mm; 
+                padding: 0 !important;
+                vertical-align: top;
+                border-bottom: 0.3mm solid #111;
+                box-sizing: border-box;
+            }
+            .info-inner {
+                width: 100%;
+                height: 100%;
+                border-collapse: collapse;
+                table-layout: fixed;
+            }
+            .info-inner td {
+                width: 50%;
+                padding: 1.5mm 3.5mm;
+                vertical-align: top;
+                border-right: 0.3mm solid #111;
+                border-bottom: 0.3mm solid #111;
+            }
+            .info-inner td:last-child { border-right: none; }
+            .info-inner tr:last-child td { border-bottom: none; }
+            .cell-label { font-size: 3mm; font-weight: 700; line-height: 1.15; margin-bottom: 0.6mm; }
+            .cell-value { font-size: 3.4mm; line-height: 1.2; word-break: break-word; }
+
+            .sec-barcode {
+                height: 48mm; 
+                padding: 1.5mm 2.5mm;
+                vertical-align: top;
+                text-align: center;
+                border-bottom: 0.3mm solid #111;
+                box-sizing: border-box;
+            }
+            .barcode-label { 
+                font-size: 3mm; 
+                font-weight: 700; 
+                text-align: left; 
+                margin-bottom: 0; 
+            }
+            .pick-code    { 
+                font-size: 6mm; 
+                line-height: 1.1; 
+                margin-top: 2mm; 
+                margin-bottom: 1mm; 
+                font-weight: 700;
+                word-break: break-all;
+            }
+            .qr-wrap { 
+                display: block;
+                margin: 0 auto;
+                width: 32mm;
+                height: 32mm;
+            }
+
+            .sec-bottom {
+                padding: 2.5mm 3.5mm;
+                vertical-align: top;
+                box-sizing: border-box;
+            }
+            .bottom-row   { margin-bottom: 1.2mm; }
+            .bottom-label { font-size: 3.3mm; font-weight: 700; line-height: 1.15; margin-bottom: 0.3mm; }
+            .bottom-value { font-size: 4.2mm; line-height: 1.1; word-break: break-word; }
+        </style>
+
+            <t t-foreach="docs" t-as="o">
+                <t t-set="packer" t-value="o.x_pack_packer_user_id"/>
+            <t t-set="packer_name" t-value="packer and (packer.x_packer_name or packer.name) or ''"/>
+            <t t-set="current_time" t-value="context_timestamp(datetime.datetime.now()).strftime('%H:%M %d/%m/%Y')"/>
+            <table class="label-tbl">
+                <tbody>
+                    <tr>
+                        <td class="sec-address">
+                            <div class="lbl-title">Địa chỉ giao hàng</div>
+                            <div class="lbl-company"><span t-esc="(o.partner_id.commercial_partner_id and o.partner_id.commercial_partner_id.name) or o.partner_id.name or ''"/></div>
+                            <div class="lbl-addr"><span t-esc="o.x_studio_dia_chi_giao_hang or o.partner_id.contact_address or ''"/></div>
+                            <div class="lbl-phone"><t t-if="o.partner_id.phone or o.partner_id.mobile">☎ <span t-esc="o.partner_id.phone or o.partner_id.mobile"/></t></div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="sec-info">
+                            <table class="info-inner">
+                                <tr>
+                                    <td>
+                                        <div class="cell-label">Hình thức thanh toán</div>
+                                        <div class="cell-value"><span t-esc="o.x_studio_hnh_thc_thanh_ton or (o.sale_id and o.sale_id.payment_term_id and o.sale_id.payment_term_id.name) or ''"/></div>
+                                    </td>
+                                    <td>
+                                        <div class="cell-label">Hạn giao</div>
+                                        <div class="cell-value"><span t-field="o.scheduled_date" t-options="{'widget':'date'}"/></div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <div class="cell-label">Hình thức giao hàng</div>
+                                        <div class="cell-value"><span t-esc="(o.sale_id and o.sale_id.x_studio_delivery_type) or ''"/></div>
+                                    </td>
+                                    <td>
+                                        <div class="cell-label">Nhân viên</div>
+                                        <div class="cell-value"><span t-esc="(o.sale_id and o.sale_id.x_studio_misa_saler_code) or (o.sale_id and o.sale_id.user_id and o.sale_id.user_id.login) or ''"/></div>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="sec-barcode">
+                            <div class="barcode-label">Mã phiếu lấy hàng</div>
+                            <div class="pick-code"><span t-esc="o.name"/></div>
+                            <div class="qr-wrap">
+                                <span t-field="o.name" t-options="{'widget': 'barcode', 'symbology': 'QR', 'width': 300, 'height': 300, 'img_style': 'width: 100%; height: 100%;'}"/>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="sec-bottom">
+                            <table style="width:100%; border-collapse:collapse; table-layout:fixed; border: hidden;">
+                                <tr>
+                                    <td style="width:50%; vertical-align:top; padding-right:2mm;">
+                                        <div class="bottom-row">
+                                            <div class="bottom-label">Mã đơn hàng</div>
+                                            <div class="bottom-value"><span t-esc="o.origin or ''"/></div>
+                                        </div>
+                                        <div class="bottom-row">
+                                            <div class="bottom-label">Trạng thái</div>
+                                            <t t-set="state_vn" t-value="{                                     'draft': 'Nháp',                                     'waiting': 'Đang chờ hoạt động khác',                                     'confirmed': 'Đang chờ',                                     'assigned': 'Sẵn sàng',                                     'done': 'Hoàn tất',                                     'cancel': 'Đã hủy'                                 }"/>
+                                            <div class="bottom-value"><span t-esc="state_vn.get(o.state, o.state) or ''"/></div>
+                                        </div>
+                                    </td>
+                                    <td style="width:50%; vertical-align:top; padding-left:2mm;">
+                                        <div class="bottom-row">
+                                            <div class="bottom-label">Người đóng</div>
+                                            <div class="bottom-value"><span t-esc="packer_name"/></div>
+                                        </div>
+                                        <div class="bottom-row">
+                                            <div class="bottom-label">Thời gian in phiếu</div>
+                                            <div class="bottom-value"><span t-esc="current_time"/></div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </t>
+    </t>
+</t>
