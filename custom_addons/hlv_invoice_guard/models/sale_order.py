@@ -94,25 +94,6 @@ class SaleOrder(models.Model):
             ],
         }
 
-    def _hlv_invoice_guard_serialize_sale_line(self):
-        self.ensure_one()
-        tax_percent = self._hlv_invoice_guard_tax_percent(self.tax_id)
-        price_after_tax = self.price_unit * (1.0 + tax_percent / 100.0)
-        return {
-            "id": self.id,
-            "product_code": self.product_id.default_code or "",
-            "product_name": self.product_id.display_name or self.name,
-            "description": self.name or "",
-            "qty": self.product_uom_qty,
-            "uom": self.product_uom.name if self.product_uom else "",
-            "price_unit": self.price_unit,
-            "price_after_tax": price_after_tax,
-            "discount": self.discount,
-            "tax_percent": tax_percent,
-            "subtotal": self.price_subtotal,
-            "total": self.price_total,
-        }
-
     def _hlv_invoice_guard_partner(self, partner):
         return {
             "id": partner.id,
@@ -189,4 +170,28 @@ class SaleOrder(models.Model):
             "actual": actual,
             "expected": expected,
             "diff": diff,
+        }
+
+
+class SaleOrderLine(models.Model):
+    _inherit = "sale.order.line"
+
+    def _hlv_invoice_guard_serialize_sale_line(self):
+        self.ensure_one()
+        helper = self.env["sale.order"]
+        tax_percent = helper._hlv_invoice_guard_tax_percent(self.tax_id)
+        price_after_tax = self.price_unit * (1.0 + tax_percent / 100.0)
+        return {
+            "id": self.id,
+            "product_code": self.product_id.default_code or "",
+            "product_name": self.product_id.display_name or self.name,
+            "description": self.name or "",
+            "qty": self.product_uom_qty,
+            "uom": self.product_uom.name if self.product_uom else "",
+            "price_unit": self.price_unit,
+            "price_after_tax": price_after_tax,
+            "discount": self.discount,
+            "tax_percent": tax_percent,
+            "subtotal": self.price_subtotal,
+            "total": self.price_total,
         }

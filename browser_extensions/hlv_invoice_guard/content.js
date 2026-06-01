@@ -1,5 +1,9 @@
 (() => {
+  const AMIS_INVOICE_PATH = "/crm/invoice-request/generate/sale_order/invoice_request";
+  const ODOO_BASE_URL = "https://hoanglongvu-stagin-v1-32562676.dev.odoo.com";
   const GRID_SELECTOR = ".body-grid.col-right.system-subform";
+  const ROW_BODY_SELECTOR = ".field-item.wrap-body.ui-sortable";
+  const SALE_INPUT_SELECTOR = 'input.misa-text-box[readonly][title^="DH"]';
   const FIELD_MAP = {
     ProductID: "product_code",
     Description: "description",
@@ -13,7 +17,13 @@
   };
 
   let panel;
-  let lastGrid;
+  let lastAutoCheckKey = "";
+  let autoCheckTimer;
+
+  function isInvoiceRequestPage() {
+    return window.location.hostname === "amisapp.misa.vn"
+      && window.location.pathname === AMIS_INVOICE_PATH;
+  }
 
   function textOf(el) {
     if (!el) return "";
@@ -26,14 +36,28 @@
     return document.querySelector(GRID_SELECTOR);
   }
 
+  function findRowBody(grid) {
+    return grid ? grid.querySelector(ROW_BODY_SELECTOR) : null;
+  }
+
   function inferSaleName() {
+    const directInput = document.querySelector(SALE_INPUT_SELECTOR);
+    const directTitle = directInput ? (directInput.getAttribute("title") || directInput.value || "").trim() : "";
+    if (directTitle) return directTitle;
+
+    const titledInput = Array.from(document.querySelectorAll("input[readonly][title]"))
+      .map((input) => (input.getAttribute("title") || "").trim())
+      .find((title) => /^DH\d{6,}$/.test(title));
+    if (titledInput) return titledInput;
+
     const text = document.body.innerText || "";
-    const matches = text.match(/\b(SO|S0|SOH|S)[A-Z0-9._/-]{3,}\b/g);
+    const matches = text.match(/\bDH\d{6,}\b/g);
     return matches ? matches[0] : "";
   }
 
   function extractRows(grid) {
-    const rows = Array.from(grid.querySelectorAll(".wrap-body > .wrap-row"));
+    const rowBody = findRowBody(grid);
+    const rows = Array.from((rowBody || grid).querySelectorAll(".wrap-row"));
     return rows.map((row, idx) => {
       const line = { index: idx + 1 };
       Object.entries(FIELD_MAP).forEach(([amisKey, outputKey]) => {
@@ -68,23 +92,22 @@
     panel.innerHTML = `
       <div class="hlv-invoice-guard-head">
         <span>HLV Invoice Guard</span>
-        <button type="button" class="hlv-invoice-guard-close">Ẩn</button>
+        <button type="button" class="hlv-invoice-guard-close">Hide</button>
       </div>
       <div class="hlv-invoice-guard-body">
         <div class="hlv-invoice-guard-row">
-          <input class="hlv-invoice-guard-sale" placeholder="Mã đơn bán Odoo, ví dụ SO00123">
-          <button type="button" class="hlv-invoice-guard-check">Kiểm tra</button>
+          <input class="hlv-invoice-guard-sale" placeholder="Odoo sale order">
+          <button type="button" class="hlv-invoice-guard-check">Check</button>
         </div>
         <div class="hlv-invoice-guard-status"></div>
         <div class="hlv-invoice-guard-issues"></div>
       </div>
     `;
     document.documentElement.appendChild(panel);
-    panel.querySelector(".hlv-invoice-guard-sale").value = inferSaleName();
     panel.querySelector(".hlv-invoice-guard-close").addEventListener("click", () => {
       panel.style.display = "none";
     });
-    panel.querySelector(".hlv-invoice-guard-check").addEventListener("click", runCheck);
+    panel.querySelector(".hlv-invoice-guard-check").addEventListener("click", () => runCheck({ force: true }));
     return panel;
   }
 
@@ -93,53 +116,64 @@
     const list = panel.querySelector(".hlv-invoice-guard-issues");
     list.innerHTML = "";
     if (!result.ok) {
-      status.textContent = result.message || result.error || "Không kiểm tra được.";
+      status.textContent = result.message || result.error || "Check failed.";
       return;
     }
     const summary = result.summary || {};
     if (summary.ok) {
-      status.innerHTML = `<span class="hlv-invoice-guard-ok">Khớp ${summary.checked_line_count || 0} dòng.</span>`;
+      status.innerHTML = `<span class="hlv-invoice-guard-ok">OK: matched ${summary.checked_line_count || 0} rows.</span>`;
       return;
     }
-    status.textContent = `Có ${summary.issue_count || 0} lỗi trên ${summary.checked_line_count || 0} dòng.`;
+    status.textContent = `${summary.issue_count || 0} issue(s) in ${summary.checked_line_count || 0} checked row(s).`;
     (result.issues || []).slice(0, 80).forEach((issue) => {
       const item = document.createElement("div");
       item.className = "hlv-invoice-guard-issue";
-      item.textContent = `Dòng ${issue.line} ${issue.product_code || ""}: ${issue.message}`;
+      item.textContent = `Row ${issue.line} ${issue.product_code || ""}: ${issue.message}`;
       list.appendChild(item);
     });
   }
 
   function getConfig() {
     return new Promise((resolve) => {
-      chrome.storage.sync.get(["odooBaseUrl", "apiToken"], resolve);
+      chrome.storage.sync.get(["apiToken"], resolve);
     });
   }
 
-  async function runCheck() {
+  async function runCheck(options = {}) {
+    if (!isInvoiceRequestPage()) return;
+
     const grid = findGrid();
     const p = ensurePanel();
     const status = p.querySelector(".hlv-invoice-guard-status");
-    const saleName = p.querySelector(".hlv-invoice-guard-sale").value.trim();
+    const saleInput = p.querySelector(".hlv-invoice-guard-sale");
+    const detectedSaleName = inferSaleName();
+    if (detectedSaleName && (!saleInput.value || !options.force)) {
+      saleInput.value = detectedSaleName;
+    }
+    const saleName = saleInput.value.trim();
     const config = await getConfig();
 
     if (!grid) {
-      status.textContent = "Không tìm thấy grid hàng hóa trên trang.";
+      status.textContent = "AMIS product grid not found.";
       return;
     }
     if (!saleName) {
-      status.textContent = "Nhập mã đơn bán Odoo trước khi kiểm tra.";
+      status.textContent = "Sale order code not detected.";
       return;
     }
-    if (!config.odooBaseUrl || !config.apiToken) {
-      status.textContent = "Chưa cấu hình Odoo URL hoặc token trong popup extension.";
+    if (!config.apiToken) {
+      status.textContent = "Missing API token in extension popup.";
       return;
     }
 
     const lines = extractRows(grid);
-    status.textContent = `Đang kiểm tra ${lines.length} dòng...`;
+    const checkKey = `${saleName}|${JSON.stringify(lines.map(({ _row, ...line }) => line))}`;
+    if (!options.force && checkKey === lastAutoCheckKey) return;
+    lastAutoCheckKey = checkKey;
+
+    status.textContent = `Checking ${lines.length} row(s) against ${saleName}...`;
     try {
-      const response = await fetch(`${config.odooBaseUrl}/api/hlv/invoice_guard/check`, {
+      const response = await fetch(`${ODOO_BASE_URL}/api/hlv/invoice_guard/check`, {
         method: "POST",
         headers: { "Content-Type": "text/plain;charset=utf-8" },
         body: JSON.stringify({
@@ -152,17 +186,20 @@
       markIssues(lines, result.issues || []);
       renderIssues(result);
     } catch (error) {
-      status.textContent = `Lỗi gọi Odoo: ${error.message}`;
+      status.textContent = `Odoo request error: ${error.message}`;
     }
   }
 
-  function tick() {
+  function scheduleAutoCheck() {
+    if (!isInvoiceRequestPage()) return;
     const grid = findGrid();
-    if (!grid || grid === lastGrid) return;
-    lastGrid = grid;
+    const saleName = inferSaleName();
+    if (!grid || !saleName) return;
     ensurePanel().style.display = "block";
+    clearTimeout(autoCheckTimer);
+    autoCheckTimer = setTimeout(() => runCheck(), 600);
   }
 
-  tick();
-  new MutationObserver(tick).observe(document.documentElement, { childList: true, subtree: true });
+  scheduleAutoCheck();
+  new MutationObserver(scheduleAutoCheck).observe(document.documentElement, { childList: true, subtree: true });
 })();
