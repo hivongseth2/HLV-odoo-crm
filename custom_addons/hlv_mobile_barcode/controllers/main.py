@@ -1403,7 +1403,9 @@ class HLVMobileBarcodeController(http.Controller):
         # Lấy move_lines của package này trong picking hiện tại
         move_lines = request.env['stock.move.line'].sudo().search([
             ('picking_id', '=', picking.id),
-            ('result_package_id', '=', package.id)
+            '|',
+            ('result_package_id', '=', package.id),
+            ('package_id', '=', package.id)
         ])
 
         # Lấy TẤT CẢ move_lines của picking

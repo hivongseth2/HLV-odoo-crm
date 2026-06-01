@@ -75,7 +75,7 @@
                                                 <i class="fa fa-edit"></i> Chỉnh sửa
                                             </button>
                                             <button t-else="" class="btn btn-outline btn-sm btn-pkg-edit" t-on-click="() => this.openPackageEdit(pkg)">
-                                                <i class="fa fa-eye"></i> Xem bên trong
+                                                Xem chi tiết
                                             </button>
                                             <button class="btn btn-danger btn-sm" style="margin-left: 8px; padding: 4px 12px; font-size: 0.85rem;" t-on-click="() => this.unpackPackage(pkg)">
                                                 <i class="fa fa-box-open"></i> Bỏ kiện
