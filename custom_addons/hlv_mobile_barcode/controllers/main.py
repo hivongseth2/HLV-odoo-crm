@@ -336,10 +336,35 @@ class HLVMobileBarcodeController(http.Controller):
         } for w in warehouses]
 
     @http.route('/hlv_mobile_barcode/create_empty_int', type='json', auth='user')
-    def create_empty_int(self, location_id, dest_warehouse_id=False, dest_location_id=False, is_multi_location=False):
-        source_loc = request.env['stock.location'].browse(location_id)
-        if not source_loc.exists():
-            return {'error': _('Không tìm thấy vị trí nguồn')}
+    def create_empty_int(self, location_id=None, dest_warehouse_id=False, dest_location_id=False, is_multi_location=False, source_warehouse_id=False):
+        source_loc = request.env['stock.location'].browse()
+        warehouse = None
+        
+        if location_id:
+            source_loc = request.env['stock.location'].browse(location_id)
+            if not source_loc.exists():
+                return {'error': _('Không tìm thấy vị trí nguồn')}
+            warehouse = source_loc.warehouse_id
+            if not warehouse:
+                warehouse = request.env['stock.warehouse'].search([('view_location_id', 'parent_of', source_loc.id)], limit=1)
+        elif is_multi_location:
+            # Ưu tiên lấy kho nguồn do user chọn, nếu không thì suy đoán từ đích
+            if source_warehouse_id:
+                warehouse = request.env['stock.warehouse'].browse(int(source_warehouse_id))
+            elif dest_location_id:
+                dest_loc = request.env['stock.location'].browse(dest_location_id)
+                warehouse = dest_loc.warehouse_id
+            if not warehouse and dest_warehouse_id:
+                warehouse = request.env['stock.warehouse'].browse(int(dest_warehouse_id))
+            
+            if not warehouse:
+                warehouse = request.env['stock.warehouse'].search([('company_id', '=', request.env.company.id)], limit=1)
+                
+            if warehouse and warehouse.lot_stock_id:
+                source_loc = warehouse.lot_stock_id
+        
+        if not source_loc or not source_loc.exists():
+            return {'error': _('Không xác định được vị trí nguồn')}
             
         company_id = request.env.company.id
         transit_loc = request.env['stock.location'].search([
@@ -349,13 +374,6 @@ class HLVMobileBarcodeController(http.Controller):
         
         if not transit_loc:
             return {'error': _('Không tìm thấy kho trung chuyển (Transit Location)')}
-            
-        warehouse = source_loc.warehouse_id
-        if not warehouse:
-            warehouse = request.env['stock.warehouse'].search([('view_location_id', 'parent_of', source_loc.id)], limit=1)
-            
-        if is_multi_location and warehouse and warehouse.lot_stock_id:
-            source_loc = warehouse.lot_stock_id
             
         picking_type_int = request.env['stock.picking.type'].search([
             ('code', '=', 'internal'),

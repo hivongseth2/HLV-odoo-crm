@@ -508,6 +508,7 @@ export class BarcodeApp extends Component {
 
     promptMultiLocationMove() {
         this.pendingBatchMove = { multiLocation: true };
+        this.state.multiLocationSourceWarehouseId = this.state.warehouses && this.state.warehouses.length > 0 ? this.state.warehouses[0].id.toString() : false;
         this.resetDestPopupState();
         this.state.showWarehouseSelectPopup = true;
     }
@@ -582,14 +583,17 @@ export class BarcodeApp extends Component {
         const destLocationId = isLoc ? this.state.destLocationId : false;
         
         const pendingBatchMove = this.pendingBatchMove;
-        const pendingMove = this.pendingMove;
-        const moveQty = this.state.moveQty;
+        
+        let sourceWarehouseId = false;
+        if (pendingBatchMove && pendingBatchMove.multiLocation) {
+            sourceWarehouseId = this.state.multiLocationSourceWarehouseId;
+        }
         
         this.closeWarehousePopup();
         
         if (pendingBatchMove) {
             if (pendingBatchMove.multiLocation) {
-                await this.goToBatchMove(null, null, destWarehouseId, destLocationId, true);
+                await this.goToBatchMove(null, null, destWarehouseId, destLocationId, true, sourceWarehouseId);
             } else {
                 const { locBarcode, locName } = pendingBatchMove;
                 await this.goToBatchMove(locBarcode, locName, destWarehouseId, destLocationId, false);
@@ -597,7 +601,7 @@ export class BarcodeApp extends Component {
         }
     }
 
-    async goToBatchMove(locationBarcode, locationName, destWarehouseId = false, destLocationId = false, isMultiLocation = false) {
+    async goToBatchMove(locationBarcode, locationName, destWarehouseId = false, destLocationId = false, isMultiLocation = false, sourceWarehouseId = false) {
         // Now redirects to a newly created empty INT picking
         this.pushHistory();
         try {
@@ -606,7 +610,8 @@ export class BarcodeApp extends Component {
                 location_id: this.state.recordId,
                 dest_warehouse_id: destWarehouseId,
                 dest_location_id: destLocationId,
-                is_multi_location: isMultiLocation
+                is_multi_location: isMultiLocation,
+                source_warehouse_id: sourceWarehouseId
             });
             
             if (res.error) {

@@ -275,6 +275,21 @@
                     </div>
                     
                     <div class="modal-body" style="padding: 15px;">
+                        <!-- Source Warehouse Selection (Only for Multi Location) -->
+                        <div t-if="pendingBatchMove and pendingBatchMove.multiLocation" style="margin-bottom: 20px;">
+                            <label style="font-weight: bold; margin-bottom: 8px; display: block; color: var(--primary-color);">
+                                <i class="fa fa-sign-out-alt"></i> Từ Kho (Nguồn):
+                            </label>
+                            <select class="form-control" t-model="state.multiLocationSourceWarehouseId" style="padding: 10px; width: 100%; border: 1px solid var(--border-color); border-radius: 6px;">
+                                <t t-foreach="state.warehouses" t-as="wh" t-key="wh.id">
+                                    <option t-att-value="wh.id"><t t-esc="wh.name"/></option>
+                                </t>
+                            </select>
+                        </div>
+                        
+                        <label style="font-weight: bold; margin-bottom: 8px; display: block; color: var(--primary-color);">
+                            <i class="fa fa-sign-in-alt"></i> Đến (Đích):
+                        </label>
                         <!-- Location Selection Mode -->
                         <div t-if="state.destSelectionMode === 'location'">
                             <p style="margin-bottom: 15px; color: var(--text-color);">Nhập hoặc quét mã vị trí đích:</p>
