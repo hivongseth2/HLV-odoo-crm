@@ -68,6 +68,11 @@ hlv_mobile_barcode/
     4. **Nguồn gốc tài liệu (Origin)**: Tìm kiếm các phiếu có trường `origin` khớp chính xác hoặc chứa tên của phiếu Bước 1.
   - Khi người dùng nhấp nút chuyển đổi, ứng dụng thực hiện giải phóng camera cũ, lưu lịch sử duyệt (`pushHistory()`), cập nhật trạng thái mục tiêu và kích hoạt lại camera trên phiếu Bước 2 mới một cách mượt mà không bị lỗi gắn kết DOM.
 
+- **Chế độ Chuyển kho Đa vị trí (Multi-Location Batch Move)**:
+  - Cho phép người dùng chuyển sản phẩm từ nhiều kệ hàng (vị trí con) khác nhau vào một phiếu kho chung (ví dụ dọn kho, gom hàng).
+  - Về mặt Logic Odoo: Lệnh chuyển (INT) được tạo có `location_id` là kho lưu trữ chung (`lot_stock_id` của Warehouse) để bao hàm toàn bộ. Tuy nhiên các dòng `stock.move.line` sẽ được ép cứng mã vị trí nguồn `ml_src_id` trỏ thẳng vào từng vị trí con (Kệ hàng) cụ thể mà người dùng quét.
+  - Về mặt UI/UX: Ứng dụng yêu cầu và ép buộc người dùng phải quét mã Vị trí (Kệ hàng) trước để xác nhận "điểm lấy hàng" hiện tại. Sau đó mọi sản phẩm được quét đều sẽ thuộc về vị trí này cho đến khi người dùng quét mã vị trí khác để đổi kệ.
+
 ## API / Controllers
 - `/hlv_mobile_barcode/smart_scan`: Đầu vào `barcode`. Trả về đối tượng khớp đầu tiên theo thứ tự ưu tiên: Picking > Product > Location > Package, đồng thời trả kèm thêm trường `warehouse_code`.
 - `/hlv_mobile_barcode/get_picking_data`: Trả về JSON tree chi tiết các dòng dịch chuyển (stock.move.line) của một Picking để hiển thị riêng biệt theo kiện (Package) hoặc hàng lẻ (Unpacked), bao gồm cả `warehouse_code`, các thông tin liên kết 2 bước `linked_picking_id`, `linked_picking_name` và danh sách tóm tắt kiện hàng (`packages`).

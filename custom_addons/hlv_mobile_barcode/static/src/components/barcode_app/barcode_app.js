@@ -63,6 +63,7 @@ export class BarcodeApp extends Component {
             isLocatingDest: false,
             showExitOptions: false,
             pendingExitAction: null,
+            isMultiLocationMode: savedState.isMultiLocationMode || false,
         });
         
         useEffect(() => {
@@ -79,7 +80,8 @@ export class BarcodeApp extends Component {
                 prefillLocationBarcode: this.state.prefillLocationBarcode,
                 prefillLocationName: this.state.prefillLocationName,
                 history: this.history,
-                scanMode: this.state.scanMode
+                scanMode: this.state.scanMode,
+                isMultiLocationMode: this.state.isMultiLocationMode
             }));
         }, () => [
             this.state.currentView,
@@ -93,7 +95,8 @@ export class BarcodeApp extends Component {
             this.state.lookupTitle,
             this.state.prefillLocationBarcode,
             this.state.prefillLocationName,
-            this.state.scanMode
+            this.state.scanMode,
+            this.state.isMultiLocationMode
         ]);
 
         this.barcodeBuffer = "";
@@ -243,7 +246,8 @@ export class BarcodeApp extends Component {
                     barcode: barcode,
                     destination_location_id: this.state.scannedLocationId,
                     last_product_id: this.state.lastScannedProduct,
-                    location_mode: this.state.scanMode
+                    location_mode: this.state.scanMode,
+                    is_multi_location: this.state.isMultiLocationMode
                 });
                 if (res.error) {
                     this.playSound('error');
@@ -335,6 +339,7 @@ export class BarcodeApp extends Component {
             lookupTitle: this.state.lookupTitle,
             prefillLocationBarcode: this.state.prefillLocationBarcode,
             prefillLocationName: this.state.prefillLocationName,
+            isMultiLocationMode: this.state.isMultiLocationMode,
         });
     }
 
@@ -374,6 +379,7 @@ export class BarcodeApp extends Component {
             this.state.lookupTitle = prevState.lookupTitle;
             this.state.prefillLocationBarcode = prevState.prefillLocationBarcode;
             this.state.prefillLocationName = prevState.prefillLocationName;
+            this.state.isMultiLocationMode = prevState.isMultiLocationMode || false;
             this.state.pickingState = "";
             this.viewScannerCallback = null;
 
@@ -423,6 +429,7 @@ export class BarcodeApp extends Component {
         this.state.recordId = null;
         this.state.prefillLocationBarcode = null;
         this.state.prefillLocationName = null;
+        this.state.isMultiLocationMode = false;
         this.state.pickingState = "";
         this.viewScannerCallback = null;
     }
@@ -494,7 +501,13 @@ export class BarcodeApp extends Component {
     }
 
     promptBatchMoveWarehouse(locBarcode, locName) {
-        this.pendingBatchMove = { locBarcode, locName };
+        this.pendingBatchMove = { locBarcode, locName, multiLocation: false };
+        this.resetDestPopupState();
+        this.state.showWarehouseSelectPopup = true;
+    }
+
+    promptMultiLocationMove() {
+        this.pendingBatchMove = { multiLocation: true };
         this.resetDestPopupState();
         this.state.showWarehouseSelectPopup = true;
     }
@@ -575,12 +588,16 @@ export class BarcodeApp extends Component {
         this.closeWarehousePopup();
         
         if (pendingBatchMove) {
-            const { locBarcode, locName } = pendingBatchMove;
-            await this.goToBatchMove(locBarcode, locName, destWarehouseId, destLocationId);
+            if (pendingBatchMove.multiLocation) {
+                await this.goToBatchMove(null, null, destWarehouseId, destLocationId, true);
+            } else {
+                const { locBarcode, locName } = pendingBatchMove;
+                await this.goToBatchMove(locBarcode, locName, destWarehouseId, destLocationId, false);
+            }
         }
     }
 
-    async goToBatchMove(locationBarcode, locationName, destWarehouseId = false, destLocationId = false) {
+    async goToBatchMove(locationBarcode, locationName, destWarehouseId = false, destLocationId = false, isMultiLocation = false) {
         // Now redirects to a newly created empty INT picking
         this.pushHistory();
         try {
@@ -588,7 +605,8 @@ export class BarcodeApp extends Component {
             const res = await rpc("/hlv_mobile_barcode/create_empty_int", {
                 location_id: this.state.recordId,
                 dest_warehouse_id: destWarehouseId,
-                dest_location_id: destLocationId
+                dest_location_id: destLocationId,
+                is_multi_location: isMultiLocation
             });
             
             if (res.error) {
@@ -598,9 +616,10 @@ export class BarcodeApp extends Component {
                 this.state.pickingId = res.picking_id;
                 this.state.pickingName = res.picking_name;
                 this.state.warehouseCode = res.warehouse_code || "HLV";
-                this.state.scannedLocationId = res.location_id;
-                this.state.scannedLocationName = res.location_name;
+                this.state.scannedLocationId = isMultiLocation ? null : res.location_id;
+                this.state.scannedLocationName = isMultiLocation ? "" : res.location_name;
                 this.state.currentView = 'picking';
+                this.state.isMultiLocationMode = isMultiLocation;
             }
         } catch (e) {
             this.notification.add("Lỗi kết nối máy chủ", { type: "danger" });

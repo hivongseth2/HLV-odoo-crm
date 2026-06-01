@@ -16,6 +16,7 @@ export class PickingScanner extends Component {
         refreshTick: { type: Number, optional: true },
         scanMode: { type: String, optional: true },
         onToggleScanMode: { type: Function, optional: true },
+        isMultiLocationMode: { type: Boolean, optional: true },
     };
 
     setup() {

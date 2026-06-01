@@ -336,7 +336,7 @@ class HLVMobileBarcodeController(http.Controller):
         } for w in warehouses]
 
     @http.route('/hlv_mobile_barcode/create_empty_int', type='json', auth='user')
-    def create_empty_int(self, location_id, dest_warehouse_id=False, dest_location_id=False):
+    def create_empty_int(self, location_id, dest_warehouse_id=False, dest_location_id=False, is_multi_location=False):
         source_loc = request.env['stock.location'].browse(location_id)
         if not source_loc.exists():
             return {'error': _('Không tìm thấy vị trí nguồn')}
@@ -353,6 +353,9 @@ class HLVMobileBarcodeController(http.Controller):
         warehouse = source_loc.warehouse_id
         if not warehouse:
             warehouse = request.env['stock.warehouse'].search([('view_location_id', 'parent_of', source_loc.id)], limit=1)
+            
+        if is_multi_location and warehouse and warehouse.lot_stock_id:
+            source_loc = warehouse.lot_stock_id
             
         picking_type_int = request.env['stock.picking.type'].search([
             ('code', '=', 'internal'),
@@ -423,7 +426,7 @@ class HLVMobileBarcodeController(http.Controller):
         }
 
     @http.route('/hlv_mobile_barcode/process_barcode', type='json', auth='user')
-    def process_barcode(self, picking_id, barcode, destination_location_id=None, last_product_id=None, location_mode=None):
+    def process_barcode(self, picking_id, barcode, destination_location_id=None, last_product_id=None, location_mode=None, is_multi_location=False):
         picking = request.env['stock.picking'].browse(picking_id)
         if not picking.exists() or picking.state not in ['draft', 'confirmed', 'assigned']:
             return {'error': _('Phiếu này không thể xử lý thêm sản phẩm.')}
@@ -552,6 +555,9 @@ class HLVMobileBarcodeController(http.Controller):
                     }
             
             return {'error': _('Kiện hàng "%s" không chứa sản phẩm nào phù hợp với phiếu này.', package.name)}
+
+        if is_multi_location and not destination_location_id:
+            return {'error': _('Chế độ lấy hàng Đa vị trí: Vui lòng quét mã Vị trí (Kệ hàng) trước khi quét sản phẩm!')}
 
         product = request.env['product.product'].sudo().search(['|', ('barcode', '=', barcode), ('default_code', '=', barcode)], limit=1)
         if not product:
