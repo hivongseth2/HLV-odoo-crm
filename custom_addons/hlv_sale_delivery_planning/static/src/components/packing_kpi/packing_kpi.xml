@@ -33,6 +33,15 @@
                             </t>
                         </select>
                     </div>
+                    <div>
+                        <label class="form-label small text-muted mb-1">Trạng thái</label>
+                        <select class="form-select form-select-sm" t-att-value="state.packingState" t-on-change="onPackingStateChange">
+                            <option value="all">Tất cả trạng thái</option>
+                            <option value="assigned">Đã assign</option>
+                            <option value="in_progress">Đang đóng</option>
+                            <option value="done">Hoàn thành</option>
+                        </select>
+                    </div>
                     <div class="flex-grow-1" style="min-width:160px;">
                         <label class="form-label small text-muted mb-1">Tìm theo đơn / phiếu</label>
                         <input type="text" class="form-control form-control-sm"

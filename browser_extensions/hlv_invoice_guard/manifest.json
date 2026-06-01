@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "HLV Invoice Guard",
+  "version": "1.0.0",
+  "description": "Check AMIS invoice proposal lines against Odoo sale and linked purchase orders.",
+  "permissions": ["storage"],
+  "host_permissions": ["<all_urls>"],
+  "action": {
+    "default_title": "HLV Invoice Guard",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}

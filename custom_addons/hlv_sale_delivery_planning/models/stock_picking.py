@@ -181,7 +181,7 @@ class StockPicking(models.Model):
         }
 
     @api.model
-    def get_packing_kpi_dashboard(self, date_from=False, date_to=False, packer_user_id=False, search_text=False):
+    def get_packing_kpi_dashboard(self, date_from=False, date_to=False, packer_user_id=False, search_text=False, packing_state=False):
         domain = [
             ('picking_type_id.sequence_code', 'ilike', 'PICK'),
             ('return_id', '=', False),
@@ -225,13 +225,24 @@ class StockPicking(models.Model):
             packs_by_pick[pack.x_pack_source_pick_id.id] |= pack
 
         groups = {}
-        total_assigned = len(picks)
+        filter_state = str(packing_state or 'all')
+        total_assigned = 0
         total_done = 0
         total_in_progress = 0
         print_to_done_values = []
         actual_values = []
 
         for pick in picks:
+            related_packs = packs_by_pick.get(pick.id, self.env['stock.picking'])
+            done_packs = related_packs.filtered(lambda p: p.state == 'done')
+            active_packs = related_packs.filtered(lambda p: p.state not in ('done', 'cancel'))
+            best_pack = done_packs[:1] or active_packs[:1] or related_packs[:1]
+            is_done = bool(done_packs)
+            is_in_progress = bool(active_packs.filtered(lambda p: p.x_pack_actual_start_at or p.state == 'in_progress'))
+            row_state = 'done' if is_done else ('in_progress' if is_in_progress else 'assigned')
+            if filter_state != 'all' and row_state != filter_state:
+                continue
+
             packer = pick.x_pack_packer_user_id
             key = packer.id
             group = groups.setdefault(key, {
@@ -246,14 +257,9 @@ class StockPicking(models.Model):
                 '_print_values': [],
                 '_actual_values': [],
             })
-            related_packs = packs_by_pick.get(pick.id, self.env['stock.picking'])
-            done_packs = related_packs.filtered(lambda p: p.state == 'done')
-            active_packs = related_packs.filtered(lambda p: p.state not in ('done', 'cancel'))
-            best_pack = done_packs[:1] or active_packs[:1] or related_packs[:1]
-            is_done = bool(done_packs)
-            is_in_progress = bool(active_packs.filtered(lambda p: p.x_pack_actual_start_at or p.state == 'in_progress'))
 
             group['assigned_count'] += 1
+            total_assigned += 1
             if is_done:
                 group['done_count'] += 1
                 total_done += 1
@@ -276,7 +282,7 @@ class StockPicking(models.Model):
                 'packer_user_id': packer.id,
                 'sale_order': pick.sale_id.name or pick.origin or '',
                 'pack_name': best_pack.name if best_pack else '',
-                'state': 'done' if is_done else ('in_progress' if is_in_progress else 'assigned'),
+                'state': row_state,
                 'assigned_at': pick.x_pack_assigned_at.strftime('%Y-%m-%d %H:%M:%S') if pick.x_pack_assigned_at else False,
                 'print_start_at': pick.x_pick_print_start_at.strftime('%Y-%m-%d %H:%M:%S') if pick.x_pick_print_start_at else False,
                 'print_end_at': pick.x_pick_print_end_at.strftime('%Y-%m-%d %H:%M:%S') if pick.x_pick_print_end_at else False,
@@ -309,7 +315,7 @@ class StockPicking(models.Model):
         }
 
     @api.model
-    def get_packing_kpi_daily_chart(self, date_from=False, date_to=False, packer_user_id=False):
+    def get_packing_kpi_daily_chart(self, date_from=False, date_to=False, packer_user_id=False, packing_state=False):
         """Return daily breakdown for chart rendering: labels + done/in_progress/assigned arrays."""
         domain = [
             ('picking_type_id.sequence_code', 'ilike', 'PICK'),
@@ -333,21 +339,27 @@ class StockPicking(models.Model):
             packs_by_pick.setdefault(pack.x_pack_source_pick_id.id, self.env['stock.picking'])
             packs_by_pick[pack.x_pack_source_pick_id.id] |= pack
 
+        filter_state = str(packing_state or 'all')
         daily = {}
         for pick in picks:
             if not pick.x_pack_assigned_at:
+                continue
+            related_packs = packs_by_pick.get(pick.id, self.env['stock.picking'])
+            done_packs = related_packs.filtered(lambda p: p.state == 'done')
+            active_packs = related_packs.filtered(lambda p: p.state not in ('done', 'cancel'))
+            is_done = bool(done_packs)
+            is_in_progress = bool(active_packs.filtered(lambda p: p.x_pack_actual_start_at or p.state == 'in_progress'))
+            row_state = 'done' if is_done else ('in_progress' if is_in_progress else 'assigned')
+            if filter_state != 'all' and row_state != filter_state:
                 continue
             vn_dt = pick.x_pack_assigned_at + timedelta(hours=7)
             day = vn_dt.strftime('%Y-%m-%d')
             if day not in daily:
                 daily[day] = {'assigned': 0, 'done': 0, 'in_progress': 0}
             daily[day]['assigned'] += 1
-            related_packs = packs_by_pick.get(pick.id, self.env['stock.picking'])
-            done_packs = related_packs.filtered(lambda p: p.state == 'done')
-            active_packs = related_packs.filtered(lambda p: p.state not in ('done', 'cancel'))
             if done_packs:
                 daily[day]['done'] += 1
-            elif active_packs.filtered(lambda p: p.x_pack_actual_start_at or p.state == 'in_progress'):
+            elif is_in_progress:
                 daily[day]['in_progress'] += 1
 
         labels = sorted(daily.keys())

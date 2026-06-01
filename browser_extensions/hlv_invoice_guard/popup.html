@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8">
+    <title>HLV Invoice Guard</title>
+    <style>
+      body { font: 13px Arial, sans-serif; margin: 12px; width: 320px; color: #1f2937; }
+      label { display: block; margin: 10px 0 4px; font-weight: 600; }
+      input { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; }
+      button { margin-top: 12px; width: 100%; padding: 8px; border: 0; border-radius: 4px; background: #0f766e; color: white; font-weight: 600; cursor: pointer; }
+      .hint { color: #64748b; line-height: 1.4; margin-top: 10px; }
+      .saved { color: #0f766e; margin-top: 8px; min-height: 18px; }
+    </style>
+  </head>
+  <body>
+    <label for="apiToken">API token</label>
+    <input id="apiToken" type="password" placeholder="Token trong Odoo Settings">
+
+    <button id="save">Lưu cấu hình</button>
+    <div id="saved" class="saved"></div>
+    <div class="hint">Odoo URL dang duoc hardcode ve staging. Vao trang de nghi xuat hoa don AMIS, extension se tu detect ma DH va tu kiem tra.</div>
+    <script src="popup.js"></script>
+  </body>
+</html>
