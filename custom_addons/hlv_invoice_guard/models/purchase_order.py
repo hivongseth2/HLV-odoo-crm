@@ -31,6 +31,7 @@ class PurchaseOrderLine(models.Model):
     def _hlv_invoice_guard_serialize_purchase_line(self):
         self.ensure_one()
         tax_percent = self.env["sale.order"]._hlv_invoice_guard_tax_percent(self.taxes_id)
+        tax_amount = self.price_total - self.price_subtotal
         return {
             "id": self.id,
             "product_code": self.product_id.default_code or "",
@@ -42,5 +43,6 @@ class PurchaseOrderLine(models.Model):
             "discount": getattr(self, "discount", 0.0) or 0.0,
             "tax_percent": tax_percent,
             "subtotal": self.price_subtotal,
+            "tax": tax_amount,
             "total": self.price_total,
         }

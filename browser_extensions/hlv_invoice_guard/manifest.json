@@ -4,14 +4,20 @@
   "version": "1.0.0",
   "description": "Check AMIS invoice proposal lines against Odoo sale and linked purchase orders.",
   "permissions": ["storage"],
-  "host_permissions": ["<all_urls>"],
+  "host_permissions": [
+    "https://amisapp.misa.vn/*",
+    "https://hoanglongvu-stagin-v1-32562676.dev.odoo.com/*"
+  ],
   "action": {
     "default_title": "HLV Invoice Guard",
     "default_popup": "popup.html"
   },
+  "background": {
+    "service_worker": "background.js"
+  },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
+      "matches": ["https://amisapp.misa.vn/crm/invoice-request/generate/sale_order/invoice_request*"],
       "js": ["content.js"],
       "css": ["content.css"],
       "run_at": "document_idle"
