@@ -1,9 +1,15 @@
 const ODOO_BASE_URL = "https://hoanglongvu-stagin-v1-32562676.dev.odoo.com";
+const LOG_PREFIX = "[HLV Invoice Guard BG]";
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || message.type !== "hlv_invoice_guard_check") {
     return false;
   }
+
+  console.log(LOG_PREFIX, "check request", {
+    sale_name: message.payload?.sale_name,
+    line_count: message.payload?.lines?.length || 0,
+  });
 
   fetch(`${ODOO_BASE_URL}/api/hlv/invoice_guard/check`, {
     method: "POST",
@@ -12,6 +18,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   })
     .then(async (response) => {
       const text = await response.text();
+      console.log(LOG_PREFIX, "odoo response", response.status, text.slice(0, 300));
       let data;
       try {
         data = text ? JSON.parse(text) : {};
@@ -29,6 +36,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       });
     })
     .catch((error) => {
+      console.error(LOG_PREFIX, "fetch failed", error);
       sendResponse({
         ok: false,
         status: 0,
