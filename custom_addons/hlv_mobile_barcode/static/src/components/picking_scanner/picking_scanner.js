@@ -74,11 +74,13 @@ export class PickingScanner extends Component {
                     
                     if (!openedPickings.includes(this.props.pickingId)) {
                         const autoClearKey = 'hlv_auto_cleared_' + this.props.pickingId;
-                        if (!sessionStorage.getItem(autoClearKey)) {
+                        if (!sessionStorage.getItem(autoClearKey) && data.name && data.name.toUpperCase().includes('PICK')) {
                             sessionStorage.setItem(autoClearKey, '1');
                             
                             // Gọi trực tiếp hàm xóa số lượng, bỏ qua xác nhận
-                            this.clearQuantities(true);
+                            await this.clearQuantities(true);
+                            // Sau khi xóa xong, load lại data thay vì reload trang
+                            await this.loadPicking();
                             return;
                         }
                         
@@ -114,7 +116,9 @@ export class PickingScanner extends Component {
                 } catch (e) {}
                 
                 this.notification.add("Đã làm mới số lượng", { type: "success" });
-                window.location.reload();
+                if (!skipConfirm) {
+                    await this.loadPicking();
+                }
             }
         } catch (e) {
             this.notification.add("Lỗi kết nối", { type: "danger" });
