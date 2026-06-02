@@ -587,6 +587,45 @@ class HLVMobileBarcodeController(http.Controller):
         # Find the move for this product
         move = picking.move_ids.filtered(lambda m: m.product_id == product and m.state not in ['done', 'cancel'])
         
+        # PRE-CHECK: Physical stock check BEFORE creating any new move
+        temp_move_line = move.move_line_ids.filtered(lambda ml: not ml.result_package_id and not ml.package_id) if move else []
+        ml_src_id = destination_location_id if (destination_location_id and not is_putaway) else (temp_move_line[0].location_id.id if temp_move_line else picking.location_id.id)
+        
+        if not is_putaway:
+            quants = request.env['stock.quant'].sudo().search([
+                ('product_id', '=', product.id),
+                ('location_id', 'child_of', ml_src_id),
+                ('company_id', '=', picking.company_id.id),
+                ('package_id', '=', False)
+            ])
+            free_qty = sum(q.quantity - q.reserved_quantity for q in quants)
+            
+            source_loc = request.env['stock.location'].sudo().browse(ml_src_id)
+            child_loc_ids = request.env['stock.location'].sudo().search([('id', 'child_of', ml_src_id)]).ids
+            
+            reserved_by_this = sum(
+                ml.product_uom_id._compute_quantity(ml.quantity_product_uom, product.uom_id)
+                for ml in picking.move_line_ids
+                if ml.product_id == product and ml.location_id.id in child_loc_ids and not ml.package_id
+            )
+            available_qty = free_qty + reserved_by_this
+            
+            processed_qty_from_loc_base = sum(
+                ml.product_uom_id._compute_quantity(ml.quantity, product.uom_id)
+                for ml in picking.move_line_ids
+                if ml.product_id == product and ml.location_id.id in child_loc_ids
+            )
+            
+            if available_qty <= 0:
+                return {'error': _('Sản phẩm "%s" không có tồn kho khả dụng tại vị trí "%s" (bao gồm các vị trí con). Không thể quét!', product.display_name, source_loc.display_name)}
+                
+            scan_qty_base = 1.0
+            if move and move[0].product_uom:
+                scan_qty_base = move[0].product_uom._compute_quantity(1.0, product.uom_id)
+            
+            if processed_qty_from_loc_base + scan_qty_base > available_qty:
+                return {'error': _('Số lượng quét vượt quá tồn kho thực tế khả dụng tại vị trí "%s" (Tối đa: %g %s). Không thể quét thêm!', source_loc.display_name, available_qty, product.uom_id.name)}
+        
         if not move:
             if picking.source_transfer_id:
                 return {'error': _('Không được quét thêm sản phẩm mới vào phiếu Bước 2! Chỉ được quét các sản phẩm đã có trong phiếu.')}
@@ -606,12 +645,8 @@ class HLVMobileBarcodeController(http.Controller):
                 'location_dest_id': picking.location_dest_id.id,
             })
             
-            # If picking was draft, maybe we need to confirm it so it gets move_line_ids?
-            # Or we can just create the move_line manually. In Odoo 17+, moves usually get confirmed later.
-            # But let's confirm the picking if it's draft so Odoo's internal state is happy.
             if picking.state == 'draft':
                 picking.action_confirm()
-                # Re-fetch move as action_confirm might replace/merge it
                 move = picking.move_ids.filtered(lambda m: m.product_id == product and m.state not in ['done', 'cancel'])
                 if not move:
                     return {'error': _('Lỗi hệ thống khi tạo sản phẩm mới.')}
@@ -640,60 +675,8 @@ class HLVMobileBarcodeController(http.Controller):
         move_line = move.move_line_ids.filtered(lambda ml: not ml.result_package_id and not ml.package_id)
         
         ml_dest_id = destination_location_id if (destination_location_id and is_putaway) else (move_line[0].location_dest_id.id if move_line else picking.location_dest_id.id)
-        ml_src_id = destination_location_id if (destination_location_id and not is_putaway) else (move_line[0].location_id.id if move_line else picking.location_id.id)
         
-        # Check actual physical stock in the source location to prevent over-picking (only when picking, i.e., not is_putaway)
         if not is_putaway:
-            # Find the actual physical stock available at this source location (including all sub-locations)
-            quants = request.env['stock.quant'].sudo().search([
-                ('product_id', '=', product.id),
-                ('location_id', 'child_of', ml_src_id),
-                ('company_id', '=', picking.company_id.id),
-                ('package_id', '=', False)
-            ])
-            free_qty = sum(q.quantity - q.reserved_quantity for q in quants)
-            
-            source_loc = request.env['stock.location'].sudo().browse(ml_src_id)
-            child_loc_ids = request.env['stock.location'].sudo().search([('id', 'child_of', ml_src_id)]).ids
-            
-            # Add back quantity reserved by this picking in this location tree
-            reserved_by_this = sum(
-                ml.product_uom_id._compute_quantity(ml.quantity_product_uom, product.uom_id)
-                for ml in picking.move_line_ids
-                if ml.product_id == product and ml.location_id.id in child_loc_ids and not ml.package_id
-            )
-            available_qty = free_qty + reserved_by_this
-            
-            # Calculate total processed qty in Base UOM
-            processed_qty_from_loc_base = sum(
-                ml.product_uom_id._compute_quantity(ml.quantity, product.uom_id)
-                for ml in picking.move_line_ids
-                if ml.product_id == product and ml.location_id.id in child_loc_ids
-            )
-            
-            if available_qty <= 0:
-                return {
-                    'error': _(
-                        'Sản phẩm "%s" không có tồn kho khả dụng tại vị trí "%s" (bao gồm các vị trí con). Không thể quét!',
-                        product.display_name,
-                        source_loc.display_name
-                    )
-                }
-                
-            scan_qty_base = 1.0
-            if move and move.product_uom:
-                scan_qty_base = move.product_uom._compute_quantity(1.0, product.uom_id)
-            
-            if processed_qty_from_loc_base + scan_qty_base > available_qty:
-                return {
-                    'error': _(
-                        'Số lượng quét vượt quá tồn kho thực tế khả dụng tại vị trí "%s" (Tối đa: %g %s). Không thể quét thêm!',
-                        source_loc.display_name,
-                        available_qty,
-                        product.uom_id.name
-                    )
-                }
-            
             # Resolve actual child location where stock exists for accurate move line creation
             # If stock is not directly at ml_src_id but at a child location, use the child location
             actual_src_id = ml_src_id
