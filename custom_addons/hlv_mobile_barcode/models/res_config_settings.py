@@ -27,18 +27,18 @@ class ResConfigSettings(models.TransientModel):
         readonly=False,
     )
     hlv_barcode_use_independent_permissions = fields.Boolean(
-        string='Sử dụng phân quyền quét độc lập',
+        string='Dùng Quyền Riêng Cho Máy Quét',
         config_parameter='hlv_mobile_barcode.hlv_barcode_use_independent_permissions',
-        help='Nếu bật, hệ thống sẽ sử dụng cấu hình phân quyền quét của riêng module Mobile Barcode. Nếu tắt, sẽ dùng chung cấu hình của module hlv_warehouse_permission.'
+        help='Bật lên nếu bạn muốn phân quyền cho nhân viên quét mã độc lập với quyền kho bình thường trên máy tính.'
     )
     hlv_barcode_allow_package_scan = fields.Boolean(
-        string='Cho phép quét Kiện hàng (Package)',
+        string='Cho Phép Quét Mã Kiện Hàng (PACKxxx)',
         config_parameter='hlv_mobile_barcode.hlv_barcode_allow_package_scan',
-        help='Nếu bật, cho phép quét mã vạch của kiện hàng (PACKxxx) để tự động nhận dạng và xử lý hàng loạt tất cả sản phẩm bên trong kiện.'
+        help='Bật để nhân viên có thể quét 1 mã kiện chứa nhiều sản phẩm thay vì phải quét từng cái một.'
     )
     hlv_barcode_show_qty_buttons = fields.Boolean(
-        string='Hiển thị nút điều chỉnh số lượng nhanh',
-        help='Nếu bật, sẽ hiển thị các nút -10, -1, +1, +10 để chỉnh số lượng nhanh trong ứng dụng quét mã vạch.'
+        string='Hiện Nút Bấm Cộng/Trừ Số Lượng',
+        help='Hiển thị các nút +1, -1, +10, -10 trên màn hình quét để nhân viên bấm nhanh không cần gõ phím.'
     )
 
     def get_values(self):
