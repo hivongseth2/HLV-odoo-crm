@@ -41,15 +41,14 @@ class SaleOrder(models.Model):
                 issues.append(self._hlv_invoice_guard_issue(index, code, "product_code", "Mã hàng không có trong đơn bán Odoo."))
                 continue
 
+            self._hlv_invoice_guard_compare_number(issues, index, code, "qty", "Số lượng", crm_line["qty"], sale_line["qty"], precision)
             self._hlv_invoice_guard_compare_number(issues, index, code, "price_unit", "Đơn giá", crm_line["price_unit"], sale_line["price_unit"], precision)
             self._hlv_invoice_guard_compare_number(issues, index, code, "tax_percent", "VAT", crm_line["tax_percent"], sale_line["tax_percent"], 0.01)
+            self._hlv_invoice_guard_compare_number(issues, index, code, "tax", "Tiền thuế", crm_line["tax"], sale_line["tax"], precision)
+            self._hlv_invoice_guard_compare_number(issues, index, code, "total", "Tổng tiền", crm_line["total"], sale_line["total"], precision)
 
-            if not payload.get("purchase_order"):
-                issues.append(self._hlv_invoice_guard_issue(index, code, "product_code", "Không tìm thấy đơn mua liên kết qua purchase.order.origin."))
-                continue
-            if not po_line:
-                issues.append(self._hlv_invoice_guard_issue(index, code, "product_code", "Mã hàng không có trong đơn mua liên kết."))
-                continue
+            if po_line:
+                self._hlv_invoice_guard_compare_number(issues, index, code, "tax_percent", "VAT CRM/đơn mua", crm_line["tax_percent"], po_line["tax_percent"], 0.01, actual_label="CRM", expected_label="Đơn mua")
 
 
         return {

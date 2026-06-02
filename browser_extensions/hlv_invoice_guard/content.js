@@ -6,6 +6,7 @@
   const SALE_INPUT_SELECTOR = 'input.misa-text-box[readonly][title^="DH"]';
   const FIELD_MAP = {
     ProductID: "product_code",
+    Amount: "qty",
     Price: "price_unit",
     TaxPercentID: "tax_percent",
     Tax: "tax",
@@ -13,11 +14,13 @@
   };
   const FALLBACK_CELL_INDEX = {
     product_code: 1,
-    price_unit: 4,
-    tax_percent: 9,
-    tax: 10,
-    total: 11,
+    qty: 5,
+    price_unit: 6,
+    tax_percent: 10,
+    tax: 11,
+    total: 12,
   };
+  const SALE_COMPARE_FIELDS = ["qty", "price_unit", "tax_percent", "tax", "total"];
 
   let root;
   let lastResult = null;
@@ -123,6 +126,7 @@
     };
     return {
       product_code: find("Mã hàng hóa", "Mã hàng", "Mã HH"),
+      qty: find("Số lượng", "SL"),
       price_unit: find("Đơn giá"),
       tax_percent: find("Thuế suất"),
       tax: find("Tiền thuế"),
@@ -160,6 +164,7 @@
         const cells = Array.from(row.children);
         const values = cells.map(textOf);
         const productIndex = columns.product_code >= 0 ? columns.product_code : FALLBACK_CELL_INDEX.product_code;
+        const qtyIndex = columns.qty >= 0 ? columns.qty : FALLBACK_CELL_INDEX.qty;
         const priceUnitIndex = columns.price_unit >= 0 ? columns.price_unit : FALLBACK_CELL_INDEX.price_unit;
         const taxPercentIndex = columns.tax_percent >= 0 ? columns.tax_percent : FALLBACK_CELL_INDEX.tax_percent;
         const taxIndex = columns.tax >= 0 ? columns.tax : FALLBACK_CELL_INDEX.tax;
@@ -167,11 +172,13 @@
 
         if (values.length && values.some(Boolean) && !/tong cong/i.test(compactText(values.join(" ")))) {
           line.product_code = values[productIndex] || "";
+          line.qty = values[qtyIndex] || "";
           line.price_unit = values[priceUnitIndex] || "";
           line.tax_percent = values[taxPercentIndex] || "";
           line.tax = values[taxIndex] || "";
           line.total = values[totalIndex] || "";
           if (cells[productIndex]) line._cells.product_code = cells[productIndex];
+          if (cells[qtyIndex]) line._cells.qty = cells[qtyIndex];
           if (cells[priceUnitIndex]) line._cells.price_unit = cells[priceUnitIndex];
           if (cells[taxPercentIndex]) line._cells.tax_percent = cells[taxPercentIndex];
           if (cells[taxIndex]) line._cells.tax = cells[taxIndex];
@@ -253,7 +260,7 @@
 
   function enforcePurchaseCompare(result, crmLines) {
     if (!result || !result.ok) return result;
-    const issues = Array.isArray(result.issues) ? [...result.issues] : [];
+    const issues = sanitizeBackendIssues(result.issues || []);
     const po = result.purchase_order;
     const poByCode = lineMap(po?.lines || []);
 
@@ -261,6 +268,7 @@
       const code = String(crmLine.product_code || "").trim().toUpperCase();
       if (!code) return;
       const poLine = poByCode.get(code);
+      if (!po || !poLine) return;
       if (!po) {
         addIssue(issues, crmLine.index, code, "product_code", "Không tìm thấy đơn mua liên kết.", null, null);
         return;
@@ -300,6 +308,16 @@
         checked_line_count: crmLines.length,
       },
     };
+  }
+
+  function sanitizeBackendIssues(issues) {
+    return (issues || []).filter((issue) => {
+      const message = compactText(issue?.message || "");
+      if (message.includes("khong co trong don mua")) return false;
+      if (message.includes("khong tim thay don mua")) return false;
+      if (isSalePurchaseIssue(issue)) return false;
+      return true;
+    });
   }
 
   function collapseIssues(issues) {
@@ -351,7 +369,7 @@
     const byIndex = new Map(lines.map((line) => [line.index, line]));
 
     lines.forEach((line) => {
-      ["price_unit", "tax_percent"].forEach((field) => {
+      SALE_COMPARE_FIELDS.forEach((field) => {
         const cell = line._cells[field];
         if (!cell) return;
         cell.setAttribute("data-hlv-crm-line", String(line.index));
@@ -595,7 +613,7 @@
   }
 
   function compareOkClass(issueMap, side, code, field) {
-    if (side === "sale" && !["price_unit", "tax_percent"].includes(field)) return "";
+    if (side === "sale" && !SALE_COMPARE_FIELDS.includes(field)) return "";
     if (side === "purchase" && field !== "tax_percent") return "";
     return compareCellClass(issueMap, side, code, field) ? "" : "hlv-invoice-guard-compare-ok";
   }
@@ -626,15 +644,15 @@
       <tr>
         <td${compareCellAttrs(issueMap, side, line.product_code, "product_code")}${compareDataAttrs(side, line.product_code, "product_code")}>${escapeHtml(line.product_code || "")}</td>
         <td>${escapeHtml(line.product_name || line.description || "")}</td>
-        <td class="num"${compareDataAttrs(side, line.product_code, "qty")}>${formatMoney(line.qty)}</td>
+        <td class="num ${compareCellClass(issueMap, side, line.product_code, "qty")} ${compareOkClass(issueMap, side, line.product_code, "qty")}" title="${compareCellTitle(issueMap, side, line.product_code, "qty")}"${compareDataAttrs(side, line.product_code, "qty")}>${formatMoney(line.qty)}</td>
         <td class="num ${compareCellClass(issueMap, side, line.product_code, "price_unit")} ${compareOkClass(issueMap, side, line.product_code, "price_unit")}" title="${compareCellTitle(issueMap, side, line.product_code, "price_unit")}"${compareDataAttrs(side, line.product_code, "price_unit")}>${formatMoney(line.price_unit)}</td>
         <td class="num ${compareCellClass(issueMap, side, line.product_code, "tax_percent")} ${compareOkClass(issueMap, side, line.product_code, "tax_percent")}" title="${compareCellTitle(issueMap, side, line.product_code, "tax_percent")}"${compareDataAttrs(side, line.product_code, "tax_percent")}>${formatMoney(line.tax_percent)}%</td>
-        <td class="num"${compareDataAttrs(side, line.product_code, "tax")}>${formatMoney(line.tax)}</td>
-        <td class="num"${compareDataAttrs(side, line.product_code, "total")}>${formatMoney(line.total)}</td>
+        <td class="num ${compareCellClass(issueMap, side, line.product_code, "tax")} ${compareOkClass(issueMap, side, line.product_code, "tax")}" title="${compareCellTitle(issueMap, side, line.product_code, "tax")}"${compareDataAttrs(side, line.product_code, "tax")}>${formatMoney(line.tax)}</td>
+        <td class="num ${compareCellClass(issueMap, side, line.product_code, "total")} ${compareOkClass(issueMap, side, line.product_code, "total")}" title="${compareCellTitle(issueMap, side, line.product_code, "total")}"${compareDataAttrs(side, line.product_code, "total")}>${formatMoney(line.total)}</td>
       </tr>
     `).join("");
     return `
-      <div class="hlv-invoice-guard-order">
+      <div class="hlv-invoice-guard-order" style="background: ${side === "sale" ? "#f7ddbf" : "#bcdffc"}">
         <div class="hlv-invoice-guard-order-title">${escapeHtml(title)}: ${escapeHtml(order.name || "")}</div>
         <div class="hlv-invoice-guard-order-meta">
           ${escapeHtml(order.partner?.name || "")} | VAT: ${escapeHtml(order.partner?.vat || "")} | Tổng: ${formatMoney(order.amount_total)}
@@ -702,7 +720,7 @@
   function drawConnectorLines(result) {
     document.querySelector(".hlv-invoice-guard-lines")?.remove();
     const lineIssues = collapseIssues(result?.issues || []).filter((issue) => (
-      ["price_unit", "tax_percent"].includes(issue.field)
+      SALE_COMPARE_FIELDS.includes(issue.field)
       && (isCrmSaleIssue(issue) || isCrmPurchaseIssue(issue) || isSalePurchaseIssue(issue))
     ));
     if (!lineIssues.length) return;
