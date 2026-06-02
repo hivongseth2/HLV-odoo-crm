@@ -482,7 +482,7 @@ class HLVMobileBarcodeController(http.Controller):
         location = request.env['stock.location'].sudo().search(['|', ('barcode', '=', barcode), ('name', '=', barcode)], limit=1)
         if location:
             res = {'type': 'location', 'location_id': location.id, 'location_name': location.display_name, 'is_putaway': is_putaway}
-            if last_product_id:
+            if last_product_id and not is_multi_location:
                 move = picking.move_ids.filtered(lambda m: m.product_id.id == last_product_id and m.state not in ['done', 'cancel'])
                 if move:
                     move_line = move.move_line_ids.filtered(lambda ml: not ml.result_package_id)
