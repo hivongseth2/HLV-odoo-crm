@@ -6,6 +6,36 @@ from odoo.http import request
 
 _logger = logging.getLogger(__name__)
 
+def _is_pick_picking(picking):
+    if not picking or not picking.exists():
+        return False
+    pt = picking.picking_type_id
+    if not pt:
+        return False
+        
+    picking_name = (picking.name or '').lower()
+    pt_name = (pt.name or '').lower()
+    seq_code = (pt.sequence_code or '').lower()
+    
+    seq_prefix = ''
+    seq_name = ''
+    try:
+        if pt.sequence_id:
+            seq_prefix = (pt.sequence_id.prefix or '').lower()
+            seq_name = (pt.sequence_id.name or '').lower()
+    except Exception:
+        pass
+        
+    return (
+        'pick' in picking_name or
+        'pick' in pt_name or
+        'pick' in seq_code or
+        'pick' in seq_prefix or
+        'pick' in seq_name or
+        'lấy hàng' in pt_name or
+        'lấy hàng' in seq_name
+    )
+
 class HLVMobileBarcodeController(http.Controller):
 
     @http.route('/hlv_mobile_barcode/smart_scan', type='json', auth='user')
@@ -118,7 +148,7 @@ class HLVMobileBarcodeController(http.Controller):
                         for line in move.move_line_ids:
                             line.quantity = 0.0
 
-        is_pick_picking = 'pick' in (picking.name or '').lower() or 'pick' in (picking.picking_type_id.name or '').lower() or 'pick' in (picking.picking_type_id.sequence_code or '').lower()
+        is_pick_picking = _is_pick_picking(picking)
 
         lines = []
         for move in picking.move_ids:
