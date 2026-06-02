@@ -17,7 +17,7 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://amisapp.misa.vn/crm/invoice-request/generate/sale_order/invoice_request*"],
+      "matches": ["https://amisapp.misa.vn/*"],
       "js": ["content.js"],
       "css": ["content.css"],
       "run_at": "document_idle"

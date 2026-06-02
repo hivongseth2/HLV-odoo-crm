@@ -20,6 +20,8 @@ class SaleOrder(models.Model):
         self.ensure_one()
         payload = self.hlv_invoice_guard_payload()
         sale_by_code = self._hlv_invoice_guard_line_map(payload["sale_order"]["lines"])
+        po_lines = (payload.get("purchase_order") or {}).get("lines") or []
+        po_by_code = self._hlv_invoice_guard_line_map(po_lines)
 
         issues = []
         normalized_crm_lines = []
@@ -30,6 +32,7 @@ class SaleOrder(models.Model):
             normalized_crm_lines.append(crm_line)
             code = crm_line["product_code"]
             sale_line = sale_by_code.get(code)
+            po_line = po_by_code.get(code)
 
             if not code:
                 issues.append(self._hlv_invoice_guard_issue(index, "", "product_code", "Dòng AMIS thiếu mã hàng hóa."))
@@ -41,6 +44,18 @@ class SaleOrder(models.Model):
             self._hlv_invoice_guard_compare_number(issues, index, code, "tax_percent", "VAT", crm_line["tax_percent"], sale_line["tax_percent"], 0.01)
             self._hlv_invoice_guard_compare_number(issues, index, code, "tax", "Tiền thuế", crm_line["tax"], sale_line["tax"], precision)
             self._hlv_invoice_guard_compare_number(issues, index, code, "total", "Tổng tiền", crm_line["total"], sale_line["total"], precision)
+
+            if not payload.get("purchase_order"):
+                issues.append(self._hlv_invoice_guard_issue(index, code, "product_code", "Không tìm thấy đơn mua liên kết qua purchase.order.origin."))
+                continue
+            if not po_line:
+                issues.append(self._hlv_invoice_guard_issue(index, code, "product_code", "Mã hàng không có trong đơn mua liên kết."))
+                continue
+
+            self._hlv_invoice_guard_compare_number(issues, index, code, "qty", "Số lượng đơn bán/đơn mua", sale_line["qty"], po_line["qty"], precision)
+            self._hlv_invoice_guard_compare_number(issues, index, code, "tax_percent", "VAT đơn bán/đơn mua", sale_line["tax_percent"], po_line["tax_percent"], 0.01)
+            self._hlv_invoice_guard_compare_number(issues, index, code, "tax", "Tiền thuế đơn bán/đơn mua", sale_line["tax"], po_line["tax"], precision)
+            self._hlv_invoice_guard_compare_number(issues, index, code, "total", "Tổng tiền đơn bán/đơn mua", sale_line["total"], po_line["total"], precision)
 
         return {
             **payload,
