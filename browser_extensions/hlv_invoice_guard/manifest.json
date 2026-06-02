@@ -6,7 +6,7 @@
   "permissions": ["storage"],
   "host_permissions": [
     "https://amisapp.misa.vn/*",
-    "https://hoanglongvu-stagin-v1-32562676.dev.odoo.com/*"
+    "https://www.hoanglongvu-erp.com/*"
   ],
   "action": {
     "default_title": "HLV Invoice Guard",

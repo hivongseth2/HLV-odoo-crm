@@ -1,4 +1,4 @@
-const ODOO_BASE_URL = "https://hoanglongvu-stagin-v1-32562676.dev.odoo.com";
+const ODOO_BASE_URL = "https://www.hoanglongvu-erp.com";
 const LOG_PREFIX = "[HLV Invoice Guard BG]";
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
