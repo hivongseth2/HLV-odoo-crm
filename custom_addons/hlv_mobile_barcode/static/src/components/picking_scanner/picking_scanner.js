@@ -77,14 +77,8 @@ export class PickingScanner extends Component {
                         if (!sessionStorage.getItem(autoClearKey) && data.name && data.name.toUpperCase().includes('PICK')) {
                             sessionStorage.setItem(autoClearKey, '1');
                             
-                            // Gọi hàm xóa số lượng ở backend
-                            await this.clearQuantities(true);
-                            
-                            // Cập nhật giao diện về 0 ngay lập tức mà không cần fetch lại để tránh lỗi hiển thị
-                            data.lines.forEach(l => {
-                                l.qty_done = 0;
-                            });
-                            this.state.picking = data;
+                            // Gọi hàm Làm lại (reload trang sau khi xóa số lượng)
+                            this.clearQuantities(true);
                             return;
                         }
                         
@@ -120,9 +114,7 @@ export class PickingScanner extends Component {
                 } catch (e) {}
                 
                 this.notification.add("Đã làm mới số lượng", { type: "success" });
-                if (!skipConfirm) {
-                    await this.loadPicking();
-                }
+                window.location.reload();
             }
         } catch (e) {
             this.notification.add("Lỗi kết nối", { type: "danger" });
