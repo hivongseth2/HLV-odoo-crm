@@ -60,7 +60,7 @@ class MisaInvoiceController(http.Controller):
         )
         if not request.session.get(SESSION_KEY_OK):
             result = {"status": "error", "message": "Truy cập bị từ chối."}
-            _logger.warning("[MISA INVOICE PREVIEW][ODOO RESPONSE] %s", result)
+            # _logger.warning("[MISA INVOICE PREVIEW][ODOO RESPONSE] %s", result)
             return result
         try:
             misa_utils = request.env['misa.api.utils'].sudo()
@@ -68,22 +68,22 @@ class MisaInvoiceController(http.Controller):
             if resp.status_code == 200:
                 try:
                     result = {"status": "success", "data": resp.json()}
-                    _logger.info(
-                        "[MISA INVOICE PREVIEW][ODOO RESPONSE] %s",
-                        json.dumps(result, ensure_ascii=False)[:4000],
-                    )
+                    # _logger.info(
+                    #     "[MISA INVOICE PREVIEW][ODOO RESPONSE] %s",
+                    #     json.dumps(result, ensure_ascii=False)[:4000],
+                    # )
                     return result
                 except Exception as e:
                     result = {"status": "error", "message": f"Dữ liệu JSON không hợp lệ. {e}"}
-                    _logger.exception("[MISA INVOICE PREVIEW][JSON ERROR]")
-                    _logger.info("[MISA INVOICE PREVIEW][ODOO RESPONSE] %s", result)
+                    # _logger.exception("[MISA INVOICE PREVIEW][JSON ERROR]")
+                    # _logger.info("[MISA INVOICE PREVIEW][ODOO RESPONSE] %s", result)
                     return result
             else:
                 result = {"status": "error", "message": f"MISA API error {resp.status_code}: {resp.text}"}
-                _logger.info("[MISA INVOICE PREVIEW][ODOO RESPONSE] %s", result)
+                # _logger.info("[MISA INVOICE PREVIEW][ODOO RESPONSE] %s", result)
                 return result
         except Exception as e:
             _logger.exception("Error previewing invoice")
             result = {"status": "error", "message": str(e)}
-            _logger.info("[MISA INVOICE PREVIEW][ODOO RESPONSE] %s", result)
+            # _logger.info("[MISA INVOICE PREVIEW][ODOO RESPONSE] %s", result)
             return result

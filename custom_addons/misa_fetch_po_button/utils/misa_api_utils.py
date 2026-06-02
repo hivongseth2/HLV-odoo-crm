@@ -416,20 +416,20 @@ class MisaApiUtils(models.AbstractModel):
             if key in safe_headers:
                 safe_headers[key] = "***MASKED***"
 
-        _logger.info("[MISA API REQUEST] url=%s headers=%s payload=%s", url, safe_headers, json.dumps(payload, ensure_ascii=False)[:4000])
+        # _logger.info("[MISA API REQUEST] url=%s headers=%s payload=%s", url, safe_headers, json.dumps(payload, ensure_ascii=False)[:4000])
         try:
             response = requests.post(url, headers=headers, json=payload, timeout=30)
         except Exception:
             _logger.exception("[MISA API REQUEST ERROR] url=%s payload=%s", url, json.dumps(payload, ensure_ascii=False)[:4000])
             raise
 
-        _logger.info(
-            "[MISA API RESPONSE] url=%s status=%s headers=%s body=%s",
-            url,
-            response.status_code,
-            dict(response.headers),
-            (response.text or "")[:4000],
-        )
+        # _logger.info(
+        #     "[MISA API RESPONSE] url=%s status=%s headers=%s body=%s",
+        #     url,
+        #     response.status_code,
+        #     dict(response.headers),
+        #     (response.text or "")[:4000],
+        # )
         if response.status_code == 401:
             _logger.warning("🔁 Token hết hạn, đang đăng nhập lại...")
             new_token = self._get_misa_token()
