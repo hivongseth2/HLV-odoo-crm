@@ -77,10 +77,14 @@ export class PickingScanner extends Component {
                         if (!sessionStorage.getItem(autoClearKey) && data.name && data.name.toUpperCase().includes('PICK')) {
                             sessionStorage.setItem(autoClearKey, '1');
                             
-                            // Gọi trực tiếp hàm xóa số lượng, bỏ qua xác nhận
+                            // Gọi hàm xóa số lượng ở backend
                             await this.clearQuantities(true);
-                            // Sau khi xóa xong, load lại data thay vì reload trang
-                            await this.loadPicking();
+                            
+                            // Cập nhật giao diện về 0 ngay lập tức mà không cần fetch lại để tránh lỗi hiển thị
+                            data.lines.forEach(l => {
+                                l.qty_done = 0;
+                            });
+                            this.state.picking = data;
                             return;
                         }
                         
