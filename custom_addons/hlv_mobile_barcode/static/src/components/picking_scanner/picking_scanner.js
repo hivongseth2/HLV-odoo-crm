@@ -55,7 +55,7 @@ export class PickingScanner extends Component {
     async loadPicking() {
         this.state.loading = true;
         try {
-            const data = await rpc("/hlv_mobile_barcode/get_picking_data", { picking_id: this.props.pickingId });
+            let data = await rpc("/hlv_mobile_barcode/get_picking_data", { picking_id: this.props.pickingId });
             if (data.error) {
                 this.notification.add(data.error, { type: "danger" });
             } else {
@@ -73,28 +73,18 @@ export class PickingScanner extends Component {
                     }
                     
                     if (!openedPickings.includes(this.props.pickingId)) {
-                        // Prevent infinite loop since the button clears localStorage
                         const autoClearKey = 'hlv_auto_cleared_' + this.props.pickingId;
                         if (!sessionStorage.getItem(autoClearKey)) {
                             sessionStorage.setItem(autoClearKey, '1');
                             
-                            // Thực hiện chính xác những gì nút làm lại thực hiện: click vào nút
-                            setTimeout(() => {
-                                const btn = document.querySelector('.fa-undo');
-                                if (btn && btn.parentElement) {
-                                    const originalConfirm = window.confirm;
-                                    window.confirm = () => true; // Bypass confirm dialog
-                                    btn.parentElement.click();
-                                    window.confirm = originalConfirm;
-                                }
-                            }, 50);
+                            // Gọi trực tiếp hàm xóa số lượng, bỏ qua xác nhận
+                            this.clearQuantities(true);
                             return;
-                        } else {
-                            // Đã tự động nhấn nút trong phiên này, lưu lại vào localStorage để sau này không bị lặp
-                            openedPickings.push(this.props.pickingId);
-                            if (openedPickings.length > 200) openedPickings = openedPickings.slice(openedPickings.length - 200);
-                            localStorage.setItem(storageKey, JSON.stringify(openedPickings));
                         }
+                        
+                        openedPickings.push(this.props.pickingId);
+                        if (openedPickings.length > 200) openedPickings = openedPickings.slice(openedPickings.length - 200);
+                        localStorage.setItem(storageKey, JSON.stringify(openedPickings));
                     }
                 }
                 this.state.picking = data;
@@ -105,8 +95,8 @@ export class PickingScanner extends Component {
         this.state.loading = false;
     }
 
-    async clearQuantities() {
-        if (!confirm("Bạn có chắc muốn xoá toàn bộ số lượng đã quét để quét lại từ đầu không?")) {
+    async clearQuantities(skipConfirm = false) {
+        if (!skipConfirm && !confirm("Bạn có chắc muốn xoá toàn bộ số lượng đã quét để quét lại từ đầu không?")) {
             return;
         }
         try {
