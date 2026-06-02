@@ -221,10 +221,10 @@ class HlvChatgptSession(models.Model):
              if image_data:
                 current_content.append({
                     "type": "input_image",
-                    "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}
+                    "image_url": f"data:image/jpeg;base64,{image_data}"
                 })
              else:
-                current_content.append({"type": "text", "text": "[System Error: Không tải được ảnh đính kèm]"})
+                current_content.append({"type": "input_text", "text": "[System Error: Không tải được ảnh đính kèm]"})
 
         if current_content:
             input_messages.append({
