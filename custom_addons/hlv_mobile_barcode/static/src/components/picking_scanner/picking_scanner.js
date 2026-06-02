@@ -77,7 +77,7 @@ export class PickingScanner extends Component {
                         openedPickings = [];
                     }
                     
-                    if (!this._hasAutoCleared && data.name && data.name.toUpperCase().includes('PICK')) {
+                    if (!this._hasAutoCleared && data.is_pick) {
                         this._hasAutoCleared = true;
                         
                         // Gọi hàm Làm lại
