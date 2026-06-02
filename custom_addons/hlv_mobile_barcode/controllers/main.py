@@ -323,6 +323,8 @@ class HLVMobileBarcodeController(http.Controller):
             'packages': packages,
             'linked_picking_id': linked_picking_id,
             'linked_picking_name': linked_picking_name,
+            'source_transfer_id': picking.source_transfer_id.id if picking.source_transfer_id else False,
+            'source_transfer_name': picking.source_transfer_id.name if picking.source_transfer_id else False,
             'is_putaway': is_putaway,
             'show_qty_buttons': show_qty_buttons,
         }

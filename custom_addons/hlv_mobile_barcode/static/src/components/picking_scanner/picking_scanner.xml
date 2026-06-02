@@ -11,6 +11,13 @@
                 <div class="picking-label">
                     <i class="fa fa-clipboard-list"></i>
                     Phiếu xuất/nhập <t t-esc="state.picking.name"/>
+                    <t t-if="state.picking.source_transfer_name">
+                        <br/>
+                        <span style="font-size: 0.85em; color: var(--text-muted); font-weight: 500; margin-top: 2px; display: inline-block;">
+                            <i class="fa fa-link" style="margin-right: 4px;"></i> 
+                            Từ phiếu Bước 1: <t t-esc="state.picking.source_transfer_name"/>
+                        </span>
+                    </t>
                 </div>
                 
                 <!-- Multi-Location Mode Header -->
