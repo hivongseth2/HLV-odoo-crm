@@ -1076,6 +1076,56 @@ class HLVMobileBarcodeController(http.Controller):
                 if not Permission.check_picking_operation(request.env.user, warehouse, code, 'can_confirm'):
                     return {'error': _('Bạn không có quyền xác nhận phiếu %s tại kho "%s". Vui lòng liên hệ Admin!', code, warehouse.name)}
         try:
+            # STRICT PRE-VALIDATION STOCK CHECK
+            # To completely prevent negative stock due to concurrent transactions
+            pt_type = picking.picking_type_id.code
+            pt_code = (picking.picking_type_id.sequence_code or '').upper()
+            is_putaway = (pt_type == 'incoming' or (pt_type == 'internal' and 'INT' not in pt_code and 'IN' in pt_code))
+            
+            if not is_putaway:
+                grouped_mls = {}
+                for ml in picking.move_line_ids:
+                    if ml.quantity > 0 and ml.product_id.type == 'product':
+                        key = (ml.product_id.id, ml.location_id.id, ml.package_id.id if ml.package_id else False)
+                        if key not in grouped_mls:
+                            grouped_mls[key] = {
+                                'product': ml.product_id,
+                                'location': ml.location_id,
+                                'qty_to_consume': 0.0,
+                                'reserved_by_this': 0.0
+                            }
+                        grouped_mls[key]['qty_to_consume'] += ml.product_uom_id._compute_quantity(ml.quantity, ml.product_id.uom_id)
+                        grouped_mls[key]['reserved_by_this'] += ml.product_uom_id._compute_quantity(ml.quantity_product_uom, ml.product_id.uom_id)
+                
+                for key, data in grouped_mls.items():
+                    product = data['product']
+                    location = data['location']
+                    qty_to_consume = data['qty_to_consume']
+                    reserved_by_this = data['reserved_by_this']
+                    
+                    quants = request.env['stock.quant'].sudo().search([
+                        ('product_id', '=', product.id),
+                        ('location_id', '=', location.id),
+                        ('company_id', '=', picking.company_id.id),
+                        ('package_id', '=', key[2])
+                    ])
+                    free_qty = sum(q.quantity - q.reserved_quantity for q in quants)
+                    available_qty = free_qty + reserved_by_this
+                    
+                    if qty_to_consume > available_qty:
+                        return {
+                            'error': _(
+                                'LỖI TỒN KHO: Không thể xác nhận!\n'
+                                'Số lượng ghi nhận của sản phẩm "%s" tại vị trí "%s" không chính xác '
+                                '(đang xác nhận %g nhưng kho chỉ còn tối đa %g khả dụng). '
+                                'Vui lòng kiểm tra lại tồn kho thực tế hoặc nhấn "Làm lại" để đồng bộ dữ liệu!',
+                                product.display_name,
+                                location.display_name,
+                                qty_to_consume,
+                                available_qty
+                            )
+                        }
+
             note = picking.note or ''
             dest_loc_id = None
             if 'DEST_LOC_OVERRIDE:' in note:
