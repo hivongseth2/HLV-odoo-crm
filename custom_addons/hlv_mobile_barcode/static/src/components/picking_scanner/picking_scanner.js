@@ -23,6 +23,7 @@ export class PickingScanner extends Component {
         this.notification = useService("notification");
         this.actionService = useService("action");
         this.isProcessingQty = false;
+        this._hasAutoCleared = false;
         
         this.state = useState({
             picking: null,
@@ -44,9 +45,13 @@ export class PickingScanner extends Component {
         });
 
         onWillUpdateProps(async (nextProps) => {
+            if (nextProps.pickingId !== this.props.pickingId) {
+                this._hasAutoCleared = false;
+            }
             if (nextProps.lastScannedProduct !== this.props.lastScannedProduct 
                 || nextProps.scannedLocationName !== this.props.scannedLocationName
-                || nextProps.refreshTick !== this.props.refreshTick) {
+                || nextProps.refreshTick !== this.props.refreshTick
+                || nextProps.pickingId !== this.props.pickingId) {
                 await this.loadPicking();
             }
         });
@@ -72,22 +77,15 @@ export class PickingScanner extends Component {
                         openedPickings = [];
                     }
                     
-                    if (!openedPickings.includes(this.props.pickingId)) {
-                        const autoClearKey = 'hlv_auto_cleared_' + this.props.pickingId;
-                        if (!sessionStorage.getItem(autoClearKey) && data.name && data.name.toUpperCase().includes('PICK')) {
-                            sessionStorage.setItem(autoClearKey, '1');
-                            
-                            // Gọi hàm xóa số lượng ở backend
-                            await this.clearQuantities(true);
-                            
-                            // Cập nhật giao diện về 0 ngay lập tức mà không cần fetch lại để tránh lỗi hiển thị
-                            data.lines.forEach(l => {
-                                l.qty_done = 0;
-                            });
-                            this.state.picking = data;
-                            return;
-                        }
+                    if (!this._hasAutoCleared && data.name && data.name.toUpperCase().includes('PICK')) {
+                        this._hasAutoCleared = true;
                         
+                        // Gọi hàm Làm lại
+                        await this.clearQuantities(true);
+                        return;
+                    }
+                    
+                    if (!openedPickings.includes(this.props.pickingId)) {
                         openedPickings.push(this.props.pickingId);
                         if (openedPickings.length > 200) openedPickings = openedPickings.slice(openedPickings.length - 200);
                         localStorage.setItem(storageKey, JSON.stringify(openedPickings));
@@ -120,9 +118,7 @@ export class PickingScanner extends Component {
                 } catch (e) {}
                 
                 this.notification.add("Đã làm mới số lượng", { type: "success" });
-                if (!skipConfirm) {
-                    await this.loadPicking();
-                }
+                await this.loadPicking();
             }
         } catch (e) {
             this.notification.add("Lỗi kết nối", { type: "danger" });
@@ -149,7 +145,12 @@ export class PickingScanner extends Component {
             if (res.error) {
                 this.playSound('error');
                 this.notification.add(res.error, { type: "danger" });
+                await this.loadPicking();
             } else {
+                if (res.warning) {
+                    this.playSound('error');
+                    this.notification.add(res.warning, { type: "warning" });
+                }
                 line.qty_done = res.new_qty;
                 if (!line.id) {
                     await this.loadPicking();
@@ -177,8 +178,12 @@ export class PickingScanner extends Component {
             if (res.error) {
                 this.playSound('error');
                 this.notification.add(res.error, { type: "danger" });
-                ev.target.value = line.qty_done;
+                await this.loadPicking();
             } else {
+                if (res.warning) {
+                    this.playSound('error');
+                    this.notification.add(res.warning, { type: "warning" });
+                }
                 line.qty_done = res.new_qty;
                 if (!line.id) {
                     await this.loadPicking();

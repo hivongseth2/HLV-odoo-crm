@@ -7,36 +7,36 @@
         <field name="arch" type="xml">
             <xpath expr="//form" position="inside">
                 <app data-string="HLV Mobile Barcode" string="HLV Mobile Barcode" name="hlv_mobile_barcode">
-                    <block title="HLV Mobile Barcode" name="hlv_mobile_barcode_setting_container">
-                        <setting string="Allowed Picking Types" help="Select which operations can be processed via Mobile Barcode App">
+                    <block title="Thiết Lập Máy Quét Mã Vạch (Mobile Barcode)" name="hlv_mobile_barcode_setting_container">
+                        <setting string="Các Loại Phiếu Được Quét" help="Chỉ những loại phiếu chọn ở đây (vd: Phiếu lấy hàng) mới được phép dùng máy quét. Bỏ trống = Cho phép tất cả.">
                             <field name="hlv_barcode_picking_type_ids" widget="many2many_tags"/>
                         </setting>
-                        <setting string="Print after Packing" help="Enable option to print label after Put in Pack">
+                        <setting string="Tự Động In Nhãn Sau Đóng Gói" help="Bật để máy tự động in nhãn dán ngay khi nhân viên vừa bấm nút 'Đóng Gói' xong.">
                             <field name="hlv_barcode_print_after_pack"/>
                         </setting>
-                        <setting string="Cho phép quét Kiện hàng" help="Quét mã vạch kiện (PACKxxx) để xử lý nhanh toàn bộ sản phẩm bên trong.">
+                        <setting string="Cho Phép Quét Kiện Hàng" help="Bật để nhân viên quét 1 mã thùng/kiện và hệ thống tự hiểu tất cả đồ bên trong.">
                             <field name="hlv_barcode_allow_package_scan"/>
                         </setting>
-                        <setting string="Hiển thị nút điều chỉnh số lượng nhanh" help="Hiển thị các nút -10, -1, +1, +10 trên màn hình quét mã vạch để chỉnh nhanh số lượng.">
+                        <setting string="Hiện Nút Bấm Chỉnh Số Lượng" help="Bật để hiện các nút bấm +1, -1, +10 trên màn hình điện thoại/máy quét để bấm nhanh.">
                             <field name="hlv_barcode_show_qty_buttons"/>
                         </setting>
-                        <setting string="Sử dụng phân quyền quét độc lập" help="Bật để dùng cấu hình phân quyền quét của riêng Mobile Barcode. Tắt để dùng phân quyền chung của hlv_warehouse_permission.">
+                        <setting string="Dùng Quyền Riêng Cho Máy Quét" help="Bật để dùng bảng phân quyền máy quét độc lập. Tắt để dùng chung với quyền kho trên máy tính.">
                             <field name="hlv_barcode_use_independent_permissions"/>
                         </setting>
-                        <setting string="Cấu hình phân quyền quét" help="Phân quyền chi tiết cho từng người dùng tại từng kho" invisible="not hlv_barcode_use_independent_permissions">
+                        <setting string="Cấu Hình Quyền Máy Quét" help="Bấm vào đây để cài đặt ai được phép quét/xác nhận phiếu ở kho nào (Quyền Độc Lập)." invisible="not hlv_barcode_use_independent_permissions">
                             <div class="mt-2">
                                 <button name="%(hlv_mobile_barcode.action_barcode_permission)d"
                                         type="action"
-                                        string="Cấu hình phân quyền quét độc lập"
+                                        string="Cài đặt Quyền Máy Quét"
                                         class="btn-link"
                                         icon="fa-arrow-right"/>
                             </div>
                         </setting>
-                        <setting string="Cấu hình phân quyền kho (Chung)" help="Sử dụng cấu hình phân quyền chung của module hlv_warehouse_permission" invisible="hlv_barcode_use_independent_permissions">
+                        <setting string="Cấu Hình Quyền Kho Chung" help="Bấm vào đây để chỉnh quyền chung trên máy tính (do bạn đang tắt Quyền Riêng Máy Quét)." invisible="hlv_barcode_use_independent_permissions">
                             <div class="mt-2">
                                 <button name="action_open_warehouse_permissions"
                                         type="object"
-                                        string="Cấu hình phân quyền kho (Chung)"
+                                        string="Cài đặt Quyền Kho (Chung)"
                                         class="btn-link"
                                         icon="fa-arrow-right"/>
                             </div>

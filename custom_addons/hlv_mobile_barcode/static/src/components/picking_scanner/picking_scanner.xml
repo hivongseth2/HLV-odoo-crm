@@ -151,7 +151,7 @@
                 </div>
                 
                 <!-- Transition to Step 2 Button -->
-                <div t-if="state.picking.linked_picking_id" style="padding: 10px; background: white; border-top: 1px solid var(--border-color); display: flex; gap: 8px;">
+                <div t-if="state.picking.linked_picking_id and !state.picking.name.toUpperCase().includes('PICK')" style="padding: 10px; background: white; border-top: 1px solid var(--border-color); display: flex; gap: 8px;">
                     <button class="btn btn-primary" style="flex: 1; padding: 12px; font-weight: bold; background-color: var(--primary-color); display: flex; align-items: center; justify-content: center; gap: 8px; border-radius: 8px; box-shadow: var(--shadow-sm);" t-on-click="() => props.onSelectPicking(state.picking.linked_picking_id, state.picking.linked_picking_name)" t-att-disabled="state.loading">
                         <i class="fa fa-arrow-right"></i> Chuyển sang Bước 2 (<t t-esc="state.picking.linked_picking_name"/>)
                     </button>
