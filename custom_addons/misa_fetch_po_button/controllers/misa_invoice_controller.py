@@ -51,8 +51,8 @@ class MisaInvoiceController(http.Controller):
     @http.route('/api/misa/invoice/preview', type='json', auth='public', methods=['POST'])
     def api_preview_misa_invoice(self, refid, date, **kwargs):
         """API proxy to get MISA invoice PDF link"""
-        if not request.session.get(SESSION_KEY_OK):
-            return {"status": "error", "message": "Truy cập bị từ chối."}
+        # if not request.session.get(SESSION_KEY_OK):
+        #     return {"status": "error", "message": "Truy cập bị từ chối."}
         try:
             misa_utils = request.env['misa.api.utils'].sudo()
             resp = misa_utils.preview_invoice_api(refid, date)
