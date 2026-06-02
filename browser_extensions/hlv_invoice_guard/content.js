@@ -411,7 +411,7 @@
     root.className = "hlv-invoice-guard-inline";
     root.innerHTML = `
       <div class="hlv-invoice-guard-main">
-        <div class="hlv-invoice-guard-title">HLV Invoice Guard</div>
+        <div class="hlv-invoice-guard-title">Đối chiếu XHD</div>
         <input class="hlv-invoice-guard-sale" placeholder="Mã đơn bán Odoo">
         <button type="button" class="hlv-invoice-guard-check">Check</button>
         <button type="button" class="hlv-invoice-guard-compare">Đối chiếu</button>
@@ -652,7 +652,7 @@
       </tr>
     `).join("");
     return `
-      <div class="hlv-invoice-guard-order" style="background: ${side === "sale" ? "#f7ddbf" : "#bcdffc"}">
+      <div class="hlv-invoice-guard-order" style="background: ${side === "sale" ? "#fdbc902f" : "#dcebff23"}">
         <div class="hlv-invoice-guard-order-title">${escapeHtml(title)}: ${escapeHtml(order.name || "")}</div>
         <div class="hlv-invoice-guard-order-meta">
           ${escapeHtml(order.partner?.name || "")} | VAT: ${escapeHtml(order.partner?.vat || "")} | Tổng: ${formatMoney(order.amount_total)}
@@ -750,8 +750,8 @@
       );
       if (!source || !target) return;
 
-      const from = cellCenter(source.getBoundingClientRect(), "left");
-      const to = cellCenter(target.getBoundingClientRect(), "right");
+      const from = cellCenter(source.getBoundingClientRect(), "right");
+      const to = cellCenter(target.getBoundingClientRect(), "bottom");
       const midX = Math.max(0, Math.min(docWidth, (from.x + to.x) / 2));
       const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
       path.setAttribute("d", `M ${from.x} ${from.y} C ${midX} ${from.y}, ${midX} ${to.y}, ${to.x} ${to.y}`);
