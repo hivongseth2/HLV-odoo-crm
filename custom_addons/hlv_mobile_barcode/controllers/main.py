@@ -799,11 +799,21 @@ class HLVMobileBarcodeController(http.Controller):
                 line_demand = sum(matched_orig.mapped('quantity'))
                 
             if line_demand > 0.0 and new_val > line_demand:
-                return {'error': _('Số lượng vượt quá yêu cầu cho phép của dòng này (%g/%g).', new_val, line_demand)}
+                capped_val = line_demand
+                if capped_val == move_line.quantity:
+                    return {'error': _('Số lượng vượt quá yêu cầu cho phép của dòng này (%g/%g).', new_val, line_demand)}
+                
+                new_val = capped_val
+                warning_msg = _('Số lượng đã tự lùi về mức tối đa theo yêu cầu (%g).', capped_val)
         else:
             other_lines_qty = sum(ml.quantity for ml in move.move_line_ids if ml.id != move_line.id)
             if move.product_uom_qty > 0.0 and (new_val + other_lines_qty) > move.product_uom_qty:
-                return {'error': _('Số lượng vượt quá yêu cầu cho phép (%g/%g).', (new_val + other_lines_qty), move.product_uom_qty)}
+                capped_val = max(0.0, move.product_uom_qty - other_lines_qty)
+                if capped_val == move_line.quantity:
+                    return {'error': _('Số lượng vượt quá yêu cầu cho phép (%g/%g).', (new_val + other_lines_qty), move.product_uom_qty)}
+                
+                new_val = capped_val
+                warning_msg = _('Số lượng đã tự lùi về tối đa theo yêu cầu phiếu (%g).', capped_val)
 
         # If we are picking from a location, validate physical stock
         pt_code = (move.picking_id.picking_type_id.sequence_code or '').upper()
@@ -841,18 +851,34 @@ class HLVMobileBarcodeController(http.Controller):
             )
             
             if (new_val_base + processed_qty_from_loc_base) > available_qty:
-                return {
-                    'error': _(
-                        'Số lượng cập nhật vượt quá tồn kho thực tế khả dụng tại vị trí "%s" (Tối đa: %g %s).',
-                        move_line.location_id.display_name,
-                        available_qty,
-                        move.product_id.uom_id.name
-                    )
-                }
+                capped_val_base = max(0.0, available_qty - processed_qty_from_loc_base)
+                capped_val = move.product_id.uom_id._compute_quantity(capped_val_base, move_line.product_uom_id)
+                
+                if capped_val == move_line.quantity:
+                    return {
+                        'error': _(
+                            'Số lượng cập nhật vượt quá tồn kho thực tế khả dụng tại vị trí "%s" (Tối đa: %g %s).',
+                            move_line.location_id.display_name,
+                            available_qty,
+                            move.product_id.uom_id.name
+                        )
+                    }
+                
+                new_val = capped_val
+                warning_msg = _(
+                    'Số lượng đã tự lùi về mức tối đa khả dụng tại vị trí "%s" (%g %s).',
+                    move_line.location_id.display_name,
+                    capped_val,
+                    move.product_id.uom_id.name
+                )
 
         move_line.quantity = new_val
         
-        return {'success': True, 'new_qty': move_line.quantity}
+        res = {'success': True, 'new_qty': move_line.quantity}
+        if 'warning_msg' in locals() and warning_msg:
+            res['warning'] = warning_msg
+            
+        return res
 
     @http.route('/hlv_mobile_barcode/clear_quantities', type='json', auth='user')
     def clear_quantities(self, picking_id):

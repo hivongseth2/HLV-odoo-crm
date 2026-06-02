@@ -141,7 +141,12 @@ export class PickingScanner extends Component {
             if (res.error) {
                 this.playSound('error');
                 this.notification.add(res.error, { type: "danger" });
+                await this.loadPicking();
             } else {
+                if (res.warning) {
+                    this.playSound('error');
+                    this.notification.add(res.warning, { type: "warning" });
+                }
                 line.qty_done = res.new_qty;
                 if (!line.id) {
                     await this.loadPicking();
@@ -169,8 +174,12 @@ export class PickingScanner extends Component {
             if (res.error) {
                 this.playSound('error');
                 this.notification.add(res.error, { type: "danger" });
-                ev.target.value = line.qty_done;
+                await this.loadPicking();
             } else {
+                if (res.warning) {
+                    this.playSound('error');
+                    this.notification.add(res.warning, { type: "warning" });
+                }
                 line.qty_done = res.new_qty;
                 if (!line.id) {
                     await this.loadPicking();
