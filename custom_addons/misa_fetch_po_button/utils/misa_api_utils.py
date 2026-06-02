@@ -408,14 +408,47 @@ class MisaApiUtils(models.AbstractModel):
 
     def _fetch_with_retry(self, url, headers, payload):
         """Fetch API with retry on token expiration"""
-        response = requests.post(url, headers=headers, json=payload)
-        _logger.info("Response text: %s", response.text)
+        safe_headers = dict(headers or {})
+        for key in ("Authorization", "Cookie", "cookie"):
+            if key in safe_headers:
+                safe_headers[key] = "***MASKED***"
+
+        _logger.info("[MISA API REQUEST] url=%s headers=%s payload=%s", url, safe_headers, json.dumps(payload, ensure_ascii=False)[:4000])
+        try:
+            response = requests.post(url, headers=headers, json=payload, timeout=30)
+        except Exception:
+            _logger.exception("[MISA API REQUEST ERROR] url=%s payload=%s", url, json.dumps(payload, ensure_ascii=False)[:4000])
+            raise
+
+        _logger.info(
+            "[MISA API RESPONSE] url=%s status=%s headers=%s body=%s",
+            url,
+            response.status_code,
+            dict(response.headers),
+            (response.text or "")[:4000],
+        )
         if response.status_code == 401:
             _logger.warning("🔁 Token hết hạn, đang đăng nhập lại...")
             new_token = self._get_misa_token()
             _logger.info("🔑 Đăng nhập thành công, token mới: %s", new_token)
             headers["Authorization"] = f"Bearer {new_token}"
-            response = requests.post(url, headers=headers, json=payload)
+            retry_headers = dict(headers or {})
+            for key in ("Authorization", "Cookie", "cookie"):
+                if key in retry_headers:
+                    retry_headers[key] = "***MASKED***"
+            _logger.info("[MISA API RETRY REQUEST] url=%s headers=%s payload=%s", url, retry_headers, json.dumps(payload, ensure_ascii=False)[:4000])
+            try:
+                response = requests.post(url, headers=headers, json=payload, timeout=30)
+            except Exception:
+                _logger.exception("[MISA API RETRY ERROR] url=%s payload=%s", url, json.dumps(payload, ensure_ascii=False)[:4000])
+                raise
+            _logger.info(
+                "[MISA API RETRY RESPONSE] url=%s status=%s headers=%s body=%s",
+                url,
+                response.status_code,
+                dict(response.headers),
+                (response.text or "")[:4000],
+            )
         return response
 
     def search_invoice_api(self, query):
