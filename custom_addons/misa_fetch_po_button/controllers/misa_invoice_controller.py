@@ -65,11 +65,6 @@ class MisaInvoiceController(http.Controller):
         try:
             misa_utils = request.env['misa.api.utils'].sudo()
             resp = misa_utils.preview_invoice_api(refid, date)
-            _logger.info(
-                "[MISA INVOICE PREVIEW][MISA RAW RESPONSE] status=%s body=%s",
-                getattr(resp, "status_code", None),
-                (getattr(resp, "text", "") or "")[:4000],
-            )
             if resp.status_code == 200:
                 try:
                     result = {"status": "success", "data": resp.json()}

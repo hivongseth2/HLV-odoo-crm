@@ -520,14 +520,24 @@ class MisaApiUtils(models.AbstractModel):
                 "?viewType=1&&publishType=1&&decreeType=3&&isFollowSerial=true"
             )
 
+        def _has_preview_data(response):
+            if not response.ok:
+                return False
+            try:
+                data = response.json()
+            except Exception:
+                _logger.exception("[MISA INVOICE PREVIEW] Invalid JSON from gateway")
+                return False
+            return bool(data.get("Data"))
+
         g2_url = _preview_url("g2")
         try:
             _logger.info("[MISA INVOICE PREVIEW] Trying gateway g2")
             response = self._fetch_with_retry(g2_url, headers, payload)
-            if response.ok:
+            if _has_preview_data(response):
                 return response
             _logger.warning(
-                "[MISA INVOICE PREVIEW] Gateway g2 failed status=%s body=%s",
+                "[MISA INVOICE PREVIEW] Gateway g2 missing preview data status=%s body=%s",
                 response.status_code,
                 (response.text or "")[:4000],
             )
