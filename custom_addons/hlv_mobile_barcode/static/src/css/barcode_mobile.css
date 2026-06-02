@@ -513,20 +513,33 @@
   margin-top: 10px;
 }
 
+.hlv-barcode-app .product-row-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  margin-bottom: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.04);
+  background: var(--white);
+  transition: all 0.25s ease;
+}
+
+.hlv-barcode-app .product-row-card.scanned {
+  border-color: #a5d6a7;
+  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.08);
+}
+
 .hlv-barcode-app .item-card {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 12px;
-  background: var(--light-bg);
-  border: 1px solid transparent;
-  border-radius: 8px;
+  padding: 12px 14px;
+  background: transparent;
+  border: none;
   transition: all 0.2s;
 }
 
 .hlv-barcode-app .item-card.scanned {
   background-color: #e8f5e9;
-  border-color: #c3e6cb;
 }
 
 .hlv-barcode-app .item-info {

@@ -96,7 +96,7 @@
                     </div>
                     <div class="items-list" style="margin-top: 0;">
                         <t t-foreach="state.picking.lines" t-as="line" t-key="line.id || 'draft_' + line.product_id">
-                            <div style="border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 8px; overflow: hidden;">
+                            <div t-attf-class="product-row-card #{line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0 ? 'scanned' : ''}">
                                 <div t-attf-class="item-card #{line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0 ? 'scanned' : ''}" style="border: none; margin-bottom: 0;">
                                     <div class="item-info">
                                         <div class="item-name"><t t-esc="line.product_name"/></div>

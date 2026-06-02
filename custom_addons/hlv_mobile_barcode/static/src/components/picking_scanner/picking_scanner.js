@@ -513,5 +513,14 @@ export class PickingScanner extends Component {
             const audio = new Audio(audioPath);
             audio.play().catch(e => console.error("Audio error:", e));
         } catch (e) {}
+        try {
+            if (navigator.vibrate) {
+                if (type === 'success') {
+                    navigator.vibrate(150);
+                } else if (type === 'error') {
+                    navigator.vibrate([100, 50, 100]);
+                }
+            }
+        } catch (e) {}
     }
 }
