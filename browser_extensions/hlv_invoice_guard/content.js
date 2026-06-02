@@ -6,12 +6,14 @@
   const SALE_INPUT_SELECTOR = 'input.misa-text-box[readonly][title^="DH"]';
   const FIELD_MAP = {
     ProductID: "product_code",
+    Price: "price_unit",
     TaxPercentID: "tax_percent",
     Tax: "tax",
     Total: "total",
   };
   const FALLBACK_CELL_INDEX = {
     product_code: 1,
+    price_unit: 4,
     tax_percent: 9,
     tax: 10,
     total: 11,
@@ -121,6 +123,7 @@
     };
     return {
       product_code: find("Mã hàng hóa", "Mã hàng", "Mã HH"),
+      price_unit: find("Đơn giá"),
       tax_percent: find("Thuế suất"),
       tax: find("Tiền thuế"),
       total: find("Tổng tiền"),
@@ -157,16 +160,19 @@
         const cells = Array.from(row.children);
         const values = cells.map(textOf);
         const productIndex = columns.product_code >= 0 ? columns.product_code : FALLBACK_CELL_INDEX.product_code;
+        const priceUnitIndex = columns.price_unit >= 0 ? columns.price_unit : FALLBACK_CELL_INDEX.price_unit;
         const taxPercentIndex = columns.tax_percent >= 0 ? columns.tax_percent : FALLBACK_CELL_INDEX.tax_percent;
         const taxIndex = columns.tax >= 0 ? columns.tax : FALLBACK_CELL_INDEX.tax;
         const totalIndex = columns.total >= 0 ? columns.total : FALLBACK_CELL_INDEX.total;
 
         if (values.length && values.some(Boolean) && !/tong cong/i.test(compactText(values.join(" ")))) {
           line.product_code = values[productIndex] || "";
+          line.price_unit = values[priceUnitIndex] || "";
           line.tax_percent = values[taxPercentIndex] || "";
           line.tax = values[taxIndex] || "";
           line.total = values[totalIndex] || "";
           if (cells[productIndex]) line._cells.product_code = cells[productIndex];
+          if (cells[priceUnitIndex]) line._cells.price_unit = cells[priceUnitIndex];
           if (cells[taxPercentIndex]) line._cells.tax_percent = cells[taxPercentIndex];
           if (cells[taxIndex]) line._cells.tax = cells[taxIndex];
           if (cells[totalIndex]) line._cells.total = cells[totalIndex];
@@ -213,13 +219,23 @@
     return map;
   }
 
-  function issueKey(issue) {
+  function issueBaseKey(issue) {
     return `${issue.line || ""}:${normalizedCode(issue.product_code)}:${issue.field || ""}`;
+  }
+
+  function issueRelation(issue) {
+    if (isCrmPurchaseIssue(issue)) return "crm_purchase";
+    if (isSalePurchaseIssue(issue)) return "sale_purchase";
+    return "crm_sale";
+  }
+
+  function issueKey(issue) {
+    return `${issueBaseKey(issue)}:${issueRelation(issue)}`;
   }
 
   function issueExists(issues, line, productCode, field, message) {
     const key = `${line || ""}:${normalizedCode(productCode)}:${field || ""}`;
-    return issues.some((issue) => issueKey(issue) === key && issue.message === message);
+    return issues.some((issue) => issueBaseKey(issue) === key && issue.message === message);
   }
 
   function addIssue(issues, line, productCode, field, message, actual, expected) {
@@ -255,19 +271,8 @@
       }
 
       [
-        ["qty", "Số lượng CRM/đơn mua lệch", 0.01],
         ["tax_percent", "VAT CRM/đơn mua lệch", 0.01],
-        ["tax", "Tiền thuế CRM/đơn mua lệch", 1],
-        ["total", "Tổng tiền CRM/đơn mua lệch", 1],
       ].forEach(([field, label, tolerance]) => {
-        const sameFieldPurchaseIssue = issues.some((issue) => (
-          issue.line === crmLine.index
-          && normalizedCode(issue.product_code) === code
-          && issue.field === field
-          && isSalePurchaseIssue(issue)
-        ));
-        if (sameFieldPurchaseIssue) return;
-
         const actual = normalizeNumber(crmLine[field]);
         const expected = normalizeNumber(poLine[field]);
         if (numberDiffers(actual, expected, tolerance)) {
@@ -301,16 +306,13 @@
     const byKey = new Map();
     (issues || []).forEach((issue) => {
       const key = issueKey(issue);
-      const previous = byKey.get(key);
-      if (!previous) {
-        byKey.set(key, issue);
-        return;
-      }
-      if (isSalePurchaseIssue(issue) && !isSalePurchaseIssue(previous)) {
+      if (!byKey.has(key)) {
         byKey.set(key, issue);
       }
     });
-    return Array.from(byKey.values());
+    const collapsed = Array.from(byKey.values());
+    const crmPurchaseKeys = new Set(collapsed.filter(isCrmPurchaseIssue).map(issueBaseKey));
+    return collapsed.filter((issue) => !(isSalePurchaseIssue(issue) && crmPurchaseKeys.has(issueBaseKey(issue))));
   }
 
   function clearMarks() {
@@ -347,22 +349,21 @@
   function markIssues(lines, issues) {
     clearMarks();
     const byIndex = new Map(lines.map((line) => [line.index, line]));
-    const crmSaleIssues = (issues || []).filter(isCrmSaleIssue);
-    const crmSaleIssueKeys = new Set(crmSaleIssues.map((issue) => `${issue.line}:${issue.field}`));
 
     lines.forEach((line) => {
-      ["tax_percent", "tax", "total"].forEach((field) => {
+      ["price_unit", "tax_percent"].forEach((field) => {
         const cell = line._cells[field];
         if (!cell) return;
         cell.setAttribute("data-hlv-crm-line", String(line.index));
         cell.setAttribute("data-hlv-field", field);
-        if (!crmSaleIssueKeys.has(`${line.index}:${field}`)) {
+        const hasIssue = (issues || []).some((issue) => issue.line === line.index && issue.field === field);
+        if (!hasIssue) {
           cell.classList.add("hlv-invoice-guard-ok-cell");
         }
       });
     });
 
-    crmSaleIssues.forEach((issue) => {
+    (issues || []).forEach((issue) => {
       const line = byIndex.get(issue.line);
       if (!line) return;
       const cell = line._cells[issue.field] || line._cells.product_code;
@@ -429,7 +430,7 @@
     }
     const summary = result.summary || {};
     if (summary.ok) {
-      setStatus(`OK: ${summary.checked_line_count || 0} dòng khớp CRM + đơn bán + đơn mua.`, "is-ok");
+      setStatus(`OK: ${summary.checked_line_count || 0} dòng khớp đơn giá/VAT với Odoo.`, "is-ok");
       return;
     }
     setStatus(`${summary.issue_count || 0} lỗi / ${summary.checked_line_count || 0} dòng.`, "is-error");
@@ -506,6 +507,7 @@
     log("parsed lines", lines.map((line) => ({
       index: line.index,
       product_code: line.product_code,
+      price_unit: line.price_unit,
       tax_percent: line.tax_percent,
       tax: line.tax,
       total: line.total,
@@ -593,7 +595,8 @@
   }
 
   function compareOkClass(issueMap, side, code, field) {
-    if (!["qty", "tax_percent", "tax", "total"].includes(field)) return "";
+    if (side === "sale" && !["price_unit", "tax_percent"].includes(field)) return "";
+    if (side === "purchase" && field !== "tax_percent") return "";
     return compareCellClass(issueMap, side, code, field) ? "" : "hlv-invoice-guard-compare-ok";
   }
 
@@ -623,10 +626,11 @@
       <tr>
         <td${compareCellAttrs(issueMap, side, line.product_code, "product_code")}${compareDataAttrs(side, line.product_code, "product_code")}>${escapeHtml(line.product_code || "")}</td>
         <td>${escapeHtml(line.product_name || line.description || "")}</td>
-        <td class="num ${compareCellClass(issueMap, side, line.product_code, "qty")} ${compareOkClass(issueMap, side, line.product_code, "qty")}" title="${compareCellTitle(issueMap, side, line.product_code, "qty")}"${compareDataAttrs(side, line.product_code, "qty")}>${formatMoney(line.qty)}</td>
+        <td class="num"${compareDataAttrs(side, line.product_code, "qty")}>${formatMoney(line.qty)}</td>
+        <td class="num ${compareCellClass(issueMap, side, line.product_code, "price_unit")} ${compareOkClass(issueMap, side, line.product_code, "price_unit")}" title="${compareCellTitle(issueMap, side, line.product_code, "price_unit")}"${compareDataAttrs(side, line.product_code, "price_unit")}>${formatMoney(line.price_unit)}</td>
         <td class="num ${compareCellClass(issueMap, side, line.product_code, "tax_percent")} ${compareOkClass(issueMap, side, line.product_code, "tax_percent")}" title="${compareCellTitle(issueMap, side, line.product_code, "tax_percent")}"${compareDataAttrs(side, line.product_code, "tax_percent")}>${formatMoney(line.tax_percent)}%</td>
-        <td class="num ${compareCellClass(issueMap, side, line.product_code, "tax")} ${compareOkClass(issueMap, side, line.product_code, "tax")}" title="${compareCellTitle(issueMap, side, line.product_code, "tax")}"${compareDataAttrs(side, line.product_code, "tax")}>${formatMoney(line.tax)}</td>
-        <td class="num ${compareCellClass(issueMap, side, line.product_code, "total")} ${compareOkClass(issueMap, side, line.product_code, "total")}" title="${compareCellTitle(issueMap, side, line.product_code, "total")}"${compareDataAttrs(side, line.product_code, "total")}>${formatMoney(line.total)}</td>
+        <td class="num"${compareDataAttrs(side, line.product_code, "tax")}>${formatMoney(line.tax)}</td>
+        <td class="num"${compareDataAttrs(side, line.product_code, "total")}>${formatMoney(line.total)}</td>
       </tr>
     `).join("");
     return `
@@ -636,7 +640,7 @@
           ${escapeHtml(order.partner?.name || "")} | VAT: ${escapeHtml(order.partner?.vat || "")} | Tổng: ${formatMoney(order.amount_total)}
         </div>
         <table>
-          <thead><tr><th>Mã hàng</th><th>Tên hàng</th><th>SL</th><th>VAT</th><th>Tiền thuế</th><th>Tổng</th></tr></thead>
+          <thead><tr><th>Mã hàng</th><th>Tên hàng</th><th>SL</th><th>Đơn giá</th><th>VAT</th><th>Tiền thuế</th><th>Tổng</th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
       </div>
@@ -664,7 +668,18 @@
       ${renderOrderTable("Đơn bán Odoo", result.sale_order, "sale", issueMap)}
       ${renderOrderTable("Đơn mua liên kết", result.purchase_order, "purchase", issueMap)}
     `;
+    alignCompareBox(box);
     scheduleConnectorRedraw();
+  }
+
+  function alignCompareBox(box) {
+    const grid = findGrid();
+    if (!grid || !root) return;
+    const gridRect = grid.getBoundingClientRect();
+    const rootRect = root.getBoundingClientRect();
+    const left = Math.max(0, gridRect.left - rootRect.left);
+    box.style.marginLeft = `${left}px`;
+    box.style.width = `${gridRect.width}px`;
   }
 
   function cellCenter(rect, side) {
@@ -679,13 +694,17 @@
     connectorRedrawTimer = window.setTimeout(() => {
       const box = root?.querySelector(".hlv-invoice-guard-compare-box");
       if (!lastResult || !box || box.hidden) return;
+      alignCompareBox(box);
       drawConnectorLines(lastResult);
     }, 60);
   }
 
   function drawConnectorLines(result) {
     document.querySelector(".hlv-invoice-guard-lines")?.remove();
-    const lineIssues = collapseIssues(result?.issues || []).filter((issue) => isCrmPurchaseIssue(issue) || isSalePurchaseIssue(issue));
+    const lineIssues = collapseIssues(result?.issues || []).filter((issue) => (
+      ["price_unit", "tax_percent"].includes(issue.field)
+      && (isCrmSaleIssue(issue) || isCrmPurchaseIssue(issue) || isSalePurchaseIssue(issue))
+    ));
     if (!lineIssues.length) return;
     const docWidth = Math.max(document.documentElement.scrollWidth, document.body.scrollWidth, window.innerWidth);
     const docHeight = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight, window.innerHeight);

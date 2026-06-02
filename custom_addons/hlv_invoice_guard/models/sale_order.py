@@ -41,9 +41,8 @@ class SaleOrder(models.Model):
                 issues.append(self._hlv_invoice_guard_issue(index, code, "product_code", "Mã hàng không có trong đơn bán Odoo."))
                 continue
 
+            self._hlv_invoice_guard_compare_number(issues, index, code, "price_unit", "Đơn giá", crm_line["price_unit"], sale_line["price_unit"], precision)
             self._hlv_invoice_guard_compare_number(issues, index, code, "tax_percent", "VAT", crm_line["tax_percent"], sale_line["tax_percent"], 0.01)
-            self._hlv_invoice_guard_compare_number(issues, index, code, "tax", "Tiền thuế", crm_line["tax"], sale_line["tax"], precision)
-            self._hlv_invoice_guard_compare_number(issues, index, code, "total", "Tổng tiền", crm_line["total"], sale_line["total"], precision)
 
             if not payload.get("purchase_order"):
                 issues.append(self._hlv_invoice_guard_issue(index, code, "product_code", "Không tìm thấy đơn mua liên kết qua purchase.order.origin."))
@@ -52,10 +51,6 @@ class SaleOrder(models.Model):
                 issues.append(self._hlv_invoice_guard_issue(index, code, "product_code", "Mã hàng không có trong đơn mua liên kết."))
                 continue
 
-            self._hlv_invoice_guard_compare_number(issues, index, code, "qty", "Số lượng đơn bán/đơn mua", sale_line["qty"], po_line["qty"], precision, actual_label="Đơn bán", expected_label="Đơn mua")
-            self._hlv_invoice_guard_compare_number(issues, index, code, "tax_percent", "VAT đơn bán/đơn mua", sale_line["tax_percent"], po_line["tax_percent"], 0.01, actual_label="Đơn bán", expected_label="Đơn mua")
-            self._hlv_invoice_guard_compare_number(issues, index, code, "tax", "Tiền thuế đơn bán/đơn mua", sale_line["tax"], po_line["tax"], precision, actual_label="Đơn bán", expected_label="Đơn mua")
-            self._hlv_invoice_guard_compare_number(issues, index, code, "total", "Tổng tiền đơn bán/đơn mua", sale_line["total"], po_line["total"], precision, actual_label="Đơn bán", expected_label="Đơn mua")
 
         return {
             **payload,
@@ -140,7 +135,7 @@ class SaleOrder(models.Model):
             "product_code": (line.get("product_code") or line.get("ProductID") or "").strip().upper(),
             "description": line.get("description") or line.get("Description") or "",
             "qty": as_float(line.get("qty") or line.get("Amount")) or 0.0,
-            "price_unit": as_float(line.get("price_unit") or line.get("Price")) or 0.0,
+            "price_unit": as_float(line.get("price_unit") or line.get("Price")),
             "price_after_tax": as_float(line.get("price_after_tax") or line.get("PriceAfterTax")),
             "tax_percent": as_float(line.get("tax_percent") or line.get("TaxPercentID")) or 0.0,
             "subtotal": as_float(line.get("subtotal") or line.get("ToCurrency")),
