@@ -167,6 +167,47 @@ class ZaloSheetWebhook(http.Controller):
                     
                                 
             
+            elif event_name == 'user_send_link':
+                attachments = message_obj.get('attachments', [])
+                _logger.info(
+                        "FULL message_obj (LINK):\n%s",
+                        json.dumps(message_obj, ensure_ascii=False, indent=2)
+                    )
+                _logger.info(
+                        "ATTACHMENTS RAW (LINK):\n%s",
+                        json.dumps(attachments, ensure_ascii=False, indent=2)
+                    )
+
+                link_parts = []
+                link_text = (message_obj.get('text') or '').strip()
+                if link_text:
+                    link_parts.append(link_text)
+
+                for attachment in attachments:
+                    payload = attachment.get('payload') or {}
+                    title = payload.get('title') or payload.get('name')
+                    url = payload.get('url') or payload.get('href')
+                    description = payload.get('description') or payload.get('desc')
+                    thumbnail = payload.get('thumbnail')
+
+                    if title:
+                        link_parts.append(f"Tiêu đề: {title}")
+                    if url:
+                        link_parts.append(f"Link: {url}")
+                    if description:
+                        link_parts.append(f"Mô tả: {description}")
+                    if thumbnail:
+                        link_parts.append(f"Thumbnail: {thumbnail}")
+
+                message_content = "\n".join(link_parts).strip()
+                if not message_content and attachments:
+                    message_content = "Người dùng gửi link:\n%s" % json.dumps(
+                        attachments,
+                        ensure_ascii=False,
+                        indent=2
+                    )
+                _logger.info("User gửi link: %s", message_content)
+
             # =============================================
 
             # === 6. XỬ LÝ LOGIC ===
