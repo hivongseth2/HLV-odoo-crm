@@ -100,9 +100,14 @@
 }
 .hlv-invoice-guard-compare-box {
   margin-top: 8px;
+  box-sizing: border-box;
   display: grid;
   grid-template-columns: repeat(2, minmax(360px, 1fr));
   gap: 10px;
+  overflow-x: auto;
+}
+.hlv-invoice-guard-compare-box[hidden] {
+  display: none;
 }
 .hlv-invoice-guard-order {
   min-width: 0;
