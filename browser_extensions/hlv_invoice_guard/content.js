@@ -19,10 +19,12 @@
 
   let root;
   let lastResult = null;
+  let lastLines = [];
   let lastCheckKey = "";
   let autoCheckDone = false;
   let pollCount = 0;
   let lastPath = "";
+  let connectorRedrawTimer = null;
 
   function log(...args) {
     console.log(LOG_PREFIX, ...args);
@@ -47,6 +49,7 @@
       .toLowerCase()
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
+      .replace(/đ/g, "d")
       .replace(/\s+/g, " ")
       .trim();
   }
@@ -210,12 +213,17 @@
     return map;
   }
 
-  function issueExists(issues, line, field, message) {
-    return issues.some((issue) => issue.line === line && issue.field === field && issue.message === message);
+  function issueKey(issue) {
+    return `${issue.line || ""}:${normalizedCode(issue.product_code)}:${issue.field || ""}`;
+  }
+
+  function issueExists(issues, line, productCode, field, message) {
+    const key = `${line || ""}:${normalizedCode(productCode)}:${field || ""}`;
+    return issues.some((issue) => issueKey(issue) === key && issue.message === message);
   }
 
   function addIssue(issues, line, productCode, field, message, actual, expected) {
-    if (issueExists(issues, line, field, message)) return;
+    if (issueExists(issues, line, productCode, field, message)) return;
     issues.push({
       line,
       product_code: productCode,
@@ -252,6 +260,14 @@
         ["tax", "Tiền thuế CRM/đơn mua lệch", 1],
         ["total", "Tổng tiền CRM/đơn mua lệch", 1],
       ].forEach(([field, label, tolerance]) => {
+        const sameFieldPurchaseIssue = issues.some((issue) => (
+          issue.line === crmLine.index
+          && normalizedCode(issue.product_code) === code
+          && issue.field === field
+          && isSalePurchaseIssue(issue)
+        ));
+        if (sameFieldPurchaseIssue) return;
+
         const actual = normalizeNumber(crmLine[field]);
         const expected = normalizeNumber(poLine[field]);
         if (numberDiffers(actual, expected, tolerance)) {
@@ -268,29 +284,85 @@
       });
     });
 
+    const collapsedIssues = collapseIssues(issues);
     return {
       ...result,
-      issues,
+      issues: collapsedIssues,
       summary: {
         ...(result.summary || {}),
-        ok: issues.length === 0,
-        issue_count: issues.length,
+        ok: collapsedIssues.length === 0,
+        issue_count: collapsedIssues.length,
         checked_line_count: crmLines.length,
       },
     };
   }
 
-  function clearMarks() {
-    document.querySelectorAll(".hlv-invoice-guard-bad-cell").forEach((el) => {
-      el.classList.remove("hlv-invoice-guard-bad-cell");
-      el.removeAttribute("data-hlv-issue");
+  function collapseIssues(issues) {
+    const byKey = new Map();
+    (issues || []).forEach((issue) => {
+      const key = issueKey(issue);
+      const previous = byKey.get(key);
+      if (!previous) {
+        byKey.set(key, issue);
+        return;
+      }
+      if (isSalePurchaseIssue(issue) && !isSalePurchaseIssue(previous)) {
+        byKey.set(key, issue);
+      }
     });
+    return Array.from(byKey.values());
+  }
+
+  function clearMarks() {
+    document.querySelectorAll(".hlv-invoice-guard-bad-cell, .hlv-invoice-guard-ok-cell").forEach((el) => {
+      el.classList.remove("hlv-invoice-guard-bad-cell");
+      el.classList.remove("hlv-invoice-guard-ok-cell");
+      el.removeAttribute("data-hlv-issue");
+      el.removeAttribute("data-hlv-crm-line");
+      el.removeAttribute("data-hlv-field");
+    });
+    document.querySelector(".hlv-invoice-guard-lines")?.remove();
+  }
+
+  function isCrmPurchaseIssue(issue) {
+    return compactText(issue?.message || "").includes("crm/don mua");
+  }
+
+  function isSalePurchaseIssue(issue) {
+    return compactText(issue?.message || "").includes("don ban/don mua");
+  }
+
+  function isPurchaseOnlyIssue(issue) {
+    const message = compactText(issue?.message || "");
+    return isCrmPurchaseIssue(issue)
+      || isSalePurchaseIssue(issue)
+      || message.includes("khong co trong don mua")
+      || message.includes("khong tim thay don mua");
+  }
+
+  function isCrmSaleIssue(issue) {
+    return !isPurchaseOnlyIssue(issue);
   }
 
   function markIssues(lines, issues) {
     clearMarks();
     const byIndex = new Map(lines.map((line) => [line.index, line]));
-    (issues || []).forEach((issue) => {
+    const crmSaleIssues = (issues || []).filter(isCrmSaleIssue);
+    const crmSaleIssueKeys = new Set(crmSaleIssues.map((issue) => `${issue.line}:${issue.field}`));
+
+    lines.forEach((line) => {
+      ["tax_percent", "tax", "total"].forEach((field) => {
+        const cell = line._cells[field];
+        if (!cell) return;
+        cell.setAttribute("data-hlv-crm-line", String(line.index));
+        cell.setAttribute("data-hlv-field", field);
+        if (!crmSaleIssueKeys.has(`${line.index}:${field}`)) {
+          cell.classList.add("hlv-invoice-guard-ok-cell");
+        }
+      });
+    });
+
+    crmSaleIssues.forEach((issue) => {
       const line = byIndex.get(issue.line);
       if (!line) return;
       const cell = line._cells[issue.field] || line._cells.product_code;
@@ -361,7 +433,7 @@
       return;
     }
     setStatus(`${summary.issue_count || 0} lỗi / ${summary.checked_line_count || 0} dòng.`, "is-error");
-    (result.issues || []).slice(0, 40).forEach((issue) => {
+    collapseIssues(result.issues || []).slice(0, 40).forEach((issue) => {
       const item = document.createElement("div");
       item.className = "hlv-invoice-guard-issue";
       item.textContent = `Dòng ${issue.line} ${issue.product_code || ""}: ${issue.message}`;
@@ -430,6 +502,7 @@
     }
 
     const lines = parseRows(grid);
+    lastLines = lines;
     log("parsed lines", lines.map((line) => ({
       index: line.index,
       product_code: line.product_code,
@@ -472,16 +545,88 @@
     }[char]));
   }
 
-  function renderOrderTable(title, order) {
+  function normalizedCode(value) {
+    return String(value || "").trim().toUpperCase();
+  }
+
+  function ensureCompareIssueBucket(map, side, code, field) {
+    if (!map[side].has(code)) map[side].set(code, new Map());
+    const fields = map[side].get(code);
+    if (!fields.has(field)) fields.set(field, []);
+    return fields.get(field);
+  }
+
+  function addCompareIssue(map, side, code, field, message) {
+    const normalized = normalizedCode(code);
+    if (!normalized) return;
+    ensureCompareIssueBucket(map, side, normalized, field).push(message);
+  }
+
+  function compareIssueMap(result) {
+    const map = {
+      sale: new Map(),
+      purchase: new Map(),
+    };
+    collapseIssues(result.issues || []).forEach((issue) => {
+      const field = issue.field || "product_code";
+      const message = issue.message || "";
+      const code = issue.product_code || "";
+      const normalizedMessage = compactText(message);
+
+      if (normalizedMessage.includes("crm/don mua")) {
+        addCompareIssue(map, "purchase", code, field, message);
+        return;
+      }
+      if (normalizedMessage.includes("don ban/don mua")) {
+        addCompareIssue(map, "purchase", code, field, message);
+        return;
+      }
+      if (normalizedMessage.includes("khong co trong don mua") || normalizedMessage.includes("khong tim thay don mua")) {
+        addCompareIssue(map, "sale", code, "product_code", message);
+        return;
+      }
+      if (normalizedMessage.includes("don ban odoo") || normalizedMessage.includes("odoo")) {
+        addCompareIssue(map, "sale", code, field, message);
+      }
+    });
+    return map;
+  }
+
+  function compareOkClass(issueMap, side, code, field) {
+    if (!["qty", "tax_percent", "tax", "total"].includes(field)) return "";
+    return compareCellClass(issueMap, side, code, field) ? "" : "hlv-invoice-guard-compare-ok";
+  }
+
+  function compareCellClass(issueMap, side, code, field) {
+    const messages = issueMap?.[side]?.get(normalizedCode(code))?.get(field);
+    return messages?.length ? "hlv-invoice-guard-compare-bad" : "";
+  }
+
+  function compareCellTitle(issueMap, side, code, field) {
+    const messages = issueMap?.[side]?.get(normalizedCode(code))?.get(field);
+    return messages?.length ? escapeHtml(messages.join("\n")) : "";
+  }
+
+  function compareCellAttrs(issueMap, side, code, field) {
+    const cls = compareCellClass(issueMap, side, code, field);
+    const title = compareCellTitle(issueMap, side, code, field);
+    return cls ? ` class="${cls}" title="${title}"` : "";
+  }
+
+  function compareDataAttrs(side, code, field) {
+    return ` data-hlv-compare-side="${side}" data-hlv-code="${escapeHtml(normalizedCode(code))}" data-hlv-field="${field}"`;
+  }
+
+  function renderOrderTable(title, order, side, issueMap) {
     if (!order) return `<div class="hlv-invoice-guard-empty">${title}: không có dữ liệu.</div>`;
     const rows = (order.lines || []).map((line) => `
       <tr>
-        <td>${escapeHtml(line.product_code || "")}</td>
+        <td${compareCellAttrs(issueMap, side, line.product_code, "product_code")}${compareDataAttrs(side, line.product_code, "product_code")}>${escapeHtml(line.product_code || "")}</td>
         <td>${escapeHtml(line.product_name || line.description || "")}</td>
-        <td class="num">${formatMoney(line.qty)}</td>
-        <td class="num">${formatMoney(line.tax_percent)}%</td>
-        <td class="num">${formatMoney(line.tax)}</td>
-        <td class="num">${formatMoney(line.total)}</td>
+        <td class="num ${compareCellClass(issueMap, side, line.product_code, "qty")} ${compareOkClass(issueMap, side, line.product_code, "qty")}" title="${compareCellTitle(issueMap, side, line.product_code, "qty")}"${compareDataAttrs(side, line.product_code, "qty")}>${formatMoney(line.qty)}</td>
+        <td class="num ${compareCellClass(issueMap, side, line.product_code, "tax_percent")} ${compareOkClass(issueMap, side, line.product_code, "tax_percent")}" title="${compareCellTitle(issueMap, side, line.product_code, "tax_percent")}"${compareDataAttrs(side, line.product_code, "tax_percent")}>${formatMoney(line.tax_percent)}%</td>
+        <td class="num ${compareCellClass(issueMap, side, line.product_code, "tax")} ${compareOkClass(issueMap, side, line.product_code, "tax")}" title="${compareCellTitle(issueMap, side, line.product_code, "tax")}"${compareDataAttrs(side, line.product_code, "tax")}>${formatMoney(line.tax)}</td>
+        <td class="num ${compareCellClass(issueMap, side, line.product_code, "total")} ${compareOkClass(issueMap, side, line.product_code, "total")}" title="${compareCellTitle(issueMap, side, line.product_code, "total")}"${compareDataAttrs(side, line.product_code, "total")}>${formatMoney(line.total)}</td>
       </tr>
     `).join("");
     return `
@@ -503,6 +648,7 @@
     if (!box) return;
     if (!box.hidden) {
       box.hidden = true;
+      document.querySelector(".hlv-invoice-guard-lines")?.remove();
       return;
     }
     const result = lastResult || await runCheck({ force: true, showCompare: true });
@@ -512,11 +658,72 @@
   function renderCompare(result) {
     const box = root?.querySelector(".hlv-invoice-guard-compare-box");
     if (!box) return;
+    const issueMap = compareIssueMap(result || {});
     box.hidden = false;
     box.innerHTML = `
-      ${renderOrderTable("Đơn bán Odoo", result.sale_order)}
-      ${renderOrderTable("Đơn mua liên kết", result.purchase_order)}
+      ${renderOrderTable("Đơn bán Odoo", result.sale_order, "sale", issueMap)}
+      ${renderOrderTable("Đơn mua liên kết", result.purchase_order, "purchase", issueMap)}
     `;
+    scheduleConnectorRedraw();
+  }
+
+  function cellCenter(rect, side) {
+    return {
+      x: (side === "left" ? rect.left : rect.right) + window.scrollX,
+      y: rect.top + rect.height / 2 + window.scrollY,
+    };
+  }
+
+  function scheduleConnectorRedraw() {
+    window.clearTimeout(connectorRedrawTimer);
+    connectorRedrawTimer = window.setTimeout(() => {
+      const box = root?.querySelector(".hlv-invoice-guard-compare-box");
+      if (!lastResult || !box || box.hidden) return;
+      drawConnectorLines(lastResult);
+    }, 60);
+  }
+
+  function drawConnectorLines(result) {
+    document.querySelector(".hlv-invoice-guard-lines")?.remove();
+    const lineIssues = collapseIssues(result?.issues || []).filter((issue) => isCrmPurchaseIssue(issue) || isSalePurchaseIssue(issue));
+    if (!lineIssues.length) return;
+    const docWidth = Math.max(document.documentElement.scrollWidth, document.body.scrollWidth, window.innerWidth);
+    const docHeight = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight, window.innerHeight);
+
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.classList.add("hlv-invoice-guard-lines");
+    svg.setAttribute("width", String(docWidth));
+    svg.setAttribute("height", String(docHeight));
+    svg.setAttribute("viewBox", `0 0 ${docWidth} ${docHeight}`);
+
+    const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+    defs.innerHTML = `
+      <marker id="hlv-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
+        <path d="M0,0 L8,4 L0,8 Z" fill="#dc2626"></path>
+      </marker>
+    `;
+    svg.appendChild(defs);
+
+    lineIssues.forEach((issue) => {
+      const crmLine = lastLines.find((line) => line.index === issue.line);
+      const source = crmLine?._cells?.[issue.field];
+      const targetSide = isCrmPurchaseIssue(issue) || isSalePurchaseIssue(issue) ? "purchase" : "sale";
+      const target = document.querySelector(
+        `[data-hlv-compare-side="${targetSide}"][data-hlv-code="${CSS.escape(normalizedCode(issue.product_code))}"][data-hlv-field="${issue.field}"]`,
+      );
+      if (!source || !target) return;
+
+      const from = cellCenter(source.getBoundingClientRect(), "left");
+      const to = cellCenter(target.getBoundingClientRect(), "right");
+      const midX = Math.max(0, Math.min(docWidth, (from.x + to.x) / 2));
+      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.setAttribute("d", `M ${from.x} ${from.y} C ${midX} ${from.y}, ${midX} ${to.y}, ${to.x} ${to.y}`);
+      path.setAttribute("class", "hlv-invoice-guard-line");
+      path.setAttribute("marker-end", "url(#hlv-arrow)");
+      svg.appendChild(path);
+    });
+
+    document.body.appendChild(svg);
   }
 
   function scheduleSetup() {
@@ -554,4 +761,6 @@
     if (pollCount >= 300) window.clearInterval(poll);
   }, 1000);
   window.setTimeout(scheduleSetup, 2500);
+  window.addEventListener("scroll", scheduleConnectorRedraw, true);
+  window.addEventListener("resize", scheduleConnectorRedraw);
 })();
