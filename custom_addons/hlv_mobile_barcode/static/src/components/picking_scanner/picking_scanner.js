@@ -72,16 +72,16 @@ export class PickingScanner extends Component {
                         openedPickings = [];
                     }
                     
-                    if (!openedPickings.includes(this.props.pickingId)) {
-                        const autoClearKey = 'hlv_auto_cleared_' + this.props.pickingId;
-                        if (!sessionStorage.getItem(autoClearKey) && data.name && data.name.toUpperCase().includes('PICK')) {
-                            sessionStorage.setItem(autoClearKey, '1');
-                            
-                            // Gọi hàm Làm lại (reload trang sau khi xóa số lượng)
-                            this.clearQuantities(true);
-                            return;
-                        }
+                    const autoClearKey = 'hlv_auto_cleared_' + this.props.pickingId;
+                    if (!sessionStorage.getItem(autoClearKey) && data.name && data.name.toUpperCase().includes('PICK')) {
+                        sessionStorage.setItem(autoClearKey, '1');
                         
+                        // Gọi hàm Làm lại (reload trang sau khi xóa số lượng)
+                        this.clearQuantities(true);
+                        return;
+                    }
+                    
+                    if (!openedPickings.includes(this.props.pickingId)) {
                         openedPickings.push(this.props.pickingId);
                         if (openedPickings.length > 200) openedPickings = openedPickings.slice(openedPickings.length - 200);
                         localStorage.setItem(storageKey, JSON.stringify(openedPickings));
