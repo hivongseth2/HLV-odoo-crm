@@ -65,6 +65,17 @@ export class BarcodeApp extends Component {
             pendingExitAction: null,
             isMultiLocationMode: savedState.isMultiLocationMode || false,
         });
+
+        this._cameraStream = null;
+        this._scanInterval = null;
+        this._barcodeDetector = null;
+        this._lastScanResult = "";
+        this._lastScanTime = 0;
+        this._isCameraRunning = false;
+
+        onWillUnmount(() => {
+            this.closeCamera();
+        });
         
         useEffect(() => {
             sessionStorage.setItem('hlv_barcode_state', JSON.stringify({
@@ -664,6 +675,7 @@ export class BarcodeApp extends Component {
             // Tải vị trí nguồn mặc định của phiếu để hiển thị trực tiếp lên tiêu đề
             rpc("/hlv_mobile_barcode/get_picking_data", { picking_id: pickingId }).then((data) => {
                 if (data && !data.error) {
+                    this.state.warehouseCode = data.warehouse_code || "HLV";
                     if (data.is_putaway && data.location_dest_name) {
                         this.state.scannedLocationId = data.location_dest_id;
                         this.state.scannedLocationName = data.location_dest_name;
@@ -709,11 +721,11 @@ export class BarcodeApp extends Component {
         this.state.cameraNeedsActivation = false;
         this.state.cameraErrorMessage = "";
 
-        if (!window.Html5Qrcode) {
+        if (typeof window.BarcodeDetector === 'undefined') {
             try {
                 await new Promise((resolve, reject) => {
                     const script = document.createElement("script");
-                    script.src = "https://unpkg.com/html5-qrcode";
+                    script.src = "https://fastly.jsdelivr.net/npm/barcode-detector@3/dist/iife/polyfill.min.js";
                     script.onload = resolve;
                     script.onerror = reject;
                     document.head.appendChild(script);
@@ -722,6 +734,20 @@ export class BarcodeApp extends Component {
                 this.notification.add("Cannot load camera library. Need internet.", { type: "danger" });
                 this.state.cameraFallback = true;
                 return;
+            }
+        }
+
+        if (!this._barcodeDetector && typeof window.BarcodeDetector !== 'undefined') {
+            try {
+                this._barcodeDetector = new window.BarcodeDetector({
+                    formats: [
+                        'code_128', 'code_39', 'ean_13', 'ean_8',
+                        'upc_a', 'upc_e', 'itf', 'qr_code',
+                        'data_matrix', 'codabar'
+                    ]
+                });
+            } catch (e) {
+                console.error("BarcodeDetector init failed:", e);
             }
         }
         
@@ -738,44 +764,76 @@ export class BarcodeApp extends Component {
             }
 
             if (!readerEl) {
-                console.warn("Html5Qrcode: #reader element not found in DOM after retries.");
+                console.warn("#reader element not found in DOM after retries.");
                 return;
             }
 
-            this.html5Qrcode = new window.Html5Qrcode("reader");
-            
-            const config = { 
-                fps: 20,               
-                disableFlip: false,    
-                aspectRatio: 1.333334,      
-                experimentalFeatures: {
-                    useBarCodeDetectorIfSupported: true 
-                }
-            };
-            
-            await this.html5Qrcode.start(
-                { facingMode: "environment" }, 
-                config,
-                async (decodedText, decodedResult) => {
-                    if (this.html5Qrcode) {
-                        try { this.html5Qrcode.pause(); } catch(e) {}
-                    }
-                    await this.processBarcode(decodedText);
-                    
-                    setTimeout(() => {
-                        if (this.html5Qrcode) {
-                            const state = this.html5Qrcode.getState();
-                            // 3 is PAUSED in Html5QrcodeScannerState
-                            if (state === 3 || (window.Html5QrcodeScannerState && state === window.Html5QrcodeScannerState.PAUSED)) {
-                                try { this.html5Qrcode.resume(); } catch(e) {}
-                            }
-                        }
-                    }, 1500);
+            readerEl.innerHTML = '';
+
+            // Create video element
+            const video = document.createElement('video');
+            video.setAttribute('autoplay', '');
+            video.setAttribute('playsinline', '');
+            video.setAttribute('muted', '');
+            video.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block;';
+            readerEl.appendChild(video);
+
+            // Add scan overlay with laser line
+            const overlay = document.createElement('div');
+            overlay.className = 'scan-overlay';
+            overlay.innerHTML = '<div class="scan-laser"></div>';
+            readerEl.style.cssText = 'position:relative;width:100%;height:100%;overflow:hidden;background:#000;';
+            readerEl.appendChild(overlay);
+
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    facingMode: { ideal: 'environment' },
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                    focusMode: { ideal: 'continuous' },
+                    frameRate: { ideal: 30 },
                 },
-                (errorMessage) => {
-                    // ignore parse errors
+                audio: false
+            });
+            this._cameraStream = stream;
+            video.srcObject = stream;
+            await video.play();
+            video.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block;';
+            this._isCameraRunning = true;
+            this._lastScanResult = '';
+            this._lastScanTime = 0;
+
+            // Start scanning loop
+            const scanFrame = async () => {
+                if (!this._isCameraRunning || !this._cameraStream) return;
+                if (video.readyState < video.HAVE_ENOUGH_DATA) {
+                    this._scanInterval = requestAnimationFrame(scanFrame);
+                    return;
                 }
-            );
+
+                try {
+                    let result = null;
+                    if (this._barcodeDetector) {
+                        const barcodes = await this._barcodeDetector.detect(video);
+                        if (barcodes.length > 0) result = barcodes[0].rawValue;
+                    }
+
+                    if (result) {
+                        const now = Date.now();
+                        // Deduplicate: same barcode within 2s
+                        if (result !== this._lastScanResult || (now - this._lastScanTime) > 2000) {
+                            this._lastScanResult = result;
+                            this._lastScanTime = now;
+                            await this.processBarcode(result);
+                        }
+                    }
+                } catch (e) { /* scan error, continue */ }
+
+                setTimeout(() => {
+                    this._scanInterval = requestAnimationFrame(scanFrame);
+                }, 66);
+            };
+            this._scanInterval = requestAnimationFrame(scanFrame);
 
             this.state.cameraNeedsActivation = false;
             this.state.cameraErrorMessage = "";
@@ -786,15 +844,12 @@ export class BarcodeApp extends Component {
             
             if (errStr.includes("notallowederror") || errStr.includes("permission")) {
                 if (!isUserGesture) {
-                    // Fail on load (possibly iOS user-gesture requirement or first time permission prompt block)
-                    // We show the "Activate" overlay to let user click and trigger it via active gesture.
                     this.state.cameraNeedsActivation = true;
                     this.state.cameraErrorMessage = "PERMISSION_DENIED";
                 } else {
-                    // Real refusal or permission disabled globally
                     this.state.cameraFallback = true;
                     this.state.cameraErrorMessage = "PERMISSION_DENIED";
-                    this.notification.add("Không thể mở Camera. Hãy cấp quyền Camera cho Chrome trong Cài đặt iPhone.", { type: "danger" });
+                    this.notification.add("Không thể mở Camera. Hãy cấp quyền Camera trong Cài đặt trình duyệt.", { type: "danger" });
                 }
             } else {
                 this.notification.add("Không thể mở Camera. Lỗi: " + err, { type: "warning" });
@@ -807,11 +862,40 @@ export class BarcodeApp extends Component {
         if (!ev.target.files || ev.target.files.length === 0) return;
         const file = ev.target.files[0];
         try {
-            if (!this.html5Qrcode) {
-                this.html5Qrcode = new window.Html5Qrcode("reader");
+            if (typeof window.BarcodeDetector === 'undefined') {
+                await new Promise((resolve, reject) => {
+                    const script = document.createElement("script");
+                    script.src = "https://fastly.jsdelivr.net/npm/barcode-detector@3/dist/iife/polyfill.min.js";
+                    script.onload = resolve;
+                    script.onerror = reject;
+                    document.head.appendChild(script);
+                });
             }
-            const decodedText = await this.html5Qrcode.scanFile(file, true);
-            await this.processBarcode(decodedText);
+            if (!this._barcodeDetector) {
+                this._barcodeDetector = new window.BarcodeDetector({
+                    formats: [
+                        'code_128', 'code_39', 'ean_13', 'ean_8',
+                        'upc_a', 'upc_e', 'itf', 'qr_code',
+                        'data_matrix', 'codabar'
+                    ]
+                });
+            }
+
+            const img = new Image();
+            img.src = URL.createObjectURL(file);
+            await new Promise((resolve, reject) => {
+                img.onload = resolve;
+                img.onerror = reject;
+            });
+
+            const barcodes = await this._barcodeDetector.detect(img);
+            URL.revokeObjectURL(img.src);
+
+            if (barcodes.length > 0) {
+                await this.processBarcode(barcodes[0].rawValue);
+            } else {
+                throw new Error("No barcode detected");
+            }
         } catch (err) {
             this.playSound('error');
             this.notification.add("Không tìm thấy mã vạch hợp lệ trong ảnh này.", { type: "danger" });
@@ -819,21 +903,23 @@ export class BarcodeApp extends Component {
     }
 
     async closeCamera() {
-        this.state.showCamera = false;
+        this._isCameraRunning = false;
         this.state.cameraFallback = false;
         this.state.cameraNeedsActivation = false;
         this.state.cameraErrorMessage = "";
         
-        const qrcode = this.html5Qrcode;
-        this.html5Qrcode = null; // Immediately nullify to prevent concurrent access
+        if (this._scanInterval) {
+            cancelAnimationFrame(this._scanInterval);
+            this._scanInterval = null;
+        }
+        if (this._cameraStream) {
+            this._cameraStream.getTracks().forEach(t => t.stop());
+            this._cameraStream = null;
+        }
         
-        if (qrcode) {
-            try {
-                await qrcode.stop();
-            } catch (e) {}
-            try {
-                qrcode.clear();
-            } catch (e) {}
+        let readerEl = document.getElementById("reader");
+        if (readerEl) {
+            readerEl.innerHTML = '';
         }
     }
 

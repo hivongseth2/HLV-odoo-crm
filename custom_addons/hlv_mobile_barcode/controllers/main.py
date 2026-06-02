@@ -118,6 +118,8 @@ class HLVMobileBarcodeController(http.Controller):
                         for line in move.move_line_ids:
                             line.quantity = 0.0
 
+        is_pick_picking = 'pick' in (picking.name or '').lower() or 'pick' in (picking.picking_type_id.name or '').lower() or 'pick' in (picking.picking_type_id.sequence_code or '').lower()
+
         lines = []
         for move in picking.move_ids:
             if move.move_line_ids:
@@ -159,6 +161,8 @@ class HLVMobileBarcodeController(http.Controller):
                         'package_id': ml.package_id.id or False,
                     })
             else:
+                if is_pick_picking:
+                    continue
                 if is_putaway:
                     loc_name = move.location_dest_id.display_name
                 else:
@@ -179,6 +183,9 @@ class HLVMobileBarcodeController(http.Controller):
                     'result_package_id': False,
                     'package_id': False,
                 })
+
+        if is_pick_picking and not lines:
+            return {'error': _('Phiếu PICK này chưa có sản phẩm nào được gán vị trí lấy hàng. Vui lòng chờ hệ thống phân bổ xong!')}
         # Find linked Step 2 picking (only active for pure internal transfers e.g. INT -> IN / STOR)
         linked_picking_id = False
         linked_picking_name = False

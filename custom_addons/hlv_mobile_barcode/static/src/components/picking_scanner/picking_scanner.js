@@ -23,6 +23,7 @@ export class PickingScanner extends Component {
         this.notification = useService("notification");
         this.actionService = useService("action");
         this.isProcessingQty = false;
+        this._hasAutoCleared = false;
         
         this.state = useState({
             picking: null,
@@ -44,9 +45,13 @@ export class PickingScanner extends Component {
         });
 
         onWillUpdateProps(async (nextProps) => {
+            if (nextProps.pickingId !== this.props.pickingId) {
+                this._hasAutoCleared = false;
+            }
             if (nextProps.lastScannedProduct !== this.props.lastScannedProduct 
                 || nextProps.scannedLocationName !== this.props.scannedLocationName
-                || nextProps.refreshTick !== this.props.refreshTick) {
+                || nextProps.refreshTick !== this.props.refreshTick
+                || nextProps.pickingId !== this.props.pickingId) {
                 await this.loadPicking();
             }
         });
@@ -72,12 +77,11 @@ export class PickingScanner extends Component {
                         openedPickings = [];
                     }
                     
-                    const autoClearKey = 'hlv_auto_cleared_' + this.props.pickingId;
-                    if (!sessionStorage.getItem(autoClearKey) && data.name && data.name.toUpperCase().includes('PICK')) {
-                        sessionStorage.setItem(autoClearKey, '1');
+                    if (!this._hasAutoCleared && data.name && data.name.toUpperCase().includes('PICK')) {
+                        this._hasAutoCleared = true;
                         
-                        // Gọi hàm Làm lại (reload trang sau khi xóa số lượng)
-                        this.clearQuantities(true);
+                        // Gọi hàm Làm lại
+                        await this.clearQuantities(true);
                         return;
                     }
                     
@@ -114,7 +118,7 @@ export class PickingScanner extends Component {
                 } catch (e) {}
                 
                 this.notification.add("Đã làm mới số lượng", { type: "success" });
-                window.location.reload();
+                await this.loadPicking();
             }
         } catch (e) {
             this.notification.add("Lỗi kết nối", { type: "danger" });
