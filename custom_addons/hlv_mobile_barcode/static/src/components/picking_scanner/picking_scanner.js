@@ -7,14 +7,14 @@ import { rpc } from "@web/core/network/rpc";
 export class PickingScanner extends Component {
     static template = "hlv_mobile_barcode.PickingScanner";
     static props = {
-        pickingId: Number,
+        pickingId: { type: [Number, Boolean, String], optional: true },
         onBack: Function,
         onSelectPicking: Function,
         onStateLoaded: { type: Function, optional: true },
-        lastScannedProduct: { type: Number, optional: true },
-        scannedLocationName: { type: String, optional: true },
+        lastScannedProduct: { optional: true },
+        scannedLocationName: { type: [String, Boolean], optional: true },
         refreshTick: { type: Number, optional: true },
-        scanMode: { type: String, optional: true },
+        scanMode: { type: [String, Boolean], optional: true },
         onToggleScanMode: { type: Function, optional: true },
         isMultiLocationMode: { type: Boolean, optional: true },
     };
