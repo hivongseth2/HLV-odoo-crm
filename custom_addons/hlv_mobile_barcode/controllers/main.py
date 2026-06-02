@@ -1072,8 +1072,32 @@ class HLVMobileBarcodeController(http.Controller):
                 match = re.search(r'DEST_LOC_OVERRIDE:(\d+)', note)
                 if match:
                     dest_loc_id = int(match.group(1))
-
-            picking.button_validate()
+            res_dict = picking.button_validate()
+            
+            # Xử lý tự động tạo backorder nếu quét không đủ số lượng
+            backorder_info = {}
+            if isinstance(res_dict, dict) and res_dict.get('res_model') == 'stock.backorder.confirmation':
+                wizard_context = res_dict.get('context', {})
+                if 'default_pick_ids' not in wizard_context:
+                    wizard_context['default_pick_ids'] = [(4, picking.id)]
+                
+                existing_backorders = request.env['stock.picking'].search([('backorder_id', '=', picking.id)]).ids
+                
+                backorder_wizard = request.env['stock.backorder.confirmation'].with_context(wizard_context).create({
+                    'pick_ids': [(4, picking.id)]
+                })
+                backorder_wizard.process()
+                
+                new_backorders = request.env['stock.picking'].search([
+                    ('backorder_id', '=', picking.id),
+                    ('id', 'not in', existing_backorders)
+                ])
+                if new_backorders:
+                    backorder_info = {
+                        'backorder_created': True,
+                        'backorder_id': new_backorders[0].id,
+                        'backorder_name': new_backorders[0].name
+                    }
             
             # Override destination location for Step 2 if requested
             if dest_loc_id:
@@ -1090,7 +1114,9 @@ class HLVMobileBarcodeController(http.Controller):
                     """, (dest_loc_id, step2_picking.id))
                     step2_picking.invalidate_recordset()
                     
-            return {'success': True}
+            result = {'success': True}
+            result.update(backorder_info)
+            return result
         except Exception as e:
             return {'error': str(e)}
 
