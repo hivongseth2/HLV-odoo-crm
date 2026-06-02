@@ -68,7 +68,7 @@ export class PickingScanner extends Component {
                     this.props.onStateLoaded(data.state);
                 }
                 
-                if (['draft', 'confirmed', 'assigned'].includes(data.state)) {
+                if (['draft', 'waiting', 'confirmed', 'assigned'].includes(data.state)) {
                     const storageKey = 'hlv_opened_pickings';
                     let openedPickings = [];
                     try {

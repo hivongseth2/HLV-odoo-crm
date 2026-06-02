@@ -890,7 +890,7 @@ class HLVMobileBarcodeController(http.Controller):
     @http.route('/hlv_mobile_barcode/clear_quantities', type='json', auth='user')
     def clear_quantities(self, picking_id):
         picking = request.env['stock.picking'].sudo().browse(picking_id)
-        if not picking.exists() or picking.state not in ['draft', 'confirmed', 'assigned']:
+        if not picking.exists() or picking.state not in ['draft', 'waiting', 'confirmed', 'assigned']:
             return {'error': _('Không thể xoá số lượng của phiếu này')}
             
         try:
