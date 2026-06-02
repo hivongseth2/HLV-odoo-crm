@@ -20,9 +20,6 @@
                         <setting string="Hiện Nút Bấm Chỉnh Số Lượng" help="Bật để hiện các nút bấm +1, -1, +10 trên màn hình điện thoại/máy quét để bấm nhanh.">
                             <field name="hlv_barcode_show_qty_buttons"/>
                         </setting>
-                        <setting string="Cho Phép Quét Sản Phẩm Lạ" help="Bật để cho phép nhân viên quét các sản phẩm chưa có trong phiếu (tự động tạo thêm dòng mới).">
-                            <field name="hlv_barcode_allow_add_product"/>
-                        </setting>
                         <setting string="Dùng Quyền Riêng Cho Máy Quét" help="Bật để dùng bảng phân quyền máy quét độc lập. Tắt để dùng chung với quyền kho trên máy tính.">
                             <field name="hlv_barcode_use_independent_permissions"/>
                         </setting>
