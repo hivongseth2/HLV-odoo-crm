@@ -52,10 +52,10 @@ class SaleOrder(models.Model):
                 issues.append(self._hlv_invoice_guard_issue(index, code, "product_code", "Mã hàng không có trong đơn mua liên kết."))
                 continue
 
-            self._hlv_invoice_guard_compare_number(issues, index, code, "qty", "Số lượng đơn bán/đơn mua", sale_line["qty"], po_line["qty"], precision)
-            self._hlv_invoice_guard_compare_number(issues, index, code, "tax_percent", "VAT đơn bán/đơn mua", sale_line["tax_percent"], po_line["tax_percent"], 0.01)
-            self._hlv_invoice_guard_compare_number(issues, index, code, "tax", "Tiền thuế đơn bán/đơn mua", sale_line["tax"], po_line["tax"], precision)
-            self._hlv_invoice_guard_compare_number(issues, index, code, "total", "Tổng tiền đơn bán/đơn mua", sale_line["total"], po_line["total"], precision)
+            self._hlv_invoice_guard_compare_number(issues, index, code, "qty", "Số lượng đơn bán/đơn mua", sale_line["qty"], po_line["qty"], precision, actual_label="Đơn bán", expected_label="Đơn mua")
+            self._hlv_invoice_guard_compare_number(issues, index, code, "tax_percent", "VAT đơn bán/đơn mua", sale_line["tax_percent"], po_line["tax_percent"], 0.01, actual_label="Đơn bán", expected_label="Đơn mua")
+            self._hlv_invoice_guard_compare_number(issues, index, code, "tax", "Tiền thuế đơn bán/đơn mua", sale_line["tax"], po_line["tax"], precision, actual_label="Đơn bán", expected_label="Đơn mua")
+            self._hlv_invoice_guard_compare_number(issues, index, code, "total", "Tổng tiền đơn bán/đơn mua", sale_line["total"], po_line["total"], precision, actual_label="Đơn bán", expected_label="Đơn mua")
 
         return {
             **payload,
@@ -148,7 +148,7 @@ class SaleOrder(models.Model):
             "total": as_float(line.get("total") or line.get("Total")),
         }
 
-    def _hlv_invoice_guard_compare_number(self, issues, index, code, field, label, actual, expected, precision):
+    def _hlv_invoice_guard_compare_number(self, issues, index, code, field, label, actual, expected, precision, actual_label="AMIS", expected_label="Odoo"):
         if actual is None or expected is None:
             return
         diff = actual - expected
@@ -156,7 +156,7 @@ class SaleOrder(models.Model):
             return
         issues.append(self._hlv_invoice_guard_issue(
             index, code, field,
-            "%s lệch: AMIS=%s, Odoo=%s." % (label, actual, expected),
+            "%s lệch: %s=%s, %s=%s." % (label, actual_label, actual, expected_label, expected),
             actual=actual,
             expected=expected,
             diff=diff,

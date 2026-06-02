@@ -64,6 +64,36 @@
   background: #fee2e2 !important;
   box-shadow: inset 0 0 0 2px #dc2626 !important;
 }
+.hlv-invoice-guard-ok-cell {
+  background: #dcfce7 !important;
+  box-shadow: inset 0 0 0 1px #16a34a !important;
+}
+.hlv-invoice-guard-compare-bad {
+  background: #fee2e2 !important;
+  box-shadow: inset 0 0 0 2px #dc2626 !important;
+  color: #7f1d1d !important;
+  font-weight: 700;
+}
+.hlv-invoice-guard-compare-ok {
+  background: #dcfce7 !important;
+  box-shadow: inset 0 0 0 1px #16a34a !important;
+  color: #14532d !important;
+}
+.hlv-invoice-guard-lines {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 2147482500;
+  pointer-events: none;
+  overflow: visible;
+}
+.hlv-invoice-guard-line {
+  fill: none;
+  stroke: #dc2626;
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+  opacity: 0.85;
+}
 .hlv-invoice-guard-bad-cell::after {
   content: attr(data-hlv-issue);
   display: none;
