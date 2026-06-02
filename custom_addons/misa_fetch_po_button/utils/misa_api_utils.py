@@ -513,8 +513,30 @@ class MisaApiUtils(models.AbstractModel):
         token = self._get_misa_token()
         headers = self.env['misa.config'].get_default_headers(token)
         payload = self.env['misa.config'].get_invoice_preview_payload(refid, date)
-        url = "https://actapp.misa.vn/g2/api/einvoice/v1/einvoice/preview_one?viewType=1&publishType=1&decreeType=3&isFollowSerial=true"
-        return self._fetch_with_retry(url, headers, payload)
+
+        def _preview_url(gateway):
+            return (
+                f"https://actapp.misa.vn/{gateway}/api/einvoice/v1/einvoice/preview_one"
+                "?viewType=1&&publishType=1&&decreeType=3&&isFollowSerial=true"
+            )
+
+        g2_url = _preview_url("g2")
+        try:
+            _logger.info("[MISA INVOICE PREVIEW] Trying gateway g2")
+            response = self._fetch_with_retry(g2_url, headers, payload)
+            if response.ok:
+                return response
+            _logger.warning(
+                "[MISA INVOICE PREVIEW] Gateway g2 failed status=%s body=%s",
+                response.status_code,
+                (response.text or "")[:4000],
+            )
+        except Exception as e:
+            _logger.exception("[MISA INVOICE PREVIEW] Gateway g2 request error: %s", e)
+
+        g1_url = _preview_url("g1")
+        _logger.info("[MISA INVOICE PREVIEW] Retrying gateway g1")
+        return self._fetch_with_retry(g1_url, headers, payload)
 
     def _fetch_login_crm_token(self):
         """Fetch CRM token for MISA"""
