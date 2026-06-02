@@ -59,7 +59,7 @@ class HLVMobileBarcodeController(http.Controller):
             return {'type': 'location', 'id': location.id, 'name': location.display_name, 'warehouse_code': warehouse_code}
 
         # 4. Check if it's a Package
-        allow_package = request.env['ir.config_parameter'].sudo().get_param('hlv_mobile_barcode.hlv_barcode_allow_package_scan', 'True') == 'True'
+        allow_package = request.env['ir.config_parameter'].sudo().get_param('hlv_mobile_barcode.hlv_barcode_allow_package_scan', 'False') == 'True'
         if allow_package:
             package = request.env['stock.quant.package'].sudo().search([('name', '=', barcode)], limit=1)
             if package:
@@ -499,7 +499,7 @@ class HLVMobileBarcodeController(http.Controller):
         # 1.5. Try to find package
         package = request.env['stock.quant.package'].sudo().search([('name', '=', barcode)], limit=1)
         if package:
-            allow_package = request.env['ir.config_parameter'].sudo().get_param('hlv_mobile_barcode.hlv_barcode_allow_package_scan', 'True') == 'True'
+            allow_package = request.env['ir.config_parameter'].sudo().get_param('hlv_mobile_barcode.hlv_barcode_allow_package_scan', 'False') == 'True'
             if not allow_package:
                 return {'error': _('Tính năng quét Kiện hàng hiện đang bị tắt trong cấu hình hệ thống!')}
             # We found a package! Let's process the package contents in the picking.
