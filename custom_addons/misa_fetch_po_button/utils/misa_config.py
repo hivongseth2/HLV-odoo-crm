@@ -256,7 +256,7 @@ class MisaConfig(models.AbstractModel):
     def get_invoice_preview_payload(self, refid, date):
         """Payload to fetch a preview PDF link for a specific invoice."""
         return [{
-            "RefID": refid, "inv_refid": refid, "RefType": 3560, "invdate": date,
+            "RefID": refid, "inv_refid": refid, "RefType": 3560, "invdate": date,"business_area":0,
             "invtemplateno": "1", "invseries": "1C26TLV", "InvoiceTemplateID": "5d966b18-1ca1-404a-af7f-6c1edddf15ce"
         }]
 
