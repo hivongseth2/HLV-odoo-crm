@@ -68,7 +68,7 @@ export class PickingScanner extends Component {
                     this.props.onStateLoaded(data.state);
                 }
                 
-                if (['draft', 'confirmed', 'assigned'].includes(data.state)) {
+                if (['draft', 'waiting', 'confirmed', 'assigned'].includes(data.state)) {
                     const storageKey = 'hlv_opened_pickings';
                     let openedPickings = [];
                     try {
@@ -77,7 +77,7 @@ export class PickingScanner extends Component {
                         openedPickings = [];
                     }
                     
-                    if (!this._hasAutoCleared && data.name && data.name.toUpperCase().includes('PICK')) {
+                    if (!this._hasAutoCleared && data.is_pick) {
                         this._hasAutoCleared = true;
                         
                         // Gọi hàm Làm lại
@@ -512,6 +512,15 @@ export class PickingScanner extends Component {
                 : '/custom_barcode_scan_redirect/static/src/sound/error.mp3';
             const audio = new Audio(audioPath);
             audio.play().catch(e => console.error("Audio error:", e));
+        } catch (e) {}
+        try {
+            if (navigator.vibrate) {
+                if (type === 'success') {
+                    navigator.vibrate(150);
+                } else if (type === 'error') {
+                    navigator.vibrate([100, 50, 100]);
+                }
+            }
         } catch (e) {}
     }
 }

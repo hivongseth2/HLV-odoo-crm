@@ -96,7 +96,7 @@
                     </div>
                     <div class="items-list" style="margin-top: 0;">
                         <t t-foreach="state.picking.lines" t-as="line" t-key="line.id || 'draft_' + line.product_id">
-                            <div style="border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 8px; overflow: hidden;">
+                            <div t-attf-class="product-row-card #{line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0 ? 'scanned' : ''}">
                                 <div t-attf-class="item-card #{line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0 ? 'scanned' : ''}" style="border: none; margin-bottom: 0;">
                                     <div class="item-info">
                                         <div class="item-name"><t t-esc="line.product_name"/></div>
@@ -151,7 +151,7 @@
                 </div>
                 
                 <!-- Transition to Step 2 Button -->
-                <div t-if="state.picking.linked_picking_id and !state.picking.name.toUpperCase().includes('PICK')" style="padding: 10px; background: white; border-top: 1px solid var(--border-color); display: flex; gap: 8px;">
+                <div t-if="state.picking.linked_picking_id and !state.picking.is_pick" style="padding: 10px; background: white; border-top: 1px solid var(--border-color); display: flex; gap: 8px;">
                     <button class="btn btn-primary" style="flex: 1; padding: 12px; font-weight: bold; background-color: var(--primary-color); display: flex; align-items: center; justify-content: center; gap: 8px; border-radius: 8px; box-shadow: var(--shadow-sm);" t-on-click="() => props.onSelectPicking(state.picking.linked_picking_id, state.picking.linked_picking_name)" t-att-disabled="state.loading">
                         <i class="fa fa-arrow-right"></i> Chuyển sang Bước 2 (<t t-esc="state.picking.linked_picking_name"/>)
                     </button>
