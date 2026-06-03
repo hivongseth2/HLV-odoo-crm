@@ -165,6 +165,7 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
         # Kiện đã giao (location.usage == 'customer') đã nằm trong qty_delivered rồi,
         # nếu trừ thêm sẽ double-count và làm "Thiếu" bị nhỏ hơn thực tế.
         qty_packed_map = {}
+        qty_packed_by_product_id = {}
         total_packages_count = 0
         package_groups = so_packages_dict.get(so.id, [])
         for group in package_groups:
@@ -174,6 +175,8 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                     continue  # Đã giao, items đã tính trong qty_delivered
                 for prod_name, qty in pack.get('product_map', {}).items():
                     qty_packed_map[prod_name] = qty_packed_map.get(prod_name, 0.0) + qty
+                for prod_id, qty in pack.get('product_id_map', {}).items():
+                    qty_packed_by_product_id[prod_id] = qty_packed_by_product_id.get(prod_id, 0.0) + qty
 
         # --- Nhận diện Kit (phantom BOM) ---
         # Dùng data batch từ caller (thay thế per-SO mrp.bom.search)
@@ -289,7 +292,29 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                 qty_avail = allocated_free + reserved_here
                 if product_wh_key and allocated_free > 0:
                     remaining_free_by_product[product_wh_key] = max(base_free_remaining - allocated_free, 0.0)
-            qty_packed = qty_packed_map.get(p_name, 0.0)
+            qty_packed = 0.0
+            if line.product_id:
+                qty_packed = qty_packed_by_product_id.get(line.product_id.id, 0.0)
+            if not qty_packed:
+                qty_packed = qty_packed_map.get(p_name, 0.0)
+
+            # Phantom BOM kit: packages contain component products, not the kit
+            # parent product. Convert packed component quantities back to
+            # completed kit quantity, mirroring the qty_delivered fallback below.
+            if is_kit and line.product_id:
+                _pack_bom = kit_bom_map.get(line.product_id.product_tmpl_id.id)
+                if _pack_bom:
+                    _bom_qty = _pack_bom.product_qty or 1.0
+                    _packed_kits_ratio = float('inf')
+                    for _comp in _pack_bom.bom_line_ids:
+                        _qty_per_kit = (_comp.product_qty or 0.0) / _bom_qty
+                        if _qty_per_kit > 0 and _comp.product_id:
+                            _comp_packed = qty_packed_by_product_id.get(_comp.product_id.id, 0.0)
+                            if not _comp_packed:
+                                _comp_packed = qty_packed_map.get(_comp.product_id.display_name, 0.0)
+                            _packed_kits_ratio = min(_packed_kits_ratio, _comp_packed / _qty_per_kit)
+                    if _packed_kits_ratio != float('inf') and _packed_kits_ratio > 0:
+                        qty_packed = min(_packed_kits_ratio, line.product_uom_qty)
 
             # Raw warehouse free_qty (không capped theo line) để hiển thị "Tồn Kho"
             if is_kit:

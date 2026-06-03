@@ -649,6 +649,7 @@ function groupLines(lines){
     if(map[pid]){
       map[pid].product_uom_qty+=l.product_uom_qty||0;
       map[pid].qty_delivered+=l.qty_delivered||0;
+      map[pid].qty_packed+=l.qty_packed||0;
       map[pid].qty_reserved_here+=(l.qty_reserved_here||0); // sum reservations across lines
       // qty_warehouse_free: keep first (product-level, same for all lines of same product/wh)
       map[pid].delivered_subtotal+=(l.delivered_subtotal||0);
