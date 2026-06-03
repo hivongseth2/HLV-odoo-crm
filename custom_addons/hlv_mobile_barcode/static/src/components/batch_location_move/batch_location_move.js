@@ -101,12 +101,16 @@ export class BatchLocationMove extends Component {
     async openLocalCamera() {
         this.state.showLocalCamera = true;
         await new Promise(r => setTimeout(r, 100)); // wait for DOM element
+        
+        let readerEl = document.getElementById("batch-location-move-camera-reader");
+        if (!readerEl) return;
+        readerEl.innerHTML = '';
 
-        if (!window.Html5Qrcode) {
+        if (typeof window.BarcodeDetector === 'undefined') {
             try {
                 await new Promise((resolve, reject) => {
                     const script = document.createElement("script");
-                    script.src = "https://unpkg.com/html5-qrcode";
+                    script.src = "https://fastly.jsdelivr.net/npm/barcode-detector@3/dist/iife/polyfill.min.js";
                     script.onload = resolve;
                     script.onerror = reject;
                     document.head.appendChild(script);
@@ -118,16 +122,80 @@ export class BatchLocationMove extends Component {
             }
         }
 
+        if (!this._barcodeDetector && typeof window.BarcodeDetector !== 'undefined') {
+            try {
+                this._barcodeDetector = new window.BarcodeDetector({
+                    formats: ['code_128', 'code_39', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'itf', 'qr_code', 'data_matrix', 'codabar']
+                });
+            } catch (e) {}
+        }
+
+        const video = document.createElement('video');
+        video.setAttribute('autoplay', '');
+        video.setAttribute('playsinline', '');
+        video.setAttribute('muted', '');
+        video.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block;';
+        readerEl.appendChild(video);
+        
+        readerEl.style.position = 'relative';
+        readerEl.style.width = '100%';
+        readerEl.style.height = '100%';
+        readerEl.style.overflow = 'hidden';
+        readerEl.style.background = '#000';
+
         try {
-            this.localScanner = new window.Html5Qrcode("batch-location-move-camera-reader");
-            await this.localScanner.start(
-                { facingMode: "environment" },
-                { fps: 15, disableFlip: false, aspectRatio: 1.0 },
-                async (decodedText) => {
-                    this.handleScannedBarcode(decodedText);
-                },
-                (errorMessage) => {}
-            );
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: { ideal: 'environment' } },
+                audio: false
+            });
+            this.localCameraStream = stream;
+            video.srcObject = stream;
+            await video.play();
+            video.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block;';
+            this.isLocalCameraRunning = true;
+            this.lastLocalScanResult = '';
+            this.lastLocalScanTime = 0;
+
+            const scanFrame = async () => {
+                if (!this.isLocalCameraRunning || !this.localCameraStream) return;
+                
+                const currentReaderEl = document.getElementById("batch-location-move-camera-reader");
+                if (currentReaderEl && !currentReaderEl.contains(video)) {
+                    currentReaderEl.innerHTML = '';
+                    currentReaderEl.appendChild(video);
+                    if (video.paused) {
+                        video.play().catch(e => {});
+                    }
+                }
+
+                if (video.readyState < video.HAVE_ENOUGH_DATA) {
+                    this.localScanInterval = requestAnimationFrame(scanFrame);
+                    return;
+                }
+
+                try {
+                    let result = null;
+                    if (this._barcodeDetector) {
+                        const barcodes = await this._barcodeDetector.detect(video);
+                        if (barcodes.length > 0) result = barcodes[0].rawValue;
+                    }
+
+                    if (result) {
+                        const now = Date.now();
+                        if (result !== this.lastLocalScanResult || (now - this.lastLocalScanTime) > 2000) {
+                            this.lastLocalScanResult = result;
+                            this.lastLocalScanTime = now;
+                            this.handleScannedBarcode(result);
+                        }
+                    }
+                } catch (e) {}
+
+                setTimeout(() => {
+                    this.localScanInterval = requestAnimationFrame(scanFrame);
+                }, 66);
+            };
+            this.localScanInterval = requestAnimationFrame(scanFrame);
+
         } catch (err) {
             this.notification.add("Lỗi mở Camera: " + err, { type: "warning" });
             this.closeLocalCamera();
@@ -135,12 +203,14 @@ export class BatchLocationMove extends Component {
     }
 
     async closeLocalCamera() {
-        if (this.localScanner) {
-            try {
-                await this.localScanner.stop();
-                this.localScanner.clear();
-            } catch(e) {}
-            this.localScanner = null;
+        this.isLocalCameraRunning = false;
+        if (this.localScanInterval) {
+            cancelAnimationFrame(this.localScanInterval);
+            this.localScanInterval = null;
+        }
+        if (this.localCameraStream) {
+            this.localCameraStream.getTracks().forEach(t => t.stop());
+            this.localCameraStream = null;
         }
         this.state.showLocalCamera = false;
     }

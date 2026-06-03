@@ -468,14 +468,14 @@ export class BarcodeApp extends Component {
         if (isClear) {
             this.state.isProcessing = true;
             try {
-                const res = await rpc("/hlv_mobile_barcode/clear_and_cancel_picking", { picking_id: this.state.pickingId });
+                const res = await rpc("/hlv_mobile_barcode/clear_quantities", { picking_id: this.state.pickingId });
                 if (res && res.error) {
                     this.notification.add(res.error, { type: "danger" });
                 } else {
-                    this.notification.add("Đã hủy phiếu và giải phóng sản phẩm thành công.", { type: "success" });
+                    this.notification.add("Đã xóa toàn bộ số lượng đã quét.", { type: "success" });
                 }
             } catch (e) {
-                console.error("Cancel error:", e);
+                console.error("Clear quantities error:", e);
             } finally {
                 this.state.isProcessing = false;
             }
@@ -791,7 +791,11 @@ export class BarcodeApp extends Component {
             const overlay = document.createElement('div');
             overlay.className = 'scan-overlay';
             overlay.innerHTML = '<div class="scan-laser"></div>';
-            readerEl.style.cssText = 'position:relative;width:100%;height:100%;overflow:hidden;background:#000;';
+            readerEl.style.position = 'relative';
+            readerEl.style.width = '100%';
+            readerEl.style.height = '100%';
+            readerEl.style.overflow = 'hidden';
+            readerEl.style.background = '#000';
             readerEl.appendChild(overlay);
 
             const stream = await navigator.mediaDevices.getUserMedia({
@@ -806,7 +810,16 @@ export class BarcodeApp extends Component {
             });
             this._cameraStream = stream;
             video.srcObject = stream;
-            await video.play();
+            
+            try {
+                await video.play();
+            } catch (err) {
+                console.warn("Camera play interrupted:", err);
+                // Try again after a short delay or fallback
+                this.state.cameraFallback = true;
+                return;
+            }
+            
             video.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block;';
             this._isCameraRunning = true;
             this._lastScanResult = '';
@@ -815,6 +828,24 @@ export class BarcodeApp extends Component {
             // Start scanning loop
             const scanFrame = async () => {
                 if (!this._isCameraRunning || !this._cameraStream) return;
+                
+                // Re-attach video if Owl wiped it during a virtual DOM patch
+                const currentReaderEl = document.getElementById("reader");
+                if (currentReaderEl && !currentReaderEl.contains(video)) {
+                    currentReaderEl.innerHTML = '';
+                    currentReaderEl.appendChild(video);
+                    currentReaderEl.appendChild(overlay);
+                    currentReaderEl.style.position = 'relative';
+                    currentReaderEl.style.width = '100%';
+                    currentReaderEl.style.height = '100%';
+                    currentReaderEl.style.overflow = 'hidden';
+                    currentReaderEl.style.background = '#000';
+                    
+                    if (video.paused) {
+                        video.play().catch(e => console.error("Auto-play on reattach failed:", e));
+                    }
+                }
+
                 if (video.readyState < video.HAVE_ENOUGH_DATA) {
                     this._scanInterval = requestAnimationFrame(scanFrame);
                     return;
