@@ -391,6 +391,13 @@ class HLVMobileBarcodeController(http.Controller):
             'code': w.code,
         } for w in warehouses]
 
+    @http.route('/hlv_mobile_barcode/get_settings', type='json', auth='user')
+    def get_settings(self):
+        camera_default_on = request.env['ir.config_parameter'].sudo().get_param('hlv_mobile_barcode.hlv_barcode_camera_default_on', 'True') == 'True'
+        return {
+            'camera_default_on': camera_default_on,
+        }
+
     @http.route('/hlv_mobile_barcode/create_empty_int', type='json', auth='user')
     def create_empty_int(self, location_id=None, dest_warehouse_id=False, dest_location_id=False, is_multi_location=False, source_warehouse_id=False):
         source_loc = request.env['stock.location'].browse()

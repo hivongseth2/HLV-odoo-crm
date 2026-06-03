@@ -54,6 +54,7 @@ export class BarcodeApp extends Component {
             cameraErrorMessage: "",
             showCameraPopup: false,
             cameraManuallyOff: savedState.cameraManuallyOff || false,
+            cameraDefaultOn: savedState.cameraDefaultOn !== undefined ? savedState.cameraDefaultOn : true,
             pickingRefreshTick: 0,
             pickingState: "",
             scanMode: savedState.scanMode || "source",
@@ -99,7 +100,9 @@ export class BarcodeApp extends Component {
                 prefillLocationName: this.state.prefillLocationName,
                 history: this.history,
                 scanMode: this.state.scanMode,
-                isMultiLocationMode: this.state.isMultiLocationMode
+                isMultiLocationMode: this.state.isMultiLocationMode,
+                cameraManuallyOff: this.state.cameraManuallyOff,
+                cameraDefaultOn: this.state.cameraDefaultOn
             }));
         }, () => [
             this.state.currentView,
@@ -117,7 +120,9 @@ export class BarcodeApp extends Component {
             this.state.prefillLocationBarcode,
             this.state.prefillLocationName,
             this.state.scanMode,
-            this.state.isMultiLocationMode
+            this.state.isMultiLocationMode,
+            this.state.cameraManuallyOff,
+            this.state.cameraDefaultOn
         ]);
 
         this.barcodeBuffer = "";
@@ -141,12 +146,19 @@ export class BarcodeApp extends Component {
             this.keepFocusOnHiddenInput();
             document.addEventListener('click', this.boundKeepFocus);
             
-            try {
-                const warehouses = await rpc("/hlv_mobile_barcode/get_warehouses", {});
+            // Tải song song settings và warehouses từ backend
+            rpc("/hlv_mobile_barcode/get_settings", {}).then((settings) => {
+                if (settings && settings.camera_default_on !== undefined) {
+                    this.state.cameraDefaultOn = settings.camera_default_on;
+                    if (savedState.cameraManuallyOff === undefined) {
+                        this.state.cameraManuallyOff = !settings.camera_default_on;
+                    }
+                }
+            }).catch(e => console.error("Failed to load settings", e));
+
+            rpc("/hlv_mobile_barcode/get_warehouses", {}).then((warehouses) => {
                 this.state.warehouses = warehouses;
-            } catch (e) {
-                console.error("Failed to load warehouses", e);
-            }
+            }).catch(e => console.error("Failed to load warehouses", e));
 
             this.focusInterval = setInterval(this.boundKeepFocus, 2000);
             setTimeout(this.boundKeepFocus, 500);
@@ -318,6 +330,7 @@ export class BarcodeApp extends Component {
                     await this.selectPicking(result.id, result.name);
                 } else {
                     this.pushHistory();
+                    this.state.cameraManuallyOff = !this.state.cameraDefaultOn;
                     this.state.warehouseCode = result.warehouse_code || "HLV";
                     this.state.lookupType = result.type;
                     this.state.recordId = result.id;
@@ -373,6 +386,7 @@ export class BarcodeApp extends Component {
             prefillLocationBarcode: this.state.prefillLocationBarcode,
             prefillLocationName: this.state.prefillLocationName,
             isMultiLocationMode: this.state.isMultiLocationMode,
+            cameraManuallyOff: this.state.cameraManuallyOff,
         });
     }
 
@@ -416,6 +430,7 @@ export class BarcodeApp extends Component {
             this.state.prefillLocationBarcode = prevState.prefillLocationBarcode;
             this.state.prefillLocationName = prevState.prefillLocationName;
             this.state.isMultiLocationMode = prevState.isMultiLocationMode || false;
+            this.state.cameraManuallyOff = prevState.cameraManuallyOff !== undefined ? prevState.cameraManuallyOff : !this.state.cameraDefaultOn;
             this.state.pickingState = "";
             this.viewScannerCallback = null;
 
@@ -516,6 +531,7 @@ export class BarcodeApp extends Component {
 
     goToMove(productId, locationBarcode = null, locationName = null, destWarehouseId = false, destLocationId = false) {
         this.pushHistory();
+        this.state.cameraManuallyOff = !this.state.cameraDefaultOn;
         this.state.recordId = productId;
         this.state.prefillLocationBarcode = locationBarcode;
         this.state.prefillLocationName = locationName;
@@ -526,6 +542,7 @@ export class BarcodeApp extends Component {
 
     promptMoveWarehouse(productId, locBarcode, locName, qty, productName) {
         this.pushHistory();
+        this.state.cameraManuallyOff = !this.state.cameraDefaultOn;
         this.state.recordId = productId;
         this.state.prefillLocationBarcode = locBarcode;
         this.state.prefillLocationName = locName;
@@ -664,6 +681,10 @@ export class BarcodeApp extends Component {
                 this.state.scannedLocationName = isMultiLocation ? "" : res.location_name;
                 this.state.currentView = 'picking';
                 this.state.isMultiLocationMode = isMultiLocation;
+                this.state.cameraManuallyOff = !this.state.cameraDefaultOn;
+                setTimeout(async () => {
+                    await this.startPersistentCamera(false);
+                }, 200);
             }
         } catch (e) {
             this.notification.add("Lỗi kết nối máy chủ", { type: "danger" });
@@ -673,6 +694,7 @@ export class BarcodeApp extends Component {
 
     goToProductLookup(productId, productName) {
         this.pushHistory();
+        this.state.cameraManuallyOff = !this.state.cameraDefaultOn;
         this.state.lookupType = 'product';
         this.state.recordId = productId;
         this.state.lookupTitle = productName;
@@ -699,6 +721,7 @@ export class BarcodeApp extends Component {
             this.state.pickingState = "";
             this.state.isMultiLocationMode = false;
             this.state.pickingRefreshTick += 1;
+            this.state.cameraManuallyOff = !this.state.cameraDefaultOn;
 
             // Tải vị trí nguồn mặc định của phiếu để hiển thị trực tiếp lên tiêu đề
             rpc("/hlv_mobile_barcode/get_picking_data", { picking_id: pickingId }).then((data) => {
@@ -710,9 +733,6 @@ export class BarcodeApp extends Component {
                     if (!data.is_pick && !data.is_putaway && data.location_name) {
                         this.state.scannedLocationId = data.location_id;
                         this.state.scannedLocationName = data.location_name;
-                    }
-                    if (data.camera_default_on === false) {
-                        this.state.cameraManuallyOff = true;
                     }
                 }
             }).catch(() => {});
