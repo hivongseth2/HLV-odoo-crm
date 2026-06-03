@@ -68,6 +68,8 @@ export class PickingScanner extends Component {
                     const productId = matchingLine.product_id;
                     const element = document.querySelector(`[data-product-id="${productId}"]`);
                     if (element) {
+                        element.classList.remove('flash-highlight');
+                        void element.offsetWidth; // Force CSS reflow to restart animation
                         element.scrollIntoView({ behavior: 'smooth', block: 'center' });
                         element.classList.add('flash-highlight');
                         setTimeout(() => {

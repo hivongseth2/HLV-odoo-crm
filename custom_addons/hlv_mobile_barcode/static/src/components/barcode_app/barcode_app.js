@@ -810,7 +810,16 @@ export class BarcodeApp extends Component {
             });
             this._cameraStream = stream;
             video.srcObject = stream;
-            await video.play();
+            
+            try {
+                await video.play();
+            } catch (err) {
+                console.warn("Camera play interrupted:", err);
+                // Try again after a short delay or fallback
+                this.state.cameraFallback = true;
+                return;
+            }
+            
             video.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block;';
             this._isCameraRunning = true;
             this._lastScanResult = '';
