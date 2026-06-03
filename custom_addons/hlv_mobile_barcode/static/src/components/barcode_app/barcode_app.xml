@@ -26,6 +26,27 @@
                     </div>
                 </div>
 
+                <!-- Picking Title (Displayed above the camera feed) -->
+                <div class="picking-title-above-camera" t-if="state.currentView === 'picking' and state.pickingName">
+                    <div class="picking-title-main">
+                        <i class="fa fa-clipboard-check"></i>
+                        <span>
+                            <t t-if="state.pickingIsPick">Phiếu lấy hàng </t>
+                            <t t-elif="state.pickingTypeCode == 'outgoing'">Phiếu xuất kho </t>
+                            <t t-elif="state.pickingTypeCode == 'incoming'">Phiếu nhập kho </t>
+                            <t t-elif="state.pickingTypeCode == 'internal'">Phiếu chuyển kho </t>
+                            <t t-else="">Phiếu kho </t>
+                            <t t-esc="state.pickingName"/>
+                        </span>
+                    </div>
+                    <t t-if="state.pickingSourceTransferName">
+                        <div class="picking-title-sub">
+                            <i class="fa fa-level-up-alt fa-rotate-90"></i> 
+                            Từ phiếu Bước 1: <t t-esc="state.pickingSourceTransferName"/>
+                        </div>
+                    </t>
+                </div>
+
                 <!-- Persistent Camera Section (Only when NOT on main home screen and picking is not completed) -->
                 <t t-if="state.currentView !== 'main' and state.pickingState !== 'done'">
                     <div class="persistent-camera-wrapper">
@@ -148,7 +169,7 @@
                     </div>
                     
                     <!-- Picking View -->
-                    <PickingScanner t-if="state.currentView === 'picking'" t-key="state.pickingId" pickingId="state.pickingId" onBack="() => this.goBack()" onSelectPicking="(id, name) => this.selectPicking(id, name)" onStateLoaded="(state) => this.onPickingStateLoaded(state)" lastScannedProduct="state.lastScannedProduct" scannedLocationName="state.scannedLocationName" refreshTick="state.pickingRefreshTick" scanMode="state.scanMode" isMultiLocationMode="state.isMultiLocationMode" onToggleScanMode="(mode) => this.toggleScanMode(mode)"/>
+                    <PickingScanner t-if="state.currentView === 'picking'" t-key="state.pickingId" pickingId="state.pickingId" onBack="() => this.goBack()" onSelectPicking="(id, name) => this.selectPicking(id, name)" onStateLoaded="(state) => this.onPickingStateLoaded(state)" onPickingLoaded="(data) => this.onPickingLoaded(data)" lastScannedProduct="state.lastScannedProduct" scannedLocationName="state.scannedLocationName" refreshTick="state.pickingRefreshTick" scanMode="state.scanMode" isMultiLocationMode="state.isMultiLocationMode" onToggleScanMode="(mode) => this.toggleScanMode(mode)"/>
                     
                     <!-- Move Component -->
                     <LocationMove t-if="state.currentView === 'move'" productId="state.recordId" prefillLocationBarcode="state.prefillLocationBarcode" prefillLocationName="state.prefillLocationName" sourceQty="state.sourceQty" productName="state.productName" destWarehouseId="state.destWarehouseId" destLocationId="state.destLocationId" onBack="() => this.goBack()" onSuccess="() => this.onMoveSuccess()" registerScanner="(cb) => this.registerScanner(cb)"/>

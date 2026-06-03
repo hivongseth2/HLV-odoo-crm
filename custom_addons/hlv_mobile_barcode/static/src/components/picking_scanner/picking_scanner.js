@@ -11,6 +11,7 @@ export class PickingScanner extends Component {
         onBack: Function,
         onSelectPicking: Function,
         onStateLoaded: { type: Function, optional: true },
+        onPickingLoaded: { type: Function, optional: true },
         lastScannedProduct: { optional: true },
         scannedLocationName: { type: [String, Boolean], optional: true },
         refreshTick: { type: Number, optional: true },
@@ -88,6 +89,9 @@ export class PickingScanner extends Component {
             } else {
                 if (this.props.onStateLoaded) {
                     this.props.onStateLoaded(data.state);
+                }
+                if (this.props.onPickingLoaded) {
+                    this.props.onPickingLoaded(data);
                 }
                 
                 if (['draft', 'waiting', 'confirmed', 'assigned'].includes(data.state)) {

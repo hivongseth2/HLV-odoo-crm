@@ -1310,3 +1310,118 @@
   box-shadow: 0 0 8px rgba(23, 162, 184, 0.2);
   transition: all 0.3s ease;
 }
+
+/* ==========================================================================
+   PICKING TITLE ABOVE CAMERA & MODERN LOCATION BANNER
+   ========================================================================== */
+.hlv-barcode-app .picking-title-above-camera {
+  background: linear-gradient(to right, #f1f5f9, transparent);
+  border-left: 4px solid #0ea5e9;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  border-radius: 0 6px 6px 0;
+  flex-shrink: 0;
+}
+
+.hlv-barcode-app .picking-title-above-camera .picking-title-main {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+}
+
+.hlv-barcode-app .picking-title-above-camera .picking-title-main i {
+  color: #0ea5e9;
+  font-size: 1.15rem;
+  margin-right: 8px;
+}
+
+.hlv-barcode-app .picking-title-above-camera .picking-title-sub {
+  font-size: 0.85rem;
+  color: #64748b;
+  font-weight: 500;
+  margin-top: 4px;
+  padding-left: 24px;
+  display: flex;
+  align-items: center;
+}
+
+.hlv-barcode-app .picking-title-above-camera .picking-title-sub i {
+  margin-right: 6px;
+  font-size: 0.75rem;
+}
+
+/* Modern simplified location banner */
+.hlv-barcode-app .modern-location-banner {
+  margin: 6px 0 10px 0;
+  padding: 10px 14px;
+  background: #ffffff;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+  display: flex;
+  align-items: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.hlv-barcode-app .modern-location-banner .location-info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  font-size: 0.95rem;
+}
+
+.hlv-barcode-app .modern-location-banner .location-badge {
+  color: #64748b;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hlv-barcode-app .modern-location-banner .location-badge i {
+  color: #0ea5e9;
+  font-size: 1.05rem;
+}
+
+.hlv-barcode-app .modern-location-banner .location-val {
+  color: #16a34a;
+  font-weight: 700;
+  background: rgba(22, 163, 74, 0.08);
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(22, 163, 74, 0.15);
+  font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.95rem;
+  letter-spacing: 0.5px;
+}
+
+/* Error state when location is missing */
+.hlv-barcode-app .modern-location-banner.error-state {
+  background: rgba(239, 68, 68, 0.03);
+  border-color: rgba(239, 68, 68, 0.15);
+}
+
+.hlv-barcode-app .modern-location-banner .location-badge.error {
+  color: #ef4444;
+}
+
+.hlv-barcode-app .modern-location-banner .location-badge.error i {
+  color: #ef4444;
+  animation: pulse-icon 1.5s infinite;
+}
+
+.hlv-barcode-app .modern-location-banner .location-hint {
+  font-size: 0.85rem;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+@keyframes pulse-icon {
+  0% { opacity: 0.6; }
+  50% { opacity: 1; }
+  100% { opacity: 0.6; }
+}

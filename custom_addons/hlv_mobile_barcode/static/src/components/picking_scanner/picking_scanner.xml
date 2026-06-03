@@ -7,46 +7,23 @@
             </div>
             
             <t t-elif="state.picking">
-                <!-- Picking label: clean, left-border emphasis -->
-                <div style="background: linear-gradient(to right, #f1f5f9, transparent); border-left: 4px solid #0ea5e9; padding: 12px 15px; margin-bottom: 15px; border-radius: 0 6px 6px 0;">
-                    <div style="font-size: 1.15rem; font-weight: 700; color: #1e293b; display: flex; align-items: center;">
-                        <i class="fa fa-clipboard-check" style="color: #0ea5e9; font-size: 1.2rem; margin-right: 8px;"></i>
-                        <span>
-                            <t t-if="state.picking.is_pick">Phiếu lấy hàng </t>
-                            <t t-elif="state.picking.picking_type_code == 'outgoing'">Phiếu xuất kho </t>
-                            <t t-elif="state.picking.picking_type_code == 'incoming'">Phiếu nhập kho </t>
-                            <t t-elif="state.picking.picking_type_code == 'internal'">Phiếu chuyển kho </t>
-                            <t t-else="">Phiếu kho </t>
-                            <t t-esc="state.picking.name"/>
-                        </span>
-                    </div>
-                    <t t-if="state.picking.source_transfer_name">
-                        <div style="font-size: 0.9rem; color: #64748b; font-weight: 500; margin-top: 6px; padding-left: 27px; display: flex; align-items: center;">
-                            <i class="fa fa-level-up-alt fa-rotate-90" style="margin-right: 6px; font-size: 0.8rem;"></i> 
-                            Từ phiếu Bước 1: <t t-esc="state.picking.source_transfer_name"/>
-                        </div>
-                    </t>
-                </div>
-                
-                <!-- Location Mode Header -->
-                <div t-if="props.isMultiLocationMode or state.picking.is_pick or state.picking.picking_type_code == 'incoming'" style="background: rgba(23, 162, 184, 0.05); border: 2px dashed var(--info-color); padding: 12px; margin: 10px 0; border-radius: 8px; text-align: center;">
-                    <div style="font-weight: 700; color: var(--info-color); margin-bottom: 5px; font-size: 1rem;">
-                        <i class="fa fa-route"></i> Chế độ lấy hàng theo Vị trí
-                    </div>
+                <!-- Location Mode Header (Simplified and Modern) -->
+                <div t-if="props.isMultiLocationMode or state.picking.is_pick or state.picking.picking_type_code == 'incoming'" 
+                     t-attf-class="modern-location-banner #{!props.scannedLocationName ? 'error-state' : ''}">
                     <t t-if="props.scannedLocationName">
-                        <div style="font-size: 1.15rem; color: var(--success-color); font-weight: bold; margin-top: 8px;">
-                            📍 Đang lấy từ: <t t-esc="props.scannedLocationName"/>
-                        </div>
-                        <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 5px;">
-                            Có thể quét sản phẩm, hoặc quét mã vị trí khác để đổi kệ/vị trí lấy hàng.
+                        <div class="location-info-row">
+                            <span class="location-badge">
+                                <i class="fa fa-map-marker-alt"></i> Đang lấy từ:
+                            </span>
+                            <span class="location-val"><t t-esc="props.scannedLocationName"/></span>
                         </div>
                     </t>
                     <t t-else="">
-                        <div style="font-size: 1.1rem; color: var(--danger-color); font-weight: bold; margin-top: 8px;">
-                            📍 CHƯA QUÉT VỊ TRÍ!
-                        </div>
-                        <div style="font-size: 0.85rem; color: var(--text-color); margin-top: 5px; font-weight: 500;">
-                            BẮT BUỘC: Vui lòng quét mã Vị Trí (Kệ chứa hàng) trước khi quét sản phẩm.
+                        <div class="location-info-row">
+                            <span class="location-badge error">
+                                <i class="fa fa-exclamation-triangle"></i> CHƯA QUÉT VỊ TRÍ!
+                            </span>
+                            <span class="location-hint">Vui lòng quét vị trí trước</span>
                         </div>
                     </t>
                 </div>
