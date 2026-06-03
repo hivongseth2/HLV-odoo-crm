@@ -815,6 +815,16 @@ export class BarcodeApp extends Component {
             // Start scanning loop
             const scanFrame = async () => {
                 if (!this._isCameraRunning || !this._cameraStream) return;
+                
+                // Re-attach video if Owl wiped it during a virtual DOM patch
+                const currentReaderEl = document.getElementById("reader");
+                if (currentReaderEl && !currentReaderEl.contains(video)) {
+                    currentReaderEl.innerHTML = '';
+                    currentReaderEl.appendChild(video);
+                    currentReaderEl.appendChild(overlay);
+                    currentReaderEl.style.cssText = 'position:relative;width:100%;height:100%;overflow:hidden;background:#000;';
+                }
+
                 if (video.readyState < video.HAVE_ENOUGH_DATA) {
                     this._scanInterval = requestAnimationFrame(scanFrame);
                     return;

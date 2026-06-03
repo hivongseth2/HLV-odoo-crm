@@ -58,7 +58,7 @@
                         </t>
                         
                         <div t-att-class="'camera-container ' + (state.cameraFallback ? 'd-none' : '')">
-                            <div id="reader" t-ignore="true"></div>
+                            <div id="reader"></div>
                             
                             <!-- Camera Activation Overlay -->
                             <div t-if="state.cameraNeedsActivation" class="camera-activation-overlay" t-on-click="() => this.startPersistentCamera(true)">
@@ -200,7 +200,7 @@
                         
                         <!-- Camera Feed inside Popup -->
                         <div t-att-class="state.cameraFallback ? 'd-none' : ''" style="width: 100%; background: #000; overflow: hidden; position: relative; min-height: 240px; border-radius: 8px; box-shadow: var(--shadow-md);">
-                            <div id="reader" style="width: 100%; height: 100%; min-height: 240px;" t-ignore="true"></div>
+                            <div id="reader" style="width: 100%; height: 100%; min-height: 240px;"></div>
                             
                             <!-- Camera Activation Overlay -->
                             <div t-if="state.cameraNeedsActivation" class="camera-activation-overlay" t-on-click="() => this.startPersistentCamera(true)">
