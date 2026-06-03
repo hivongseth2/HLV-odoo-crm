@@ -528,6 +528,21 @@
   box-shadow: 0 2px 8px rgba(76, 175, 80, 0.08);
 }
 
+/* Picking Label styling */
+.picking-label {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #2c3e50;
+  padding: 4px 5px 10px 5px;
+  margin-bottom: 12px;
+  border-bottom: 1px dashed #e2e8f0;
+  line-height: 1.4;
+}
+.picking-label i.fa-clipboard-list {
+  color: #64748b;
+  margin-right: 6px;
+}
+
 .hlv-barcode-app .item-card {
   display: flex;
   justify-content: space-between;
