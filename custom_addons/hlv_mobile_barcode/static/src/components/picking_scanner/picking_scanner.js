@@ -70,17 +70,20 @@ export class PickingScanner extends Component {
                 
                 if (['draft', 'waiting', 'confirmed', 'assigned'].includes(data.state)) {
                     const storageKey = 'hlv_opened_pickings';
+                    const autoClearKey = 'hlv_autocleared_pickings';
                     let openedPickings = [];
+                    let autoClearedPickings = [];
                     try {
                         openedPickings = JSON.parse(localStorage.getItem(storageKey) || '[]');
-                    } catch (e) {
-                        openedPickings = [];
-                    }
+                        autoClearedPickings = JSON.parse(localStorage.getItem(autoClearKey) || '[]');
+                    } catch (e) {}
                     
-                    if (!this._hasAutoCleared && data.is_pick) {
-                        this._hasAutoCleared = true;
+                    if (!autoClearedPickings.includes(this.props.pickingId) && data.is_pick) {
+                        autoClearedPickings.push(this.props.pickingId);
+                        if (autoClearedPickings.length > 200) autoClearedPickings = autoClearedPickings.slice(autoClearedPickings.length - 200);
+                        localStorage.setItem(autoClearKey, JSON.stringify(autoClearedPickings));
                         
-                        // Gọi hàm Làm lại
+                        // Gọi hàm Làm lại (chỉ tự động chạy 1 lần duy nhất cho mỗi phiếu)
                         try {
                             await this.clearQuantities(true);
                         } finally {
@@ -115,13 +118,6 @@ export class PickingScanner extends Component {
             if (res.error) {
                 this.notification.add(res.error, { type: "danger" });
             } else {
-                const storageKey = 'hlv_opened_pickings';
-                try {
-                    let opened = JSON.parse(localStorage.getItem(storageKey) || '[]');
-                    opened = opened.filter(id => id !== this.props.pickingId);
-                    localStorage.setItem(storageKey, JSON.stringify(opened));
-                } catch (e) {}
-                
                 this.notification.add("Đã làm mới số lượng", { type: "success" });
                 await this.loadPicking();
             }
