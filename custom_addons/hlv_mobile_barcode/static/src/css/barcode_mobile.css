@@ -529,18 +529,20 @@
 }
 
 /* Picking Label styling */
-.picking-label {
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: #2c3e50;
-  padding: 4px 5px 10px 5px;
-  margin-bottom: 12px;
-  border-bottom: 1px dashed #e2e8f0;
+.hlv-barcode-app .picking-label {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--primary-color, #2c3e50);
+  padding: 8px 10px;
+  margin-bottom: 15px;
+  border-bottom: 2px dashed #e2e8f0;
   line-height: 1.4;
+  background-color: #f8fafc;
+  border-radius: 6px;
 }
-.picking-label i.fa-clipboard-list {
-  color: #64748b;
-  margin-right: 6px;
+.hlv-barcode-app .picking-label i.fa-clipboard-list {
+  color: var(--secondary-color, #64748b);
+  margin-right: 8px;
 }
 
 .hlv-barcode-app .item-card {
