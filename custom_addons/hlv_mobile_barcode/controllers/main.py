@@ -1000,6 +1000,10 @@ class HLVMobileBarcodeController(http.Controller):
                     dynamic_moves._action_cancel()
                     dynamic_moves.unlink()
                 
+            # Đánh dấu đã auto-clear để không lặp lại
+            if hasattr(picking, 'hlv_barcode_auto_cleared'):
+                picking.sudo().write({'hlv_barcode_auto_cleared': True})
+                
             return {'success': True}
         except Exception as e:
             import logging

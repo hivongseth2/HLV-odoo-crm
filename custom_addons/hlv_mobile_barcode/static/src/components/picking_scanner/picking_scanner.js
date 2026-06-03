@@ -99,7 +99,8 @@ export class PickingScanner extends Component {
                     
                     const pickingIdInt = parseInt(this.props.pickingId, 10);
                     
-                    if (data.is_pick && !data.hlv_barcode_auto_cleared) {
+                    if (data.is_pick && !data.hlv_barcode_auto_cleared && !this.hasAutoClearedOnce) {
+                        this.hasAutoClearedOnce = true;
                         // Gọi hàm Làm lại (chỉ tự động chạy 1 lần duy nhất cho mỗi phiếu)
                         try {
                             await this.clearQuantities(true);
