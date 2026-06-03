@@ -78,8 +78,10 @@ export class PickingScanner extends Component {
                         autoClearedPickings = JSON.parse(localStorage.getItem(autoClearKey) || '[]');
                     } catch (e) {}
                     
-                    if (!autoClearedPickings.includes(this.props.pickingId) && data.is_pick) {
-                        autoClearedPickings.push(this.props.pickingId);
+                    const pickingIdInt = parseInt(this.props.pickingId, 10);
+                    
+                    if (!autoClearedPickings.includes(pickingIdInt) && data.is_pick) {
+                        autoClearedPickings.push(pickingIdInt);
                         if (autoClearedPickings.length > 200) autoClearedPickings = autoClearedPickings.slice(autoClearedPickings.length - 200);
                         localStorage.setItem(autoClearKey, JSON.stringify(autoClearedPickings));
                         
@@ -92,8 +94,8 @@ export class PickingScanner extends Component {
                         return;
                     }
                     
-                    if (!openedPickings.includes(this.props.pickingId)) {
-                        openedPickings.push(this.props.pickingId);
+                    if (!openedPickings.includes(pickingIdInt)) {
+                        openedPickings.push(pickingIdInt);
                         if (openedPickings.length > 200) openedPickings = openedPickings.slice(openedPickings.length - 200);
                         localStorage.setItem(storageKey, JSON.stringify(openedPickings));
                     }

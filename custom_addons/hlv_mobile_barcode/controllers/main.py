@@ -934,9 +934,9 @@ class HLVMobileBarcodeController(http.Controller):
                 # For PICK, reset all lines, never delete them
                 lines_to_reset = move_lines.filtered(lambda l: l.quantity != 0.0 or (not picking.source_transfer_id and l.result_package_id))
                 if lines_to_reset:
-                    # Dùng raw SQL để tránh 2 vấn đề của Odoo 18:
-                    # 1. Tránh trigger side-effect làm mất reservation khi thay đổi field quantity.
-                    # 2. Tránh ghi log Chatter (thông báo) quá nhiều lần do loop.
+                    # Flush before raw SQL to ensure Odoo doesn't overwrite our SQL updates with dirty cache later
+                    lines_to_reset.flush_recordset(['quantity', 'result_package_id'])
+                    
                     set_clause = "quantity = 0.0"
                     if not picking.source_transfer_id:
                         set_clause += ", result_package_id = NULL"
@@ -963,6 +963,8 @@ class HLVMobileBarcodeController(http.Controller):
                 if lines_to_reset:
                     actual_reset = lines_to_reset.filtered(lambda l: l.quantity != 0.0 or (not picking.source_transfer_id and l.result_package_id))
                     if actual_reset:
+                        actual_reset.flush_recordset(['quantity', 'result_package_id'])
+                        
                         set_clause = "quantity = 0.0"
                         if not picking.source_transfer_id:
                             set_clause += ", result_package_id = NULL"
