@@ -797,27 +797,54 @@ export class BarcodeApp extends Component {
             readerEl.style.overflow = 'hidden';
             readerEl.style.background = '#000';
             readerEl.appendChild(overlay);
+            let stream = null;
+            let retryCount = 0;
+            while (retryCount < 3) {
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            facingMode: { ideal: 'environment' },
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 },
+                            focusMode: { ideal: 'continuous' },
+                            frameRate: { ideal: 30 },
+                        },
+                        audio: false
+                    });
+                    break; // Success
+                } catch (err) {
+                    const errStr = String(err).toLowerCase();
+                    if (errStr.includes("notreadableerror") || errStr.includes("trackstart")) {
+                        console.warn("Camera is busy, retrying in 300ms...", err);
+                        await new Promise(resolve => setTimeout(resolve, 300));
+                        retryCount++;
+                    } else {
+                        throw err; // Other errors, throw to outer catch
+                    }
+                }
+            }
+            if (!stream) {
+                throw new Error("Could not start camera after retries");
+            }
 
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: {
-                    facingMode: { ideal: 'environment' },
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 },
-                    focusMode: { ideal: 'continuous' },
-                    frameRate: { ideal: 30 },
-                },
-                audio: false
-            });
             this._cameraStream = stream;
             video.srcObject = stream;
             
             try {
                 await video.play();
             } catch (err) {
-                console.warn("Camera play interrupted:", err);
-                // Try again after a short delay or fallback
-                this.state.cameraFallback = true;
-                return;
+                if (err.name === 'AbortError') {
+                    console.warn("Camera play aborted (likely DOM update). scanFrame will reattach.");
+                } else if (err.name === 'NotAllowedError') {
+                    console.warn("Camera play requires user gesture:", err);
+                    this.state.cameraNeedsActivation = true;
+                    return;
+                } else {
+                    console.warn("Camera play interrupted:", err);
+                    // Try again after a short delay or fallback
+                    this.state.cameraFallback = true;
+                    return;
+                }
             }
             
             video.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block;';
