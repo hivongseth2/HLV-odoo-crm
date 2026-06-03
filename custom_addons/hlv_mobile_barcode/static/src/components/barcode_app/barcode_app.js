@@ -791,7 +791,11 @@ export class BarcodeApp extends Component {
             const overlay = document.createElement('div');
             overlay.className = 'scan-overlay';
             overlay.innerHTML = '<div class="scan-laser"></div>';
-            readerEl.style.cssText = 'position:relative;width:100%;height:100%;overflow:hidden;background:#000;';
+            readerEl.style.position = 'relative';
+            readerEl.style.width = '100%';
+            readerEl.style.height = '100%';
+            readerEl.style.overflow = 'hidden';
+            readerEl.style.background = '#000';
             readerEl.appendChild(overlay);
 
             const stream = await navigator.mediaDevices.getUserMedia({
@@ -822,7 +826,15 @@ export class BarcodeApp extends Component {
                     currentReaderEl.innerHTML = '';
                     currentReaderEl.appendChild(video);
                     currentReaderEl.appendChild(overlay);
-                    currentReaderEl.style.cssText = 'position:relative;width:100%;height:100%;overflow:hidden;background:#000;';
+                    currentReaderEl.style.position = 'relative';
+                    currentReaderEl.style.width = '100%';
+                    currentReaderEl.style.height = '100%';
+                    currentReaderEl.style.overflow = 'hidden';
+                    currentReaderEl.style.background = '#000';
+                    
+                    if (video.paused) {
+                        video.play().catch(e => console.error("Auto-play on reattach failed:", e));
+                    }
                 }
 
                 if (video.readyState < video.HAVE_ENOUGH_DATA) {

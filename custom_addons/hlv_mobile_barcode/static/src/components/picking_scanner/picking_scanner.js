@@ -81,7 +81,11 @@ export class PickingScanner extends Component {
                         this._hasAutoCleared = true;
                         
                         // Gọi hàm Làm lại
-                        await this.clearQuantities(true);
+                        try {
+                            await this.clearQuantities(true);
+                        } finally {
+                            this.state.loading = false;
+                        }
                         return;
                     }
                     
@@ -95,8 +99,9 @@ export class PickingScanner extends Component {
             }
         } catch (e) {
             this.notification.add("Failed to load picking", { type: "danger" });
+        } finally {
+            this.state.loading = false;
         }
-        this.state.loading = false;
     }
 
     async clearQuantities(skipConfirm = false) {
