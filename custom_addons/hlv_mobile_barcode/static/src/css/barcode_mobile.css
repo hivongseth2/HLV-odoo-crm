@@ -1331,25 +1331,13 @@
   align-items: center;
 }
 
-.hlv-barcode-app .picking-title-above-camera .picking-title-main i {
-  color: #0ea5e9;
-  font-size: 1.15rem;
-  margin-right: 8px;
-}
-
 .hlv-barcode-app .picking-title-above-camera .picking-title-sub {
   font-size: 0.85rem;
   color: #64748b;
   font-weight: 500;
   margin-top: 4px;
-  padding-left: 24px;
   display: flex;
   align-items: center;
-}
-
-.hlv-barcode-app .picking-title-above-camera .picking-title-sub i {
-  margin-right: 6px;
-  font-size: 0.75rem;
 }
 
 /* Modern simplified location banner */
@@ -1379,12 +1367,6 @@
   font-weight: 600;
   display: flex;
   align-items: center;
-  gap: 6px;
-}
-
-.hlv-barcode-app .modern-location-banner .location-badge i {
-  color: #0ea5e9;
-  font-size: 1.05rem;
 }
 
 .hlv-barcode-app .modern-location-banner .location-val {
@@ -1407,11 +1389,7 @@
 
 .hlv-barcode-app .modern-location-banner .location-badge.error {
   color: #ef4444;
-}
-
-.hlv-barcode-app .modern-location-banner .location-badge.error i {
-  color: #ef4444;
-  animation: pulse-icon 1.5s infinite;
+  animation: pulse-text 1.5s infinite;
 }
 
 .hlv-barcode-app .modern-location-banner .location-hint {
@@ -1420,7 +1398,40 @@
   font-weight: 500;
 }
 
-@keyframes pulse-icon {
+/* Camera controls (matching barcode shipper) */
+.hlv-barcode-app .camera-controls {
+  position: absolute;
+  bottom: 12px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  z-index: 30;
+}
+
+.hlv-barcode-app .camera-controls .btn {
+  background: rgba(0, 0, 0, 0.65) !important;
+  color: white !important;
+  border: 1px solid rgba(255, 255, 255, 0.25) !important;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  font-weight: 600;
+  padding: 6px 18px;
+  font-size: 0.85rem;
+  border-radius: 20px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
+  transition: all 0.2s ease;
+}
+
+.hlv-barcode-app .camera-controls .btn:hover {
+  background: rgba(0, 0, 0, 0.8) !important;
+  transform: scale(1.04);
+}
+
+.hlv-barcode-app .camera-controls .btn:active {
+  transform: scale(0.96);
+}
+
+@keyframes pulse-text {
   0% { opacity: 0.6; }
   50% { opacity: 1; }
   100% { opacity: 0.6; }

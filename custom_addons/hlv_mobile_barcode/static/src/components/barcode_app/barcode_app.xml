@@ -29,7 +29,6 @@
                 <!-- Picking Title (Displayed above the camera feed) -->
                 <div class="picking-title-above-camera" t-if="state.currentView === 'picking' and state.pickingName">
                     <div class="picking-title-main">
-                        <i class="fa fa-clipboard-check"></i>
                         <span>
                             <t t-if="state.pickingIsPick">Phiếu lấy hàng </t>
                             <t t-elif="state.pickingTypeCode == 'outgoing'">Phiếu xuất kho </t>
@@ -41,7 +40,6 @@
                     </div>
                     <t t-if="state.pickingSourceTransferName">
                         <div class="picking-title-sub">
-                            <i class="fa fa-level-up-alt fa-rotate-90"></i> 
                             Từ phiếu Bước 1: <t t-esc="state.pickingSourceTransferName"/>
                         </div>
                     </t>
@@ -79,21 +77,23 @@
                         </t>
                         
                         <div t-if="state.cameraManuallyOff" class="camera-off-placeholder">
-                            <button class="btn btn-outline-primary" t-on-click="toggleCamera">
-                                <i class="fa fa-video"/> Bật Camera
+                            <button class="btn btn-primary" t-on-click="toggleCamera">
+                                Bật Camera
                             </button>
                         </div>
                         
                         <div t-if="!state.cameraManuallyOff" t-att-class="'camera-container ' + (state.cameraFallback ? 'd-none' : '')">
-                            <button class="camera-toggle-btn" t-on-click="toggleCamera">
-                                <i class="fa fa-video-slash"/>
-                            </button>
                             <div id="reader"></div>
+                            <div class="camera-controls">
+                                <button class="btn btn-secondary btn-sm" t-on-click="toggleCamera">
+                                    Tắt Camera
+                                </button>
+                            </div>
                             
                             <!-- Camera Activation Overlay -->
                             <div t-if="state.cameraNeedsActivation" class="camera-activation-overlay" t-on-click="() => this.startPersistentCamera(true)">
                                 <div class="activation-btn">
-                                    <i class="fa fa-camera"></i> Kích hoạt Camera
+                                    Kích hoạt Camera
                                 </div>
                                 <div class="activation-hint">
                                     Nhấp để cấp quyền và mở Camera trực tiếp.
