@@ -19,22 +19,39 @@ class OdooUtils(models.AbstractModel):
         Không bao giờ tạo partner con (parent_id set) để tránh gây duplicate
         là_company=True dưới một công ty khác.
         """
-        name = name.strip()
+        name = (name or "").strip()
+        misa_code = (misa_code or "").strip()
         Partner = self.env["res.partner"]
 
-        # Bước 1: Tìm theo mã MISA (ref hoặc company_registry) nếu có
+        # MISA CRM can have multiple accounts with the same company name but
+        # different customer codes. When misa_code is provided, use it as the
+        # primary key and never fall back to name matching.
         if misa_code:
-            partner = Partner.search([
+            candidates = Partner.search([
                 ("parent_id", "=", False),
+                ("is_company", "=", True),
                 "|",
                 ("ref", "=", misa_code),
                 ("company_registry", "=", misa_code),
-            ], limit=1)
+            ], order="id asc")
+            partner = candidates.filtered(
+                lambda p: (p.ref or "").strip() == misa_code
+                or (not p.ref and (p.company_registry or "").strip() == misa_code)
+            )[:1]
             if partner:
-                _logger.info("Dùng liên hệ có sẵn (theo mã %s): %s", misa_code, partner.name)
+                _logger.info("Use existing partner by MISA code %s: %s", misa_code, partner.name)
                 return partner
 
-        # Bước 2: Tìm theo tên, chỉ lấy root company
+            partner = Partner.create({
+                "name": name,
+                "customer_rank": 1,
+                "is_company": True,
+                "ref": misa_code,
+                "company_registry": misa_code,
+            })
+            _logger.info("Created partner by MISA code %s: %s", misa_code, name)
+            return partner
+
         partner = Partner.search([
             ("name", "=", name),
             ("parent_id", "=", False),
@@ -49,20 +66,12 @@ class OdooUtils(models.AbstractModel):
             ], limit=1)
 
         if partner:
-            # Gán mã MISA nếu partner chưa có
-            if misa_code and not partner.ref and not partner.company_registry:
-                partner.write({"ref": misa_code})
-                _logger.info("Gán mã MISA %s cho liên hệ: %s", misa_code, partner.name)
-            else:
-                _logger.info("Dùng liên hệ có sẵn (theo tên): %s", partner.name)
+            _logger.info("Use existing partner by name without MISA code: %s", partner.name)
             return partner
 
-        # Bước 3: Tạo mới
         vals = {"name": name, "customer_rank": 1, "is_company": True}
-        if misa_code:
-            vals["ref"] = misa_code
         partner = Partner.create(vals)
-        _logger.info("Tạo liên hệ mới: %s (mã=%s)", name, misa_code or "-")
+        _logger.info("Created partner without MISA code: %s", name)
         return partner
 
     def _get_or_create_uom(self, name):
