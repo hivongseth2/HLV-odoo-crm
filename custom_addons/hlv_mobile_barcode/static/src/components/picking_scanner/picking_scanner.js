@@ -57,25 +57,18 @@ export class PickingScanner extends Component {
         });
 
         useEffect(() => {
-            if (!this.state.loading && this.props.lastScannedProduct && this.state.picking && this.state.picking.lines) {
-                const barcode = String(this.props.lastScannedProduct).toLowerCase();
-                const matchingLine = this.state.picking.lines.find(l => 
-                    (l.product_barcode && String(l.product_barcode).toLowerCase() === barcode) || 
-                    (l.product_name && String(l.product_name).toLowerCase().includes(barcode))
-                );
-                
-                if (matchingLine) {
-                    const productId = matchingLine.product_id;
-                    const element = document.querySelector(`[data-product-id="${productId}"]`);
-                    if (element) {
-                        element.classList.remove('flash-highlight');
-                        void element.offsetWidth; // Force CSS reflow to restart animation
-                        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        element.classList.add('flash-highlight');
-                        setTimeout(() => {
-                            if (element) element.classList.remove('flash-highlight');
-                        }, 1500);
-                    }
+            if (!this.state.loading && this.props.lastScannedProduct) {
+                // lastScannedProduct is actually the product_id from the backend (res.product_id)
+                const productId = Number(this.props.lastScannedProduct);
+                const element = document.querySelector(`[data-product-id="${productId}"]`);
+                if (element) {
+                    element.classList.remove('flash-highlight');
+                    void element.offsetWidth; // Force CSS reflow to restart animation
+                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    element.classList.add('flash-highlight');
+                    setTimeout(() => {
+                        if (element) element.classList.remove('flash-highlight');
+                    }, 1500);
                 }
             }
         }, () => [this.props.lastScannedProduct, this.props.refreshTick, this.state.loading]);
