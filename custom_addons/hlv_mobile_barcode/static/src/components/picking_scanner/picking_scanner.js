@@ -1,6 +1,6 @@
 /** @odoo-module **/
 
-import { Component, useState, onWillStart, onWillUpdateProps } from "@odoo/owl";
+import { Component, useState, onWillStart, onWillUpdateProps, useEffect } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
 import { rpc } from "@web/core/network/rpc";
 
@@ -55,6 +55,28 @@ export class PickingScanner extends Component {
                 await this.loadPicking();
             }
         });
+
+        useEffect(() => {
+            if (!this.state.loading && this.props.lastScannedProduct && this.state.picking && this.state.picking.lines) {
+                const barcode = String(this.props.lastScannedProduct).toLowerCase();
+                const matchingLine = this.state.picking.lines.find(l => 
+                    (l.product_barcode && String(l.product_barcode).toLowerCase() === barcode) || 
+                    (l.product_name && String(l.product_name).toLowerCase().includes(barcode))
+                );
+                
+                if (matchingLine) {
+                    const productId = matchingLine.product_id;
+                    const element = document.querySelector(`[data-product-id="${productId}"]`);
+                    if (element) {
+                        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        element.classList.add('flash-highlight');
+                        setTimeout(() => {
+                            if (element) element.classList.remove('flash-highlight');
+                        }, 1500);
+                    }
+                }
+            }
+        }, () => [this.props.lastScannedProduct, this.props.refreshTick, this.state.loading]);
     }
 
     async loadPicking() {

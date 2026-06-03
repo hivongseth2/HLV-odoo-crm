@@ -1244,4 +1244,16 @@
   50% { opacity: 1; transform: translateY(8px); }
 }
 
+/* Flash Highlight Animation for Scanned Items */
+@keyframes flashHighlight {
+  0% { background-color: var(--light-bg); }
+  10% { background-color: rgba(40, 167, 69, 0.2); border-color: var(--success-color); transform: scale(1.02); }
+  50% { background-color: rgba(40, 167, 69, 0.1); border-color: var(--success-color); transform: scale(1.01); }
+  100% { background-color: white; transform: scale(1); }
+}
 
+.flash-highlight {
+  animation: flashHighlight 1.5s ease-out forwards;
+  z-index: 10;
+  box-shadow: 0 0 12px rgba(40, 167, 69, 0.3) !important;
+}

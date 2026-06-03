@@ -150,6 +150,16 @@ class HLVMobileBarcodeController(http.Controller):
 
         is_pick_picking = _is_pick_picking(picking)
 
+        product_ids = picking.move_ids.mapped('product_id').ids
+        warehouse_qty_by_product = {}
+        if product_ids:
+            quants = request.env['stock.quant'].sudo().search([
+                ('product_id', 'in', product_ids),
+                ('location_id', 'child_of', picking.location_id.id)
+            ])
+            for q in quants:
+                warehouse_qty_by_product[q.product_id.id] = warehouse_qty_by_product.get(q.product_id.id, 0.0) + q.quantity
+
         lines = []
         for move in picking.move_ids:
             if move.move_line_ids:
@@ -183,6 +193,7 @@ class HLVMobileBarcodeController(http.Controller):
                         'product_barcode': move.product_id.barcode,
                         'product_uom_qty': line_demand,
                         'qty_done': ml.quantity,
+                        'warehouse_qty': warehouse_qty_by_product.get(move.product_id.id, 0.0),
                         'uom_name': move.product_uom.name,
                         'state': move.state,
                         'location_name': loc_name,
@@ -206,6 +217,7 @@ class HLVMobileBarcodeController(http.Controller):
                     'product_barcode': move.product_id.barcode,
                     'product_uom_qty': move.product_uom_qty,
                     'qty_done': 0.0,
+                    'warehouse_qty': warehouse_qty_by_product.get(move.product_id.id, 0.0),
                     'uom_name': move.product_uom.name,
                     'state': move.state,
                     'location_name': loc_name,
@@ -1037,6 +1049,9 @@ class HLVMobileBarcodeController(http.Controller):
             
         if picking.state not in ['draft', 'confirmed', 'assigned']:
             return {'error': _('Phiếu không ở trạng thái cho phép xóa sản phẩm')}
+
+        if _is_pick_picking(picking):
+            return {'error': _('Không được phép xóa sản phẩm trong phiếu Lấy hàng (PICK). Nếu sai, vui lòng thoát và xóa số lượng, hoặc hủy phiếu ngoài hệ thống để tạo lại.')}
 
         # Enforce warehouse delete permission (can_delete)
         use_independent = request.env['ir.config_parameter'].sudo().get_param('hlv_mobile_barcode.hlv_barcode_use_independent_permissions') == 'True'

@@ -468,14 +468,14 @@ export class BarcodeApp extends Component {
         if (isClear) {
             this.state.isProcessing = true;
             try {
-                const res = await rpc("/hlv_mobile_barcode/clear_and_cancel_picking", { picking_id: this.state.pickingId });
+                const res = await rpc("/hlv_mobile_barcode/clear_quantities", { picking_id: this.state.pickingId });
                 if (res && res.error) {
                     this.notification.add(res.error, { type: "danger" });
                 } else {
-                    this.notification.add("Đã hủy phiếu và giải phóng sản phẩm thành công.", { type: "success" });
+                    this.notification.add("Đã xóa toàn bộ số lượng đã quét.", { type: "success" });
                 }
             } catch (e) {
-                console.error("Cancel error:", e);
+                console.error("Clear quantities error:", e);
             } finally {
                 this.state.isProcessing = false;
             }

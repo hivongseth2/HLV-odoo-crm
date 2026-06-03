@@ -10,7 +10,12 @@
                 <!-- Compact picking label: left-aligned, small, gray -->
                 <div class="picking-label">
                     <i class="fa fa-clipboard-list"></i>
-                    Phiếu xuất/nhập <t t-esc="state.picking.name"/>
+                    <t t-if="state.picking.is_pick">Phiếu lấy hàng </t>
+                    <t t-elif="state.picking.picking_type_code == 'outgoing'">Phiếu xuất kho </t>
+                    <t t-elif="state.picking.picking_type_code == 'incoming'">Phiếu nhập kho </t>
+                    <t t-elif="state.picking.picking_type_code == 'internal'">Phiếu chuyển kho </t>
+                    <t t-else="">Phiếu kho </t>
+                    <t t-esc="state.picking.name"/>
                     <t t-if="state.picking.source_transfer_name">
                         <br/>
                         <span style="font-size: 0.85em; color: var(--text-muted); font-weight: 500; margin-top: 2px; display: inline-block;">
@@ -96,20 +101,32 @@
                     </div>
                     <div class="items-list" style="margin-top: 0;">
                         <t t-foreach="state.picking.lines" t-as="line" t-key="line.id || 'draft_' + line.product_id">
-                            <div t-attf-class="product-row-card #{line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0 ? 'scanned' : ''}">
+                            <div t-attf-class="product-row-card #{line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0 ? 'scanned' : ''}" t-att-data-product-id="line.product_id">
                                 <div t-attf-class="item-card #{line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0 ? 'scanned' : ''}" style="border: none; margin-bottom: 0;">
-                                    <div class="item-info">
-                                        <div class="item-name"><t t-esc="line.product_name"/></div>
-                                        <div style="font-size: 0.8rem; margin-top: 3px; color: var(--text-muted); display: flex; align-items: center; flex-wrap: wrap; gap: 8px;">
-                                            <span style="display: inline-flex; align-items: center; gap: 4px;">
-                                                <i class="fa fa-barcode"></i> <span class="no-copy"><t t-esc="line.product_barcode"/></span>
-                                            </span>
-                                            <span t-if="line.location_name" style="color: var(--info-color); font-weight: 500; display: inline-flex; align-items: center; gap: 4px;">
-                                                <i class="fa fa-map-marker-alt"></i> <t t-esc="line.location_name"/>
-                                            </span>
-                                            <span t-if="line.package_name" class="item-package-badge">
-                                                <i class="fa fa-box"></i> <t t-esc="line.package_name"/>
-                                            </span>
+                                    <div class="item-info" style="display: flex; gap: 10px;">
+                                        <div style="flex-shrink: 0; width: 60px; height: 60px; border-radius: 6px; overflow: hidden; border: 1px solid var(--border-color); background: #fff;">
+                                            <img t-attf-src="/web/image?model=product.product&amp;id={{line.product_id}}&amp;field=image_128" style="width: 100%; height: 100%; object-fit: contain;"/>
+                                        </div>
+                                        <div style="flex-grow: 1;">
+                                            <div class="item-name"><t t-esc="line.product_name"/></div>
+                                            <div style="font-size: 0.8rem; margin-top: 3px; color: var(--text-muted); display: flex; align-items: center; flex-wrap: wrap; gap: 8px;">
+                                                <span style="display: inline-flex; align-items: center; gap: 4px;">
+                                                    <i class="fa fa-barcode"></i> 
+                                                    <span class="no-copy">
+                                                        <t t-if="line.product_barcode"><t t-esc="line.product_barcode"/></t>
+                                                        <t t-else=""><span style="color: var(--danger-color); font-weight: 500;">Không có mã vạch</span></t>
+                                                    </span>
+                                                </span>
+                                                <span t-if="line.location_name" style="color: var(--info-color); font-weight: 500; display: inline-flex; align-items: center; gap: 4px;">
+                                                    <i class="fa fa-map-marker-alt"></i> <t t-esc="line.location_name"/>
+                                                </span>
+                                                <span t-if="line.package_name" class="item-package-badge">
+                                                    <i class="fa fa-box"></i> <t t-esc="line.package_name"/>
+                                                </span>
+                                                <span style="color: var(--warning-color); font-weight: 500; display: inline-flex; align-items: center; gap: 4px;">
+                                                    <i class="fa fa-cubes"></i> Tồn kho: <t t-esc="line.warehouse_qty"/>
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
                                     <div style="display: flex; align-items: center;">
@@ -131,14 +148,14 @@
                                         <input type="number" class="form-control" style="width: 48px; text-align: center; font-weight: bold; padding: 4px 2px; font-size: 0.85rem;" t-model="line.qty_done" t-on-change="(ev) => this.saveQty(line, ev)" min="0" step="any"/>
                                         <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, 0.01)">+0.01</button>
                                         <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, 0.1)">+0.1</button>
-                                        <button class="btn btn-danger btn-sm" style="padding: 4px 8px; font-size: 0.78rem; min-width: 28px;" t-on-click="() => this.deleteLine(line)">
+                                        <button t-if="!state.picking.is_pick" class="btn btn-danger btn-sm" style="padding: 4px 8px; font-size: 0.78rem; min-width: 28px;" t-on-click="() => this.deleteLine(line)">
                                             <i class="fa fa-trash"></i>
                                         </button>
                                     </div>
                                 </t>
                                 <t t-else="">
                                     <div t-if="state.picking.state !== 'done'" style="background-color: var(--light-bg); padding: 6px; border-top: 1px solid var(--border-color); display: flex; gap: 4px; align-items: center; justify-content: flex-end;">
-                                        <button class="btn btn-danger btn-sm" style="padding: 4px 12px; font-size: 0.85rem; min-width: 28px;" t-on-click="() => this.deleteLine(line)">
+                                        <button t-if="!state.picking.is_pick" class="btn btn-danger btn-sm" style="padding: 4px 12px; font-size: 0.85rem; min-width: 28px;" t-on-click="() => this.deleteLine(line)">
                                             <i class="fa fa-trash"></i> Xóa
                                         </button>
                                     </div>
