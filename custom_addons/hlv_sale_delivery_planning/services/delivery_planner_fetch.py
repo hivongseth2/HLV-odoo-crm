@@ -245,14 +245,20 @@ class DeliveryPlannerServiceFetch(models.AbstractModel):
                     'sequence': pack_info.get('pack_sequence') or 0,
                     'total': pack_info.get('pack_total') or 0,
                     'product_map': {},
+                    'product_id_map': {},
                 }
 
             p_content = so_picking_packs[so_id][pick_id]['packages_dict'][pname]
+            prod_id = ml['product_id'][0] if ml['product_id'] else False
             prod_name = ml['product_id'][1] if ml['product_id'] else 'Unknown'
             qty = float(ml['quantity']) if ml.get('quantity') else 0.0
             p_content['product_map'][prod_name] = (
                 p_content['product_map'].get(prod_name, 0.0) + qty
             )
+            if prod_id:
+                p_content['product_id_map'][prod_id] = (
+                    p_content['product_id_map'].get(prod_id, 0.0) + qty
+                )
 
         # --- Sắp xếp theo thứ tự phiếu kho trong SO và format kết quả ---
         final_so_packages = {}

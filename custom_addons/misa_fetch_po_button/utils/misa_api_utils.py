@@ -411,14 +411,47 @@ class MisaApiUtils(models.AbstractModel):
 
     def _fetch_with_retry(self, url, headers, payload):
         """Fetch API with retry on token expiration"""
-        response = requests.post(url, headers=headers, json=payload)
-        _logger.info("Response text: %s", response.text)
+        safe_headers = dict(headers or {})
+        for key in ("Authorization", "Cookie", "cookie"):
+            if key in safe_headers:
+                safe_headers[key] = "***MASKED***"
+
+        # _logger.info("[MISA API REQUEST] url=%s headers=%s payload=%s", url, safe_headers, json.dumps(payload, ensure_ascii=False)[:4000])
+        try:
+            response = requests.post(url, headers=headers, json=payload, timeout=30)
+        except Exception:
+            _logger.exception("[MISA API REQUEST ERROR] url=%s payload=%s", url, json.dumps(payload, ensure_ascii=False)[:4000])
+            raise
+
+        # _logger.info(
+        #     "[MISA API RESPONSE] url=%s status=%s headers=%s body=%s",
+        #     url,
+        #     response.status_code,
+        #     dict(response.headers),
+        #     (response.text or "")[:4000],
+        # )
         if response.status_code == 401:
             _logger.warning("🔁 Token hết hạn, đang đăng nhập lại...")
             new_token = self._get_misa_token()
             _logger.info("🔑 Đăng nhập thành công, token mới: %s", new_token)
             headers["Authorization"] = f"Bearer {new_token}"
-            response = requests.post(url, headers=headers, json=payload)
+            retry_headers = dict(headers or {})
+            for key in ("Authorization", "Cookie", "cookie"):
+                if key in retry_headers:
+                    retry_headers[key] = "***MASKED***"
+            _logger.info("[MISA API RETRY REQUEST] url=%s headers=%s payload=%s", url, retry_headers, json.dumps(payload, ensure_ascii=False)[:4000])
+            try:
+                response = requests.post(url, headers=headers, json=payload, timeout=30)
+            except Exception:
+                _logger.exception("[MISA API RETRY ERROR] url=%s payload=%s", url, json.dumps(payload, ensure_ascii=False)[:4000])
+                raise
+            _logger.info(
+                "[MISA API RETRY RESPONSE] url=%s status=%s headers=%s body=%s",
+                url,
+                response.status_code,
+                dict(response.headers),
+                (response.text or "")[:4000],
+            )
         return response
 
     def search_invoice_api(self, query):
@@ -480,8 +513,40 @@ class MisaApiUtils(models.AbstractModel):
         token = self._get_misa_token()
         headers = self.env['misa.config'].get_default_headers(token)
         payload = self.env['misa.config'].get_invoice_preview_payload(refid, date)
-        url = "https://actapp.misa.vn/g2/api/einvoice/v1/einvoice/preview_one?viewType=1&publishType=1&decreeType=3&isFollowSerial=true"
-        return self._fetch_with_retry(url, headers, payload)
+
+        def _preview_url(gateway):
+            return (
+                f"https://actapp.misa.vn/{gateway}/api/einvoice/v1/einvoice/preview_one"
+                "?viewType=1&&publishType=1&&decreeType=3&&isFollowSerial=true"
+            )
+
+        def _has_preview_data(response):
+            if not response.ok:
+                return False
+            try:
+                data = response.json()
+            except Exception:
+                _logger.exception("[MISA INVOICE PREVIEW] Invalid JSON from gateway")
+                return False
+            return bool(data.get("Data"))
+
+        g2_url = _preview_url("g2")
+        try:
+            _logger.info("[MISA INVOICE PREVIEW] Trying gateway g2")
+            response = self._fetch_with_retry(g2_url, headers, payload)
+            if _has_preview_data(response):
+                return response
+            _logger.warning(
+                "[MISA INVOICE PREVIEW] Gateway g2 missing preview data status=%s body=%s",
+                response.status_code,
+                (response.text or "")[:4000],
+            )
+        except Exception as e:
+            _logger.exception("[MISA INVOICE PREVIEW] Gateway g2 request error: %s", e)
+
+        g1_url = _preview_url("g1")
+        _logger.info("[MISA INVOICE PREVIEW] Retrying gateway g1")
+        return self._fetch_with_retry(g1_url, headers, payload)
 
     def _fetch_login_crm_token(self):
         """Fetch CRM token for MISA"""

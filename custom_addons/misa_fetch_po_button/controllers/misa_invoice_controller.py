@@ -1,6 +1,7 @@
 from odoo import http
 from odoo.http import request
 import logging
+import json
 
 _logger = logging.getLogger(__name__)
 
@@ -51,18 +52,38 @@ class MisaInvoiceController(http.Controller):
     @http.route('/api/misa/invoice/preview', type='json', auth='public', methods=['POST'])
     def api_preview_misa_invoice(self, refid, date, **kwargs):
         """API proxy to get MISA invoice PDF link"""
+        _logger.info(
+            "[MISA INVOICE PREVIEW][ODOO REQUEST] refid=%s date=%s kwargs=%s",
+            refid,
+            date,
+            kwargs,
+        )
         if not request.session.get(SESSION_KEY_OK):
-            return {"status": "error", "message": "Truy cập bị từ chối."}
+            result = {"status": "error", "message": "Truy cập bị từ chối."}
+            # _logger.warning("[MISA INVOICE PREVIEW][ODOO RESPONSE] %s", result)
+            return result
         try:
             misa_utils = request.env['misa.api.utils'].sudo()
             resp = misa_utils.preview_invoice_api(refid, date)
             if resp.status_code == 200:
                 try:
-                    return {"status": "success", "data": resp.json()}
+                    result = {"status": "success", "data": resp.json()}
+                    # _logger.info(
+                    #     "[MISA INVOICE PREVIEW][ODOO RESPONSE] %s",
+                    #     json.dumps(result, ensure_ascii=False)[:4000],
+                    # )
+                    return result
                 except Exception as e:
-                    return {"status": "error", "message": f"Dữ liệu JSON không hợp lệ. {e}"}
+                    result = {"status": "error", "message": f"Dữ liệu JSON không hợp lệ. {e}"}
+                    # _logger.exception("[MISA INVOICE PREVIEW][JSON ERROR]")
+                    # _logger.info("[MISA INVOICE PREVIEW][ODOO RESPONSE] %s", result)
+                    return result
             else:
-                return {"status": "error", "message": f"MISA API error {resp.status_code}: {resp.text}"}
+                result = {"status": "error", "message": f"MISA API error {resp.status_code}: {resp.text}"}
+                # _logger.info("[MISA INVOICE PREVIEW][ODOO RESPONSE] %s", result)
+                return result
         except Exception as e:
             _logger.exception("Error previewing invoice")
-            return {"status": "error", "message": str(e)}
+            result = {"status": "error", "message": str(e)}
+            # _logger.info("[MISA INVOICE PREVIEW][ODOO RESPONSE] %s", result)
+            return result
