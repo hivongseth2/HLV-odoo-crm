@@ -92,21 +92,14 @@ export class PickingScanner extends Component {
                 
                 if (['draft', 'waiting', 'confirmed', 'assigned'].includes(data.state)) {
                     const storageKey = 'hlv_opened_pickings';
-                    const autoClearKey = 'hlv_autocleared_pickings';
                     let openedPickings = [];
-                    let autoClearedPickings = [];
                     try {
                         openedPickings = JSON.parse(localStorage.getItem(storageKey) || '[]');
-                        autoClearedPickings = JSON.parse(localStorage.getItem(autoClearKey) || '[]');
                     } catch (e) {}
                     
                     const pickingIdInt = parseInt(this.props.pickingId, 10);
                     
-                    if (!autoClearedPickings.includes(pickingIdInt) && data.is_pick) {
-                        autoClearedPickings.push(pickingIdInt);
-                        if (autoClearedPickings.length > 200) autoClearedPickings = autoClearedPickings.slice(autoClearedPickings.length - 200);
-                        localStorage.setItem(autoClearKey, JSON.stringify(autoClearedPickings));
-                        
+                    if (data.is_pick && !data.hlv_barcode_auto_cleared) {
                         // Gọi hàm Làm lại (chỉ tự động chạy 1 lần duy nhất cho mỗi phiếu)
                         try {
                             await this.clearQuantities(true);

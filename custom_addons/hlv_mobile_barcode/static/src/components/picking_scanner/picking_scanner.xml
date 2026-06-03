@@ -28,22 +28,22 @@
                     </t>
                 </div>
                 
-                <!-- Multi-Location Mode Header -->
-                <div t-if="props.isMultiLocationMode" style="background: rgba(23, 162, 184, 0.05); border: 2px dashed var(--info-color); padding: 12px; margin: 10px 0; border-radius: 8px; text-align: center;">
+                <!-- Location Mode Header -->
+                <div t-if="props.isMultiLocationMode or state.picking.is_pick or state.picking.picking_type_code == 'incoming'" style="background: rgba(23, 162, 184, 0.05); border: 2px dashed var(--info-color); padding: 12px; margin: 10px 0; border-radius: 8px; text-align: center;">
                     <div style="font-weight: 700; color: var(--info-color); margin-bottom: 5px; font-size: 1rem;">
-                        <i class="fa fa-route"></i> Chế độ lấy hàng Đa vị trí
+                        <i class="fa fa-route"></i> Chế độ lấy hàng theo Vị trí
                     </div>
                     <t t-if="props.scannedLocationName">
                         <div style="font-size: 1.15rem; color: var(--success-color); font-weight: bold; margin-top: 8px;">
                             📍 Đang lấy từ: <t t-esc="props.scannedLocationName"/>
                         </div>
                         <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 5px;">
-                            Có thể quét sản phẩm, hoặc quét mã vị trí khác để đổi Kệ.
+                            Có thể quét sản phẩm, hoặc quét mã vị trí khác để đổi kệ/vị trí lấy hàng.
                         </div>
                     </t>
                     <t t-else="">
                         <div style="font-size: 1.1rem; color: var(--danger-color); font-weight: bold; margin-top: 8px;">
-                            📍 CHƯA CHỌN VỊ TRÍ!
+                            📍 CHƯA QUÉT VỊ TRÍ!
                         </div>
                         <div style="font-size: 0.85rem; color: var(--text-color); margin-top: 5px; font-weight: 500;">
                             BẮT BUỘC: Vui lòng quét mã Vị Trí (Kệ chứa hàng) trước khi quét sản phẩm.
@@ -104,7 +104,8 @@
                     </div>
                     <div class="items-list" style="margin-top: 0;">
                         <t t-foreach="state.picking.lines" t-as="line" t-key="line.id || 'draft_' + line.product_id">
-                            <div t-attf-class="product-row-card #{line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0 ? 'scanned' : ''}" t-att-data-product-id="line.product_id">
+                            <t t-set="is_active_location" t-value="(state.picking.is_pick or state.picking.picking_type_code == 'incoming') and props.scannedLocationName and line.location_name == props.scannedLocationName"/>
+                            <div t-attf-class="product-row-card #{line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0 ? 'scanned' : ''} #{is_active_location ? 'active-location-row' : ''}" t-att-data-product-id="line.product_id">
                                 <div t-attf-class="item-card #{line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0 ? 'scanned' : ''}" style="border: none; margin-bottom: 0; display: flex; align-items: stretch; gap: 10px; padding: 10px;">
                                     <!-- Left: Image -->
                                     <div style="flex-shrink: 0; width: 64px; height: 64px; border-radius: 6px; overflow: hidden; border: 1px solid var(--border-color); background: #fff; display: flex; align-items: center; justify-content: center;">

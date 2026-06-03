@@ -359,6 +359,7 @@ class HLVMobileBarcodeController(http.Controller):
                 })
 
         show_qty_buttons = request.env['ir.config_parameter'].sudo().get_param('hlv_mobile_barcode.hlv_barcode_show_qty_buttons', 'True') == 'True'
+        camera_default_on = request.env['ir.config_parameter'].sudo().get_param('hlv_mobile_barcode.hlv_barcode_camera_default_on', 'True') == 'True'
 
         return {
             'id': picking.id,
@@ -376,7 +377,9 @@ class HLVMobileBarcodeController(http.Controller):
             'source_transfer_name': picking.source_transfer_id.name if picking.source_transfer_id else False,
             'is_putaway': is_putaway,
             'show_qty_buttons': show_qty_buttons,
+            'camera_default_on': camera_default_on,
             'is_pick': is_pick_picking,
+            'hlv_barcode_auto_cleared': getattr(picking, 'hlv_barcode_auto_cleared', False),
         }
 
     @http.route('/hlv_mobile_barcode/get_warehouses', type='json', auth='user')
@@ -627,8 +630,11 @@ class HLVMobileBarcodeController(http.Controller):
             
             return {'error': _('Kiện hàng "%s" không chứa sản phẩm nào phù hợp với phiếu này.', package.name)}
 
-        if is_multi_location and not destination_location_id:
-            return {'error': _('Chế độ lấy hàng Đa vị trí: Vui lòng quét mã Vị trí (Kệ hàng) trước khi quét sản phẩm!')}
+        is_pick_picking = _is_pick_picking(picking)
+        is_in_picking = pt_type == 'incoming'
+
+        if (is_multi_location or is_pick_picking or is_in_picking) and not destination_location_id:
+            return {'error': _('Vui lòng quét mã Vị trí (Kệ hàng) trước khi quét sản phẩm!')}
 
         product = request.env['product.product'].sudo().search(['|', ('barcode', '=', barcode), ('default_code', '=', barcode)], limit=1)
         if not product:
@@ -717,12 +723,30 @@ class HLVMobileBarcodeController(http.Controller):
             if line_demand > 0.0 and loose_qty_done + 1 > line_demand:
                 return {'error': _('Sản phẩm rời "%s" đã quét đủ số lượng yêu cầu (%g/%g). Không thể quét thêm hàng rời!', product.display_name, loose_qty_done, line_demand)}
         else:
+            target_mls = move.move_line_ids
+            if is_pick_picking and destination_location_id:
+                target_mls = target_mls.filtered(lambda ml: ml.location_id.id == destination_location_id)
+            elif is_in_picking and destination_location_id:
+                target_mls = target_mls.filtered(lambda ml: ml.location_dest_id.id == destination_location_id)
+                
+            if target_mls:
+                loc_qty_done = sum(ml.quantity for ml in target_mls)
+                loc_demand = sum(ml.quantity_product_uom for ml in target_mls)
+                if loc_demand > 0.0 and loc_qty_done + 1 > loc_demand:
+                    return {'error': _('Sản phẩm "%s" đã quét đủ số lượng yêu cầu tại vị trí này (%g/%g). Vui lòng quét vị trí khác nếu cần lấy thêm!', product.display_name, loc_qty_done, loc_demand)}
+
             current_qty_done = sum(ml.quantity for ml in move.move_line_ids)
             if move.product_uom_qty > 0.0 and current_qty_done + 1 > move.product_uom_qty:
-                return {'error': _('Sản phẩm "%s" đã quét đủ số lượng yêu cầu (%g/%g). Không thể quét thêm!', product.display_name, current_qty_done, move.product_uom_qty)}
+                return {'error': _('Sản phẩm "%s" đã quét đủ tổng số lượng yêu cầu (%g/%g). Không thể quét thêm!', product.display_name, current_qty_done, move.product_uom_qty)}
 
         # Find an unpacked move line that is not in any package
         move_line = move.move_line_ids.filtered(lambda ml: not ml.result_package_id and not ml.package_id)
+        if is_pick_picking and destination_location_id:
+            move_line = move_line.filtered(lambda ml: ml.location_id.id == destination_location_id)
+            if not move_line:
+                return {'error': _('Sản phẩm "%s" không có dòng lấy hàng tại vị trí đang quét.', product.display_name)}
+        elif is_in_picking and destination_location_id:
+            move_line = move_line.filtered(lambda ml: ml.location_dest_id.id == destination_location_id)
         
         ml_dest_id = destination_location_id if (destination_location_id and is_putaway) else (move_line[0].location_dest_id.id if move_line else picking.location_dest_id.id)
         
@@ -946,22 +970,10 @@ class HLVMobileBarcodeController(http.Controller):
                 # For PICK, reset all lines, never delete them
                 lines_to_reset = move_lines.filtered(lambda l: l.quantity != 0.0 or (not picking.source_transfer_id and l.result_package_id))
                 if lines_to_reset:
-                    # Flush before raw SQL to ensure Odoo doesn't overwrite our SQL updates with dirty cache later
-                    lines_to_reset.flush_recordset(['quantity', 'result_package_id'])
-                    
-                    set_clause = "quantity = 0.0"
+                    vals = {'quantity': 0.0}
                     if not picking.source_transfer_id:
-                        set_clause += ", result_package_id = NULL"
-                    
-                    request.env.cr.execute(f"""
-                        UPDATE stock_move_line 
-                        SET {set_clause}
-                        WHERE id IN %s
-                    """, (tuple(lines_to_reset.ids),))
-                    
-                    # Invalidate cache để UI và các compute field nhận diện đúng
-                    lines_to_reset.invalidate_recordset(['quantity', 'result_package_id'])
-                    picking.move_ids.invalidate_recordset(['quantity'])
+                        vals['result_package_id'] = False
+                    lines_to_reset.write(vals)
             else:
                 # For other picking types, delete dynamically created lines, reset the rest
                 lines_to_unlink = move_lines.filtered(
@@ -975,20 +987,10 @@ class HLVMobileBarcodeController(http.Controller):
                 if lines_to_reset:
                     actual_reset = lines_to_reset.filtered(lambda l: l.quantity != 0.0 or (not picking.source_transfer_id and l.result_package_id))
                     if actual_reset:
-                        actual_reset.flush_recordset(['quantity', 'result_package_id'])
-                        
-                        set_clause = "quantity = 0.0"
+                        vals = {'quantity': 0.0}
                         if not picking.source_transfer_id:
-                            set_clause += ", result_package_id = NULL"
-                        
-                        request.env.cr.execute(f"""
-                            UPDATE stock_move_line 
-                            SET {set_clause}
-                            WHERE id IN %s
-                        """, (tuple(actual_reset.ids),))
-                        
-                        actual_reset.invalidate_recordset(['quantity', 'result_package_id'])
-                        picking.move_ids.invalidate_recordset(['quantity'])
+                            vals['result_package_id'] = False
+                        actual_reset.write(vals)
                     
             # 2. Handle stock moves that were created dynamically on the fly (demand = 0)
             # Only delete if it has no move_orig_ids (meaning it wasn't generated by a previous step)

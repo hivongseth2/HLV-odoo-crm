@@ -50,6 +50,7 @@ export class BarcodeApp extends Component {
             cameraNeedsActivation: false,
             cameraErrorMessage: "",
             showCameraPopup: false,
+            cameraManuallyOff: savedState.cameraManuallyOff || false,
             pickingRefreshTick: 0,
             pickingState: "",
             scanMode: savedState.scanMode || "source",
@@ -685,12 +686,12 @@ export class BarcodeApp extends Component {
             rpc("/hlv_mobile_barcode/get_picking_data", { picking_id: pickingId }).then((data) => {
                 if (data && !data.error) {
                     this.state.warehouseCode = data.warehouse_code || "HLV";
-                    if (data.is_putaway && data.location_dest_name) {
-                        this.state.scannedLocationId = data.location_dest_id;
-                        this.state.scannedLocationName = data.location_dest_name;
-                    } else if (!data.is_putaway && data.location_name) {
+                    if (!data.is_pick && !data.is_putaway && data.location_name) {
                         this.state.scannedLocationId = data.location_id;
                         this.state.scannedLocationName = data.location_name;
+                    }
+                    if (data.camera_default_on === false) {
+                        this.state.cameraManuallyOff = true;
                     }
                 }
             }).catch(() => {});
@@ -720,6 +721,9 @@ export class BarcodeApp extends Component {
     }
 
     async startPersistentCamera(isUserGesture = false) {
+        if (this.state.cameraManuallyOff && !isUserGesture) return;
+        this.state.cameraManuallyOff = false;
+        
         // Check if page is served securely (HTTPS or localhost)
         if (window.isSecureContext === false && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
             this.state.cameraFallback = true;
@@ -990,6 +994,16 @@ export class BarcodeApp extends Component {
         }
     }
 
+    async toggleCamera() {
+        if (this.state.cameraManuallyOff) {
+            this.state.cameraManuallyOff = false;
+            await this.startPersistentCamera(true);
+        } else {
+            this.state.cameraManuallyOff = true;
+            await this.closeCamera();
+        }
+    }
+
     exitApp() {
         // Thoát ứng dụng Barcode, quay về màn hình chính Odoo
         window.location.href = "/web";
@@ -1032,7 +1046,6 @@ export class BarcodeApp extends Component {
                 this.state.scannedLocationName = "";
                 this.state.lastScannedProduct = null;
                 this.state.pickingRefreshTick += 1;
-                window.location.reload();
             }
         } catch (e) {
             this.notification.add("Lỗi kết nối", { type: "danger" });

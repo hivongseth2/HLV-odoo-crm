@@ -57,7 +57,16 @@
                             </div>
                         </t>
                         
-                        <div t-att-class="'camera-container ' + (state.cameraFallback ? 'd-none' : '')">
+                        <div t-if="state.cameraManuallyOff" class="camera-off-placeholder">
+                            <button class="btn btn-outline-primary" t-on-click="toggleCamera">
+                                <i class="fa fa-video"/> Bật Camera
+                            </button>
+                        </div>
+                        
+                        <div t-if="!state.cameraManuallyOff" t-att-class="'camera-container ' + (state.cameraFallback ? 'd-none' : '')">
+                            <button class="camera-toggle-btn" t-on-click="toggleCamera">
+                                <i class="fa fa-video-slash"/>
+                            </button>
                             <div id="reader"></div>
                             
                             <!-- Camera Activation Overlay -->
