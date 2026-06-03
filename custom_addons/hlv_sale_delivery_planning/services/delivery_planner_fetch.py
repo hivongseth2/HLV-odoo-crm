@@ -147,10 +147,12 @@ class DeliveryPlannerServiceFetch(models.AbstractModel):
                 loc_raw = p.get('location_id')
                 loc_id = loc_raw[0] if isinstance(loc_raw, (list, tuple)) and loc_raw else None
                 loc_name = loc_raw[1] if isinstance(loc_raw, (list, tuple)) and loc_raw else ''
-                loc_usage = loc_usage_map.get(loc_id, 'internal')
+                loc_usage = loc_usage_map.get(loc_id, 'internal') if loc_id else None
                 # is_shipped = True nếu kiện đã rời kho (customer/supplier location)
                 # → items đã tính vào qty_delivered, không double-count trong qty_packed
-                is_shipped = loc_usage not in ('internal', 'transit', 'view')
+                # Kiện không còn location_id không còn đại diện cho hàng đang nằm ở
+                # khu đóng gói/đầu ra; không tính vào qty_packed.
+                is_shipped = not loc_id or loc_usage not in ('internal', 'transit', 'view')
                 pack_dict[p['id']] = {
                     'id': p['id'],
                     'name': p.get('name') or '',
