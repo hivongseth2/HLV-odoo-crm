@@ -1,6 +1,6 @@
 /** @odoo-module **/
 
-import { Component, useState, onWillStart, onWillUpdateProps, useEffect } from "@odoo/owl";
+import { Component, useState, onWillStart, onWillUpdateProps, useEffect, onWillDestroy } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
 import { rpc } from "@web/core/network/rpc";
 
@@ -24,6 +24,11 @@ export class PickingScanner extends Component {
         this.actionService = useService("action");
         this.isProcessingQty = false;
         this._hasAutoCleared = false;
+        this.isDestroyed = false;
+
+        onWillDestroy(() => {
+            this.isDestroyed = true;
+        });
         
         this.state = useState({
             picking: null,
@@ -60,7 +65,7 @@ export class PickingScanner extends Component {
             if (!this.state.loading && this.props.lastScannedProduct) {
                 // lastScannedProduct is actually the product_id from the backend (res.product_id)
                 const productId = Number(this.props.lastScannedProduct);
-                const element = document.querySelector(`[data-product-id="${productId}"]`);
+                const element = document.querySelector(`[data-product-id="${productId}"] .item-card`);
                 if (element) {
                     element.classList.remove('flash-highlight');
                     void element.offsetWidth; // Force CSS reflow to restart animation
@@ -138,7 +143,9 @@ export class PickingScanner extends Component {
                 this.notification.add(res.error, { type: "danger" });
             } else {
                 this.notification.add("Đã làm mới số lượng", { type: "success" });
-                await this.loadPicking();
+                if (!this.isDestroyed) {
+                    await this.loadPicking();
+                }
             }
         } catch (e) {
             this.notification.add("Lỗi kết nối", { type: "danger" });
