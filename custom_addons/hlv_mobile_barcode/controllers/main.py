@@ -708,7 +708,22 @@ class HLVMobileBarcodeController(http.Controller):
                     return {'error': _('Lỗi hệ thống khi tạo sản phẩm mới.')}
                 move = move[0]
         else:
-            move = move[0]
+            # Select the most appropriate move if there are multiple
+            incomplete_moves = move.filtered(lambda m: m.product_uom_qty > sum(m.move_line_ids.mapped('quantity')))
+            target_moves = incomplete_moves if incomplete_moves else move
+            
+            best_move = False
+            if len(target_moves) > 1 and destination_location_id:
+                if is_pick_picking:
+                    moves_with_loc = target_moves.filtered(lambda m: destination_location_id in m.move_line_ids.mapped('location_id').ids)
+                    if moves_with_loc:
+                        best_move = moves_with_loc[0]
+                elif is_in_picking:
+                    moves_with_loc = target_moves.filtered(lambda m: destination_location_id in m.move_line_ids.mapped('location_dest_id').ids)
+                    if moves_with_loc:
+                        best_move = moves_with_loc[0]
+            
+            move = best_move if best_move else target_moves[0]
 
         # Check limit to prevent over-scanning (demand-based)
         if picking.source_transfer_id:
@@ -723,21 +738,9 @@ class HLVMobileBarcodeController(http.Controller):
             if line_demand > 0.0 and loose_qty_done + 1 > line_demand:
                 return {'error': _('Sản phẩm rời "%s" đã quét đủ số lượng yêu cầu (%g/%g). Không thể quét thêm hàng rời!', product.display_name, loose_qty_done, line_demand)}
         else:
-            target_mls = move.move_line_ids
-            if is_pick_picking and destination_location_id:
-                target_mls = target_mls.filtered(lambda ml: ml.location_id.id == destination_location_id)
-            elif is_in_picking and destination_location_id:
-                target_mls = target_mls.filtered(lambda ml: ml.location_dest_id.id == destination_location_id)
-                
-            if target_mls:
-                loc_qty_done = sum(ml.quantity for ml in target_mls)
-                loc_demand = sum(ml.quantity_product_uom for ml in target_mls)
-                if loc_demand > 0.0 and loc_qty_done + 1 > loc_demand:
-                    return {'error': _('Sản phẩm "%s" đã quét đủ số lượng yêu cầu tại vị trí này (%g/%g). Vui lòng quét vị trí khác nếu cần lấy thêm!', product.display_name, loc_qty_done, loc_demand)}
-
             current_qty_done = sum(ml.quantity for ml in move.move_line_ids)
             if move.product_uom_qty > 0.0 and current_qty_done + 1 > move.product_uom_qty:
-                return {'error': _('Sản phẩm "%s" đã quét đủ tổng số lượng yêu cầu (%g/%g). Không thể quét thêm!', product.display_name, current_qty_done, move.product_uom_qty)}
+                return {'error': _('Sản phẩm "%s" đã quét đủ tổng số lượng yêu cầu của dòng này (%g/%g). Không thể quét thêm!', product.display_name, current_qty_done, move.product_uom_qty)}
 
         # Find an unpacked move line that is not in any package
         move_line = move.move_line_ids.filtered(lambda ml: not ml.result_package_id and not ml.package_id)
