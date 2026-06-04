@@ -104,7 +104,7 @@ SCHEMA_UPDATE_PRODUCT = {
         "properties": {
             "misa_id": {
                 "type": "string",
-                "description": "MISA product ID (GUID)",
+                "description": "MISA product ID ví dụ :77449",
             },
             "field": {
                 "type": "string",
