@@ -1,4 +1,105 @@
-from odoo import models, fields, api
+from odoo import api, fields, models
+
+
+class HlvProductReportGroupLine(models.Model):
+    _name = 'hlv.product.report.group.line'
+    _description = 'Sản phẩm trong nhóm báo cáo tồn kho'
+    _order = 'created_at desc, id desc'
+
+    group_id = fields.Many2one(
+        'hlv.product.report.group',
+        string='Nhóm',
+        required=True,
+        ondelete='cascade',
+        index=True,
+    )
+    product_id = fields.Many2one(
+        'product.product',
+        string='Sản phẩm',
+        required=True,
+        ondelete='cascade',
+        index=True,
+        domain=[('type', 'in', ['consu', 'product'])],
+    )
+    created_at = fields.Datetime(
+        string='Thêm lúc',
+        default=fields.Datetime.now,
+        readonly=True,
+        copy=False,
+        index=True,
+    )
+    updated_at = fields.Datetime(
+        string='Cập nhật lúc',
+        default=fields.Datetime.now,
+        readonly=True,
+        copy=False,
+        index=True,
+    )
+
+    _sql_constraints = [
+        (
+            'group_product_unique',
+            'unique(group_id, product_id)',
+            'Sản phẩm này đã có trong nhóm báo cáo.',
+        ),
+    ]
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        now = fields.Datetime.now()
+        for vals in vals_list:
+            vals.setdefault('created_at', now)
+            vals.setdefault('updated_at', now)
+        return super().create(vals_list)
+
+    def write(self, vals):
+        vals = dict(vals)
+        vals['updated_at'] = fields.Datetime.now()
+        return super().write(vals)
+
+    def init(self):
+        self._migrate_legacy_many2many()
+
+    def _migrate_legacy_many2many(self):
+        self.env.cr.execute("SELECT to_regclass('hlv_report_group_product_rel')")
+        if not self.env.cr.fetchone()[0]:
+            return
+        self.env.cr.execute(
+            """
+            INSERT INTO hlv_product_report_group_line
+                (group_id, product_id, created_at, updated_at, create_uid, write_uid, create_date, write_date)
+            SELECT DISTINCT
+                rel.group_id,
+                rel.product_id,
+                COALESCE(grp.write_date, grp.create_date, NOW() AT TIME ZONE 'UTC'),
+                COALESCE(grp.write_date, grp.create_date, NOW() AT TIME ZONE 'UTC'),
+                COALESCE(grp.create_uid, 1),
+                COALESCE(grp.write_uid, grp.create_uid, 1),
+                COALESCE(grp.write_date, grp.create_date, NOW() AT TIME ZONE 'UTC'),
+                COALESCE(grp.write_date, grp.create_date, NOW() AT TIME ZONE 'UTC')
+            FROM hlv_report_group_product_rel rel
+            JOIN hlv_product_report_group grp ON grp.id = rel.group_id
+            JOIN product_product prod ON prod.id = rel.product_id
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM hlv_product_report_group_line line
+                WHERE line.group_id = rel.group_id
+                  AND line.product_id = rel.product_id
+            )
+            """
+        )
+        self.env.cr.execute(
+            """
+            UPDATE hlv_product_report_group grp
+            SET product_count = counts.product_count
+            FROM (
+                SELECT group_id, COUNT(*) AS product_count
+                FROM hlv_product_report_group_line
+                GROUP BY group_id
+            ) counts
+            WHERE counts.group_id = grp.id
+            """
+        )
 
 
 class HlvProductReportGroup(models.Model):
@@ -12,13 +113,19 @@ class HlvProductReportGroup(models.Model):
     color = fields.Integer('Màu sắc')
     active = fields.Boolean('Hoạt động', default=True)
 
+    line_ids = fields.One2many(
+        'hlv.product.report.group.line',
+        'group_id',
+        string='Sản phẩm trong nhóm',
+        copy=True,
+    )
     product_ids = fields.Many2many(
         'product.product',
-        'hlv_report_group_product_rel',
-        'group_id',
-        'product_id',
         string='Sản phẩm',
         domain=[('type', 'in', ['consu', 'product'])],
+        compute='_compute_product_ids',
+        inverse='_inverse_product_ids',
+        search='_search_product_ids',
     )
     product_count = fields.Integer(
         'Số sản phẩm',
@@ -26,10 +133,39 @@ class HlvProductReportGroup(models.Model):
         store=True,
     )
 
-    @api.depends('product_ids')
+    @api.depends('line_ids.product_id')
+    def _compute_product_ids(self):
+        for rec in self:
+            rec.product_ids = rec.line_ids.mapped('product_id')
+
+    def _inverse_product_ids(self):
+        Line = self.env['hlv.product.report.group.line']
+        for rec in self:
+            existing_lines = rec.line_ids
+            existing_by_product = {
+                line.product_id.id: line
+                for line in existing_lines
+            }
+            target_ids = set(rec.product_ids.ids)
+            existing_ids = set(existing_by_product)
+            removed_lines = existing_lines.filtered(
+                lambda line: line.product_id.id not in target_ids
+            )
+            if removed_lines:
+                removed_lines.unlink()
+            for product_id in target_ids - existing_ids:
+                Line.create({
+                    'group_id': rec.id,
+                    'product_id': product_id,
+                })
+
+    def _search_product_ids(self, operator, value):
+        return [('line_ids.product_id', operator, value)]
+
+    @api.depends('line_ids')
     def _compute_product_count(self):
         for rec in self:
-            rec.product_count = len(rec.product_ids)
+            rec.product_count = len(rec.line_ids)
 
     def action_open_report_wizard(self):
         """Open quick stock viewer pre-filled with this group."""

@@ -2,6 +2,7 @@
 import { registry } from "@web/core/registry";
 import { Component, useState, onWillStart, markup } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
+import { productManagerMethods } from "./stock_quick_product_manager";
 
 export class StockQuickView extends Component {
     static template = "hlv_inventory_group_report.StockQuickView";
@@ -50,6 +51,10 @@ export class StockQuickView extends Component {
             editGroupName: "",
             // Quan ly san pham trong nhom
             groupProducts: [],
+            groupProductQuery: "",
+            groupProductLoading: false,
+            groupProductPage: 0,
+            groupProductTotalCount: 0,
             productQuery: "",
             productResults: [],
             productLoading: false,
@@ -155,6 +160,10 @@ export class StockQuickView extends Component {
         this.state.whOpen = false;
         this.state.activeTab = "stock";
         this.state.editingGroupId = false;
+        this.state.groupProducts = [];
+        this.state.groupProductQuery = "";
+        this.state.groupProductPage = 0;
+        this.state.groupProductTotalCount = 0;
         this.state.productQuery = "";
         this.state.productResults = [];
         this.state.productPage = 0;
@@ -239,75 +248,9 @@ export class StockQuickView extends Component {
         }
     }
 
-    // ── Quan ly san pham trong nhom ──
+    // Product management methods are mixed in from stock_quick_product_manager.js
 
-    async loadGroupProducts() {
-        if (!this.state.groupId) return;
-        const result = await this.orm.call(
-            "hlv.stock.quick", "get_group_products", [this.state.groupId]
-        );
-        this.state.groupProducts = result;
-    }
-
-    onProductQueryKeydown(ev) {
-        if (ev.key === "Enter") { this.searchProducts(); }
-    }
-
-    async searchProducts(pageOrEvent) {
-        const query = this.state.productQuery.trim();
-        if (!query) return;
-        const page = (typeof pageOrEvent === "number") ? pageOrEvent : 0;
-        this.state.productPage = page;
-        this.state.productLoading = true;
-        try {
-            const excludeIds = this.state.groupProducts.map(p => p.id);
-            const result = await this.orm.call(
-                "hlv.stock.quick", "search_products", [query, excludeIds, page * 50]
-            );
-            this.state.productResults = result.items;
-            this.state.productTotalCount = result.total;
-        } finally {
-            this.state.productLoading = false;
-        }
-    }
-
-    searchProductsPrev() {
-        if (this.state.productPage > 0) {
-            this.searchProducts(this.state.productPage - 1);
-        }
-    }
-
-    searchProductsNext() {
-        const maxPage = Math.ceil(this.state.productTotalCount / 50) - 1;
-        if (this.state.productPage < maxPage) {
-            this.searchProducts(this.state.productPage + 1);
-        }
-    }
-
-    async addProductToGroup(productId) {
-        await this.orm.write("hlv.product.report.group", [this.state.groupId], {
-            product_ids: [[4, productId]],
-        });
-        await this.loadGroupProducts();
-        this.state.productResults = this.state.productResults.filter(p => p.id !== productId);
-        if (this.state.productTotalCount > 0) {
-            this.state.productTotalCount -= 1;
-        }
-        if (this.state.productResults.length === 0 && this.state.productPage > 0) {
-            this.searchProducts(this.state.productPage - 1);
-        }
-        this.loadData();
-    }
-
-    async removeProductFromGroup(productId) {
-        await this.orm.write("hlv.product.report.group", [this.state.groupId], {
-            product_ids: [[3, productId]],
-        });
-        await this.loadGroupProducts();
-        this.loadData();
-    }
-
-    // ── Kho ──
+    // Kho ──
 
     get warehouseSummary() {
         const n = this.state.warehouseIds.length;
@@ -670,7 +613,7 @@ export class StockQuickView extends Component {
                 [this.state.groupId, b64]
             );
             this.state.importResults = result;
-            await this.loadGroupProducts();
+            await this.loadGroupProducts(0);
             this.loadData();
         } finally {
             this.state.importLoading = false;
@@ -683,5 +626,7 @@ export class StockQuickView extends Component {
         if (inp) inp.value = "";
     }
 }
+
+Object.assign(StockQuickView.prototype, productManagerMethods);
 
 registry.category("actions").add("hlv_stock_quick_action", StockQuickView);

@@ -2,3 +2,9 @@ from . import product_report_group
 from . import inventory_report_config
 from . import inventory_report_line
 from . import stock_quick
+from . import stock_quick_cost
+from . import stock_quick_products
+from . import stock_quick_moves
+from . import stock_quick_inventory_excel
+from . import stock_quick_product_moves_excel
+from . import stock_quick_group_moves_excel

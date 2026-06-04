@@ -115,16 +115,12 @@
                                 </button>
                             </div>
 
-                            <field name="product_ids"
-                                   widget="many2many"
+                            <field name="line_ids"
                                    string="Sản phẩm trong nhóm">
-                                <list string="Sản phẩm" create="false">
-                                    <field name="default_code" string="Mã SP" optional="show"/>
-                                    <field name="display_name" string="Tên sản phẩm"/>
-                                    <field name="categ_id" string="Danh mục" optional="show"/>
-                                    <field name="uom_id" string="ĐVT" groups="uom.group_uom"
-                                           optional="show"/>
-                                    <field name="qty_available" string="Tổng tồn" optional="show"/>
+                                <list string="Sản phẩm" editable="bottom">
+                                    <field name="product_id" string="Sản phẩm"/>
+                                    <field name="created_at" string="Thêm lúc" readonly="1"/>
+                                    <field name="updated_at" string="Cập nhật lúc" readonly="1"/>
                                 </list>
                             </field>
                         </page>

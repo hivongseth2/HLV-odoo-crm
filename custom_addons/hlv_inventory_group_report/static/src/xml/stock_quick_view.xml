@@ -667,36 +667,76 @@
 
                             <!-- Danh sach san pham -->
                             <div style="background:#fff; border-radius:10px; overflow:hidden; box-shadow:0 1px 6px rgba(0,0,0,0.07); margin-bottom:16px;">
-                                <div style="padding:12px 16px; font-size:13px; font-weight:700; color:#1a2639; border-bottom:1px solid #f0f0f0; display:flex; align-items:center; gap:8px;">
-                                    <i class="fa fa-list" style="color:#6c757d;"/>
-                                    Sản phẩm trong nhóm
-                                    <span style="background:#e9ecef; color:#495057; border-radius:12px; padding:1px 8px; font-size:11px;">
-                                        <t t-esc="state.groupProducts.length"/>
-                                    </span>
+                                <div style="padding:12px 16px; border-bottom:1px solid #f0f0f0; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                                    <div style="font-size:13px; font-weight:700; color:#1a2639; display:flex; align-items:center; gap:8px; margin-right:auto;">
+                                        <i class="fa fa-list" style="color:#6c757d;"/>
+                                        Sản phẩm trong nhóm
+                                        <span style="background:#e9ecef; color:#495057; border-radius:12px; padding:1px 8px; font-size:11px;">
+                                            <t t-esc="state.groupProductTotalCount"/>
+                                        </span>
+                                    </div>
+                                    <input t-model="state.groupProductQuery" t-on-keydown="onGroupProductQueryKeydown"
+                                           placeholder="Tìm mã hoặc tên sản phẩm trong nhóm..."
+                                           style="width:280px; max-width:100%; padding:6px 10px; border:1px solid #ced4da; border-radius:6px; font-size:12px; outline:none;"/>
+                                    <button t-on-click="() => this.loadGroupProducts(0)"
+                                            style="background:#0d6efd; color:#fff; border:none; border-radius:6px; padding:6px 12px; font-size:12px; cursor:pointer; display:flex; align-items:center; gap:6px;">
+                                        <i class="fa fa-search"/> Tìm
+                                    </button>
+                                    <button t-if="state.groupProductQuery" t-on-click="clearGroupProductQuery"
+                                            style="background:#fff; color:#6c757d; border:1px solid #dee2e6; border-radius:6px; padding:6px 10px; font-size:12px; cursor:pointer;">
+                                        Xóa lọc
+                                    </button>
                                 </div>
-                                <t t-if="state.groupProducts.length === 0">
+                                <t t-if="state.groupProductLoading">
+                                    <div style="color:#6c757d; font-size:12px; padding:16px;">
+                                        <i class="fa fa-spinner fa-spin"/> Đang tải...
+                                    </div>
+                                </t>
+                                <t t-elif="state.groupProducts.length === 0">
                                     <div style="text-align:center; padding:30px; color:#adb5bd; font-size:13px;">
-                                        Chưa có sản phẩm nào trong nhóm này
+                                        Chưa có sản phẩm phù hợp
                                     </div>
                                 </t>
                                 <t t-else="">
-                                    <t t-foreach="state.groupProducts" t-as="p" t-key="p.id">
+                                    <t t-if="state.groupProductTotalCount > 50">
+                                        <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 12px; background:#f8f9fa; border-bottom:1px solid #dee2e6; font-size:12px; color:#495057;">
+                                            <span>
+                                                Hiển thị <b><t t-esc="state.groupProductPage * 50 + 1"/></b>&#8211;<b><t t-esc="Math.min((state.groupProductPage + 1) * 50, state.groupProductTotalCount)"/></b> / <b><t t-esc="state.groupProductTotalCount"/></b>
+                                            </span>
+                                            <div style="display:flex; gap:4px; align-items:center;">
+                                                <button t-on-click="groupProductsPrev"
+                                                        t-att-style="'border:1px solid #dee2e6; border-radius:4px; padding:3px 10px; font-size:12px; cursor:pointer; ' + (state.groupProductPage === 0 ? 'background:#f8f9fa; color:#adb5bd; pointer-events:none;' : 'background:#fff; color:#0d6efd;')">
+                                                    &#8592; Trước
+                                                </button>
+                                                <span style="padding:3px 8px; font-size:12px; color:#495057;">
+                                                    Trang <b><t t-esc="state.groupProductPage + 1"/></b> / <b><t t-esc="Math.ceil(state.groupProductTotalCount / 50)"/></b>
+                                                </span>
+                                                <button t-on-click="groupProductsNext"
+                                                        t-att-style="'border:1px solid #dee2e6; border-radius:4px; padding:3px 10px; font-size:12px; cursor:pointer; ' + ((state.groupProductPage + 1) * 50 >= state.groupProductTotalCount ? 'background:#f8f9fa; color:#adb5bd; pointer-events:none;' : 'background:#fff; color:#0d6efd;')">
+                                                    Tiếp &#8594;
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </t>
+                                    <t t-foreach="state.groupProducts" t-as="p" t-key="p.line_id">
                                         <div t-att-style="'display:flex; align-items:center; padding:10px 16px; gap:14px; ' + (p_index > 0 ? 'border-top:1px solid #f5f5f5;' : '') + (p_index % 2 === 1 ? ' background:#fafbfc;' : '')">
                                             <img t-att-src="p.image_url"
                                                  style="width:56px; height:56px; object-fit:contain; border-radius:8px; border:1px solid #e9ecef; background:#fafafa; flex-shrink:0;"/>
                                             <div style="flex:1; min-width:0;">
                                                 <div style="font-family:monospace; font-size:11px; color:#546e7a; margin-bottom:3px;"><t t-esc="p.code"/></div>
                                                 <div style="font-size:13px; color:#212121;"><t t-esc="p.name"/></div>
+                                                <div style="font-size:11px; color:#6c757d; margin-top:3px;">
+                                                    Thêm lúc: <t t-esc="p.created_at ? p.created_at : '-'"/>
+                                                </div>
                                             </div>
                                             <button t-on-click="() => this.removeProductFromGroup(p.id)"
                                                     style="background:none; border:1px solid #dee2e6; color:#dc3545; border-radius:6px; padding:6px 14px; font-size:11px; cursor:pointer; white-space:nowrap; flex-shrink:0;">
-                                                ✕ Xóa
+                                                x Xóa
                                             </button>
                                         </div>
                                     </t>
                                 </t>
                             </div>
-
                             <!-- Import tu Excel -->
                             <div style="background:#fff; border-radius:10px; padding:18px; box-shadow:0 1px 6px rgba(0,0,0,0.07);">
                                 <div style="font-size:13px; font-weight:700; color:#1a2639; margin-bottom:12px; display:flex; align-items:center; gap:8px;">
