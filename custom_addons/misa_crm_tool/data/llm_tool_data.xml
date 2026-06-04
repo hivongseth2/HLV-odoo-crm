@@ -43,7 +43,7 @@
     "type": {"type": "string", "enum": ["goods", "service", "finished_product"], "description": "Loại hàng hóa"},
     "Description": {"type": "string", "description": "Mô tả sản phẩm trên MISA CRM. Có thể truyền chuỗi JSON, VD: {\"Vật liệu\" : \"Thép\"}"}
   },
-  "required": ["code", "name", "price", "tax", "unit", "category", "category_id", "type", "price_pu"]
+  "required": ["code", "name", "price", "tax", "unit", "category", "category_id", "type", "price_pu", "Description"]
 }</field>
         <field name="default" eval="True" />
         <field name="active" eval="True" />

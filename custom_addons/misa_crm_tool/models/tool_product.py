@@ -85,7 +85,7 @@ SCHEMA_CREATE_PRODUCT = {
         },
         "required": [
             "code", "name", "price", "tax", "unit",
-            "category", "category_id", "type", "price_pu",
+            "category", "category_id", "type", "price_pu", "Description",
         ],
         "additionalProperties": False,
     },

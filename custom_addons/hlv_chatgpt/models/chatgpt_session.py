@@ -101,7 +101,8 @@ TOOLS_SCHEMA = [
           "category",
           "category_id",
           "type",
-          "price_pu"
+          "price_pu",
+          "Description"
         ],
         "additionalProperties": False
       },
