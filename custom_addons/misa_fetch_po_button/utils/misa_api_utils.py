@@ -2063,6 +2063,7 @@ class MisaApiUtils(models.AbstractModel):
                     "tax": p.get("TaxIDText"),
                     "type": p.get("ProductPropertiesIDText"),
                     "active": p.get("Active", True),
+                    "description": p.get("Description", ""),
                 })
             
             return result
