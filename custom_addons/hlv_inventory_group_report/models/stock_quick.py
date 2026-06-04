@@ -28,9 +28,6 @@ class HlvStockQuick(models.TransientModel):
                 or stock_query in (p.name or "").lower()
                 or stock_query in (p.uom_id.name or "").lower()
             )
-        total_count = len(products)
-        if limit:
-            products = products[offset:offset + limit]
         if warehouse_ids:
             warehouses = self.env["stock.warehouse"].browse(warehouse_ids)
             columns = [{"id": wh.id, "name": wh.name} for wh in warehouses]
@@ -47,6 +44,58 @@ class HlvStockQuick(models.TransientModel):
                         children = self.env["stock.location"].search([("id", "child_of", loc.id)])
                         ids.extend(children.ids)
                 wh_outgoing_locs[wh.id] = ids
+        if limit and not show_zero and products:
+            visible_product_ids = set()
+            product_domain = [("product_id", "in", products.ids)]
+            if warehouses:
+                stock_loc_ids = warehouses.mapped("lot_stock_id").ids
+                stock_locs = self.env["stock.location"].search([
+                    ("id", "child_of", stock_loc_ids),
+                    ("usage", "=", "internal"),
+                ])
+                stock_domain = product_domain + [
+                    ("location_id", "in", stock_locs.ids),
+                    ("quantity", "!=", 0),
+                ]
+            else:
+                stock_domain = product_domain + [
+                    ("location_id.usage", "=", "internal"),
+                    ("quantity", "!=", 0),
+                ]
+            stock_groups = self.env["stock.quant"].read_group(
+                stock_domain,
+                ["product_id", "quantity:sum"],
+                ["product_id"],
+            )
+            visible_product_ids.update(
+                row["product_id"][0]
+                for row in stock_groups
+                if row.get("product_id") and row.get("quantity")
+            )
+            if include_outgoing and wh_outgoing_locs:
+                outgoing_loc_ids = list({
+                    loc_id
+                    for loc_ids in wh_outgoing_locs.values()
+                    for loc_id in loc_ids
+                })
+                if outgoing_loc_ids:
+                    outgoing_groups = self.env["stock.quant"].read_group(
+                        product_domain + [
+                            ("location_id", "in", outgoing_loc_ids),
+                            ("quantity", ">", 0),
+                        ],
+                        ["product_id", "quantity:sum"],
+                        ["product_id"],
+                    )
+                    visible_product_ids.update(
+                        row["product_id"][0]
+                        for row in outgoing_groups
+                        if row.get("product_id") and row.get("quantity")
+                    )
+            products = products.filtered(lambda p: p.id in visible_product_ids)
+        total_count = len(products)
+        if limit:
+            products = products[offset:offset + limit]
         # Pre-compute extra column data
         product_ids_list = products.ids
         extra_data = {}
