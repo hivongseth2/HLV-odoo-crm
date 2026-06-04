@@ -543,16 +543,18 @@ class SaleOrder(models.Model):
         account_id = data.get("AccountID") or data.get("AccountId")
         partner = None
         misa_code = None
+        tax_code = None
         if account_id:
             partner = env['misa.api.utils']._sync_customer_from_misa_account_api(account_id, headers)
             # Lấy mã CRM dù có tìm thấy partner hay không — dùng cho fallback và ghi vào liên hệ con
             try:
                 ident = env['misa.api.utils'].get_account_identity(account_id, headers) or {}
                 misa_code = ident.get("account_number") or ident.get("id")
+                tax_code = ident.get("taxcode")
             except Exception:
                 pass
         if not partner:
-            partner = odoo_utils._get_or_create_partner(partner_name, misa_code=misa_code)
+            partner = odoo_utils._get_or_create_partner(partner_name, misa_code=misa_code, tax_code=tax_code)
 
         # Địa chỉ/phone KHÔNG cập nhật vào liên hệ cha — ghi vào liên hệ con (delivery contact) bên dưới
 
@@ -592,16 +594,6 @@ class SaleOrder(models.Model):
                 contact_name=shipping_contact_name.strip() if shipping_contact_name else None,
                 is_e_account=(partner_name in e_accounts)
             )
-            # Ghi mã CRM vào liên hệ con (delivery contact), không ghi vào cha
-            if misa_code and delivery_contact:
-                dc_vals = {}
-                if not delivery_contact.ref:
-                    dc_vals['ref'] = misa_code
-                if not delivery_contact.company_registry:
-                    dc_vals['company_registry'] = misa_code
-                if dc_vals:
-                    delivery_contact.write(dc_vals)
-                    _logger.info("Ghi mã CRM %s vào delivery contact %s", misa_code, delivery_contact.name)
             shipping_id = delivery_contact.id
         except Exception as e:
             _logger.warning("Không set delivery contact: %s", e)

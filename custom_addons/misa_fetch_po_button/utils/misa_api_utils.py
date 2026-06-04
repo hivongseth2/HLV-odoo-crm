@@ -54,39 +54,25 @@ class MisaApiUtils(models.AbstractModel):
                 _logger.warning("⚠️ MISA Account ID %s has no AccountNumber", account_id)
                 return None
                 
-            Partner = self.env['res.partner']
-            
-            # Find by ref (AccountNumber)
-            # Case-insensitive search ideally, but 'ref' is usually exact.
-            partner = Partner.search([
-                ('ref', '=', account_number),
-                ('parent_id', '=', False),
-            ], limit=1)
-            
-            vals = {}
-            # Always update name if provided? Or only if different?
-            # User wants to update info.
-            if account_name:
-                vals['name'] = account_name
-            if tax_code:
-                vals['vat'] = tax_code
-            
-            # Ensure company type
-            if not partner and not vals.get('name'):
-                 # Should rare happen if account_name exists
-                 vals['name'] = account_number
+            partner = self.env['odoo.utils']._get_or_create_partner(
+                account_name or account_number,
+                misa_code=account_number,
+                tax_code=tax_code,
+            )
 
-            if partner:
-                # Update existing
-                if vals:
-                    partner.write(vals)
-                _logger.info("✅ Synced customer %s (ref=%s) from MISA Account API", partner.name, account_number)
-            else:
-                # Create new
-                vals['ref'] = account_number
-                vals['company_type'] = 'company' 
-                partner = Partner.create(vals)
-                _logger.info("🆕 Created customer %s (ref=%s) from MISA Account API", partner.name, account_number)
+            vals = {}
+            if account_name and partner.name != account_name:
+                vals['name'] = account_name
+            if account_number:
+                if not partner.ref:
+                    vals['ref'] = account_number
+                if not partner.company_registry:
+                    vals['company_registry'] = account_number
+            if tax_code and not partner.vat:
+                vals['vat'] = tax_code
+            if vals:
+                partner.write(vals)
+            _logger.info("Synced customer %s (key=%s-%s) from MISA Account API", partner.name, tax_code or "-", account_number)
                 
             return partner
             

@@ -1020,7 +1020,9 @@ class SaleApiImportWizard(models.TransientModel):
                     misa_code_preview = ident.get("account_number") or ident.get("id")
                     partner_name_for_so = customer_name
                     partner = odoo_utils._get_or_create_partner(
-                        partner_name_for_so, misa_code=misa_code_preview
+                        partner_name_for_so,
+                        misa_code=misa_code_preview,
+                        tax_code=ident.get("taxcode"),
                     )
 
                 try:
@@ -1050,21 +1052,6 @@ class SaleApiImportWizard(models.TransientModel):
                 )
                 _logger.info("📍 [%s] Delivery contact created/found: id=%s, name='%s', street='%s'",
                             order_ref_base, delivery_contact.id, delivery_contact.name, delivery_contact.street)
-
-                # Ghi mã KH CRM vào liên hệ con (delivery contact), không ghi vào cha
-                misa_code = ident.get("account_number") or ident.get("id") if ident else None
-                if misa_code and delivery_contact:
-                    try:
-                        dc_vals = {}
-                        if not delivery_contact.ref:
-                            dc_vals['ref'] = misa_code
-                        if not delivery_contact.company_registry:
-                            dc_vals['company_registry'] = misa_code
-                        if dc_vals:
-                            delivery_contact.write(dc_vals)
-                            _logger.info("Ghi mã CRM %s vào delivery contact %s", misa_code, delivery_contact.name)
-                    except Exception as e:
-                        _logger.warning("Không ghi được mã CRM vào delivery contact: %s", e)
 
                 distinct_stocks = [s for s in lines_by_stock.keys() if s in stock_mapping]
                 if not distinct_stocks:

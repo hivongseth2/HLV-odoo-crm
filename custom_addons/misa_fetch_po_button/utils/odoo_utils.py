@@ -8,7 +8,7 @@ class OdooUtils(models.AbstractModel):
     _name = 'odoo.utils'
     _description = 'Odoo Utilities'
 
-    def _get_or_create_partner(self, name, misa_code=None):
+    def _get_or_create_partner(self, name, misa_code=None, tax_code=None):
         """Tìm hoặc tạo mới đối tác (partner) dựa trên tên.
 
         Thứ tự tìm kiếm:
@@ -21,6 +21,7 @@ class OdooUtils(models.AbstractModel):
         """
         name = (name or "").strip()
         misa_code = (misa_code or "").strip()
+        tax_code = (tax_code or "").strip()
         Partner = self.env["res.partner"]
 
         # MISA CRM can have multiple accounts with the same company name but
@@ -37,19 +38,48 @@ class OdooUtils(models.AbstractModel):
             partner = candidates.filtered(
                 lambda p: (p.ref or "").strip() == misa_code
                 or (not p.ref and (p.company_registry or "").strip() == misa_code)
-            )[:1]
+            )
+            if tax_code:
+                tax_match = partner.filtered(lambda p: (p.vat or "").strip() == tax_code)[:1]
+                if tax_match:
+                    _logger.info("Use existing partner by MISA key %s-%s: %s", tax_code, misa_code, tax_match.name)
+                    return tax_match
+
+                no_tax = partner.filtered(lambda p: not (p.vat or "").strip())[:1]
+                if no_tax:
+                    vals = {"vat": tax_code}
+                    if not no_tax.ref:
+                        vals["ref"] = misa_code
+                    if not no_tax.company_registry:
+                        vals["company_registry"] = misa_code
+                    no_tax.write(vals)
+                    _logger.info("Use existing partner by code %s and fill VAT=%s: %s", misa_code, tax_code, no_tax.name)
+                    return no_tax
+
+                if partner:
+                    _logger.warning(
+                        "MISA key mismatch for code %s tax %s. Existing partner ids=%s; creating a new root company.",
+                        misa_code,
+                        tax_code,
+                        partner.ids,
+                    )
+
+            partner = partner[:1]
             if partner:
                 _logger.info("Use existing partner by MISA code %s: %s", misa_code, partner.name)
                 return partner
 
-            partner = Partner.create({
+            vals = {
                 "name": name,
                 "customer_rank": 1,
                 "is_company": True,
                 "ref": misa_code,
                 "company_registry": misa_code,
-            })
-            _logger.info("Created partner by MISA code %s: %s", misa_code, name)
+            }
+            if tax_code:
+                vals["vat"] = tax_code
+            partner = Partner.create(vals)
+            _logger.info("Created partner by MISA key %s-%s: %s", tax_code or "-", misa_code, name)
             return partner
 
         partner = Partner.search([
