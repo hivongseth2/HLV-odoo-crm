@@ -46,6 +46,7 @@ export class StockQuickView extends Component {
             stockPage: 0,
             stockPageSize: 50,
             stockTotalCount: 0,
+            stockDirty: false,
             whOpen: false,
             // Quan ly nhom
             activeTab: "stock",
@@ -167,6 +168,7 @@ export class StockQuickView extends Component {
             this.state.total = result.total;
             this.state.outgoingTotal = result.outgoing_total || 0;
             this.state.stockTotalCount = result.total_count || 0;
+            this.state.stockDirty = false;
         } finally {
             this.state.loading = false;
         }
@@ -180,6 +182,7 @@ export class StockQuickView extends Component {
         this.state.editingGroupId = false;
         this.state.stockQuery = "";
         this.state.stockPage = 0;
+        this.state.stockDirty = false;
         this.state.groupProducts = [];
         this.state.groupProductQuery = "";
         this.state.groupProductPage = 0;
@@ -198,6 +201,8 @@ export class StockQuickView extends Component {
         this.state.activeTab = tab;
         if (tab === "manage" && this.state.groupId) {
             this.loadGroupProducts();
+        } else if (tab === "stock" && this.state.groupId && this.state.stockDirty) {
+            this.loadData(true);
         }
     }
 
@@ -271,6 +276,10 @@ export class StockQuickView extends Component {
     // Product management methods are mixed in from stock_quick_product_manager.js
 
     // Kho ──
+
+    markStockDirty() {
+        this.state.stockDirty = true;
+    }
 
     get stockPagedLines() {
         return this.state.lines;
@@ -679,7 +688,7 @@ export class StockQuickView extends Component {
             );
             this.state.importResults = result;
             await this.loadGroupProducts(0);
-            this.loadData(true);
+            this.markStockDirty();
         } finally {
             this.state.importLoading = false;
         }
