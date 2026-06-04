@@ -202,7 +202,7 @@ class HlvChatgptSession(models.Model):
         2. Gọi API với Prompt đã lưu (Stored Prompt)
         3. Xử lý Tool Calls (Loop)
         """
-        _logger.info("🚀 Start Prompt Workflow | Has Image: %s", bool(image_url))
+        # _logger.info("🚀 Start Prompt Workflow | Has Image: %s", bool(image_url))
 
         # A. Xây dựng danh sách tin nhắn đầu vào (Conversation History + New Message)
         input_messages = self._get_conversation_history()
@@ -257,7 +257,7 @@ class HlvChatgptSession(models.Model):
                 return f"Lỗi gọi OpenAI: {str(e)}"
 
             # Kiểm tra Output Message
-            _logger.info("API Response Object: %s", str(response))
+            # _logger.info("API Response Object: %s", str(response))
             try:
                 _logger.info("API Response Dict: %s", response.to_dict())
             except:
@@ -332,7 +332,7 @@ class HlvChatgptSession(models.Model):
                     call_id = tc['id']
                     args = json.loads(tc['function']['arguments'] or '{}')
                     
-                    _logger.info("⚡ Tool Call: %s | Args: %s", fname, str(args))
+                    # _logger.info("⚡ Tool Call: %s | Args: %s", fname, str(args))
                     tool_result_str = ""
 
                     if fname == "search_product_misa":
@@ -404,7 +404,7 @@ class HlvChatgptSession(models.Model):
     
     def _execute_get_category_info(self, args):
         """Tool: Lấy tên nhóm từ ID"""
-        _logger.info("ℹ️ Check Category: %s", args)
+        # _logger.info("ℹ️ Check Category: %s", args)
         cat_id = args.get('category_id')
         if not cat_id: return json.dumps({"error": "Thiếu category_id"})
 
@@ -425,7 +425,7 @@ class HlvChatgptSession(models.Model):
     
     def _execute_search_category_misa(self, args):
         """Tool: Tìm ID nhóm từ tên"""
-        _logger.info("ℹ️ Search Category Data: %s", args)
+        # _logger.info("ℹ️ Search Category Data: %s", args)
         name = args.get('name')
         if not name: return json.dumps({"error": "Thiếu tên nhóm"})
 
@@ -459,7 +459,7 @@ class HlvChatgptSession(models.Model):
 
     def _execute_search_misa(self, args):
         """Tìm kiếm sản phẩm trong MISA (Live DB)"""
-        _logger.info("🔍 MISA Search: %s", args)
+        # _logger.info("🔍 MISA Search: %s", args)
         try:
             name = args.get('name')
             code = args.get('code')
@@ -484,7 +484,7 @@ class HlvChatgptSession(models.Model):
 
     def _execute_create_misa(self, args):
         """Tạo 1 sản phẩm MISA (Single Object)"""
-        _logger.info("🆕 MISA Create: %s", args)
+        # _logger.info("🆕 MISA Create: %s", args)
         try:
             misa_utils = self.env['misa.api.utils'].sudo()
             misa_id = misa_utils.create_product_misa_raw(
