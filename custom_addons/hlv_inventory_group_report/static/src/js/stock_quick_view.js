@@ -42,6 +42,9 @@ export class StockQuickView extends Component {
             columns: [],
             total: 0,
             loading: false,
+            stockQuery: "",
+            stockPage: 0,
+            stockPageSize: 50,
             whOpen: false,
             // Quan ly nhom
             activeTab: "stock",
@@ -149,6 +152,7 @@ export class StockQuickView extends Component {
             this.state.columns = result.columns;
             this.state.total = result.total;
             this.state.outgoingTotal = result.outgoing_total || 0;
+            this.state.stockPage = 0;
         } finally {
             this.state.loading = false;
         }
@@ -160,6 +164,8 @@ export class StockQuickView extends Component {
         this.state.whOpen = false;
         this.state.activeTab = "stock";
         this.state.editingGroupId = false;
+        this.state.stockQuery = "";
+        this.state.stockPage = 0;
         this.state.groupProducts = [];
         this.state.groupProductQuery = "";
         this.state.groupProductPage = 0;
@@ -251,6 +257,51 @@ export class StockQuickView extends Component {
     // Product management methods are mixed in from stock_quick_product_manager.js
 
     // Kho ──
+
+    get stockFilteredLines() {
+        const query = (this.state.stockQuery || "").trim().toLowerCase();
+        if (!query) {
+            return this.state.lines;
+        }
+        return this.state.lines.filter((line) => {
+            return [line.code, line.name, line.uom]
+                .some((value) => String(value || "").toLowerCase().includes(query));
+        });
+    }
+
+    get stockPagedLines() {
+        const start = this.state.stockPage * this.state.stockPageSize;
+        return this.stockFilteredLines.slice(start, start + this.state.stockPageSize);
+    }
+
+    get stockTotalCount() {
+        return this.stockFilteredLines.length;
+    }
+
+    get stockTotalPages() {
+        return Math.max(1, Math.ceil(this.stockTotalCount / this.state.stockPageSize));
+    }
+
+    onStockQueryInput() {
+        this.state.stockPage = 0;
+    }
+
+    clearStockQuery() {
+        this.state.stockQuery = "";
+        this.state.stockPage = 0;
+    }
+
+    stockPagePrev() {
+        if (this.state.stockPage > 0) {
+            this.state.stockPage -= 1;
+        }
+    }
+
+    stockPageNext() {
+        if (this.state.stockPage + 1 < this.stockTotalPages) {
+            this.state.stockPage += 1;
+        }
+    }
 
     get warehouseSummary() {
         const n = this.state.warehouseIds.length;
