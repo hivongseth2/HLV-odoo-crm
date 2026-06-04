@@ -1626,7 +1626,7 @@ class MisaApiUtils(models.AbstractModel):
     # -------------------------------------------------------------------------
     # API RAW: CẬP NHẬT LOG CHI TIẾT & CẤU TRÚC CUSTOM TABLES
     # -------------------------------------------------------------------------
-    def create_product_misa_raw(self, code, name, price=0, tax_percent=10, unit_name="Cái", category_name="Hàng hóa", product_type="goods", cat_id=None, category_id=None, price_pu=0):
+    def create_product_misa_raw(self, code, name, price=0, tax_percent=10, unit_name="Cái", category_name="Hàng hóa", product_type="goods", cat_id=None, category_id=None, price_pu=0, description=""):
         misa_config = self.env['misa.config']
         token = self._fetch_login_crm_token()
         if not token:
@@ -1663,6 +1663,7 @@ class MisaApiUtils(models.AbstractModel):
         payload = {
             "ProductCode": code,
             "ProductName": name,
+            "Description": description or "",
             "ProductCategoryID": cat_id,
             # "ProductCategoryIDText": category_name if cat_id != 23 else "Hàng hóa",
             "ProductCategoryIDText": cat_name or "",
@@ -1759,6 +1760,8 @@ class MisaApiUtils(models.AbstractModel):
                 'is_storable': True if str(product_type).lower() == 'goods' else False,
                 'available_in_pos': True,
             }
+            if description:
+                vals['description'] = description
 
             # Tìm và gán thuế theo phần trăm
             if tax_percent:
@@ -1792,6 +1795,69 @@ class MisaApiUtils(models.AbstractModel):
             # Không raise lỗi để tránh ảnh hưởng response MISA ID nếu MISA tạo thành công rồi
 
         return misa_id
+
+    def _get_product_code_by_misa_id(self, headers, misa_id):
+        """Best-effort lookup ProductCode from MISA Product ID."""
+        url = "https://amisapp.misa.vn/crm/g2/api/business/Product/FormDataNew/Product/45/4"
+        payload = {"ID": str(misa_id)}
+        try:
+            res = self._get_retry_session().post(
+                url, headers=headers, json=payload, timeout=20)
+            data = res.json()
+            if not data.get("Success"):
+                return None
+
+            raw = data.get("Data") or {}
+            if isinstance(raw, dict):
+                current = (
+                    raw.get("CurrentData")
+                    or raw.get("FormData")
+                    or raw.get("Data")
+                    or raw
+                )
+                if isinstance(current, dict):
+                    return current.get("ProductCode")
+        except Exception as e:
+            _logger.warning("Cannot fetch product code for MISA ID %s: %s", misa_id, e)
+        return None
+
+    def _sync_product_description_to_odoo(self, misa_id, description, headers=None):
+        """Sync MISA product Description to Odoo product.template.description."""
+        try:
+            ProductTemplate = self.env['product.template'].sudo()
+            product = ProductTemplate.browse()
+
+            if 'x_misa_id' in ProductTemplate._fields:
+                product = ProductTemplate.search([
+                    '|',
+                    ('x_misa_id', '=', str(misa_id)),
+                    ('x_misa_id', '=', misa_id),
+                ], limit=1)
+
+            if not product:
+                if headers is None:
+                    misa_config = self.env['misa.config']
+                    token = self._fetch_login_crm_token()
+                    headers = misa_config.get_crm_header(token)
+                    headers.update({"LayoutCode": "product", "X-Misa-Language": "vi-VN"})
+                code = self._get_product_code_by_misa_id(headers, misa_id)
+                if code:
+                    product = ProductTemplate.search([
+                        ('default_code', '=', code),
+                    ], limit=1)
+
+            if product:
+                product.write({'description': description or ""})
+                return True
+
+            _logger.warning(
+                "Cannot sync Description to Odoo: product not found for MISA ID %s",
+                misa_id,
+            )
+        except Exception as e:
+            _logger.error("Odoo description sync failed for MISA ID %s: %s", misa_id, e)
+        return False
+
     def update_product_field_misa(self, misa_id, field_type, new_value, old_value):
         """
         Cập nhật từng trường (name hoặc code) lên MISA CRM
@@ -1816,6 +1882,8 @@ class MisaApiUtils(models.AbstractModel):
             payload = misa_config.get_misa_update_product_name_payload(misa_id, new_value, old_value)
         elif field_type == 'code':
             payload = misa_config.get_misa_update_product_code_payload(misa_id, new_value, old_value)
+        elif field_type in ('Description', 'description'):
+            payload = misa_config.get_misa_update_product_description_payload(misa_id, new_value, old_value)
         else:
             return False
 
@@ -1827,6 +1895,9 @@ class MisaApiUtils(models.AbstractModel):
             res_json = res.json()
             if res.ok and res_json.get("Success"):
                 _logger.info("✅ Đã cập nhật %s cho MISA ID %s", field_type, misa_id)
+                if field_type in ('Description', 'description'):
+                    self._sync_product_description_to_odoo(
+                        misa_id, new_value, headers=headers)
                 return True
             else:
                 _logger.warning("⚠️ Lỗi MISA khi cập nhật %s: %s", field_type, res.text)
