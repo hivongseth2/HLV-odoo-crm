@@ -198,10 +198,45 @@
                                 </div>
                             </t>
                             <t t-else="">
+                                <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px; background:#fff; border:1px solid #e9ecef; border-radius:6px; padding:10px 12px;">
+                                    <div style="display:flex; align-items:center; gap:8px; flex:1; min-width:260px;">
+                                        <i class="fa fa-search" style="color:#6c757d;"/>
+                                        <input t-model="state.stockQuery" t-on-input="onStockQueryInput"
+                                               placeholder="Tìm mã hoặc tên sản phẩm trong bảng tồn kho..."
+                                               style="width:100%; border:none; outline:none; font-size:13px; color:#212121;"/>
+                                    </div>
+                                    <button t-if="state.stockQuery" t-on-click="clearStockQuery"
+                                            style="background:#fff; color:#6c757d; border:1px solid #dee2e6; border-radius:5px; padding:5px 10px; font-size:12px; cursor:pointer;">
+                                        Xóa lọc
+                                    </button>
+                                    <div style="display:flex; align-items:center; gap:6px; color:#495057; font-size:12px; margin-left:auto;">
+                                        <span>
+                                            Hiển thị
+                                            <b><t t-esc="stockTotalCount ? state.stockPage * state.stockPageSize + 1 : 0"/></b>&#8211;<b><t t-esc="Math.min((state.stockPage + 1) * state.stockPageSize, stockTotalCount)"/></b>
+                                            / <b><t t-esc="stockTotalCount"/></b>
+                                        </span>
+                                        <button t-on-click="stockPagePrev"
+                                                t-att-style="'border:1px solid #dee2e6; border-radius:4px; padding:4px 9px; font-size:12px; cursor:pointer; ' + (state.stockPage === 0 ? 'background:#f8f9fa; color:#adb5bd; pointer-events:none;' : 'background:#fff; color:#0d6efd;')">
+                                            &#8592;
+                                        </button>
+                                        <span style="min-width:68px; text-align:center;">
+                                            <t t-esc="state.stockPage + 1"/> / <t t-esc="stockTotalPages"/>
+                                        </span>
+                                        <button t-on-click="stockPageNext"
+                                                t-att-style="'border:1px solid #dee2e6; border-radius:4px; padding:4px 9px; font-size:12px; cursor:pointer; ' + (state.stockPage + 1 >= stockTotalPages ? 'background:#f8f9fa; color:#adb5bd; pointer-events:none;' : 'background:#fff; color:#0d6efd;')">
+                                            &#8594;
+                                        </button>
+                                    </div>
+                                </div>
                                 <div style="background:#e8f4fd; border:1px solid #b8daff; border-radius:6px; padding:8px 14px; margin-bottom:12px; font-size:12px; color:#004085; display:flex; align-items:center; gap:8px;">
                                     <i class="fa fa-info-circle"/> Click vào dòng sản phẩm để xem vị trí tồn kho chi tiết
                                 </div>
-                                <div style="background:#fff;box-shadow:0 1px 6px rgba(0,0,0,0.07); overflow:hidden;">
+                                <t t-if="stockTotalCount === 0">
+                                    <div style="text-align:center; padding:50px; color:#adb5bd; font-size:13px; background:#fff; border:1px solid #e9ecef; border-radius:6px;">
+                                        Khong co san pham phu hop bo loc.
+                                    </div>
+                                </t>
+                                <div t-else="" style="background:#fff;box-shadow:0 1px 6px rgba(0,0,0,0.07); overflow:hidden;">
                                     <table style="width:100%; border-collapse:collapse; font-size:13px;">
                                         <thead>
                                             <tr style="background:#1a2639; color:#fff;">
@@ -259,12 +294,12 @@
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            <t t-foreach="state.lines" t-as="line" t-key="line_index">
+                                            <t t-foreach="stockPagedLines" t-as="line" t-key="line.id">
                                                 <tr class="hlv-stock-row"
                                                     t-on-click="() => this.toggleProductLocations(line.id)"
                                                     t-att-style="'border-bottom:1px solid #f0f0f0; cursor:pointer; ' + (state.expandedProductId === line.id ? 'background:#e8f4fd;' : (line_index % 2 === 1 ? 'background:#fafbfc;' : ''))">
                                                     <td style="padding:8px 12px; text-align:center; color:#adb5bd; font-size:11px; vertical-align:middle; border-right:1px solid #f0f0f0;">
-                                                        <t t-esc="line_index + 1"/>
+                                                        <t t-esc="state.stockPage * state.stockPageSize + line_index + 1"/>
                                                     </td>
                                                     <td style="padding:6px 12px; text-align:center; vertical-align:middle; border-right:1px solid #f0f0f0;">
                                                         <div style="display:inline-flex; flex-direction:column; align-items:center; gap:3px;">
