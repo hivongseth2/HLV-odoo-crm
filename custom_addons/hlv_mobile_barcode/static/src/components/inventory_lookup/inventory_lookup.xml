@@ -7,7 +7,7 @@
                 <div class="header-title" style="font-size: 0.95rem; font-weight: bold;">
                     <i class="fa fa-search"></i> <t t-esc="state.title"/>
                 </div>
-                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <div t-if="props.lookupType !== 'product'" style="display: flex; gap: 8px; flex-wrap: wrap;">
                     <button class="btn btn-outline" style="padding: 6px 12px; font-size: 0.85rem;" t-on-click="props.onBack">
                         <i class="fa fa-arrow-left"></i> Quay lại
                     </button>
