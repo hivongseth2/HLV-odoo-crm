@@ -382,6 +382,35 @@
   object-fit: cover !important;
 }
 
+.hlv-barcode-app .camera-toggle-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  backdrop-filter: blur(4px);
+}
+
+.hlv-barcode-app .camera-off-placeholder {
+  width: 100%;
+  height: 60px;
+  background: #e9ecef;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 1px solid var(--border-color);
+}
+
 .hlv-barcode-app .persistent-camera-wrapper .camera-activation-overlay {
   padding: 5px;
 }
@@ -526,6 +555,23 @@
 .hlv-barcode-app .product-row-card.scanned {
   border-color: #a5d6a7;
   box-shadow: 0 2px 8px rgba(76, 175, 80, 0.08);
+}
+
+/* Picking Label styling */
+.hlv-barcode-app .picking-label {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--primary-color, #2c3e50);
+  padding: 8px 10px;
+  margin-bottom: 15px;
+  border-bottom: 2px dashed #e2e8f0;
+  line-height: 1.4;
+  background-color: #f8fafc;
+  border-radius: 6px;
+}
+.hlv-barcode-app .picking-label i.fa-clipboard-list {
+  color: var(--secondary-color, #64748b);
+  margin-right: 8px;
 }
 
 .hlv-barcode-app .item-card {
@@ -1246,14 +1292,147 @@
 
 /* Flash Highlight Animation for Scanned Items */
 @keyframes flashHighlight {
-  0% { background-color: var(--light-bg); }
-  10% { background-color: rgba(40, 167, 69, 0.2); border-color: var(--success-color); transform: scale(1.02); }
-  50% { background-color: rgba(40, 167, 69, 0.1); border-color: var(--success-color); transform: scale(1.01); }
-  100% { background-color: white; transform: scale(1); }
+  0% { background-color: var(--light-bg); box-shadow: inset 0 0 0 2px transparent; }
+  10% { background-color: rgba(40, 167, 69, 0.15); box-shadow: inset 0 0 0 2px var(--success-color); }
+  50% { background-color: rgba(40, 167, 69, 0.05); box-shadow: inset 0 0 0 1px var(--success-color); }
+  100% { background-color: white; box-shadow: inset 0 0 0 0 transparent; }
 }
 
 .flash-highlight {
   animation: flashHighlight 1.5s ease-out forwards;
-  z-index: 10;
-  box-shadow: 0 0 12px rgba(40, 167, 69, 0.3) !important;
+}
+/* ==========================================================================
+   MULTI-LOCATION MODE ACTIVE ROW
+   ========================================================================== */
+.hlv-barcode-app .active-location-row {
+  border: 2px solid var(--info-color) !important;
+  background-color: rgba(23, 162, 184, 0.04) !important;
+  box-shadow: 0 0 8px rgba(23, 162, 184, 0.2);
+  transition: all 0.3s ease;
+}
+
+/* ==========================================================================
+   PICKING TITLE ABOVE CAMERA & MODERN LOCATION BANNER
+   ========================================================================== */
+.hlv-barcode-app .picking-title-above-camera {
+  background: linear-gradient(to right, #f1f5f9, transparent);
+  border-left: 4px solid #0ea5e9;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  border-radius: 0 6px 6px 0;
+  flex-shrink: 0;
+}
+
+.hlv-barcode-app .picking-title-above-camera .picking-title-main {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+}
+
+.hlv-barcode-app .picking-title-above-camera .picking-title-sub {
+  font-size: 0.85rem;
+  color: #64748b;
+  font-weight: 500;
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+}
+
+/* Modern simplified location banner */
+.hlv-barcode-app .modern-location-banner {
+  margin: 6px 0 10px 0;
+  padding: 10px 14px;
+  background: #ffffff;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+  display: flex;
+  align-items: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.hlv-barcode-app .modern-location-banner .location-info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  font-size: 0.95rem;
+}
+
+.hlv-barcode-app .modern-location-banner .location-badge {
+  color: #64748b;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+}
+
+.hlv-barcode-app .modern-location-banner .location-val {
+  color: #16a34a;
+  font-weight: 700;
+  background: rgba(22, 163, 74, 0.08);
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(22, 163, 74, 0.15);
+  font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.95rem;
+  letter-spacing: 0.5px;
+}
+
+/* Error state when location is missing */
+.hlv-barcode-app .modern-location-banner.error-state {
+  background: rgba(239, 68, 68, 0.03);
+  border-color: rgba(239, 68, 68, 0.15);
+}
+
+.hlv-barcode-app .modern-location-banner .location-badge.error {
+  color: #ef4444;
+  animation: pulse-text 1.5s infinite;
+}
+
+.hlv-barcode-app .modern-location-banner .location-hint {
+  font-size: 0.85rem;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+/* Camera controls (matching barcode shipper) */
+.hlv-barcode-app .camera-controls {
+  position: absolute;
+  bottom: 12px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  z-index: 30;
+}
+
+.hlv-barcode-app .camera-controls .btn {
+  background: rgba(0, 0, 0, 0.65) !important;
+  color: white !important;
+  border: 1px solid rgba(255, 255, 255, 0.25) !important;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  font-weight: 600;
+  padding: 6px 18px;
+  font-size: 0.85rem;
+  border-radius: 20px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
+  transition: all 0.2s ease;
+}
+
+.hlv-barcode-app .camera-controls .btn:hover {
+  background: rgba(0, 0, 0, 0.8) !important;
+  transform: scale(1.04);
+}
+
+.hlv-barcode-app .camera-controls .btn:active {
+  transform: scale(0.96);
+}
+
+@keyframes pulse-text {
+  0% { opacity: 0.6; }
+  50% { opacity: 1; }
+  100% { opacity: 0.6; }
 }

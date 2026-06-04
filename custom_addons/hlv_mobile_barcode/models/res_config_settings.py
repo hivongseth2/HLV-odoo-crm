@@ -40,6 +40,11 @@ class ResConfigSettings(models.TransientModel):
         string='Hiện Nút Bấm Cộng/Trừ Số Lượng',
         help='Hiển thị các nút +1, -1, +10, -10 trên màn hình quét để nhân viên bấm nhanh không cần gõ phím.'
     )
+    hlv_barcode_camera_default_on = fields.Boolean(
+        string='Camera Mặc Định BẬT Khi Vào Phiếu',
+        config_parameter='hlv_mobile_barcode.hlv_barcode_camera_default_on',
+        help='Bật: Camera tự động mở khi vào phiếu. Tắt: Camera đóng sẵn, người dùng bấm nút để mở khi cần.'
+    )
 
     def get_values(self):
         res = super(ResConfigSettings, self).get_values()

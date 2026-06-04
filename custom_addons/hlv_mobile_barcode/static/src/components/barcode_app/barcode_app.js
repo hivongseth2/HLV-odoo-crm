@@ -38,6 +38,9 @@ export class BarcodeApp extends Component {
             isProcessing: false,
             pickingId: savedState.pickingId || null,
             pickingName: savedState.pickingName || "",
+            pickingIsPick: savedState.pickingIsPick || false,
+            pickingTypeCode: savedState.pickingTypeCode || "",
+            pickingSourceTransferName: savedState.pickingSourceTransferName || "",
             warehouseCode: savedState.warehouseCode || "",
             scannedLocationId: savedState.scannedLocationId || null,
             scannedLocationName: savedState.scannedLocationName || "",
@@ -50,6 +53,8 @@ export class BarcodeApp extends Component {
             cameraNeedsActivation: false,
             cameraErrorMessage: "",
             showCameraPopup: false,
+            cameraManuallyOff: savedState.cameraManuallyOff || false,
+            cameraDefaultOn: savedState.cameraDefaultOn !== undefined ? savedState.cameraDefaultOn : true,
             pickingRefreshTick: 0,
             pickingState: "",
             scanMode: savedState.scanMode || "source",
@@ -82,6 +87,9 @@ export class BarcodeApp extends Component {
                 currentView: this.state.currentView,
                 pickingId: this.state.pickingId,
                 pickingName: this.state.pickingName,
+                pickingIsPick: this.state.pickingIsPick,
+                pickingTypeCode: this.state.pickingTypeCode,
+                pickingSourceTransferName: this.state.pickingSourceTransferName,
                 warehouseCode: this.state.warehouseCode,
                 scannedLocationId: this.state.scannedLocationId,
                 scannedLocationName: this.state.scannedLocationName,
@@ -92,12 +100,17 @@ export class BarcodeApp extends Component {
                 prefillLocationName: this.state.prefillLocationName,
                 history: this.history,
                 scanMode: this.state.scanMode,
-                isMultiLocationMode: this.state.isMultiLocationMode
+                isMultiLocationMode: this.state.isMultiLocationMode,
+                cameraManuallyOff: this.state.cameraManuallyOff,
+                cameraDefaultOn: this.state.cameraDefaultOn
             }));
         }, () => [
             this.state.currentView,
             this.state.pickingId,
             this.state.pickingName,
+            this.state.pickingIsPick,
+            this.state.pickingTypeCode,
+            this.state.pickingSourceTransferName,
             this.state.warehouseCode,
             this.state.scannedLocationId,
             this.state.scannedLocationName,
@@ -107,7 +120,9 @@ export class BarcodeApp extends Component {
             this.state.prefillLocationBarcode,
             this.state.prefillLocationName,
             this.state.scanMode,
-            this.state.isMultiLocationMode
+            this.state.isMultiLocationMode,
+            this.state.cameraManuallyOff,
+            this.state.cameraDefaultOn
         ]);
 
         this.barcodeBuffer = "";
@@ -131,12 +146,19 @@ export class BarcodeApp extends Component {
             this.keepFocusOnHiddenInput();
             document.addEventListener('click', this.boundKeepFocus);
             
-            try {
-                const warehouses = await rpc("/hlv_mobile_barcode/get_warehouses", {});
+            // Tải song song settings và warehouses từ backend
+            rpc("/hlv_mobile_barcode/get_settings", {}).then((settings) => {
+                if (settings && settings.camera_default_on !== undefined) {
+                    this.state.cameraDefaultOn = settings.camera_default_on;
+                    if (savedState.cameraManuallyOff === undefined) {
+                        this.state.cameraManuallyOff = !settings.camera_default_on;
+                    }
+                }
+            }).catch(e => console.error("Failed to load settings", e));
+
+            rpc("/hlv_mobile_barcode/get_warehouses", {}).then((warehouses) => {
                 this.state.warehouses = warehouses;
-            } catch (e) {
-                console.error("Failed to load warehouses", e);
-            }
+            }).catch(e => console.error("Failed to load warehouses", e));
 
             this.focusInterval = setInterval(this.boundKeepFocus, 2000);
             setTimeout(this.boundKeepFocus, 500);
@@ -308,6 +330,7 @@ export class BarcodeApp extends Component {
                     await this.selectPicking(result.id, result.name);
                 } else {
                     this.pushHistory();
+                    this.state.cameraManuallyOff = !this.state.cameraDefaultOn;
                     this.state.warehouseCode = result.warehouse_code || "HLV";
                     this.state.lookupType = result.type;
                     this.state.recordId = result.id;
@@ -353,6 +376,9 @@ export class BarcodeApp extends Component {
             currentView: this.state.currentView,
             pickingId: this.state.pickingId,
             pickingName: this.state.pickingName,
+            pickingIsPick: this.state.pickingIsPick,
+            pickingTypeCode: this.state.pickingTypeCode,
+            pickingSourceTransferName: this.state.pickingSourceTransferName,
             warehouseCode: this.state.warehouseCode,
             lookupType: this.state.lookupType,
             recordId: this.state.recordId,
@@ -360,6 +386,7 @@ export class BarcodeApp extends Component {
             prefillLocationBarcode: this.state.prefillLocationBarcode,
             prefillLocationName: this.state.prefillLocationName,
             isMultiLocationMode: this.state.isMultiLocationMode,
+            cameraManuallyOff: this.state.cameraManuallyOff,
         });
     }
 
@@ -393,6 +420,9 @@ export class BarcodeApp extends Component {
             this.state.currentView = prevState.currentView;
             this.state.pickingId = prevState.pickingId;
             this.state.pickingName = prevState.pickingName;
+            this.state.pickingIsPick = prevState.pickingIsPick || false;
+            this.state.pickingTypeCode = prevState.pickingTypeCode || "";
+            this.state.pickingSourceTransferName = prevState.pickingSourceTransferName || "";
             this.state.warehouseCode = prevState.warehouseCode || "";
             this.state.lookupType = prevState.lookupType;
             this.state.recordId = prevState.recordId;
@@ -400,6 +430,7 @@ export class BarcodeApp extends Component {
             this.state.prefillLocationBarcode = prevState.prefillLocationBarcode;
             this.state.prefillLocationName = prevState.prefillLocationName;
             this.state.isMultiLocationMode = prevState.isMultiLocationMode || false;
+            this.state.cameraManuallyOff = prevState.cameraManuallyOff !== undefined ? prevState.cameraManuallyOff : !this.state.cameraDefaultOn;
             this.state.pickingState = "";
             this.viewScannerCallback = null;
 
@@ -441,6 +472,9 @@ export class BarcodeApp extends Component {
         this.state.currentView = 'main';
         this.state.pickingId = null;
         this.state.pickingName = "";
+        this.state.pickingIsPick = false;
+        this.state.pickingTypeCode = "";
+        this.state.pickingSourceTransferName = "";
         this.state.scannedLocationId = null;
         this.state.scannedLocationName = "";
         this.state.lastScannedProduct = null;
@@ -497,6 +531,7 @@ export class BarcodeApp extends Component {
 
     goToMove(productId, locationBarcode = null, locationName = null, destWarehouseId = false, destLocationId = false) {
         this.pushHistory();
+        this.state.cameraManuallyOff = !this.state.cameraDefaultOn;
         this.state.recordId = productId;
         this.state.prefillLocationBarcode = locationBarcode;
         this.state.prefillLocationName = locationName;
@@ -507,6 +542,7 @@ export class BarcodeApp extends Component {
 
     promptMoveWarehouse(productId, locBarcode, locName, qty, productName) {
         this.pushHistory();
+        this.state.cameraManuallyOff = !this.state.cameraDefaultOn;
         this.state.recordId = productId;
         this.state.prefillLocationBarcode = locBarcode;
         this.state.prefillLocationName = locName;
@@ -645,6 +681,10 @@ export class BarcodeApp extends Component {
                 this.state.scannedLocationName = isMultiLocation ? "" : res.location_name;
                 this.state.currentView = 'picking';
                 this.state.isMultiLocationMode = isMultiLocation;
+                this.state.cameraManuallyOff = !this.state.cameraDefaultOn;
+                setTimeout(async () => {
+                    await this.startPersistentCamera(false);
+                }, 200);
             }
         } catch (e) {
             this.notification.add("Lỗi kết nối máy chủ", { type: "danger" });
@@ -654,6 +694,7 @@ export class BarcodeApp extends Component {
 
     goToProductLookup(productId, productName) {
         this.pushHistory();
+        this.state.cameraManuallyOff = !this.state.cameraDefaultOn;
         this.state.lookupType = 'product';
         this.state.recordId = productId;
         this.state.lookupTitle = productName;
@@ -680,15 +721,16 @@ export class BarcodeApp extends Component {
             this.state.pickingState = "";
             this.state.isMultiLocationMode = false;
             this.state.pickingRefreshTick += 1;
+            this.state.cameraManuallyOff = !this.state.cameraDefaultOn;
 
             // Tải vị trí nguồn mặc định của phiếu để hiển thị trực tiếp lên tiêu đề
             rpc("/hlv_mobile_barcode/get_picking_data", { picking_id: pickingId }).then((data) => {
                 if (data && !data.error) {
                     this.state.warehouseCode = data.warehouse_code || "HLV";
-                    if (data.is_putaway && data.location_dest_name) {
-                        this.state.scannedLocationId = data.location_dest_id;
-                        this.state.scannedLocationName = data.location_dest_name;
-                    } else if (!data.is_putaway && data.location_name) {
+                    this.state.pickingIsPick = data.is_pick;
+                    this.state.pickingTypeCode = data.picking_type_code;
+                    this.state.pickingSourceTransferName = data.source_transfer_name;
+                    if (!data.is_pick && !data.is_putaway && data.location_name) {
                         this.state.scannedLocationId = data.location_id;
                         this.state.scannedLocationName = data.location_name;
                     }
@@ -707,6 +749,12 @@ export class BarcodeApp extends Component {
         this.state.pickingState = pickingState;
     }
 
+    onPickingLoaded(data) {
+        this.state.pickingIsPick = data.is_pick;
+        this.state.pickingTypeCode = data.picking_type_code;
+        this.state.pickingSourceTransferName = data.source_transfer_name;
+    }
+
     openPopupCamera() {
         this.state.showCameraPopup = true;
         setTimeout(() => {
@@ -720,6 +768,9 @@ export class BarcodeApp extends Component {
     }
 
     async startPersistentCamera(isUserGesture = false) {
+        if (this.state.cameraManuallyOff && !isUserGesture) return;
+        this.state.cameraManuallyOff = false;
+        
         // Check if page is served securely (HTTPS or localhost)
         if (window.isSecureContext === false && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
             this.state.cameraFallback = true;
@@ -797,27 +848,54 @@ export class BarcodeApp extends Component {
             readerEl.style.overflow = 'hidden';
             readerEl.style.background = '#000';
             readerEl.appendChild(overlay);
+            let stream = null;
+            let retryCount = 0;
+            while (retryCount < 3) {
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            facingMode: { ideal: 'environment' },
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 },
+                            focusMode: { ideal: 'continuous' },
+                            frameRate: { ideal: 30 },
+                        },
+                        audio: false
+                    });
+                    break; // Success
+                } catch (err) {
+                    const errStr = String(err).toLowerCase();
+                    if (errStr.includes("notreadableerror") || errStr.includes("trackstart")) {
+                        console.warn("Camera is busy, retrying in 300ms...", err);
+                        await new Promise(resolve => setTimeout(resolve, 300));
+                        retryCount++;
+                    } else {
+                        throw err; // Other errors, throw to outer catch
+                    }
+                }
+            }
+            if (!stream) {
+                throw new Error("Could not start camera after retries");
+            }
 
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: {
-                    facingMode: { ideal: 'environment' },
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 },
-                    focusMode: { ideal: 'continuous' },
-                    frameRate: { ideal: 30 },
-                },
-                audio: false
-            });
             this._cameraStream = stream;
             video.srcObject = stream;
             
             try {
                 await video.play();
             } catch (err) {
-                console.warn("Camera play interrupted:", err);
-                // Try again after a short delay or fallback
-                this.state.cameraFallback = true;
-                return;
+                if (err.name === 'AbortError') {
+                    console.warn("Camera play aborted (likely DOM update). scanFrame will reattach.");
+                } else if (err.name === 'NotAllowedError') {
+                    console.warn("Camera play requires user gesture:", err);
+                    this.state.cameraNeedsActivation = true;
+                    return;
+                } else {
+                    console.warn("Camera play interrupted:", err);
+                    // Try again after a short delay or fallback
+                    this.state.cameraFallback = true;
+                    return;
+                }
             }
             
             video.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block;';
@@ -963,6 +1041,16 @@ export class BarcodeApp extends Component {
         }
     }
 
+    async toggleCamera() {
+        if (this.state.cameraManuallyOff) {
+            this.state.cameraManuallyOff = false;
+            await this.startPersistentCamera(true);
+        } else {
+            this.state.cameraManuallyOff = true;
+            await this.closeCamera();
+        }
+    }
+
     exitApp() {
         // Thoát ứng dụng Barcode, quay về màn hình chính Odoo
         window.location.href = "/web";
@@ -1005,7 +1093,6 @@ export class BarcodeApp extends Component {
                 this.state.scannedLocationName = "";
                 this.state.lastScannedProduct = null;
                 this.state.pickingRefreshTick += 1;
-                window.location.reload();
             }
         } catch (e) {
             this.notification.add("Lỗi kết nối", { type: "danger" });

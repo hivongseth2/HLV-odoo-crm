@@ -359,6 +359,7 @@ class HLVMobileBarcodeController(http.Controller):
                 })
 
         show_qty_buttons = request.env['ir.config_parameter'].sudo().get_param('hlv_mobile_barcode.hlv_barcode_show_qty_buttons', 'True') == 'True'
+        camera_default_on = request.env['ir.config_parameter'].sudo().get_param('hlv_mobile_barcode.hlv_barcode_camera_default_on', 'True') == 'True'
 
         return {
             'id': picking.id,
@@ -376,7 +377,9 @@ class HLVMobileBarcodeController(http.Controller):
             'source_transfer_name': picking.source_transfer_id.name if picking.source_transfer_id else False,
             'is_putaway': is_putaway,
             'show_qty_buttons': show_qty_buttons,
+            'camera_default_on': camera_default_on,
             'is_pick': is_pick_picking,
+            'hlv_barcode_auto_cleared': getattr(picking, 'hlv_barcode_auto_cleared', False),
         }
 
     @http.route('/hlv_mobile_barcode/get_warehouses', type='json', auth='user')
@@ -387,6 +390,13 @@ class HLVMobileBarcodeController(http.Controller):
             'name': w.name,
             'code': w.code,
         } for w in warehouses]
+
+    @http.route('/hlv_mobile_barcode/get_settings', type='json', auth='user')
+    def get_settings(self):
+        camera_default_on = request.env['ir.config_parameter'].sudo().get_param('hlv_mobile_barcode.hlv_barcode_camera_default_on', 'True') == 'True'
+        return {
+            'camera_default_on': camera_default_on,
+        }
 
     @http.route('/hlv_mobile_barcode/create_empty_int', type='json', auth='user')
     def create_empty_int(self, location_id=None, dest_warehouse_id=False, dest_location_id=False, is_multi_location=False, source_warehouse_id=False):
@@ -627,8 +637,11 @@ class HLVMobileBarcodeController(http.Controller):
             
             return {'error': _('Kiện hàng "%s" không chứa sản phẩm nào phù hợp với phiếu này.', package.name)}
 
-        if is_multi_location and not destination_location_id:
-            return {'error': _('Chế độ lấy hàng Đa vị trí: Vui lòng quét mã Vị trí (Kệ hàng) trước khi quét sản phẩm!')}
+        is_pick_picking = _is_pick_picking(picking)
+        is_in_picking = pt_type == 'incoming'
+
+        if (is_multi_location or is_pick_picking or is_in_picking) and not destination_location_id:
+            return {'error': _('Vui lòng quét mã Vị trí (Kệ hàng) trước khi quét sản phẩm!')}
 
         product = request.env['product.product'].sudo().search(['|', ('barcode', '=', barcode), ('default_code', '=', barcode)], limit=1)
         if not product:
@@ -702,7 +715,22 @@ class HLVMobileBarcodeController(http.Controller):
                     return {'error': _('Lỗi hệ thống khi tạo sản phẩm mới.')}
                 move = move[0]
         else:
-            move = move[0]
+            # Select the most appropriate move if there are multiple
+            incomplete_moves = move.filtered(lambda m: m.product_uom_qty > sum(m.move_line_ids.mapped('quantity')))
+            target_moves = incomplete_moves if incomplete_moves else move
+            
+            best_move = False
+            if len(target_moves) > 1 and destination_location_id:
+                if is_pick_picking:
+                    moves_with_loc = target_moves.filtered(lambda m: destination_location_id in m.move_line_ids.mapped('location_id').ids)
+                    if moves_with_loc:
+                        best_move = moves_with_loc[0]
+                elif is_in_picking:
+                    moves_with_loc = target_moves.filtered(lambda m: destination_location_id in m.move_line_ids.mapped('location_dest_id').ids)
+                    if moves_with_loc:
+                        best_move = moves_with_loc[0]
+            
+            move = best_move if best_move else target_moves[0]
 
         # Check limit to prevent over-scanning (demand-based)
         if picking.source_transfer_id:
@@ -719,10 +747,16 @@ class HLVMobileBarcodeController(http.Controller):
         else:
             current_qty_done = sum(ml.quantity for ml in move.move_line_ids)
             if move.product_uom_qty > 0.0 and current_qty_done + 1 > move.product_uom_qty:
-                return {'error': _('Sản phẩm "%s" đã quét đủ số lượng yêu cầu (%g/%g). Không thể quét thêm!', product.display_name, current_qty_done, move.product_uom_qty)}
+                return {'error': _('Sản phẩm "%s" đã quét đủ tổng số lượng yêu cầu của dòng này (%g/%g). Không thể quét thêm!', product.display_name, current_qty_done, move.product_uom_qty)}
 
         # Find an unpacked move line that is not in any package
         move_line = move.move_line_ids.filtered(lambda ml: not ml.result_package_id and not ml.package_id)
+        if is_pick_picking and destination_location_id:
+            move_line = move_line.filtered(lambda ml: ml.location_id.id == destination_location_id)
+            if not move_line:
+                return {'error': _('Sản phẩm "%s" không có dòng lấy hàng tại vị trí đang quét.', product.display_name)}
+        elif is_in_picking and destination_location_id:
+            move_line = move_line.filtered(lambda ml: ml.location_dest_id.id == destination_location_id)
         
         ml_dest_id = destination_location_id if (destination_location_id and is_putaway) else (move_line[0].location_dest_id.id if move_line else picking.location_dest_id.id)
         
@@ -939,6 +973,8 @@ class HLVMobileBarcodeController(http.Controller):
         try:
             is_pick = _is_pick_picking(picking)
             
+            changed = False
+            
             # 1. Handle stock move lines - dùng sudo() để đảm bảo quyền ghi
             move_lines = picking.move_line_ids.sudo()
             
@@ -946,22 +982,11 @@ class HLVMobileBarcodeController(http.Controller):
                 # For PICK, reset all lines, never delete them
                 lines_to_reset = move_lines.filtered(lambda l: l.quantity != 0.0 or (not picking.source_transfer_id and l.result_package_id))
                 if lines_to_reset:
-                    # Flush before raw SQL to ensure Odoo doesn't overwrite our SQL updates with dirty cache later
-                    lines_to_reset.flush_recordset(['quantity', 'result_package_id'])
-                    
-                    set_clause = "quantity = 0.0"
+                    vals = {'quantity': 0.0}
                     if not picking.source_transfer_id:
-                        set_clause += ", result_package_id = NULL"
-                    
-                    request.env.cr.execute(f"""
-                        UPDATE stock_move_line 
-                        SET {set_clause}
-                        WHERE id IN %s
-                    """, (tuple(lines_to_reset.ids),))
-                    
-                    # Invalidate cache để UI và các compute field nhận diện đúng
-                    lines_to_reset.invalidate_recordset(['quantity', 'result_package_id'])
-                    picking.move_ids.invalidate_recordset(['quantity'])
+                        vals['result_package_id'] = False
+                    lines_to_reset.write(vals)
+                    changed = True
             else:
                 # For other picking types, delete dynamically created lines, reset the rest
                 lines_to_unlink = move_lines.filtered(
@@ -971,24 +996,16 @@ class HLVMobileBarcodeController(http.Controller):
                 
                 if lines_to_unlink:
                     lines_to_unlink.unlink()
+                    changed = True
                 
                 if lines_to_reset:
                     actual_reset = lines_to_reset.filtered(lambda l: l.quantity != 0.0 or (not picking.source_transfer_id and l.result_package_id))
                     if actual_reset:
-                        actual_reset.flush_recordset(['quantity', 'result_package_id'])
-                        
-                        set_clause = "quantity = 0.0"
+                        vals = {'quantity': 0.0}
                         if not picking.source_transfer_id:
-                            set_clause += ", result_package_id = NULL"
-                        
-                        request.env.cr.execute(f"""
-                            UPDATE stock_move_line 
-                            SET {set_clause}
-                            WHERE id IN %s
-                        """, (tuple(actual_reset.ids),))
-                        
-                        actual_reset.invalidate_recordset(['quantity', 'result_package_id'])
-                        picking.move_ids.invalidate_recordset(['quantity'])
+                            vals['result_package_id'] = False
+                        actual_reset.write(vals)
+                        changed = True
                     
             # 2. Handle stock moves that were created dynamically on the fly (demand = 0)
             # Only delete if it has no move_orig_ids (meaning it wasn't generated by a previous step)
@@ -997,6 +1014,14 @@ class HLVMobileBarcodeController(http.Controller):
                 if dynamic_moves:
                     dynamic_moves._action_cancel()
                     dynamic_moves.unlink()
+                    changed = True
+                
+            # Đánh dấu đã auto-clear để không lặp lại
+            if hasattr(picking, 'hlv_barcode_auto_cleared'):
+                picking.sudo().write({'hlv_barcode_auto_cleared': True})
+                
+            if not changed:
+                return {'error': 'Đã hoàn tất kiểm tra số lượng ban đầu.'}
                 
             return {'success': True}
         except Exception as e:

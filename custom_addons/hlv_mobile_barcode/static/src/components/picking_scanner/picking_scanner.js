@@ -1,6 +1,6 @@
 /** @odoo-module **/
 
-import { Component, useState, onWillStart, onWillUpdateProps, useEffect } from "@odoo/owl";
+import { Component, useState, onWillStart, onWillUpdateProps, useEffect, onWillDestroy } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
 import { rpc } from "@web/core/network/rpc";
 
@@ -11,6 +11,7 @@ export class PickingScanner extends Component {
         onBack: Function,
         onSelectPicking: Function,
         onStateLoaded: { type: Function, optional: true },
+        onPickingLoaded: { type: Function, optional: true },
         lastScannedProduct: { optional: true },
         scannedLocationName: { type: [String, Boolean], optional: true },
         refreshTick: { type: Number, optional: true },
@@ -24,6 +25,11 @@ export class PickingScanner extends Component {
         this.actionService = useService("action");
         this.isProcessingQty = false;
         this._hasAutoCleared = false;
+        this.isDestroyed = false;
+
+        onWillDestroy(() => {
+            this.isDestroyed = true;
+        });
         
         this.state = useState({
             picking: null,
@@ -57,25 +63,18 @@ export class PickingScanner extends Component {
         });
 
         useEffect(() => {
-            if (!this.state.loading && this.props.lastScannedProduct && this.state.picking && this.state.picking.lines) {
-                const barcode = String(this.props.lastScannedProduct).toLowerCase();
-                const matchingLine = this.state.picking.lines.find(l => 
-                    (l.product_barcode && String(l.product_barcode).toLowerCase() === barcode) || 
-                    (l.product_name && String(l.product_name).toLowerCase().includes(barcode))
-                );
-                
-                if (matchingLine) {
-                    const productId = matchingLine.product_id;
-                    const element = document.querySelector(`[data-product-id="${productId}"]`);
-                    if (element) {
-                        element.classList.remove('flash-highlight');
-                        void element.offsetWidth; // Force CSS reflow to restart animation
-                        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        element.classList.add('flash-highlight');
-                        setTimeout(() => {
-                            if (element) element.classList.remove('flash-highlight');
-                        }, 1500);
-                    }
+            if (!this.state.loading && this.props.lastScannedProduct) {
+                // lastScannedProduct is actually the product_id from the backend (res.product_id)
+                const productId = Number(this.props.lastScannedProduct);
+                const element = document.querySelector(`[data-product-id="${productId}"] .item-card`);
+                if (element) {
+                    element.classList.remove('flash-highlight');
+                    void element.offsetWidth; // Force CSS reflow to restart animation
+                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    element.classList.add('flash-highlight');
+                    setTimeout(() => {
+                        if (element) element.classList.remove('flash-highlight');
+                    }, 1500);
                 }
             }
         }, () => [this.props.lastScannedProduct, this.props.refreshTick, this.state.loading]);
@@ -91,24 +90,21 @@ export class PickingScanner extends Component {
                 if (this.props.onStateLoaded) {
                     this.props.onStateLoaded(data.state);
                 }
+                if (this.props.onPickingLoaded) {
+                    this.props.onPickingLoaded(data);
+                }
                 
                 if (['draft', 'waiting', 'confirmed', 'assigned'].includes(data.state)) {
                     const storageKey = 'hlv_opened_pickings';
-                    const autoClearKey = 'hlv_autocleared_pickings';
                     let openedPickings = [];
-                    let autoClearedPickings = [];
                     try {
                         openedPickings = JSON.parse(localStorage.getItem(storageKey) || '[]');
-                        autoClearedPickings = JSON.parse(localStorage.getItem(autoClearKey) || '[]');
                     } catch (e) {}
                     
                     const pickingIdInt = parseInt(this.props.pickingId, 10);
                     
-                    if (!autoClearedPickings.includes(pickingIdInt) && data.is_pick) {
-                        autoClearedPickings.push(pickingIdInt);
-                        if (autoClearedPickings.length > 200) autoClearedPickings = autoClearedPickings.slice(autoClearedPickings.length - 200);
-                        localStorage.setItem(autoClearKey, JSON.stringify(autoClearedPickings));
-                        
+                    if (data.is_pick && !data.hlv_barcode_auto_cleared && !this.hasAutoClearedOnce) {
+                        this.hasAutoClearedOnce = true;
                         // Gọi hàm Làm lại (chỉ tự động chạy 1 lần duy nhất cho mỗi phiếu)
                         try {
                             await this.clearQuantities(true);
@@ -145,7 +141,9 @@ export class PickingScanner extends Component {
                 this.notification.add(res.error, { type: "danger" });
             } else {
                 this.notification.add("Đã làm mới số lượng", { type: "success" });
-                await this.loadPicking();
+                if (!this.isDestroyed) {
+                    await this.loadPicking();
+                }
             }
         } catch (e) {
             this.notification.add("Lỗi kết nối", { type: "danger" });
