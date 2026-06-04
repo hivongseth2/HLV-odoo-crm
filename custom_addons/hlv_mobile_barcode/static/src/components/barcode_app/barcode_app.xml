@@ -110,7 +110,7 @@
                                 <i class="fa fa-barcode"></i> Máy quét mã vạch
                             </div>
                             <div style="display: flex; gap: 8px;">
-                                <div class="user-info" t-on-click="openSettings">
+                                <div t-if="state.isDebug" class="user-info" t-on-click="openSettings">
                                     <i class="fa fa-cog"></i> Cài đặt
                                 </div>
                                 <div class="user-info" t-on-click="exitApp">

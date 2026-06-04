@@ -4,6 +4,7 @@ import { Component, useState, onMounted, useEffect, useRef, onWillUnmount } from
 import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 import { rpc } from "@web/core/network/rpc";
+import { session } from "@web/session";
 import { PickingScanner } from "../picking_scanner/picking_scanner";
 import { InventoryLookup } from "../inventory_lookup/inventory_lookup";
 import { LocationMove } from "../location_move/location_move";
@@ -69,6 +70,7 @@ export class BarcodeApp extends Component {
             showExitOptions: false,
             pendingExitAction: null,
             isMultiLocationMode: savedState.isMultiLocationMode || false,
+            isDebug: !!session.debug,
         });
 
         this._cameraStream = null;
