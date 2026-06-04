@@ -33,7 +33,14 @@
                 <div class="picking-title-above-camera" t-if="state.currentView === 'picking' and state.pickingName">
                     <div style="display: flex; flex-direction: column;">
                         <div class="picking-title-main">
-                            <span t-esc="state.pickingName"/>
+                            <span>
+                                <t t-if="state.pickingIsPick">Lấy hàng </t>
+                                <t t-elif="state.pickingTypeCode == 'outgoing'">Xuất kho </t>
+                                <t t-elif="state.pickingTypeCode == 'incoming'">Nhập kho </t>
+                                <t t-elif="state.pickingTypeCode == 'internal'">Chuyển kho </t>
+                                <t t-else="">Kho </t>
+                                <t t-esc="state.pickingName"/>
+                            </span>
                         </div>
                         <t t-if="state.pickingSourceTransferName">
                             <div class="picking-title-sub">
