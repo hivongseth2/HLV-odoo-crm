@@ -7,7 +7,7 @@
                 <div class="header-title" style="font-size: 0.95rem; font-weight: bold;">
                     <i class="fa fa-search"></i> <t t-esc="state.title"/>
                 </div>
-                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <div t-if="props.lookupType !== 'product'" style="display: flex; gap: 8px; flex-wrap: wrap;">
                     <button class="btn btn-outline" style="padding: 6px 12px; font-size: 0.85rem;" t-on-click="props.onBack">
                         <i class="fa fa-arrow-left"></i> Quay lại
                     </button>
@@ -67,7 +67,7 @@
                         
                         <t t-if="props.lookupType === 'product' and state.reservations and state.reservations.length > 0">
                             <div style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 4px;">
-                                Đang được giữ (Reserved)
+                                Đang giữ hàng
                             </div>
                             <div class="items-list" style="margin-top: 0;">
                                 <div t-foreach="state.reservations" t-as="r" t-key="r_index" class="item-card" t-on-click="() => this.openPicking(r.picking_id)" style="cursor: pointer; border: 1px solid var(--border-color);">
