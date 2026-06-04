@@ -18,6 +18,7 @@ export class PickingScanner extends Component {
         scanMode: { type: [String, Boolean], optional: true },
         onToggleScanMode: { type: Function, optional: true },
         isMultiLocationMode: { type: Boolean, optional: true },
+        onDirectGoToMain: { type: Function, optional: true },
     };
 
     setup() {
@@ -86,6 +87,11 @@ export class PickingScanner extends Component {
             let data = await rpc("/hlv_mobile_barcode/get_picking_data", { picking_id: this.props.pickingId });
             if (data.error) {
                 this.notification.add(data.error, { type: "danger" });
+                if (this.props.onDirectGoToMain) {
+                    this.props.onDirectGoToMain();
+                } else {
+                    this.props.onBack();
+                }
             } else {
                 if (this.props.onStateLoaded) {
                     this.props.onStateLoaded(data.state);
