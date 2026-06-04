@@ -31,6 +31,7 @@ export class BarcodeApp extends Component {
         this.history = savedHistory;
 
         this.hiddenInputRef = useRef("hiddenInput");
+        this.manualInputRef = useRef("manualInput");
 
         this.state = useState({
             currentView: savedState.currentView || "main", 
@@ -128,12 +129,21 @@ export class BarcodeApp extends Component {
 
         this.keepFocusOnHiddenInput = () => {
             const active = document.activeElement;
-            if (active && ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName) && !active.classList.contains('hidden-barcode-input')) {
+            if (active && ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName) && 
+                !active.classList.contains('hidden-barcode-input') && 
+                active !== this.manualInputRef?.el) {
                 return;
             }
-            const inputEl = this.hiddenInputRef?.el;
-            if (inputEl) {
-                inputEl.focus();
+            if (this.state.currentView === 'main') {
+                const manualInputEl = this.manualInputRef?.el;
+                if (manualInputEl) {
+                    manualInputEl.focus();
+                }
+            } else {
+                const inputEl = this.hiddenInputRef?.el;
+                if (inputEl) {
+                    inputEl.focus();
+                }
             }
         };
 
@@ -199,6 +209,20 @@ export class BarcodeApp extends Component {
         if (ev.key === 'Enter') {
             this.processManualBarcode();
         }
+    }
+
+    onManualInputClick(ev) {
+        const input = ev.target;
+        if (input.getAttribute('inputmode') === 'none') {
+            input.setAttribute('inputmode', 'text');
+            input.blur();
+            input.focus();
+        }
+    }
+
+    onManualInputBlur(ev) {
+        const input = ev.target;
+        input.setAttribute('inputmode', 'none');
     }
 
     async onHiddenInputKeyup(ev) {

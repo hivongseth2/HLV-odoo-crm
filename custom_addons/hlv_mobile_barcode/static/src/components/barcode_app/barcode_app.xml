@@ -134,7 +134,7 @@
                             <div class="card-box" style="padding: 15px;">
                                 <div style="font-weight: 700; margin-bottom: 10px; font-size: 0.92rem; color: var(--primary-color);"><i class="fa fa-keyboard"></i> Nhập mã thủ công</div>
                                 <div class="input-group-row" style="margin-bottom: 0;">
-                                    <input type="text" class="form-control" placeholder="Nhập mã sản phẩm, vị trí hoặc số phiếu..." t-model="state.manualBarcode" t-on-keyup="onManualBarcodeKeyup"/>
+                                    <input type="text" class="form-control" placeholder="Nhập mã sản phẩm, vị trí hoặc số phiếu..." t-model="state.manualBarcode" t-on-keyup="onManualBarcodeKeyup" t-ref="manualInput" inputmode="none" t-on-click="onManualInputClick" t-on-blur="onManualInputBlur"/>
                                     <button class="btn btn-primary" t-on-click="processManualBarcode" style="font-weight: bold;">
                                         <i class="fa fa-arrow-right"></i> Đi tiếp
                                     </button>
