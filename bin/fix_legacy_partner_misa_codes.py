@@ -24,7 +24,7 @@ Run:
     odoo-bin shell -c <odoo.conf> --no-http < bin/fix_legacy_partner_misa_codes.py
 """
 
-DRY_RUN = True
+DRY_RUN = False
 
 # For root companies where ref and company_registry differ:
 #   - create a new root company for the secondary code company_registry, using

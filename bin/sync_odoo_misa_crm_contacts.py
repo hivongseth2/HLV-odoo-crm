@@ -19,15 +19,25 @@ DRY_RUN mac dinh True. Doi DRY_RUN=False de ghi that.
 
 import json
 import os
+import re
 import time
+import unicodedata
 import uuid
 
 import requests
 
 
-DRY_RUN = True
+DRY_RUN = False
 CREATE_MISSING_ROOT = True
+MISA_FETCH_ATTEMPTS = 3
 
+# False: chỉ chạy TARGET_NAMES bên dưới.
+# True : lấy toàn bộ root customer trong Odoo, trừ khách Shopee nếu EXCLUDE_SHOPEE_PARTNERS=True.
+SYNC_ALL_ODOO_CUSTOMERS = False
+EXCLUDE_SHOPEE_PARTNERS = True
+SYNC_ALL_LIMIT = 0  # 0 = no limit
+
+get_param = env['ir.config_parameter'].sudo().get_param
 TARGET_NAMES = [
     "CÔNG TY TRÁCH NHIỆM HỮU HẠN DONGJIN TEXTILE VINA",
     "CÔNG TY TNHH MILWAUKEE TOOL (VIỆT NAM)",
@@ -35,8 +45,12 @@ TARGET_NAMES = [
 ]
 
 MISA_CRM_URL = "https://amisapp.misa.vn/crm/g2/api/business/Account/Grid"
-MISA_CRM_COMPANY_CODE = os.environ.get("MISA_CRM_COMPANY_CODE", "3R2PY2F4")
-MISA_CRM_AUTHORIZATION = os.environ.get("MISA_CRM_AUTHORIZATION", "").strip()
+MISA_CRM_COMPANY_CODE = get_param("misa.crm.company_code") or "3R2PY2F4"
+MISA_CRM_AUTHORIZATION = (
+    get_param("misa.crm.authorization")
+    or get_param("MISA_CRM_AUTHORIZATION")
+    or os.environ.get("MISA_CRM_AUTHORIZATION", "")
+).strip()
 
 # MISA CRM yeu cau giu nguyen Columns nay de tra du field.
 MISA_CRM_COLUMNS = (
@@ -59,6 +73,13 @@ def section(title):
 
 def norm_code(value):
     return (value or "").strip().upper().replace(" ", "")
+
+
+def norm_text(value):
+    value = (value or "").strip().upper()
+    value = unicodedata.normalize("NFC", value)
+    value = re.sub(r"\s+", " ", value)
+    return value
 
 
 def clean(value):
@@ -85,7 +106,7 @@ def misa_headers():
     }
 
 
-def misa_payload(keyword, page=1, page_size=20):
+def misa_payload(keyword, page=1, page_size=20, use_cache=False):
     session_id = str(uuid.uuid4())
     return {
         "Columns": MISA_CRM_COLUMNS,
@@ -105,7 +126,7 @@ def misa_payload(keyword, page=1, page_size=20):
         "ListGmailPage": [],
         "ListFacebookPage": {},
         "IsListPaging": True,
-        "IsGetCache": True,
+        "IsGetCache": use_cache,
         "IsCheckInactive": False,
         "IsConverted": False,
         "SessionID": session_id,
@@ -116,19 +137,53 @@ def misa_payload(keyword, page=1, page_size=20):
 
 
 def fetch_misa_accounts(keyword):
-    resp = requests.post(
-        MISA_CRM_URL,
-        headers=misa_headers(),
-        data=json.dumps(misa_payload(keyword), ensure_ascii=False).encode("utf-8"),
-        timeout=30,
-    )
-    resp.raise_for_status()
-    data = resp.json()
-    if data.get("Code") != 200 or data.get("Success") is not True:
-        raise Exception("MISA CRM loi: Code=%s SubCode=%s raw=%s" % (
-            data.get("Code"), data.get("SubCode"), json.dumps(data, ensure_ascii=False)[:500]
+    expected_name = norm_text(keyword)
+    last_raw = []
+
+    for attempt in range(1, MISA_FETCH_ATTEMPTS + 1):
+        resp = requests.post(
+            MISA_CRM_URL,
+            headers=misa_headers(),
+            data=json.dumps(
+                misa_payload(keyword, use_cache=False),
+                ensure_ascii=False,
+            ).encode("utf-8"),
+            timeout=30,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        if data.get("Code") != 200 or data.get("Success") is not True:
+            raise Exception("MISA CRM loi: Code=%s SubCode=%s raw=%s" % (
+                data.get("Code"), data.get("SubCode"), json.dumps(data, ensure_ascii=False)[:500]
+            ))
+
+        raw_accounts = data.get("Data") or []
+        last_raw = raw_accounts
+        matched = [
+            account for account in raw_accounts
+            if norm_text(account.get("AccountName")) == expected_name
+        ]
+
+        if matched:
+            if len(matched) != len(raw_accounts):
+                print("  [WARN] MISA attempt %s returned %s raw rows, keep %s exact AccountName match(es)" % (
+                    attempt, len(raw_accounts), len(matched)
+                ))
+            return matched
+
+        print("  [WARN] MISA attempt %s returned %s raw rows but 0 exact AccountName matches; retry..." % (
+            attempt, len(raw_accounts)
         ))
-    return data.get("Data") or []
+        time.sleep(0.8)
+
+    sample = [
+        "%s:%s" % (a.get("AccountNumber"), a.get("AccountName"))
+        for a in last_raw[:5]
+    ]
+    raise Exception(
+        "MISA search khong tra ve AccountName khop keyword sau %s lan. "
+        "Raw rows=%s sample=%s" % (MISA_FETCH_ATTEMPTS, len(last_raw), sample)
+    )
 
 
 def odoo_domain_for_misa_code(misa_code):
@@ -246,10 +301,78 @@ def describe_partner(partner):
     )
 
 
+def shopee_sale_order_domain():
+    SaleOrder = env["sale.order"].sudo()
+    fields = SaleOrder._fields
+    clauses = []
+    for field_name in ("shopee_order_ref", "x_studio_tham_chiu_shopee", "shopee_shop_id"):
+        if field_name in fields:
+            clauses.append((field_name, "!=", False))
+
+    if not clauses:
+        return []
+    if len(clauses) == 1:
+        return clauses
+    return ["|"] * (len(clauses) - 1) + clauses
+
+
+def shopee_commercial_partner_ids():
+    if not EXCLUDE_SHOPEE_PARTNERS:
+        return set()
+
+    domain = shopee_sale_order_domain()
+    if not domain:
+        return set()
+
+    SaleOrder = env["sale.order"].sudo()
+    orders = SaleOrder.search(domain)
+    partners = env["res.partner"].sudo()
+    for order in orders:
+        for partner in (order.partner_id, order.partner_invoice_id, order.partner_shipping_id):
+            if partner:
+                partners |= partner.commercial_partner_id
+    return set(partners.ids)
+
+
+def target_names_from_odoo():
+    if not SYNC_ALL_ODOO_CUSTOMERS:
+        return TARGET_NAMES
+
+    Partner = env["res.partner"].sudo().with_context(active_test=False)
+    excluded_ids = shopee_commercial_partner_ids()
+
+    domain = [
+        ("parent_id", "=", False),
+        ("is_company", "=", True),
+        ("customer_rank", ">", 0),
+        ("active", "=", True),
+    ]
+    if excluded_ids:
+        domain.append(("id", "not in", list(excluded_ids)))
+
+    partners = Partner.search(domain, order="name asc", limit=SYNC_ALL_LIMIT or None)
+    names = []
+    seen = set()
+    for partner in partners:
+        name = clean(partner.name)
+        key = norm_text(name)
+        if name and key not in seen:
+            names.append(name)
+            seen.add(key)
+
+    print("  SYNC_ALL_ODOO_CUSTOMERS=True")
+    print("  Excluded Shopee commercial partners: %s" % len(excluded_ids))
+    print("  Odoo target root customer names    : %s" % len(names))
+    return names
+
+
 section("SYNC ODOO CONTACTS FROM MISA CRM")
 print("  DRY_RUN=%s" % DRY_RUN)
 print("  CREATE_MISSING_ROOT=%s" % CREATE_MISSING_ROOT)
-print("  Target names: %s" % len(TARGET_NAMES))
+print("  SYNC_ALL_ODOO_CUSTOMERS=%s" % SYNC_ALL_ODOO_CUSTOMERS)
+print("  EXCLUDE_SHOPEE_PARTNERS=%s" % EXCLUDE_SHOPEE_PARTNERS)
+targets = target_names_from_odoo()
+print("  Target names: %s" % len(targets))
 
 total_accounts = 0
 matched_accounts = 0
@@ -257,7 +380,7 @@ updated_partners = 0
 skipped_accounts = 0
 errors = 0
 
-for keyword in TARGET_NAMES:
+for keyword in targets:
     section("FETCH MISA CRM: %s" % keyword)
     try:
         accounts = fetch_misa_accounts(keyword)
