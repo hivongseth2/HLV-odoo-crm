@@ -707,6 +707,14 @@ export class BarcodeApp extends Component {
         if (this.state.isProcessing) return;
         this.state.isProcessing = true;
         try {
+            // Tải thông tin phiếu trước từ backend để kiểm tra lỗi hoặc phân bổ vị trí
+            const data = await rpc("/hlv_mobile_barcode/get_picking_data", { picking_id: pickingId });
+            if (data && data.error) {
+                this.playSound('error');
+                this.notification.add(data.error, { type: "danger" });
+                return;
+            }
+
             await this.closeCamera();
             this.pushHistory();
             this.state.pickingId = pickingId;
@@ -720,23 +728,23 @@ export class BarcodeApp extends Component {
             this.state.pickingRefreshTick += 1;
             this.state.cameraManuallyOff = !this.state.cameraDefaultOn;
 
-            // Tải vị trí nguồn mặc định của phiếu để hiển thị trực tiếp lên tiêu đề
-            rpc("/hlv_mobile_barcode/get_picking_data", { picking_id: pickingId }).then((data) => {
-                if (data && !data.error) {
-                    this.state.warehouseCode = data.warehouse_code || "HLV";
-                    this.state.pickingIsPick = data.is_pick;
-                    this.state.pickingTypeCode = data.picking_type_code;
-                    this.state.pickingSourceTransferName = data.source_transfer_name;
-                    if (!data.is_pick && !data.is_putaway && data.location_name) {
-                        this.state.scannedLocationId = data.location_id;
-                        this.state.scannedLocationName = data.location_name;
-                    }
+            if (data) {
+                this.state.warehouseCode = data.warehouse_code || "HLV";
+                this.state.pickingIsPick = data.is_pick;
+                this.state.pickingTypeCode = data.picking_type_code;
+                this.state.pickingSourceTransferName = data.source_transfer_name;
+                if (!data.is_pick && !data.is_putaway && data.location_name) {
+                    this.state.scannedLocationId = data.location_id;
+                    this.state.scannedLocationName = data.location_name;
                 }
-            }).catch(() => {});
+            }
             
             setTimeout(async () => {
                 await this.startPersistentCamera(false);
             }, 150);
+        } catch (err) {
+            this.playSound('error');
+            this.notification.add("Lỗi kết nối khi tải dữ liệu phiếu kho", { type: "danger" });
         } finally {
             this.state.isProcessing = false;
         }
