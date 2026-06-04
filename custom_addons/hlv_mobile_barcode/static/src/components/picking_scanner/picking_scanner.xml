@@ -95,22 +95,26 @@
                                             <t t-esc="line.product_name"/>
                                         </div>
                                         <div class="item-metadata-row">
-                                            <span class="item-meta-badge barcode">
-                                                <i class="fa fa-barcode"></i> 
-                                                <span class="no-copy">
-                                                    <t t-if="line.product_barcode"><t t-esc="line.product_barcode"/></t>
-                                                    <t t-else=""><span style="color: var(--danger-color); font-weight: 500;">(Chưa có mã)</span></t>
+                                            <div class="item-metadata-line">
+                                                <span class="item-meta-badge barcode">
+                                                    <i class="fa fa-barcode"></i> 
+                                                    <span class="no-copy">
+                                                        <t t-if="line.product_barcode"><t t-esc="line.product_barcode"/></t>
+                                                        <t t-else=""><span style="color: var(--danger-color); font-weight: 500;">(Chưa có mã)</span></t>
+                                                    </span>
                                                 </span>
-                                            </span>
-                                            <span t-if="line.location_name" class="item-meta-badge location">
-                                                <i class="fa fa-map-marker-alt"></i> <t t-esc="line.location_name"/>
-                                            </span>
-                                            <span t-if="line.package_name" class="item-package-badge">
-                                                <i class="fa fa-box"></i> <t t-esc="line.package_name"/>
-                                            </span>
-                                            <span class="item-meta-badge stock">
-                                                <i class="fa fa-cubes"></i> Tồn: <t t-esc="line.warehouse_qty"/>
-                                            </span>
+                                                <span t-if="line.package_name" class="item-package-badge">
+                                                    <i class="fa fa-box"></i> <t t-esc="line.package_name"/>
+                                                </span>
+                                            </div>
+                                            <div class="item-metadata-line">
+                                                <span t-if="line.location_name" class="item-meta-badge location">
+                                                    <i class="fa fa-map-marker-alt"></i> <t t-esc="line.location_name"/>
+                                                </span>
+                                                <span class="item-meta-badge stock">
+                                                    <i class="fa fa-cubes"></i> Tồn: <t t-esc="line.warehouse_qty"/>
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
                                     

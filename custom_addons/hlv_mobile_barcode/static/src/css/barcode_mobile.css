@@ -1365,7 +1365,7 @@
 }
 
 .hlv-barcode-app .picking-title-above-camera .picking-title-main {
-  font-size: 1.1rem;
+  font-size: 0.95rem;
   font-weight: 700;
   color: var(--text-color);
   display: flex;
@@ -1477,10 +1477,16 @@
   font-size: 0.8rem;
   color: var(--text-muted);
   display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.hlv-barcode-app .item-metadata-line {
+  display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 12px;
-  margin-top: 6px;
 }
 
 .hlv-barcode-app .item-meta-badge {
