@@ -21,9 +21,9 @@
                     <t t-else="">
                         <div class="location-info-row">
                             <span class="location-badge error">
-                                CHƯA QUÉT VỊ TRÍ!
+                                CHƯA QUÉT VỊ TRÍ NGUỒN!
                             </span>
-                            <span class="location-hint">Vui lòng quét vị trí trước</span>
+                            <span class="location-hint">Vui lòng quét vị trí nguồn trước</span>
                         </div>
                     </t>
                 </div>
