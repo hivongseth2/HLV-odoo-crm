@@ -102,7 +102,7 @@ export const productManagerMethods = {
         if (this.state.productResults.length === 0 && this.state.productPage > 0) {
             await this.searchProducts(this.state.productPage - 1);
         }
-        this.loadData();
+        this.loadData(true);
     },
 
     async removeProductFromGroup(productId) {
@@ -119,6 +119,6 @@ export const productManagerMethods = {
         if (this.state.productQuery.trim()) {
             await this.searchProducts(this.state.productPage);
         }
-        this.loadData();
+        this.loadData(true);
     },
 };

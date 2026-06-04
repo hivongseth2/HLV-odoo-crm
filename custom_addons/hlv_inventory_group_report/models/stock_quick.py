@@ -5,11 +5,32 @@ class HlvStockQuick(models.TransientModel):
     _description = "Xem ton kho theo nhom"
 
     @api.model
-    def get_data(self, group_id, warehouse_ids, show_zero, include_outgoing=True, extra_cols=None):
+    def get_data(
+        self,
+        group_id,
+        warehouse_ids,
+        show_zero,
+        include_outgoing=True,
+        extra_cols=None,
+        stock_query="",
+        offset=0,
+        limit=None,
+    ):
         if not group_id:
-            return {"lines": [], "total": 0.0, "outgoing_total": 0.0, "columns": []}
+            return {"lines": [], "total": 0.0, "outgoing_total": 0.0, "columns": [], "total_count": 0}
         extra_cols = extra_cols or []
         group = self.env["hlv.product.report.group"].browse(group_id)
+        products = group.product_ids.sorted("default_code")
+        stock_query = (stock_query or "").strip().lower()
+        if stock_query:
+            products = products.filtered(
+                lambda p: stock_query in (p.default_code or "").lower()
+                or stock_query in (p.name or "").lower()
+                or stock_query in (p.uom_id.name or "").lower()
+            )
+        total_count = len(products)
+        if limit:
+            products = products[offset:offset + limit]
         if warehouse_ids:
             warehouses = self.env["stock.warehouse"].browse(warehouse_ids)
             columns = [{"id": wh.id, "name": wh.name} for wh in warehouses]
@@ -27,7 +48,7 @@ class HlvStockQuick(models.TransientModel):
                         ids.extend(children.ids)
                 wh_outgoing_locs[wh.id] = ids
         # Pre-compute extra column data
-        product_ids_list = [p.id for p in group.product_ids]
+        product_ids_list = products.ids
         extra_data = {}
         _direct_price_fields = {
             "sale_price": "lst_price",
@@ -38,7 +59,7 @@ class HlvStockQuick(models.TransientModel):
         }
         _direct_keys = [k for k in extra_cols if k in _direct_price_fields]
         if _direct_keys:
-            for product in group.product_ids:
+            for product in products:
                 tmpl = product.product_tmpl_id
                 d = extra_data.setdefault(product.id, {})
                 for key in _direct_keys:
@@ -71,7 +92,7 @@ class HlvStockQuick(models.TransientModel):
                 count = len(sale_order_sets.get(pid, set()))
                 extra_data.setdefault(pid, {})["sales_cycle"] = round(90.0 / count, 1) if count > 0 else None
         if "avg_cost" in extra_cols:
-            for product in group.product_ids:
+            for product in products:
                 layers_data = self.get_product_cost_layers(product.id, warehouse_ids)
                 computed_avg = layers_data.get("computed_avg") or 0.0
                 manual_avg_override = self._get_saved_manual_avg_override(product.id)
@@ -133,7 +154,7 @@ class HlvStockQuick(models.TransientModel):
         lines = []
         total = 0.0
         outgoing_total = 0.0
-        for product in group.product_ids.sorted("default_code"):
+        for product in products:
             if warehouses:
                 col_qtys = []
                 col_outgoing_qtys = []
@@ -181,5 +202,11 @@ class HlvStockQuick(models.TransientModel):
                 "outgoing_total": prod_outgoing,
                 "extra": line_extra,
             })
-        return {"lines": lines, "total": total, "outgoing_total": outgoing_total, "columns": columns}
+        return {
+            "lines": lines,
+            "total": total,
+            "outgoing_total": outgoing_total,
+            "columns": columns,
+            "total_count": total_count,
+        }
 

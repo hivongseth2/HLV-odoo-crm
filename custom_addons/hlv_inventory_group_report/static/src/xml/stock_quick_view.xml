@@ -201,10 +201,14 @@
                                 <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px; background:#fff; border:1px solid #e9ecef; border-radius:6px; padding:10px 12px;">
                                     <div style="display:flex; align-items:center; gap:8px; flex:1; min-width:260px;">
                                         <i class="fa fa-search" style="color:#6c757d;"/>
-                                        <input t-model="state.stockQuery" t-on-input="onStockQueryInput"
+                                        <input t-model="state.stockQuery" t-on-input="onStockQueryInput" t-on-keydown="onStockQueryKeydown"
                                                placeholder="Tim ma hoac ten san pham trong bang ton kho..."
                                                style="width:100%; border:none; outline:none; font-size:13px; color:#212121;"/>
                                     </div>
+                                    <button t-on-click="searchStock"
+                                            style="background:#0d6efd; color:#fff; border:none; border-radius:5px; padding:5px 12px; font-size:12px; cursor:pointer;">
+                                        Tim
+                                    </button>
                                     <button t-if="state.stockQuery" t-on-click="clearStockQuery"
                                             style="background:#fff; color:#6c757d; border:1px solid #dee2e6; border-radius:5px; padding:5px 10px; font-size:12px; cursor:pointer;">
                                         Xoa loc
