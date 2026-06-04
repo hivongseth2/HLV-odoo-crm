@@ -17,7 +17,7 @@
                         </t>
                     </div>
                     <div style="display: flex; gap: 8px; align-items: center;">
-                        <div class="user-info" t-if="state.currentView !== 'picking' and state.currentView !== 'main'" t-on-click="toggleCamera" t-attf-style="padding: 6px; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; border-radius: 6px; border: 1px solid {{ state.cameraManuallyOff ? 'rgba(255,255,255,0.2)' : '#22c55e' }}; background: {{ state.cameraManuallyOff ? 'rgba(255,255,255,0.1)' : '#22c55e' }}; color: white; cursor: pointer; transition: all 0.25s;" title="Bật/Tắt Camera">
+                        <div class="user-info" t-if="state.currentView !== 'picking' and state.currentView !== 'main'" t-on-click="toggleCamera" t-attf-style="padding: 6px; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; border-radius: 6px; border: 1px solid {{ state.cameraManuallyOff ? 'rgba(255,255,255,0.2)' : 'var(--success-color)' }}; background: {{ state.cameraManuallyOff ? 'rgba(255,255,255,0.1)' : 'var(--success-color)' }}; color: white; cursor: pointer; transition: all 0.25s;" title="Bật/Tắt Camera">
                             <i class="fa fa-camera" style="font-size: 1rem;"></i>
                         </div>
                         <div class="user-info" t-if="state.currentView === 'picking' and state.pickingId" t-on-click="clearPicking" style="background: var(--danger-color); color: white;">
@@ -49,7 +49,7 @@
                         </t>
                     </div>
                     <!-- Toggle Camera Button next to Picking Title -->
-                    <button class="btn btn-camera-toggle" t-on-click="toggleCamera" t-attf-style="width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 8px; border: 1px solid {{ state.cameraManuallyOff ? '#cbd5e1' : '#22c55e' }}; background: {{ state.cameraManuallyOff ? '#f8fafc' : '#22c55e' }}; color: {{ state.cameraManuallyOff ? '#64748b' : '#ffffff' }}; box-shadow: var(--shadow-sm); cursor: pointer; transition: all 0.25s;" title="Bật/Tắt Camera">
+                    <button class="btn btn-camera-toggle" t-on-click="toggleCamera" t-attf-style="width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 8px; border: 1px solid {{ state.cameraManuallyOff ? 'var(--border-color)' : 'var(--success-color)' }}; background: {{ state.cameraManuallyOff ? 'var(--light-bg)' : 'var(--success-color)' }}; color: {{ state.cameraManuallyOff ? 'var(--text-muted)' : '#ffffff' }}; box-shadow: var(--shadow-sm); cursor: pointer; transition: all 0.25s;" title="Bật/Tắt Camera">
                         <i class="fa fa-camera" style="font-size: 1.15rem;"></i>
                     </button>
                 </div>
@@ -142,7 +142,7 @@
                             </div>
                             
                             <!-- Multi-Location Transfer Card -->
-                            <div class="card-box" style="padding: 15px; cursor: pointer; border: 1px solid var(--info-color); background: rgba(23, 162, 184, 0.03);" t-on-click="promptMultiLocationMove">
+                            <div class="card-box" style="padding: 15px; cursor: pointer; border: 1px solid var(--info-border); background: var(--info-bg);" t-on-click="promptMultiLocationMove">
                                 <div style="display: flex; align-items: center; gap: 15px;">
                                     <i class="fa fa-route" style="font-size: 32px; color: var(--info-color);"></i>
                                     <div style="flex: 1; text-align: left;">
