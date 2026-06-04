@@ -1321,6 +1321,10 @@
   margin-bottom: 10px;
   border-radius: 0 6px 6px 0;
   flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
 }
 
 .hlv-barcode-app .picking-title-above-camera .picking-title-main {
