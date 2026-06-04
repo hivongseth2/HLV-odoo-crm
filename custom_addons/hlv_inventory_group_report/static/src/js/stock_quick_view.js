@@ -45,6 +45,7 @@ export class StockQuickView extends Component {
             stockQuery: "",
             stockPage: 0,
             stockPageSize: 50,
+            stockTotalCount: 0,
             whOpen: false,
             // Quan ly nhom
             activeTab: "stock",
@@ -124,12 +125,16 @@ export class StockQuickView extends Component {
         return groups;
     }
 
-    async loadData() {
+    async loadData(resetPage = false) {
         if (!this.state.groupId) {
             this.state.lines = [];
             this.state.columns = [];
             this.state.total = 0;
+            this.state.stockTotalCount = 0;
             return;
+        }
+        if (resetPage) {
+            this.state.stockPage = 0;
         }
         this.state.loading = true;
         try {
@@ -137,7 +142,16 @@ export class StockQuickView extends Component {
             const _allExtraCols = [...new Set([..._fixedKeys, ...this.state.extraCols])];
             const result = await this.orm.call(
                 "hlv.stock.quick", "get_data",
-                [this.state.groupId, this.state.warehouseIds, this.state.showZero, this.state.includeOutgoing, _allExtraCols]
+                [
+                    this.state.groupId,
+                    this.state.warehouseIds,
+                    this.state.showZero,
+                    this.state.includeOutgoing,
+                    _allExtraCols,
+                    this.state.stockQuery,
+                    this.state.stockPage * this.state.stockPageSize,
+                    this.state.stockPageSize,
+                ]
             );
             const restoredManualAvgCosts = Object.assign({}, this.state.manualAvgCosts);
             this.state.lines = result.lines.map((line) => {
@@ -152,7 +166,7 @@ export class StockQuickView extends Component {
             this.state.columns = result.columns;
             this.state.total = result.total;
             this.state.outgoingTotal = result.outgoing_total || 0;
-            this.state.stockPage = 0;
+            this.state.stockTotalCount = result.total_count || 0;
         } finally {
             this.state.loading = false;
         }
@@ -177,7 +191,7 @@ export class StockQuickView extends Component {
         this.state.locationData = {};
         this.state.expandedProductId = false;
         this.state.importResults = null;
-        this.loadData();
+        this.loadData(true);
     }
 
     setTab(tab) {
@@ -258,24 +272,12 @@ export class StockQuickView extends Component {
 
     // Kho ──
 
-    get stockFilteredLines() {
-        const query = (this.state.stockQuery || "").trim().toLowerCase();
-        if (!query) {
-            return this.state.lines;
-        }
-        return this.state.lines.filter((line) => {
-            return [line.code, line.name, line.uom]
-                .some((value) => String(value || "").toLowerCase().includes(query));
-        });
-    }
-
     get stockPagedLines() {
-        const start = this.state.stockPage * this.state.stockPageSize;
-        return this.stockFilteredLines.slice(start, start + this.state.stockPageSize);
+        return this.state.lines;
     }
 
     get stockTotalCount() {
-        return this.stockFilteredLines.length;
+        return this.state.stockTotalCount;
     }
 
     get stockTotalPages() {
@@ -286,20 +288,32 @@ export class StockQuickView extends Component {
         this.state.stockPage = 0;
     }
 
+    onStockQueryKeydown(ev) {
+        if (ev.key === "Enter") {
+            this.searchStock();
+        }
+    }
+
+    searchStock() {
+        this.loadData(true);
+    }
+
     clearStockQuery() {
         this.state.stockQuery = "";
-        this.state.stockPage = 0;
+        this.loadData(true);
     }
 
     stockPagePrev() {
         if (this.state.stockPage > 0) {
             this.state.stockPage -= 1;
+            this.loadData();
         }
     }
 
     stockPageNext() {
         if (this.state.stockPage + 1 < this.stockTotalPages) {
             this.state.stockPage += 1;
+            this.loadData();
         }
     }
 
@@ -324,7 +338,7 @@ export class StockQuickView extends Component {
         } else {
             this.state.warehouseIds = [...this.state.warehouseIds, id];
         }
-        this.loadData();
+        this.loadData(true);
     }
 
     toggleAllWarehouses() {
@@ -333,7 +347,7 @@ export class StockQuickView extends Component {
         } else {
             this.state.warehouseIds = this.state.warehouses.map(w => w.id);
         }
-        this.loadData();
+        this.loadData(true);
     }
 
     toggleWhDropdown() {
@@ -488,12 +502,12 @@ export class StockQuickView extends Component {
 
     onShowZeroChange(ev) {
         this.state.showZero = ev.target.checked;
-        this.loadData();
+        this.loadData(true);
     }
 
     onIncludeOutgoingChange(ev) {
         this.state.includeOutgoing = ev.target.checked;
-        this.loadData();
+        this.loadData(true);
     }
 
     // ── Chon cot ──
@@ -546,7 +560,7 @@ export class StockQuickView extends Component {
         } else {
             this.state.extraCols = [...this.state.extraCols, key];
         }
-        this.loadData();
+        this.loadData(true);
     }
 
     formatExtraVal(key, val) {
@@ -665,7 +679,7 @@ export class StockQuickView extends Component {
             );
             this.state.importResults = result;
             await this.loadGroupProducts(0);
-            this.loadData();
+            this.loadData(true);
         } finally {
             this.state.importLoading = false;
         }
