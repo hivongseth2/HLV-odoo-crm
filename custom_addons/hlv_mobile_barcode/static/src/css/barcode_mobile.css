@@ -3,19 +3,38 @@
    ========================================================================== */
 
 :root {
-  --primary-color: #2c3e50;
-  --secondary-color: #6c757d;
-  --success-color: #28a745;
-  --danger-color: #dc3545;
-  --warning-color: #ffc107;
-  --info-color: #17a2b8;
-  --light-bg: #f8f9fa;
+  /* Unified premium dark-navy theme (Tím than) */
+  --primary-color: #1e293b; /* Modern slate-800 - elegant dark charcoal navy */
+  --primary-light: #f1f5f9; /* Slate-100 */
+  --primary-hover: #0f172a; /* Slate-900 */
+  
+  --secondary-color: #64748b; /* Slate-500 */
+  
+  /* Modern clean alert/feedback colors instead of raw saturated colors */
+  --success-color: #10b981; /* Emerald-500 - premium clean green */
+  --success-bg: #ecfdf5; /* Emerald-50 - soft pastel green bg */
+  --success-border: #a7f3d0; /* Emerald-200 */
+  
+  --danger-color: #ef4444; /* Red-500 */
+  --danger-bg: #fef2f2; /* Red-50 - soft pastel red bg */
+  --danger-border: #fca5a5; /* Red-300 */
+  
+  --warning-color: #f59e0b; /* Amber-500 */
+  --warning-bg: #fffbeb; /* Amber-50 - soft pastel yellow bg */
+  --warning-border: #fde68a; /* Amber-200 */
+  
+  --info-color: #3b82f6; /* Blue-500 - elegant blue instead of cyan */
+  --info-bg: #eff6ff; /* Blue-50 - soft pastel blue bg */
+  --info-border: #bfdbfe; /* Blue-200 */
+  
+  --light-bg: #f8fafc; /* Slate-50 - clean modern background */
   --white: #ffffff;
-  --border-color: #e9ecef;
-  --text-color: #343a40;
-  --text-muted: #6c757d;
-  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+  --border-color: #e2e8f0; /* Slate-200 - clean thin border */
+  --text-color: #0f172a; /* Slate-900 - dark readable text */
+  --text-muted: #64748b; /* Slate-500 */
+  
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
 }
 
 /* ==========================================================================
@@ -312,6 +331,24 @@
   color: var(--white);
 }
 
+.hlv-barcode-app .btn-warning {
+  background-color: var(--warning-color);
+  color: var(--white);
+}
+
+.hlv-barcode-app .btn-warning:hover {
+  background-color: #d97706;
+}
+
+.hlv-barcode-app .btn-danger {
+  background-color: var(--danger-color);
+  color: var(--white);
+}
+
+.hlv-barcode-app .btn-danger:hover {
+  background-color: #dc2626;
+}
+
 .hlv-barcode-app .btn-outline {
   background-color: transparent;
   border: 2px solid var(--border-color);
@@ -553,24 +590,24 @@
 }
 
 .hlv-barcode-app .product-row-card.scanned {
-  border-color: #a5d6a7;
-  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.08);
+  border-color: var(--success-border);
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.08);
 }
 
 /* Picking Label styling */
 .hlv-barcode-app .picking-label {
   font-size: 1.15rem;
   font-weight: 700;
-  color: var(--primary-color, #2c3e50);
+  color: var(--primary-color);
   padding: 8px 10px;
   margin-bottom: 15px;
-  border-bottom: 2px dashed #e2e8f0;
+  border-bottom: 2px dashed var(--border-color);
   line-height: 1.4;
-  background-color: #f8fafc;
+  background-color: var(--light-bg);
   border-radius: 6px;
 }
 .hlv-barcode-app .picking-label i.fa-clipboard-list {
-  color: var(--secondary-color, #64748b);
+  color: var(--secondary-color);
   margin-right: 8px;
 }
 
@@ -585,7 +622,7 @@
 }
 
 .hlv-barcode-app .item-card.scanned {
-  background-color: #e8f5e9;
+  background-color: transparent;
 }
 
 .hlv-barcode-app .item-info {
@@ -740,21 +777,21 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: rgba(23, 162, 184, 0.08);
-  border: 1px solid rgba(23, 162, 184, 0.2);
+  background: var(--info-bg);
+  border: 1px solid var(--info-border);
   padding: 3px 10px;
   border-radius: 20px; /* Modern Pill shape */
-  color: #0c5460;
+  color: var(--info-color);
   font-weight: 600;
   font-size: 0.72rem;
   letter-spacing: 0.3px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--shadow-sm);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .hlv-barcode-app .item-package-badge:hover {
-  background: rgba(23, 162, 184, 0.12);
-  border-color: rgba(23, 162, 184, 0.3);
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.3);
 }
 
 .hlv-barcode-app .item-package-badge i.fa-box {
@@ -831,7 +868,7 @@
 .hlv-barcode-app .packages-list-container {
   padding: 16px;
   border-top: 1px solid var(--border-color);
-  background: #fafafa;
+  background: var(--light-bg);
 }
 
 .hlv-barcode-app .packages-grid {
@@ -1306,8 +1343,8 @@
    ========================================================================== */
 .hlv-barcode-app .active-location-row {
   border: 2px solid var(--info-color) !important;
-  background-color: rgba(23, 162, 184, 0.04) !important;
-  box-shadow: 0 0 8px rgba(23, 162, 184, 0.2);
+  background-color: var(--info-bg) !important;
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.15);
   transition: all 0.3s ease;
 }
 
@@ -1315,25 +1352,29 @@
    PICKING TITLE ABOVE CAMERA & MODERN LOCATION BANNER
    ========================================================================== */
 .hlv-barcode-app .picking-title-above-camera {
-  background: linear-gradient(to right, #f1f5f9, transparent);
-  border-left: 4px solid #0ea5e9;
+  background: var(--primary-light);
+  border-left: 4px solid var(--primary-color);
   padding: 10px 12px;
   margin-bottom: 10px;
   border-radius: 0 6px 6px 0;
   flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
 }
 
 .hlv-barcode-app .picking-title-above-camera .picking-title-main {
-  font-size: 1.1rem;
+  font-size: 0.95rem;
   font-weight: 700;
-  color: #1e293b;
+  color: var(--text-color);
   display: flex;
   align-items: center;
 }
 
 .hlv-barcode-app .picking-title-above-camera .picking-title-sub {
   font-size: 0.85rem;
-  color: #64748b;
+  color: var(--text-muted);
   font-weight: 500;
   margin-top: 4px;
   display: flex;
@@ -1344,10 +1385,10 @@
 .hlv-barcode-app .modern-location-banner {
   margin: 6px 0 10px 0;
   padding: 10px 14px;
-  background: #ffffff;
+  background: var(--info-bg);
   border-radius: 8px;
-  border: 1px solid var(--border-color);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+  border: 1px solid var(--info-border);
+  box-shadow: var(--shadow-sm);
   display: flex;
   align-items: center;
   transition: all 0.2s ease;
@@ -1363,19 +1404,19 @@
 }
 
 .hlv-barcode-app .modern-location-banner .location-badge {
-  color: #64748b;
+  color: var(--text-muted);
   font-weight: 600;
   display: flex;
   align-items: center;
 }
 
 .hlv-barcode-app .modern-location-banner .location-val {
-  color: #16a34a;
+  color: var(--info-color);
   font-weight: 700;
-  background: rgba(22, 163, 74, 0.08);
+  background: var(--white);
   padding: 4px 10px;
   border-radius: 6px;
-  border: 1px solid rgba(22, 163, 74, 0.15);
+  border: 1px solid var(--info-border);
   font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 0.95rem;
   letter-spacing: 0.5px;
@@ -1383,18 +1424,18 @@
 
 /* Error state when location is missing */
 .hlv-barcode-app .modern-location-banner.error-state {
-  background: rgba(239, 68, 68, 0.03);
-  border-color: rgba(239, 68, 68, 0.15);
+  background: var(--danger-bg) !important;
+  border-color: var(--danger-border) !important;
 }
 
 .hlv-barcode-app .modern-location-banner .location-badge.error {
-  color: #ef4444;
+  color: var(--danger-color) !important;
   animation: pulse-text 1.5s infinite;
 }
 
 .hlv-barcode-app .modern-location-banner .location-hint {
   font-size: 0.85rem;
-  color: #94a3b8;
+  color: var(--text-muted);
   font-weight: 500;
 }
 
@@ -1429,6 +1470,50 @@
 
 .hlv-barcode-app .camera-controls .btn:active {
   transform: scale(0.96);
+}
+
+/* New Metadata Badges styling */
+.hlv-barcode-app .item-metadata-row {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.hlv-barcode-app .item-metadata-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.hlv-barcode-app .item-meta-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: none !important;
+  border: none !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+}
+
+.hlv-barcode-app .item-meta-badge.barcode {
+  color: var(--text-muted);
+}
+
+.hlv-barcode-app .item-meta-badge.location {
+  color: var(--info-color);
+  font-weight: 600;
+}
+
+.hlv-barcode-app .item-meta-badge.stock {
+  color: var(--warning-color);
+  font-weight: 600;
 }
 
 @keyframes pulse-text {
