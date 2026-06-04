@@ -359,7 +359,8 @@ class HLVMobileBarcodeController(http.Controller):
                 })
 
         show_qty_buttons = request.env['ir.config_parameter'].sudo().get_param('hlv_mobile_barcode.hlv_barcode_show_qty_buttons', 'True') == 'True'
-        camera_default_on = request.env['ir.config_parameter'].sudo().get_param('hlv_mobile_barcode.hlv_barcode_camera_default_on', 'True') == 'True'
+        camera_param = request.env['ir.config_parameter'].sudo().get_param('hlv_mobile_barcode.hlv_barcode_camera_default_on')
+        camera_default_on = camera_param is None or str(camera_param).strip().lower() in ['true', '1']
 
         return {
             'id': picking.id,
@@ -393,7 +394,8 @@ class HLVMobileBarcodeController(http.Controller):
 
     @http.route('/hlv_mobile_barcode/get_settings', type='json', auth='user')
     def get_settings(self):
-        camera_default_on = request.env['ir.config_parameter'].sudo().get_param('hlv_mobile_barcode.hlv_barcode_camera_default_on', 'True') == 'True'
+        camera_param = request.env['ir.config_parameter'].sudo().get_param('hlv_mobile_barcode.hlv_barcode_camera_default_on')
+        camera_default_on = camera_param is None or str(camera_param).strip().lower() in ['true', '1']
         return {
             'camera_default_on': camera_default_on,
         }

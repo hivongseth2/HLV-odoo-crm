@@ -16,9 +16,9 @@
                             Kho <t t-esc="state.warehouseCode || 'HLV'"/>
                         </t>
                     </div>
-                    <div style="display: flex; gap: 8px;">
-                        <div class="user-info" t-if="state.currentView !== 'picking' and state.currentView !== 'main'" t-on-click="toggleCamera">
-                            <i t-attf-class="fa {{ state.cameraManuallyOff ? 'fa-camera' : 'fa-camera-slash' }}"></i> Camera
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <div class="user-info" t-if="state.currentView !== 'picking' and state.currentView !== 'main'" t-on-click="toggleCamera" t-attf-style="padding: 6px; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; border-radius: 6px; border: 1px solid {{ state.cameraManuallyOff ? 'rgba(255,255,255,0.2)' : '#22c55e' }}; background: {{ state.cameraManuallyOff ? 'rgba(255,255,255,0.1)' : '#22c55e' }}; color: white; cursor: pointer; transition: all 0.25s;" title="Bật/Tắt Camera">
+                            <i class="fa fa-camera" style="font-size: 1rem;"></i>
                         </div>
                         <div class="user-info" t-if="state.currentView === 'picking' and state.pickingId" t-on-click="clearPicking" style="background: var(--danger-color); color: white;">
                             <i class="fa fa-undo"></i> Làm lại
@@ -49,9 +49,8 @@
                         </t>
                     </div>
                     <!-- Toggle Camera Button next to Picking Title -->
-                    <button class="btn btn-sm btn-camera-toggle" t-on-click="toggleCamera" style="padding: 6px 12px; font-weight: 600; border-radius: 6px; border: 1px solid var(--border-color); background: white; color: var(--primary-color); display: flex; align-items: center; gap: 6px; box-shadow: var(--shadow-sm); cursor: pointer; transition: all 0.2s;">
-                        <i t-attf-class="fa {{ state.cameraManuallyOff ? 'fa-camera' : 'fa-camera-slash' }}"></i>
-                        <t t-esc="state.cameraManuallyOff ? 'Bật Camera' : 'Tắt Camera'"/>
+                    <button class="btn btn-camera-toggle" t-on-click="toggleCamera" t-attf-style="width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 8px; border: 1px solid {{ state.cameraManuallyOff ? '#cbd5e1' : '#22c55e' }}; background: {{ state.cameraManuallyOff ? '#f8fafc' : '#22c55e' }}; color: {{ state.cameraManuallyOff ? '#64748b' : '#ffffff' }}; box-shadow: var(--shadow-sm); cursor: pointer; transition: all 0.25s;" title="Bật/Tắt Camera">
+                        <i class="fa fa-camera" style="font-size: 1.15rem;"></i>
                     </button>
                 </div>
 
