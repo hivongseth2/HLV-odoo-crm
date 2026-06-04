@@ -67,7 +67,7 @@
                         
                         <t t-if="props.lookupType === 'product' and state.reservations and state.reservations.length > 0">
                             <div style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 4px;">
-                                Đang được giữ (Reserved)
+                                Đang giữ hàng
                             </div>
                             <div class="items-list" style="margin-top: 0;">
                                 <div t-foreach="state.reservations" t-as="r" t-key="r_index" class="item-card" t-on-click="() => this.openPicking(r.picking_id)" style="cursor: pointer; border: 1px solid var(--border-color);">

@@ -1338,7 +1338,21 @@ class HLVMobileBarcodeController(http.Controller):
                     'partner': m.picking_id.partner_id.name or '',
                     'demand': getattr(m, 'product_uom_qty', 0.0),
                     'reserved': getattr(m, 'quantity', getattr(m, 'reserved_availability', 0.0)),
-                    'state_desc': dict(m._fields['state'].selection).get(m.state, m.state)
+                    'state_desc': {
+                        'draft': 'Nháp',
+                        'waiting': 'Chờ bước khác',
+                        'confirmed': 'Chờ hàng',
+                        'partially_available': 'Sẵn sàng một phần',
+                        'assigned': 'Sẵn sàng',
+                        'done': 'Hoàn thành',
+                        'cancel': 'Đã hủy',
+                        'Draft': 'Nháp',
+                        'Waiting Another Move': 'Chờ bước khác',
+                        'Waiting Availability': 'Chờ hàng',
+                        'Available': 'Sẵn sàng',
+                        'Done': 'Hoàn thành',
+                        'Cancelled': 'Đã hủy'
+                    }.get(m.state, dict(m._fields['state'].selection).get(m.state, m.state))
                 })
                 
         elif lookup_type == 'location':
