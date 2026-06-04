@@ -86,6 +86,10 @@ TOOLS_SCHEMA = [
               "finished_product"
             ],
             "description": "Loại hàng hóa (Mặc định là 'goods')"
+          },
+          "Description": {
+            "type": "string",
+            "description": "Mô tả sản phẩm trên MISA CRM. Có thể truyền chuỗi JSON, ví dụ: {\"Vật liệu\" : \"Thép\"}"
           }
         },
         "required": [
@@ -98,6 +102,45 @@ TOOLS_SCHEMA = [
           "category_id",
           "type",
           "price_pu"
+        ],
+        "additionalProperties": False
+      },
+      "strict": True
+    },
+    {
+      "type": "function",
+      "description": "Cập nhật thông tin sản phẩm trên MISA CRM. Cần có misa_id của sản phẩm.",
+      "name": "update_product_misa",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "misa_id": {
+            "type": "string",
+            "description": "MISA product ID (GUID)"
+          },
+          "field": {
+            "type": "string",
+            "enum": [
+              "name",
+              "code",
+              "Description"
+            ],
+            "description": "Trường cần cập nhật: name=tên, code=mã, Description=mô tả sản phẩm"
+          },
+          "new_value": {
+            "type": "string",
+            "description": "Giá trị mới. Với Description có thể là chuỗi JSON, ví dụ: {\"Vật liệu\" : \"Thép\"}"
+          },
+          "old_value": {
+            "type": "string",
+            "description": "Giá trị cũ để đối chứng"
+          }
+        },
+        "required": [
+          "misa_id",
+          "field",
+          "new_value",
+          "old_value"
         ],
         "additionalProperties": False
       },
@@ -339,6 +382,8 @@ class HlvChatgptSession(models.Model):
                         tool_result_str = self._execute_search_misa(args)
                     elif fname == "create_product_misa":
                         tool_result_str = self._execute_create_misa(args)
+                    elif fname == "update_product_misa":
+                        tool_result_str = self._execute_update_misa(args)
                     elif fname == "get_category_info":
                         tool_result_str = self._execute_get_category_info(args)
                     elif fname == "search_category_misa":
@@ -497,6 +542,7 @@ class HlvChatgptSession(models.Model):
                 product_type=args.get('type', 'goods'), 
                 cat_id=args.get('category_id', False),
                 price_pu=args.get('price_pu', 0),
+                description=args.get('Description') or args.get('description') or "",
             )
             
             return json.dumps({
@@ -513,6 +559,33 @@ class HlvChatgptSession(models.Model):
     # =================================================================================
     # 4. ZALO & UI INTEGRATION (GIỮ NGUYÊN LOGIC, CHỈ CẬP NHẬT CÁCH GỌI)
     # =================================================================================
+    def _execute_update_misa(self, args):
+        """Cập nhật 1 trường sản phẩm MISA."""
+        _logger.info("✏️ MISA Update: %s", args)
+        try:
+            misa_id = args.get('misa_id')
+            field = args.get('field')
+            new_value = args.get('new_value')
+            old_value = args.get('old_value')
+
+            misa_utils = self.env['misa.api.utils'].sudo()
+            ok = misa_utils.update_product_field_misa(
+                misa_id, field, new_value, old_value,
+            )
+            if ok:
+                return json.dumps({
+                    "status": "success",
+                    "message": f"Đã cập nhật {field} thành '{new_value}'",
+                }, ensure_ascii=False)
+            return json.dumps({
+                "status": "error",
+                "message": f"Không thể cập nhật {field} cho MISA ID {misa_id}",
+            }, ensure_ascii=False)
+
+        except Exception as e:
+            _logger.exception("Update Misa Error")
+            return json.dumps({"status": "error", "message": f"Lỗi cập nhật MISA: {str(e)}"}, ensure_ascii=False)
+
     @api.model
     def process_zalo_message(self, zalo_user_id, message_content, zalo_msg_id=False, image_url=False):
         """Webhook Entry Point"""

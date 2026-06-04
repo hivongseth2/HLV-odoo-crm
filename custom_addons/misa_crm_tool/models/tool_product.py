@@ -78,6 +78,10 @@ SCHEMA_CREATE_PRODUCT = {
                 "enum": ["goods", "service", "finished_product"],
                 "description": "Loại hàng hóa (Mặc định 'goods')",
             },
+            "Description": {
+                "type": "string",
+                "description": "Mô tả sản phẩm trên MISA CRM. Có thể truyền chuỗi JSON, ví dụ: {\"Vật liệu\" : \"Thép\"}",
+            },
         },
         "required": [
             "code", "name", "price", "tax", "unit",
@@ -92,7 +96,7 @@ SCHEMA_UPDATE_PRODUCT = {
     "type": "function",
     "name": "update_product_misa",
     "description": (
-        "Cập nhật thông tin sản phẩm trên MISA: tên, mã, giá bán cố định, "
+        "Cập nhật thông tin sản phẩm trên MISA: tên, mã, mô tả, giá bán cố định, "
         "giá mua, giá bán lẻ, thuế. Cần có misa_id của sản phẩm."
     ),
     "parameters": {
@@ -104,8 +108,8 @@ SCHEMA_UPDATE_PRODUCT = {
             },
             "field": {
                 "type": "string",
-                "enum": ["name", "code", "unit_price_fixed", "purchased_price", "unit_price", "tax","custom_field_16"],
-                "description": "Trường cần cập nhật: name=tên, code=mã, unit_price_fixed=giá bán cố định, purchased_price=giá mua, unit_price=giá bán lẻ (gồm VAT), tax=thuế GTGT (truyền % VD: 10, 8), custom_field_16=Đơn giá mua bắt buộc",
+                "enum": ["name", "code", "Description", "unit_price_fixed", "purchased_price", "unit_price", "tax","custom_field_16"],
+                "description": "Trường cần cập nhật: name=tên, code=mã, Description=mô tả sản phẩm, unit_price_fixed=giá bán cố định, purchased_price=giá mua, unit_price=giá bán lẻ (gồm VAT), tax=thuế GTGT (truyền % VD: 10, 8), custom_field_16=Đơn giá mua bắt buộc",
             },
             "new_value": {
                 "type": "string",
@@ -179,6 +183,7 @@ class MisaCrmToolProduct(models.AbstractModel):
             product_type=args.get('type', 'goods'),
             cat_id=args.get('category_id', False),
             price_pu=args.get('price_pu', 0),
+            description=args.get('Description') or args.get('description') or "",
         )
         return self._ok(
             message=f"Tạo thành công sản phẩm: {args.get('name')}",

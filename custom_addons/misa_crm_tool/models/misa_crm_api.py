@@ -378,6 +378,31 @@ class MisaCrmApi(models.AbstractModel):
         }
 
     @staticmethod
+    def _update_description_payload(misa_id, new_value, old_value):
+        return {
+            "FieldName": "Description",
+            "PrimaryKeyName": "ID",
+            "PrimaryKeyValue": str(misa_id),
+            "Id": 2130,
+            "Value": new_value,
+            "OldValue": old_value,
+            "TypeControl": 2,
+            "FormLayoutID": 45,
+            "LayoutCode": "Product",
+            "Lable": "Mô tả",
+            "Text": "Mô tả",
+            "IsRequired": False,
+            "IsNotZero": False,
+            "IsSensitive": False,
+            "IsUnique": False,
+            "MaxLength": 4000,
+            "CustomRoundDigit": 2,
+            "DecimalLength": 2,
+            "ComparedValue": None,
+            "ModuleType": None,
+        }
+
+    @staticmethod
     def _update_unit_price_fixed_payload(misa_id, new_value, old_value):
         return {
             "FieldName": "UnitPriceFixed",
@@ -623,7 +648,7 @@ class MisaCrmApi(models.AbstractModel):
     def create_product(self, code, name, price=0, price_pu=0,
                        tax_percent=10, unit_name='Cái',
                        category_name='Hàng hóa', product_type='goods',
-                       cat_id=None):
+                       cat_id=None, description=""):
         token = self._get_crm_token()
         headers = self._crm_hdrs(token)
         headers.update({"LayoutCode": "product", "X-Misa-Language": "vi-VN"})
@@ -651,6 +676,7 @@ class MisaCrmApi(models.AbstractModel):
         payload = {
             "ProductCode": code,
             "ProductName": name,
+            "Description": description or "",
             "ProductCategoryID": cat_id,
             "ProductCategoryIDText": category_name if cat_id != 23 else "Hàng hóa",
             "UsageUnitID": unit_id,
@@ -725,7 +751,7 @@ class MisaCrmApi(models.AbstractModel):
         # --- Sync to Odoo ---
         self._sync_product_to_odoo(
             code, name, price, price_pu,
-            product_type, cat_id, unit_name, tax_percent)
+            product_type, cat_id, unit_name, tax_percent, description)
         return misa_id
 
     def _parse_misa_id(self, res_json, code, headers):
@@ -756,7 +782,8 @@ class MisaCrmApi(models.AbstractModel):
         return None
 
     def _sync_product_to_odoo(self, code, name, price, price_pu,
-                              product_type, cat_id, unit_name, tax_percent):
+                              product_type, cat_id, unit_name, tax_percent,
+                              description=""):
         """Best-effort sync to Odoo product.template after MISA creation."""
         try:
             pos_categ = False
@@ -794,6 +821,8 @@ class MisaCrmApi(models.AbstractModel):
                 'is_storable': is_goods,
                 'available_in_pos': True,
             }
+            if description:
+                vals['description'] = description
             if tax_ids:
                 vals['taxes_id'] = tax_ids
             if pos_categ:
@@ -812,6 +841,67 @@ class MisaCrmApi(models.AbstractModel):
         except Exception as e:
             _logger.error("Odoo sync failed: %s", e)
 
+    def _get_product_code_by_misa_id(self, headers, misa_id):
+        """Best-effort lookup ProductCode from MISA Product ID."""
+        url = "https://amisapp.misa.vn/crm/g2/api/business/Product/FormDataNew/Product/45/4"
+        payload = {"ID": str(misa_id)}
+        try:
+            res = self._retry_session().post(
+                url, headers=headers, json=payload, timeout=20)
+            data = res.json()
+            if not data.get("Success"):
+                return None
+
+            raw = data.get("Data") or {}
+            if isinstance(raw, dict):
+                current = (
+                    raw.get("CurrentData")
+                    or raw.get("FormData")
+                    or raw.get("Data")
+                    or raw
+                )
+                if isinstance(current, dict):
+                    return current.get("ProductCode")
+        except Exception as e:
+            _logger.warning("Cannot fetch product code for MISA ID %s: %s", misa_id, e)
+        return None
+
+    def _sync_product_description_to_odoo(self, misa_id, description, headers=None):
+        """Sync MISA product Description to Odoo product.template.description."""
+        try:
+            ProductTemplate = self.env['product.template'].sudo()
+            product = ProductTemplate.browse()
+
+            if 'x_misa_id' in ProductTemplate._fields:
+                product = ProductTemplate.search([
+                    '|',
+                    ('x_misa_id', '=', str(misa_id)),
+                    ('x_misa_id', '=', misa_id),
+                ], limit=1)
+
+            if not product:
+                if headers is None:
+                    token = self._get_crm_token()
+                    headers = self._crm_hdrs(token)
+                    headers.update({"LayoutCode": "product", "X-Misa-Language": "vi-VN"})
+                code = self._get_product_code_by_misa_id(headers, misa_id)
+                if code:
+                    product = ProductTemplate.search([
+                        ('default_code', '=', code),
+                    ], limit=1)
+
+            if product:
+                product.write({'description': description or ""})
+                return True
+
+            _logger.warning(
+                "Cannot sync Description to Odoo: product not found for MISA ID %s",
+                misa_id,
+            )
+        except Exception as e:
+            _logger.error("Odoo description sync failed for MISA ID %s: %s", misa_id, e)
+        return False
+
     # =====================================================================
     # Product — update field
     # =====================================================================
@@ -827,6 +917,8 @@ class MisaCrmApi(models.AbstractModel):
             payload = self._update_name_payload(misa_id, new_value, old_value)
         elif field_type == 'code':
             payload = self._update_code_payload(misa_id, new_value, old_value)
+        elif field_type in ('Description', 'description'):
+            payload = self._update_description_payload(misa_id, new_value, old_value)
         elif field_type == 'unit_price_fixed':
             payload = self._update_unit_price_fixed_payload(misa_id, new_value, old_value)
         elif field_type == 'purchased_price':
@@ -848,6 +940,9 @@ class MisaCrmApi(models.AbstractModel):
             rj = res.json()
             if res.ok and rj.get("Success"):
                 _logger.info("✅ Updated %s for MISA ID %s", field_type, misa_id)
+                if field_type in ('Description', 'description'):
+                    self._sync_product_description_to_odoo(
+                        misa_id, new_value, headers=headers)
                 return True
             _logger.warning("⚠️ Update %s failed: %s", field_type, res.text)
             return False

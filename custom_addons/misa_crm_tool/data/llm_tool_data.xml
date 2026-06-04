@@ -40,7 +40,8 @@
     "unit": {"type": "string", "description": "Đơn vị tính (Cái, Bộ, Hộp...)"},
     "category": {"type": "string", "description": "Tên nhóm hàng"},
     "category_id": {"type": "integer", "description": "ID nhóm hàng"},
-    "type": {"type": "string", "enum": ["goods", "service", "finished_product"], "description": "Loại hàng hóa"}
+    "type": {"type": "string", "enum": ["goods", "service", "finished_product"], "description": "Loại hàng hóa"},
+    "Description": {"type": "string", "description": "Mô tả sản phẩm trên MISA CRM. Có thể truyền chuỗi JSON, VD: {\"Vật liệu\" : \"Thép\"}"}
   },
   "required": ["code", "name", "price", "tax", "unit", "category", "category_id", "type", "price_pu"]
 }</field>
@@ -53,12 +54,12 @@
     <record id="llm_tool_misa_update_product" model="llm.tool">
         <field name="name">update_product_misa</field>
         <field name="implementation">misa_update_product</field>
-        <field name="description">Cập nhật thông tin sản phẩm trên MISA CRM: tên, mã, giá bán cố định, giá mua, giá bán lẻ, thuế. Cần có misa_id.</field>
+        <field name="description">Cập nhật thông tin sản phẩm trên MISA CRM: tên, mã, mô tả, giá bán cố định, giá mua, giá bán lẻ, thuế. Cần có misa_id.</field>
         <field name="input_schema">{
   "type": "object",
   "properties": {
     "misa_id": {"type": "string", "description": "MISA product ID (GUID)"},
-    "field": {"type": "string", "enum": ["name", "code", "unit_price_fixed", "purchased_price", "unit_price", "tax","custom_field_16"], "description": "Trường cần cập nhật: name=tên, code=mã, unit_price_fixed=giá bán cố định, purchased_price=giá mua, unit_price=giá bán lẻ (gồm VAT), tax=thuế GTGT (truyền % VD: 10, 8), custom_field_16=Đơn giá mua bắt buộc"},
+    "field": {"type": "string", "enum": ["name", "code", "Description", "unit_price_fixed", "purchased_price", "unit_price", "tax","custom_field_16"], "description": "Trường cần cập nhật: name=tên, code=mã, Description=mô tả sản phẩm, unit_price_fixed=giá bán cố định, purchased_price=giá mua, unit_price=giá bán lẻ (gồm VAT), tax=thuế GTGT (truyền % VD: 10, 8), custom_field_16=Đơn giá mua bắt buộc"},
     "new_value": {"type": "string", "description": "Giá trị mới"},
     "old_value": {"type": "string", "description": "Giá trị cũ (để đối chứng)"}
   },

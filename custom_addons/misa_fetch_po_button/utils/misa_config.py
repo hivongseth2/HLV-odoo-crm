@@ -307,3 +307,27 @@ class MisaConfig(models.AbstractModel):
             "ComparedValue": None,
             "ModuleType": None
         }
+
+    def get_misa_update_product_description_payload(self, misa_id, new_value, old_value):
+        return {
+            "FieldName": "Description",
+            "PrimaryKeyName": "ID",
+            "PrimaryKeyValue": str(misa_id),
+            "Id": 2130,
+            "Value": new_value,
+            "OldValue": old_value,
+            "TypeControl": 2,
+            "FormLayoutID": 45,
+            "LayoutCode": "Product",
+            "Lable": "Mô tả",
+            "Text": "Mô tả",
+            "IsRequired": False,
+            "IsNotZero": False,
+            "IsSensitive": False,
+            "IsUnique": False,
+            "MaxLength": 4000,
+            "CustomRoundDigit": 2,
+            "DecimalLength": 2,
+            "ComparedValue": None,
+            "ModuleType": None
+        }
