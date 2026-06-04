@@ -622,7 +622,7 @@
 }
 
 .hlv-barcode-app .item-card.scanned {
-  background-color: var(--success-bg);
+  background-color: transparent;
 }
 
 .hlv-barcode-app .item-info {
@@ -1479,7 +1479,7 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 12px;
   margin-top: 6px;
 }
 
@@ -1487,27 +1487,25 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 0.75rem;
+  font-size: 0.78rem;
   font-weight: 500;
+  color: var(--text-muted);
+  background: none !important;
+  border: none !important;
+  padding: 0 !important;
+  box-shadow: none !important;
 }
 
 .hlv-barcode-app .item-meta-badge.barcode {
-  background: var(--light-bg);
-  border: 1px solid var(--border-color);
   color: var(--text-muted);
 }
 
 .hlv-barcode-app .item-meta-badge.location {
-  background: var(--info-bg);
-  border: 1px solid var(--info-border);
   color: var(--info-color);
+  font-weight: 600;
 }
 
 .hlv-barcode-app .item-meta-badge.stock {
-  background: var(--warning-bg);
-  border: 1px solid var(--warning-border);
   color: var(--warning-color);
   font-weight: 600;
 }

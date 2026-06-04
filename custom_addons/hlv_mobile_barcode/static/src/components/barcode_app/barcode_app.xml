@@ -20,10 +20,10 @@
                         <div class="user-info" t-if="state.currentView !== 'picking' and state.currentView !== 'main'" t-on-click="toggleCamera" t-attf-style="padding: 6px; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; border-radius: 6px; border: 1px solid {{ state.cameraManuallyOff ? 'rgba(255,255,255,0.2)' : 'var(--success-color)' }}; background: {{ state.cameraManuallyOff ? 'rgba(255,255,255,0.1)' : 'var(--success-color)' }}; color: white; cursor: pointer; transition: all 0.25s;" title="Bật/Tắt Camera">
                             <i class="fa fa-camera" style="font-size: 1rem;"></i>
                         </div>
-                        <div class="user-info" t-if="state.currentView === 'picking' and state.pickingId" t-on-click="clearPicking" style="background: var(--danger-color); color: white;">
+                        <div class="user-info" t-if="state.currentView === 'picking' and state.pickingId" t-on-click="clearPicking" style="background: var(--danger-bg); border: 1px solid var(--danger-border); color: var(--danger-color); border-radius: 20px; font-weight: 600;">
                             <i class="fa fa-undo"></i> Làm lại
                         </div>
-                        <div class="user-info" t-on-click="goToMain">
+                        <div class="user-info" t-on-click="goToMain" style="background: var(--white); border: 1px solid var(--border-color); color: var(--primary-color); border-radius: 20px; font-weight: 600;">
                             <i class="fa fa-home"></i> Trang chủ
                         </div>
                     </div>
