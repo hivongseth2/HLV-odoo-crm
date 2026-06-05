@@ -587,6 +587,27 @@ class HlvChatgptSession(models.Model):
             _logger.exception("Update Misa Error")
             return json.dumps({"status": "error", "message": f"Lỗi cập nhật MISA: {str(e)}"}, ensure_ascii=False)
 
+    def _try_lock_for_zalo_processing(self):
+        """Return False if another webhook is already processing this session."""
+        self.ensure_one()
+        try:
+            with self.env.cr.savepoint():
+                self.env.cr.execute(
+                    "SELECT id FROM hlv_chatgpt_session WHERE id = %s FOR UPDATE NOWAIT",
+                    [self.id],
+                )
+            return True
+        except Exception:
+            _logger.info("Zalo Chat session %s is already processing", self.id)
+            return False
+
+    def _zalo_busy_reply(self, message_content):
+        content = (message_content or "").strip() or "[Gửi ảnh]"
+        return (
+            f'Hiện có yêu cầu đang xử lý, chưa xử lý được yêu cầu "{content}". '
+            "Vui lòng thử lại sau."
+        )
+
     @api.model
     def process_zalo_message(self, zalo_user_id, message_content, zalo_msg_id=False, image_url=False):
         """Webhook Entry Point"""
@@ -604,6 +625,22 @@ class HlvChatgptSession(models.Model):
         display_content = message_content
         if image_url:
             display_content = f"{message_content or '[Gửi ảnh]'} \n[IMG: {image_url}]"
+
+        if not session._try_lock_for_zalo_processing():
+            busy_reply = session._zalo_busy_reply(message_content)
+            self.env['hlv.chatgpt.message'].sudo().create({
+                'session_id': session.id,
+                'role': 'user',
+                'content': display_content,
+                'zalo_msg_id': zalo_msg_id
+            })
+            self.env['hlv.chatgpt.message'].sudo().create({
+                'session_id': session.id,
+                'role': 'assistant',
+                'content': busy_reply
+            })
+            session.sudo().write({'last_activity': fields.Datetime.now()})
+            return busy_reply
 
         self.env['hlv.chatgpt.message'].sudo().create({
             'session_id': session.id,
