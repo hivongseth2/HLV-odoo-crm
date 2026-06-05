@@ -4,6 +4,7 @@ import base64
 import json
 import logging
 import re
+import unicodedata
 import uuid
 from datetime import date, datetime
 from io import BytesIO
@@ -27,6 +28,7 @@ class HlvExcelPurchaseFile(models.Model):
     header_row = fields.Integer(string="Dòng header", default=4, required=True)
     public_slug = fields.Char(string="Mã link công khai", copy=False, readonly=True, default=lambda self: uuid.uuid4().hex[:12])
     public_url = fields.Char(string="Link công khai", compute="_compute_public_url")
+    access_password = fields.Char(string="Mật khẩu truy cập public")
     column_ids = fields.One2many("hlv.excel.purchase.column", "file_id", string="Cột Excel")
     line_ids = fields.One2many("hlv.excel.purchase.line", "file_id", string="Dữ liệu")
     line_count = fields.Integer(string="Số dòng", compute="_compute_line_count")
@@ -80,7 +82,11 @@ class HlvExcelPurchaseFile(models.Model):
     def _normalize_keyword(self, value):
         value = (value or "").lower()
         value = re.sub(r"\s+", " ", value)
-        return value.strip()
+        value = value.strip()
+        ascii_value = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii")
+        if ascii_value and ascii_value != value:
+            return f"{value} {ascii_value}"
+        return value
 
     def action_read_headers(self):
         for record in self:
@@ -103,6 +109,7 @@ class HlvExcelPurchaseFile(models.Model):
                     "sequence": index,
                     "name": header,
                     "searchable": True,
+                    "show_public": True,
                 })
             if not columns:
                 raise UserError("Không đọc được header tại dòng đã khai báo.")
@@ -174,6 +181,7 @@ class HlvExcelPurchaseColumn(models.Model):
     sequence = fields.Integer(string="Số cột", required=True)
     name = fields.Char(string="Header", required=True)
     searchable = fields.Boolean(string="Cho phép tìm kiếm", default=True)
+    show_public = fields.Boolean(string="Hiển thị public", default=True)
 
 
 class HlvExcelPurchaseLine(models.Model):

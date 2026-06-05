@@ -12,7 +12,7 @@
                                 <t t-esc="excel_file.name"/>
                             </p>
                         </div>
-                        <div class="eps-count" t-if="searched">
+                        <div class="eps-count" t-if="auth_ok and searched">
                             <span t-esc="total"/>
                             <small>kết quả</small>
                         </div>
@@ -25,7 +25,31 @@
                         </section>
                     </t>
 
-                    <t t-if="not not_found">
+                    <t t-if="not not_found and not auth_ok">
+                        <section class="eps-auth-card">
+                            <h2>Xác thực truy cập</h2>
+                            <p>Nhập mật khẩu để vào trang tra cứu.</p>
+
+                            <t t-if="auth_config_error">
+                                <div class="eps-alert"><t t-esc="auth_config_error"/></div>
+                            </t>
+                            <t t-if="auth_error">
+                                <div class="eps-alert"><t t-esc="auth_error"/></div>
+                            </t>
+
+                            <form method="post" t-att-action="request.httprequest.path" class="eps-auth-form" t-if="not auth_config_error">
+                                <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                                <input type="password"
+                                       name="access_password"
+                                       placeholder="Nhập mật khẩu truy cập"
+                                       required="required"
+                                       autocomplete="current-password"/>
+                                <button type="submit">Xác nhận</button>
+                            </form>
+                        </section>
+                    </t>
+
+                    <t t-if="not not_found and auth_ok">
                         <section class="eps-search-panel">
                             <form method="get" t-att-action="'/excel-purchase-search/%s' % excel_file.public_slug" class="eps-search-form">
                                 <div class="eps-input-wrap">
@@ -33,7 +57,7 @@
                                     <input type="text"
                                            name="q"
                                            t-att-value="keyword"
-                                           placeholder="Nhập từ khóa: mã chứng từ, nhà cung cấp, tên hàng..."
+                                           placeholder="Nhập từ khóa rời: pu04 pvn, ống 4 pvn, mã chứng từ..."
                                            autocomplete="off"/>
                                 </div>
                                 <button type="submit">Tìm kiếm</button>
