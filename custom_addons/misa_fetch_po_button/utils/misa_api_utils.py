@@ -1999,7 +1999,7 @@ class MisaApiUtils(models.AbstractModel):
             })
         
         payload = {
-            "Columns": "SUQsUHJvZHVjdENvZGUsUHJvZHVjdE5hbWUsUHJvZHVjdENhdGVnb3J5SUQsUHJvZHVjdENhdGVnb3J5SURUZXh0LFVzYWdlVW5pdElELFVzYWdlVW5pdElEVGV4dCxVbml0UHJpY2UsVGF4SUQsVGF4SURUZXh0LERlZmF1bHRTdG9ja0lELERlZmF1bHRTdG9ja0lEVGV4dCxGb3JtTGF5b3V0SUQsRm9ybUxheW91dElEVGV4dCxPd25lcklELE93bmVySURUZXh0LElzU3lzdGVtLEF2YXRhcg==",
+            "Columns": "SUQsUHJvZHVjdENvZGUsUHJvZHVjdE5hbWUsUHJvZHVjdENhdGVnb3J5SUQsUHJvZHVjdENhdGVnb3J5SURUZXh0LFVzYWdlVW5pdElELFVzYWdlVW5pdElEVGV4dCxEZWZhdWx0U3RvY2tJRCxEZWZhdWx0U3RvY2tJRFRleHQsU291cmNlLEJyYW5kSUQsQnJhbmRJRFRleHQsUHJvZHVjdFByb3BlcnRpZXNJRCxQcm9kdWN0UHJvcGVydGllc0lEVGV4dCxSYWRpdXMsRm9ybUxheW91dElELEZvcm1MYXlvdXRJRFRleHQsSGVpZ2h0LExlbmd0aCxXaWR0aCxRdWFudGl0eUZvcm11bGEsRGVzY3JpcHRpb24sT3JnYW5pemF0aW9uVW5pdElELE9yZ2FuaXphdGlvblVuaXRJRFRleHQsT3duZXJJRCxPd25lcklEVGV4dCxJc1N5c3RlbSxBdmF0YXIsSXNDb3Jw",
             "Sorts": [{"SortBy": "ModifiedDate", "Type": 0, "SortDirection": 1}],
             "Start": 0,
             "Page": 1,
@@ -2054,6 +2054,7 @@ class MisaApiUtils(models.AbstractModel):
                     "tax": p.get("TaxIDText"),
                     "type": p.get("ProductPropertiesIDText"),
                     "active": p.get("Active", True),
+                    "description": p.get("Description", ""),
                 })
             
             return result
