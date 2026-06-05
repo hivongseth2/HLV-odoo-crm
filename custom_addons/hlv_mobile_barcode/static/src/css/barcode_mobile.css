@@ -1427,8 +1427,6 @@
   font-size: 1em;
   letter-spacing: 0;
   white-space: nowrap;
-  overflow: hidden;
-  max-width: 100%;
 }
 
 /* Error state when location is missing */
@@ -1447,7 +1445,6 @@
   color: var(--text-muted);
   font-weight: 500;
   white-space: nowrap;
-  overflow: hidden;
 }
 
 /* Camera controls (matching barcode shipper) */
