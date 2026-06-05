@@ -28,6 +28,7 @@ class HlvExcelPurchaseFile(models.Model):
     header_row = fields.Integer(string="Dòng header", default=4, required=True)
     public_slug = fields.Char(string="Mã link công khai", copy=False, readonly=True, default=lambda self: uuid.uuid4().hex[:12])
     public_url = fields.Char(string="Link công khai", compute="_compute_public_url")
+    access_password = fields.Char(string="Mật khẩu truy cập public")
     column_ids = fields.One2many("hlv.excel.purchase.column", "file_id", string="Cột Excel")
     line_ids = fields.One2many("hlv.excel.purchase.line", "file_id", string="Dữ liệu")
     line_count = fields.Integer(string="Số dòng", compute="_compute_line_count")
@@ -108,6 +109,7 @@ class HlvExcelPurchaseFile(models.Model):
                     "sequence": index,
                     "name": header,
                     "searchable": True,
+                    "show_public": True,
                 })
             if not columns:
                 raise UserError("Không đọc được header tại dòng đã khai báo.")
@@ -179,6 +181,7 @@ class HlvExcelPurchaseColumn(models.Model):
     sequence = fields.Integer(string="Số cột", required=True)
     name = fields.Char(string="Header", required=True)
     searchable = fields.Boolean(string="Cho phép tìm kiếm", default=True)
+    show_public = fields.Boolean(string="Hiển thị public", default=True)
 
 
 class HlvExcelPurchaseLine(models.Model):

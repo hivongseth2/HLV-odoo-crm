@@ -40,17 +40,19 @@
                         <group string="Công khai">
                             <field name="public_slug"/>
                             <field name="public_url" readonly="1"/>
+                            <field name="access_password" password="True" placeholder="Nhập mật khẩu để khóa trang public"/>
                             <field name="line_count" readonly="1"/>
                             <field name="last_import_date" readonly="1"/>
                         </group>
                     </group>
                     <notebook>
-                        <page string="Cột được tìm kiếm">
+                        <page string="Cấu hình cột">
                             <field name="column_ids">
                                 <list editable="bottom">
                                     <field name="sequence" string="Cột"/>
                                     <field name="name" string="Header"/>
                                     <field name="searchable" widget="boolean_toggle"/>
+                                    <field name="show_public" widget="boolean_toggle"/>
                                 </list>
                             </field>
                         </page>
