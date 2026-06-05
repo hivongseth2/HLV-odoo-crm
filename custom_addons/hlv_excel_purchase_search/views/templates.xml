@@ -1,27 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <template id="public_search_template" name="Excel Purchase Search">
+    <template id="public_search_template" name="Tra cứu Excel mua hàng">
         <t t-call="website.layout">
             <div class="eps-page">
                 <main class="eps-shell">
                     <section class="eps-header">
                         <div>
-                            <p class="eps-kicker">Tra cuu Excel</p>
-                            <h1>So chi tiet mua hang</h1>
+                            <p class="eps-kicker">Tra cứu Excel</p>
+                            <h1>Sổ chi tiết mua hàng</h1>
                             <p class="eps-subtitle" t-if="excel_file">
                                 <t t-esc="excel_file.name"/>
                             </p>
                         </div>
                         <div class="eps-count" t-if="searched">
                             <span t-esc="total"/>
-                            <small>ket qua</small>
+                            <small>kết quả</small>
                         </div>
                     </section>
 
                     <t t-if="not_found">
                         <section class="eps-empty">
-                            <h2>Chua co file kha dung</h2>
-                            <p>Vui long lien he admin de upload va kich hoat file Excel.</p>
+                            <h2>Chưa có file khả dụng</h2>
+                            <p>Vui lòng liên hệ admin để upload và kích hoạt file Excel.</p>
                         </section>
                     </t>
 
@@ -33,10 +33,10 @@
                                     <input type="text"
                                            name="q"
                                            t-att-value="keyword"
-                                           placeholder="Nhap tu khoa: ma chung tu, nha cung cap, ten hang..."
+                                           placeholder="Nhập từ khóa: mã chứng từ, nhà cung cấp, tên hàng..."
                                            autocomplete="off"/>
                                 </div>
-                                <button type="submit">Tim kiem</button>
+                                <button type="submit">Tìm kiếm</button>
                             </form>
                         </section>
 
@@ -46,15 +46,15 @@
 
                         <t t-if="not searched">
                             <section class="eps-empty">
-                                <h2>Nhap tu khoa de bat dau</h2>
-                                <p>Ket qua chi tim trong cac cot admin da cho phep search.</p>
+                                <h2>Nhập từ khóa để bắt đầu</h2>
+                                <p>Kết quả chỉ tìm trong các cột admin đã cho phép tìm kiếm.</p>
                             </section>
                         </t>
 
                         <t t-if="searched and total == 0 and not error">
                             <section class="eps-empty">
-                                <h2>Khong tim thay du lieu</h2>
-                                <p>Thu tu khoa ngan hon hoac dung ma chung tu, ten nha cung cap, ten hang.</p>
+                                <h2>Không tìm thấy dữ liệu</h2>
+                                <p>Thử từ khóa ngắn hơn hoặc dùng mã chứng từ, tên nhà cung cấp, tên hàng.</p>
                             </section>
                         </t>
 
@@ -64,7 +64,7 @@
                                     <table class="eps-table">
                                         <thead>
                                             <tr>
-                                                <th class="eps-row-col">Dong</th>
+                                                <th class="eps-row-col">Dòng</th>
                                                 <t t-foreach="columns" t-as="column">
                                                     <th><t t-esc="column.name"/></th>
                                                 </t>

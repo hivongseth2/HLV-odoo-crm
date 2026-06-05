@@ -1,4 +1,10 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_hlv_excel_purchase_file_user,hlv.excel.purchase.file.user,model_hlv_excel_purchase_file,base.group_user,1,1,1,1
-access_hlv_excel_purchase_column_user,hlv.excel.purchase.column.user,model_hlv_excel_purchase_column,base.group_user,1,1,1,1
-access_hlv_excel_purchase_line_user,hlv.excel.purchase.line.user,model_hlv_excel_purchase_line,base.group_user,1,0,0,1
+access_hlv_excel_purchase_file_reader,hlv.excel.purchase.file.reader,model_hlv_excel_purchase_file,hlv_excel_purchase_search.group_hlv_excel_purchase_search_user,1,0,0,0
+access_hlv_excel_purchase_column_reader,hlv.excel.purchase.column.reader,model_hlv_excel_purchase_column,hlv_excel_purchase_search.group_hlv_excel_purchase_search_user,1,0,0,0
+access_hlv_excel_purchase_line_reader,hlv.excel.purchase.line.reader,model_hlv_excel_purchase_line,hlv_excel_purchase_search.group_hlv_excel_purchase_search_user,1,0,0,0
+access_hlv_excel_purchase_file_manager,hlv.excel.purchase.file.manager,model_hlv_excel_purchase_file,hlv_excel_purchase_search.group_hlv_excel_purchase_search_manager,1,1,1,1
+access_hlv_excel_purchase_column_manager,hlv.excel.purchase.column.manager,model_hlv_excel_purchase_column,hlv_excel_purchase_search.group_hlv_excel_purchase_search_manager,1,1,1,1
+access_hlv_excel_purchase_line_manager,hlv.excel.purchase.line.manager,model_hlv_excel_purchase_line,hlv_excel_purchase_search.group_hlv_excel_purchase_search_manager,1,1,1,1
+access_hlv_excel_purchase_file_system,hlv.excel.purchase.file.system,model_hlv_excel_purchase_file,base.group_system,1,1,1,1
+access_hlv_excel_purchase_column_system,hlv.excel.purchase.column.system,model_hlv_excel_purchase_column,base.group_system,1,1,1,1
+access_hlv_excel_purchase_line_system,hlv.excel.purchase.line.system,model_hlv_excel_purchase_line,base.group_system,1,1,1,1

@@ -16,21 +16,21 @@ _logger = logging.getLogger(__name__)
 
 class HlvExcelPurchaseFile(models.Model):
     _name = "hlv.excel.purchase.file"
-    _description = "Excel Search File - So chi tiet mua hang"
+    _description = "File Excel tra cứu sổ chi tiết mua hàng"
     _order = "write_date desc, id desc"
 
-    name = fields.Char(string="Ten file/search", required=True, default="So chi tiet mua hang")
+    name = fields.Char(string="Tên file/tra cứu", required=True, default="Sổ chi tiết mua hàng")
     active = fields.Boolean(default=True)
     file_data = fields.Binary(string="File Excel", attachment=True, required=True)
-    file_name = fields.Char(string="Ten file")
-    sheet_name = fields.Char(string="Sheet", help="De trong se lay sheet dau tien.")
-    header_row = fields.Integer(string="Dong header", default=4, required=True)
-    public_slug = fields.Char(string="Ma link public", copy=False, readonly=True, default=lambda self: uuid.uuid4().hex[:12])
-    public_url = fields.Char(string="Link public", compute="_compute_public_url")
-    column_ids = fields.One2many("hlv.excel.purchase.column", "file_id", string="Cot Excel")
-    line_ids = fields.One2many("hlv.excel.purchase.line", "file_id", string="Du lieu")
-    line_count = fields.Integer(string="So dong", compute="_compute_line_count")
-    last_import_date = fields.Datetime(string="Lan import cuoi", readonly=True)
+    file_name = fields.Char(string="Tên file")
+    sheet_name = fields.Char(string="Sheet", help="Để trống sẽ lấy sheet đầu tiên.")
+    header_row = fields.Integer(string="Dòng header", default=4, required=True)
+    public_slug = fields.Char(string="Mã link công khai", copy=False, readonly=True, default=lambda self: uuid.uuid4().hex[:12])
+    public_url = fields.Char(string="Link công khai", compute="_compute_public_url")
+    column_ids = fields.One2many("hlv.excel.purchase.column", "file_id", string="Cột Excel")
+    line_ids = fields.One2many("hlv.excel.purchase.line", "file_id", string="Dữ liệu")
+    line_count = fields.Integer(string="Số dòng", compute="_compute_line_count")
+    last_import_date = fields.Datetime(string="Lần import cuối", readonly=True)
 
     @api.depends("public_slug")
     def _compute_public_url(self):
@@ -49,20 +49,20 @@ class HlvExcelPurchaseFile(models.Model):
     def _get_workbook_sheet(self):
         self.ensure_one()
         if not self.file_data:
-            raise UserError("Chua upload file Excel.")
+            raise UserError("Chưa upload file Excel.")
         try:
             from openpyxl import load_workbook
         except ImportError as exc:
-            raise UserError("Server chua cai thu vien openpyxl de doc Excel.") from exc
+            raise UserError("Server chưa cài thư viện openpyxl để đọc Excel.") from exc
 
         try:
             workbook = load_workbook(BytesIO(base64.b64decode(self.file_data)), data_only=True, read_only=True)
         except Exception as exc:
-            raise UserError(f"Khong doc duoc file Excel: {exc}") from exc
+            raise UserError(f"Không đọc được file Excel: {exc}") from exc
 
         if self.sheet_name:
             if self.sheet_name not in workbook.sheetnames:
-                raise UserError(f"Khong tim thay sheet '{self.sheet_name}'.")
+                raise UserError(f"Không tìm thấy sheet '{self.sheet_name}'.")
             return workbook, workbook[self.sheet_name]
         return workbook, workbook[workbook.sheetnames[0]]
 
@@ -85,7 +85,7 @@ class HlvExcelPurchaseFile(models.Model):
     def action_read_headers(self):
         for record in self:
             if record.header_row < 1:
-                raise UserError("Dong header phai lon hon 0.")
+                raise UserError("Dòng header phải lớn hơn 0.")
             workbook, sheet = record._get_workbook_sheet()
             try:
                 header_cells = next(sheet.iter_rows(min_row=record.header_row, max_row=record.header_row, values_only=True))
@@ -105,7 +105,7 @@ class HlvExcelPurchaseFile(models.Model):
                     "searchable": True,
                 })
             if not columns:
-                raise UserError("Khong doc duoc header tai dong da khai bao.")
+                raise UserError("Không đọc được header tại dòng đã khai báo.")
             self.env["hlv.excel.purchase.column"].create(columns)
         return True
 
@@ -117,7 +117,7 @@ class HlvExcelPurchaseFile(models.Model):
 
             searchable_sequences = set(record.column_ids.filtered("searchable").mapped("sequence"))
             if not searchable_sequences:
-                raise UserError("Can chon it nhat 1 cot duoc phep search.")
+                raise UserError("Cần chọn ít nhất 1 cột được phép tìm kiếm.")
 
             column_by_sequence = {column.sequence: column.name for column in record.column_ids}
             max_sequence = max(column_by_sequence)
@@ -167,24 +167,24 @@ class HlvExcelPurchaseFile(models.Model):
 
 class HlvExcelPurchaseColumn(models.Model):
     _name = "hlv.excel.purchase.column"
-    _description = "Excel Purchase Search Column"
+    _description = "Cột tra cứu Excel mua hàng"
     _order = "file_id, sequence"
 
     file_id = fields.Many2one("hlv.excel.purchase.file", required=True, ondelete="cascade")
-    sequence = fields.Integer(string="So cot", required=True)
+    sequence = fields.Integer(string="Số cột", required=True)
     name = fields.Char(string="Header", required=True)
-    searchable = fields.Boolean(string="Cho phep search", default=True)
+    searchable = fields.Boolean(string="Cho phép tìm kiếm", default=True)
 
 
 class HlvExcelPurchaseLine(models.Model):
     _name = "hlv.excel.purchase.line"
-    _description = "Excel Purchase Search Line"
+    _description = "Dòng tra cứu Excel mua hàng"
     _order = "excel_row asc, id asc"
 
     file_id = fields.Many2one("hlv.excel.purchase.file", required=True, ondelete="cascade", index=True)
-    excel_row = fields.Integer(string="Dong Excel", index=True)
-    row_json = fields.Text(string="Du lieu JSON", required=True)
-    search_text = fields.Text(string="Search Text", index=True)
+    excel_row = fields.Integer(string="Dòng Excel", index=True)
+    row_json = fields.Text(string="Dữ liệu JSON", required=True)
+    search_text = fields.Text(string="Nội dung tìm kiếm", index=True)
 
     def get_row_values(self):
         self.ensure_one()
