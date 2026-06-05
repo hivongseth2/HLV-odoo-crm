@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_hlv_excel_purchase_file_list" model="ir.ui.view">
+        <field name="name">hlv.excel.purchase.file.list</field>
+        <field name="model">hlv.excel.purchase.file</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="name"/>
+                <field name="file_name"/>
+                <field name="header_row"/>
+                <field name="line_count"/>
+                <field name="last_import_date"/>
+                <field name="active" widget="boolean_toggle"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_hlv_excel_purchase_file_form" model="ir.ui.view">
+        <field name="name">hlv.excel.purchase.file.form</field>
+        <field name="model">hlv.excel.purchase.file</field>
+        <field name="arch" type="xml">
+            <form string="Tra cứu Excel mua hàng">
+                <header>
+                    <button name="action_read_headers" type="object" string="Đọc header" class="btn-secondary" groups="hlv_excel_purchase_search.group_hlv_excel_purchase_search_manager,base.group_system"/>
+                    <button name="action_import_lines" type="object" string="Import dữ liệu" class="btn-primary" groups="hlv_excel_purchase_search.group_hlv_excel_purchase_search_manager,base.group_system"/>
+                    <button name="action_open_public_url" type="object" string="Mở link công khai" class="btn-secondary"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name" placeholder="Sổ chi tiết mua hàng"/></h1>
+                    </div>
+                    <group>
+                        <group string="File Excel">
+                            <field name="active"/>
+                            <field name="file_data" filename="file_name"/>
+                            <field name="file_name" invisible="1"/>
+                            <field name="sheet_name" placeholder="Để trống nếu dùng sheet đầu tiên"/>
+                            <field name="header_row"/>
+                        </group>
+                        <group string="Công khai">
+                            <field name="public_slug"/>
+                            <field name="public_url" readonly="1"/>
+                            <field name="access_password" password="True" placeholder="Nhập mật khẩu để khóa trang public"/>
+                            <field name="line_count" readonly="1"/>
+                            <field name="last_import_date" readonly="1"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Cấu hình cột">
+                            <field name="column_ids">
+                                <list editable="bottom">
+                                    <field name="sequence" string="Cột"/>
+                                    <field name="name" string="Header"/>
+                                    <field name="searchable" widget="boolean_toggle"/>
+                                    <field name="show_public" widget="boolean_toggle"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Dữ liệu đã import">
+                            <field name="line_ids" readonly="1">
+                                <list create="0" edit="0">
+                                    <field name="excel_row"/>
+                                    <field name="search_text"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_hlv_excel_purchase_file" model="ir.actions.act_window">
+        <field name="name">Tra cứu Excel mua hàng</field>
+        <field name="res_model">hlv.excel.purchase.file</field>
+        <field name="view_mode">list,form</field>
+        <field name="groups_id" eval="[(4, ref('hlv_excel_purchase_search.group_hlv_excel_purchase_search_user')), (4, ref('base.group_system'))]"/>
+    </record>
+
+    <menuitem id="menu_hlv_excel_purchase_root"
+              name="Tra cứu Excel"
+              sequence="75"
+              groups="hlv_excel_purchase_search.group_hlv_excel_purchase_search_user,base.group_system"/>
+    <menuitem id="menu_hlv_excel_purchase_file"
+              name="Sổ chi tiết mua hàng"
+              parent="menu_hlv_excel_purchase_root"
+              action="action_hlv_excel_purchase_file"
+              sequence="10"
+              groups="hlv_excel_purchase_search.group_hlv_excel_purchase_search_user,base.group_system"/>
+</odoo>

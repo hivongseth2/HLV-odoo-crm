@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="module_category_hlv_excel_purchase_search" model="ir.module.category">
+        <field name="name">Tra cứu Excel mua hàng</field>
+        <field name="description">Quản lý file Excel sổ chi tiết mua hàng và dữ liệu tra cứu công khai.</field>
+        <field name="sequence">75</field>
+    </record>
+
+    <record id="group_hlv_excel_purchase_search_user" model="res.groups">
+        <field name="name">Người dùng tra cứu Excel mua hàng</field>
+        <field name="category_id" ref="module_category_hlv_excel_purchase_search"/>
+        <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+    </record>
+
+    <record id="group_hlv_excel_purchase_search_manager" model="res.groups">
+        <field name="name">Quản lý tra cứu Excel mua hàng</field>
+        <field name="category_id" ref="module_category_hlv_excel_purchase_search"/>
+        <field name="implied_ids" eval="[(4, ref('group_hlv_excel_purchase_search_user'))]"/>
+    </record>
+</odoo>
