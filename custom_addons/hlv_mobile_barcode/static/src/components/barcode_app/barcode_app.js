@@ -43,6 +43,7 @@ export class BarcodeApp extends Component {
             pickingName: savedState.pickingName || "",
             pickingIsPick: savedState.pickingIsPick || false,
             pickingIsReturn: savedState.pickingIsReturn || false,
+            pickingIsPutaway: savedState.pickingIsPutaway || false,
             pickingTypeCode: savedState.pickingTypeCode || "",
             pickingSourceTransferName: savedState.pickingSourceTransferName || "",
             warehouseCode: savedState.warehouseCode || "",
@@ -57,6 +58,7 @@ export class BarcodeApp extends Component {
             cameraNeedsActivation: false,
             cameraErrorMessage: "",
             showCameraPopup: false,
+            showDestLocationCamera: false,
             cameraManuallyOff: true,
             cameraDefaultOn: false,
             pickingRefreshTick: 0,
@@ -96,6 +98,7 @@ export class BarcodeApp extends Component {
                 pickingName: this.state.pickingName,
                 pickingIsPick: this.state.pickingIsPick,
                 pickingIsReturn: this.state.pickingIsReturn,
+                pickingIsPutaway: this.state.pickingIsPutaway,
                 pickingTypeCode: this.state.pickingTypeCode,
                 pickingSourceTransferName: this.state.pickingSourceTransferName,
                 warehouseCode: this.state.warehouseCode,
@@ -116,6 +119,7 @@ export class BarcodeApp extends Component {
             this.state.pickingName,
             this.state.pickingIsPick,
             this.state.pickingIsReturn,
+            this.state.pickingIsPutaway,
             this.state.pickingTypeCode,
             this.state.pickingSourceTransferName,
             this.state.warehouseCode,
@@ -409,12 +413,13 @@ export class BarcodeApp extends Component {
 
         if (this.state.currentView === 'picking') {
             try {
+                const locationMode = this.state.pickingIsPutaway ? null : this.state.scanMode;
                 const res = await rpc("/hlv_mobile_barcode/process_barcode", { 
                     picking_id: this.state.pickingId, 
                     barcode: barcode,
                     destination_location_id: this.state.scannedLocationId,
                     last_product_id: this.state.lastScannedProduct,
-                    location_mode: this.state.scanMode,
+                    location_mode: locationMode,
                     is_multi_location: this.state.isMultiLocationMode
                 });
                 if (res.error) {
@@ -515,6 +520,7 @@ export class BarcodeApp extends Component {
             pickingName: this.state.pickingName,
             pickingIsPick: this.state.pickingIsPick,
             pickingIsReturn: this.state.pickingIsReturn,
+            pickingIsPutaway: this.state.pickingIsPutaway,
             pickingTypeCode: this.state.pickingTypeCode,
             pickingSourceTransferName: this.state.pickingSourceTransferName,
             warehouseCode: this.state.warehouseCode,
@@ -560,6 +566,7 @@ export class BarcodeApp extends Component {
             this.state.pickingName = prevState.pickingName;
             this.state.pickingIsPick = prevState.pickingIsPick || false;
             this.state.pickingIsReturn = prevState.pickingIsReturn || false;
+            this.state.pickingIsPutaway = prevState.pickingIsPutaway || false;
             this.state.pickingTypeCode = prevState.pickingTypeCode || "";
             this.state.pickingSourceTransferName = prevState.pickingSourceTransferName || "";
             this.state.warehouseCode = prevState.warehouseCode || "";
@@ -613,6 +620,7 @@ export class BarcodeApp extends Component {
         this.state.pickingName = "";
         this.state.pickingIsPick = false;
         this.state.pickingIsReturn = false;
+        this.state.pickingIsPutaway = false;
         this.state.pickingTypeCode = "";
         this.state.pickingSourceTransferName = "";
         this.state.scannedLocationId = null;
@@ -726,6 +734,8 @@ export class BarcodeApp extends Component {
         this.state.destSelectionMode = mode;
         if (mode === 'location') {
             this.focusDestLocationInput();
+        } else if (this.state.showDestLocationCamera) {
+            this.closeDestLocationCamera();
         }
     }
 
@@ -778,6 +788,10 @@ export class BarcodeApp extends Component {
     }
 
     closeWarehousePopup(ev = null, restoreFocus = true) {
+        if (this.state.showDestLocationCamera) {
+            this.state.showDestLocationCamera = false;
+            this.closeCamera();
+        }
         this.state.showWarehouseSelectPopup = false;
         this.pendingBatchMove = null;
         this.pendingMove = null;
@@ -844,6 +858,7 @@ export class BarcodeApp extends Component {
                 this.state.pickingId = res.picking_id;
                 this.state.pickingName = res.picking_name;
                 this.state.warehouseCode = res.warehouse_code || "HLV";
+                this.state.pickingIsPutaway = false;
                 this.state.scannedLocationId = isMultiLocation ? null : res.location_id;
                 this.state.scannedLocationName = isMultiLocation ? "" : res.location_name;
                 this.state.currentView = 'picking';
@@ -897,6 +912,7 @@ export class BarcodeApp extends Component {
             this.state.pickingState = "";
             this.state.isMultiLocationMode = false;
             this.state.pickingIsReturn = false;
+            this.state.pickingIsPutaway = false;
             this.state.pickingRefreshTick += 1;
             this.state.cameraManuallyOff = !this.state.cameraDefaultOn;
 
@@ -904,6 +920,7 @@ export class BarcodeApp extends Component {
                 this.state.warehouseCode = data.warehouse_code || "HLV";
                 this.state.pickingIsPick = data.is_pick;
                 this.state.pickingIsReturn = data.is_return || false;
+                this.state.pickingIsPutaway = data.is_putaway || false;
                 this.state.pickingTypeCode = data.picking_type_code;
                 this.state.pickingSourceTransferName = data.source_transfer_name;
                 if (!data.is_pick && !data.is_putaway && data.location_name) {
@@ -930,11 +947,13 @@ export class BarcodeApp extends Component {
     onPickingLoaded(data) {
         this.state.pickingIsPick = data.is_pick;
         this.state.pickingIsReturn = data.is_return || false;
+        this.state.pickingIsPutaway = data.is_putaway || false;
         this.state.pickingTypeCode = data.picking_type_code;
         this.state.pickingSourceTransferName = data.source_transfer_name;
     }
 
     openPopupCamera() {
+        this._cameraReaderId = 'reader';
         this.state.showCameraPopup = true;
         setTimeout(() => {
             this.startPersistentCamera(true);
@@ -946,9 +965,26 @@ export class BarcodeApp extends Component {
         this.state.showCameraPopup = false;
     }
 
-    async startPersistentCamera(isUserGesture = false) {
+    async openDestLocationCamera() {
+        this._cameraReaderId = 'destLocationReader';
+        this.state.showDestLocationCamera = true;
+        this.state.cameraManuallyOff = false;
+        setTimeout(() => {
+            this.startPersistentCamera(true, 'destLocationReader');
+        }, 150);
+    }
+
+    async closeDestLocationCamera() {
+        await this.closeCamera();
+        this.state.showDestLocationCamera = false;
+        this.state.cameraManuallyOff = true;
+        this.focusDestLocationInput();
+    }
+
+    async startPersistentCamera(isUserGesture = false, readerId = 'reader') {
         if (this.state.cameraManuallyOff && !isUserGesture) return;
         this.state.cameraManuallyOff = false;
+        this._cameraReaderId = readerId;
         
         // Check if page is served securely (HTTPS or localhost)
         if (window.isSecureContext === false && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
@@ -994,11 +1030,11 @@ export class BarcodeApp extends Component {
             await this.closeCamera();
 
             // Wait for the #reader element to be mounted in the DOM (async transitions)
-            let readerEl = document.getElementById("reader");
+            let readerEl = document.getElementById(readerId);
             let retries = 0;
             while (!readerEl && retries < 15) {
                 await new Promise(resolve => setTimeout(resolve, 50));
-                readerEl = document.getElementById("reader");
+                readerEl = document.getElementById(readerId);
                 retries++;
             }
 
@@ -1087,7 +1123,7 @@ export class BarcodeApp extends Component {
                 if (!this._isCameraRunning || !this._cameraStream) return;
                 
                 // Re-attach video if Owl wiped it during a virtual DOM patch
-                const currentReaderEl = document.getElementById("reader");
+                const currentReaderEl = document.getElementById(readerId);
                 if (currentReaderEl && !currentReaderEl.contains(video)) {
                     currentReaderEl.innerHTML = '';
                     currentReaderEl.appendChild(video);
@@ -1220,6 +1256,10 @@ export class BarcodeApp extends Component {
         let readerEl = document.getElementById("reader");
         if (readerEl) {
             readerEl.innerHTML = '';
+        }
+        let destReaderEl = document.getElementById("destLocationReader");
+        if (destReaderEl) {
+            destReaderEl.innerHTML = '';
         }
         this.restoreScannerFocus();
     }

@@ -304,6 +304,12 @@ Phiếu Bước 1 (INT) hoàn thành (state = 'done')
   → Bấm: giải phóng camera, pushHistory(), mở phiếu mới
 ```
 
+**Hành vi phiếu Bước 2 / putaway**:
+- Phiếu Bước 2 được nhận diện qua `source_transfer_id` và thường là phiếu nhập/putaway từ Transit về vị trí đích.
+- Khi vào phiếu Bước 2, mobile không yêu cầu quét vị trí nguồn. Thủ kho quét sản phẩm để tăng `quantity`, sau đó bấm xác nhận.
+- Backend bỏ qua `location_mode='source'` mặc định của frontend đối với phiếu putaway/incoming, để không biến phiếu nhập thành luồng lấy hàng khỏi source.
+- Vẫn không cho quét thêm sản phẩm mới ngoài các move đã sinh từ phiếu Bước 1.
+
 ### 2.4.5. Luồng chuyển kho đa vị trí
 
 ```

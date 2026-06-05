@@ -561,17 +561,19 @@ class HLVMobileBarcodeController(http.Controller):
 
         pt_code = (picking.picking_type_id.sequence_code or '').upper()
         pt_type = picking.picking_type_id.code
-        is_putaway = False
         is_return_picking = _is_return_picking(picking)
+        is_pick_picking = _is_pick_picking(picking) and not is_return_picking
+        if is_return_picking:
+            is_putaway = picking.location_dest_id.usage == 'internal'
+        elif pt_type == 'incoming' or (pt_type == 'internal' and 'INT' not in pt_code and 'IN' in pt_code) or picking.location_id.usage == 'transit':
+            is_putaway = True
+        else:
+            is_putaway = False
+
         if location_mode == 'dest':
             is_putaway = True
-        elif location_mode == 'source':
+        elif location_mode == 'source' and (is_multi_location or is_pick_picking):
             is_putaway = False
-        elif is_return_picking:
-            is_putaway = picking.location_dest_id.usage == 'internal'
-        else:
-            if pt_type == 'incoming' or (pt_type == 'internal' and 'INT' not in pt_code and 'IN' in pt_code) or picking.location_id.usage == 'transit':
-                is_putaway = True
         
         # 1. Try to find location first
         location = request.env['stock.location'].sudo().search(['|', ('barcode', '=', barcode), ('name', '=', barcode)], limit=1)
@@ -672,10 +674,9 @@ class HLVMobileBarcodeController(http.Controller):
             
             return {'error': _('Kiện hàng "%s" không chứa sản phẩm nào phù hợp với phiếu này.', package.name)}
 
-        is_pick_picking = _is_pick_picking(picking) and not _is_return_picking(picking)
         is_in_picking = pt_type == 'incoming'
 
-        if (is_multi_location or is_pick_picking or is_in_picking) and not destination_location_id:
+        if (is_pick_picking or (is_multi_location and not is_putaway)) and not destination_location_id:
             return {'error': _('Vui lòng quét mã Vị trí (Kệ hàng) trước khi quét sản phẩm!')}
 
         product = request.env['product.product'].sudo().search(['|', ('barcode', '=', barcode), ('default_code', '=', barcode)], limit=1)
