@@ -589,14 +589,13 @@ class HlvChatgptSession(models.Model):
     def _try_lock_for_zalo_processing(self):
         """Return False if another webhook is already processing this session."""
         self.ensure_one()
-        try:
-            with self.env.cr.savepoint():
-                self.env.cr.execute(
-                    "SELECT id FROM hlv_chatgpt_session WHERE id = %s FOR UPDATE NOWAIT",
-                    [self.id],
-                )
+        self.env.cr.execute(
+            "SELECT id FROM hlv_chatgpt_session WHERE id = %s FOR UPDATE SKIP LOCKED",
+            [self.id],
+        )
+        if self.env.cr.fetchone():
             return True
-        except Exception:
+        else:
             _logger.info("Zalo Chat session %s is already processing", self.id)
             return False
 
