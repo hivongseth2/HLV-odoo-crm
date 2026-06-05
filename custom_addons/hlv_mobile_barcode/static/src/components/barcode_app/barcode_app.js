@@ -130,6 +130,7 @@ export class BarcodeApp extends Component {
         this.barcodeTimeout = null;
         this.boundHandleKeyDown = this.handleKeyDown.bind(this);
         this.boundRestoreScannerFocus = () => this.restoreScannerFocus();
+        this.boundPointerRestoreScannerFocus = (ev) => this.restoreScannerFocusFromPointer(ev);
         this.boundVisibilityRestoreScannerFocus = () => {
             if (!document.hidden) {
                 this.restoreScannerFocus();
@@ -163,6 +164,8 @@ export class BarcodeApp extends Component {
             document.addEventListener('keydown', this.boundHandleKeyDown, true);
             this.keepFocusOnHiddenInput();
             document.addEventListener('click', this.boundKeepFocus);
+            document.addEventListener('pointerdown', this.boundPointerRestoreScannerFocus, true);
+            document.addEventListener('touchend', this.boundPointerRestoreScannerFocus, true);
             window.addEventListener('focus', this.boundRestoreScannerFocus);
             window.addEventListener('pageshow', this.boundRestoreScannerFocus);
             document.addEventListener('visibilitychange', this.boundVisibilityRestoreScannerFocus);
@@ -193,6 +196,8 @@ export class BarcodeApp extends Component {
         onWillUnmount(() => {
             document.removeEventListener('click', this.boundKeepFocus);
             document.removeEventListener('keydown', this.boundHandleKeyDown, true);
+            document.removeEventListener('pointerdown', this.boundPointerRestoreScannerFocus, true);
+            document.removeEventListener('touchend', this.boundPointerRestoreScannerFocus, true);
             window.removeEventListener('focus', this.boundRestoreScannerFocus);
             window.removeEventListener('pageshow', this.boundRestoreScannerFocus);
             document.removeEventListener('visibilitychange', this.boundVisibilityRestoreScannerFocus);
@@ -206,6 +211,18 @@ export class BarcodeApp extends Component {
         setTimeout(() => this.keepFocusOnHiddenInput(), delay);
         setTimeout(() => this.keepFocusOnHiddenInput(), delay + 250);
         setTimeout(() => this.keepFocusOnHiddenInput(), delay + 1200);
+    }
+
+    restoreScannerFocusFromPointer(ev) {
+        const target = ev.target;
+        if (target && (
+            target === this.manualInputRef?.el ||
+            ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(target.tagName) ||
+            target.closest?.('button, a, input, textarea, select, .btn')
+        )) {
+            return;
+        }
+        this.restoreScannerFocus(0);
     }
 
     handleKeyDown(e) {
@@ -274,6 +291,14 @@ export class BarcodeApp extends Component {
     onManualInputBlur(ev) {
         const input = ev.target;
         input.setAttribute('inputmode', 'none');
+        setTimeout(() => {
+            input.focus({ preventScroll: true });
+            const pos = input.value ? input.value.length : 0;
+            try {
+                input.setSelectionRange(pos, pos);
+            } catch (e) {}
+        }, 0);
+        this.restoreScannerFocus(80);
     }
 
     async onHiddenInputKeyup(ev) {

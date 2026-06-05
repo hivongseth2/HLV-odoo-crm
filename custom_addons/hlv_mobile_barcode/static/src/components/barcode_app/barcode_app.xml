@@ -3,7 +3,7 @@
     <t t-name="hlv_mobile_barcode.BarcodeApp">
         <div class="hlv-barcode-app" t-ref="app-container">
             <!-- Hidden input for Ctrl+V and USB barcode scanner test integration -->
-            <input type="text" class="hidden-barcode-input" t-ref="hiddenInput" t-model="state.hiddenBarcode" t-on-keyup="onHiddenInputKeyup" inputmode="none" autocomplete="off" autocapitalize="off" spellcheck="false" style="position: fixed; opacity: 0.01; pointer-events: none; width: 1px; height: 1px; top: 0; left: 0; border: 0; padding: 0; background: transparent; color: transparent; caret-color: transparent; z-index: -1;"/>
+            <input type="text" class="hidden-barcode-input" t-ref="hiddenInput" t-model="state.hiddenBarcode" t-on-keyup="onHiddenInputKeyup" inputmode="none" autocomplete="off" autocapitalize="off" spellcheck="false" style="position: fixed; opacity: 0.01; pointer-events: none; width: 1px; height: 1px; top: 0; left: 0; border: 0; padding: 0; background: transparent; color: transparent; caret-color: transparent; z-index: 1;"/>
             <div t-attf-class="shipper-container #{state.currentView === 'main' ? 'main-view' : 'sub-view'}">
                 <!-- Header (hidden on main screen) -->
                 <div class="shipper-header" t-if="state.currentView !== 'main'">
