@@ -306,7 +306,23 @@ export class BarcodeApp extends Component {
     onManualInputBlur(ev) {
         const input = ev.target;
         input.setAttribute('inputmode', 'none');
+        if (this.state.showWarehouseSelectPopup) {
+            return;
+        }
         setTimeout(() => {
+            const active = document.activeElement;
+            if (
+                active &&
+                (
+                    ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(active.tagName) ||
+                    active.closest?.('.modal-overlay, .modal-content, .modal-overlay-custom, .modal-container-custom')
+                )
+            ) {
+                return;
+            }
+            if (this.state.currentView !== 'main' || this.state.showWarehouseSelectPopup) {
+                return;
+            }
             input.focus({ preventScroll: true });
             const pos = input.value ? input.value.length : 0;
             try {
@@ -761,10 +777,13 @@ export class BarcodeApp extends Component {
         }
     }
 
-    closeWarehousePopup() {
+    closeWarehousePopup(ev = null, restoreFocus = true) {
         this.state.showWarehouseSelectPopup = false;
         this.pendingBatchMove = null;
         this.pendingMove = null;
+        if (restoreFocus && this.state.currentView === 'main') {
+            this.restoreScannerFocus(80);
+        }
     }
 
     selectWarehouse(whId) {
@@ -793,7 +812,7 @@ export class BarcodeApp extends Component {
             sourceWarehouseId = this.state.multiLocationSourceWarehouseId;
         }
         
-        this.closeWarehousePopup();
+        this.closeWarehousePopup(null, false);
         
         if (pendingBatchMove) {
             if (pendingBatchMove.multiLocation) {
