@@ -32,6 +32,7 @@ export class BarcodeApp extends Component {
 
         this.hiddenInputRef = useRef("hiddenInput");
         this.manualInputRef = useRef("manualInput");
+        this.destLocationInputRef = useRef("destLocationInput");
 
         this.state = useState({
             currentView: savedState.currentView || "main", 
@@ -141,7 +142,22 @@ export class BarcodeApp extends Component {
         };
         this._ignoreNextHiddenKeyup = false;
 
-        this.keepFocusOnHiddenInput = () => {
+        const shouldPreserveUserFocus = (target) => {
+            if (!target) return false;
+            return (
+                target === this.manualInputRef?.el ||
+                ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(target.tagName) ||
+                !!target.closest?.('button, a, input, textarea, select, .btn, .modal-overlay, .modal-content, .modal-overlay-custom, .modal-container-custom')
+            );
+        };
+
+        this.keepFocusOnHiddenInput = (ev = null) => {
+            if (shouldPreserveUserFocus(ev?.target)) {
+                return;
+            }
+            if (this.state.showWarehouseSelectPopup) {
+                return;
+            }
             const active = document.activeElement;
             if (active && ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName) && 
                 !active.classList.contains('hidden-barcode-input') && 
@@ -218,11 +234,7 @@ export class BarcodeApp extends Component {
 
     restoreScannerFocusFromPointer(ev) {
         const target = ev.target;
-        if (target && (
-            target === this.manualInputRef?.el ||
-            ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(target.tagName) ||
-            target.closest?.('button, a, input, textarea, select, .btn')
-        )) {
+        if (target && target.closest?.('button, a, input, textarea, select, .btn, .modal-overlay, .modal-content, .modal-overlay-custom, .modal-container-custom')) {
             return;
         }
         this.restoreScannerFocus(0);
@@ -673,6 +685,7 @@ export class BarcodeApp extends Component {
         this.pendingBatchMove = { locBarcode, locName, multiLocation: false };
         this.resetDestPopupState();
         this.state.showWarehouseSelectPopup = true;
+        this.focusDestLocationInput();
     }
 
     promptMultiLocationMove() {
@@ -680,6 +693,7 @@ export class BarcodeApp extends Component {
         this.state.multiLocationSourceWarehouseId = this.state.warehouses && this.state.warehouses.length > 0 ? this.state.warehouses[0].id.toString() : false;
         this.resetDestPopupState();
         this.state.showWarehouseSelectPopup = true;
+        this.focusDestLocationInput();
     }
 
     resetDestPopupState() {
@@ -694,6 +708,21 @@ export class BarcodeApp extends Component {
 
     setDestSelectionMode(mode) {
         this.state.destSelectionMode = mode;
+        if (mode === 'location') {
+            this.focusDestLocationInput();
+        }
+    }
+
+    focusDestLocationInput() {
+        setTimeout(() => {
+            const input = this.destLocationInputRef?.el;
+            if (!input || this.state.destSelectionMode !== 'location' || !this.state.showWarehouseSelectPopup) return;
+            input.focus({ preventScroll: true });
+            const pos = input.value ? input.value.length : 0;
+            try {
+                input.setSelectionRange(pos, pos);
+            } catch (e) {}
+        }, 80);
     }
 
     async validateDestLocation() {
@@ -723,6 +752,12 @@ export class BarcodeApp extends Component {
             this.notification.add("Lỗi kết nối", { type: "danger" });
         } finally {
             this.state.isLocatingDest = false;
+        }
+    }
+
+    onDestLocationInputKeyup(ev) {
+        if (ev.key === 'Enter') {
+            this.validateDestLocation();
         }
     }
 

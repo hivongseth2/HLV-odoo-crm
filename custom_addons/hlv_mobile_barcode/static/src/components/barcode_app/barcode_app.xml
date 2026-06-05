@@ -325,8 +325,11 @@
                             
                             <div class="input-group" style="margin-bottom: 15px; display: flex;">
                                 <input type="text" class="form-control" placeholder="Mã vị trí..." 
+                                       t-ref="destLocationInput"
                                        t-model="state.destLocationBarcode" 
+                                       t-on-keyup="onDestLocationInputKeyup"
                                        t-on-change="validateDestLocation"
+                                       inputmode="text"
                                        style="flex: 1; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px 0 0 6px;" />
                                 <button class="btn btn-secondary" t-on-click="validateDestLocation" t-att-disabled="state.isLocatingDest"
                                         style="border-radius: 0 6px 6px 0; padding: 10px 15px;">
