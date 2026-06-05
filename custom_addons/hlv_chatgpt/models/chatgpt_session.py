@@ -626,18 +626,6 @@ class HlvChatgptSession(models.Model):
 
         if not session._try_lock_for_zalo_processing():
             busy_reply = session._zalo_busy_reply(message_content)
-            self.env['hlv.chatgpt.message'].sudo().create({
-                'session_id': session.id,
-                'role': 'user',
-                'content': display_content,
-                'zalo_msg_id': zalo_msg_id
-            })
-            self.env['hlv.chatgpt.message'].sudo().create({
-                'session_id': session.id,
-                'role': 'assistant',
-                'content': busy_reply
-            })
-            session.sudo().write({'last_activity': fields.Datetime.now()})
             return busy_reply
 
         self.env['hlv.chatgpt.message'].sudo().create({
