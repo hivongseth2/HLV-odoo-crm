@@ -1004,7 +1004,7 @@ class HLVMobileBarcodeController(http.Controller):
             new_val_base = move_line.product_uom_id._compute_quantity(new_val, move.product_id.uom_id)
             
             processed_qty_from_loc_base = sum(
-                ml.product_uom_id._compute_quantity(ml.quantity, move.product_id.uom_id)
+                ml.product_uom_id._compute_quantity(ml.qty_scanned if is_pick else ml.quantity, move.product_id.uom_id)
                 for ml in move.picking_id.move_line_ids
                 if ml.product_id == move.product_id and ml.location_id.id in child_loc_ids and ml.id != move_line.id
             )
