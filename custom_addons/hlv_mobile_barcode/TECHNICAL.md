@@ -247,7 +247,7 @@ Mở phiếu → RPC /get_picking_data
   - Không copy `qty_scanned -> quantity` lúc validate.
 - Trong lúc quét và sửa số lượng, phiếu trả hàng luôn dùng field Odoo chuẩn `stock.move.line.quantity`.
 - Vị trí nguồn/đích của phiếu trả hàng không đảo thủ công trong module mobile. Odoo tạo phiếu return từ wizard với source/destination đã đảo theo phiếu gốc.
-- Khi phiếu đã hoàn tất (`state = done`), footer `PickingScanner` hiển thị nút **Trả hàng**. Nút này mở popup mobile custom dựa trên wizard `stock.return.picking`, cho phép sửa số lượng hoặc xóa dòng trước khi tạo phiếu return.
+- Khi phiếu gốc đã hoàn tất (`state = done`) và không phải phiếu return, `PickingScanner` hiển thị nút **Trả hàng**. Nút này mở popup mobile custom dựa trên wizard `stock.return.picking`, cho phép sửa số lượng hoặc xóa dòng trước khi tạo phiếu return. Phiếu return đã xác nhận không hiện lại nút này.
 - Hai thao tác trong popup:
   - **Trả hàng**: gọi `stock.return.picking.action_create_returns()`.
   - **Trả tất cả**: gọi `stock.return.picking.action_create_returns_all()`. Nếu môi trường Odoo không có method này, backend trả lỗi rõ ràng.
