@@ -129,6 +129,12 @@ export class BarcodeApp extends Component {
         this.barcodeBuffer = "";
         this.barcodeTimeout = null;
         this.boundHandleKeyDown = this.handleKeyDown.bind(this);
+        this.boundRestoreScannerFocus = () => this.restoreScannerFocus();
+        this.boundVisibilityRestoreScannerFocus = () => {
+            if (!document.hidden) {
+                this.restoreScannerFocus();
+            }
+        };
         this._ignoreNextHiddenKeyup = false;
 
         this.keepFocusOnHiddenInput = () => {
@@ -157,6 +163,9 @@ export class BarcodeApp extends Component {
             document.addEventListener('keydown', this.boundHandleKeyDown, true);
             this.keepFocusOnHiddenInput();
             document.addEventListener('click', this.boundKeepFocus);
+            window.addEventListener('focus', this.boundRestoreScannerFocus);
+            window.addEventListener('pageshow', this.boundRestoreScannerFocus);
+            document.addEventListener('visibilitychange', this.boundVisibilityRestoreScannerFocus);
             
             // Wait for settings to load first to prevent race condition
             try {
@@ -184,6 +193,9 @@ export class BarcodeApp extends Component {
         onWillUnmount(() => {
             document.removeEventListener('click', this.boundKeepFocus);
             document.removeEventListener('keydown', this.boundHandleKeyDown, true);
+            window.removeEventListener('focus', this.boundRestoreScannerFocus);
+            window.removeEventListener('pageshow', this.boundRestoreScannerFocus);
+            document.removeEventListener('visibilitychange', this.boundVisibilityRestoreScannerFocus);
             if (this.focusInterval) {
                 clearInterval(this.focusInterval);
             }
@@ -193,6 +205,7 @@ export class BarcodeApp extends Component {
     restoreScannerFocus(delay = 50) {
         setTimeout(() => this.keepFocusOnHiddenInput(), delay);
         setTimeout(() => this.keepFocusOnHiddenInput(), delay + 250);
+        setTimeout(() => this.keepFocusOnHiddenInput(), delay + 1200);
     }
 
     handleKeyDown(e) {
@@ -1036,6 +1049,8 @@ export class BarcodeApp extends Component {
                 this.notification.add("Không thể mở Camera. Lỗi: " + err, { type: "warning" });
                 this.state.cameraFallback = true;
             }
+        } finally {
+            this.restoreScannerFocus();
         }
     }
 

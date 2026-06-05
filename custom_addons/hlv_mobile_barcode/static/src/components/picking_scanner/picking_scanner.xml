@@ -7,9 +7,6 @@
             </div>
             
             <t t-elif="state.picking">
-                <!-- Thẻ hidden input để chặn focus tự động vào input số lượng, tránh tự động mở bàn phím ảo trên mobile -->
-                <input type="text" class="hidden-barcode-input" autofocus="autofocus" inputmode="none" style="position: absolute; opacity: 0; pointer-events: none; width: 1px; height: 1px; left: -9999px; z-index: -9999;" />
-
                 <!-- CONFLICT POPUP: Khi vào lại phiếu PICK, tồn kho đã thay đổi -->
                 <div class="modal-overlay" t-if="state.showConflictPopup" style="z-index: 10000;">
                     <div class="modal-content" style="max-width: 420px; width: 92%;">
