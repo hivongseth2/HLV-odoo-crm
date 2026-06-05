@@ -1936,7 +1936,7 @@ class MisaApiUtils(models.AbstractModel):
         headers.update({"LayoutCode": "product", "X-Misa-Language": "vi-VN"})
 
         # Sử dụng API g1 thay vì g2
-        url = "https://amisapp.misa.vn/crm/g1/api/business/Product/Grid"
+        url = "https://amisapp.misa.vn/crm/g2/api/business/Product/Grid"
         
         filters = []
         keyword = name or code # Lấy giá trị nào đang có dữ liệu
@@ -1974,7 +1974,7 @@ class MisaApiUtils(models.AbstractModel):
             "Page": 1,
             "PageSize": limit,
             "Filters": filters,
-            "Formula": "",
+            "Formula": "( 1 OR 2 )" if keyword else "", # <--- Cập nhật dòng này
             "LayoutCode": "Product",
             "DefaultTotal": True,
             "IsMappingData": False,
@@ -1990,7 +1990,8 @@ class MisaApiUtils(models.AbstractModel):
             "IsConverted": False,
             "SessionID": str(uuid.uuid4()),
             "LayoutCodeCheckPermission": "Product",
-            "AISearchKeyword": ""
+            "AISearchKeyword": "",
+            "SkipNormalSearch": False # <--- Thêm dòng này
         }
 
         # _logger.info(f"🔎 [MISA SEARCH] Tìm kiếm sản phẩm với tên: '{name}'")
