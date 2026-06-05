@@ -2,6 +2,7 @@
 
 import logging
 import math
+import re
 
 from odoo import http
 from odoo.http import request
@@ -15,17 +16,26 @@ class HlvExcelPurchaseSearchController(http.Controller):
             [("active", "=", True)], order="write_date desc, id desc", limit=1
         )
 
+    def _get_keyword_tokens(self, keyword):
+        keyword = re.sub(r"\s+", " ", (keyword or "").strip().lower())
+        tokens = []
+        for token in keyword.split(" "):
+            if token and token not in tokens:
+                tokens.append(token)
+        return tokens[:12]
+
     def _prepare_search_values(self, excel_file, keyword, page):
         keyword = (keyword or "").strip()
         page = max(page, 1)
         per_page = 50
         domain = [("file_id", "=", excel_file.id)]
-        if keyword:
-            domain.append(("search_text", "ilike", keyword.lower()))
+        tokens = self._get_keyword_tokens(keyword)
+        for token in tokens:
+            domain.append(("search_text", "ilike", token))
 
         Line = request.env["hlv.excel.purchase.line"].sudo()
-        total = Line.search_count(domain) if keyword else 0
-        lines = Line.search(domain, offset=(page - 1) * per_page, limit=per_page) if keyword else Line.browse()
+        total = Line.search_count(domain) if tokens else 0
+        lines = Line.search(domain, offset=(page - 1) * per_page, limit=per_page) if tokens else Line.browse()
         columns = excel_file.column_ids.sorted("sequence")
 
         rows = []
@@ -51,7 +61,7 @@ class HlvExcelPurchaseSearchController(http.Controller):
             "columns": columns,
             "rows": rows,
             "keyword": keyword,
-            "searched": bool(keyword),
+            "searched": bool(tokens),
             "total": total,
             "page": page,
             "per_page": per_page,

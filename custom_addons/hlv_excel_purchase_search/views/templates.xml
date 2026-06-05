@@ -33,7 +33,7 @@
                                     <input type="text"
                                            name="q"
                                            t-att-value="keyword"
-                                           placeholder="Nhập từ khóa: mã chứng từ, nhà cung cấp, tên hàng..."
+                                           placeholder="Nhập từ khóa rời: pu04 pvn, ống 4 pvn, mã chứng từ..."
                                            autocomplete="off"/>
                                 </div>
                                 <button type="submit">Tìm kiếm</button>

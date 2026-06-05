@@ -4,6 +4,7 @@ import base64
 import json
 import logging
 import re
+import unicodedata
 import uuid
 from datetime import date, datetime
 from io import BytesIO
@@ -80,7 +81,11 @@ class HlvExcelPurchaseFile(models.Model):
     def _normalize_keyword(self, value):
         value = (value or "").lower()
         value = re.sub(r"\s+", " ", value)
-        return value.strip()
+        value = value.strip()
+        ascii_value = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii")
+        if ascii_value and ascii_value != value:
+            return f"{value} {ascii_value}"
+        return value
 
     def action_read_headers(self):
         for record in self:
