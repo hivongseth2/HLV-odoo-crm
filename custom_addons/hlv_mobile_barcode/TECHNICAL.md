@@ -36,6 +36,7 @@ hlv_mobile_barcode/
 │   ├── __init__.py
 │   ├── barcode_permission.py    ← Model phân quyền quét kho (2 model mới)
 │   ├── res_config_settings.py   ← Cấu hình ứng dụng (kế thừa res.company & res.config.settings)
+│   ├── stock_move_line.py       ← Mở rộng stock.move.line: thêm field qty_scanned cho PICK
 │   └── stock_picking.py         ← Mở rộng stock.picking (thêm field cờ đánh dấu)
 ├── security/
 │   ├── security.xml             ← Nhóm quyền: Quản lý phân quyền Barcode

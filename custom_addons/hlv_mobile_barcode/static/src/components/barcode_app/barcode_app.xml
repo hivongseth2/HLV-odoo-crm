@@ -259,12 +259,17 @@
                         
                         <button class="btn btn-danger" style="width: 100%; padding: 12px; font-weight: bold; margin-bottom: 10px;"
                                 t-on-click="() => this.confirmExit('clear')">
-                            Thoát và xóa số lượng đã quét
+                            <i class="fa fa-trash"/> Thoát và xóa số lượng đã quét
                         </button>
 
                         <button class="btn btn-primary" style="width: 100%; padding: 12px; font-weight: bold;"
                                 t-on-click="() => this.confirmExit('keep')">
-                            Thoát và giữ (Lưu tạm)
+                            <t t-if="state.pickingIsPick">
+                                <i class="fa fa-save"/> Thoát và lưu tạm (vào lại sẽ tiếp tục)
+                            </t>
+                            <t t-else="">
+                                <i class="fa fa-sign-out-alt"/> Thoát và giữ (Lưu tạm)
+                            </t>
                         </button>
                     </div>
                 </div>
