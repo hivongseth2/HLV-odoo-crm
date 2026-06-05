@@ -23,6 +23,9 @@
                         <setting string="Camera Mặc Định Bật" help="Bật: Camera tự mở sẵn khi vào phiếu. Tắt: Camera đóng sẵn, nhân viên bấm nút để bật khi cần.">
                             <field name="hlv_barcode_camera_default_on"/>
                         </setting>
+                        <setting string="Chuyển Cùng Kho 1 Bước" help="Bật để chuyển giữa các vị trí trong cùng kho đi thẳng 1 bước. Tắt để cùng kho khác vị trí cũng tạo quy trình 2 bước qua Transit.">
+                            <field name="hlv_barcode_same_warehouse_one_step"/>
+                        </setting>
                         <setting string="Dùng Quyền Riêng Cho Máy Quét" help="Bật để dùng bảng phân quyền máy quét độc lập. Tắt để dùng chung với quyền kho trên máy tính.">
                             <field name="hlv_barcode_use_independent_permissions"/>
                         </setting>

@@ -45,6 +45,12 @@ class ResConfigSettings(models.TransientModel):
         config_parameter='hlv_mobile_barcode.hlv_barcode_camera_default_on',
         help='Bật: Camera tự động mở khi vào phiếu. Tắt: Camera đóng sẵn, người dùng bấm nút để mở khi cần.'
     )
+    hlv_barcode_same_warehouse_one_step = fields.Boolean(
+        string='Chuyển Nội Bộ Cùng Kho 1 Bước',
+        config_parameter='hlv_mobile_barcode.hlv_barcode_same_warehouse_one_step',
+        default=True,
+        help='Bật: chuyển hàng giữa các vị trí trong cùng kho sẽ hoàn thành trong 1 bước. Tắt: cùng kho khác vị trí cũng đi theo quy trình 2 bước qua Transit.'
+    )
 
     def get_values(self):
         res = super(ResConfigSettings, self).get_values()

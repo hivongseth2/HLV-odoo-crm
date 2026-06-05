@@ -3,7 +3,7 @@
     <t t-name="hlv_mobile_barcode.BarcodeApp">
         <div class="hlv-barcode-app" t-ref="app-container">
             <!-- Hidden input for Ctrl+V and USB barcode scanner test integration -->
-            <input type="text" class="hidden-barcode-input" t-ref="hiddenInput" t-model="state.hiddenBarcode" t-on-keyup="onHiddenInputKeyup" inputmode="none" style="position: absolute; opacity: 0; pointer-events: none; width: 1px; height: 1px; left: -9999px; z-index: -9999;"/>
+            <input type="text" class="hidden-barcode-input" t-ref="hiddenInput" t-model="state.hiddenBarcode" t-on-keyup="onHiddenInputKeyup" inputmode="none" autocomplete="off" autocapitalize="off" spellcheck="false" style="position: fixed; opacity: 0.01; pointer-events: none; width: 1px; height: 1px; top: 0; left: 0; border: 0; padding: 0; background: transparent; color: transparent; caret-color: transparent; z-index: -1;"/>
             <div t-attf-class="shipper-container #{state.currentView === 'main' ? 'main-view' : 'sub-view'}">
                 <!-- Header (hidden on main screen) -->
                 <div class="shipper-header" t-if="state.currentView !== 'main'">
@@ -167,7 +167,7 @@
                     </div>
                     
                     <!-- Picking View -->
-                    <PickingScanner t-if="state.currentView === 'picking'" t-key="state.pickingId" pickingId="state.pickingId" onBack="() => this.goBack()" onSelectPicking="(id, name) => this.selectPicking(id, name)" onStateLoaded="(state) => this.onPickingStateLoaded(state)" onPickingLoaded="(data) => this.onPickingLoaded(data)" lastScannedProduct="state.lastScannedProduct" scannedLocationName="state.scannedLocationName" refreshTick="state.pickingRefreshTick" scanMode="state.scanMode" isMultiLocationMode="state.isMultiLocationMode" onToggleScanMode="(mode) => this.toggleScanMode(mode)" onDirectGoToMain="() => this._executeGoToMain()"/>
+                    <PickingScanner t-if="state.currentView === 'picking'" t-key="state.pickingId" pickingId="state.pickingId" onBack="() => this.goBack()" onSelectPicking="(id, name) => this.selectPicking(id, name)" onStateLoaded="(state) => this.onPickingStateLoaded(state)" onPickingLoaded="(data) => this.onPickingLoaded(data)" lastScannedProduct="state.lastScannedProduct" lastScannedMoveLine="state.lastScannedMoveLine" scannedLocationName="state.scannedLocationName" refreshTick="state.pickingRefreshTick" scanMode="state.scanMode" isMultiLocationMode="state.isMultiLocationMode" onToggleScanMode="(mode) => this.toggleScanMode(mode)" onDirectGoToMain="() => this._executeGoToMain()"/>
                     
                     <!-- Move Component -->
                     <LocationMove t-if="state.currentView === 'move'" productId="state.recordId" prefillLocationBarcode="state.prefillLocationBarcode" prefillLocationName="state.prefillLocationName" sourceQty="state.sourceQty" productName="state.productName" destWarehouseId="state.destWarehouseId" destLocationId="state.destLocationId" onBack="() => this.goBack()" onSuccess="() => this.onMoveSuccess()" registerScanner="(cb) => this.registerScanner(cb)"/>

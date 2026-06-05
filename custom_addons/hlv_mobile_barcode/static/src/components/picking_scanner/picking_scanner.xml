@@ -7,9 +7,6 @@
             </div>
             
             <t t-elif="state.picking">
-                <!-- Thẻ hidden input để chặn focus tự động vào input số lượng, tránh tự động mở bàn phím ảo trên mobile -->
-                <input type="text" class="hidden-barcode-input" autofocus="autofocus" inputmode="none" style="position: absolute; opacity: 0; pointer-events: none; width: 1px; height: 1px; left: -9999px; z-index: -9999;" />
-
                 <!-- CONFLICT POPUP: Khi vào lại phiếu PICK, tồn kho đã thay đổi -->
                 <div class="modal-overlay" t-if="state.showConflictPopup" style="z-index: 10000;">
                     <div class="modal-content" style="max-width: 420px; width: 92%;">
@@ -42,10 +39,6 @@
                             <button class="btn btn-warning" style="width: 100%; padding: 11px; font-weight: bold;"
                                     t-on-click="() => this.resolveConflict('cap')">
                                 <i class="fa fa-level-down-alt"/> Lấy số tối đa khả dụng
-                            </button>
-                            <button class="btn btn-secondary" style="width: 100%; padding: 11px;"
-                                    t-on-click="() => this.resolveConflict('keep')">
-                                <i class="fa fa-times"/> Bỏ qua, giữ nguyên
                             </button>
                         </div>
                     </div>
@@ -129,7 +122,7 @@
                     <div class="items-list" style="margin-top: 0;">
                         <t t-foreach="state.picking.lines" t-as="line" t-key="line.id || 'draft_' + line.product_id">
                             <t t-set="is_active_location" t-value="(state.picking.is_pick or state.picking.picking_type_code == 'incoming') and props.scannedLocationName and line.location_name == props.scannedLocationName"/>
-                            <div t-attf-class="product-row-card #{line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0 ? 'scanned' : ''} #{is_active_location ? 'active-location-row' : ''}" t-att-data-product-id="line.product_id">
+                            <div t-attf-class="product-row-card #{line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0 ? 'scanned' : ''} #{is_active_location ? 'active-location-row' : ''}" t-att-data-product-id="line.product_id" t-att-data-line-id="line.id">
                                 <div t-attf-class="item-card #{line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0 ? 'scanned' : ''}" style="border: none; margin-bottom: 0; display: flex; align-items: stretch; gap: 10px; padding: 10px;">
                                     <!-- Left: Image -->
                                     <div style="flex-shrink: 0; width: 64px; height: 64px; border-radius: 6px; overflow: hidden; background: #fff; display: flex; align-items: center; justify-content: center;">

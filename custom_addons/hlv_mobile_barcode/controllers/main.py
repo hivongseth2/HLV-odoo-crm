@@ -36,6 +36,13 @@ def _is_pick_picking(picking):
         'lấy hàng' in seq_name
     )
 
+def _same_warehouse_one_step_enabled():
+    param = request.env['ir.config_parameter'].sudo().get_param(
+        'hlv_mobile_barcode.hlv_barcode_same_warehouse_one_step',
+        'True'
+    )
+    return str(param).strip().lower() in ['true', '1']
+
 class HLVMobileBarcodeController(http.Controller):
 
     @http.route('/hlv_mobile_barcode/smart_scan', type='json', auth='user')
@@ -173,7 +180,9 @@ class HLVMobileBarcodeController(http.Controller):
                     
                     # Calculate individual line demand for Step 2
                     line_demand = move.product_uom_qty
-                    if picking.source_transfer_id:
+                    if is_pick_picking:
+                        line_demand = ml.quantity
+                    elif picking.source_transfer_id:
                         orig_mls = picking.source_transfer_id.move_line_ids.filtered(lambda l: l.product_id == ml.product_id)
                         if ml.package_id or ml.result_package_id:
                             pkg_id = ml.package_id or ml.result_package_id
@@ -472,15 +481,16 @@ class HLVMobileBarcodeController(http.Controller):
         partner_id = False
         target_location_dest_id = transit_loc.id
         override_dest_loc_id = False
+        same_warehouse_one_step = _same_warehouse_one_step_enabled()
         
         if dest_location_id:
             dest_loc = request.env['stock.location'].browse(dest_location_id)
             if dest_loc.exists():
-                if dest_loc.warehouse_id and dest_loc.warehouse_id == warehouse:
+                if dest_loc.warehouse_id and dest_loc.warehouse_id == warehouse and same_warehouse_one_step:
                     # Same warehouse -> direct 1 step move
                     target_location_dest_id = dest_loc.id
                 else:
-                    # Different warehouse -> use transit, but we need to override step 2
+                    # Different warehouse, or same warehouse with 1-step disabled -> use transit and override step 2.
                     override_dest_loc_id = dest_loc.id
                     if dest_loc.warehouse_id and dest_loc.warehouse_id.partner_id:
                         partner_id = dest_loc.warehouse_id.partner_id.id
@@ -558,11 +568,13 @@ class HLVMobileBarcodeController(http.Controller):
                 if move:
                     move_line = move.move_line_ids.filtered(lambda ml: not ml.result_package_id)
                     if move_line:
+                        updated_ml = move_line[-1]
                         if is_putaway:
-                            move_line[-1].location_dest_id = location.id
+                            updated_ml.location_dest_id = location.id
                         else:
-                            move_line[-1].location_id = location.id
+                            updated_ml.location_id = location.id
                         res['updated_product_id'] = last_product_id
+                        res['updated_move_line_id'] = updated_ml.id
             return res
 
         # 1.5. Try to find package
@@ -683,7 +695,10 @@ class HLVMobileBarcodeController(http.Controller):
             available_qty = free_qty + reserved_by_this
             
             processed_qty_from_loc_base = sum(
-                ml.product_uom_id._compute_quantity(ml.quantity, product.uom_id)
+                ml.product_uom_id._compute_quantity(
+                    ml.qty_scanned if is_pick_picking else ml.quantity,
+                    product.uom_id
+                )
                 for ml in picking.move_line_ids
                 if ml.product_id == product and ml.location_id.id in child_loc_ids
             )
@@ -814,6 +829,7 @@ class HLVMobileBarcodeController(http.Controller):
             
             ml_src_id = actual_src_id
         
+        updated_move_line = request.env['stock.move.line'].browse()
         if move_line:
             # Check if location matches, otherwise we might need a new move line
             last_ml = move_line[-1]
@@ -832,12 +848,13 @@ class HLVMobileBarcodeController(http.Controller):
                     new_ml_vals['qty_scanned'] = 1
                 else:
                     new_ml_vals['quantity'] = 1
-                request.env['stock.move.line'].create(new_ml_vals)
+                updated_move_line = request.env['stock.move.line'].create(new_ml_vals)
             else:
                 if is_pick_picking:
                     last_ml.qty_scanned += 1
                 else:
                     last_ml.quantity += 1
+                updated_move_line = last_ml
         else:
             # Create a new move line if none exists or all are full
             new_ml_vals = {
@@ -852,9 +869,15 @@ class HLVMobileBarcodeController(http.Controller):
                 new_ml_vals['qty_scanned'] = 1
             else:
                 new_ml_vals['quantity'] = 1
-            request.env['stock.move.line'].create(new_ml_vals)
+            updated_move_line = request.env['stock.move.line'].create(new_ml_vals)
             
-        return {'success': True, 'type': 'product', 'product_id': product.id, 'product_name': product.display_name}
+        return {
+            'success': True,
+            'type': 'product',
+            'product_id': product.id,
+            'product_name': product.display_name,
+            'move_line_id': updated_move_line.id or False,
+        }
 
     @http.route('/hlv_mobile_barcode/update_move_line_qty', type='json', auth='user')
     def update_move_line_qty(self, move_id=None, move_line_id=None, qty_change=None, new_qty=None):
@@ -1145,15 +1168,21 @@ class HLVMobileBarcodeController(http.Controller):
                 and (m.package_id.id if m.package_id else False) == (ml.package_id.id if ml.package_id else False)
             )
             available_qty = free_qty + reserved_by_this
+            line_assigned_qty = ml.product_uom_id._compute_quantity(ml.quantity, ml.product_id.uom_id)
+            available_qty = min(available_qty, line_assigned_qty)
             scanned_in_base = ml.product_uom_id._compute_quantity(ml.qty_scanned, ml.product_id.uom_id)
 
             if scanned_in_base > available_qty + 0.001:
+                available_qty_display = ml.product_id.uom_id._compute_quantity(
+                    max(0.0, available_qty),
+                    ml.product_uom_id
+                )
                 conflicts.append({
                     'move_line_id': ml.id,
                     'product_name': ml.product_id.display_name,
                     'location_name': ml.location_id.display_name,
                     'saved_qty': ml.qty_scanned,
-                    'available_qty': available_qty,
+                    'available_qty': available_qty_display,
                     'uom_name': ml.product_uom_id.name,
                 })
 
@@ -1193,6 +1222,8 @@ class HLVMobileBarcodeController(http.Controller):
                 and (m.package_id.id if m.package_id else False) == (ml.package_id.id if ml.package_id else False)
             )
             available_qty = free_qty + reserved_by_this
+            line_assigned_qty = ml.product_uom_id._compute_quantity(ml.quantity, ml.product_id.uom_id)
+            available_qty = min(available_qty, line_assigned_qty)
             scanned_in_base = ml.product_uom_id._compute_quantity(ml.qty_scanned, ml.product_id.uom_id)
 
             if scanned_in_base > available_qty + 0.001:
@@ -1629,11 +1660,12 @@ class HLVMobileBarcodeController(http.Controller):
         partner_id = False
         target_location_dest_id = transit_loc.id
         override_dest_loc_id = False
+        same_warehouse_one_step = _same_warehouse_one_step_enabled()
         
         if dest_location_id:
             dest_loc = request.env['stock.location'].sudo().browse(dest_location_id)
             if dest_loc.exists():
-                if dest_loc.warehouse_id and dest_loc.warehouse_id == warehouse:
+                if dest_loc.warehouse_id and dest_loc.warehouse_id == warehouse and same_warehouse_one_step:
                     # Same warehouse
                     target_location_dest_id = dest_loc.id
                 else:
