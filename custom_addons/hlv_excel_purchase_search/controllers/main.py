@@ -5,6 +5,7 @@ import hmac
 import logging
 import math
 import re
+from datetime import datetime
 
 from odoo import http
 from odoo.http import request
@@ -57,6 +58,64 @@ class HlvExcelPurchaseSearchController(http.Controller):
 
         return {"ok": False, "error": False, "config_error": False}
 
+    def _parse_number(self, value):
+        value = re.sub(r"[^\d,.\-]", "", str(value or "").strip())
+        if not value:
+            return None
+
+        if "," in value and "." in value:
+            last_comma = value.rfind(",")
+            last_dot = value.rfind(".")
+            decimal_sep = "," if last_comma > last_dot else "."
+            thousands_sep = "." if decimal_sep == "," else ","
+            decimal_part = value.split(decimal_sep)[-1]
+            if len(decimal_part) == 3:
+                decimal_sep = None
+            value = value.replace(thousands_sep, "")
+            if decimal_sep:
+                value = value.replace(decimal_sep, ".")
+        elif "," in value:
+            decimal_part = value.split(",")[-1]
+            value = value.replace(",", "." if 0 < len(decimal_part) < 3 else "")
+        elif "." in value:
+            decimal_part = value.split(".")[-1]
+            if len(decimal_part) == 3:
+                value = value.replace(".", "")
+
+        try:
+            return float(value)
+        except Exception:
+            return None
+
+    def _format_number(self, value, decimal_places):
+        number = self._parse_number(value)
+        if number is None:
+            return value or ""
+        decimal_places = max(0, min(int(decimal_places or 0), 6))
+        return f"{number:,.{decimal_places}f}"
+
+    def _format_date(self, value):
+        value = (value or "").strip()
+        if not value:
+            return ""
+        for date_format in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y", "%m/%d/%Y"):
+            try:
+                return datetime.strptime(value, date_format).strftime("%d/%m/%Y")
+            except Exception:
+                continue
+        return value
+
+    def _format_display_value(self, value, column):
+        if column.display_format == "number":
+            return self._format_number(value, column.decimal_places)
+        if column.display_format == "currency":
+            formatted = self._format_number(value, column.decimal_places)
+            symbol = (column.currency_symbol or "").strip()
+            return f"{formatted} {symbol}".strip()
+        if column.display_format == "date":
+            return self._format_date(value)
+        return value or ""
+
     def _prepare_search_values(self, excel_file, keyword, page):
         keyword = (keyword or "").strip()
         page = max(page, 1)
@@ -76,7 +135,10 @@ class HlvExcelPurchaseSearchController(http.Controller):
             row_values = line.get_row_values()
             rows.append({
                 "excel_row": line.excel_row,
-                "values": [row_values.get(str(column.sequence), "") for column in columns],
+                "values": [
+                    self._format_display_value(row_values.get(str(column.sequence), ""), column)
+                    for column in columns
+                ],
             })
 
         pager = request.website.pager(

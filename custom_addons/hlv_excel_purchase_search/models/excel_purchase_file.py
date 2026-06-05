@@ -182,6 +182,14 @@ class HlvExcelPurchaseColumn(models.Model):
     name = fields.Char(string="Header", required=True)
     searchable = fields.Boolean(string="Cho phép tìm kiếm", default=True)
     show_public = fields.Boolean(string="Hiển thị public", default=True)
+    display_format = fields.Selection([
+        ("text", "Văn bản"),
+        ("number", "Số"),
+        ("currency", "Tiền tệ"),
+        ("date", "Ngày"),
+    ], string="Định dạng hiển thị", default="text", required=True)
+    decimal_places = fields.Integer(string="Số lẻ", default=0)
+    currency_symbol = fields.Char(string="Ký hiệu tiền tệ", default="")
 
 
 class HlvExcelPurchaseLine(models.Model):

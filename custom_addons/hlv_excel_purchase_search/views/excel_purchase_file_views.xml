@@ -53,6 +53,9 @@
                                     <field name="name" string="Header"/>
                                     <field name="searchable" widget="boolean_toggle"/>
                                     <field name="show_public" widget="boolean_toggle"/>
+                                    <field name="display_format"/>
+                                    <field name="decimal_places"/>
+                                    <field name="currency_symbol"/>
                                 </list>
                             </field>
                         </page>
