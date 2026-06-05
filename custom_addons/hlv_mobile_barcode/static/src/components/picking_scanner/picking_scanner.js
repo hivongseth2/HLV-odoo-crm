@@ -209,7 +209,6 @@ export class PickingScanner extends Component {
                 this.notification.add("Lỗi kết nối", { type: "danger" });
             }
         }
-        // 'keep': giữ nguyên, không làm gì thêm
     }
 
     async clearQuantities(skipConfirm = false) {

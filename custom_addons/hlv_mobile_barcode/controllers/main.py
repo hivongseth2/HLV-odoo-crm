@@ -173,7 +173,9 @@ class HLVMobileBarcodeController(http.Controller):
                     
                     # Calculate individual line demand for Step 2
                     line_demand = move.product_uom_qty
-                    if picking.source_transfer_id:
+                    if is_pick_picking:
+                        line_demand = ml.quantity
+                    elif picking.source_transfer_id:
                         orig_mls = picking.source_transfer_id.move_line_ids.filtered(lambda l: l.product_id == ml.product_id)
                         if ml.package_id or ml.result_package_id:
                             pkg_id = ml.package_id or ml.result_package_id
@@ -1148,15 +1150,21 @@ class HLVMobileBarcodeController(http.Controller):
                 and (m.package_id.id if m.package_id else False) == (ml.package_id.id if ml.package_id else False)
             )
             available_qty = free_qty + reserved_by_this
+            line_assigned_qty = ml.product_uom_id._compute_quantity(ml.quantity, ml.product_id.uom_id)
+            available_qty = min(available_qty, line_assigned_qty)
             scanned_in_base = ml.product_uom_id._compute_quantity(ml.qty_scanned, ml.product_id.uom_id)
 
             if scanned_in_base > available_qty + 0.001:
+                available_qty_display = ml.product_id.uom_id._compute_quantity(
+                    max(0.0, available_qty),
+                    ml.product_uom_id
+                )
                 conflicts.append({
                     'move_line_id': ml.id,
                     'product_name': ml.product_id.display_name,
                     'location_name': ml.location_id.display_name,
                     'saved_qty': ml.qty_scanned,
-                    'available_qty': available_qty,
+                    'available_qty': available_qty_display,
                     'uom_name': ml.product_uom_id.name,
                 })
 
@@ -1196,6 +1204,8 @@ class HLVMobileBarcodeController(http.Controller):
                 and (m.package_id.id if m.package_id else False) == (ml.package_id.id if ml.package_id else False)
             )
             available_qty = free_qty + reserved_by_this
+            line_assigned_qty = ml.product_uom_id._compute_quantity(ml.quantity, ml.product_id.uom_id)
+            available_qty = min(available_qty, line_assigned_qty)
             scanned_in_base = ml.product_uom_id._compute_quantity(ml.qty_scanned, ml.product_id.uom_id)
 
             if scanned_in_base > available_qty + 0.001:

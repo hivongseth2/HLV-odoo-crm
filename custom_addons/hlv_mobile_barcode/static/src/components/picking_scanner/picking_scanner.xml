@@ -43,10 +43,6 @@
                                     t-on-click="() => this.resolveConflict('cap')">
                                 <i class="fa fa-level-down-alt"/> Lấy số tối đa khả dụng
                             </button>
-                            <button class="btn btn-secondary" style="width: 100%; padding: 11px;"
-                                    t-on-click="() => this.resolveConflict('keep')">
-                                <i class="fa fa-times"/> Bỏ qua, giữ nguyên
-                            </button>
                         </div>
                     </div>
                 </div>
