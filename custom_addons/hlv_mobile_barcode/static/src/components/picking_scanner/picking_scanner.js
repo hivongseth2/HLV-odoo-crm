@@ -13,6 +13,7 @@ export class PickingScanner extends Component {
         onStateLoaded: { type: Function, optional: true },
         onPickingLoaded: { type: Function, optional: true },
         lastScannedProduct: { optional: true },
+        lastScannedMoveLine: { optional: true },
         scannedLocationName: { type: [String, Boolean], optional: true },
         refreshTick: { type: Number, optional: true },
         scanMode: { type: [String, Boolean], optional: true },
@@ -61,6 +62,7 @@ export class PickingScanner extends Component {
                 this._hasCheckedConflict = false;
             }
             if (nextProps.lastScannedProduct !== this.props.lastScannedProduct 
+                || nextProps.lastScannedMoveLine !== this.props.lastScannedMoveLine
                 || nextProps.scannedLocationName !== this.props.scannedLocationName
                 || nextProps.refreshTick !== this.props.refreshTick
                 || nextProps.pickingId !== this.props.pickingId) {
@@ -70,9 +72,13 @@ export class PickingScanner extends Component {
 
         useEffect(() => {
             if (!this.state.loading && this.props.lastScannedProduct) {
-                // lastScannedProduct is actually the product_id from the backend (res.product_id)
+                const moveLineId = Number(this.props.lastScannedMoveLine || 0);
                 const productId = Number(this.props.lastScannedProduct);
-                const element = document.querySelector(`[data-product-id="${productId}"] .item-card`);
+                const element = (
+                    moveLineId
+                        ? document.querySelector(`[data-line-id="${moveLineId}"] .item-card`)
+                        : null
+                ) || document.querySelector(`[data-product-id="${productId}"] .item-card`);
                 if (element) {
                     element.classList.remove('flash-highlight');
                     void element.offsetWidth; // Force CSS reflow to restart animation
@@ -83,7 +89,7 @@ export class PickingScanner extends Component {
                     }, 1500);
                 }
             }
-        }, () => [this.props.lastScannedProduct, this.props.refreshTick, this.state.loading]);
+        }, () => [this.props.lastScannedProduct, this.props.lastScannedMoveLine, this.props.refreshTick, this.state.loading]);
 
         useEffect(() => {
             if (this.locationBannerRef.el) {

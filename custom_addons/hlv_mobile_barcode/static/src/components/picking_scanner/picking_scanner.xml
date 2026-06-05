@@ -125,7 +125,7 @@
                     <div class="items-list" style="margin-top: 0;">
                         <t t-foreach="state.picking.lines" t-as="line" t-key="line.id || 'draft_' + line.product_id">
                             <t t-set="is_active_location" t-value="(state.picking.is_pick or state.picking.picking_type_code == 'incoming') and props.scannedLocationName and line.location_name == props.scannedLocationName"/>
-                            <div t-attf-class="product-row-card #{line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0 ? 'scanned' : ''} #{is_active_location ? 'active-location-row' : ''}" t-att-data-product-id="line.product_id">
+                            <div t-attf-class="product-row-card #{line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0 ? 'scanned' : ''} #{is_active_location ? 'active-location-row' : ''}" t-att-data-product-id="line.product_id" t-att-data-line-id="line.id">
                                 <div t-attf-class="item-card #{line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0 ? 'scanned' : ''}" style="border: none; margin-bottom: 0; display: flex; align-items: stretch; gap: 10px; padding: 10px;">
                                     <!-- Left: Image -->
                                     <div style="flex-shrink: 0; width: 64px; height: 64px; border-radius: 6px; overflow: hidden; background: #fff; display: flex; align-items: center; justify-content: center;">

@@ -58,6 +58,8 @@ export class BarcodeApp extends Component {
             cameraManuallyOff: true,
             cameraDefaultOn: false,
             pickingRefreshTick: 0,
+            lastScannedProduct: null,
+            lastScannedMoveLine: null,
             pickingState: "",
             scanMode: savedState.scanMode || "source",
             warehouses: [],
@@ -316,12 +318,14 @@ export class BarcodeApp extends Component {
                     
                     if (res.updated_product_id) {
                         this.state.lastScannedProduct = res.updated_product_id;
+                        this.state.lastScannedMoveLine = res.updated_move_line_id || null;
                     }
                     this.state.pickingRefreshTick += 1;
                 } else {
                     this.playSound('success');
                     this.notification.add(`Scanned ${res.product_name}`, { type: "success" });
                     this.state.lastScannedProduct = res.product_id;
+                    this.state.lastScannedMoveLine = res.move_line_id || null;
                     this.state.pickingRefreshTick += 1;
                 }
             } catch (e) {
@@ -501,6 +505,7 @@ export class BarcodeApp extends Component {
         this.state.scannedLocationId = null;
         this.state.scannedLocationName = "";
         this.state.lastScannedProduct = null;
+        this.state.lastScannedMoveLine = null;
         this.state.warehouseCode = "";
         this.state.lookupType = null;
         this.state.recordId = null;
@@ -749,6 +754,7 @@ export class BarcodeApp extends Component {
             this.state.scannedLocationId = null;
             this.state.scannedLocationName = "";
             this.state.lastScannedProduct = null;
+            this.state.lastScannedMoveLine = null;
             this.state.pickingState = "";
             this.state.isMultiLocationMode = false;
             this.state.pickingRefreshTick += 1;
@@ -1123,6 +1129,7 @@ export class BarcodeApp extends Component {
                 this.state.scannedLocationId = null;
                 this.state.scannedLocationName = "";
                 this.state.lastScannedProduct = null;
+                this.state.lastScannedMoveLine = null;
                 this.state.pickingRefreshTick += 1;
             }
         } catch (e) {

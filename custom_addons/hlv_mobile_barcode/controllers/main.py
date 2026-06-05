@@ -568,11 +568,13 @@ class HLVMobileBarcodeController(http.Controller):
                 if move:
                     move_line = move.move_line_ids.filtered(lambda ml: not ml.result_package_id)
                     if move_line:
+                        updated_ml = move_line[-1]
                         if is_putaway:
-                            move_line[-1].location_dest_id = location.id
+                            updated_ml.location_dest_id = location.id
                         else:
-                            move_line[-1].location_id = location.id
+                            updated_ml.location_id = location.id
                         res['updated_product_id'] = last_product_id
+                        res['updated_move_line_id'] = updated_ml.id
             return res
 
         # 1.5. Try to find package
@@ -827,6 +829,7 @@ class HLVMobileBarcodeController(http.Controller):
             
             ml_src_id = actual_src_id
         
+        updated_move_line = request.env['stock.move.line'].browse()
         if move_line:
             # Check if location matches, otherwise we might need a new move line
             last_ml = move_line[-1]
@@ -845,12 +848,13 @@ class HLVMobileBarcodeController(http.Controller):
                     new_ml_vals['qty_scanned'] = 1
                 else:
                     new_ml_vals['quantity'] = 1
-                request.env['stock.move.line'].create(new_ml_vals)
+                updated_move_line = request.env['stock.move.line'].create(new_ml_vals)
             else:
                 if is_pick_picking:
                     last_ml.qty_scanned += 1
                 else:
                     last_ml.quantity += 1
+                updated_move_line = last_ml
         else:
             # Create a new move line if none exists or all are full
             new_ml_vals = {
@@ -865,9 +869,15 @@ class HLVMobileBarcodeController(http.Controller):
                 new_ml_vals['qty_scanned'] = 1
             else:
                 new_ml_vals['quantity'] = 1
-            request.env['stock.move.line'].create(new_ml_vals)
+            updated_move_line = request.env['stock.move.line'].create(new_ml_vals)
             
-        return {'success': True, 'type': 'product', 'product_id': product.id, 'product_name': product.display_name}
+        return {
+            'success': True,
+            'type': 'product',
+            'product_id': product.id,
+            'product_name': product.display_name,
+            'move_line_id': updated_move_line.id or False,
+        }
 
     @http.route('/hlv_mobile_barcode/update_move_line_qty', type='json', auth='user')
     def update_move_line_qty(self, move_id=None, move_line_id=None, qty_change=None, new_qty=None):
