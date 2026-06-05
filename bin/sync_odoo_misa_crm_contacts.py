@@ -33,9 +33,19 @@ MISA_FETCH_ATTEMPTS = 3
 
 # False: chỉ chạy TARGET_NAMES bên dưới.
 # True : lấy toàn bộ root customer trong Odoo, trừ khách Shopee nếu EXCLUDE_SHOPEE_PARTNERS=True.
-SYNC_ALL_ODOO_CUSTOMERS = False
+SYNC_ALL_ODOO_CUSTOMERS = True
 EXCLUDE_SHOPEE_PARTNERS = True
 SYNC_ALL_LIMIT = 0  # 0 = no limit
+DEBUG_TARGET_SELECTION = True
+REQUIRE_CUSTOMER_RANK = False
+SHOPEE_PARTNER_MARKERS = (
+    "SHOPEE",
+    "TIKTOK",
+    "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN",
+    "KHACH HANG KHONG CUNG CAP THONG TIN",
+    "KHÁCH LẺ KHÔNG LẤY HÓA ĐƠN",
+    "KHACH LE KHONG LAY HOA DON",
+)
 
 get_param = env['ir.config_parameter'].sudo().get_param
 TARGET_NAMES = [
@@ -47,8 +57,7 @@ TARGET_NAMES = [
 MISA_CRM_URL = "https://amisapp.misa.vn/crm/g2/api/business/Account/Grid"
 MISA_CRM_COMPANY_CODE = get_param("misa.crm.company_code") or "3R2PY2F4"
 MISA_CRM_AUTHORIZATION = (
-    get_param("misa.crm.authorization")
-    or get_param("MISA_CRM_AUTHORIZATION")
+    get_param("MISA_CRM_AUTHORIZATION")
     or os.environ.get("MISA_CRM_AUTHORIZATION", "")
 ).strip()
 
@@ -301,36 +310,38 @@ def describe_partner(partner):
     )
 
 
-def shopee_sale_order_domain():
-    SaleOrder = env["sale.order"].sudo()
-    fields = SaleOrder._fields
-    clauses = []
-    for field_name in ("shopee_order_ref", "x_studio_tham_chiu_shopee", "shopee_shop_id"):
-        if field_name in fields:
-            clauses.append((field_name, "!=", False))
-
-    if not clauses:
-        return []
-    if len(clauses) == 1:
-        return clauses
-    return ["|"] * (len(clauses) - 1) + clauses
-
-
 def shopee_commercial_partner_ids():
     if not EXCLUDE_SHOPEE_PARTNERS:
         return set()
 
-    domain = shopee_sale_order_domain()
-    if not domain:
-        return set()
+    Partner = env["res.partner"].sudo().with_context(active_test=False)
+    partners = Partner.browse()
 
-    SaleOrder = env["sale.order"].sudo()
-    orders = SaleOrder.search(domain)
-    partners = env["res.partner"].sudo()
-    for order in orders:
-        for partner in (order.partner_id, order.partner_invoice_id, order.partner_shipping_id):
-            if partner:
-                partners |= partner.commercial_partner_id
+    for marker in SHOPEE_PARTNER_MARKERS:
+        partners |= Partner.search([
+            ("parent_id", "=", False),
+            "|", "|",
+            ("name", "ilike", marker),
+            ("ref", "ilike", marker),
+            ("company_registry", "ilike", marker),
+        ])
+
+    if "amis.shopee.customer.map" in env:
+        for mapping in env["amis.shopee.customer.map"].sudo().search([]):
+            if mapping.customer_name:
+                partners |= Partner.search([
+                    ("parent_id", "=", False),
+                    ("name", "=", mapping.customer_name.strip()),
+                ])
+            if mapping.customer_code:
+                code = mapping.customer_code.strip()
+                partners |= Partner.search([
+                    ("parent_id", "=", False),
+                    "|",
+                    ("ref", "=", code),
+                    ("company_registry", "=", code),
+                ])
+
     return set(partners.ids)
 
 
@@ -339,14 +350,18 @@ def target_names_from_odoo():
         return TARGET_NAMES
 
     Partner = env["res.partner"].sudo().with_context(active_test=False)
-    excluded_ids = shopee_commercial_partner_ids()
-
-    domain = [
+    all_domain = [
         ("parent_id", "=", False),
         ("is_company", "=", True),
-        ("customer_rank", ">", 0),
         ("active", "=", True),
     ]
+    if REQUIRE_CUSTOMER_RANK:
+        all_domain.append(("customer_rank", ">", 0))
+
+    all_count = Partner.search_count(all_domain)
+    excluded_ids = shopee_commercial_partner_ids()
+
+    domain = list(all_domain)
     if excluded_ids:
         domain.append(("id", "not in", list(excluded_ids)))
 
@@ -361,8 +376,58 @@ def target_names_from_odoo():
             seen.add(key)
 
     print("  SYNC_ALL_ODOO_CUSTOMERS=True")
-    print("  Excluded Shopee commercial partners: %s" % len(excluded_ids))
+    print("  REQUIRE_CUSTOMER_RANK=%s" % REQUIRE_CUSTOMER_RANK)
+    print("  Odoo root customers before exclude : %s" % all_count)
+    print("  Excluded Shopee-like root partners : %s" % len(excluded_ids))
     print("  Odoo target root customer names    : %s" % len(names))
+
+    if DEBUG_TARGET_SELECTION:
+        all_active = Partner.search_count([("active", "=", True)])
+        active_companies = Partner.search_count([
+            ("active", "=", True),
+            ("is_company", "=", True),
+        ])
+        active_root_companies = Partner.search_count([
+            ("active", "=", True),
+            ("is_company", "=", True),
+            ("parent_id", "=", False),
+        ])
+        active_customers = Partner.search_count([
+            ("active", "=", True),
+            ("customer_rank", ">", 0),
+        ])
+        active_company_customers = Partner.search_count([
+            ("active", "=", True),
+            ("is_company", "=", True),
+            ("customer_rank", ">", 0),
+        ])
+        active_root_company_customers = Partner.search_count([
+            ("active", "=", True),
+            ("is_company", "=", True),
+            ("parent_id", "=", False),
+            ("customer_rank", ">", 0),
+        ])
+
+        print("  DEBUG counts:")
+        print("    active partners                  : %s" % all_active)
+        print("    active companies                 : %s" % active_companies)
+        print("    active root companies            : %s" % active_root_companies)
+        print("    active customers customer_rank>0 : %s" % active_customers)
+        print("    active company customers         : %s" % active_company_customers)
+        print("    active root company customers    : %s" % active_root_company_customers)
+
+        excluded = Partner.browse(list(excluded_ids)).sorted(lambda p: (p.name or "", p.id))
+        print("  DEBUG excluded Shopee-like sample:")
+        for p in excluded[:30]:
+            print("    EXCL id=%s name=%r ref=%r company_registry=%r customer_rank=%s" % (
+                p.id, p.name, p.ref, p.company_registry, p.customer_rank
+            ))
+
+        print("  DEBUG selected target sample:")
+        for p in partners[:30]:
+            print("    KEEP id=%s name=%r ref=%r company_registry=%r customer_rank=%s" % (
+                p.id, p.name, p.ref, p.company_registry, p.customer_rank
+            ))
     return names
 
 
