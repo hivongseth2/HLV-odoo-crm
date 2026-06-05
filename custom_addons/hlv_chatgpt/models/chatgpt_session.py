@@ -117,7 +117,7 @@ TOOLS_SCHEMA = [
         "properties": {
           "misa_id": {
             "type": "string",
-            "description": "MISA product ID (ví dụ : 77449)"
+            "description": "MISA product ID (ví dụ : 77449) lấy từ cột misa_id : nếu gọi search trước đó thì lấy misa_id từ kết quả search"
           },
           "field": {
             "type": "string",
@@ -134,7 +134,7 @@ TOOLS_SCHEMA = [
           },
           "old_value": {
             "type": "string",
-            "description": "Giá trị cũ để đối chứng"
+            "description": "Giá trị cũ để đối chứng, lấy từ kết quả search trước khi cập nhật. Ví dụ: {\"Vật liệu\" : \"Nhựa\"}"
           }
         },
         "required": [
