@@ -20,7 +20,7 @@
                         <div class="user-info" t-if="state.currentView !== 'picking' and state.currentView !== 'main'" t-on-click="toggleCamera" t-attf-style="padding: 6px; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; border-radius: 6px; border: 1px solid {{ state.cameraManuallyOff ? 'rgba(255,255,255,0.2)' : 'var(--success-color)' }}; background: {{ state.cameraManuallyOff ? 'rgba(255,255,255,0.1)' : 'var(--success-color)' }}; color: white; cursor: pointer; transition: all 0.25s;" title="Bật/Tắt Camera">
                             <i class="fa fa-camera" style="font-size: 1rem;"></i>
                         </div>
-                        <div class="user-info" t-if="state.currentView === 'picking' and state.pickingId" t-on-click="clearPicking" style="background: var(--danger-bg); border: 1px solid var(--danger-border); color: var(--danger-color); border-radius: 20px; font-weight: 600;">
+                        <div class="user-info" t-if="state.currentView === 'picking' and state.pickingId and state.pickingState !== 'done'" t-on-click="clearPicking" style="background: var(--danger-bg); border: 1px solid var(--danger-border); color: var(--danger-color); border-radius: 20px; font-weight: 600;">
                             <i class="fa fa-undo"></i> Làm lại
                         </div>
                         <div class="user-info" t-on-click="goToMain" style="background: var(--white); border: 1px solid var(--border-color); color: var(--primary-color); border-radius: 20px; font-weight: 600;">
@@ -49,7 +49,7 @@
                         </t>
                     </div>
                     <!-- Toggle Camera Button next to Picking Title -->
-                    <button class="btn btn-camera-toggle" t-on-click="toggleCamera" t-attf-style="width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 8px; border: 1px solid {{ state.cameraManuallyOff ? 'var(--border-color)' : 'var(--success-color)' }}; background: {{ state.cameraManuallyOff ? 'var(--light-bg)' : 'var(--success-color)' }}; color: {{ state.cameraManuallyOff ? 'var(--text-muted)' : '#ffffff' }}; box-shadow: var(--shadow-sm); cursor: pointer; transition: all 0.25s;" title="Bật/Tắt Camera">
+                    <button t-if="state.pickingState !== 'done'" class="btn btn-camera-toggle" t-on-click="toggleCamera" t-attf-style="width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 8px; border: 1px solid {{ state.cameraManuallyOff ? 'var(--border-color)' : 'var(--success-color)' }}; background: {{ state.cameraManuallyOff ? 'var(--light-bg)' : 'var(--success-color)' }}; color: {{ state.cameraManuallyOff ? 'var(--text-muted)' : '#ffffff' }}; box-shadow: var(--shadow-sm); cursor: pointer; transition: all 0.25s;" title="Bật/Tắt Camera">
                         <i class="fa fa-camera" style="font-size: 1.15rem;"></i>
                     </button>
                 </div>
@@ -134,7 +134,7 @@
                             <div class="card-box" style="padding: 15px;">
                                 <div style="font-weight: 700; margin-bottom: 10px; font-size: 0.92rem; color: var(--primary-color);"><i class="fa fa-keyboard"></i> Nhập mã thủ công</div>
                                 <div class="input-group-row" style="margin-bottom: 0;">
-                                    <input type="text" class="form-control" placeholder="Nhập mã sản phẩm, vị trí hoặc số phiếu..." t-model="state.manualBarcode" t-on-keyup="onManualBarcodeKeyup" t-ref="manualInput" inputmode="none" t-on-click="onManualInputClick" t-on-blur="onManualInputBlur"/>
+                                    <input type="text" class="form-control" placeholder="Nhập mã sản phẩm, vị trí hoặc số phiếu..." t-model="state.manualBarcode" t-on-keyup="onManualBarcodeKeyup" t-ref="manualInput" inputmode="none" t-on-pointerdown="onManualInputPointerDown" t-on-click="onManualInputClick" t-on-blur="onManualInputBlur"/>
                                     <button class="btn btn-primary" t-on-click="processManualBarcode" style="font-weight: bold;">
                                         <i class="fa fa-arrow-right"></i> Đi tiếp
                                     </button>
@@ -167,7 +167,7 @@
                     </div>
                     
                     <!-- Picking View -->
-                    <PickingScanner t-if="state.currentView === 'picking'" t-key="state.pickingId" pickingId="state.pickingId" onBack="() => this.goBack()" onSelectPicking="(id, name) => this.selectPicking(id, name)" onStateLoaded="(state) => this.onPickingStateLoaded(state)" onPickingLoaded="(data) => this.onPickingLoaded(data)" lastScannedProduct="state.lastScannedProduct" lastScannedMoveLine="state.lastScannedMoveLine" scannedLocationName="state.scannedLocationName" refreshTick="state.pickingRefreshTick" scanMode="state.scanMode" isMultiLocationMode="state.isMultiLocationMode" onToggleScanMode="(mode) => this.toggleScanMode(mode)" onDirectGoToMain="() => this._executeGoToMain()"/>
+                    <PickingScanner t-if="state.currentView === 'picking'" t-key="state.pickingId" pickingId="state.pickingId" onBack="() => this.goBack()" onSelectPicking="(id, name) => this.selectPicking(id, name)" onStateLoaded="(state) => this.onPickingStateLoaded(state)" onPickingLoaded="(data) => this.onPickingLoaded(data)" onValidated="() => this._executeGoToMain()" lastScannedProduct="state.lastScannedProduct" lastScannedMoveLine="state.lastScannedMoveLine" scannedLocationName="state.scannedLocationName" refreshTick="state.pickingRefreshTick" scanMode="state.scanMode" isMultiLocationMode="state.isMultiLocationMode" onToggleScanMode="(mode) => this.toggleScanMode(mode)" onDirectGoToMain="() => this._executeGoToMain()"/>
                     
                     <!-- Move Component -->
                     <LocationMove t-if="state.currentView === 'move'" productId="state.recordId" prefillLocationBarcode="state.prefillLocationBarcode" prefillLocationName="state.prefillLocationName" sourceQty="state.sourceQty" productName="state.productName" destWarehouseId="state.destWarehouseId" destLocationId="state.destLocationId" onBack="() => this.goBack()" onSuccess="() => this.onMoveSuccess()" registerScanner="(cb) => this.registerScanner(cb)"/>
