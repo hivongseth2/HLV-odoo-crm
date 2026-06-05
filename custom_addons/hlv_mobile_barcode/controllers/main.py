@@ -683,7 +683,10 @@ class HLVMobileBarcodeController(http.Controller):
             available_qty = free_qty + reserved_by_this
             
             processed_qty_from_loc_base = sum(
-                ml.product_uom_id._compute_quantity(ml.quantity, product.uom_id)
+                ml.product_uom_id._compute_quantity(
+                    ml.qty_scanned if is_pick_picking else ml.quantity,
+                    product.uom_id
+                )
                 for ml in picking.move_line_ids
                 if ml.product_id == product and ml.location_id.id in child_loc_ids
             )
