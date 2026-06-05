@@ -36,6 +36,13 @@ def _is_pick_picking(picking):
         'lấy hàng' in seq_name
     )
 
+def _same_warehouse_one_step_enabled():
+    param = request.env['ir.config_parameter'].sudo().get_param(
+        'hlv_mobile_barcode.hlv_barcode_same_warehouse_one_step',
+        'True'
+    )
+    return str(param).strip().lower() in ['true', '1']
+
 class HLVMobileBarcodeController(http.Controller):
 
     @http.route('/hlv_mobile_barcode/smart_scan', type='json', auth='user')
@@ -474,15 +481,16 @@ class HLVMobileBarcodeController(http.Controller):
         partner_id = False
         target_location_dest_id = transit_loc.id
         override_dest_loc_id = False
+        same_warehouse_one_step = _same_warehouse_one_step_enabled()
         
         if dest_location_id:
             dest_loc = request.env['stock.location'].browse(dest_location_id)
             if dest_loc.exists():
-                if dest_loc.warehouse_id and dest_loc.warehouse_id == warehouse:
+                if dest_loc.warehouse_id and dest_loc.warehouse_id == warehouse and same_warehouse_one_step:
                     # Same warehouse -> direct 1 step move
                     target_location_dest_id = dest_loc.id
                 else:
-                    # Different warehouse -> use transit, but we need to override step 2
+                    # Different warehouse, or same warehouse with 1-step disabled -> use transit and override step 2.
                     override_dest_loc_id = dest_loc.id
                     if dest_loc.warehouse_id and dest_loc.warehouse_id.partner_id:
                         partner_id = dest_loc.warehouse_id.partner_id.id
@@ -1642,11 +1650,12 @@ class HLVMobileBarcodeController(http.Controller):
         partner_id = False
         target_location_dest_id = transit_loc.id
         override_dest_loc_id = False
+        same_warehouse_one_step = _same_warehouse_one_step_enabled()
         
         if dest_location_id:
             dest_loc = request.env['stock.location'].sudo().browse(dest_location_id)
             if dest_loc.exists():
-                if dest_loc.warehouse_id and dest_loc.warehouse_id == warehouse:
+                if dest_loc.warehouse_id and dest_loc.warehouse_id == warehouse and same_warehouse_one_step:
                     # Same warehouse
                     target_location_dest_id = dest_loc.id
                 else:
