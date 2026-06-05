@@ -147,12 +147,12 @@ export class BarcodeApp extends Component {
             if (this.state.currentView === 'main') {
                 const manualInputEl = this.manualInputRef?.el;
                 if (manualInputEl) {
-                    manualInputEl.focus();
+                    manualInputEl.focus({ preventScroll: true });
                 }
             } else {
                 const inputEl = this.hiddenInputRef?.el;
                 if (inputEl) {
-                    inputEl.focus();
+                    inputEl.focus({ preventScroll: true });
                 }
             }
         };
@@ -246,12 +246,28 @@ export class BarcodeApp extends Component {
         }
     }
 
+    activateManualInput(ev) {
+        const input = ev.target || this.manualInputRef?.el;
+        if (!input) return;
+        input.setAttribute('inputmode', 'text');
+        input.removeAttribute('readonly');
+        setTimeout(() => {
+            input.focus({ preventScroll: true });
+            const pos = input.value ? input.value.length : 0;
+            try {
+                input.setSelectionRange(pos, pos);
+            } catch (e) {}
+        }, 0);
+    }
+
     onManualInputClick(ev) {
+        this.activateManualInput(ev);
+    }
+
+    onManualInputPointerDown(ev) {
         const input = ev.target;
-        if (input.getAttribute('inputmode') === 'none') {
+        if (input && input.getAttribute('inputmode') === 'none') {
             input.setAttribute('inputmode', 'text');
-            input.blur();
-            input.focus();
         }
     }
 
