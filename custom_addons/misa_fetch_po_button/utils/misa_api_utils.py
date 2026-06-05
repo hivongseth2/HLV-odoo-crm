@@ -1,3 +1,5 @@
+from os import name
+
 import requests
 import logging
 import time
@@ -1650,10 +1652,10 @@ class MisaApiUtils(models.AbstractModel):
         # if not cat_id:
         #      cat_id = self._get_category_id_by_name(headers, "Hàng hóa") or 23 
         
-        _logger.debug("catname", cat_name,)
+        # _logger.debug("catname", cat_name,)
 
         unit_id, unit_text = self._find_dictionary_item_unit(headers, unit_name)
-        _logger.info(f"Checking Unit: {unit_name} -> Found: {unit_id} - {unit_text}")
+        # _logger.info(f"Checking Unit: {unit_name} -> Found: {unit_id} - {unit_text}")
         
 
         if not unit_id:
@@ -1672,7 +1674,7 @@ class MisaApiUtils(models.AbstractModel):
         payload = {
             "ProductCode": code,
             "ProductName": name,
-            "Description": description or "",
+            "Description": "",
             "ProductCategoryID": cat_id,
             # "ProductCategoryIDText": category_name if cat_id != 23 else "Hàng hóa",
             "ProductCategoryIDText": cat_name or "",
@@ -1700,6 +1702,7 @@ class MisaApiUtils(models.AbstractModel):
                 "CustomField14": None,
                 "CustomField15": None,
                 "CustomField16": int(price_pu_val), 
+                "CustomField17": description or "",
                 "Avatar": ""
             },
             
@@ -1936,79 +1939,36 @@ class MisaApiUtils(models.AbstractModel):
         url = "https://amisapp.misa.vn/crm/g1/api/business/Product/Grid"
         
         filters = []
-        
-        if name:
+        keyword = name or code # Lấy giá trị nào đang có dữ liệu
+
+        if keyword:
+            keyword = keyword.strip()
+            # Thêm filter cho ProductCode
             filters.append({
-                "Value": name.strip(),
-                "IsDefaultFilter": False,
-                "IsCustomField": False,
-                "IsRelatedField": False,
-                "ModuleRelated": "",
-                "FromFilterCustom": False,
-                "ValueDisplayText": "",
-                "isValueDateNumber": False,
-                "IsSearchModule": False,
-                "ConfigDisplayRelatedField": "",
-                "ConfigSubDisplayRelatedField": "",
-                "ConfigSearchField": [],
-                "ConfigUrlCbx": "",
-                "FilterObjects": [],
-                "dataOperator": [],
-                "IsProductCategory": False,
-                "SelectedDataList": [],
-                "IsCustomTypeDecimalDigits": False,
-                "IsFromFormula": False,
-                "Operator": 1,
+                "Group": None,
                 "Addition": 1,
-                "Property": "ProductName",
                 "InputType": 1,
-                "FieldType": 0,
-                "FieldName": "ProductName",
-                "OperatorBeforeDetectChanges": 1,
-                "InputTypeOrigin": 1,
-                "DisplayField": "Tên hàng hóa",
-                "DisplayOperator": "Chứa",
-                "DisplayValue": name.strip(),
-                "ValueOrigin": name.strip()
-            })
-        
-        if code:
-            filters.append({
-                "Value": code.strip(),
-                "IsDefaultFilter": False,
-                "IsCustomField": False,
-                "IsRelatedField": False,
-                "ModuleRelated": "",
-                "FromFilterCustom": False,
-                "ValueDisplayText": "",
-                "isValueDateNumber": False,
-                "IsSearchModule": False,
-                "ConfigDisplayRelatedField": "",
-                "ConfigSubDisplayRelatedField": "",
-                "ConfigSearchField": [],
-                "ConfigUrlCbx": "",
-                "FilterObjects": [],
-                "dataOperator": [],
-                "IsProductCategory": False,
-                "SelectedDataList": [],
-                "IsCustomTypeDecimalDigits": False,
-                "IsFromFormula": False,
+                "IsFromFormula": True,
                 "Operator": 1,
-                "Addition": 1,
                 "Property": "ProductCode",
+                "Text": keyword,
+                "Value": keyword
+            })
+            # Thêm filter cho ProductName
+            filters.append({
+                "Group": None,
+                "Addition": 1,
                 "InputType": 1,
-                "FieldType": 0,
-                "FieldName": "ProductCode",
-                "OperatorBeforeDetectChanges": 1,
-                "InputTypeOrigin": 1,
-                "DisplayField": "Mã hàng hóa",
-                "DisplayOperator": "Chứa",
-                "DisplayValue": code.strip(),
-                "ValueOrigin": code.strip()
+                "IsFromFormula": True,
+                "Operator": 1,
+                "Property": "ProductName",
+                "Text": keyword,
+                "Value": keyword
             })
         
         payload = {
-            "Columns": "SUQsUHJvZHVjdENvZGUsUHJvZHVjdE5hbWUsUHJvZHVjdENhdGVnb3J5SUQsUHJvZHVjdENhdGVnb3J5SURUZXh0LFVzYWdlVW5pdElELFVzYWdlVW5pdElEVGV4dCxEZWZhdWx0U3RvY2tJRCxEZWZhdWx0U3RvY2tJRFRleHQsU291cmNlLEJyYW5kSUQsQnJhbmRJRFRleHQsUHJvZHVjdFByb3BlcnRpZXNJRCxQcm9kdWN0UHJvcGVydGllc0lEVGV4dCxSYWRpdXMsRm9ybUxheW91dElELEZvcm1MYXlvdXRJRFRleHQsSGVpZ2h0LExlbmd0aCxXaWR0aCxRdWFudGl0eUZvcm11bGEsRGVzY3JpcHRpb24sT3JnYW5pemF0aW9uVW5pdElELE9yZ2FuaXphdGlvblVuaXRJRFRleHQsT3duZXJJRCxPd25lcklEVGV4dCxJc1N5c3RlbSxBdmF0YXIsSXNDb3Jw",
+            "Columns": "SUQsUHJvZHVjdENvZGUsUHJvZHVjdE5hbWUsUHJvZHVjdENhdGVnb3J5SUQsUHJvZHVjdENhdGVnb3J5SURUZXh0LFVzYWdlVW5pdElELFVzYWdlVW5pdElEVGV4dCxEZWZhdWx0U3RvY2tJRCxEZWZhdWx0U3RvY2tJRFRleHQsU291cmNlLEJyYW5kSUQsQnJhbmRJRFRleHQsUHJvZHVjdFByb3BlcnRpZXNJRCxQcm9kdWN0UHJvcGVydGllc0lEVGV4dCxSYWRpdXMsRm9ybUxheW91dElELEZvcm1MYXlvdXRJRFRleHQsSGVpZ2h0LExlbmd0aCxXaWR0aCxRdWFudGl0eUZvcm11bGEsRGVzY3JpcHRpb24sT3JnYW5pemF0aW9uVW5pdElELE9yZ2FuaXphdGlvblVuaXRJRFRleHQsSXNTZXRQcm9kdWN0LE93bmVySUQsT3duZXJJRFRleHQsSXNTeXN0ZW0sQXZhdGFyLElzQ29ycA==",
+            "CustomColumns":"Q3VzdG9tRmllbGQxNSxDdXN0b21GaWVsZDEzLEN1c3RvbUZpZWxkMTNUZXh0LEN1c3RvbUZpZWxkMTQsQ3VzdG9tRmllbGQxNw==",
             "Sorts": [{"SortBy": "ModifiedDate", "Type": 0, "SortDirection": 1}],
             "Start": 0,
             "Page": 1,
@@ -2033,7 +1993,7 @@ class MisaApiUtils(models.AbstractModel):
             "AISearchKeyword": ""
         }
 
-        _logger.info(f"🔎 [MISA SEARCH] Tìm kiếm sản phẩm với tên: '{name}'")
+        # _logger.info(f"🔎 [MISA SEARCH] Tìm kiếm sản phẩm với tên: '{name}'")
 
         session = self._get_retry_session()
         try:
@@ -2063,7 +2023,7 @@ class MisaApiUtils(models.AbstractModel):
                     "tax": p.get("TaxIDText"),
                     "type": p.get("ProductPropertiesIDText"),
                     "active": p.get("Active", True),
-                    "description": p.get("Description", ""),
+                    "description": p.get("CustomField17", ""),
                 })
             
             return result
