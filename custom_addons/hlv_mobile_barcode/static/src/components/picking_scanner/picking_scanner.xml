@@ -18,7 +18,9 @@
                             <span class="location-badge">
                                 Đang lấy từ:
                             </span>
-                            <span class="location-val"><t t-esc="props.scannedLocationName"/></span>
+                            <span class="location-val" t-ref="locationValRef">
+                                <t t-esc="props.scannedLocationName"/>
+                            </span>
                         </div>
                     </t>
                     <t t-else="">

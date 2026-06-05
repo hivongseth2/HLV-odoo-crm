@@ -1402,6 +1402,7 @@
   width: 100%;
   font-size: 0.85rem;
   gap: 8px;
+  min-width: 0;
 }
 
 .hlv-barcode-app .modern-location-banner .location-badge {
@@ -1425,7 +1426,6 @@
   letter-spacing: 0;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
   max-width: 100%;
 }
 

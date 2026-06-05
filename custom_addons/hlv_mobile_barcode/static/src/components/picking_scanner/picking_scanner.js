@@ -1,6 +1,6 @@
 /** @odoo-module **/
 
-import { Component, useState, onWillStart, onWillUpdateProps, useEffect, onWillDestroy } from "@odoo/owl";
+import { Component, useState, onWillStart, onWillUpdateProps, useEffect, onWillDestroy, useRef } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
 import { rpc } from "@web/core/network/rpc";
 
@@ -27,6 +27,7 @@ export class PickingScanner extends Component {
         this.isProcessingQty = false;
         this._hasAutoCleared = false;
         this.isDestroyed = false;
+        this.locationValRef = useRef("locationValRef");
 
         onWillDestroy(() => {
             this.isDestroyed = true;
@@ -79,6 +80,33 @@ export class PickingScanner extends Component {
                 }
             }
         }, () => [this.props.lastScannedProduct, this.props.refreshTick, this.state.loading]);
+
+        useEffect(() => {
+            const el = this.locationValRef.el;
+            if (el) {
+                // Tắt transition và ẩn đi để tính toán (không cho user thấy quá trình nhỏ dần)
+                const prevTransition = el.style.transition;
+                el.style.transition = "none";
+                el.style.opacity = "0";
+                
+                // Reset to default
+                el.style.fontSize = "0.85rem";
+                let currentFontSize = 0.85;
+                
+                // Shrink until it fits or reaches a minimum readable size
+                while (el.scrollWidth > el.clientWidth && currentFontSize > 0.4) {
+                    currentFontSize -= 0.05; // Decrease faster to reduce layout thrashing
+                    el.style.fontSize = `${currentFontSize}rem`;
+                }
+                
+                // Hiển thị lại ngay lập tức
+                el.style.opacity = "1";
+                // Phục hồi transition sau 1 frame nhỏ
+                requestAnimationFrame(() => {
+                    if (el) el.style.transition = prevTransition;
+                });
+            }
+        }, () => [this.props.scannedLocationName]);
     }
 
     async loadPicking() {
