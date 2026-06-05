@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="public_search_template" name="Excel Purchase Search">
+        <t t-call="website.layout">
+            <div class="eps-page">
+                <main class="eps-shell">
+                    <section class="eps-header">
+                        <div>
+                            <p class="eps-kicker">Tra cuu Excel</p>
+                            <h1>So chi tiet mua hang</h1>
+                            <p class="eps-subtitle" t-if="excel_file">
+                                <t t-esc="excel_file.name"/>
+                            </p>
+                        </div>
+                        <div class="eps-count" t-if="searched">
+                            <span t-esc="total"/>
+                            <small>ket qua</small>
+                        </div>
+                    </section>
+
+                    <t t-if="not_found">
+                        <section class="eps-empty">
+                            <h2>Chua co file kha dung</h2>
+                            <p>Vui long lien he admin de upload va kich hoat file Excel.</p>
+                        </section>
+                    </t>
+
+                    <t t-if="not not_found">
+                        <section class="eps-search-panel">
+                            <form method="get" t-att-action="'/excel-purchase-search/%s' % excel_file.public_slug" class="eps-search-form">
+                                <div class="eps-input-wrap">
+                                    <span class="eps-search-icon">⌕</span>
+                                    <input type="text"
+                                           name="q"
+                                           t-att-value="keyword"
+                                           placeholder="Nhap tu khoa: ma chung tu, nha cung cap, ten hang..."
+                                           autocomplete="off"/>
+                                </div>
+                                <button type="submit">Tim kiem</button>
+                            </form>
+                        </section>
+
+                        <t t-if="error">
+                            <div class="eps-alert"><t t-esc="error"/></div>
+                        </t>
+
+                        <t t-if="not searched">
+                            <section class="eps-empty">
+                                <h2>Nhap tu khoa de bat dau</h2>
+                                <p>Ket qua chi tim trong cac cot admin da cho phep search.</p>
+                            </section>
+                        </t>
+
+                        <t t-if="searched and total == 0 and not error">
+                            <section class="eps-empty">
+                                <h2>Khong tim thay du lieu</h2>
+                                <p>Thu tu khoa ngan hon hoac dung ma chung tu, ten nha cung cap, ten hang.</p>
+                            </section>
+                        </t>
+
+                        <t t-if="rows">
+                            <section class="eps-table-card">
+                                <div class="eps-table-scroll">
+                                    <table class="eps-table">
+                                        <thead>
+                                            <tr>
+                                                <th class="eps-row-col">Dong</th>
+                                                <t t-foreach="columns" t-as="column">
+                                                    <th><t t-esc="column.name"/></th>
+                                                </t>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <t t-foreach="rows" t-as="row">
+                                                <tr>
+                                                    <td class="eps-row-col"><t t-esc="row['excel_row']"/></td>
+                                                    <t t-foreach="row['values']" t-as="value">
+                                                        <td><t t-esc="value"/></td>
+                                                    </t>
+                                                </tr>
+                                            </t>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </section>
+                            <div class="eps-pager">
+                                <t t-call="website.pager"/>
+                            </div>
+                        </t>
+                    </t>
+                </main>
+            </div>
+        </t>
+    </template>
+</odoo>

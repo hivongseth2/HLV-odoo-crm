@@ -1,0 +1,4 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_hlv_excel_purchase_file_user,hlv.excel.purchase.file.user,model_hlv_excel_purchase_file,base.group_user,1,1,1,1
+access_hlv_excel_purchase_column_user,hlv.excel.purchase.column.user,model_hlv_excel_purchase_column,base.group_user,1,1,1,1
+access_hlv_excel_purchase_line_user,hlv.excel.purchase.line.user,model_hlv_excel_purchase_line,base.group_user,1,0,0,1

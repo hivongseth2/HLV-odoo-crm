@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_hlv_excel_purchase_file_list" model="ir.ui.view">
+        <field name="name">hlv.excel.purchase.file.list</field>
+        <field name="model">hlv.excel.purchase.file</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="name"/>
+                <field name="file_name"/>
+                <field name="header_row"/>
+                <field name="line_count"/>
+                <field name="last_import_date"/>
+                <field name="active" widget="boolean_toggle"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_hlv_excel_purchase_file_form" model="ir.ui.view">
+        <field name="name">hlv.excel.purchase.file.form</field>
+        <field name="model">hlv.excel.purchase.file</field>
+        <field name="arch" type="xml">
+            <form string="Excel Purchase Search">
+                <header>
+                    <button name="action_read_headers" type="object" string="Doc header" class="btn-secondary"/>
+                    <button name="action_import_lines" type="object" string="Import du lieu" class="btn-primary"/>
+                    <button name="action_open_public_url" type="object" string="Mo link public" class="btn-secondary"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name" placeholder="So chi tiet mua hang"/></h1>
+                    </div>
+                    <group>
+                        <group string="File Excel">
+                            <field name="active"/>
+                            <field name="file_data" filename="file_name"/>
+                            <field name="file_name" invisible="1"/>
+                            <field name="sheet_name" placeholder="De trong neu dung sheet dau tien"/>
+                            <field name="header_row"/>
+                        </group>
+                        <group string="Public">
+                            <field name="public_slug"/>
+                            <field name="public_url" readonly="1"/>
+                            <field name="line_count" readonly="1"/>
+                            <field name="last_import_date" readonly="1"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Cot duoc search">
+                            <field name="column_ids">
+                                <list editable="bottom">
+                                    <field name="sequence" string="Cot"/>
+                                    <field name="name" string="Header"/>
+                                    <field name="searchable" widget="boolean_toggle"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Du lieu da import">
+                            <field name="line_ids" readonly="1">
+                                <list create="0" edit="0">
+                                    <field name="excel_row"/>
+                                    <field name="search_text"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_hlv_excel_purchase_file" model="ir.actions.act_window">
+        <field name="name">Excel Search mua hang</field>
+        <field name="res_model">hlv.excel.purchase.file</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <menuitem id="menu_hlv_excel_purchase_root"
+              name="Excel Search"
+              sequence="75"/>
+    <menuitem id="menu_hlv_excel_purchase_file"
+              name="So chi tiet mua hang"
+              parent="menu_hlv_excel_purchase_root"
+              action="action_hlv_excel_purchase_file"
+              sequence="10"/>
+</odoo>
