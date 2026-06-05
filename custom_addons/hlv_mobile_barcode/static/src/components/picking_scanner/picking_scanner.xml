@@ -12,13 +12,14 @@
                 
                 <!-- Location Mode Header (Simplified and Modern) -->
                 <div t-if="props.isMultiLocationMode or state.picking.is_pick or state.picking.picking_type_code == 'incoming'" 
-                     t-attf-class="modern-location-banner #{!props.scannedLocationName ? 'error-state' : ''}">
+                     t-attf-class="modern-location-banner #{!props.scannedLocationName ? 'error-state' : ''}"
+                     t-ref="locationBannerRef">
                     <t t-if="props.scannedLocationName">
                         <div class="location-info-row">
                             <span class="location-badge">
                                 Đang lấy từ:
                             </span>
-                            <span class="location-val" t-ref="locationValRef">
+                            <span class="location-val">
                                 <t t-esc="props.scannedLocationName"/>
                             </span>
                         </div>
