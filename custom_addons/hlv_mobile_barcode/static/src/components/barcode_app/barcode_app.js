@@ -128,6 +128,8 @@ export class BarcodeApp extends Component {
 
         this.barcodeBuffer = "";
         this.barcodeTimeout = null;
+        this.boundHandleKeyDown = this.handleKeyDown.bind(this);
+        this._ignoreNextHiddenKeyup = false;
 
         this.keepFocusOnHiddenInput = () => {
             const active = document.activeElement;
@@ -152,7 +154,7 @@ export class BarcodeApp extends Component {
         this.boundKeepFocus = this.keepFocusOnHiddenInput.bind(this);
         
         onMounted(async () => {
-            document.addEventListener('keydown', this.handleKeyDown.bind(this));
+            document.addEventListener('keydown', this.boundHandleKeyDown, true);
             this.keepFocusOnHiddenInput();
             document.addEventListener('click', this.boundKeepFocus);
             
@@ -181,20 +183,38 @@ export class BarcodeApp extends Component {
 
         onWillUnmount(() => {
             document.removeEventListener('click', this.boundKeepFocus);
+            document.removeEventListener('keydown', this.boundHandleKeyDown, true);
             if (this.focusInterval) {
                 clearInterval(this.focusInterval);
             }
         });
     }
 
+    restoreScannerFocus(delay = 50) {
+        setTimeout(() => this.keepFocusOnHiddenInput(), delay);
+        setTimeout(() => this.keepFocusOnHiddenInput(), delay + 250);
+    }
+
     handleKeyDown(e) {
-        if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) {
+        const target = e.target;
+        const isHiddenScannerInput = target?.classList?.contains('hidden-barcode-input');
+        const isManualInput = target === this.manualInputRef?.el;
+        const isEditable = target && (
+            ['TEXTAREA', 'SELECT'].includes(target.tagName) ||
+            (target.tagName === 'INPUT' && !isHiddenScannerInput)
+        );
+
+        if (isEditable || isManualInput) {
             return;
         }
 
         if (e.key === 'Enter' && this.barcodeBuffer.length > 2) {
-            this.processBarcode(this.barcodeBuffer);
+            e.preventDefault();
+            this._ignoreNextHiddenKeyup = isHiddenScannerInput;
+            Promise.resolve(this.processBarcode(this.barcodeBuffer))
+                .finally(() => this.restoreScannerFocus());
             this.barcodeBuffer = "";
+            this.state.hiddenBarcode = "";
             return;
         }
         
@@ -228,13 +248,18 @@ export class BarcodeApp extends Component {
     }
 
     async onHiddenInputKeyup(ev) {
+        if (this._ignoreNextHiddenKeyup) {
+            this._ignoreNextHiddenKeyup = false;
+            this.state.hiddenBarcode = "";
+            return;
+        }
         if (ev.key === 'Enter') {
             const barcode = this.state.hiddenBarcode ? this.state.hiddenBarcode.trim() : "";
             if (barcode) {
                 await this.processBarcode(barcode);
             }
             this.state.hiddenBarcode = "";
-            setTimeout(() => this.keepFocusOnHiddenInput(), 50);
+            this.restoreScannerFocus();
         }
     }
 
@@ -993,6 +1018,7 @@ export class BarcodeApp extends Component {
             this.state.cameraNeedsActivation = false;
             this.state.cameraErrorMessage = "";
             this.state.cameraFallback = false;
+            this.restoreScannerFocus();
         } catch (err) {
             const errStr = String(err).toLowerCase();
             console.error("Camera start error:", err);
@@ -1076,6 +1102,7 @@ export class BarcodeApp extends Component {
         if (readerEl) {
             readerEl.innerHTML = '';
         }
+        this.restoreScannerFocus();
     }
 
     async toggleCamera() {
@@ -1086,6 +1113,7 @@ export class BarcodeApp extends Component {
             this.state.cameraManuallyOff = true;
             await this.closeCamera();
         }
+        this.restoreScannerFocus();
     }
 
     exitApp() {
