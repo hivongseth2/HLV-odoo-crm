@@ -7,15 +7,62 @@
             </div>
             
             <t t-elif="state.picking">
+                <!-- Thẻ hidden input để chặn focus tự động vào input số lượng, tránh tự động mở bàn phím ảo trên mobile -->
+                <input type="text" class="hidden-barcode-input" autofocus="autofocus" inputmode="none" style="position: absolute; opacity: 0; pointer-events: none; width: 1px; height: 1px; left: -9999px; z-index: -9999;" />
+
+                <!-- CONFLICT POPUP: Khi vào lại phiếu PICK, tồn kho đã thay đổi -->
+                <div class="modal-overlay" t-if="state.showConflictPopup" style="z-index: 10000;">
+                    <div class="modal-content" style="max-width: 420px; width: 92%;">
+                        <div class="modal-header" style="background: var(--danger-color, #e74c3c);">
+                            <div class="modal-title">
+                                <i class="fa fa-exclamation-triangle"/> Cảnh báo: Tồn kho thay đổi
+                            </div>
+                        </div>
+                        <div class="modal-body" style="padding: 16px;">
+                            <p style="margin-bottom: 12px; color: var(--text-color); font-weight: 600;">
+                                Phiếu này có dữ liệu quét đã lưu, nhưng tồn kho tại một số vị trí đã thay đổi:
+                            </p>
+                            <div t-foreach="state.conflictItems" t-as="item" t-key="item.move_line_id"
+                                 style="background: var(--card-bg); border: 1px solid var(--danger-color, #e74c3c); border-radius: 8px; padding: 10px; margin-bottom: 8px; font-size: 0.85rem;">
+                                <div style="font-weight: 700; margin-bottom: 4px;"><t t-esc="item.product_name"/></div>
+                                <div style="color: var(--text-muted);">Vị trí: <t t-esc="item.location_name"/></div>
+                                <div style="margin-top: 4px;">
+                                    <span style="color: var(--danger-color, #e74c3c);">Đã quét: <b><t t-esc="item.saved_qty"/> <t t-esc="item.uom_name"/></b></span>
+                                    <span style="margin: 0 8px;">→</span>
+                                    <span style="color: var(--success-color, #27ae60);">Khả dụng: <b><t t-esc="item.available_qty"/> <t t-esc="item.uom_name"/></b></span>
+                                </div>
+                            </div>
+                            <p style="margin-top: 12px; color: var(--text-muted); font-size: 0.85rem;">Bạn muốn xử lý thế nào?</p>
+                        </div>
+                        <div class="modal-footer" style="padding: 12px 16px; display: flex; flex-direction: column; gap: 8px;">
+                            <button class="btn btn-danger" style="width: 100%; padding: 11px; font-weight: bold;"
+                                    t-on-click="() => this.resolveConflict('reset')">
+                                <i class="fa fa-redo"/> Đặt về 0, quét lại từ đầu
+                            </button>
+                            <button class="btn btn-warning" style="width: 100%; padding: 11px; font-weight: bold;"
+                                    t-on-click="() => this.resolveConflict('cap')">
+                                <i class="fa fa-level-down-alt"/> Lấy số tối đa khả dụng
+                            </button>
+                            <button class="btn btn-secondary" style="width: 100%; padding: 11px;"
+                                    t-on-click="() => this.resolveConflict('keep')">
+                                <i class="fa fa-times"/> Bỏ qua, giữ nguyên
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
                 <!-- Location Mode Header (Simplified and Modern) -->
                 <div t-if="props.isMultiLocationMode or state.picking.is_pick or state.picking.picking_type_code == 'incoming'" 
-                     t-attf-class="modern-location-banner #{!props.scannedLocationName ? 'error-state' : ''}">
+                     t-attf-class="modern-location-banner #{!props.scannedLocationName ? 'error-state' : ''}"
+                     t-ref="locationBannerRef">
                     <t t-if="props.scannedLocationName">
                         <div class="location-info-row">
                             <span class="location-badge">
                                 Đang lấy từ:
                             </span>
-                            <span class="location-val"><t t-esc="props.scannedLocationName"/></span>
+                            <span class="location-val">
+                                <t t-esc="props.scannedLocationName"/>
+                            </span>
                         </div>
                     </t>
                     <t t-else="">

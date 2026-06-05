@@ -1,133 +1,472 @@
-# Technical Document: HLV Mobile Barcode
+# Tài liệu kỹ thuật: HLV Mobile Barcode
 
-## Mục đích
-Cung cấp một giải pháp quét mã vạch (Barcode Scanner) được tối ưu hóa cho màn hình cảm ứng di động (Mobile Web) trong Odoo 18. Hỗ trợ "Smart Routing" - người dùng không cần chọn trước thao tác, chỉ cần quét mã (Sản phẩm, Vị trí, Lệnh chuyển, Kiện hàng) hệ thống sẽ tự động chuyển đến màn hình tương ứng. Hỗ trợ đầy đủ các tính năng như Lấy hàng, Đóng gói (có in nhãn), Kiểm tra tồn kho và Dịch chuyển vị trí.
+> **Phiên bản**: 18.0.1.0.0 · **Nền tảng**: Odoo 18 · **Công nghệ giao diện**: OWL 2.0
 
-## Cấu trúc thư mục (Tree view)
+---
+
+# PHẦN 1 – TỔNG QUAN
+
+## 1.1. Mục đích module
+
+HLV Mobile Barcode là ứng dụng quét mã vạch tối ưu cho điện thoại di động (Mobile Web), hoạt động trực tiếp trên trình duyệt web mà không cần cài đặt ứng dụng riêng. Module thay thế hoàn toàn giao diện Barcode gốc của Odoo, cung cấp trải nghiệm nhanh hơn, trực quan hơn và phù hợp hơn cho thao tác một tay trong kho hàng thực tế.
+
+## 1.2. Các chức năng chính
+
+| STT | Chức năng | Mô tả ngắn |
+|-----|-----------|-------------|
+| 1 | **Quét thông minh (Smart Routing)** | Chỉ cần quét 1 mã bất kỳ (sản phẩm, vị trí, phiếu kho, kiện hàng), hệ thống tự nhận diện loại mã và chuyển đến màn hình tương ứng. Không cần chọn trước thao tác. |
+| 2 | **Xử lý phiếu kho (Picking Scanner)** | Quét sản phẩm để tăng số lượng hoàn thành trên phiếu kho. Hỗ trợ đầy đủ các loại phiếu: Nhập (IN), Xuất (OUT), Chuyển nội bộ (INT), Lấy hàng (PICK), Đóng gói (PACK), Lưu kho (STO). |
+| 3 | **Quét camera tích hợp** | Camera điện thoại nhúng trực tiếp trên giao diện, quét liên tục không cần bấm nút. Hỗ trợ quét bằng súng USB, dán mã (Ctrl+V), hoặc gõ tay. |
+| 4 | **Tra cứu tồn kho** | Quét mã sản phẩm / vị trí / kiện hàng để xem tồn kho theo cây vị trí phân cấp, bao gồm cả vị trí con. |
+| 5 | **Chuyển vị trí hàng hóa** | Tạo phiếu chuyển kho nội bộ (Internal Transfer) để di chuyển sản phẩm từ vị trí này sang vị trí khác, tự động xác nhận phiếu. |
+| 6 | **Chuyển kho đa vị trí** | Gom hàng từ nhiều kệ (vị trí con) khác nhau vào một phiếu chuyển kho chung. Phù hợp cho nghiệp vụ dọn kho, gom hàng. |
+| 7 | **Quản lý kiện hàng (Đóng gói)** | Đóng gói sản phẩm đã quét thành kiện (Package), gỡ kiện, chỉnh sửa số lượng trong kiện, chuyển sản phẩm giữa các kiện. Hỗ trợ in nhãn kiện tự động. |
+| 8 | **Liên kết quy trình 2 bước** | Khi hoàn thành phiếu Bước 1 (ví dụ INT), hệ thống tự tìm và hiển thị nút chuyển nhanh sang phiếu Bước 2 (IN / STO). |
+| 9 | **Phân quyền quét kho** | Hệ thống phân quyền linh hoạt theo Người dùng × Kho × Loại phiếu, với 4 cấp quyền: Xem, Sửa, Xóa, Xác nhận. |
+| 10 | **Chống gian lận** | Chặn sao chép mã vạch từ giao diện (chống bôi đen, chặn chuột phải, chặn Ctrl+C). Giới hạn quét theo tồn kho thực tế. |
+
+## 1.3. Cấu trúc thư mục
+
 ```
 hlv_mobile_barcode/
 ├── controllers/
 │   ├── __init__.py
-│   └── main.py              ← JSON RPC API cho quá trình quét và xử lý (Smart Routing)
+│   └── main.py                  ← Toàn bộ API JSON-RPC (Smart Routing, xử lý quét, đóng gói…)
 ├── models/
 │   ├── __init__.py
-│   └── res_config_settings.py ← Lưu cấu hình của Barcode App (Picking Types, In nhãn v.v.)
+│   ├── barcode_permission.py    ← Model phân quyền quét kho (2 model mới)
+│   ├── res_config_settings.py   ← Cấu hình ứng dụng (kế thừa res.company & res.config.settings)
+│   ├── stock_move_line.py       ← Mở rộng stock.move.line: thêm field qty_scanned cho PICK
+│   └── stock_picking.py         ← Mở rộng stock.picking (thêm field cờ đánh dấu)
+├── security/
+│   ├── security.xml             ← Nhóm quyền: Quản lý phân quyền Barcode
+│   └── ir.model.access.csv      ← Quyền truy cập cho 2 model mới
 ├── static/src/
-│   ├── components/          ← Các OWL component chính
-│   │   ├── barcode_app/     ← Component cha quản lý state và UI chính (Camera/Scanner)
-│   │   ├── inventory_lookup/← UI Tra cứu tồn kho (Product/Location/Package)
-│   │   ├── location_move/   ← UI Chuyển vị trí (Dùng API tạo Internal Transfer)
-│   │   └── picking_scanner/ ← UI Xử lý lệnh Picking (Lấy/Nhập/Chuyển)
-│   └── css/                 ← CSS cho Mobile 
+│   ├── components/              ← Các component OWL 2.0
+│   │   ├── barcode_app/         ← Component cha: quản lý state, camera, điều hướng
+│   │   ├── picking_scanner/     ← Xử lý phiếu kho: quét, đóng gói, xác nhận
+│   │   ├── inventory_lookup/    ← Tra cứu tồn kho theo sản phẩm/vị trí/kiện
+│   │   ├── location_move/       ← Chuyển vị trí đơn lẻ
+│   │   └── batch_location_move/ ← Chuyển kho đa vị trí (gom từ nhiều kệ)
+│   └── css/
+│       └── barcode_mobile.css   ← Hệ thống thiết kế giao diện (design tokens, responsive)
 ├── views/
-│   ├── barcode_menu.xml     ← Action mở ứng dụng OWL (Client Action)
-│   └── res_config_settings_views.xml
+│   ├── barcode_menu.xml         ← Client Action mở ứng dụng OWL
+│   ├── barcode_permission_views.xml ← Giao diện quản lý phân quyền quét
+│   └── res_config_settings_views.xml ← Trang Cài đặt ứng dụng
 ├── __init__.py
 └── __manifest__.py
 ```
 
-## Kiến trúc Frontend (OWL 2.0)
-- `barcode_app`: Component cha lắng nghe sự kiện barcode (`keydown`). Khi nhận mã, gọi Backend RPC `smart_scan`. Dựa vào response, thay đổi trạng thái (`currentView`) để hiển thị Component con tương ứng.
-- **Persistent Inline Camera**: Camera được nhúng trực tiếp ở phần trên cùng của ứng dụng để quét liên tục. Hoạt động dựa trên **BarcodeDetector API** (native trên các trình duyệt mới hoặc qua polyfill được tải tự động từ jsdelivr). Quét thông qua vòng lặp `requestAnimationFrame` nhẹ nhàng. Sau mỗi lần quét thành công, camera ghi nhận kết quả và tạm dừng 2 giây đối với mã vạch trùng lặp để tránh trùng lặp thao tác.
-  - *Cấu hình Camera mặc định*: Trạng thái Camera mặc định bật/tắt khi vào phiếu (`camera_default_on`) được truy vấn toàn cục từ Backend thông qua API `/hlv_mobile_barcode/get_settings` khi tải ứng dụng, sau đó được chờ đợi (await) để giải quyết triệt để lỗi Race Condition trước khi mở bất kỳ luồng camera nào. Khi người dùng điều hướng hoặc mở camera, trạng thái `cameraManuallyOff` được đồng bộ hóa tức thì nhằm đảm bảo tính nhất quán của cấu hình.
-- **Xử lý Quyền & Bảo mật Camera di động**:
-  - *HTTPS Context*: Kiểm tra `window.isSecureContext`. Nếu truy cập qua HTTP (không bảo mật), hệ thống tự động tắt camera trực tiếp và hiển thị thông báo yêu cầu HTTPS, đồng thời kích hoạt fallback (chụp ảnh bằng file input).
-  - *iOS / Safari / Chrome User Gesture*: Để tránh việc hệ thống iOS (WKWebView) tự động từ chối (`NotAllowedError`) khi gọi camera tự động lúc tải trang (`onMounted`), component sẽ hiển thị một lớp phủ "Kích hoạt Camera". Khi người dùng chạm vào lớp phủ này (sự kiện click/tap), camera được khởi tạo thông qua user gesture hợp lệ, giúp kích hoạt hộp thoại xin quyền của iOS và khởi chạy camera thành công.
-  - *Đóng giải phóng Camera tức thì*: Khi chuyển đổi giữa các view (hoặc unmount component qua hook `onWillUnmount`), luồng camera được giải phóng triệt để bằng cách gọi `stream.getTracks().forEach(t => t.stop())` và hủy vòng lặp animation frame để tránh xung đột tài nguyên camera ở view mới.
-- **UI/UX & Viewport Constraints**: Các component dùng CSS custom trong `barcode_mobile.css` để đảm bảo bố cục co giãn tốt (flex layout), nút bấm to, rõ, phù hợp thao tác bằng một tay. Danh sách sản phẩm cuộn độc lập, đầu trang và chân trang được giữ cố định để tránh tràn màn hình.
-- **Thẻ dòng sản phẩm độc lập (Product Cards)**: Mỗi dòng sản phẩm được bao bọc trong một thẻ `.product-row-card` bo tròn 10px, có bóng đổ nhẹ để dễ đọc. Thẻ tự động đổi viền sang màu xanh lá (`border-color: #a5d6a7`) khi quét đủ số lượng.
-- **Phản hồi âm thanh & Rung (Audio & Haptic Feedback)**: Khi nhận diện thành công hoặc thất bại, phương thức `playSound()` phát ra tệp âm thanh tương ứng (`success.mp3` hoặc `error.mp3`) kết hợp kích hoạt bộ rung API `navigator.vibrate` trên thiết bị di động để phản hồi vật lý lập tức cho người vận hành (rung 150ms cho thành công, rung kép 2 lần cho lỗi).
-- **Triệt tiêu lỗi kẹt cuộn và tràn footer (Absolute & Flex Constraint)**: Do Odoo Web Client có thanh Navbar ở trên cùng, việc sử dụng chiều cao 100vh thông thường sẽ làm lệch và đẩy chân trang (footer) ra ngoài viewport. Ứng dụng giải quyết triệt để lỗi này bằng cách thiết lập `.hlv-barcode-app` định vị tuyệt đối `position: absolute !important` bám khít vào container nội dung `.o_content` của Odoo. Kết hợp với `height: 100% !important` trên `.shipper-container`, mọi flexbox con được khống chế chiều cao nghiêm ngặt. Cho phép danh sách sản phẩm cuộn nội bộ trơn tru, đồng thời ghim chân trang `.picking-footer` và `.subview-footer` cố định ở đáy màn hình.
-- **Bố cục 1 cột tối ưu hợp nhất (Unified 1-Column Layout)**: Giữ nguyên giao diện 1 cột đứng thẳng cực kỳ gọn gàng và đồng bộ cho cả Mobile lẫn Desktop. Dải camera nằm ngang được cấu hình cao `160px` trên Mobile.
-- **Desktop Camera Expander**: Trên Desktop (màn hình ≥ 992px), camera container tự động mở rộng tối đa `100%` chiều ngang (bám dọc theo container 1200px) và nâng chiều cao lên **`240px`** giúp tăng diện tích quan sát và quét mã cực kỳ trực quan, lấp đầy 2 bên màn hình như yêu cầu.
-- **Invisible Keyboard/Scanner Input (Tính năng ẩn)**: Tích hợp một ô input ẩn hoàn toàn nhận tiêu điểm (`focus`) tự động thông qua sự kiện `click` và cơ chế kiểm tra định kỳ (ngoại trừ khi người dùng focus các ô nhập liệu số lượng thực tế khác). Cho phép nhà phát triển hoặc người kiểm thử dán mã vạch (`Ctrl + V`) hoặc quét bằng súng quét USB cầm tay trực tiếp từ bàn phím ở bất kỳ màn hình nào rồi nhấn `Enter` để xử lý và tăng số lượng sản phẩm ngay lập tức (không cần hiển thị ô nhập liệu ra màn hình để tránh người dùng đi tắt dễ sai).
-- **Anti-Cheat Copy Blocker (Bảo mật 2 lớp chống đi tắt)**: Ngăn chặn tuyệt đối việc người dùng bôi đen, sao chép mã vạch hiển thị trên giao diện rồi dán (Ctrl+V) để "hoàn thành phiếu khống":
-  * *CSS Layer*: Thiết lập `user-select: none !important` trên `.hlv-barcode-app` (ngoại trừ các ô input thực tế có `user-select: text`) để triệt tiêu khả năng bôi đen hay giữ ngón tay lựa chọn văn bản.
-  * *JS Event Layer*: Chặn sự kiện sao chép `copy` trên toàn ứng dụng và hiển thị cảnh báo *"Không được phép sao chép thông tin trên trang này!"*.
-  * *Context Menu Layer*: Chặn menu chuột phải `contextmenu` trên máy tính tại các vùng tĩnh để ngăn việc kích hoạt menu Copy.
-- **Data Sync & Network Fault Tolerance (Chống lệch số lượng do rớt mạng/mạng yếu)**:
-  * *Single-Request Processing Lock (isProcessing)*: Khóa hoàn toàn khả năng nhận mã vạch mới hoặc điều hướng khi RPC cũ đang chạy dở dang, tránh Race Condition khi người dùng thao tác quá nhanh lúc mạng chập chờn.
-  * *Single-Request Quantity Lock (isProcessingQty)*: Khóa thao tác nút chỉnh nhanh hoặc ô nhập số lượng thủ công trên Picking card trong khi đợi backend phản hồi thành công, ngăn xung đột chèn dữ liệu song song.
-  * *F5/Reload vs Exit/Reset Sync*:
-    - Khi F5/Reload trang: `localStorage` vẫn lưu giữ `hlv_opened_pickings` giúp số lượng quét hiện tại được giữ nguyên và tải lại an toàn từ backend.
-    - Khi Quay lại (`goBack()`), về trang chủ (`goToMain()`), hoặc Làm lại (`clearPicking()`): Xóa `pickingId` khỏi `localStorage` và tự động gửi RPC `/hlv_mobile_barcode/clear_quantities` để reset sạch sẽ toàn bộ dữ liệu quét (hủy và xóa các dòng dịch chuyển/sản phẩm tạo động, reset số lượng đặt trước về 0 và gỡ kiện cho các dòng đặt trước ban đầu), đồng thời làm sạch state vị trí và sản phẩm đã quét ở giao diện.
-- **Hierarchical & Sudo Location Stock Lookup (Tra cứu tồn kho phân cấp & Bỏ qua rào cản phân quyền)**:
-  * Tối ưu hóa API tra cứu tồn kho vị trí bằng cách thay đổi toán tử tìm kiếm `stock.quant` từ `=` sang `child_of` (`[('location_id', 'child_of', location.id)]`) kết hợp với phương thức `.sudo()`.
-  * Việc sử dụng `.sudo()` là bắt buộc để bỏ qua các rào cản phân quyền multi-company hoặc giới hạn vị trí ngầm định của Odoo ORM khi gọi qua RPC, đảm bảo thủ kho luôn thấy 100% dữ liệu tồn kho thực tế.
-  * Lọc thêm điều kiện `('quantity', '>', 0.0)` trên cả 3 nhánh tìm kiếm (`product`, `location`, `package`) để tránh hiển thị các dòng quant trống (bản ghi rác).
-  * Tích hợp hiển thị nhãn vị trí con cụ thể (`location_name`) bên dưới tên sản phẩm trên giao diện `InventoryLookup` để thủ kho biết chính xác sản phẩm đó đang nằm ở vị trí con cụ thể nào.
-- **Sudo Bypass & SKU/Internal Reference Matching (Bypass Quyền hạn & Đồng bộ SKU)**:
-  * Áp dụng phương thức `.sudo()` cho toàn bộ các truy vấn `.search()` và `.browse()` liên quan đến Sản phẩm, Vị trí kho, Phiếu kho, và Gói hàng trong tất cả các API đầu cuối của Mobile Barcode để giải quyết triệt để lỗi "Không tìm thấy" do multi-company hoặc record rules của Odoo ORM chặn ngầm.
-  * Quét sản phẩm trong `smart_scan` và `process_barcode` hỗ trợ khớp đồng thời cả trường **Mã vạch (`barcode`)** lẫn **Mã SKU/Tham chiếu nội bộ (`default_code`)** của sản phẩm.
-  * Quét/Dán vị trí trong `smart_scan` hỗ trợ khớp cả **Mã vạch vị trí (`barcode`)** lẫn **Tên vị trí (`name`)**.
-  * Quét hoặc tra cứu Kiện hàng/Gói hàng (`stock.quant.package`) tự động phân tích vị trí hiện tại của gói hoặc các `stock.quant` chứa bên trong để truy xuất đúng mã kho thực tế (`warehouse_code`), cập nhật tiêu đề Header thay vì hiển thị "Kho HLV" tĩnh.
-  * Tự động cắt bỏ các khoảng trắng thừa (`.strip()`) ở hai đầu chuỗi quét ở tất cả các router backend, ngăn lỗi do máy quét cầm tay tự động nối thêm phím Enter/Tab.
-- **Dynamic Warehouse Header**: API tự động trả về `warehouse_code` thực tế của phiếu kho (`picking.picking_type_id.warehouse_id.code` hoặc `location.warehouse_id.code`), hiển thị động lên Header dạng "Kho KBC", "Kho TSN"... thay vì "Kho HLV" tĩnh.
-- **Liên kết & Chuyển đổi trực tiếp Quy trình 2 bước (INT -> IN / STOR)**:
-  - Khi hoàn thành hoặc quét một phiếu chuyển kho Bước 1 (`INT` - Internal Transfer) có trạng thái `done` (hoàn tất), ứng dụng hiển thị chi tiết thông tin phiếu và cung cấp một nút bấm nổi bật **"Chuyển sang Bước 2 (<Tên phiếu bước 2>)"** ngay phía trên chân trang.
-  - *Cơ chế tìm kiếm liên kết*: Backend tự động tìm kiếm phiếu Bước 2 (`IN` hoặc `STOR`) thông qua 4 phương pháp ưu tiên (gọn gàng, tin cậy):
-    1. **Tin nhắn Chatter (Chatter Message - Ưu tiên cao nhất)**: Khi Odoo tạo phiếu Bước 2 từ phiếu Bước 1 thông qua push rules, hệ thống sẽ tự động đăng tin nhắn trong Chatter (ví dụ: "This transfer has been created from: KBC/INT/02042"). Backend tìm kiếm trong `mail.message` với `model='stock.picking'` và `body` chứa tên của phiếu Bước 1 để lấy ID phiếu mới.
-    2. **Chuỗi dịch chuyển (Stock Moves Chain)**: Sử dụng quan hệ `move_dest_ids.picking_id` để tìm các stock.picking đích hợp lệ (Odoo native chain).
-    3. **Nhóm cung ứng (Procurement Group)**: Tìm kiếm các stock.picking khác có cùng `group_id` và có mã sequence chứa ký tự `'IN'` hoặc `'STOR'` hoặc thuộc loại `incoming`/`internal`.
-    4. **Nguồn gốc tài liệu (Origin)**: Tìm kiếm các phiếu có trường `origin` khớp chính xác hoặc chứa tên của phiếu Bước 1.
-  - Khi người dùng nhấp nút chuyển đổi, ứng dụng thực hiện giải phóng camera cũ, lưu lịch sử duyệt (`pushHistory()`), cập nhật trạng thái mục tiêu và kích hoạt lại camera trên phiếu Bước 2 mới một cách mượt mà không bị lỗi gắn kết DOM.
+---
 
-- **Chế độ Chuyển kho Đa vị trí (Multi-Location Batch Move)**:
-  - Cho phép người dùng chuyển sản phẩm từ nhiều kệ hàng (vị trí con) khác nhau vào một phiếu kho chung (ví dụ dọn kho, gom hàng).
-  - Về mặt Logic Odoo: Lệnh chuyển (INT) được tạo có `location_id` là kho lưu trữ chung (`lot_stock_id` của Warehouse) để bao hàm toàn bộ. Tuy nhiên các dòng `stock.move.line` sẽ được ép cứng mã vị trí nguồn `ml_src_id` trỏ thẳng vào từng vị trí con (Kệ hàng) cụ thể mà người dùng quét.
-  - Về mặt UI/UX: Ứng dụng yêu cầu và ép buộc người dùng phải quét mã Vị trí (Kệ hàng) trước để xác nhận "điểm lấy hàng" hiện tại. Sau đó mọi sản phẩm được quét đều sẽ thuộc về vị trí này cho đến khi người dùng quét mã vị trí khác để đổi kệ.
+# PHẦN 2 – CHI TIẾT KỸ THUẬT
 
-## API / Controllers
-- `/hlv_mobile_barcode/smart_scan`: Đầu vào `barcode`. Trả về đối tượng khớp đầu tiên theo thứ tự ưu tiên: Picking > Product > Location > Package, đồng thời trả kèm thêm trường `warehouse_code`.
-- `/hlv_mobile_barcode/get_picking_data`: Trả về JSON tree chi tiết các dòng dịch chuyển (stock.move.line) của một Picking để hiển thị riêng biệt theo kiện (Package) hoặc hàng lẻ (Unpacked), bao gồm cả `warehouse_code`, các thông tin liên kết 2 bước `linked_picking_id`, `linked_picking_name` và danh sách tóm tắt kiện hàng (`packages`).
-  - *Lọc vị trí PICK*: Đối với phiếu PICK (tên/code chứa "PICK"), backend chỉ trả về các dòng dịch chuyển đã có vị trí nguồn (move_line_ids tồn tại). Các dòng chưa phân bổ vị trí sẽ bị bỏ qua. Nếu không có dòng nào hợp lệ, trả về lỗi yêu cầu chờ hệ thống phân bổ xong.
-- `/hlv_mobile_barcode/process_barcode`: Cập nhật `quantity` khi quét sản phẩm, vị trí, hoặc kiện hàng. Hỗ trợ bỏ qua và tự tạo dòng mới khi quét sản phẩm đã được đóng gói/nằm trong kiện hàng, tránh ghi đè số lượng đã đóng gói.
-  * *Giải quyết vị trí con (Child Location Resolution)*: Khi quét từ vị trí cha (ví dụ A1-T1) nhưng tồn kho thực tế nằm ở vị trí con (A1-T1/THUNG 1), hệ thống tự động tìm và gán đúng vị trí con có hàng vào `location_id` của move line, đảm bảo Odoo validate picking thành công.
-  * *Giới hạn số lượng quét theo tồn kho thực tế*: Kiểm tra tổng số lượng đã quét cho cùng sản phẩm trên TOÀN BỘ picking (không chỉ 1 move) tại cây vị trí nguồn (bao gồm tất cả vị trí con). Nếu vượt quá tồn kho thực tế → chặn quét và thông báo lỗi rõ ràng.
-  * *Hỗ trợ quét Kiện hàng (Package)*: Được kiểm soát thông qua cấu hình **"Cho phép quét Kiện hàng" (hlv_barcode_allow_package_scan)** trong Cài đặt hệ thống (mặc định bật). Khi người dùng quét mã vạch của kiện hàng (`stock.quant.package`):
-    1. Kiểm tra xem phiếu kho có dòng dịch chuyển (move line) nào dành riêng cho kiện hàng này không (khớp `package_id` hoặc `result_package_id`). Nếu có, tự động cập nhật số lượng hoàn tất cho các dòng đó theo số lượng reserved.
-    2. Nếu không có dòng dịch chuyển riêng cho kiện hàng, hệ thống tự động tra cứu danh sách sản phẩm và số lượng thực tế chứa trong kiện thông qua `stock.quant`, sau đó tự động khớp, bổ sung và cập nhật số lượng hoàn thành tương ứng cho các sản phẩm đó trong phiếu một cách hàng loạt.
-- `/hlv_mobile_barcode/put_in_pack`: Đóng gói các dòng có số lượng đã quét lẻ thành Package. Trả về tên kiện hàng vừa đóng gói (`package_name`) và cờ `print_after_pack`.
-- `/hlv_mobile_barcode/unpack_move_line`: Gỡ sản phẩm ra khỏi kiện hàng (xóa `package_id` và `result_package_id` trên dòng dịch chuyển được chọn) để chuyển về dạng hàng lẻ, cho phép chỉnh sửa hoặc quét bổ sung.
-- `/hlv_mobile_barcode/get_package_details`: Trả về chi tiết các sản phẩm trong kiện hiện tại, các kiện khác có thể chuyển sang, và danh sách sản phẩm lẻ chưa đóng gói để thêm vào kiện.
-- `/hlv_mobile_barcode/update_package_item_qty`: Điều chỉnh số lượng sản phẩm trong kiện. Nếu giảm, tách phần thừa ra thành hàng lẻ (không mất số lượng đã quét).
-- `/hlv_mobile_barcode/remove_package_item`: Gỡ sản phẩm khỏi kiện, trả về dạng hàng lẻ đã quét (unpack).
-- `/hlv_mobile_barcode/add_item_to_package`: Thêm số lượng sản phẩm lẻ (đã quét) vào kiện hiện tại.
-- `/hlv_mobile_barcode/transfer_item_between_packages`: Di chuyển số lượng sản phẩm từ kiện này sang kiện khác một cách trực tiếp.
-- `/hlv_mobile_barcode/get_inventory_lookup`: Truy vấn `stock.quant` cho màn hình tra cứu, tự động xác định `warehouse_code` từ vị trí kho.
-- `/hlv_mobile_barcode/move_location`: Tạo lệnh `stock.picking` type Internal và xử lý tự động validate để di chuyển tồn kho.
+## 2.1. Kiến trúc tổng thể
 
-## Quản lý Kiện hàng nâng cao (Package Management Section & Edit Modal)
-Ứng dụng Mobile Barcode phân tách hoàn toàn hiển thị kiện hàng thành một khu vực riêng và bổ sung modal chỉnh sửa chi tiết:
-- **Khu vực Kiện hàng (Collapsible Packages Section)**:
-  - Hiển thị ngay trên danh sách sản phẩm, tự động thu gọn/mở rộng.
-  - Các kiện hàng được hiển thị dưới dạng Card trực quan, tóm tắt các sản phẩm chứa bên trong và hiển thị nút "Chỉnh sửa" để quản lý.
-- **Modal Chỉnh sửa Kiện hàng (Package Edit Modal)**:
-  - Modal toàn màn hình tối ưu cho Mobile Web, hiển thị danh sách sản phẩm trong kiện.
-  - Cho phép điều chỉnh trực tiếp số lượng (+/- 1) của từng dòng trong kiện (tự động cập nhật qua endpoint `update_package_item_qty`).
-  - Gỡ sản phẩm khỏi kiện về dạng hàng lẻ (qua endpoint `remove_package_item`).
-  - Thêm sản phẩm lẻ (đã quét trước đó) vào kiện trực tiếp từ danh sách chọn (qua endpoint `add_item_to_package`).
-  - Chuyển đổi số lượng sản phẩm trực tiếp từ kiện hiện tại sang một kiện đích khác trong cùng phiếu (qua endpoint `transfer_item_between_packages`).
+Ứng dụng hoạt động theo mô hình **Client Action OWL + JSON-RPC Backend**:
+
+```
+┌─────────────────────────────────────────────────┐
+│                 TRÌNH DUYỆT (OWL 2.0)           │
+│                                                 │
+│  barcode_app (Component cha)                    │
+│   ├── Camera nhúng (BarcodeDetector API)        │
+│   ├── Ô nhập mã ẩn / hiển thị                  │
+│   ├── picking_scanner (Xử lý phiếu kho)        │
+│   ├── inventory_lookup (Tra cứu tồn kho)       │
+│   ├── location_move (Chuyển vị trí)             │
+│   └── batch_location_move (Chuyển đa vị trí)   │
+│                     │                           │
+│              JSON-RPC calls                     │
+└─────────────────┬───────────────────────────────┘
+                  │
+┌─────────────────▼───────────────────────────────┐
+│              MÁY CHỦ ODOO 18                    │
+│                                                 │
+│  controllers/main.py                            │
+│   ├── /smart_scan         (nhận diện mã)        │
+│   ├── /get_picking_data   (tải dữ liệu phiếu)  │
+│   ├── /process_barcode    (xử lý quét)          │
+│   ├── /put_in_pack        (đóng gói)            │
+│   ├── /validate_picking   (xác nhận phiếu)      │
+│   ├── /get_inventory_lookup (tra cứu tồn)       │
+│   ├── /move_location      (chuyển vị trí)       │
+│   └── ... (các endpoint quản lý kiện hàng)      │
+│                                                 │
+│  models/                                        │
+│   ├── barcode_permission.py (phân quyền)        │
+│   ├── res_config_settings.py (cấu hình)         │
+│   └── stock_picking.py (mở rộng phiếu kho)      │
+└─────────────────────────────────────────────────┘
+```
+
+## 2.2. Model dữ liệu
+
+### 2.2.1. Model mới: `hlv.barcode.user.permission`
+
+Quản lý phân quyền quét kho theo cặp **Người dùng × Kho**.
+
+| Trường | Kiểu | Mô tả |
+|--------|------|-------|
+| `user_id` | Many2one → `res.users` | Người dùng (chỉ user nội bộ, `share=False`) |
+| `warehouse_id` | Many2one → `stock.warehouse` | Kho được cấp quyền |
+| `picking_permission_ids` | One2many → `hlv.barcode.picking.permission` | Danh sách quyền theo loại phiếu |
+
+- **Ràng buộc SQL**: Mỗi user chỉ có 1 bản ghi phân quyền cho mỗi kho (`unique(user_id, warehouse_id)`).
+- **Phương thức `check_picking_operation()`**: Kiểm tra quyền thực thi. Nếu user chưa có bản ghi phân quyền nào → cho phép mặc định (tương thích ngược). Nếu có bản ghi cho kho khác nhưng không có cho kho hiện tại → từ chối.
+- **Phương thức `action_generate_all()`**: Tạo hàng loạt phân quyền cho tất cả user nội bộ × tất cả kho với quyền mặc định bật hết.
+
+### 2.2.2. Model mới: `hlv.barcode.picking.permission`
+
+Quyền chi tiết cho từng loại phiếu, liên kết con của `hlv.barcode.user.permission`.
+
+| Trường | Kiểu | Mô tả |
+|--------|------|-------|
+| `permission_id` | Many2one → `hlv.barcode.user.permission` | Bản ghi phân quyền cha |
+| `picking_type_code` | Selection | Loại phiếu: `IN`, `OUT`, `INT`, `PICK`, `PACK`, `STO` |
+| `can_view` | Boolean | Quyền xem / quét phiếu |
+| `can_edit` | Boolean | Quyền sửa / quét hàng vào phiếu |
+| `can_delete` | Boolean | Quyền xóa dòng sản phẩm |
+| `can_confirm` | Boolean | Quyền xác nhận (validate) phiếu |
+
+- **Ràng buộc SQL**: Mỗi loại phiếu chỉ xuất hiện 1 lần trong mỗi bản ghi phân quyền cha (`unique(permission_id, picking_type_code)`).
+
+### 2.2.3. Model kế thừa: `res.company` & `res.config.settings`
+
+Mở rộng cấu hình hệ thống với các tham số:
+
+| Tham số | Kiểu | Mô tả |
+|---------|------|-------|
+| `hlv_barcode_picking_type_ids` | Many2many → `stock.picking.type` | Danh sách loại phiếu hiển thị trên ứng dụng quét |
+| `hlv_barcode_print_after_pack` | Boolean | In nhãn tự động sau khi đóng gói |
+| `hlv_barcode_use_independent_permissions` | Boolean (config_parameter) | Nút gạt chọn nguồn phân quyền: riêng module hoặc dùng chung `hlv_warehouse_permission` |
+| `hlv_barcode_allow_package_scan` | Boolean (config_parameter) | Cho phép quét mã kiện hàng để hoàn thành hàng loạt |
+| `hlv_barcode_show_qty_buttons` | Boolean (config_parameter) | Hiển thị nút +1/-1/+10/-10 trên giao diện quét |
+| `hlv_barcode_camera_default_on` | Boolean (config_parameter) | Camera tự động bật khi vào phiếu |
+
+### 2.2.4. Model kế thừa: `stock.picking`
+
+Thêm 1 trường cờ đánh dấu:
+
+| Trường | Kiểu | Mô tả |
+|--------|------|-------|
+| `hlv_barcode_auto_cleared` | Boolean | Đánh dấu phiếu đã được tự động làm mới số lượng khi mở lần đầu từ ứng dụng quét |
+
+## 2.3. Nhóm quyền bảo mật
+
+- **Nhóm `group_barcode_permission_manager`**: Quyền quản lý bảng phân quyền quét. Tự động gán cho `stock.group_stock_manager` (Quản lý kho) thông qua `implied_ids`.
+- **Quyền truy cập model**:
+  - Manager: Đọc / Ghi / Tạo / Xóa trên cả 2 model phân quyền.
+  - User kho (`stock.group_stock_user`): Chỉ được Đọc (để hệ thống kiểm tra quyền qua RPC).
+
+## 2.4. Luồng xử lý chính (Workflow)
+
+### 2.4.1. Luồng quét thông minh (Smart Routing)
+
+```
+Người dùng quét/nhập mã
+        │
+        ▼
+  barcode_app.processBarcode()
+        │
+        ▼
+  RPC → /smart_scan (gửi mã vạch)
+        │
+        ▼
+  Backend tìm kiếm theo thứ tự ưu tiên:
+  1. stock.picking  (khớp name)
+  2. product.product (khớp barcode hoặc default_code)
+  3. stock.location  (khớp barcode hoặc name)
+  4. stock.quant.package (khớp name)
+        │
+        ▼
+  Trả về {type, id, name, warehouse_code}
+        │
+        ▼
+  Frontend chuyển đổi currentView:
+  - type='picking'  → mở picking_scanner
+  - type='product'  → mở inventory_lookup
+  - type='location' → mở inventory_lookup
+  - type='package'  → mở inventory_lookup
+```
+
+**Lưu ý kỹ thuật**:
+- Toàn bộ truy vấn `search()` sử dụng `.sudo()` để bỏ qua rào cản phân quyền multi-company.
+- Hỗ trợ khớp song song: mã vạch (`barcode`) và mã nội bộ/SKU (`default_code`) cho sản phẩm; mã vạch (`barcode`) và tên (`name`) cho vị trí.
+- Chuỗi quét được tự động `.strip()` để loại bỏ khoảng trắng thừa từ máy quét.
+
+### 2.4.2. Luồng xử lý phiếu kho (Picking Scanner)
+
+```
+Mở phiếu → RPC /get_picking_data
+        │
+        ▼
+  Hiển thị danh sách sản phẩm cần xử lý
+  (phân tách: hàng lẻ + kiện hàng đã đóng gói)
+        │
+        ▼
+  Quét sản phẩm → RPC /process_barcode
+        │
+        ├─ Nếu là mã sản phẩm: +1 số lượng hoàn thành
+        ├─ Nếu là mã vị trí: gán vị trí nguồn cho các lần quét tiếp theo
+        └─ Nếu là mã kiện hàng: hoàn thành hàng loạt tất cả sản phẩm trong kiện
+        │
+        ▼
+  Khi đủ số lượng → Xác nhận phiếu (RPC /validate_picking)
+```
+
+**Chi tiết kỹ thuật xử lý quét sản phẩm (`/process_barcode`)**:
+- **Phân giải vị trí con**: Khi quét vị trí cha (ví dụ `A1-T1`) nhưng tồn kho thực tế nằm ở vị trí con (`A1-T1/THUNG-1`), hệ thống dùng toán tử `child_of` để tìm và gán đúng vị trí con vào `location_id` của `stock.move.line`.
+- **Giới hạn theo tồn kho thực tế**: Tính tổng số lượng đã quét cho cùng sản phẩm trên toàn bộ phiếu (tất cả move, tất cả vị trí con) rồi so sánh với `stock.quant`. Nếu vượt quá → chặn quét, trả lỗi.
+- **Quét kiện hàng**: Kiểm tra xem phiếu có dòng `move.line` khớp `package_id` không. Nếu có → hoàn thành các dòng đó. Nếu không → tra cứu `stock.quant` trong kiện, tự động khớp và cập nhật số lượng hàng loạt.
+- **Bỏ qua sản phẩm đã đóng gói**: Khi quét sản phẩm đã có trong kiện, hệ thống tạo dòng `move.line` mới thay vì ghi đè số lượng kiện.
+
+**Lọc đặc biệt cho phiếu PICK**:
+- Backend chỉ trả về các dòng dịch chuyển đã có vị trí nguồn được phân bổ (`move_line_ids` tồn tại).
+- Nếu chưa có dòng nào hợp lệ → trả lỗi yêu cầu chờ hệ thống phân bổ, chặn từ trang chủ không cho vào phiếu.
+
+### 2.4.3. Luồng đóng gói kiện hàng
+
+```
+Quét xong sản phẩm (có qty_done > 0, chưa thuộc kiện nào)
+        │
+        ▼
+  Bấm "Đóng gói" → RPC /put_in_pack
+        │
+        ▼
+  Backend gọi picking._put_in_pack() của Odoo
+  Trả về: package_name, print_after_pack
+        │
+        ▼
+  Nếu print_after_pack = true → Mở tab in nhãn kiện
+
+Quản lý kiện hàng (Modal chỉnh sửa):
+  - RPC /get_package_details      → Lấy chi tiết kiện
+  - RPC /update_package_item_qty  → Chỉnh số lượng trong kiện
+  - RPC /remove_package_item      → Gỡ sản phẩm khỏi kiện
+  - RPC /add_item_to_package      → Thêm hàng lẻ vào kiện
+  - RPC /transfer_item_between_packages → Chuyển giữa các kiện
+  - RPC /unpack_move_line         → Gỡ toàn bộ kiện về hàng lẻ
+```
+
+### 2.4.4. Luồng liên kết quy trình 2 bước
+
+```
+Phiếu Bước 1 (INT) hoàn thành (state = 'done')
+        │
+        ▼
+  Backend tìm phiếu Bước 2 qua 4 phương pháp:
+  1. Tin nhắn Chatter: tìm mail.message có body chứa tên phiếu Bước 1
+  2. Chuỗi dịch chuyển: move_dest_ids.picking_id
+  3. Nhóm cung ứng: cùng group_id, mã chứa 'IN'/'STOR'
+  4. Nguồn gốc: trường origin khớp tên phiếu Bước 1
+        │
+        ▼
+  Trả về linked_picking_id, linked_picking_name
+        │
+        ▼
+  Frontend hiển thị nút "Chuyển sang Bước 2"
+  → Bấm: giải phóng camera, pushHistory(), mở phiếu mới
+```
+
+### 2.4.5. Luồng chuyển kho đa vị trí
+
+```
+Chọn "Chuyển kho đa vị trí" từ trang tra cứu vị trí
+        │
+        ▼
+  Popup chọn vị trí đích (quét hoặc chọn kho)
+        │
+        ▼
+  RPC /create_empty_int → Tạo phiếu INT trống
+  (location_id = lot_stock_id của kho nguồn)
+        │
+        ▼
+  Yêu cầu quét vị trí nguồn (kệ cụ thể) TRƯỚC
+        │
+        ▼
+  Quét sản phẩm → Backend tạo stock.move.line
+  với ml_src_id trỏ thẳng vào vị trí con đã quét
+        │
+        ▼
+  Quét vị trí mới → Đổi kệ nguồn cho các lần quét tiếp theo
+```
+
+### 2.4.6. Luồng phân quyền quét kho
+
+```
+Mỗi RPC endpoint kiểm tra quyền:
+        │
+        ▼
+  Đọc config_parameter: hlv_barcode_use_independent_permissions
+        │
+        ├─ True  → Truy vấn hlv.barcode.user.permission
+        └─ False → Truy vấn warehouse.user.permission (module hlv_warehouse_permission)
+        │
+        ▼
+  request.env.get(model_name)
+  (nếu module chưa cài → trả None → cho phép mặc định, không crash)
+        │
+        ▼
+  Gọi check_picking_operation(user, warehouse, type_code, 'can_edit')
+        │
+        ▼
+  Nếu không có quyền → trả lỗi 403 qua JSON response
+```
+
+## 2.5. Danh sách API (JSON-RPC Controllers)
+
+| Endpoint | Phương thức | Mô tả |
+|----------|-------------|-------|
+| `/hlv_mobile_barcode/smart_scan` | POST | Nhận diện mã vạch, trả về loại đối tượng và thông tin |
+| `/hlv_mobile_barcode/get_picking_data` | POST | Tải chi tiết phiếu kho (dòng sản phẩm, kiện hàng, liên kết 2 bước) |
+| `/hlv_mobile_barcode/process_barcode` | POST | Xử lý quét sản phẩm/vị trí/kiện trong phiếu kho |
+| `/hlv_mobile_barcode/update_move_line_qty` | POST | Cập nhật số lượng thủ công trên dòng sản phẩm |
+| `/hlv_mobile_barcode/delete_move` | POST | Xóa dòng sản phẩm khỏi phiếu |
+| `/hlv_mobile_barcode/validate_picking` | POST | Xác nhận phiếu kho |
+| `/hlv_mobile_barcode/clear_quantities` | POST | Xóa sạch số lượng đã quét (reset phiếu) |
+| `/hlv_mobile_barcode/put_in_pack` | POST | Đóng gói các sản phẩm lẻ đã quét thành kiện |
+| `/hlv_mobile_barcode/unpack_move_line` | POST | Gỡ sản phẩm khỏi kiện về hàng lẻ |
+| `/hlv_mobile_barcode/get_package_details` | POST | Lấy chi tiết kiện hàng để chỉnh sửa |
+| `/hlv_mobile_barcode/update_package_item_qty` | POST | Chỉnh số lượng sản phẩm trong kiện |
+| `/hlv_mobile_barcode/remove_package_item` | POST | Gỡ sản phẩm khỏi kiện |
+| `/hlv_mobile_barcode/add_item_to_package` | POST | Thêm hàng lẻ vào kiện |
+| `/hlv_mobile_barcode/transfer_item_between_packages` | POST | Chuyển sản phẩm giữa các kiện |
+| `/hlv_mobile_barcode/get_inventory_lookup` | POST | Tra cứu tồn kho (sản phẩm/vị trí/kiện) |
+| `/hlv_mobile_barcode/move_location` | POST | Tạo phiếu chuyển vị trí và tự động xác nhận |
+| `/hlv_mobile_barcode/create_empty_int` | POST | Tạo phiếu INT trống cho chế độ chuyển đa vị trí |
+| `/hlv_mobile_barcode/get_settings` | POST | Lấy cấu hình ứng dụng (camera mặc định, nút số lượng…) |
+| `/hlv_mobile_barcode/get_warehouses` | POST | Lấy danh sách kho để chọn đích chuyển |
+
+## 2.6. Kiến trúc giao diện (OWL 2.0)
+
+### 2.6.1. Cây component
+
+| Component | File | Vai trò |
+|-----------|------|---------|
+| `BarcodeApp` | `barcode_app/` | Component cha: quản lý state toàn cục, camera, điều hướng, lịch sử duyệt, xử lý mã quét |
+| `PickingScanner` | `picking_scanner/` | Hiển thị và xử lý phiếu kho: danh sách sản phẩm, kiện hàng, modal chỉnh sửa kiện, footer xác nhận |
+| `InventoryLookup` | `inventory_lookup/` | Tra cứu tồn kho: hiển thị quant theo vị trí, sản phẩm đang giữ hàng (reserved) |
+| `LocationMove` | `location_move/` | Giao diện chuyển vị trí đơn lẻ |
+| `BatchLocationMove` | `batch_location_move/` | Giao diện chuyển kho đa vị trí |
+
+### 2.6.2. Quản lý trạng thái (State Management)
+
+- Sử dụng `useState` của OWL 2.0 để quản lý reactive state trong `BarcodeApp`.
+- Trạng thái chính `currentView` quyết định component con nào được hiển thị: `'main'`, `'picking'`, `'lookup'`, `'move'`, `'batch_move'`.
+- Lịch sử duyệt (`history[]`) được quản lý thủ công qua `pushHistory()` / `goBack()` để cho phép quay lại nhiều cấp.
+- Trạng thái được lưu vào `sessionStorage` để giữ nguyên khi F5/reload, và xóa khi quay lại trang chủ.
+
+### 2.6.3. Camera nhúng liên tục
+
+- Sử dụng **BarcodeDetector API** (native trên trình duyệt hiện đại hoặc polyfill từ jsdelivr).
+- Quét qua vòng lặp `requestAnimationFrame` nhẹ nhàng, tạm dừng 2 giây khi quét trùng mã.
+- Trạng thái camera mặc định (`camera_default_on`) được tải từ backend qua `/get_settings` và chờ đợi (`await`) trước khi mở camera để tránh Race Condition.
+- **Xử lý quyền camera di động**:
+  - Kiểm tra `window.isSecureContext` → yêu cầu HTTPS.
+  - iOS/Safari: hiển thị lớp phủ yêu cầu user gesture trước khi gọi `getUserMedia()`.
+  - Giải phóng camera triệt để khi chuyển view: `stream.getTracks().forEach(t => t.stop())`.
+
+### 2.6.4. Ô nhập mã thông minh
+
+- **Trong các view chi tiết**: Ô input ẩn (`hiddenInputRef`) tự động nhận focus qua cơ chế kiểm tra định kỳ 2 giây. Cho phép quét bằng súng USB hoặc dán mã (Ctrl+V) rồi nhấn Enter.
+- **Tại trang chủ**: Focus tự động chuyển sang ô nhập mã hiển thị (`manualInputRef`). Thuộc tính `inputmode="none"` được gán mặc định để ngăn bàn phím ảo mở tự động trên điện thoại. Khi người dùng nhấn vào ô nhập → chuyển `inputmode` sang `"text"`, thực hiện `blur()` rồi `focus()` để kích hoạt bàn phím ảo. Khi mất focus → đưa `inputmode` về `"none"`.
+
+### 2.6.5. Phản hồi cảm giác (Feedback)
+
+- **Âm thanh**: Phát `success.mp3` hoặc `error.mp3` qua Web Audio API.
+- **Rung**: `navigator.vibrate(150)` khi thành công, `navigator.vibrate([100, 50, 100])` khi lỗi.
+- **Nháy sáng**: Dòng sản phẩm vừa quét được highlight với hiệu ứng CSS animation.
+
+## 2.7. Cơ chế bảo mật
+
+### 2.7.1. Chống gian lận quét
+
+- **Chặn sao chép**: CSS `user-select: none`, chặn sự kiện `copy` và `contextmenu` trên toàn ứng dụng.
+- **Giới hạn tồn kho**: Số lượng quét bị chặn khi vượt tồn kho thực tế tại cây vị trí nguồn.
+- **Khóa xử lý đơn (isProcessing)**: Ngăn Race Condition khi quét nhanh hoặc mạng chập chờn. Chỉ cho phép 1 RPC chạy tại 1 thời điểm.
+- **Khóa số lượng (isProcessingQty)**: Ngăn xung đột khi bấm nút +/- hoặc nhập số lượng thủ công song song.
+
+### 2.7.2. Đồng bộ dữ liệu khi mất kết nối
+
+- **F5/Reload**: `sessionStorage` lưu trạng thái hiện tại, `localStorage` lưu `hlv_opened_pickings` → tải lại an toàn từ backend.
+- **Thoát phiếu**: Gọi RPC `/clear_quantities` để reset sạch: xóa dòng tạo động, reset số lượng, gỡ kiện cho dòng đặt trước.
+
+### 2.7.3. Bỏ qua phân quyền Odoo (Sudo Bypass)
+
+- Toàn bộ truy vấn `search()` và `browse()` liên quan đến sản phẩm, vị trí, phiếu kho, kiện hàng đều sử dụng `.sudo()` để bỏ qua record rules multi-company.
+- Lý do: Nhân viên kho cần thấy 100% dữ liệu thực tế mà không bị chặn bởi các quy tắc phân quyền ngầm định của Odoo ORM.
+
+## 2.8. Thiết kế giao diện (CSS)
+
+- **Hệ thống biến thiết kế (Design Tokens)**: Sử dụng CSS variables trong `:root` với tông màu slate-navy (`--primary-color: #1e293b`), các biến màu nền pastel cho trạng thái (`--success-bg`, `--danger-bg`, `--warning-bg`).
+- **Bố cục 1 cột**: Giao diện đồng nhất cho mobile và desktop, tránh lỗi hiển thị chéo nền tảng.
+- **Xử lý viewport Odoo**: Dùng `position: absolute !important` trên `.hlv-barcode-app` bám khít `.o_content` để tránh tràn footer do thanh navbar Odoo. Danh sách sản phẩm cuộn nội bộ, header và footer cố định.
+- **Responsive**: Camera container cao `160px` trên mobile, mở rộng `240px` trên desktop (≥ 992px).
+
+## 2.9. Nút gạt phân quyền (Chế độ kép)
+
+Tham số `hlv_barcode_use_independent_permissions` cho phép chuyển đổi nguồn phân quyền:
+
+| Giá trị | Hành vi |
+|---------|---------|
+| `False` (mặc định) | Dùng chung phân quyền từ module `hlv_warehouse_permission` (model `warehouse.user.permission`) |
+| `True` | Dùng phân quyền riêng của module này (model `hlv.barcode.user.permission`) |
+
+**Xử lý khi module phụ thuộc chưa cài**:
+- Giao diện cài đặt dùng nút gọi Python (`action_open_warehouse_permissions`) thay vì action ID tĩnh → tránh lỗi `ParseError`.
+- Backend dùng `request.env.get(model_name)` → trả `None` nếu module chưa cài, không crash.
+
+## 2.10. Hướng dẫn mở rộng
+
+| Mục đích | Cách thực hiện |
+|----------|----------------|
+| Thêm loại mã vạch mới | Bổ sung logic tìm kiếm vào hàm `smart_scan` trong `controllers/main.py` |
+| Thêm component giao diện mới | Tạo thư mục trong `static/src/components/`, import vào `barcode_app.js` |
+| Thêm cấu hình mới | Thêm field vào `res_config_settings.py`, cập nhật view XML và endpoint `/get_settings` |
+| Thêm endpoint API mới | Thêm hàm trong `controllers/main.py` với decorator `@http.route()`, type `json` |
+| Thêm loại phiếu phân quyền | Bổ sung vào `PICKING_TYPE_CODES` trong `barcode_permission.py` |
 
 
-## Phân quyền quét Barcode di động (Hệ thống Nút gạt Động)
-Để tăng tính tự động hóa và bảo mật tối đa, ứng dụng Mobile Barcode tích hợp hệ thống phân quyền quét kho động, cho phép linh hoạt cấu hình và chuyển đổi:
-* **Models**:
-  - `hlv.barcode.user.permission`: Định cấu hình người dùng (`res.users`) tại từng kho (`stock.warehouse`).
-  - `hlv.barcode.picking.permission`: Cấu hình quyền chi tiết cho từng loại phiếu quét (`IN`, `OUT`, `INT`, `PICK`, `PACK`, `STO`) với các cờ boolean: `can_view` (Xem/Quét), `can_edit` (Sửa/Quét hàng), `can_delete` (Xóa dòng), `can_confirm` (Xác nhận phiếu).
-* **Nút gạt cấu hình (Toggle Setting)**:
-  - Tham số `hlv_barcode_use_independent_permissions` trong `ir.config_parameter` (được cấu hình qua Settings) cho phép quản trị viên lựa chọn:
-    - **Bật (True)**: Sử dụng cấu hình phân quyền quét của riêng Mobile Barcode (`hlv.barcode.*`).
-    - **Tắt (False - Mặc định)**: Dùng chung cấu hình phân quyền kho của module `hlv_warehouse_permission` (`warehouse.*`).
-* **Tránh lỗi biên dịch XML (Resilient Runtime Routing)**:
-  - Để tránh lỗi `ParseError` khi cài đặt module trên hệ thống không có `hlv_warehouse_permission`:
-    - Giao diện cài đặt sử dụng **nút gọi Python object (`action_open_warehouse_permissions`)** thay vì dùng action ID tĩnh để mở trang cấu hình chung của `hlv_warehouse_permission`.
-    - Menu phụ debug *"Phân quyền quét kho"* gọi một **Odoo Server Action (`action_open_barcode_permissions_menu`)**, tự động kiểm tra trạng thái nút gạt để trả về trang cấu hình tương ứng ở runtime.
-* **Kiểm tra quyền đa hình (Polymorphic Validation)**:
-  - Cả 6 API controllers kiểm tra quyền (`smart_scan`, `get_picking_data`, `process_barcode`, `update_move_line_qty`, `delete_move`, `validate_picking`) tự động quyết định model cần truy vấn tại runtime dựa trên nút gạt.
-  - Nếu module đích chưa cài đặt, `request.env.get(...)` sẽ trả về `None` một cách an toàn mà không bao giờ gây crash hệ thống.
 
-## Hướng dẫn mở rộng
-- Khi cần thêm loại mã vạch mới: Thêm logic tìm kiếm vào endpoint `smart_scan` ở `controllers/main.py`.
-- Khi cần thêm tính năng xử lý, có thể tạo thêm các component OWL trong `static/src/components` và import vào `barcode_app.js`.
-- Bố cục 1 cột được thiết lập thống nhất nên giao diện di động và desktop sẽ đồng nhất 100%, bảo trì đơn giản mà không sợ phát sinh lỗi hiển thị chéo nền tảng.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+---
+```text
+                       _oo0oo_
+                      o8888888o
+                      88" . "88
+                      (| -_- |)
+                      0\  =  /0
+                    ___/`---'\___
+                  .' \\|     |// '.
+                 / \\|||  :  |||// \
+                / _||||| -:- |||||- \
+               |   | \\\  -  /// |   |
+               | \_|  ''\---/''  |_/ |
+               \  .-\__  '-'  ___/-. /
+             ___'. .'  /--.--\  `. .'___
+          ."" '<  `.___\_<|>_/___.' >' "".
+         | | :  `- \`.;`\ _ /`;.`/ - ` : | |
+         \  \ `_.   \_ __\ /__ _/   .-` /  /
+     =====`-.____`.___ \_____/___.-`___.-'=====
+                       `=---='
+```

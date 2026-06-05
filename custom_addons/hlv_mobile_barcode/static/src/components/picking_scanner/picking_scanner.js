@@ -1,6 +1,6 @@
 /** @odoo-module **/
 
-import { Component, useState, onWillStart, onWillUpdateProps, useEffect, onWillDestroy } from "@odoo/owl";
+import { Component, useState, onWillStart, onWillUpdateProps, useEffect, onWillDestroy, useRef } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
 import { rpc } from "@web/core/network/rpc";
 
@@ -27,6 +27,7 @@ export class PickingScanner extends Component {
         this.isProcessingQty = false;
         this._hasAutoCleared = false;
         this.isDestroyed = false;
+        this.locationBannerRef = useRef("locationBannerRef");
 
         onWillDestroy(() => {
             this.isDestroyed = true;
@@ -45,6 +46,9 @@ export class PickingScanner extends Component {
             addItemQty: 1,
             transferTargets: {},
             transferQtys: {},
+            // Conflict check state (khi vào lại phiếu PICK đã có qty_scanned)
+            showConflictPopup: false,
+            conflictItems: [],
         });
 
         onWillStart(async () => {
@@ -54,6 +58,7 @@ export class PickingScanner extends Component {
         onWillUpdateProps(async (nextProps) => {
             if (nextProps.pickingId !== this.props.pickingId) {
                 this._hasAutoCleared = false;
+                this._hasCheckedConflict = false;
             }
             if (nextProps.lastScannedProduct !== this.props.lastScannedProduct 
                 || nextProps.scannedLocationName !== this.props.scannedLocationName
@@ -79,6 +84,39 @@ export class PickingScanner extends Component {
                 }
             }
         }, () => [this.props.lastScannedProduct, this.props.refreshTick, this.state.loading]);
+
+        useEffect(() => {
+            if (this.locationBannerRef.el) {
+                const el = this.locationBannerRef.el.querySelector('.location-info-row');
+                if (el) {
+                    // Tắt transition và ẩn đi để tính toán (không cho user thấy quá trình nhỏ dần)
+                    const prevTransition = this.locationBannerRef.el.style.transition;
+                    this.locationBannerRef.el.style.transition = "none";
+                    el.style.transition = "none";
+                    this.locationBannerRef.el.style.opacity = "0";
+                    
+                    // Reset to default
+                    el.style.fontSize = "0.85rem";
+                    let currentFontSize = 0.85;
+                    
+                    // Shrink until it fits or reaches a minimum readable size
+                    while (el.scrollWidth > el.clientWidth && currentFontSize > 0.4) {
+                        currentFontSize -= 0.05; // Decrease faster to reduce layout thrashing
+                        el.style.fontSize = `${currentFontSize}rem`;
+                    }
+                    
+                    // Hiển thị lại ngay lập tức
+                    this.locationBannerRef.el.style.opacity = "1";
+                    // Phục hồi transition sau 1 frame nhỏ
+                    requestAnimationFrame(() => {
+                        if (this.locationBannerRef.el) {
+                            this.locationBannerRef.el.style.transition = prevTransition;
+                            el.style.transition = "";
+                        }
+                    });
+                }
+            }
+        }, () => [this.props.scannedLocationName]);
     }
 
     async loadPicking() {
@@ -108,15 +146,13 @@ export class PickingScanner extends Component {
                     } catch (e) {}
                     
                     const pickingIdInt = parseInt(this.props.pickingId, 10);
-                    
-                    if (data.is_pick && !data.hlv_barcode_auto_cleared && !this.hasAutoClearedOnce) {
-                        this.hasAutoClearedOnce = true;
-                        // Gọi hàm Làm lại (chỉ tự động chạy 1 lần duy nhất cho mỗi phiếu)
-                        try {
-                            await this.clearQuantities(true);
-                        } finally {
-                            this.state.loading = false;
-                        }
+
+                    // PICK: Nếu có dữ liệu đã quét lưu trước (qty_scanned > 0), kiểm tra tồn kho
+                    if (data.is_pick && data.has_scanned_data && !this._hasCheckedConflict) {
+                        this._hasCheckedConflict = true;
+                        this.state.picking = data;
+                        this.state.loading = false;
+                        await this._checkScannedAvailability();
                         return;
                     }
                     
@@ -133,6 +169,47 @@ export class PickingScanner extends Component {
         } finally {
             this.state.loading = false;
         }
+    }
+
+    async _checkScannedAvailability() {
+        try {
+            const res = await rpc("/hlv_mobile_barcode/check_pick_scanned_availability", {
+                picking_id: this.props.pickingId,
+            });
+            if (res.has_conflicts) {
+                this.state.conflictItems = res.conflicts;
+                this.state.showConflictPopup = true;
+            }
+        } catch (e) {
+            // Nếu lỗi kết nối, bỏ qua (tiếp tục với dữ liệu cũ)
+        }
+    }
+
+    async resolveConflict(action) {
+        this.state.showConflictPopup = false;
+        this.state.conflictItems = [];
+        if (action === 'reset') {
+            // Xóa toàn bộ qty_scanned, quét lại từ đầu
+            await this.clearQuantities(true);
+        } else if (action === 'cap') {
+            // Giảm qty_scanned xuống mức tối đa khả dụng
+            try {
+                const res = await rpc("/hlv_mobile_barcode/cap_pick_scanned_to_available", {
+                    picking_id: this.props.pickingId,
+                });
+                if (res.error) {
+                    this.notification.add(res.error, { type: "danger" });
+                } else {
+                    this.notification.add("Đã điều chỉnh số lượng về mức tối đa khả dụng.", { type: "success" });
+                    if (!this.isDestroyed) {
+                        await this.loadPicking();
+                    }
+                }
+            } catch (e) {
+                this.notification.add("Lỗi kết nối", { type: "danger" });
+            }
+        }
+        // 'keep': giữ nguyên, không làm gì thêm
     }
 
     async clearQuantities(skipConfirm = false) {

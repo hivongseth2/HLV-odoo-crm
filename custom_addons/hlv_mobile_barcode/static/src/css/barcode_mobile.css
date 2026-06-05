@@ -1400,7 +1400,11 @@
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  font-size: 0.95rem;
+  font-size: 0.85rem;
+  gap: 8px;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 .hlv-barcode-app .modern-location-banner .location-badge {
@@ -1408,18 +1412,21 @@
   font-weight: 600;
   display: flex;
   align-items: center;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .hlv-barcode-app .modern-location-banner .location-val {
   color: var(--info-color);
   font-weight: 700;
   background: var(--white);
-  padding: 4px 10px;
+  padding: 3px 6px;
   border-radius: 6px;
   border: 1px solid var(--info-border);
   font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  font-size: 0.95rem;
-  letter-spacing: 0.5px;
+  font-size: 1em;
+  letter-spacing: 0;
+  white-space: nowrap;
 }
 
 /* Error state when location is missing */
@@ -1434,9 +1441,10 @@
 }
 
 .hlv-barcode-app .modern-location-banner .location-hint {
-  font-size: 0.85rem;
+  font-size: 1em;
   color: var(--text-muted);
   font-weight: 500;
+  white-space: nowrap;
 }
 
 /* Camera controls (matching barcode shipper) */
