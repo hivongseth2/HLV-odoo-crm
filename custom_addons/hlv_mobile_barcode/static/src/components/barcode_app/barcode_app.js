@@ -41,6 +41,7 @@ export class BarcodeApp extends Component {
             pickingId: savedState.pickingId || null,
             pickingName: savedState.pickingName || "",
             pickingIsPick: savedState.pickingIsPick || false,
+            pickingIsReturn: savedState.pickingIsReturn || false,
             pickingTypeCode: savedState.pickingTypeCode || "",
             pickingSourceTransferName: savedState.pickingSourceTransferName || "",
             warehouseCode: savedState.warehouseCode || "",
@@ -93,6 +94,7 @@ export class BarcodeApp extends Component {
                 pickingId: this.state.pickingId,
                 pickingName: this.state.pickingName,
                 pickingIsPick: this.state.pickingIsPick,
+                pickingIsReturn: this.state.pickingIsReturn,
                 pickingTypeCode: this.state.pickingTypeCode,
                 pickingSourceTransferName: this.state.pickingSourceTransferName,
                 warehouseCode: this.state.warehouseCode,
@@ -112,6 +114,7 @@ export class BarcodeApp extends Component {
             this.state.pickingId,
             this.state.pickingName,
             this.state.pickingIsPick,
+            this.state.pickingIsReturn,
             this.state.pickingTypeCode,
             this.state.pickingSourceTransferName,
             this.state.warehouseCode,
@@ -483,6 +486,7 @@ export class BarcodeApp extends Component {
             pickingId: this.state.pickingId,
             pickingName: this.state.pickingName,
             pickingIsPick: this.state.pickingIsPick,
+            pickingIsReturn: this.state.pickingIsReturn,
             pickingTypeCode: this.state.pickingTypeCode,
             pickingSourceTransferName: this.state.pickingSourceTransferName,
             warehouseCode: this.state.warehouseCode,
@@ -527,6 +531,7 @@ export class BarcodeApp extends Component {
             this.state.pickingId = prevState.pickingId;
             this.state.pickingName = prevState.pickingName;
             this.state.pickingIsPick = prevState.pickingIsPick || false;
+            this.state.pickingIsReturn = prevState.pickingIsReturn || false;
             this.state.pickingTypeCode = prevState.pickingTypeCode || "";
             this.state.pickingSourceTransferName = prevState.pickingSourceTransferName || "";
             this.state.warehouseCode = prevState.warehouseCode || "";
@@ -579,6 +584,7 @@ export class BarcodeApp extends Component {
         this.state.pickingId = null;
         this.state.pickingName = "";
         this.state.pickingIsPick = false;
+        this.state.pickingIsReturn = false;
         this.state.pickingTypeCode = "";
         this.state.pickingSourceTransferName = "";
         this.state.scannedLocationId = null;
@@ -836,12 +842,14 @@ export class BarcodeApp extends Component {
             this.state.lastScannedMoveLine = null;
             this.state.pickingState = "";
             this.state.isMultiLocationMode = false;
+            this.state.pickingIsReturn = false;
             this.state.pickingRefreshTick += 1;
             this.state.cameraManuallyOff = !this.state.cameraDefaultOn;
 
             if (data) {
                 this.state.warehouseCode = data.warehouse_code || "HLV";
                 this.state.pickingIsPick = data.is_pick;
+                this.state.pickingIsReturn = data.is_return || false;
                 this.state.pickingTypeCode = data.picking_type_code;
                 this.state.pickingSourceTransferName = data.source_transfer_name;
                 if (!data.is_pick && !data.is_putaway && data.location_name) {
@@ -867,6 +875,7 @@ export class BarcodeApp extends Component {
 
     onPickingLoaded(data) {
         this.state.pickingIsPick = data.is_pick;
+        this.state.pickingIsReturn = data.is_return || false;
         this.state.pickingTypeCode = data.picking_type_code;
         this.state.pickingSourceTransferName = data.source_transfer_name;
     }

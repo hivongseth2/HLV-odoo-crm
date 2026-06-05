@@ -34,7 +34,8 @@
                     <div style="display: flex; flex-direction: column;">
                         <div class="picking-title-main">
                             <span>
-                                <t t-if="state.pickingIsPick">Lấy hàng </t>
+                                <t t-if="state.pickingIsReturn">Trả hàng </t>
+                                <t t-elif="state.pickingIsPick">Lấy hàng </t>
                                 <t t-elif="state.pickingTypeCode == 'outgoing'">Xuất kho </t>
                                 <t t-elif="state.pickingTypeCode == 'incoming'">Nhập kho </t>
                                 <t t-elif="state.pickingTypeCode == 'internal'">Chuyển kho </t>
