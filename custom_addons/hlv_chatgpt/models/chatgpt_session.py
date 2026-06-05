@@ -279,22 +279,27 @@ class HlvChatgptSession(models.Model):
         # API Responses không dùng ThreadRun stateful như Assistant/Threads API cũ.
         # Ta cần tự quản lý loop tool calls.
         
-        MAX_STEPS = 40 # Tránh loop vô tận
+        MAX_STEPS = 8 # Tránh loop tool call quá lâu
         step_count = 0
         final_response_text = "..."
+        previous_response_id = None
+        next_input = input_messages
+        executed_tools = set()
 
         while step_count < MAX_STEPS:
             step_count += 1
             try:
-                # Gọi API
-                # Gọi API
-                response = client.responses.create(
-                    prompt={
+                params = {
+                    "prompt": {
                         "id": prompt_id,
                     },
-                    input=input_messages,
-                    tools=TOOLS_SCHEMA, # Định nghĩa lại Tool schema để server biết tool nào khả dụng
-                )
+                    "input": next_input,
+                    "tools": TOOLS_SCHEMA,
+                }
+                if previous_response_id:
+                    params["previous_response_id"] = previous_response_id
+                response = client.responses.create(**params)
+                previous_response_id = getattr(response, 'id', None)
             except Exception as e:
                 _logger.error("API Call Error: %s", str(e))
                 return f"Lỗi gọi OpenAI: {str(e)}"
@@ -314,11 +319,13 @@ class HlvChatgptSession(models.Model):
                 for item in response.output:
                     # 1. Text Output
                     if hasattr(item, 'type') and item.type == 'message':
-                        # Item có thể là ResponseMessage?
-                        # Trong log user gửi không thấy type='message' trong output list, mà là content list?
-                        # Log mẫu: output=[ResponseFileSearchToolCall(...), ResponseFunctionToolCall(...)]
-                        # Không thấy text. Có thể text nằm ở object khác hoặc user prompt chỉ trigger tool.
-                        pass
+                        for content_item in (getattr(item, 'content', []) or []):
+                            content_type = getattr(content_item, 'type', None)
+                            if content_type in ('output_text', 'text'):
+                                text_value = getattr(content_item, 'text', '') or ''
+                                if isinstance(text_value, dict):
+                                    text_value = text_value.get('value', '')
+                                output_text += text_value
                     
                     # Cấu trúc khác: item có thể là content block?
                     # Check các attribute thường gặp
@@ -362,21 +369,34 @@ class HlvChatgptSession(models.Model):
 
             # 1. Nếu có Tool Calls -> Thực hiện
             if tool_calls:
-                # Append AI turn vào history
-                ai_msg_dict = {
-                    "role": "assistant",
-                    "content": output_text or "", 
-                }
-                input_messages.append(ai_msg_dict)
-
-                # Thực hiện từng Tool
+                tool_outputs = []
                 for tc in tool_calls:
                     fname = tc['function']['name']
                     call_id = tc['id']
-                    args = json.loads(tc['function']['arguments'] or '{}')
+                    raw_args = tc['function']['arguments'] or '{}'
+                    args = json.loads(raw_args)
                     
                     _logger.info("⚡ Tool Call: %s | Args: %s", fname, str(args))
                     tool_result_str = ""
+                    tool_key = (fname, json.dumps(args, sort_keys=True, ensure_ascii=False))
+
+                    if tool_key in executed_tools:
+                        tool_result_str = json.dumps({
+                            "status": "duplicate_tool_call",
+                            "message": (
+                                "Tool này đã được gọi với cùng tham số trong lượt hiện tại. "
+                                "Không gọi lại; hãy dùng kết quả đã có để trả lời người dùng."
+                            )
+                        }, ensure_ascii=False)
+                        _logger.warning("Duplicate tool call blocked: %s %s", fname, raw_args)
+                        tool_outputs.append({
+                            "type": "function_call_output",
+                            "call_id": call_id,
+                            "output": tool_result_str,
+                        })
+                        continue
+
+                    executed_tools.add(tool_key)
 
                     if fname == "search_product_misa":
                         tool_result_str = self._execute_search_misa(args)
@@ -391,13 +411,13 @@ class HlvChatgptSession(models.Model):
                     else:
                         tool_result_str = json.dumps({"error": f"Function {fname} chưa được hỗ trợ"})
                     
-                    # Append Tool Output (biến tấu thành User role vì API Responses không chịu tool_calls input)
-                    input_messages.append({
-                        "role": "user",
-                        "content": f"[System System] Executed Tool '{fname}': {tool_result_str}"
+                    tool_outputs.append({
+                        "type": "function_call_output",
+                        "call_id": call_id,
+                        "output": tool_result_str,
                     })
                 
-                # Loop tiếp để gửi kết quả tool lên AI
+                next_input = tool_outputs
                 continue
             
             else:
@@ -406,6 +426,9 @@ class HlvChatgptSession(models.Model):
                 break
 
         # Xóa các ký tự tham chiếu rác (VD: 【4:0†source】) của File Search
+        if step_count >= MAX_STEPS and final_response_text == "...":
+            return "Yêu cầu đang bị lặp công cụ quá nhiều lần. Vui lòng thử lại với yêu cầu cụ thể hơn."
+
         final_response_text = re.sub(r'【.*?】', '', final_response_text)
         return final_response_text or "..."
 
