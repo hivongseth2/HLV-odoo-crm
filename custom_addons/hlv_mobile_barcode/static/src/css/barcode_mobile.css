@@ -1400,7 +1400,8 @@
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  font-size: 0.95rem;
+  font-size: 0.85rem;
+  gap: 8px;
 }
 
 .hlv-barcode-app .modern-location-banner .location-badge {
@@ -1408,18 +1409,24 @@
   font-weight: 600;
   display: flex;
   align-items: center;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .hlv-barcode-app .modern-location-banner .location-val {
   color: var(--info-color);
   font-weight: 700;
   background: var(--white);
-  padding: 4px 10px;
+  padding: 3px 6px;
   border-radius: 6px;
   border: 1px solid var(--info-border);
   font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  font-size: 0.95rem;
-  letter-spacing: 0.5px;
+  font-size: 0.85rem;
+  letter-spacing: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 /* Error state when location is missing */

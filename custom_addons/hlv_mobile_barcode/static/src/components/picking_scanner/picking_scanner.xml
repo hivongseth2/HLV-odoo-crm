@@ -7,6 +7,9 @@
             </div>
             
             <t t-elif="state.picking">
+                <!-- Thẻ hidden input để chặn focus tự động vào input số lượng, tránh tự động mở bàn phím ảo trên mobile -->
+                <input type="text" class="hidden-barcode-input" autofocus="autofocus" inputmode="none" style="position: absolute; opacity: 0; pointer-events: none; width: 1px; height: 1px; left: -9999px; z-index: -9999;" />
+                
                 <!-- Location Mode Header (Simplified and Modern) -->
                 <div t-if="props.isMultiLocationMode or state.picking.is_pick or state.picking.picking_type_code == 'incoming'" 
                      t-attf-class="modern-location-banner #{!props.scannedLocationName ? 'error-state' : ''}">
