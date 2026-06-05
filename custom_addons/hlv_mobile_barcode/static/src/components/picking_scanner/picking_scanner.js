@@ -48,6 +48,11 @@ export class PickingScanner extends Component {
             addItemQty: 1,
             transferTargets: {},
             transferQtys: {},
+            showReturnModal: false,
+            returnWizardId: false,
+            returnPickingName: "",
+            returnLines: [],
+            returnLoading: false,
             // Conflict check state (khi vào lại phiếu PICK đã có qty_scanned)
             showConflictPopup: false,
             conflictItems: [],
@@ -415,6 +420,73 @@ export class PickingScanner extends Component {
             }
         } catch (e) {
             this.notification.add("Lỗi kết nối", { type: "danger" });
+        }
+    }
+
+    async openReturnWizard() {
+        this.state.returnLoading = true;
+        try {
+            const res = await rpc("/hlv_mobile_barcode/get_return_wizard_data", {
+                picking_id: this.props.pickingId,
+            });
+            if (res.error) {
+                this.notification.add(res.error, { type: "danger" });
+                return;
+            }
+            this.state.returnWizardId = res.wizard_id;
+            this.state.returnPickingName = res.picking_name || "";
+            this.state.returnLines = (res.lines || []).map((line) => ({
+                ...line,
+                remove: false,
+            }));
+            this.state.showReturnModal = true;
+        } catch (e) {
+            this.notification.add("Lỗi kết nối", { type: "danger" });
+        } finally {
+            this.state.returnLoading = false;
+        }
+    }
+
+    closeReturnModal() {
+        this.state.showReturnModal = false;
+        this.state.returnWizardId = false;
+        this.state.returnPickingName = "";
+        this.state.returnLines = [];
+        this.state.returnLoading = false;
+    }
+
+    removeReturnLine(line) {
+        line.remove = true;
+    }
+
+    async createReturn(mode) {
+        if (this.state.returnLoading) return;
+        this.state.returnLoading = true;
+        try {
+            const res = await rpc("/hlv_mobile_barcode/create_return", {
+                wizard_id: this.state.returnWizardId,
+                mode,
+                lines: this.state.returnLines.map((line) => ({
+                    line_id: line.line_id,
+                    quantity: parseFloat(line.quantity || 0),
+                    remove: !!line.remove,
+                })),
+            });
+            if (res.error) {
+                this.notification.add(res.error, { type: "danger" });
+                return;
+            }
+            this.notification.add(`Đã tạo phiếu trả hàng ${res.return_picking_name}`, { type: "success" });
+            const returnPickingId = res.return_picking_id;
+            const returnPickingName = res.return_picking_name;
+            this.closeReturnModal();
+            if (this.props.onSelectPicking && returnPickingId) {
+                this.props.onSelectPicking(returnPickingId, returnPickingName);
+            }
+        } catch (e) {
+            this.notification.add("Lỗi kết nối", { type: "danger" });
+        } finally {
+            this.state.returnLoading = false;
         }
     }
     

@@ -72,6 +72,11 @@
                 <div class="picking-scroll-area">
                     <!-- Location Scanning Mode Toggle removed due to Deltatech conflict -->
 
+                    <div t-if="state.picking.state === 'done'" style="padding: 0 0 12px 0; display: flex; justify-content: flex-end;">
+                        <button class="btn btn-primary" style="padding: 9px 14px; background-color: var(--secondary-color); font-weight: 700;" t-on-click="openReturnWizard" t-att-disabled="state.returnLoading">
+                            <i class="fa fa-undo"></i> Trả hàng
+                        </button>
+                    </div>
                     
                     <!-- Collapsible Packages Section -->
                     <div t-if="state.picking.packages and state.picking.packages.length > 0" class="packages-section">
@@ -211,6 +216,53 @@
                     <button t-if="state.picking.state !== 'done'" class="btn btn-success" style="flex: 1; padding: 10px;" t-on-click="doValidate">
                         <i class="fa fa-check"></i> Xác nhận
                     </button>
+                </div>
+
+                <!-- Return Picking Modal -->
+                <div t-if="state.showReturnModal" class="modal-overlay-custom" t-on-click.self="closeReturnModal">
+                    <div class="modal-container-custom" style="max-width: 720px;">
+                        <div class="modal-header-custom">
+                            <h3 class="modal-title-custom">
+                                <i class="fa fa-undo"></i> Trả hàng <t t-if="state.returnPickingName">- <t t-esc="state.returnPickingName"/></t>
+                            </h3>
+                            <button class="modal-close-btn" t-on-click="closeReturnModal" t-att-disabled="state.returnLoading">
+                                <i class="fa fa-times"></i>
+                            </button>
+                        </div>
+                        <div class="modal-body-custom" style="padding: 14px;">
+                            <div style="display: grid; grid-template-columns: minmax(0, 1fr) 92px 72px 36px; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border-color); font-size: 0.82rem; font-weight: 700; color: var(--text-muted);">
+                                <div>Sản phẩm</div>
+                                <div style="text-align: right;">Số lượng</div>
+                                <div>Đơn vị</div>
+                                <div></div>
+                            </div>
+                            <t t-foreach="state.returnLines" t-as="line" t-key="line.line_id">
+                                <div t-if="!line.remove" style="display: grid; grid-template-columns: minmax(0, 1fr) 92px 72px 36px; gap: 8px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border-color);">
+                                    <div style="min-width: 0; font-size: 0.9rem; font-weight: 600; color: var(--text-color); line-height: 1.25;">
+                                        <t t-esc="line.product_name"/>
+                                    </div>
+                                    <input type="number" class="form-control form-control-sm" style="text-align: right; padding: 4px 6px;" t-model="line.quantity" min="0" step="any" t-att-disabled="state.returnLoading"/>
+                                    <div style="font-size: 0.86rem; color: var(--text-muted);">
+                                        <t t-esc="line.uom_name"/>
+                                    </div>
+                                    <button class="btn btn-sm btn-outline-danger" style="padding: 4px 7px;" t-on-click="() => this.removeReturnLine(line)" t-att-disabled="state.returnLoading">
+                                        <i class="fa fa-trash"></i>
+                                    </button>
+                                </div>
+                            </t>
+                        </div>
+                        <div class="modal-footer-custom" style="display: flex; gap: 8px; justify-content: flex-end; padding: 12px 14px;">
+                            <button class="btn btn-primary" t-on-click="() => this.createReturn('selected')" t-att-disabled="state.returnLoading">
+                                <i class="fa fa-undo"></i> Trả hàng
+                            </button>
+                            <button class="btn btn-primary" t-on-click="() => this.createReturn('all')" t-att-disabled="state.returnLoading">
+                                <i class="fa fa-check-double"></i> Trả tất cả
+                            </button>
+                            <button class="btn btn-secondary" t-on-click="closeReturnModal" t-att-disabled="state.returnLoading">
+                                Hủy
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Package Edit Modal -->

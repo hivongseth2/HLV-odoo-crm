@@ -237,6 +237,22 @@ Mở phiếu → RPC /get_picking_data
   - Lấy số tối đa khả dụng (`/cap_pick_scanned_to_available`), trong đó mức tối đa cũng bị chặn bởi `ml.quantity` của từng dòng.
 - Khi validate PICK, backend mới ghi `quantity = qty_scanned` ngay trước khi gọi xử lý hoàn tất của Odoo.
 
+**Phiếu trả hàng (`stock.picking.return_id`)**:
+- Bất kỳ phiếu nào có `return_id` đều được nhận diện là phiếu trả hàng, không phụ thuộc operation type là `INT`, `IN`, `OUT`, `PICK` hay `PACK`.
+- Phiếu trả hàng được miễn chốt chặn OUT/PACK của mobile scanner. OUT/PACK không có `return_id` vẫn bị chặn như cũ.
+- Phiếu trả hàng không dùng logic PICK độc lập, kể cả khi operation type chứa PICK:
+  - `is_pick` trong response bị ép về `False`.
+  - Không dùng `qty_scanned`.
+  - Không gọi popup conflict `/check_pick_scanned_availability`.
+  - Không copy `qty_scanned -> quantity` lúc validate.
+- Trong lúc quét và sửa số lượng, phiếu trả hàng luôn dùng field Odoo chuẩn `stock.move.line.quantity`.
+- Vị trí nguồn/đích của phiếu trả hàng không đảo thủ công trong module mobile. Odoo tạo phiếu return từ wizard với source/destination đã đảo theo phiếu gốc.
+- Khi phiếu đã hoàn tất (`state = done`), footer `PickingScanner` hiển thị nút **Trả hàng**. Nút này mở popup mobile custom dựa trên wizard `stock.return.picking`, cho phép sửa số lượng hoặc xóa dòng trước khi tạo phiếu return.
+- Hai thao tác trong popup:
+  - **Trả hàng**: gọi `stock.return.picking.action_create_returns()`.
+  - **Trả tất cả**: gọi `stock.return.picking.action_create_returns_all()`. Nếu môi trường Odoo không có method này, backend trả lỗi rõ ràng.
+- Sau khi tạo thành công, frontend đóng popup và mở ngay phiếu return mới bằng `onSelectPicking(return_picking_id, return_picking_name)`.
+
 ### 2.4.3. Luồng đóng gói kiện hàng
 
 ```
@@ -347,6 +363,8 @@ Mỗi RPC endpoint kiểm tra quyền:
 | `/hlv_mobile_barcode/delete_move` | POST | Xóa dòng sản phẩm khỏi phiếu |
 | `/hlv_mobile_barcode/validate_picking` | POST | Xác nhận phiếu kho |
 | `/hlv_mobile_barcode/clear_quantities` | POST | Xóa sạch số lượng đã quét (reset phiếu) |
+| `/hlv_mobile_barcode/get_return_wizard_data` | POST | Tạo và đọc dữ liệu wizard trả hàng `stock.return.picking` cho phiếu đã hoàn tất |
+| `/hlv_mobile_barcode/create_return` | POST | Cập nhật dòng wizard, gọi tạo phiếu trả hàng và trả về phiếu return mới |
 | `/hlv_mobile_barcode/check_pick_scanned_availability` | POST | Kiểm tra `qty_scanned` đã lưu của phiếu PICK khi vào lại phiếu, phát hiện dòng vượt mức khả dụng hiện tại |
 | `/hlv_mobile_barcode/cap_pick_scanned_to_available` | POST | Tự động giảm `qty_scanned` của từng move line PICK xuống mức khả dụng và không vượt `ml.quantity` |
 | `/hlv_mobile_barcode/put_in_pack` | POST | Đóng gói các sản phẩm lẻ đã quét thành kiện |
