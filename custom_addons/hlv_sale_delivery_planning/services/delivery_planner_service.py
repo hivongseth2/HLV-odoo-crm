@@ -1,33 +1,12 @@
-import os
+"""Main delivery planner dashboard orchestration service.
+
+This file coordinates the dashboard list request: it builds the candidate sale
+orders, chooses the snapshot fast path when possible, formats the visible page,
+and falls back to the full realtime status pipeline whenever snapshots are not
+clean enough to trust.
+"""
 
 from odoo import models, api
-from markupsafe import Markup
-import re
-import pytz
-
-_SKIP_MSG_RE = re.compile(
-    r'Lệnh chuyển hàng được tạo'
-    r'|lệnh chuyển hàng đã được tạo ra từ'
-    r'|Đồng bộ \(xoá .{0,5} tạo lại\) thành công'
-    r'|This transfer has been created from'
-    r'|Transfer created'
-    r'|Sales Order created'
-    r'|Quotation created'
-    r'|has been created from'
-    r'|Đơn hàng được tạo',
-    re.IGNORECASE
-)
-
-_ALLOWED_CHAT_ATTACHMENT_MIMES = {
-    'application/msword',
-    'application/pdf',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/vnd.ms-excel',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'text/csv',
-}
-_ALLOWED_CHAT_ATTACHMENT_EXTS = {'.doc', '.docx', '.pdf', '.xls', '.xlsx', '.csv'}
-_MAX_CHAT_ATTACHMENT_BYTES = 20 * 1024 * 1024
 
 
 class DeliveryPlannerService(models.AbstractModel):
@@ -65,24 +44,66 @@ class DeliveryPlannerService(models.AbstractModel):
             order='x_studio_misa_order_date desc nulls last, create_date desc, commitment_date asc, date_order desc'
         )
 
-        sales, matched_ids, dashboard_stats, product_availabilities, so_status_dict = \
-            self._calculate_po_and_stock_status(
-                sales, filter_po_date_from, filter_po_date_to,
-                filter_po_status, filter_delivery_status, filter_stock_status, filter_packing_status,
+        snapshot_match = None
+        if self._can_use_snapshot_dashboard_match(
+            filter_po_date_from=filter_po_date_from,
+            filter_po_date_to=filter_po_date_to,
+            filter_po_status=filter_po_status,
+            filter_done_date_from=filter_done_date_from,
+            filter_done_date_to=filter_done_date_to,
+            filter_need_transfer=filter_need_transfer,
+            domain=domain,
+        ):
+            snapshot_match = self._get_snapshot_dashboard_match(
+                sales,
+                filter_delivery_status=filter_delivery_status,
+                filter_stock_status=filter_stock_status,
+                filter_packing_status=filter_packing_status,
                 show_completed=show_completed,
-                filter_need_transfer=filter_need_transfer,
                 filter_new_orders=filter_new_orders,
-                filter_done_date_from=filter_done_date_from,
-                filter_done_date_to=filter_done_date_to,
                 filter_print_status=filter_print_status,
                 filter_shipper_received=filter_shipper_received,
             )
-        self._store_status_snapshot(sales, so_status_dict)
+
+        if snapshot_match:
+            matched_ids = snapshot_match['matched_ids']
+            dashboard_stats = snapshot_match['dashboard_stats']
+            page_sales = self.env['sale.order'].browse(
+                matched_ids[int(offset): int(offset) + int(limit)]
+            )
+            page_sales, _page_ids, _stats, product_availabilities, so_status_dict = \
+                self._calculate_po_and_stock_status(
+                    page_sales, filter_po_date_from, filter_po_date_to,
+                    filter_po_status, filter_delivery_status, filter_stock_status,
+                    filter_packing_status,
+                    show_completed=True,
+                    filter_need_transfer=False,
+                    filter_new_orders=False,
+                    filter_done_date_from='',
+                    filter_done_date_to='',
+                    filter_print_status='all',
+                    filter_shipper_received='all',
+                )
+            self._store_status_snapshot(page_sales, so_status_dict)
+        else:
+            sales, matched_ids, dashboard_stats, product_availabilities, so_status_dict = \
+                self._calculate_po_and_stock_status(
+                    sales, filter_po_date_from, filter_po_date_to,
+                    filter_po_status, filter_delivery_status, filter_stock_status, filter_packing_status,
+                    show_completed=show_completed,
+                    filter_need_transfer=filter_need_transfer,
+                    filter_new_orders=filter_new_orders,
+                    filter_done_date_from=filter_done_date_from,
+                    filter_done_date_to=filter_done_date_to,
+                    filter_print_status=filter_print_status,
+                    filter_shipper_received=filter_shipper_received,
+                )
+            self._store_status_snapshot(sales, so_status_dict)
+            page_sales = self.env['sale.order'].browse(
+                matched_ids[int(offset): int(offset) + int(limit)]
+            )
 
         total_count = len(matched_ids)
-        page_sales = self.env['sale.order'].browse(
-            matched_ids[int(offset): int(offset) + int(limit)]
-        )
 
         po_by_origin = self._fetch_pos_for_sales(page_sales)
         att_by_picking = self._fetch_attachments_for_pickings(page_sales.mapped('picking_ids').ids)
@@ -181,6 +202,24 @@ class DeliveryPlannerService(models.AbstractModel):
             # client that it should not overwrite existing KPI values.
             'dashboard_stats': dashboard_stats if include_stats else None,
         }
+
+    @api.model
+    def _can_use_snapshot_dashboard_match(
+        self, filter_po_date_from='', filter_po_date_to='', filter_po_status='all',
+        filter_done_date_from='', filter_done_date_to='',
+        filter_need_transfer=False, domain=None,
+    ):
+        if domain:
+            return False
+        if filter_need_transfer:
+            return False
+        if filter_done_date_from or filter_done_date_to:
+            return False
+        if filter_po_date_from or filter_po_date_to:
+            return False
+        if filter_po_status and filter_po_status != 'all':
+            return False
+        return True
 
     @api.model
     def _store_status_snapshot(self, sales, so_status_dict):

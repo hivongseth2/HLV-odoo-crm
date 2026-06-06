@@ -1,5 +1,6 @@
 from . import delivery_planner_service
 from . import delivery_planner_domain
+from . import delivery_planner_snapshot_query
 from . import delivery_planner_stock
 from . import delivery_planner_stock_helpers
 from . import delivery_planner_fetch

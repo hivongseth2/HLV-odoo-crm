@@ -1,4 +1,5 @@
 /** @odoo-module **/
+// Purpose: Delivery planner mixin for drag/drop, filters, inline notes, tags, and action openers.
 
 import {
     translateDeliveryStatus, translatePickingState, translatePickingStatus,

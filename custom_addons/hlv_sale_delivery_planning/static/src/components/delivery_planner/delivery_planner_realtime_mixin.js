@@ -1,4 +1,5 @@
 /** @odoo-module **/
+// Purpose: Delivery planner mixin for bus notifications, polling, and subset refresh.
 
 export class DeliveryPlannerRealtimeMixin {
     async pollUnreadMessages(isInitial = false) {

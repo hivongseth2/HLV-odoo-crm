@@ -1,3 +1,11 @@
+"""Delivery planner per-sale-order status snapshot.
+
+The dashboard uses this model as a warm, indexed cache for delivery/packing
+status. It is marked dirty by sale/stock hooks and refreshed by the existing
+realtime status pipeline, so the dashboard can avoid recomputing every order
+on every request once snapshots are clean.
+"""
+
 from odoo import api, fields, models
 
 
@@ -50,10 +58,12 @@ class DeliveryPlannerSnapshot(models.Model):
     has_shipper_received = fields.Boolean(index=True)
     has_delivered_today = fields.Boolean(index=True)
     has_assigned_pick = fields.Boolean(index=True)
+    is_new_order = fields.Boolean(index=True)
 
     dirty = fields.Boolean(default=True, index=True)
     dirty_reason = fields.Char()
     last_computed_at = fields.Datetime(index=True)
+    snapshot_date = fields.Date(index=True)
 
     _sql_constraints = [
         (
@@ -90,6 +100,7 @@ class DeliveryPlannerSnapshot(models.Model):
         snapshots = self.sudo().search([('sale_order_id', 'in', sales.ids)])
         by_so_id = {snap.sale_order_id.id: snap for snap in snapshots}
         now = fields.Datetime.now()
+        today = fields.Date.context_today(self)
 
         to_create = []
         for order in sales:
@@ -104,9 +115,11 @@ class DeliveryPlannerSnapshot(models.Model):
                 'has_shipper_received': bool(status.get('has_shipper_received')),
                 'has_delivered_today': bool(status.get('has_delivered_today')),
                 'has_assigned_pick': bool(status.get('has_assigned_pick')),
+                'is_new_order': self._is_order_new_today(order),
                 'dirty': False,
                 'dirty_reason': False,
                 'last_computed_at': now,
+                'snapshot_date': today,
             })
             snap = by_so_id.get(order.id)
             if snap:
@@ -129,3 +142,11 @@ class DeliveryPlannerSnapshot(models.Model):
             'dirty': dirty,
             'dirty_reason': reason or False,
         }
+
+    @api.model
+    def _is_order_new_today(self, order):
+        today = fields.Date.context_today(self)
+        order_date = order.x_studio_misa_order_date
+        if not order_date and order.date_order:
+            order_date = order.date_order.date()
+        return bool(order_date and order_date == today)

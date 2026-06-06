@@ -1,4 +1,5 @@
 /** @odoo-module **/
+// Purpose: Delivery planner mixin for overview drawer messages, attachments, and package modal helpers.
 
 import { markup } from "@odoo/owl";
 

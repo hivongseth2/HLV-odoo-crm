@@ -1,4 +1,5 @@
 /** @odoo-module **/
+// Purpose: Delivery planner mixin for relocation modal state and relocation picking creation.
 
 export class DeliveryPlannerRelocationMixin {
     async openRelocationModal() {

@@ -1,4 +1,5 @@
 /** @odoo-module **/
+// Purpose: Main OWL dashboard component: owns state/lifecycle and composes delivery planner mixins.
 
 import { registry } from "@web/core/registry";
 import { Component, useState, onWillStart, onMounted, onWillDestroy, markup, useEffect } from "@odoo/owl";

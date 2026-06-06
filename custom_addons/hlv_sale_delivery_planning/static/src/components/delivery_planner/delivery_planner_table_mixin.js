@@ -1,4 +1,5 @@
 /** @odoo-module **/
+// Purpose: Delivery planner mixin for table filters, sorting, resize, and row selection helpers.
 
 export class DeliveryPlannerTableMixin {
     getSOPrintStatus(so) {

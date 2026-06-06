@@ -1,4 +1,5 @@
 /** @odoo-module **/
+// Purpose: Delivery planner mixin for IndexedDB cache restore/save helpers.
 
 export class DeliveryPlannerCacheMixin {
     _openCacheDB() {

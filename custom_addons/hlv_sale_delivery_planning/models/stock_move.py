@@ -1,3 +1,6 @@
+"""Marks delivery planner snapshots dirty when stock move reservation/state changes affect sale orders.
+"""
+
 import logging
 from odoo import models
 

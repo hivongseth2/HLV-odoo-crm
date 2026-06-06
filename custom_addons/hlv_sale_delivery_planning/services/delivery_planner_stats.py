@@ -1,11 +1,11 @@
-"""Stats-only endpoint with in-memory cache for instant KPI rendering.
+"""Stats-only endpoint with in-memory cache and snapshot fast path.
 
 Strategy: cache the heavy `_calculate_po_and_stock_status` output keyed by
 (db, uid, filter signature). Frontend can call `get_dashboard_stats_only`
 in parallel with the main data fetch so the KPI cards paint immediately
 when the cache is warm. Cache invalidation is driven by a global version
-counter that is bumped on bus notifications (sale.order / picking / move
-write hooks).
+counter that is bumped on bus notifications. When all candidate sale orders
+have clean snapshots, this endpoint skips the heavy status pipeline entirely.
 """
 import json
 import threading
@@ -129,6 +129,37 @@ class DeliveryPlannerServiceStats(models.AbstractModel):
         if domain:
             search_domain = search_domain + list(domain)
         sales = self.env['sale.order'].search(search_domain)
+
+        if self._can_use_snapshot_dashboard_match(
+            filter_po_date_from=filter_po_date_from,
+            filter_po_date_to=filter_po_date_to,
+            filter_po_status=filter_po_status,
+            filter_done_date_from=filter_done_date_from,
+            filter_done_date_to=filter_done_date_to,
+            filter_need_transfer=filter_need_transfer,
+            domain=domain,
+        ):
+            snapshot_match = self._get_snapshot_dashboard_match(
+                sales,
+                filter_delivery_status=filter_delivery_status,
+                filter_stock_status=filter_stock_status,
+                filter_packing_status=filter_packing_status,
+                show_completed=show_completed,
+                filter_new_orders=filter_new_orders,
+                filter_print_status=filter_print_status,
+                filter_shipper_received=filter_shipper_received,
+            )
+            if snapshot_match:
+                dashboard_stats = snapshot_match['dashboard_stats']
+                total_count = len(snapshot_match['matched_ids'])
+                _put(key, dashboard_stats, total_count)
+                return {
+                    'dashboard_stats': dashboard_stats,
+                    'total_count': total_count,
+                    'cached': False,
+                    'source': 'snapshot',
+                }
+
         _, matched_ids, dashboard_stats, _, _ = self._calculate_po_and_stock_status(
             sales, filter_po_date_from, filter_po_date_to,
             filter_po_status, filter_delivery_status,

@@ -1,4 +1,5 @@
 /** @odoo-module **/
+// Purpose: Delivery planner mixin for display formatting, badges, flows, grouping, and hover helpers.
 
 import {
     translateDeliveryStatus, translatePickingState, translatePickingStatus,

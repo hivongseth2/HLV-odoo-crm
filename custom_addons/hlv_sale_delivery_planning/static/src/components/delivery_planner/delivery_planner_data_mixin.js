@@ -1,4 +1,5 @@
 /** @odoo-module **/
+// Purpose: Delivery planner mixin for dashboard data fetch, stats fetch, and load-more flows.
 
 export class DeliveryPlannerDataMixin {
     async _silentRefresh() {

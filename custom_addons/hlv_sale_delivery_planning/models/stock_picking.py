@@ -1,3 +1,6 @@
+"""Adds delivery planner picking fields/actions and invalidates snapshots on picking changes.
+"""
+
 import logging
 from datetime import timedelta
 from markupsafe import Markup, escape

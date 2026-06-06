@@ -1,4 +1,5 @@
 /** @odoo-module **/
+// Purpose: Delivery planner mixin for packer assignment, print menus, and picking slip printing.
 
 export class DeliveryPlannerPrintingMixin {
     async _ensurePackerUsers() {

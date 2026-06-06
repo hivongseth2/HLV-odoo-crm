@@ -1,3 +1,6 @@
+"""Extends sale.order with delivery planner RPC wrappers and dashboard invalidation hooks.
+"""
+
 import logging
 from odoo import models, fields, api
 from dateutil.relativedelta import relativedelta

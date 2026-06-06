@@ -1,4 +1,5 @@
 /** @odoo-module **/
+// Purpose: Delivery planner mixin for archive state, saved filters, pagination, and view mode.
 
 export class DeliveryPlannerPreferencesMixin {
     get totalPages() {

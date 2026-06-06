@@ -1,4 +1,5 @@
 /** @odoo-module **/
+// Purpose: Delivery planner mixin for kanban batching and sale order selection helpers.
 
 export class DeliveryPlannerKanbanSelectionMixin {
     async loadAllKanbanBatch() {

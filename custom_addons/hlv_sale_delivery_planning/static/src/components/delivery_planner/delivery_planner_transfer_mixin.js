@@ -1,4 +1,5 @@
 /** @odoo-module **/
+// Purpose: Delivery planner mixin for transfer modal state and transfer picking creation.
 
 export class DeliveryPlannerTransferMixin {
     async openTransferModal() {
