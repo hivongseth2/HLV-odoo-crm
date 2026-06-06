@@ -96,6 +96,15 @@ class ResPartner(models.Model):
                    ELSE 'other'
                END
         """)
+        cr.execute("""
+            UPDATE res_partner
+               SET hlv_relationship_label = CASE
+                   WHEN type = 'delivery' THEN 'Giao hàng'
+                   WHEN type = 'invoice' THEN 'Hóa đơn'
+                   WHEN parent_id IS NOT NULL THEN 'Liên hệ con'
+                   ELSE 'Hồ sơ gốc'
+               END
+        """)
 
     child_contact_count = fields.Integer(
         compute='_compute_child_contact_count',
@@ -128,6 +137,11 @@ class ResPartner(models.Model):
         ('child_contact', 'Liên hệ con'),
         ('other', 'Khác'),
     ], compute='_compute_hlv_business_role', string="Nghiệp vụ", store=True)
+    hlv_relationship_label = fields.Char(
+        compute='_compute_hlv_relationship_label',
+        string="Quan hệ",
+        store=True,
+    )
     hlv_has_sale_order = fields.Boolean(
         compute='_compute_hlv_order_flags',
         string="Có đơn bán",
@@ -284,6 +298,18 @@ class ResPartner(models.Model):
             else:
                 partner.hlv_business_role = 'other'
 
+    @api.depends('parent_id', 'type')
+    def _compute_hlv_relationship_label(self):
+        for partner in self:
+            if partner.type == 'delivery':
+                partner.hlv_relationship_label = 'Giao hàng'
+            elif partner.type == 'invoice':
+                partner.hlv_relationship_label = 'Hóa đơn'
+            elif partner.parent_id:
+                partner.hlv_relationship_label = 'Liên hệ con'
+            else:
+                partner.hlv_relationship_label = 'Hồ sơ gốc'
+
     @api.depends('parent_id', 'ref', 'company_registry')
     def _compute_hlv_code_flags(self):
         for partner in self:
@@ -352,6 +378,7 @@ class ResPartner(models.Model):
         partners._compute_hlv_partner_type()
         partners._compute_hlv_order_flags()
         partners._compute_hlv_business_role()
+        partners._compute_hlv_relationship_label()
         partners._compute_hlv_code_flags()
         partners._compute_hlv_misa_code_key()
         partners._compute_hlv_filter_tag_ids()
