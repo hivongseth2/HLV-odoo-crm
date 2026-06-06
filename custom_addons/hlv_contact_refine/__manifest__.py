@@ -16,6 +16,13 @@
         'views/res_partner_views.xml',
         'data/ir_actions_server.xml',
     ],
+    'assets': {
+        'web.assets_backend': [
+            'hlv_contact_refine/static/src/xml/contact_explorer.xml',
+            'hlv_contact_refine/static/src/js/contact_explorer.js',
+            'hlv_contact_refine/static/src/scss/contact_explorer.scss',
+        ],
+    },
     'application': False,
     'installable': True,
     'license': 'LGPL-3',

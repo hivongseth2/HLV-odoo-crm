@@ -421,3 +421,93 @@ class ResPartner(models.Model):
                 'default_new_vat': self.vat,
             },
         }
+
+    @api.model
+    def hlv_contact_explorer_data(self, search_text=False, role=False, limit=80):
+        domain = [('parent_id', '=', False), ('active', '=', True)]
+        if role and role != 'all':
+            domain.append(('hlv_business_role', '=', role))
+        if search_text:
+            domain += ['|', '|', '|',
+                       ('name', 'ilike', search_text),
+                       ('ref', 'ilike', search_text),
+                       ('vat', 'ilike', search_text),
+                       ('phone', 'ilike', search_text)]
+
+        partners = self.sudo().search(domain, order='name asc, id asc', limit=limit)
+        rows = [partner._hlv_explorer_row() for partner in partners]
+        selected = rows[0] if rows else False
+        related = self.browse(selected['id'])._hlv_explorer_related_rows() if selected else []
+        return {
+            'rows': rows,
+            'selected': selected,
+            'related': related,
+            'roles': self._hlv_explorer_role_counts(),
+        }
+
+    @api.model
+    def hlv_contact_explorer_select(self, partner_id):
+        partner = self.sudo().browse(partner_id).exists()
+        if not partner:
+            return {'selected': False, 'related': []}
+        root = partner.commercial_partner_id or partner
+        return {
+            'selected': root._hlv_explorer_row(),
+            'related': root._hlv_explorer_related_rows(),
+        }
+
+    @api.model
+    def _hlv_explorer_role_counts(self):
+        labels = {
+            'all': _('Tất cả'),
+            'customer_crm': _('Khách CRM'),
+            'customer_shopee': _('Khách Shopee'),
+            'supplier': _('Nhà cung cấp'),
+            'other': _('Khác'),
+        }
+        result = [{'key': 'all', 'label': labels['all'], 'count': self.sudo().search_count([
+            ('parent_id', '=', False),
+            ('active', '=', True),
+        ])}]
+        for key in ('customer_crm', 'customer_shopee', 'supplier', 'other'):
+            result.append({
+                'key': key,
+                'label': labels[key],
+                'count': self.sudo().search_count([
+                    ('parent_id', '=', False),
+                    ('active', '=', True),
+                    ('hlv_business_role', '=', key),
+                ]),
+            })
+        return result
+
+    def _hlv_explorer_row(self):
+        self.ensure_one()
+        return {
+            'id': self.id,
+            'name': self.display_name or self.name or '',
+            'role': dict(self._fields['hlv_business_role'].selection).get(self.hlv_business_role, self.hlv_business_role or ''),
+            'role_key': self.hlv_business_role or '',
+            'relationship': self.hlv_relationship_label or '',
+            'ref': self.ref or '',
+            'vat': self.vat or '',
+            'phone': self.phone or self.mobile or '',
+            'email': self.email or '',
+            'city': self.city or '',
+            'child_count': self.child_contact_count,
+            'has_shopee': bool(self.hlv_has_shopee_order),
+            'dirty': bool(self.hlv_dirty_child_code or self.hlv_root_code_mismatch),
+        }
+
+    def _hlv_explorer_related_rows(self):
+        self.ensure_one()
+        related = self | self.child_ids
+        related = related.sorted(lambda p: (0 if p.id == self.id else 1, p.type or '', p.name or ''))
+        return [partner._hlv_explorer_row() for partner in related]
+
+    def action_hlv_open_contact_explorer(self):
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'hlv_contact_explorer_action',
+            'name': _('Liên hệ tinh gọn'),
+        }
