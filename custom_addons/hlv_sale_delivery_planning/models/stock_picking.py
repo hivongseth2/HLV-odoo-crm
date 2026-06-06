@@ -594,6 +594,12 @@ class StockPicking(models.Model):
         except Exception:
             pass
         try:
+            self.env['hlv.delivery.planner.snapshot'].sudo().mark_dirty_for_sale_orders(
+                so_ids, reason='stock.picking'
+            )
+        except Exception:
+            pass
+        try:
             self.env['bus.bus']._sendone(
                 'delivery_planner_channel',
                 'delivery_planner_data_changed',

@@ -77,6 +77,7 @@ class DeliveryPlannerService(models.AbstractModel):
                 filter_print_status=filter_print_status,
                 filter_shipper_received=filter_shipper_received,
             )
+        self._store_status_snapshot(sales, so_status_dict)
 
         total_count = len(matched_ids)
         page_sales = self.env['sale.order'].browse(
@@ -182,6 +183,23 @@ class DeliveryPlannerService(models.AbstractModel):
         }
 
     @api.model
+    def _store_status_snapshot(self, sales, so_status_dict):
+        """Persist the current status pass for future snapshot-backed reads.
+
+        This is deliberately write-behind for now: dashboard behavior still
+        comes from the existing realtime pipeline, while the snapshot table
+        warms up and provides a migration path for count/filter endpoints.
+        """
+        if not sales or not so_status_dict:
+            return
+        try:
+            self.env['hlv.delivery.planner.snapshot'].sudo().upsert_from_status_data(
+                sales, so_status_dict
+            )
+        except Exception:
+            pass
+
+    @api.model
     def get_orders_subset(self, order_ids, filter_kwargs=None):
         """Lightweight partial refresh used by the bus update flow.
 
@@ -261,6 +279,7 @@ class DeliveryPlannerService(models.AbstractModel):
                     filter_print_status=fk.get('filter_print_status', 'all'),
                     filter_shipper_received=fk.get('filter_shipper_received', 'all'),
                 )
+            self._store_status_snapshot(page_sales, so_status_dict)
             kept_py = set(page_sales.ids)
             for i in existing_ids:
                 if i not in kept_py and i not in removed_ids:
@@ -278,6 +297,7 @@ class DeliveryPlannerService(models.AbstractModel):
                     filter_need_transfer=False,
                     filter_new_orders=False,
                 )
+            self._store_status_snapshot(page_sales, so_status_dict)
 
         po_by_origin = self._fetch_pos_for_sales(page_sales)
         att_by_picking = self._fetch_attachments_for_pickings(page_sales.mapped('picking_ids').ids)
@@ -352,400 +372,3 @@ class DeliveryPlannerService(models.AbstractModel):
         att_by_picking = self._fetch_attachments_for_pickings(pickings.ids)
         flows = self._build_flow_nodes(so, att_by_picking)
         return {'flows': flows}
-
-    @api.model
-    def get_order_messages(self, order_id):
-        so = self.env['sale.order'].browse(int(order_id))
-        if not so.exists():
-            return []
-
-        # TZ user (fallback Asia/Ho_Chi_Minh) – mail.message.date lưu UTC,
-        # cells fronend hiển thị sai 7h nếu không convert.
-        try:
-            user_tz = pytz.timezone(self.env.context.get('tz') or self.env.user.tz or 'Asia/Ho_Chi_Minh')
-        except Exception:
-            user_tz = pytz.UTC
-
-        picking_ids = so.picking_ids.ids
-        domain = [
-            '|',
-            '&', ('model', '=', 'sale.order'), ('res_id', '=', so.id),
-            '&', ('model', '=', 'stock.picking'), ('res_id', 'in', picking_ids),
-        ]
-        messages = self.env['mail.message'].search(domain, order='date desc', limit=200)
-        picking_name_map = {p.id: p.name for p in so.picking_ids}
-        result = []
-        for msg in messages:
-            plain = re.sub(r'<[^>]+>', '', msg.body or '').strip()
-            has_att = bool(msg.attachment_ids)
-            if not plain and not has_att:
-                continue
-            if plain and _SKIP_MSG_RE.search(plain):
-                continue
-            attachments = [{
-                'id': att.id, 'name': att.name or '',
-                'mimetype': att.mimetype or 'application/octet-stream',
-                'file_size': att.file_size or 0,
-            } for att in msg.attachment_ids]
-            origin = ''
-            if msg.model == 'stock.picking':
-                origin = picking_name_map.get(msg.res_id, '')
-            local_dt = msg.date.replace(tzinfo=pytz.UTC).astimezone(user_tz) if msg.date else None
-            result.append({
-                'id': msg.id,
-                'date': local_dt.strftime('%d/%m/%Y %H:%M') if local_dt else '',
-                'author': msg.author_id.name if msg.author_id else (msg.email_from or ''),
-                'body': msg.body or '',
-                'origin': origin,
-                'attachments': attachments,
-            })
-        return result
-
-    @api.model
-    def post_order_message(self, order_id, body='', attachments=None):
-        so = self.env['sale.order'].browse(int(order_id))
-        if not so.exists():
-            return False
-
-        body = (body or '').strip()
-        attachments = attachments or []
-        if not body and not attachments:
-            return False
-
-        attachment_ids = []
-        for att in attachments:
-            if not isinstance(att, dict):
-                continue
-            name = (att.get('name') or 'file').strip()[:255]
-            mimetype = (att.get('mimetype') or 'application/octet-stream').strip().lower()
-            datas = (att.get('datas') or '').strip()
-            if not datas:
-                continue
-            if not self._is_allowed_chat_attachment(name, mimetype):
-                continue
-            estimated_size = int(len(datas) * 0.75)
-            if estimated_size > _MAX_CHAT_ATTACHMENT_BYTES:
-                continue
-            new_att = self.env['ir.attachment'].sudo().create({
-                'name': name,
-                'datas': datas,
-                'mimetype': mimetype or 'application/octet-stream',
-                'res_model': 'sale.order',
-                'res_id': so.id,
-                'type': 'binary',
-            })
-            attachment_ids.append(new_att.id)
-
-        if not body and not attachment_ids:
-            return False
-
-        safe_body = Markup('<p>%s</p>') % Markup.escape(body) if body else Markup('<p><i>Tệp đính kèm</i></p>')
-        so.message_post(
-            body=safe_body,
-            message_type='comment',
-            subtype_xmlid='mail.mt_note',
-            attachment_ids=attachment_ids,
-        )
-        return True
-
-    @api.model
-    def _is_allowed_chat_attachment(self, name, mimetype):
-        if mimetype and (mimetype.startswith('image/') or mimetype.startswith('video/')):
-            return True
-        if mimetype in _ALLOWED_CHAT_ATTACHMENT_MIMES:
-            return True
-        ext = os.path.splitext(name or '')[1].lower()
-        return ext in _ALLOWED_CHAT_ATTACHMENT_EXTS
-
-    @api.model
-    def _batch_blocking_moves(self, page_sales):
-        """
-        Batch load internal moves đang block hàng tại kho của từng SO trên trang.
-        Thay 12× stock.move.search per-SO bằng 1 batch query.
-        Trả về: {so_id: {product_id: [{picking_id, picking_name, ...}]}}
-        """
-        if not page_sales:
-            return {}
-        so_wh_locs = {}
-        all_pending_pids = set()
-        for so in page_sales:
-            if not so.warehouse_id or not so.warehouse_id.lot_stock_id:
-                continue
-            so_wh_locs[so.id] = (so.warehouse_id.id, so.warehouse_id.lot_stock_id.id)
-            for line in so.order_line:
-                if line.display_type or not line.product_id:
-                    continue
-                if line.product_id.type == 'service':
-                    continue
-                if (line.product_uom_qty - line.qty_delivered) > 0:
-                    all_pending_pids.add(line.product_id.id)
-
-        if not all_pending_pids or not so_wh_locs:
-            return {}
-
-        all_root_locs = list({v[1] for v in so_wh_locs.values()})
-        child_locs = self.env['stock.location'].sudo().search([
-            ('id', 'child_of', all_root_locs), ('usage', '=', 'internal'),
-        ])
-        loc_to_whs = {}
-        for so_id, (wh_id, root_loc) in so_wh_locs.items():
-            for loc in child_locs:
-                if loc.parent_path and f'/{root_loc}/' in loc.parent_path:
-                    loc_to_whs.setdefault(loc.id, set()).add(wh_id)
-
-        if not loc_to_whs:
-            return {}
-
-        raw_moves = self.env['stock.move'].sudo().search_read([
-            ('product_id', 'in', list(all_pending_pids)),
-            ('state', 'in', ('assigned', 'partially_available', 'confirmed', 'waiting')),
-            ('location_id', 'in', list(loc_to_whs.keys())),
-            ('picking_id', '!=', False),
-            ('picking_id.state', 'not in', ('done', 'cancel')),
-            ('sale_line_id', '=', False),
-        ], ['product_id', 'location_id', 'quantity', 'picking_id'])
-
-        pk_ids = list({mv['picking_id'][0] for mv in raw_moves if mv.get('picking_id')})
-        pk_info = {}
-        if pk_ids:
-            for r in self.env['stock.picking'].sudo().search_read(
-                [('id', 'in', pk_ids)],
-                ['id', 'name', 'state', 'origin', 'picking_type_id'],
-            ):
-                pt_id = r['picking_type_id'][0] if r.get('picking_type_id') else None
-                pk_info[r['id']] = {
-                    'name': r['name'], 'state': r['state'],
-                    'origin': r.get('origin') or '', 'pt_id': pt_id,
-                }
-            pt_ids = list({v['pt_id'] for v in pk_info.values() if v['pt_id']})
-            if pt_ids:
-                pt_map = {r['id']: r for r in self.env['stock.picking.type'].sudo().search_read(
-                    [('id', 'in', pt_ids)], ['id', 'name', 'code'],
-                )}
-                for info in pk_info.values():
-                    pt = pt_map.get(info['pt_id'], {})
-                    info['type_name'] = pt.get('name') or ''
-                    info['type_code'] = pt.get('code') or ''
-
-        wh_to_sos = {}
-        for so_id, (wh_id, _) in so_wh_locs.items():
-            wh_to_sos.setdefault(wh_id, []).append(so_id)
-
-        result = {}
-        for mv in raw_moves:
-            pid = mv['product_id'][0]
-            qty = mv.get('quantity') or 0
-            if qty <= 0:
-                continue
-            loc_id = mv['location_id'][0] if mv.get('location_id') else None
-            pk_id = mv['picking_id'][0] if mv.get('picking_id') else None
-            if not loc_id or not pk_id:
-                continue
-            pk_data = pk_info.get(pk_id, {})
-            for wh_id in loc_to_whs.get(loc_id, set()):
-                for so_id in wh_to_sos.get(wh_id, []):
-                    entries = result.setdefault(so_id, {}).setdefault(pid, {})
-                    if pk_id in entries:
-                        entries[pk_id]['qty'] += qty
-                    else:
-                        entries[pk_id] = {
-                            'picking_id': pk_id,
-                            'picking_name': pk_data.get('name', ''),
-                            'picking_type': pk_data.get('type_name', ''),
-                            'picking_code': pk_data.get('type_code', ''),
-                            'origin': pk_data.get('origin', ''),
-                            'state': pk_data.get('state', ''),
-                            'qty': qty,
-                        }
-        return {
-            so_id: {pid: list(entries.values()) for pid, entries in by_prod.items()}
-            for so_id, by_prod in result.items()
-        }
-
-    @api.model
-    def _batch_transfer_suggestions(self, page_sales, product_availabilities):
-        """
-        Batch version: tính transfer_suggestions cho toàn trang trong 1-2 queries
-        thay vì N × M × P queries của _compute_transfer_suggestions per-SO.
-        Trả về: {so_id: [{product_id, product_name, shortage, to_warehouse_name, sources}]}
-        """
-        if not page_sales:
-            return {}
-
-        # Bước 1: Xác định shortage per SO từ product_availabilities đã có
-        all_tmpl_ids = page_sales.mapped('order_line.product_id.product_tmpl_id').ids
-        kits = self.env['mrp.bom'].sudo().search([
-            ('product_tmpl_id', 'in', all_tmpl_ids), ('type', '=', 'phantom'),
-        ]) if all_tmpl_ids else self.env['mrp.bom']
-        kit_tmpl_ids = set(kits.mapped('product_tmpl_id').ids)
-
-        so_shortages = {}    # {so_id: [{pid, pname, shortage}]}
-        dest_wh_by_so = {}   # {so_id: warehouse_id}
-        shortage_prod_ids = set()
-
-        for so in page_sales:
-            if not so.warehouse_id:
-                continue
-            dest_wh_id = so.warehouse_id.id
-            dest_wh_by_so[so.id] = dest_wh_id
-
-            active_pks = so.picking_ids.filtered(
-                lambda p: p.state not in ('done', 'cancel') and not p.return_id
-            )
-            products_with_demand = {
-                mv.product_id.id
-                for pk in active_pks
-                for mv in pk.move_ids
-                if mv.state not in ('cancel', 'done')
-            }
-            line_reserved = {}
-            for mv in active_pks.mapped('move_ids').filtered(
-                lambda m: m.state not in ('cancel', 'done')
-            ):
-                lid = mv.sale_line_id.id
-                if lid:
-                    line_reserved[lid] = line_reserved.get(lid, 0.0) + mv.quantity
-
-            shortages = []
-            for line in so.order_line:
-                if line.display_type or not line.product_id:
-                    continue
-                if line.product_id.type == 'service':
-                    continue
-                if line.product_id.product_tmpl_id.id in kit_tmpl_ids:
-                    continue
-                pid = line.product_id.id
-                if pid not in products_with_demand:
-                    continue
-                pending = line.product_uom_qty - line.qty_delivered
-                if pending <= 0:
-                    continue
-                avail = (product_availabilities.get((pid, dest_wh_id), 0.0)
-                         + line_reserved.get(line.id, 0.0))
-                if pending - avail > 0:
-                    shortages.append({
-                        'product_id': pid,
-                        'product_name': line.product_id.display_name,
-                        'shortage': pending - avail,
-                    })
-                    shortage_prod_ids.add(pid)
-            if shortages:
-                so_shortages[so.id] = shortages
-
-        if not so_shortages:
-            return {}
-
-        # Bước 2: Kho khác (ngoài các kho đích của trang)
-        all_dest_wh_ids = set(dest_wh_by_so.values())
-        other_whs = self.env['stock.warehouse'].search([('id', 'not in', list(all_dest_wh_ids))])
-        if not other_whs:
-            return {}
-
-        # Bước 3: Load availability tại other warehouses
-        # Nếu product_availabilities đã có (vì filter_need_transfer=True), dùng trực tiếp
-        other_avail = {}
-        missing_keys = set()
-        for pid in shortage_prod_ids:
-            for wh in other_whs:
-                key = (pid, wh.id)
-                if key in product_availabilities:
-                    other_avail[key] = product_availabilities[key]
-                else:
-                    missing_keys.add(key)
-
-        if missing_keys:
-            needed_wh_ids = list({k[1] for k in missing_keys})
-            needed_prod_ids = list({k[0] for k in missing_keys})
-            needed_whs = self.env['stock.warehouse'].browse(needed_wh_ids)
-            root_loc_ids = [wh.lot_stock_id.id for wh in needed_whs if wh.lot_stock_id]
-
-            if root_loc_ids:
-                child_locs = self.env['stock.location'].sudo().search([
-                    ('id', 'child_of', root_loc_ids), ('usage', '=', 'internal'),
-                ])
-                loc_to_owh = {}
-                for wh in needed_whs:
-                    if not wh.lot_stock_id:
-                        continue
-                    for loc in child_locs:
-                        if loc.parent_path and f'/{wh.lot_stock_id.id}/' in loc.parent_path:
-                            if loc.id not in loc_to_owh:
-                                loc_to_owh[loc.id] = wh.id
-
-                if loc_to_owh:
-                    # ONE quant query
-                    q_rows = self.env['stock.quant'].sudo().read_group(
-                        domain=[
-                            ('product_id', 'in', needed_prod_ids),
-                            ('location_id', 'in', list(loc_to_owh.keys())),
-                        ],
-                        fields=['quantity:sum', 'reserved_quantity:sum'],
-                        groupby=['product_id', 'location_id'],
-                    )
-                    for row in q_rows:
-                        pid_raw = row.get('product_id')
-                        loc_raw = row.get('location_id')
-                        if not pid_raw or not loc_raw:
-                            continue
-                        pid = pid_raw[0] if isinstance(pid_raw, (list, tuple)) else pid_raw
-                        loc_id = loc_raw[0] if isinstance(loc_raw, (list, tuple)) else loc_raw
-                        wh_id = loc_to_owh.get(loc_id)
-                        if wh_id:
-                            free = max(
-                                (row.get('quantity') or 0.0) - (row.get('reserved_quantity') or 0.0), 0.0
-                            )
-                            key = (pid, wh_id)
-                            other_avail[key] = other_avail.get(key, 0.0) + free
-
-                    # ONE internal moves query
-                    int_moves = self.env['stock.move'].sudo().search_read([
-                        ('product_id', 'in', needed_prod_ids),
-                        ('state', 'in', ('assigned', 'partially_available')),
-                        ('picking_id.picking_type_code', '=', 'internal'),
-                        ('picking_id.state', 'not in', ('done', 'cancel')),
-                        ('sale_line_id', '=', False),
-                        ('location_id', 'in', list(loc_to_owh.keys())),
-                    ], ['product_id', 'location_id', 'quantity'])
-                    for mv in int_moves:
-                        pid = mv['product_id'][0]
-                        wh_id = loc_to_owh.get(mv['location_id'][0])
-                        if wh_id:
-                            key = (pid, wh_id)
-                            other_avail[key] = other_avail.get(key, 0.0) + mv['quantity']
-
-        # Bước 4: Build kết quả per SO
-        wh_name = {wh.id: wh.name for wh in other_whs}
-        so_wh_name = {so.id: so.warehouse_id.name for so in page_sales if so.warehouse_id}
-        result = {}
-        for so_id, shortages in so_shortages.items():
-            dest_wh = self.env['stock.warehouse'].browse(dest_wh_by_so.get(so_id))
-            ordered_other_whs = self._order_source_warehouses(dest_wh, other_whs)
-            suggestions = []
-            for sp in shortages:
-                pid, remaining = sp['product_id'], sp['shortage']
-                sources = []
-                for wh in ordered_other_whs:
-                    if remaining <= 0:
-                        break
-                    available = other_avail.get((pid, wh.id), 0.0)
-                    if available > 0:
-                        suggest_qty = min(available, remaining)
-                        sources.append({
-                            'from_warehouse_id': wh.id,
-                            'from_warehouse_name': wh_name.get(wh.id, ''),
-                            'available_qty': available,
-                            'suggested_qty': suggest_qty,
-                            'blocking_pickings': [],
-                        })
-                        remaining -= suggest_qty
-                if sources:
-                    suggestions.append({
-                        'product_id': pid,
-                        'product_name': sp['product_name'],
-                        'shortage': sp['shortage'],
-                        'to_warehouse_name': so_wh_name.get(so_id, ''),
-                        'sources': sources,
-                    })
-            if suggestions:
-                result[so_id] = suggestions
-        return result

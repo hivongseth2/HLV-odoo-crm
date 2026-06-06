@@ -101,6 +101,12 @@ class SaleOrder(models.Model):
         except Exception:
             pass
         try:
+            self.env['hlv.delivery.planner.snapshot'].sudo().mark_dirty_for_sale_orders(
+                ids, reason='sale.order'
+            )
+        except Exception:
+            pass
+        try:
             self.env['bus.bus']._sendone(
                 'delivery_planner_channel',
                 'delivery_planner_data_changed',
