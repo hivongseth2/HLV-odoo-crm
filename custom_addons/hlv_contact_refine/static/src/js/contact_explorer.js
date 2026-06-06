@@ -13,7 +13,10 @@ export class HlvContactExplorer extends Component {
         this.state = useState({
             loading: true,
             search: "",
-            role: "all",
+            role: "customer_crm",
+            page: 1,
+            pageSize: 80,
+            total: 0,
             rows: [],
             selected: false,
             related: [],
@@ -30,12 +33,14 @@ export class HlvContactExplorer extends Component {
         const data = await this.orm.call("res.partner", "hlv_contact_explorer_data", [
             this.state.search,
             this.state.role,
-            120,
+            this.state.pageSize,
+            (this.state.page - 1) * this.state.pageSize,
         ]);
         this.state.rows = data.rows || [];
         this.state.selected = data.selected || false;
         this.state.related = data.related || [];
         this.state.roles = data.roles || [];
+        this.state.total = data.total || 0;
         this.state.loading = false;
     }
 
@@ -47,11 +52,44 @@ export class HlvContactExplorer extends Component {
 
     async setRole(role) {
         this.state.role = role;
+        this.state.page = 1;
         await this.load();
     }
 
     async onSearch(ev) {
         this.state.search = ev.target.value || "";
+        this.state.page = 1;
+        await this.load();
+    }
+
+    get pageCount() {
+        return Math.max(1, Math.ceil(this.state.total / this.state.pageSize));
+    }
+
+    get pageStart() {
+        if (!this.state.total) {
+            return 0;
+        }
+        return (this.state.page - 1) * this.state.pageSize + 1;
+    }
+
+    get pageEnd() {
+        return Math.min(this.state.total, this.state.page * this.state.pageSize);
+    }
+
+    async previousPage() {
+        if (this.state.page <= 1) {
+            return;
+        }
+        this.state.page -= 1;
+        await this.load();
+    }
+
+    async nextPage() {
+        if (this.state.page >= this.pageCount) {
+            return;
+        }
+        this.state.page += 1;
         await this.load();
     }
 

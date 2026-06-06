@@ -423,7 +423,7 @@ class ResPartner(models.Model):
         }
 
     @api.model
-    def hlv_contact_explorer_data(self, search_text=False, role=False, limit=80):
+    def hlv_contact_explorer_data(self, search_text=False, role='customer_crm', limit=80, offset=0):
         domain = [('parent_id', '=', False), ('active', '=', True)]
         if role and role != 'all':
             domain.append(('hlv_business_role', '=', role))
@@ -434,7 +434,8 @@ class ResPartner(models.Model):
                        ('vat', 'ilike', search_text),
                        ('phone', 'ilike', search_text)]
 
-        partners = self.sudo().search(domain, order='name asc, id asc', limit=limit)
+        total = self.sudo().search_count(domain)
+        partners = self.sudo().search(domain, order='name asc, id asc', limit=limit, offset=offset)
         rows = [partner._hlv_explorer_row() for partner in partners]
         selected = rows[0] if rows else False
         related = self.browse(selected['id'])._hlv_explorer_related_rows() if selected else []
@@ -443,6 +444,9 @@ class ResPartner(models.Model):
             'selected': selected,
             'related': related,
             'roles': self._hlv_explorer_role_counts(),
+            'total': total,
+            'offset': offset,
+            'limit': limit,
         }
 
     @api.model
@@ -489,6 +493,7 @@ class ResPartner(models.Model):
             'role': dict(self._fields['hlv_business_role'].selection).get(self.hlv_business_role, self.hlv_business_role or ''),
             'role_key': self.hlv_business_role or '',
             'relationship': self.hlv_relationship_label or '',
+            'relationship_key': self._hlv_explorer_relationship_key(),
             'ref': self.ref or '',
             'vat': self.vat or '',
             'phone': self.phone or self.mobile or '',
@@ -497,7 +502,27 @@ class ResPartner(models.Model):
             'child_count': self.child_contact_count,
             'has_shopee': bool(self.hlv_has_shopee_order),
             'dirty': bool(self.hlv_dirty_child_code or self.hlv_root_code_mismatch),
+            'dirty_reason': self._hlv_explorer_dirty_reason(),
         }
+
+    def _hlv_explorer_relationship_key(self):
+        self.ensure_one()
+        if self.type == 'delivery':
+            return 'delivery'
+        if self.type == 'invoice':
+            return 'invoice'
+        if self.parent_id:
+            return 'child'
+        return 'root'
+
+    def _hlv_explorer_dirty_reason(self):
+        self.ensure_one()
+        reasons = []
+        if self.hlv_dirty_child_code:
+            reasons.append(_('mã MISA đang nằm trên liên hệ con/địa chỉ'))
+        if self.hlv_root_code_mismatch:
+            reasons.append(_('ref và company_registry đang lệch nhau'))
+        return ', '.join(reasons)
 
     def _hlv_explorer_related_rows(self):
         self.ensure_one()

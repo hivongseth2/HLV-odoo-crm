@@ -43,6 +43,12 @@
     font-size: 12px;
 }
 
+.hlv_related_reason {
+    margin-top: 6px;
+    color: #92400e;
+    font-size: 12px;
+}
+
 .hlv_related_list {
     display: grid;
     gap: 8px;
@@ -64,6 +70,25 @@
 .hlv_related_item.is-root {
     border-color: #6b4b75;
     background: #fbf7fc;
+}
+
+.hlv_related_item.relation-root {
+    border-left: 4px solid #6b4b75;
+}
+
+.hlv_related_item.relation-child {
+    border-left: 4px solid #2563eb;
+    background: #f7fbff;
+}
+
+.hlv_related_item.relation-delivery {
+    border-left: 4px solid #16a34a;
+    background: #f7fdf9;
+}
+
+.hlv_related_item.relation-invoice {
+    border-left: 4px solid #ea580c;
+    background: #fff9f4;
 }
 
 .hlv_related_name {
@@ -137,6 +162,37 @@
     padding: 7px 10px;
 }
 
+.hlv_toolbar_right {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: flex-end;
+    min-width: 420px;
+}
+
+.hlv_pager {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: #475467;
+    white-space: nowrap;
+}
+
+.hlv_pager button {
+    width: 28px;
+    height: 28px;
+    border: 1px solid #cfd6df;
+    border-radius: 6px;
+    background: #fff;
+    font-size: 18px;
+    line-height: 1;
+}
+
+.hlv_pager button:disabled {
+    opacity: .45;
+    cursor: not-allowed;
+}
+
 .hlv_table {
     overflow: auto;
 }
@@ -202,6 +258,12 @@
     }
 
     .hlv_toolbar {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .hlv_toolbar_right {
+        min-width: 0;
         align-items: stretch;
         flex-direction: column;
     }

@@ -20,16 +20,17 @@
                     <div class="hlv_related_list">
                         <t t-foreach="state.related" t-as="item" t-key="item.id">
                             <button type="button"
-                                    t-att-class="'hlv_related_item ' + (item.id === state.selected.id ? 'is-root' : '')"
+                                    t-att-class="'hlv_related_item relation-' + item.relationship_key + ' ' + (item.id === state.selected.id ? 'is-root' : '')"
                                     t-on-click="() => this.openPartner(item.id)">
                                 <div>
                                     <div class="hlv_related_name" t-esc="item.name"/>
                                     <div class="hlv_related_meta">
                                         <t t-esc="item.relationship"/> · <t t-esc="item.role"/>
                                     </div>
+                                    <div t-if="item.dirty_reason" class="hlv_related_reason" t-esc="item.dirty_reason"/>
                                 </div>
                                 <span t-if="item.has_shopee" class="hlv_chip shopee">Shopee</span>
-                                <span t-if="item.dirty" class="hlv_chip warn">Mã lỗi</span>
+                                <span t-if="item.dirty" class="hlv_chip warn">Mã cần kiểm tra</span>
                             </button>
                         </t>
                     </div>
@@ -52,12 +53,19 @@
                             </button>
                         </t>
                     </div>
-                    <input class="hlv_search"
-                           type="search"
-                           placeholder="Tìm tên, mã KH, MST, điện thoại..."
-                           t-att-value="state.search"
-                           t-on-change="onSearch"
-                           t-on-keydown="(ev) => ev.key === 'Enter' &amp;&amp; this.onSearch(ev)"/>
+                    <div class="hlv_toolbar_right">
+                        <div class="hlv_pager">
+                            <button type="button" t-on-click="previousPage" t-att-disabled="state.page &lt;= 1">‹</button>
+                            <span><t t-esc="pageStart"/>-<t t-esc="pageEnd"/> / <t t-esc="state.total"/></span>
+                            <button type="button" t-on-click="nextPage" t-att-disabled="state.page &gt;= pageCount">›</button>
+                        </div>
+                        <input class="hlv_search"
+                               type="search"
+                               placeholder="Tìm tên, mã KH, MST, điện thoại..."
+                               t-att-value="state.search"
+                               t-on-change="onSearch"
+                               t-on-keydown="(ev) => ev.key === 'Enter' &amp;&amp; this.onSearch(ev)"/>
+                    </div>
                 </div>
 
                 <div class="hlv_table">
