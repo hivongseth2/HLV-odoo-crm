@@ -10,6 +10,10 @@ class ResPartner(models.Model):
         string="Số liên hệ con",
     )
     hlv_partner_type = fields.Selection([
+        # Legacy values from 18.0.1.0.0. Keep them valid so stored rows do not
+        # break search panel before the classification refresh rewrites them.
+        ('company', 'Công ty'),
+        ('person', 'Cá nhân'),
         ('root_company', 'Công ty gốc'),
         ('root_person', 'Cá nhân gốc'),
         ('child_contact', 'Liên hệ con'),
