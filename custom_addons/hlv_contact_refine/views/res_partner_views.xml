@@ -159,7 +159,7 @@
                         </group>
                     </group>
                     <separator string="Liên hệ / địa chỉ thuộc hồ sơ này"/>
-                    <field name="child_ids" context="{'default_parent_id': active_id}">
+                    <field name="child_ids">
                         <list editable="bottom">
                             <field name="name"/>
                             <field name="type"/>
