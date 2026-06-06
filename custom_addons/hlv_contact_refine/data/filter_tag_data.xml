@@ -1,23 +1,63 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <record id="tag_root" model="hlv.contact.filter.tag">
+        <field name="name">Liên hệ gốc</field>
+        <field name="code">root</field>
+        <field name="sequence">1</field>
+    </record>
+    <record id="tag_company" model="hlv.contact.filter.tag">
+        <field name="name">Công ty</field>
+        <field name="code">company</field>
+        <field name="sequence">2</field>
+    </record>
+    <record id="tag_person" model="hlv.contact.filter.tag">
+        <field name="name">Cá nhân</field>
+        <field name="code">person</field>
+        <field name="sequence">3</field>
+    </record>
+    <record id="tag_child" model="hlv.contact.filter.tag">
+        <field name="name">Liên hệ con</field>
+        <field name="code">child</field>
+        <field name="sequence">4</field>
+    </record>
     <record id="tag_customer" model="hlv.contact.filter.tag">
         <field name="name">Khách hàng</field>
         <field name="code">customer</field>
         <field name="sequence">10</field>
+    </record>
+    <record id="tag_customer_shopee" model="hlv.contact.filter.tag">
+        <field name="name">Khách Shopee</field>
+        <field name="code">customer_shopee</field>
+        <field name="sequence">11</field>
     </record>
     <record id="tag_vendor" model="hlv.contact.filter.tag">
         <field name="name">Nhà cung cấp</field>
         <field name="code">vendor</field>
         <field name="sequence">20</field>
     </record>
-    <record id="tag_main" model="hlv.contact.filter.tag">
-        <field name="name">Liên hệ chính</field>
-        <field name="code">main</field>
+    <record id="tag_misa_code" model="hlv.contact.filter.tag">
+        <field name="name">Có mã MISA</field>
+        <field name="code">misa_code</field>
         <field name="sequence">30</field>
     </record>
     <record id="tag_delivery" model="hlv.contact.filter.tag">
         <field name="name">Địa chỉ giao hàng</field>
         <field name="code">delivery</field>
         <field name="sequence">40</field>
+    </record>
+    <record id="tag_invoice" model="hlv.contact.filter.tag">
+        <field name="name">Địa chỉ hóa đơn</field>
+        <field name="code">invoice</field>
+        <field name="sequence">41</field>
+    </record>
+    <record id="tag_dirty_child_code" model="hlv.contact.filter.tag">
+        <field name="name">Mã nằm trên liên hệ con</field>
+        <field name="code">dirty_child_code</field>
+        <field name="sequence">80</field>
+    </record>
+    <record id="tag_root_code_mismatch" model="hlv.contact.filter.tag">
+        <field name="name">Root lệch ref/company_registry</field>
+        <field name="code">root_code_mismatch</field>
+        <field name="sequence">90</field>
     </record>
 </odoo>

@@ -1,27 +1,169 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- Add generic filter for top-level contacts -->
-    <record id="view_res_partner_filter_refine" model="ir.ui.view">
-        <field name="name">res.partner.select.refine</field>
+    <record id="view_res_partner_search_refine" model="ir.ui.view">
+        <field name="name">res.partner.search.hlv.refine</field>
         <field name="model">res.partner</field>
-        <field name="inherit_id" ref="base.view_res_partner_filter"/>
         <field name="arch" type="xml">
-            <xpath expr="//filter[@name='type_person']" position="before">
-                <filter string="Liên hệ chính" name="filter_only_parents" domain="[('parent_id', '=', False)]"/>
-                <filter string="Địa chỉ giao hàng" name="filter_type_delivery" domain="[('type', '=', 'delivery')]"/>
+            <search string="Liên hệ">
+                <field name="name"/>
+                <field name="ref"/>
+                <field name="company_registry"/>
+                <field name="vat"/>
+                <field name="phone"/>
+                <field name="email"/>
                 <separator/>
-            </xpath>
-            <xpath expr="//search" position="inside">
+                <filter string="Công ty gốc" name="root_company" domain="[('parent_id', '=', False), ('is_company', '=', True)]"/>
+                <filter string="Cá nhân" name="root_person" domain="[('parent_id', '=', False), ('is_company', '=', False)]"/>
+                <filter string="Liên hệ con" name="child_contact" domain="[('parent_id', '!=', False)]"/>
+                <separator/>
+                <filter string="Khách CRM" name="crm_customer" domain="[('hlv_has_sale_order', '=', True), ('hlv_has_shopee_order', '=', False)]"/>
+                <filter string="Khách Shopee" name="shopee_customer" domain="[('hlv_has_shopee_order', '=', True)]"/>
+                <filter string="Nhà cung cấp" name="vendor" domain="[('hlv_has_purchase_order', '=', True)]"/>
+                <separator/>
+                <filter string="Có mã MISA" name="has_misa_code" domain="['|', ('ref', '!=', False), ('company_registry', '!=', False)]"/>
+                <filter string="Mã nằm trên liên hệ con" name="dirty_child_code" domain="[('hlv_dirty_child_code', '=', True)]"/>
+                <filter string="Root lệch mã" name="root_code_mismatch" domain="[('hlv_root_code_mismatch', '=', True)]"/>
+                <group expand="0" string="Nhóm">
+                    <filter string="Loại liên hệ" name="group_hlv_type" context="{'group_by': 'hlv_partner_type'}"/>
+                    <filter string="Tỉnh/Thành" name="group_state" context="{'group_by': 'state_id'}"/>
+                    <filter string="Người tạo" name="group_create_uid" context="{'group_by': 'create_uid'}"/>
+                </group>
                 <searchpanel>
                     <field name="hlv_partner_type" icon="fa-users" enable_counters="1"/>
                     <field name="hlv_filter_tag_ids" string="Phân loại" icon="fa-tags" select="multi" enable_counters="1"/>
+                    <field name="state_id" string="Tỉnh/Thành" icon="fa-map-marker" enable_counters="1"/>
                 </searchpanel>
+            </search>
+        </field>
+    </record>
+
+    <record id="view_res_partner_list_refine" model="ir.ui.view">
+        <field name="name">res.partner.list.hlv.refine</field>
+        <field name="model">res.partner</field>
+        <field name="arch" type="xml">
+            <list string="Liên hệ" multi_edit="1" default_order="name asc">
+                <field name="display_name" string="Tên"/>
+                <field name="hlv_partner_type" string="Loại"/>
+                <field name="hlv_filter_tag_ids" widget="many2many_tags" string="Phân loại"/>
+                <field name="ref" string="Mã KH"/>
+                <field name="company_registry" string="Mã registry"/>
+                <field name="vat" string="MST"/>
+                <field name="hlv_misa_code_key" string="Khóa MISA"/>
+                <field name="parent_id" string="Công ty mẹ"/>
+                <field name="phone"/>
+                <field name="email"/>
+                <field name="city"/>
+                <field name="customer_rank" optional="hide"/>
+                <field name="supplier_rank" optional="hide"/>
+                <field name="hlv_has_shopee_order" string="Shopee"/>
+                <field name="hlv_dirty_child_code" optional="hide"/>
+                <field name="hlv_root_code_mismatch" optional="hide"/>
+                <field name="active" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_res_partner_kanban_refine" model="ir.ui.view">
+        <field name="name">res.partner.kanban.hlv.refine</field>
+        <field name="model">res.partner</field>
+        <field name="arch" type="xml">
+            <kanban class="o_kanban_mobile" default_group_by="hlv_partner_type" sample="1">
+                <field name="display_name"/>
+                <field name="parent_id"/>
+                <field name="hlv_partner_type"/>
+                <field name="hlv_filter_tag_ids"/>
+                <field name="ref"/>
+                <field name="company_registry"/>
+                <field name="vat"/>
+                <field name="hlv_misa_code_key"/>
+                <field name="hlv_has_shopee_order"/>
+                <field name="phone"/>
+                <field name="email"/>
+                <field name="city"/>
+                <templates>
+                    <t t-name="card">
+                        <div class="oe_kanban_global_click">
+                            <div class="o_kanban_record_title">
+                                <strong><field name="display_name"/></strong>
+                            </div>
+                            <div class="text-muted" t-if="record.parent_id.raw_value">
+                                <field name="parent_id"/>
+                            </div>
+                            <div class="mt8">
+                                <field name="hlv_filter_tag_ids" widget="many2many_tags"/>
+                            </div>
+                            <div class="mt8">
+                                <span t-if="record.ref.raw_value">Mã: <field name="ref"/></span>
+                                <span t-if="record.vat.raw_value"> | MST: <field name="vat"/></span>
+                            </div>
+                            <div class="text-muted" t-if="record.hlv_misa_code_key.raw_value">
+                                Khóa: <field name="hlv_misa_code_key"/>
+                            </div>
+                            <div class="text-muted">
+                                <span t-if="record.phone.raw_value"><field name="phone"/></span>
+                                <span t-if="record.email.raw_value"> | <field name="email"/></span>
+                            </div>
+                            <div class="text-muted" t-if="record.city.raw_value">
+                                <field name="city"/>
+                            </div>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
+    <record id="view_res_partner_form_refine" model="ir.ui.view">
+        <field name="name">res.partner.form.hlv.refine</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//sheet" position="before">
+                <header>
+                    <button name="action_hlv_refresh_contact_classification" type="object" string="Quét phân loại" class="btn-secondary"/>
+                    <button name="action_hlv_open_split_wizard" type="object" string="Tách khách hàng" class="btn-secondary"/>
+                </header>
+            </xpath>
+            <xpath expr="//field[@name='category_id']" position="after">
+                <field name="hlv_filter_tag_ids" widget="many2many_tags" readonly="1"/>
+                <field name="hlv_partner_type" readonly="1"/>
+                <field name="hlv_misa_code_key" readonly="1"/>
+                <field name="hlv_has_sale_order" readonly="1"/>
+                <field name="hlv_has_shopee_order" readonly="1"/>
+                <field name="hlv_has_purchase_order" readonly="1"/>
             </xpath>
         </field>
     </record>
 
+    <record id="action_hlv_contacts" model="ir.actions.act_window">
+        <field name="name">Liên hệ tinh gọn</field>
+        <field name="res_model">res.partner</field>
+        <field name="view_mode">kanban,list,form</field>
+        <field name="search_view_id" ref="view_res_partner_search_refine"/>
+        <field name="context">{'default_is_company': True, 'search_default_root_company': 1}</field>
+        <field name="view_ids" eval="[
+            (5, 0, 0),
+            (0, 0, {'view_mode': 'kanban', 'view_id': ref('view_res_partner_kanban_refine')}),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('view_res_partner_list_refine')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('base.view_partner_form')})
+        ]"/>
+    </record>
+
+    <menuitem id="menu_hlv_contacts_refine"
+              name="Liên hệ tinh gọn"
+              parent="contacts.menu_contacts"
+              action="action_hlv_contacts"
+              sequence="1"/>
+
     <record id="contacts.action_contacts" model="ir.actions.act_window">
-        <!-- We remove the search bar default filter to prevent conflict with Search Panel counters -->
+        <field name="view_mode">kanban,list,form</field>
+        <field name="search_view_id" ref="view_res_partner_search_refine"/>
         <field name="context">{'default_is_company': True}</field>
+        <field name="view_ids" eval="[
+            (5, 0, 0),
+            (0, 0, {'view_mode': 'kanban', 'view_id': ref('view_res_partner_kanban_refine')}),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('view_res_partner_list_refine')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('base.view_partner_form')})
+        ]"/>
     </record>
 </odoo>
