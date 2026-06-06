@@ -14,13 +14,13 @@
                 <separator/>
                 <filter string="Công ty gốc" name="root_company" domain="[('parent_id', '=', False), ('is_company', '=', True)]"/>
                 <filter string="Cá nhân" name="root_person" domain="[('parent_id', '=', False), ('is_company', '=', False)]"/>
-                <filter string="Khách cá nhân" name="person_customer" domain="[('parent_id', '=', False), ('is_company', '=', False), ('hlv_has_sale_order', '=', True)]"/>
+                <filter string="Khách cá nhân" name="person_customer" domain="[('parent_id', '=', False), ('is_company', '=', False), ('hlv_business_role', 'in', ['customer_crm', 'customer_shopee'])]"/>
                 <filter string="Liên hệ con" name="child_contact" domain="[('parent_id', '!=', False)]"/>
                 <filter string="Địa chỉ giao hàng" name="delivery" domain="[('type', '=', 'delivery')]"/>
                 <separator/>
-                <filter string="Khách CRM" name="crm_customer" domain="[('hlv_has_sale_order', '=', True), ('hlv_has_shopee_order', '=', False)]"/>
-                <filter string="Khách Shopee" name="shopee_customer" domain="[('hlv_has_shopee_order', '=', True)]"/>
-                <filter string="Nhà cung cấp" name="vendor" domain="[('hlv_has_purchase_order', '=', True)]"/>
+                <filter string="Khách CRM" name="crm_customer" domain="[('hlv_business_role', '=', 'customer_crm')]"/>
+                <filter string="Khách Shopee" name="shopee_customer" domain="[('hlv_business_role', '=', 'customer_shopee')]"/>
+                <filter string="Nhà cung cấp" name="vendor" domain="[('hlv_business_role', '=', 'supplier')]"/>
                 <separator/>
                 <filter string="Có mã MISA" name="has_misa_code" domain="['|', ('ref', '!=', False), ('company_registry', '!=', False)]"/>
                 <filter string="Mã nằm trên liên hệ con" name="dirty_child_code" domain="[('hlv_dirty_child_code', '=', True)]"/>
@@ -31,10 +31,8 @@
                     <filter string="Người tạo" name="group_create_uid" context="{'group_by': 'create_uid'}"/>
                 </group>
                 <searchpanel>
-                    <field name="hlv_partner_type" icon="fa-users" enable_counters="1"/>
-                    <field name="hlv_business_role" string="Vai trò" icon="fa-briefcase" enable_counters="1"/>
-                    <field name="hlv_filter_tag_ids" string="Phân loại" icon="fa-tags" select="multi" enable_counters="1"/>
-                    <field name="state_id" string="Tỉnh/Thành" icon="fa-map-marker" enable_counters="1"/>
+                    <field name="hlv_partner_type" string="Hồ sơ" icon="fa-users" enable_counters="1"/>
+                    <field name="hlv_business_role" string="Nghiệp vụ" icon="fa-briefcase" enable_counters="1"/>
                 </searchpanel>
             </search>
         </field>
@@ -46,17 +44,17 @@
         <field name="arch" type="xml">
             <list string="Liên hệ" multi_edit="1" default_order="name asc">
                 <field name="display_name" string="Tên"/>
-                <field name="hlv_partner_type" string="Loại"/>
-                <field name="hlv_business_role" string="Vai trò"/>
-                <field name="hlv_filter_tag_ids" widget="many2many_tags" string="Phân loại"/>
+                <field name="hlv_partner_type" string="Hồ sơ"/>
+                <field name="hlv_business_role" string="Nghiệp vụ"/>
                 <field name="ref" string="Mã KH"/>
-                <field name="company_registry" string="Mã registry"/>
                 <field name="vat" string="MST"/>
-                <field name="hlv_misa_code_key" string="Khóa MISA"/>
                 <field name="parent_id" string="Công ty mẹ"/>
                 <field name="phone"/>
                 <field name="email"/>
                 <field name="city"/>
+                <field name="company_registry" string="Mã registry" optional="hide"/>
+                <field name="hlv_misa_code_key" string="Khóa MISA" optional="hide"/>
+                <field name="hlv_filter_tag_ids" widget="many2many_tags" string="Phân loại" optional="hide"/>
                 <field name="customer_rank" optional="hide"/>
                 <field name="supplier_rank" optional="hide"/>
                 <field name="hlv_has_shopee_order" string="Shopee"/>
@@ -155,11 +153,87 @@
         ]"/>
     </record>
 
+    <record id="action_hlv_contact_crm_customers" model="ir.actions.act_window">
+        <field name="name">Khách CRM</field>
+        <field name="res_model">res.partner</field>
+        <field name="view_mode">list,kanban,form</field>
+        <field name="domain">[('hlv_business_role', '=', 'customer_crm')]</field>
+        <field name="search_view_id" ref="view_res_partner_search_refine"/>
+        <field name="view_ids" eval="[
+            (5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('view_res_partner_list_refine')}),
+            (0, 0, {'view_mode': 'kanban', 'view_id': ref('view_res_partner_kanban_refine')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('base.view_partner_form')})
+        ]"/>
+    </record>
+
+    <record id="action_hlv_contact_shopee_customers" model="ir.actions.act_window">
+        <field name="name">Khách Shopee</field>
+        <field name="res_model">res.partner</field>
+        <field name="view_mode">list,kanban,form</field>
+        <field name="domain">[('hlv_business_role', '=', 'customer_shopee')]</field>
+        <field name="search_view_id" ref="view_res_partner_search_refine"/>
+        <field name="view_ids" eval="[
+            (5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('view_res_partner_list_refine')}),
+            (0, 0, {'view_mode': 'kanban', 'view_id': ref('view_res_partner_kanban_refine')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('base.view_partner_form')})
+        ]"/>
+    </record>
+
+    <record id="action_hlv_contact_suppliers" model="ir.actions.act_window">
+        <field name="name">Nhà cung cấp</field>
+        <field name="res_model">res.partner</field>
+        <field name="view_mode">list,kanban,form</field>
+        <field name="domain">[('hlv_business_role', '=', 'supplier')]</field>
+        <field name="search_view_id" ref="view_res_partner_search_refine"/>
+        <field name="view_ids" eval="[
+            (5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('view_res_partner_list_refine')}),
+            (0, 0, {'view_mode': 'kanban', 'view_id': ref('view_res_partner_kanban_refine')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('base.view_partner_form')})
+        ]"/>
+    </record>
+
+    <record id="action_hlv_contact_delivery_addresses" model="ir.actions.act_window">
+        <field name="name">Địa chỉ giao hàng</field>
+        <field name="res_model">res.partner</field>
+        <field name="view_mode">list,kanban,form</field>
+        <field name="domain">[('hlv_business_role', '=', 'delivery_address')]</field>
+        <field name="search_view_id" ref="view_res_partner_search_refine"/>
+        <field name="view_ids" eval="[
+            (5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('view_res_partner_list_refine')}),
+            (0, 0, {'view_mode': 'kanban', 'view_id': ref('view_res_partner_kanban_refine')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('base.view_partner_form')})
+        ]"/>
+    </record>
+
     <menuitem id="menu_hlv_contacts_refine"
               name="Liên hệ tinh gọn"
               parent="contacts.menu_contacts"
               action="action_hlv_contacts"
               sequence="1"/>
+    <menuitem id="menu_hlv_contact_crm_customers"
+              name="Khách CRM"
+              parent="contacts.menu_contacts"
+              action="action_hlv_contact_crm_customers"
+              sequence="2"/>
+    <menuitem id="menu_hlv_contact_shopee_customers"
+              name="Khách Shopee"
+              parent="contacts.menu_contacts"
+              action="action_hlv_contact_shopee_customers"
+              sequence="3"/>
+    <menuitem id="menu_hlv_contact_suppliers"
+              name="Nhà cung cấp"
+              parent="contacts.menu_contacts"
+              action="action_hlv_contact_suppliers"
+              sequence="4"/>
+    <menuitem id="menu_hlv_contact_delivery_addresses"
+              name="Địa chỉ giao hàng"
+              parent="contacts.menu_contacts"
+              action="action_hlv_contact_delivery_addresses"
+              sequence="5"/>
 
     <record id="contacts.action_contacts" model="ir.actions.act_window">
         <field name="view_mode">kanban,list,form</field>

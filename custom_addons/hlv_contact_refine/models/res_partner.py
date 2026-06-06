@@ -87,9 +87,12 @@ class ResPartner(models.Model):
         cr.execute("""
             UPDATE res_partner
                SET hlv_business_role = CASE
+                   WHEN type = 'delivery' THEN 'delivery_address'
+                   WHEN type = 'invoice' THEN 'invoice_address'
+                   WHEN parent_id IS NOT NULL THEN 'child_contact'
                    WHEN hlv_has_shopee_order IS TRUE THEN 'customer_shopee'
                    WHEN hlv_has_sale_order IS TRUE THEN 'customer_crm'
-                   WHEN hlv_has_purchase_order IS TRUE THEN 'vendor'
+                   WHEN hlv_has_purchase_order IS TRUE THEN 'supplier'
                    ELSE 'other'
                END
         """)
@@ -116,11 +119,15 @@ class ResPartner(models.Model):
         store=True,
     )
     hlv_business_role = fields.Selection([
+        ('vendor', 'Nhà cung cấp (cũ)'),
         ('customer_crm', 'Khách CRM'),
         ('customer_shopee', 'Khách Shopee'),
-        ('vendor', 'Nhà cung cấp'),
+        ('supplier', 'Nhà cung cấp'),
+        ('delivery_address', 'Địa chỉ giao hàng'),
+        ('invoice_address', 'Địa chỉ hóa đơn'),
+        ('child_contact', 'Liên hệ con'),
         ('other', 'Khác'),
-    ], compute='_compute_hlv_business_role', string="Vai trò", store=True)
+    ], compute='_compute_hlv_business_role', string="Nghiệp vụ", store=True)
     hlv_has_sale_order = fields.Boolean(
         compute='_compute_hlv_order_flags',
         string="Có đơn bán",
@@ -259,15 +266,21 @@ class ResPartner(models.Model):
             tax_code = (partner.vat or '').strip()
             partner.hlv_misa_code_key = '%s-%s' % (tax_code, code) if tax_code and code else code or False
 
-    @api.depends('hlv_has_sale_order', 'hlv_has_shopee_order', 'hlv_has_purchase_order')
+    @api.depends('parent_id', 'type', 'hlv_has_sale_order', 'hlv_has_shopee_order', 'hlv_has_purchase_order')
     def _compute_hlv_business_role(self):
         for partner in self:
-            if partner.hlv_has_shopee_order:
+            if partner.type == 'delivery':
+                partner.hlv_business_role = 'delivery_address'
+            elif partner.type == 'invoice':
+                partner.hlv_business_role = 'invoice_address'
+            elif partner.parent_id:
+                partner.hlv_business_role = 'child_contact'
+            elif partner.hlv_has_shopee_order:
                 partner.hlv_business_role = 'customer_shopee'
             elif partner.hlv_has_sale_order:
                 partner.hlv_business_role = 'customer_crm'
             elif partner.hlv_has_purchase_order:
-                partner.hlv_business_role = 'vendor'
+                partner.hlv_business_role = 'supplier'
             else:
                 partner.hlv_business_role = 'other'
 
@@ -312,12 +325,12 @@ class ResPartner(models.Model):
             elif partner.type == 'invoice':
                 add('invoice')
 
-            if partner.hlv_has_shopee_order:
+            if not partner.parent_id and partner.hlv_has_shopee_order:
                 add('customer_shopee')
-            elif partner.hlv_has_sale_order:
+            elif not partner.parent_id and partner.hlv_has_sale_order:
                 add('customer')
 
-            if partner.hlv_has_purchase_order:
+            if not partner.parent_id and partner.hlv_has_purchase_order:
                 add('vendor')
 
             if (partner.ref or partner.company_registry) and not partner.parent_id:
