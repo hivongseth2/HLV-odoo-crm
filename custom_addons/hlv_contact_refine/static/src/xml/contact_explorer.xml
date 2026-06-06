@@ -19,7 +19,7 @@
 
                     <div class="hlv_related_list">
                         <t t-foreach="state.related" t-as="item" t-key="item.id">
-                            <button type="button"
+                            <div
                                     t-att-class="'hlv_related_item relation-' + item.relationship_key + ' ' + (item.id === state.selected.id ? 'is-root' : '')"
                                     t-on-click="() => this.openPartner(item.id)">
                                 <div>
@@ -27,11 +27,22 @@
                                     <div class="hlv_related_meta">
                                         <t t-esc="item.relationship"/> · <t t-esc="item.role"/>
                                     </div>
+                                    <div t-if="item.code_hint" class="hlv_related_code">
+                                        Mã trên liên hệ này: <t t-esc="item.code_hint"/>
+                                    </div>
                                     <div t-if="item.dirty_reason" class="hlv_related_reason" t-esc="item.dirty_reason"/>
                                 </div>
-                                <span t-if="item.has_shopee" class="hlv_chip shopee">Shopee</span>
-                                <span t-if="item.dirty" class="hlv_chip warn">Mã cần kiểm tra</span>
-                            </button>
+                                <div class="hlv_related_actions">
+                                    <span t-if="item.has_shopee" class="hlv_chip shopee">Shopee</span>
+                                    <span t-if="item.dirty" class="hlv_chip warn">Mã cần kiểm tra</span>
+                                    <button t-if="item.dirty"
+                                            type="button"
+                                            class="hlv_fix_button"
+                                            t-on-click.stop="() => this.fixPartnerData(item.id)">
+                                        Sửa mã
+                                    </button>
+                                </div>
+                            </div>
                         </t>
                     </div>
                 </t>

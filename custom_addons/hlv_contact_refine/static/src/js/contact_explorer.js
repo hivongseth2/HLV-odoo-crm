@@ -10,6 +10,7 @@ export class HlvContactExplorer extends Component {
     setup() {
         this.orm = useService("orm");
         this.action = useService("action");
+        this.notification = useService("notification");
         this.state = useState({
             loading: true,
             search: "",
@@ -101,6 +102,23 @@ export class HlvContactExplorer extends Component {
             views: [[false, "form"]],
             target: "current",
         });
+    }
+
+    async fixPartnerData(partnerId) {
+        const data = await this.orm.call("res.partner", "hlv_contact_explorer_fix_data", [partnerId]);
+        const selectedId = data.selected && data.selected.id;
+        this.state.selected = data.selected || false;
+        this.state.related = data.related || [];
+        this.notification.add(
+            data.fixed_ids && data.fixed_ids.length
+                ? `Đã sửa ${data.fixed_ids.length} liên hệ.`
+                : "Không có mã cần sửa trên liên hệ này.",
+            { type: "success" }
+        );
+        await this.load();
+        if (selectedId) {
+            await this.selectPartner(selectedId);
+        }
     }
 }
 

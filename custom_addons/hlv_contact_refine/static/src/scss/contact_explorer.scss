@@ -49,6 +49,13 @@
     font-size: 12px;
 }
 
+.hlv_related_code {
+    margin-top: 6px;
+    color: #344054;
+    font-size: 12px;
+    font-family: monospace;
+}
+
 .hlv_related_list {
     display: grid;
     gap: 8px;
@@ -112,6 +119,23 @@
 .hlv_chip.warn {
     background: #fff8db;
     color: #92400e;
+}
+
+.hlv_related_actions {
+    flex: 0 0 auto;
+    display: grid;
+    justify-items: end;
+    gap: 6px;
+}
+
+.hlv_fix_button {
+    border: 1px solid #f59e0b;
+    border-radius: 6px;
+    background: #fffbeb;
+    color: #92400e;
+    padding: 3px 8px;
+    font-size: 12px;
+    font-weight: 700;
 }
 
 .hlv_contact_main_list {

@@ -487,6 +487,7 @@ class ResPartner(models.Model):
 
     def _hlv_explorer_row(self):
         self.ensure_one()
+        dirty = self._hlv_explorer_is_dirty()
         return {
             'id': self.id,
             'name': self.display_name or self.name or '',
@@ -495,14 +496,16 @@ class ResPartner(models.Model):
             'relationship': self.hlv_relationship_label or '',
             'relationship_key': self._hlv_explorer_relationship_key(),
             'ref': self.ref or '',
+            'company_registry': self.company_registry or '',
+            'code_hint': self._hlv_explorer_code_hint(),
             'vat': self.vat or '',
             'phone': self.phone or self.mobile or '',
             'email': self.email or '',
             'city': self.city or '',
             'child_count': self.child_contact_count,
             'has_shopee': bool(self.hlv_has_shopee_order),
-            'dirty': bool(self.hlv_dirty_child_code or self.hlv_root_code_mismatch),
-            'dirty_reason': self._hlv_explorer_dirty_reason(),
+            'dirty': dirty,
+            'dirty_reason': self._hlv_explorer_dirty_reason() if dirty else '',
         }
 
     def _hlv_explorer_relationship_key(self):
@@ -518,11 +521,31 @@ class ResPartner(models.Model):
     def _hlv_explorer_dirty_reason(self):
         self.ensure_one()
         reasons = []
-        if self.hlv_dirty_child_code:
+        ref = (self.ref or '').strip()
+        company_registry = (self.company_registry or '').strip()
+        if self.parent_id and (ref or company_registry):
             reasons.append(_('mã MISA đang nằm trên liên hệ con/địa chỉ'))
-        if self.hlv_root_code_mismatch:
+        if not self.parent_id and ref and company_registry and ref != company_registry:
             reasons.append(_('ref và company_registry đang lệch nhau'))
         return ', '.join(reasons)
+
+    def _hlv_explorer_is_dirty(self):
+        self.ensure_one()
+        ref = (self.ref or '').strip()
+        company_registry = (self.company_registry or '').strip()
+        return bool(
+            (self.parent_id and (ref or company_registry))
+            or (not self.parent_id and ref and company_registry and ref != company_registry)
+        )
+
+    def _hlv_explorer_code_hint(self):
+        self.ensure_one()
+        parts = []
+        if self.ref:
+            parts.append('ref=%s' % self.ref)
+        if self.company_registry:
+            parts.append('registry=%s' % self.company_registry)
+        return ', '.join(parts)
 
     def _hlv_explorer_related_rows(self):
         self.ensure_one()
@@ -535,4 +558,36 @@ class ResPartner(models.Model):
             'type': 'ir.actions.client',
             'tag': 'hlv_contact_explorer_action',
             'name': _('Liên hệ tinh gọn'),
+        }
+
+    @api.model
+    def hlv_contact_explorer_fix_data(self, partner_id):
+        partner = self.sudo().browse(partner_id).exists()
+        if not partner:
+            return {'selected': False, 'related': []}
+
+        root = partner.commercial_partner_id or partner
+        fixed = []
+
+        if partner.parent_id and (partner.ref or partner.company_registry):
+            partner.write({'ref': False, 'company_registry': False})
+            fixed.append(partner.id)
+        elif not partner.parent_id:
+            dirty_children = partner.child_ids.filtered(lambda p: p.ref or p.company_registry)
+            if dirty_children:
+                dirty_children.write({'ref': False, 'company_registry': False})
+                fixed.extend(dirty_children.ids)
+
+            ref = (partner.ref or '').strip()
+            company_registry = (partner.company_registry or '').strip()
+            if ref and company_registry and ref != company_registry:
+                partner.write({'company_registry': ref})
+                fixed.append(partner.id)
+
+        (root | root.child_ids)._compute_hlv_code_flags()
+        (root | root.child_ids)._compute_hlv_filter_tag_ids()
+        return {
+            'fixed_ids': fixed,
+            'selected': root._hlv_explorer_row(),
+            'related': root._hlv_explorer_related_rows(),
         }
