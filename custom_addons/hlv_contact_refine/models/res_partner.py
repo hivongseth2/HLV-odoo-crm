@@ -5,6 +5,95 @@ from odoo import api, fields, models, _
 class ResPartner(models.Model):
     _inherit = 'res.partner'
 
+    def init(self):
+        cr = self.env.cr
+        cr.execute("""
+            UPDATE res_partner
+               SET hlv_partner_type = CASE
+                   WHEN type = 'delivery' THEN 'delivery'
+                   WHEN type = 'invoice' THEN 'invoice'
+                   WHEN parent_id IS NOT NULL THEN 'child_contact'
+                   WHEN is_company IS TRUE THEN 'root_company'
+                   ELSE 'root_person'
+               END
+        """)
+        cr.execute("""
+            UPDATE res_partner
+               SET hlv_misa_code_key = CASE
+                   WHEN COALESCE(NULLIF(TRIM(vat), ''), '') != ''
+                    AND COALESCE(NULLIF(TRIM(ref), ''), NULLIF(TRIM(company_registry), '')) IS NOT NULL
+                   THEN TRIM(vat) || '-' || COALESCE(NULLIF(TRIM(ref), ''), NULLIF(TRIM(company_registry), ''))
+                   ELSE COALESCE(NULLIF(TRIM(ref), ''), NULLIF(TRIM(company_registry), ''))
+               END,
+                   hlv_dirty_child_code = (
+                       parent_id IS NOT NULL
+                       AND (
+                           COALESCE(NULLIF(TRIM(ref), ''), '') != ''
+                           OR COALESCE(NULLIF(TRIM(company_registry), ''), '') != ''
+                       )
+                   ),
+                   hlv_root_code_mismatch = (
+                       parent_id IS NULL
+                       AND COALESCE(NULLIF(TRIM(ref), ''), '') != ''
+                       AND COALESCE(NULLIF(TRIM(company_registry), ''), '') != ''
+                       AND TRIM(ref) != TRIM(company_registry)
+                   )
+        """)
+        cr.execute("UPDATE res_partner SET hlv_has_sale_order = customer_rank > 0")
+        cr.execute("UPDATE res_partner SET hlv_has_purchase_order = supplier_rank > 0")
+        cr.execute("UPDATE res_partner SET hlv_has_shopee_order = FALSE")
+        cr.execute("""
+            UPDATE res_partner
+               SET hlv_has_sale_order = TRUE
+             WHERE id IN (
+                   SELECT DISTINCT COALESCE(cp.id, so.partner_id)
+                     FROM sale_order so
+                     JOIN res_partner p ON p.id = so.partner_id
+                LEFT JOIN res_partner cp ON cp.id = p.commercial_partner_id
+             )
+        """)
+        cr.execute("""
+            UPDATE res_partner
+               SET hlv_has_purchase_order = TRUE
+             WHERE id IN (
+                   SELECT DISTINCT COALESCE(cp.id, po.partner_id)
+                     FROM purchase_order po
+                     JOIN res_partner p ON p.id = po.partner_id
+                LEFT JOIN res_partner cp ON cp.id = p.commercial_partner_id
+             )
+        """)
+        cr.execute("""
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                 WHERE table_name = 'sale_order'
+                   AND column_name = 'shopee_order_ref'
+            )
+        """)
+        has_shopee_ref = cr.fetchone()[0]
+        if has_shopee_ref:
+            cr.execute("""
+                UPDATE res_partner
+                   SET hlv_has_shopee_order = TRUE,
+                       hlv_has_sale_order = TRUE
+                 WHERE id IN (
+                       SELECT DISTINCT COALESCE(cp.id, so.partner_id)
+                         FROM sale_order so
+                         JOIN res_partner p ON p.id = so.partner_id
+                    LEFT JOIN res_partner cp ON cp.id = p.commercial_partner_id
+                        WHERE so.shopee_order_ref IS NOT NULL
+                          AND so.shopee_order_ref != ''
+                 )
+            """)
+        cr.execute("""
+            UPDATE res_partner
+               SET hlv_business_role = CASE
+                   WHEN hlv_has_shopee_order IS TRUE THEN 'customer_shopee'
+                   WHEN hlv_has_sale_order IS TRUE THEN 'customer_crm'
+                   WHEN hlv_has_purchase_order IS TRUE THEN 'vendor'
+                   ELSE 'other'
+               END
+        """)
+
     child_contact_count = fields.Integer(
         compute='_compute_child_contact_count',
         string="Số liên hệ con",
@@ -26,6 +115,12 @@ class ResPartner(models.Model):
         string="Phân loại",
         store=True,
     )
+    hlv_business_role = fields.Selection([
+        ('customer_crm', 'Khách CRM'),
+        ('customer_shopee', 'Khách Shopee'),
+        ('vendor', 'Nhà cung cấp'),
+        ('other', 'Khác'),
+    ], compute='_compute_hlv_business_role', string="Vai trò", store=True)
     hlv_has_sale_order = fields.Boolean(
         compute='_compute_hlv_order_flags',
         string="Có đơn bán",
@@ -164,6 +259,18 @@ class ResPartner(models.Model):
             tax_code = (partner.vat or '').strip()
             partner.hlv_misa_code_key = '%s-%s' % (tax_code, code) if tax_code and code else code or False
 
+    @api.depends('hlv_has_sale_order', 'hlv_has_shopee_order', 'hlv_has_purchase_order')
+    def _compute_hlv_business_role(self):
+        for partner in self:
+            if partner.hlv_has_shopee_order:
+                partner.hlv_business_role = 'customer_shopee'
+            elif partner.hlv_has_sale_order:
+                partner.hlv_business_role = 'customer_crm'
+            elif partner.hlv_has_purchase_order:
+                partner.hlv_business_role = 'vendor'
+            else:
+                partner.hlv_business_role = 'other'
+
     @api.depends('parent_id', 'ref', 'company_registry')
     def _compute_hlv_code_flags(self):
         for partner in self:
@@ -178,7 +285,7 @@ class ResPartner(models.Model):
         'customer_rank', 'supplier_rank', 'parent_id', 'type', 'is_company',
         'ref', 'company_registry', 'vat', 'hlv_has_sale_order',
         'hlv_has_shopee_order', 'hlv_has_purchase_order',
-        'hlv_dirty_child_code', 'hlv_root_code_mismatch',
+        'hlv_dirty_child_code', 'hlv_root_code_mismatch', 'hlv_business_role',
     )
     def _compute_hlv_filter_tag_ids(self):
         tags = {
@@ -231,6 +338,7 @@ class ResPartner(models.Model):
             partners = self.env['res.partner'].sudo().with_context(active_test=False).search([])
         partners._compute_hlv_partner_type()
         partners._compute_hlv_order_flags()
+        partners._compute_hlv_business_role()
         partners._compute_hlv_code_flags()
         partners._compute_hlv_misa_code_key()
         partners._compute_hlv_filter_tag_ids()

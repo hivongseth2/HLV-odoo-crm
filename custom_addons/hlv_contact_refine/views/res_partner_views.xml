@@ -14,7 +14,9 @@
                 <separator/>
                 <filter string="Công ty gốc" name="root_company" domain="[('parent_id', '=', False), ('is_company', '=', True)]"/>
                 <filter string="Cá nhân" name="root_person" domain="[('parent_id', '=', False), ('is_company', '=', False)]"/>
+                <filter string="Khách cá nhân" name="person_customer" domain="[('parent_id', '=', False), ('is_company', '=', False), ('hlv_has_sale_order', '=', True)]"/>
                 <filter string="Liên hệ con" name="child_contact" domain="[('parent_id', '!=', False)]"/>
+                <filter string="Địa chỉ giao hàng" name="delivery" domain="[('type', '=', 'delivery')]"/>
                 <separator/>
                 <filter string="Khách CRM" name="crm_customer" domain="[('hlv_has_sale_order', '=', True), ('hlv_has_shopee_order', '=', False)]"/>
                 <filter string="Khách Shopee" name="shopee_customer" domain="[('hlv_has_shopee_order', '=', True)]"/>
@@ -30,6 +32,7 @@
                 </group>
                 <searchpanel>
                     <field name="hlv_partner_type" icon="fa-users" enable_counters="1"/>
+                    <field name="hlv_business_role" string="Vai trò" icon="fa-briefcase" enable_counters="1"/>
                     <field name="hlv_filter_tag_ids" string="Phân loại" icon="fa-tags" select="multi" enable_counters="1"/>
                     <field name="state_id" string="Tỉnh/Thành" icon="fa-map-marker" enable_counters="1"/>
                 </searchpanel>
@@ -44,6 +47,7 @@
             <list string="Liên hệ" multi_edit="1" default_order="name asc">
                 <field name="display_name" string="Tên"/>
                 <field name="hlv_partner_type" string="Loại"/>
+                <field name="hlv_business_role" string="Vai trò"/>
                 <field name="hlv_filter_tag_ids" widget="many2many_tags" string="Phân loại"/>
                 <field name="ref" string="Mã KH"/>
                 <field name="company_registry" string="Mã registry"/>
@@ -71,6 +75,7 @@
                 <field name="display_name"/>
                 <field name="parent_id"/>
                 <field name="hlv_partner_type"/>
+                <field name="hlv_business_role"/>
                 <field name="hlv_filter_tag_ids"/>
                 <field name="ref"/>
                 <field name="company_registry"/>
@@ -127,6 +132,7 @@
             <xpath expr="//field[@name='category_id']" position="after">
                 <field name="hlv_filter_tag_ids" widget="many2many_tags" readonly="1"/>
                 <field name="hlv_partner_type" readonly="1"/>
+                <field name="hlv_business_role" readonly="1"/>
                 <field name="hlv_misa_code_key" readonly="1"/>
                 <field name="hlv_has_sale_order" readonly="1"/>
                 <field name="hlv_has_shopee_order" readonly="1"/>
@@ -140,7 +146,7 @@
         <field name="res_model">res.partner</field>
         <field name="view_mode">kanban,list,form</field>
         <field name="search_view_id" ref="view_res_partner_search_refine"/>
-        <field name="context">{'default_is_company': True, 'search_default_root_company': 1}</field>
+        <field name="context">{'default_is_company': True}</field>
         <field name="view_ids" eval="[
             (5, 0, 0),
             (0, 0, {'view_mode': 'kanban', 'view_id': ref('view_res_partner_kanban_refine')}),
