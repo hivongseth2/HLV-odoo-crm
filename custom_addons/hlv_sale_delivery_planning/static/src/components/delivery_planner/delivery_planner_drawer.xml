@@ -473,6 +473,27 @@
                                                 <i class="fa fa-clock-o me-1" title="Lịch giao"></i>
                                                 Lịch giao: <t t-esc="picking.scheduled_date"/>
                                             </div>
+                                            <!-- Packer for PICK pickings -->
+                                            <t t-if="picking.sequence_code and picking.sequence_code.indexOf('PICK') &gt;= 0 and picking.packer_user and picking.packer_user[0]">
+                                                <div class="small mt-1 text-primary fw-bold d-flex align-items-center gap-1">
+                                                    <i class="fa fa-user me-1"></i>Người đóng: <t t-esc="picking.packer_user[1]"/>
+                                                    <button class="btn btn-link btn-sm p-0 ms-1 text-warning small"
+                                                            t-on-click.stop="() => this.openChangePackerModal(picking.id)"
+                                                            title="Đổi người đóng">
+                                                        <i class="fa fa-exchange me-1"></i>Đổi
+                                                    </button>
+                                                </div>
+                                            </t>
+                                            <t t-elif="picking.sequence_code and picking.sequence_code.indexOf('PICK') &gt;= 0 and picking.state !== 'cancel' and picking.state !== 'done'">
+                                                <div class="small mt-1 text-muted d-flex align-items-center gap-1">
+                                                    <i class="fa fa-user-times me-1"></i>Chưa assign packer
+                                                    <button class="btn btn-link btn-sm p-0 ms-1 text-primary small"
+                                                            t-on-click.stop="() => this.openChangePackerModal(picking.id)"
+                                                            title="Assign người đóng">
+                                                        <i class="fa fa-user-plus me-1"></i>Assign
+                                                    </button>
+                                                </div>
+                                            </t>
                                             <div t-if="picking.code === 'outgoing' and picking.shipper_received"
                                                  class="small mt-1 text-success fw-bold">
                                                 <i class="fa fa-motorcycle me-1" title="Shipper đã nhận"></i>

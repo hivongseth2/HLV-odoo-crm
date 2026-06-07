@@ -1,3 +1,6 @@
+"""Marks delivery planner snapshots dirty when stock move reservation/state changes affect sale orders.
+"""
+
 import logging
 from odoo import models
 
@@ -42,6 +45,12 @@ class StockMove(models.Model):
         try:
             from ..services.delivery_planner_stats import bump_stats_cache_version
             bump_stats_cache_version()
+        except Exception:
+            pass
+        try:
+            self.env['hlv.delivery.planner.snapshot'].sudo().mark_dirty_for_sale_orders(
+                so_ids, reason='stock.move'
+            )
         except Exception:
             pass
         try:

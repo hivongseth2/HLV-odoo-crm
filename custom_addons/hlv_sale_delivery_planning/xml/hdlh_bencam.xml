@@ -1,0 +1,192 @@
+<t t-name="stock.report_picking_copy_2">
+    <t t-call="web.html_container">
+        <t t-foreach="docs" t-as="o">
+
+          
+
+            <t t-call="web.external_layout">
+                <t t-set="packer" t-value="o.x_pack_packer_user_id"/>
+                <t t-set="packer_name" t-value="packer and (packer.x_packer_name or packer.name) or ''"/>
+                <t t-set="current_time" t-value="datetime.datetime.now().strftime('%H:%M %d/%m/%Y')"/>
+                <t t-set="address" t-value="None"/>
+                <div class="page o_report_stockpicking_operations">
+              
+                
+            
+                     <div class="row" style="margin-top: 5px; margin-bottom: 16px; font-size: 14px;">
+                        <div class="col-6 text-start">
+                            <p style="margin: 0;"><strong>Người đóng:</strong> <span t-esc="packer_name"/></p>
+                        </div>
+                        <div class="col-6 text-end">
+                            <p style="margin: 0;"><strong>Thời gian in phiếu:</strong> <span t-esc="current_time"/></p>
+                        </div>
+                    </div>
+                    
+                    <div class="border-bottom mb-4"/>
+                    
+                    <div class="oe_structure"/>
+                    <div id="informations" class="row mb-4">
+                        <div t-if="o.origin" class="col" name="div_origin"><strong>Đơn hàng</strong><div t-field="o.origin">S0001</div></div>
+                        <div class="col" name="div_state"><strong>Trạng thái</strong><div t-field="o.state">Nháp</div></div>
+                        <div t-if="o.picking_type_id.code == 'incoming' and o.purchase_id" class="col">
+                            <strong>Trạng thái đơn hàng MISA</strong>
+                            <div t-field="o.purchase_id.x_studio_misa_purchase_status"/>
+                        </div>
+                        <div t-if="o.scheduled_date" class="col" name="div_sched_date"><strong>Ngày đã lên lịch</strong><div t-field="o.scheduled_date">2023-09-24</div></div>
+                        <div t-if="o.picking_type_id.code == 'outgoing' and o.carrier_id" class="col">
+                            <strong>Carrier</strong>
+                            <div t-field="o.carrier_id"/>
+                        </div>
+                        <t t-set="display_weight" t-value="o.weight if o.state == 'done' else o.shipping_weight"/>
+                        <div t-if="display_weight" class="col">
+                            <strong>Weight</strong>
+                            <div>
+                                <span t-out="display_weight"/>
+                                <span t-field="o.weight_uom_name"/>
+                            </div>
+                        </div>
+                        <div t-if="o.carrier_id" class="col" name="div_shipping_method">
+                            <strong>Shipping Method:</strong>
+                            <p t-field="o.carrier_id">FedEx</p>
+                        </div>
+                    </div>
+
+                    <table class="table table-bordered mt16" style="border: 1px solid black;" t-if="o.move_line_ids and o.move_ids_without_package">
+                        <t t-set="has_barcode" t-value="any(move_line.product_id and move_line.product_id.sudo().barcode or move_line.package_id for move_line in o.move_line_ids)"/>
+                        <t t-set="has_serial_number" t-value="any(move_line.lot_id or move_line.lot_name for move_line in o.move_line_ids)" groups="stock.group_production_lot"/>
+                        <thead> <tr>
+                                <th name="th_product" class="text-start" style="width: 35%;">
+                                    <strong>Sản phẩm</strong>
+                                </th>
+                                <th class="text-end">
+                                    <strong>SL</strong>
+                                </th>
+                                <th name="th_from" t-if="o.picking_type_id.code != 'incoming'" groups="stock.group_stock_multi_locations" class="text-start">
+                                    <strong>Từ</strong>
+                                </th>
+                                <th name="th_to" t-if="o.picking_type_id.code != 'outgoing'" groups="stock.group_stock_multi_locations" class="text-start">
+                                    <strong>Đến</strong>
+                                </th>
+                                <th name="th_serial_number" class="text-center" t-if="has_serial_number">
+                                   <strong>Số lô/sê-ri</strong>
+                                </th>
+                                <th name="th_barcode" class="text-center" t-if="has_barcode" style="width: 30%;">
+                                    <strong>Mã vạch sản phẩm</strong>
+                                </th>
+                                <th name="th_barcode_check" class="text-center">
+                                    <strong>Barcode</strong>
+                                </th>
+                                <th name="th_note" class="text-center" style="min-width: 100px;"> <strong>Ghi chú</strong>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr t-foreach="o.move_line_ids_without_package.sorted(lambda ml: (ml.location_id.complete_name, ml.location_dest_id.complete_name))" t-as="ml">
+                                <td>
+                                    <span t-field="ml.product_id.display_name">Bàn điều chỉnh được</span><br/>
+                                    <span t-if="ml.product_id.description_picking" t-field="ml.product_id.description_picking"/>
+                                </td>
+                                <td class="text-end">
+                                    <span t-field="ml.quantity">3.00</span>
+                                    <span t-field="ml.product_uom_id" groups="uom.group_uom"/>
+                                    <span t-if="ml.move_id.product_packaging_id">
+                                        <span t-if="o.state != 'done'">(<span t-field="ml.product_packaging_qty" t-options="{&quot;widget&quot;: &quot;integer&quot;}"/> <span t-field="ml.move_id.product_packaging_id.name"/>)</span>
+                                        <span t-if="o.state == 'done'">(<span t-field="ml.product_packaging_qty" t-options="{&quot;widget&quot;: &quot;integer&quot;}"/> <span t-field="ml.move_id.product_packaging_id.name"/>)</span>
+                                    </span>
+                                </td>
+                                
+                                <td t-if="o.picking_type_id.code != 'incoming'" groups="stock.group_stock_multi_locations" class="text-start">
+                                    <span t-esc="ml.location_id.display_name">WH/Tồn kho</span>
+                                    <t t-if="ml.package_id"><span t-field="ml.package_id">Kiện A</span></t>
+                                </td>
+                                
+                                <td t-if="o.picking_type_id.code != 'outgoing'" groups="stock.group_stock_multi_locations" class="text-start">
+                                    <div>
+                                        <span t-field="ml.location_dest_id">WH/Xuất hàng</span>
+                                        <t t-if="ml.result_package_id"><span t-field="ml.result_package_id">Kiện B</span></t>
+                                    </div>
+                                </td>
+                                
+                                <td class=" text-center h6" t-if="has_serial_number">
+                                    <span t-if="has_serial_number and (ml.lot_id or ml.lot_name)" t-esc="ml.lot_id.name or ml.lot_name" t-options="{'widget': 'barcode', 'humanreadable': 1, 'width': 400, 'height': 100, 'img_style': 'width:100%;height:35px;'}">
+                                        <div class="bg-light border-1 rounded d-flex flex-column align-items-center justify-content-center px-1 py-2 opacity-75 text-muted text-center">(mã vạch sê-ri)</div>
+                                    </span>
+                                </td>
+
+                                <td class="text-center" t-if="has_barcode" style="vertical-align: middle;">
+                                    <t t-if="product_barcode != ml.product_id.barcode">
+                                        <span t-if="ml.product_id and ml.product_id.barcode">
+                                            <div t-field="ml.product_id.barcode" t-options="{'widget': 'barcode', 'symbology': 'auto', 'width': 400, 'height': 100, 'quiet': 0, 'img_style': 'width:100%;max-width:200px;height:40px;'}">
+                                                <div class="bg-light border-1 rounded d-flex flex-column align-items-center justify-content-center px-1 py-2 opacity-75 text-muted text-center">
+                                                    (mã vạch sản phẩm)
+                                                </div>
+                                            </div>
+                                        </span>
+                                        <t t-set="product_barcode" t-value="ml.product_id.barcode"/>
+                                    </t>
+                                </td>
+                                
+                                <td class="text-center">
+                                    <span t-if="ml.product_id.barcode">Đã có</span>
+                                    <span t-else="">Cần bổ sung</span>
+                                </td>
+                                
+                                <td/>
+                            </tr>
+                            
+                            <t t-set="total_qty" t-value="sum(l.quantity for l in o.move_line_ids_without_package)"/>
+                            <tr>
+                                <td style="text-align: right; font-weight: bold; font-size: 14px; vertical-align: middle;">Tổng số lượng</td>
+                                <td class="text-end" style="font-weight: bold; font-size: 14px; vertical-align: middle;">
+                                    <span t-esc="total_qty" t-options="{&quot;widget&quot;: &quot;float&quot;, &quot;precision&quot;: 0}"/>
+                                </td>
+                                <td t-if="o.picking_type_id.code != 'incoming'" groups="stock.group_stock_multi_locations"/>
+                                <td t-if="o.picking_type_id.code != 'outgoing'" groups="stock.group_stock_multi_locations"/>
+                                <td t-if="has_serial_number"/>
+                                <td t-if="has_barcode"/>
+                                <td/>
+                                <td/>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div t-if="not (o.package_level_ids and o.picking_type_entire_packs and o.state in ['assigned', 'done'])" class="oe_structure"/>
+                    
+                    <table t-else="" class="table table-bordered" style="border: 1px solid black;">
+                        <thead style="background-color: #f0f0f0;">
+                            <tr>
+                                <th name="th_package">Kiện hàng</th>
+                                <th name="th_pko_from" t-if="o.picking_type_id.code != 'incoming'" groups="stock.group_stock_multi_locations">Từ</th>
+                                <th name="th_pki_from" t-if="o.picking_type_id.code != 'outgoing'" groups="stock.group_stock_multi_locations">Đến</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr t-foreach="o.package_level_ids.sorted(key=lambda p: p.package_id.name)" t-as="package">
+                                <td name="td_pk_barcode">
+                                    <t t-set="package" t-value="package.with_context(picking_id=o.id)"/>
+                                    <div t-field="package.package_id.name" t-options="{'widget': 'barcode', 'humanreadable': 1, 'width': 600, 'height': 100, 'img_style': 'width:300px;height:50px;margin-left: -50px;'}">
+                                        <div class="bg-light border-1 rounded d-flex flex-column align-items-center justify-content-center px-1 py-2  opacity-75 text-muted text-center">(mã vạch kiện hàng)</div>
+                                    </div>
+                                    <br/>
+                                </td>
+                                <td t-if="o.picking_type_id.code != 'incoming'" groups="stock.group_stock_multi_locations"><span t-field="package.location_id"/></td>
+                                <td t-if="o.picking_type_id.code != 'outgoing'" groups="stock.group_stock_multi_locations"><span t-field="package.location_dest_id"/></td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <t t-set="no_reserved_product" t-value="o.move_ids.filtered(lambda x: x.product_uom_qty != x.quantity and x.move_line_ids and x.state!='done')"/>
+                    <p t-if="o.state in ['draft', 'waiting', 'confirmed'] or no_reserved_product"><i class="fa fa-exclamation-triangle"/> Không thể dự trữ tất cả sản phẩm. Hãy bấm nút "Kiểm tra tình trạng còn hàng".</p>
+                    <p t-else=""/>
+                    <div class="oe_structure"/>
+                    <p t-field="o.note"/>
+                    <div class="oe_structure"/>
+                    
+                     <div class="text-center mt-4">
+                        <strong style="font-size: 14px; font-style: italic;">Phiếu không thể hoàn tất nếu tồn tại sản phẩm nào trong phiếu không có mã vạch</strong>
+                    </div>
+                </div>
+            </t>
+        </t>
+    </t>
+</t>

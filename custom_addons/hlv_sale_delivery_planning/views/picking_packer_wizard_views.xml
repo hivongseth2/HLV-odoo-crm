@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_picking_packer_print_wizard" model="ir.ui.view">
+        <field name="name">stock.picking.packer.print.wizard.form</field>
+        <field name="model">stock.picking.packer.print.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Chọn người đóng gói trước khi in">
+                <div class="alert alert-info mb-3" role="alert">
+                    <i class="fa fa-info-circle me-1"></i>
+                    Phiếu lấy hàng này chưa được gán người đóng gói.
+                    Vui lòng chọn người đóng trước khi in.
+                </div>
+                <group>
+                    <field name="picking_id" readonly="1"/>
+                    <field name="packer_user_id"
+                           options="{'no_create': True, 'no_open': True}"
+                           placeholder="Chọn người đóng gói..."/>
+                </group>
+                <footer>
+                    <button string="Assign &amp; In phiếu"
+                            name="action_confirm_and_print"
+                            type="object"
+                            class="btn-primary"/>
+                    <button string="Hủy" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

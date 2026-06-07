@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- Category for HLV Delivery Planning -->
+        <record id="module_category_hlv_delivery_planning" model="ir.module.category">
+            <field name="name">HLV Delivery Planning</field>
+            <field name="description">Quản lý kế hoạch giao hàng và đóng gói HLV</field>
+            <field name="sequence">100</field>
+        </record>
+
+        <!-- Group: Pack Manager / Giám sát đóng gói -->
+        <!-- Users with this group can bypass pack restriction (can open any PACK picking regardless of packer assignment) -->
+        <record id="group_pack_manager" model="res.groups">
+            <field name="name">Giám sát đóng gói</field>
+            <field name="category_id" ref="module_category_hlv_delivery_planning"/>
+            <field name="comment">Người dùng có role này có thể xem và thao tác tất cả phiếu PACK dù không được assign làm packer. Cũng có thể đổi packer cho phiếu PICK.</field>
+        </record>
+    </data>
+</odoo>

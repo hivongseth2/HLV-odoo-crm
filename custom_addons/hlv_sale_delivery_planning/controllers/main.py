@@ -12,7 +12,7 @@ _logger = logging.getLogger(__name__)
 class DeliveryPlannerController(http.Controller):
 
     @http.route('/hlv_sale_delivery_planning/print_picking_slips', type='json', auth='user', methods=['POST'])
-    def print_picking_slips(self, sale_order_ids=None, report_id=None, **kwargs):
+    def print_picking_slips(self, sale_order_ids=None, report_id=None, packer_user_id=None, **kwargs):
         """
         In phiếu lấy hàng cho các đơn hàng đã chọn.
         Loại bỏ các phiếu đã hoàn thành (state = 'done').
@@ -37,6 +37,14 @@ class DeliveryPlannerController(http.Controller):
                 report_id = next(iter(report_id), None)
             if report_id:
                 report_id = int(report_id)
+
+            if packer_user_id is None:
+                packer_user_id = kwargs.get('packer_user_id')
+            if packer_user_id is None and isinstance(request.jsonrequest, dict):
+                packer_user_id = (request.jsonrequest.get('params') or {}).get('packer_user_id')
+            if isinstance(packer_user_id, (list, tuple, set)):
+                packer_user_id = next(iter(packer_user_id), None)
+            packer_user_id = int(packer_user_id) if packer_user_id else False
 
             if not sale_order_ids:
                 return {'success': False, 'message': 'Không có đơn hàng nào được chọn'}
@@ -74,6 +82,12 @@ class DeliveryPlannerController(http.Controller):
             if not all_pickings:
                 return {'success': False, 'message': 'Không có phiếu lấy hàng nào cần in (tất cả đã hoàn thành hoặc đã hủy)'}
 
+            if not packer_user_id:
+                return {'success': False, 'message': 'Vui lòng chọn người đóng trước khi in phiếu lấy hàng'}
+            packer = request.env['res.users'].sudo().browse(packer_user_id).exists()
+            if not packer:
+                return {'success': False, 'message': 'Không tìm thấy người đóng đã chọn'}
+
             if report_id:
                 report = request.env['ir.actions.report'].sudo().browse(report_id).exists()
                 if not report:
@@ -94,6 +108,7 @@ class DeliveryPlannerController(http.Controller):
 
             picking_ids = list(all_pickings.ids)
             try:
+                all_pickings.mark_picking_print_started(packer_user_id=packer_user_id)
                 # Render từng phiếu riêng lẻ → mỗi phiếu là 1 PDF độc lập
                 # rồi merge lại bằng Odoo built-in → đảm bảo page break cứng giữa từng phiếu
                 from odoo.tools.pdf import merge_pdf
@@ -102,6 +117,7 @@ class DeliveryPlannerController(http.Controller):
                     pdf_bytes, _ = report._render_qweb_pdf(report.report_name, res_ids=[pid])
                     pdf_parts.append(pdf_bytes)
                 pdf_content = merge_pdf(pdf_parts)
+                all_pickings.mark_picking_print_finished()
             except Exception as render_error:
                 _logger.error("Error rendering PDF: %s", str(render_error), exc_info=True)
                 return {'success': False, 'message': f'Lỗi khi tạo PDF: {str(render_error)}'}
@@ -127,14 +143,14 @@ class DeliveryPlannerController(http.Controller):
                 'x_picking_slip_printed': True,
             })
             # Đánh dấu từng phiếu đã được in (để phát hiện phiếu mới chưa in sau này)
-            all_pickings.filtered(lambda p: not p.x_printed).write({
-                'x_printed': True,
-            })
+            all_pickings.filtered(lambda p: not p.x_printed).mark_picking_print_finished()
 
             return {
                 'success': True,
                 'url': f'/web/content/{attachment.id}?download=true',
                 'picking_count': len(all_pickings),
+                'packer_user_id': packer.id,
+                'packer_name': getattr(packer, 'x_packer_name', None) or packer.name,
                 'message': f'Đã tạo PDF cho {len(all_pickings)} phiếu lấy hàng',
             }
         except Exception as e:

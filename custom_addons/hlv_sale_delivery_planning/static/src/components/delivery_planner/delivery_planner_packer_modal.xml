@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="hlv_sale_delivery_planning.PackerAssignModal">
+        <div t-if="state.isPackerAssignModalOpen"
+             class="modal fade show d-block"
+             style="z-index: 2060; background: rgba(0,0,0,0.45);"
+             tabindex="-1"
+             t-on-click="closePackerAssignModal">
+            <div class="modal-dialog modal-dialog-centered" t-on-click.stop="">
+                <div class="modal-content shadow border-0">
+                    <div class="modal-header py-2 bg-light">
+                        <h6 class="modal-title fw-bold mb-0">
+                            <i t-attf-class="fa me-2 text-primary #{state.changePackerPickingId ? 'fa-exchange' : 'fa-user-plus'}"></i>
+                            <t t-if="state.changePackerPickingId">Đổi người đóng gói</t>
+                            <t t-else="">Chọn người đóng gói</t>
+                        </h6>
+                        <button type="button" class="btn-close" aria-label="Close" t-on-click="closePackerAssignModal"/>
+                    </div>
+                    <div class="modal-body">
+                        <div t-if="state.packerUsersLoading" class="text-center py-4 text-muted">
+                            <i class="fa fa-spinner fa-spin me-1"></i> Đang tải danh sách...
+                        </div>
+                        <div t-elif="!state.packerUsers.length" class="alert alert-warning mb-0">
+                            Không có người dùng nội bộ để assign.
+                        </div>
+                        <div t-else="">
+                            <label class="form-label small fw-bold text-muted text-uppercase">Người đóng</label>
+                            <select class="form-select"
+                                    t-att-value="state.selectedPackerUserId"
+                                    t-on-change="onPackerSelectChange">
+                                <t t-foreach="state.packerUsers" t-as="packer" t-key="packer.id">
+                                    <option t-att-value="packer.id">
+                                        <t t-esc="packer.packer_name"/>
+                                        <t t-if="packer.packer_name !== packer.name"> (<t t-esc="packer.name"/>)</t>
+                                    </option>
+                                </t>
+                            </select>
+                            <div class="text-muted small mt-2">
+                                <t t-if="state.changePackerPickingId">
+                                    Chọn người đóng mới cho phiếu này.
+                                </t>
+                                <t t-else="">
+                                    Người này sẽ được gắn vào các phiếu PICK đang in và dùng để kiểm tra quyền vào phiếu PACK.
+                                </t>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer py-2">
+                        <button class="btn btn-sm btn-outline-secondary" t-on-click="closePackerAssignModal">
+                            Hủy
+                        </button>
+                        <button class="btn btn-sm btn-primary"
+                                t-att-disabled="state.packerUsersLoading || !state.packerUsers.length || state.isPrintingPickingSlips"
+                                t-on-click="confirmPackerAssignAndPrint">
+                            <i t-attf-class="fa me-1 #{state.changePackerPickingId ? 'fa-check' : (state.isPrintingPickingSlips ? 'fa-spinner fa-spin' : 'fa-print')}"></i>
+                            <t t-if="state.changePackerPickingId">Đổi người đóng</t>
+                            <t t-else="">Assign và in</t>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </t>
+</templates>
