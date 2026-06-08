@@ -539,7 +539,7 @@ class HLVMobileBarcodeController(http.Controller):
         }
 
     @http.route('/hlv_mobile_barcode/process_barcode', type='json', auth='user')
-    def process_barcode(self, picking_id, barcode, destination_location_id=None, last_product_id=None, location_mode=None, is_multi_location=False):
+    def process_barcode(self, picking_id, barcode, destination_location_id=None, last_product_id=None, location_mode=None, is_multi_location=False, preferred_move_line_id=None):
         picking = request.env['stock.picking'].browse(picking_id)
         if not picking.exists() or picking.state not in ['draft', 'confirmed', 'assigned']:
             return {'error': _('Phiếu này không thể xử lý thêm sản phẩm.')}
@@ -701,6 +701,20 @@ class HLVMobileBarcodeController(http.Controller):
             if destination_location_id:
                 lines = lines.filtered(lambda ml: ml.location_id.id == destination_location_id)
             return lines.sorted('id')
+
+        preferred_move_line = request.env['stock.move.line'].browse()
+        if is_pick_picking and preferred_move_line_id:
+            try:
+                preferred_id = int(preferred_move_line_id)
+            except (TypeError, ValueError):
+                preferred_id = 0
+            candidate_line = request.env['stock.move.line'].browse(preferred_id) if preferred_id else preferred_move_line
+            if candidate_line.exists() and candidate_line.picking_id == picking and candidate_line.product_id == product:
+                if destination_location_id and candidate_line.location_id.id != destination_location_id:
+                    return {'error': _('Dòng ưu tiên của sản phẩm "%s" không thuộc vị trí đang quét. Vui lòng chọn đúng dòng tại vị trí này hoặc bỏ chọn ưu tiên!', product.display_name)}
+                if _pick_available_lines(candidate_line.move_id).filtered(lambda ml: ml.id == candidate_line.id):
+                    preferred_move_line = candidate_line
+                    move = candidate_line.move_id
         
         # PRE-CHECK: Physical stock check BEFORE creating any new move
         temp_move_line = move.move_line_ids.filtered(lambda ml: not ml.result_package_id and not ml.package_id) if move else []
@@ -771,6 +785,8 @@ class HLVMobileBarcodeController(http.Controller):
                 if not move:
                     return {'error': _('Lỗi hệ thống khi tạo sản phẩm mới.')}
                 move = move[0]
+        elif preferred_move_line:
+            move = preferred_move_line.move_id
         else:
             # Select the most appropriate move if there are multiple
             if is_pick_picking:
@@ -855,7 +871,7 @@ class HLVMobileBarcodeController(http.Controller):
                     return {'error': _('Sản phẩm "%s" không có dòng lấy hàng tại vị trí đang quét.', product.display_name)}
             
             # Lọc các dòng chưa quét đủ số lượng assign (số lượng tại vị trí)
-            available_move_line = _pick_available_lines(move)
+            available_move_line = preferred_move_line if preferred_move_line else _pick_available_lines(move)
             if not available_move_line:
                 # Nếu tất cả dòng đã quét đủ quantity
                 loc_msg = _(' tại vị trí này') if destination_location_id else ''

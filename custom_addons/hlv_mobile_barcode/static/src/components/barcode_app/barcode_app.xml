@@ -17,9 +17,9 @@
                         </t>
                     </div>
                     <div style="display: flex; gap: 8px; align-items: center;">
-                        <div class="user-info" t-if="state.currentView !== 'picking' and state.currentView !== 'main'" t-on-click="toggleCamera" t-attf-style="padding: 6px; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; border-radius: 6px; border: 1px solid {{ state.cameraManuallyOff ? 'rgba(255,255,255,0.2)' : 'var(--success-color)' }}; background: {{ state.cameraManuallyOff ? 'rgba(255,255,255,0.1)' : 'var(--success-color)' }}; color: white; cursor: pointer; transition: all 0.25s;" title="Bật/Tắt Camera">
+                        <button t-if="state.currentView !== 'picking' and state.currentView !== 'main'" t-on-click="toggleCamera" t-attf-class="btn barcode-camera-btn compact #{state.cameraManuallyOff ? 'is-off' : 'is-on'}" title="Bật/Tắt Camera">
                             <i class="fa fa-camera" style="font-size: 1rem;"></i>
-                        </div>
+                        </button>
                         <div class="user-info" t-if="state.currentView === 'picking' and state.pickingId and state.pickingState !== 'done'" t-on-click="clearPicking" style="background: var(--danger-bg); border: 1px solid var(--danger-border); color: var(--danger-color); border-radius: 20px; font-weight: 600;">
                             <i class="fa fa-undo"></i> Làm lại
                         </div>
@@ -50,7 +50,7 @@
                         </t>
                     </div>
                     <!-- Toggle Camera Button next to Picking Title -->
-                    <button t-if="state.pickingState !== 'done'" class="btn btn-camera-toggle" t-on-click="toggleCamera" t-attf-style="width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 8px; border: 1px solid {{ state.cameraManuallyOff ? 'var(--border-color)' : 'var(--success-color)' }}; background: {{ state.cameraManuallyOff ? 'var(--light-bg)' : 'var(--success-color)' }}; color: {{ state.cameraManuallyOff ? 'var(--text-muted)' : '#ffffff' }}; box-shadow: var(--shadow-sm); cursor: pointer; transition: all 0.25s;" title="Bật/Tắt Camera">
+                    <button t-if="state.pickingState !== 'done'" t-attf-class="btn barcode-camera-btn compact #{state.cameraManuallyOff ? 'is-off' : 'is-on'}" t-on-click="toggleCamera" title="Bật/Tắt Camera">
                         <i class="fa fa-camera" style="font-size: 1.15rem;"></i>
                     </button>
                 </div>
@@ -135,7 +135,10 @@
                             <div class="card-box" style="padding: 15px;">
                                 <div style="font-weight: 700; margin-bottom: 10px; font-size: 0.92rem; color: var(--primary-color);"><i class="fa fa-keyboard"></i> Nhập mã thủ công</div>
                                 <div class="input-group-row" style="margin-bottom: 0;">
-                                    <input type="text" class="form-control" placeholder="Nhập mã sản phẩm, vị trí hoặc số phiếu..." t-model="state.manualBarcode" t-on-keyup="onManualBarcodeKeyup" t-ref="manualInput" inputmode="none" t-on-pointerdown="onManualInputPointerDown" t-on-click="onManualInputClick" t-on-blur="onManualInputBlur"/>
+                                    <input type="text" class="form-control" placeholder="Nhập mã sản phẩm, vị trí hoặc số phiếu..." t-model="state.manualBarcode" t-on-keyup="onManualBarcodeKeyup" t-ref="manualInput" inputmode="none" autocomplete="off" autocapitalize="off" spellcheck="false"/>
+                                    <button class="btn barcode-camera-btn is-on" t-on-click="openPopupCamera" title="Mở Camera">
+                                        <i class="fa fa-camera"></i>
+                                    </button>
                                     <button class="btn btn-primary" t-on-click="processManualBarcode" style="font-weight: bold;">
                                         <i class="fa fa-arrow-right"></i> Đi tiếp
                                     </button>
@@ -168,10 +171,10 @@
                     </div>
                     
                     <!-- Picking View -->
-                    <PickingScanner t-if="state.currentView === 'picking'" t-key="state.pickingId" pickingId="state.pickingId" onBack="() => this.goBack()" onSelectPicking="(id, name) => this.selectPicking(id, name)" onStateLoaded="(state) => this.onPickingStateLoaded(state)" onPickingLoaded="(data) => this.onPickingLoaded(data)" onValidated="() => this._executeGoToMain()" lastScannedProduct="state.lastScannedProduct" lastScannedMoveLine="state.lastScannedMoveLine" scannedLocationName="state.scannedLocationName" refreshTick="state.pickingRefreshTick" scanMode="state.scanMode" isMultiLocationMode="state.isMultiLocationMode" onToggleScanMode="(mode) => this.toggleScanMode(mode)" onDirectGoToMain="() => this._executeGoToMain()"/>
+                    <PickingScanner t-if="state.currentView === 'picking'" t-key="state.pickingId" pickingId="state.pickingId" onBack="() => this.goBack()" onSelectPicking="(id, name) => this.selectPicking(id, name)" onStateLoaded="(state) => this.onPickingStateLoaded(state)" onPickingLoaded="(data) => this.onPickingLoaded(data)" onValidated="() => this._executeGoToMain()" lastScannedProduct="state.lastScannedProduct" lastScannedMoveLine="state.lastScannedMoveLine" preferredMoveLineId="state.preferredMoveLineId" onPreferredMoveLineChange="(id) => this.setPreferredMoveLine(id)" scannedLocationName="state.scannedLocationName" refreshTick="state.pickingRefreshTick" scanMode="state.scanMode" isMultiLocationMode="state.isMultiLocationMode" onToggleScanMode="(mode) => this.toggleScanMode(mode)" onDirectGoToMain="() => this._executeGoToMain()"/>
                     
                     <!-- Move Component -->
-                    <LocationMove t-if="state.currentView === 'move'" productId="state.recordId" prefillLocationBarcode="state.prefillLocationBarcode" prefillLocationName="state.prefillLocationName" sourceQty="state.sourceQty" productName="state.productName" destWarehouseId="state.destWarehouseId" destLocationId="state.destLocationId" onBack="() => this.goBack()" onSuccess="() => this.onMoveSuccess()" registerScanner="(cb) => this.registerScanner(cb)"/>
+                    <LocationMove t-if="state.currentView === 'move'" productId="state.recordId" prefillLocationBarcode="state.prefillLocationBarcode" prefillLocationName="state.prefillLocationName" sourceQty="state.sourceQty" productName="state.productName" destWarehouseId="state.destWarehouseId" destLocationId="state.destLocationId" cameraManuallyOff="state.cameraManuallyOff" onToggleCamera="() => this.toggleCamera()" onBack="() => this.goBack()" onSuccess="() => this.onMoveSuccess()" registerScanner="(cb) => this.registerScanner(cb)"/>
                     
                     <!-- Batch Move Component -->
                     <BatchLocationMove t-if="state.currentView === 'batch_move'" sourceLocationBarcode="state.prefillLocationBarcode" sourceLocationName="state.prefillLocationName" onBack="() => this.goBack()" registerScanner="(cb) => this.registerScanner(cb)"/>
@@ -329,7 +332,10 @@
                                        t-model="state.destLocationBarcode" 
                                        t-on-keyup="onDestLocationInputKeyup"
                                        t-on-change="validateDestLocation"
-                                       inputmode="text"
+                                       inputmode="none"
+                                       autocomplete="off"
+                                       autocapitalize="off"
+                                       spellcheck="false"
                                        style="flex: 1; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px 0 0 6px;" />
                                 <button class="btn btn-secondary" t-on-click="validateDestLocation" t-att-disabled="state.isLocatingDest"
                                         style="border-radius: 0 6px 6px 0; padding: 10px 15px;">
@@ -338,10 +344,10 @@
                             </div>
 
                             <div style="margin-bottom: 15px;">
-                                <button t-if="!state.showDestLocationCamera" class="btn btn-outline" style="width: 100%; padding: 10px; font-weight: 600;" t-on-click="openDestLocationCamera">
+                                <button t-if="!state.showDestLocationCamera" class="btn barcode-camera-action is-off" t-on-click="openDestLocationCamera">
                                     <i class="fa fa-camera"></i> Quét bằng camera
                                 </button>
-                                <button t-if="state.showDestLocationCamera" class="btn btn-outline" style="width: 100%; padding: 10px; font-weight: 600; margin-bottom: 10px;" t-on-click="closeDestLocationCamera">
+                                <button t-if="state.showDestLocationCamera" class="btn barcode-camera-action is-on" t-on-click="closeDestLocationCamera">
                                     <i class="fa fa-camera-slash"></i> Tắt camera
                                 </button>
                                 <div t-if="state.showDestLocationCamera" style="width: 100%; background: #000; overflow: hidden; position: relative; min-height: 220px; border-radius: 8px; box-shadow: var(--shadow-md);">

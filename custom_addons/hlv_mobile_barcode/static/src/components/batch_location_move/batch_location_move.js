@@ -1,6 +1,6 @@
 /** @odoo-module **/
 
-import { Component, useState, onWillStart } from "@odoo/owl";
+import { Component, useState, onWillStart, onMounted, onWillUnmount, useRef } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
 import { rpc } from "@web/core/network/rpc";
 
@@ -16,6 +16,7 @@ export class BatchLocationMove extends Component {
     setup() {
         this.action = useService("action");
         this.notification = useService("notification");
+        this.barcodeInputRef = useRef("barcodeInput");
         
         this.state = useState({
             lines: [], // array of { product_id, product_name, barcode, qty }
@@ -32,6 +33,26 @@ export class BatchLocationMove extends Component {
                 this.props.registerScanner(this.handleScannedBarcode.bind(this));
             }
         });
+
+        onWillUnmount(() => {
+            this.closeLocalCamera();
+        });
+
+        onMounted(() => {
+            this.focusBarcodeInput();
+        });
+    }
+
+    focusBarcodeInput(delay = 50) {
+        setTimeout(() => {
+            const input = this.barcodeInputRef?.el;
+            if (!input) return;
+            input.focus({ preventScroll: true });
+            const pos = input.value ? input.value.length : 0;
+            try {
+                input.setSelectionRange(pos, pos);
+            } catch (e) {}
+        }, delay);
     }
 
     onBarcodeInputKeyup(ev) {
@@ -45,6 +66,7 @@ export class BatchLocationMove extends Component {
             this.handleScannedBarcode(this.state.barcodeInput);
             this.state.barcodeInput = "";
         }
+        this.focusBarcodeInput();
     }
 
     async handleScannedBarcode(decodedText) {
@@ -82,20 +104,24 @@ export class BatchLocationMove extends Component {
             }
             this.state.loading = false;
         }
+        this.focusBarcodeInput();
     }
 
     increaseQty(line) {
         line.qty += 1;
+        this.focusBarcodeInput();
     }
 
     decreaseQty(line) {
         if (line.qty > 0) {
             line.qty -= 1;
         }
+        this.focusBarcodeInput();
     }
     
     removeLine(lineIndex) {
         this.state.lines.splice(lineIndex, 1);
+        this.focusBarcodeInput();
     }
 
     async openLocalCamera() {

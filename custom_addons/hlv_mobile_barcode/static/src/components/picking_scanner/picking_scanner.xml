@@ -127,8 +127,9 @@
                     <div class="items-list" style="margin-top: 0;">
                         <t t-foreach="state.picking.lines" t-as="line" t-key="line.id || 'draft_' + line.product_id">
                             <t t-set="is_active_location" t-value="!state.picking.is_putaway and (state.picking.is_pick or props.isMultiLocationMode) and props.scannedLocationName and line.location_name == props.scannedLocationName"/>
-                            <div t-attf-class="product-row-card #{line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0 ? 'scanned' : ''} #{is_active_location ? 'active-location-row' : ''}" t-att-data-product-id="line.product_id" t-att-data-line-id="line.id">
-                                <div t-attf-class="item-card #{line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0 ? 'scanned' : ''}" style="border: none; margin-bottom: 0; display: flex; align-items: stretch; gap: 10px; padding: 10px;">
+                            <t t-set="is_preferred_line" t-value="state.picking.is_pick and props.preferredMoveLineId and line.id == props.preferredMoveLineId"/>
+                            <div t-attf-class="product-row-card #{line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0 ? 'scanned' : ''} #{is_active_location ? 'active-location-row' : ''} #{is_preferred_line ? 'preferred-pick-line' : ''}" t-att-data-product-id="line.product_id" t-att-data-line-id="line.id">
+                                <div t-attf-class="item-card #{line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0 ? 'scanned' : ''}" style="border: none; margin-bottom: 0; display: flex; align-items: stretch; gap: 10px; padding: 10px;" t-on-click="() => this.togglePreferredLine(line)">
                                     <!-- Left: Image -->
                                     <div style="flex-shrink: 0; width: 64px; height: 64px; border-radius: 6px; overflow: hidden; background: #fff; display: flex; align-items: center; justify-content: center;">
                                         <img t-attf-src="/web/image?model=product.product&amp;id={{line.product_id}}&amp;field=image_128" style="max-width: 100%; max-height: 100%; object-fit: contain;"/>
