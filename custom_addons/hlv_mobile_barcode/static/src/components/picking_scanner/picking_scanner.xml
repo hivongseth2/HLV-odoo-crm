@@ -188,14 +188,14 @@
                                         <input type="number" class="form-control" style="width: 48px; text-align: center; font-weight: bold; padding: 4px 2px; font-size: 0.85rem;" t-model="line.qty_done" t-on-change="(ev) => this.saveQty(line, ev)" min="0" step="any"/>
                                         <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, 0.01)">+0.01</button>
                                         <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, 0.1)">+0.1</button>
-                                        <button t-if="!state.picking.is_pick" class="btn btn-danger btn-sm" style="padding: 4px 8px; font-size: 0.78rem; min-width: 28px;" t-on-click="() => this.deleteLine(line)">
+                                        <button t-if="!state.picking.is_pick and !state.picking.source_transfer_id" class="btn btn-danger btn-sm" style="padding: 4px 8px; font-size: 0.78rem; min-width: 28px;" t-on-click="() => this.deleteLine(line)">
                                             <i class="fa fa-trash"></i>
                                         </button>
                                     </div>
                                 </t>
                                 <t t-else="">
                                     <div t-if="state.picking.state !== 'done'" style="background-color: transparent; padding: 6px 12px 10px 12px; display: flex; gap: 4px; align-items: center; justify-content: flex-end;">
-                                        <button t-if="!state.picking.is_pick" class="btn btn-danger btn-sm" style="padding: 4px 12px; font-size: 0.85rem; min-width: 28px;" t-on-click="() => this.deleteLine(line)">
+                                        <button t-if="!state.picking.is_pick and !state.picking.source_transfer_id" class="btn btn-danger btn-sm" style="padding: 4px 12px; font-size: 0.85rem; min-width: 28px;" t-on-click="() => this.deleteLine(line)">
                                             <i class="fa fa-trash"></i> Xóa
                                         </button>
                                     </div>

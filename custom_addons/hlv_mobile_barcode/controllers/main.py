@@ -1543,6 +1543,9 @@ class HLVMobileBarcodeController(http.Controller):
         if picking.state not in ['draft', 'confirmed', 'assigned']:
             return {'error': _('Phiếu không ở trạng thái cho phép xóa sản phẩm')}
 
+        if picking.source_transfer_id:
+            return {'error': _('Không được phép xóa dòng sản phẩm trong phiếu Bước 2 được tự động sinh ra.')}
+
         if _is_pick_picking(picking) and not _is_return_picking(picking):
             return {'error': _('Không được phép xóa sản phẩm trong phiếu Lấy hàng (PICK). Nếu sai, vui lòng thoát và xóa số lượng, hoặc hủy phiếu ngoài hệ thống để tạo lại.')}
 
