@@ -39,6 +39,21 @@ def _is_pick_picking(picking):
 def _is_return_picking(picking):
     return bool(picking and picking.exists() and getattr(picking, 'return_id', False))
 
+def _is_putaway_picking(picking):
+    if not picking or not picking.exists():
+        return False
+    if _is_return_picking(picking):
+        return picking.location_dest_id.usage == 'internal'
+
+    pt_type = picking.picking_type_id.code
+    pt_code = (picking.picking_type_id.sequence_code or '').upper()
+    return pt_type == 'incoming' or (pt_type == 'internal' and 'INT' not in pt_code and 'IN' in pt_code)
+
+def _uses_qty_scanned_progress(picking):
+    if not picking or not picking.exists() or _is_return_picking(picking):
+        return False
+    return _is_pick_picking(picking) or _is_putaway_picking(picking)
+
 def _same_warehouse_one_step_enabled():
     param = request.env['ir.config_parameter'].sudo().get_param(
         'hlv_mobile_barcode.hlv_barcode_same_warehouse_one_step',
@@ -164,6 +179,7 @@ class HLVMobileBarcodeController(http.Controller):
                             line.quantity = 0.0
 
         is_pick_picking = _is_pick_picking(picking) and not is_return_picking
+        uses_qty_scanned = _uses_qty_scanned_progress(picking)
 
         product_ids = picking.move_ids.mapped('product_id').ids
         warehouse_qty_by_product = {}
@@ -211,8 +227,8 @@ class HLVMobileBarcodeController(http.Controller):
                         'product_name': move.product_id.display_name,
                         'product_barcode': move.product_id.barcode,
                         'product_uom_qty': line_demand,
-                        # PICK: dùng qty_scanned thay quantity để tránh xung đột với assign bên ngoài
-                        'qty_done': ml.qty_scanned if is_pick_picking else ml.quantity,
+                        # Use qty_scanned as mobile scan progress; quantity is finalized on validate.
+                        'qty_done': ml.qty_scanned if uses_qty_scanned else ml.quantity,
                         'warehouse_qty': warehouse_qty_by_product.get(move.product_id.id, 0.0),
                         'uom_name': move.product_uom.name,
                         'state': move.state,
@@ -576,6 +592,8 @@ class HLVMobileBarcodeController(http.Controller):
             is_putaway = True
         elif location_mode == 'source' and (is_multi_location or is_pick_picking):
             is_putaway = False
+
+        uses_qty_scanned = is_pick_picking or (is_putaway and not is_return_picking)
         
         # 1. Try to find location first
         location = request.env['stock.location'].sudo().search(['|', ('barcode', '=', barcode), ('name', '=', barcode)], limit=1)
@@ -675,8 +693,6 @@ class HLVMobileBarcodeController(http.Controller):
                     }
             
             return {'error': _('Kiện hàng "%s" không chứa sản phẩm nào phù hợp với phiếu này.', package.name)}
-
-        is_in_picking = pt_type == 'incoming'
 
         if (is_pick_picking or (is_multi_location and not is_putaway)) and not destination_location_id:
             return {'error': _('Vui lòng quét mã Vị trí (Kệ hàng) trước khi quét sản phẩm!')}
@@ -799,7 +815,8 @@ class HLVMobileBarcodeController(http.Controller):
                 else:
                     incomplete_moves = move.filtered(lambda m: m.product_uom_qty > sum(m.move_line_ids.mapped('qty_scanned')))
             else:
-                incomplete_moves = move.filtered(lambda m: m.product_uom_qty > sum(m.move_line_ids.mapped('quantity')))
+                qty_field = 'qty_scanned' if uses_qty_scanned else 'quantity'
+                incomplete_moves = move.filtered(lambda m: m.product_uom_qty > sum(m.move_line_ids.mapped(qty_field)))
             target_moves = incomplete_moves if incomplete_moves else move
             
             best_move = False
@@ -810,7 +827,7 @@ class HLVMobileBarcodeController(http.Controller):
                         moves_with_loc = target_moves.filtered(lambda m: destination_location_id in m.move_line_ids.mapped('location_id').ids)
                     if moves_with_loc:
                         best_move = moves_with_loc[0]
-                elif is_in_picking:
+                elif is_putaway and not is_return_picking:
                     moves_with_loc = target_moves.filtered(lambda m: destination_location_id in m.move_line_ids.mapped('location_dest_id').ids)
                     if moves_with_loc:
                         best_move = moves_with_loc[0]
@@ -820,7 +837,7 @@ class HLVMobileBarcodeController(http.Controller):
         # Check limit to prevent over-scanning (demand-based)
         if picking.source_transfer_id and is_putaway:
             line_demand = move.product_uom_qty
-            step2_qty_done = sum(ml.quantity for ml in move.move_line_ids)
+            step2_qty_done = sum(ml.qty_scanned if uses_qty_scanned else ml.quantity for ml in move.move_line_ids)
             if line_demand > 0.0 and step2_qty_done + 1 > line_demand:
                 return {'error': _('Sản phẩm "%s" đã quét đủ số lượng yêu cầu của phiếu Bước 2 (%g/%g). Không thể quét thêm!', product.display_name, step2_qty_done, line_demand)}
         elif picking.source_transfer_id:
@@ -848,14 +865,16 @@ class HLVMobileBarcodeController(http.Controller):
             if move.product_uom_qty > 0.0 and current_qty_scanned + 1 > max_allowed:
                 return {'error': _('Sản phẩm "%s" đã quét đủ số lượng yêu cầu và thực tế (%g/%g). Không thể quét thêm!', product.display_name, current_qty_scanned, max_allowed)}
         elif not picking.source_transfer_id:
-            current_qty_done = sum(ml.quantity for ml in move.move_line_ids)
+            current_qty_done = sum(ml.qty_scanned if uses_qty_scanned else ml.quantity for ml in move.move_line_ids)
             if move.product_uom_qty > 0.0 and current_qty_done + 1 > move.product_uom_qty:
                 return {'error': _('Sản phẩm "%s" đã quét đủ tổng số lượng yêu cầu của dòng này (%g/%g). Không thể quét thêm!', product.display_name, current_qty_done, move.product_uom_qty)}
 
         # Step 2 putaway must update the existing Odoo-created move lines, including package lines.
         if picking.source_transfer_id and is_putaway:
             move_line = move.move_line_ids.filtered(lambda ml: ml.state not in ['done', 'cancel'])
-            available_move_line = move_line.filtered(lambda ml: not ml.quantity_product_uom or ml.quantity < ml.quantity_product_uom)
+            available_move_line = move_line.filtered(
+                lambda ml: not ml.quantity_product_uom or (ml.qty_scanned if uses_qty_scanned else ml.quantity) < ml.quantity_product_uom
+            )
             if available_move_line:
                 move_line = available_move_line
             if not move_line:
@@ -877,7 +896,7 @@ class HLVMobileBarcodeController(http.Controller):
                 loc_msg = _(' tại vị trí này') if destination_location_id else ''
                 return {'error': _('Sản phẩm "%s"%s đã được quét đủ số lượng phân bổ (%g).', product.display_name, loc_msg, sum(move_line.mapped('qty_scanned')))}
             move_line = available_move_line
-        elif is_in_picking and destination_location_id:
+        elif uses_qty_scanned and destination_location_id:
             move_line = move_line.filtered(lambda ml: ml.location_dest_id.id == destination_location_id)
 
         if is_pick_picking:
@@ -930,13 +949,13 @@ class HLVMobileBarcodeController(http.Controller):
                     'location_id': ml_src_id,
                     'location_dest_id': ml_dest_id,
                 }
-                if is_pick_picking:
+                if uses_qty_scanned:
                     new_ml_vals['qty_scanned'] = 1
                 else:
                     new_ml_vals['quantity'] = 1
                 updated_move_line = request.env['stock.move.line'].create(new_ml_vals)
             else:
-                if is_pick_picking:
+                if uses_qty_scanned:
                     last_ml.qty_scanned += 1
                 else:
                     last_ml.quantity += 1
@@ -951,7 +970,7 @@ class HLVMobileBarcodeController(http.Controller):
                 'location_id': ml_src_id,
                 'location_dest_id': ml_dest_id,
             }
-            if is_pick_picking:
+            if uses_qty_scanned:
                 new_ml_vals['qty_scanned'] = 1
             else:
                 new_ml_vals['quantity'] = 1
@@ -1013,12 +1032,12 @@ class HLVMobileBarcodeController(http.Controller):
                     return {'error': _('Bạn không có quyền thay đổi số lượng phiếu %s tại kho "%s". Vui lòng liên hệ Admin!', code, warehouse.name)}
 
         is_pick = _is_pick_picking(move.picking_id) and not _is_return_picking(move.picking_id)
+        uses_qty_scanned = _uses_qty_scanned_progress(move.picking_id)
 
         if new_qty is not None:
             new_val = float(new_qty)
         elif qty_change is not None:
-            # PICK: đọc từ qty_scanned; phiếu khác đọc từ quantity
-            current_val = move_line.qty_scanned if is_pick else move_line.quantity
+            current_val = move_line.qty_scanned if uses_qty_scanned else move_line.quantity
             new_val = current_val + float(qty_change)
         else:
             return {'error': _('Thiếu tham số số lượng')}
@@ -1044,8 +1063,7 @@ class HLVMobileBarcodeController(http.Controller):
             if line_demand > 0.0 and new_val > line_demand:
                 capped_val = line_demand
                 
-                # Compare with current value depending on picking type
-                current_val_compare = move_line.qty_scanned if is_pick else move_line.quantity
+                current_val_compare = move_line.qty_scanned if uses_qty_scanned else move_line.quantity
                 if capped_val == current_val_compare:
                     return {'error': _('Số lượng vượt quá yêu cầu cho phép của dòng này (%g/%g).', new_val, line_demand)}
                 
@@ -1082,10 +1100,11 @@ class HLVMobileBarcodeController(http.Controller):
                 new_val = capped_val
                 warning_msg = _('Số lượng đã tự lùi về tối đa có thể (%g).', capped_val)
         elif not move.picking_id.source_transfer_id:
-            other_lines_qty = sum(ml.quantity for ml in move.move_line_ids if ml.id != move_line.id)
+            other_lines_qty = sum((ml.qty_scanned if uses_qty_scanned else ml.quantity) for ml in move.move_line_ids if ml.id != move_line.id)
             if move.product_uom_qty > 0.0 and (new_val + other_lines_qty) > move.product_uom_qty:
                 capped_val = max(0.0, move.product_uom_qty - other_lines_qty)
-                if capped_val == move_line.quantity:
+                current_val_compare = move_line.qty_scanned if uses_qty_scanned else move_line.quantity
+                if capped_val == current_val_compare:
                     return {'error': _('Số lượng vượt quá yêu cầu cho phép (%g/%g).', (new_val + other_lines_qty), move.product_uom_qty)}
                 
                 new_val = capped_val
@@ -1151,13 +1170,13 @@ class HLVMobileBarcodeController(http.Controller):
                     move.product_id.uom_id.name
                 )
 
-        # Ghi vào đúng field dựa theo loại phiếu
-        if is_pick:
+        # Write scan progress to qty_scanned for PICK/IN; quantity is finalized on validate.
+        if uses_qty_scanned:
             move_line.qty_scanned = new_val
         else:
             move_line.quantity = new_val
         
-        new_qty_result = move_line.qty_scanned if is_pick else move_line.quantity
+        new_qty_result = move_line.qty_scanned if uses_qty_scanned else move_line.quantity
         res = {'success': True, 'new_qty': new_qty_result}
         if warning_msg:
             res['warning'] = warning_msg
@@ -1171,15 +1190,15 @@ class HLVMobileBarcodeController(http.Controller):
             return {'error': _('Không thể xoá số lượng của phiếu này')}
             
         try:
-            is_pick = _is_pick_picking(picking) and not _is_return_picking(picking)
+            uses_qty_scanned = _uses_qty_scanned_progress(picking)
             
             changed = False
             
             # 1. Handle stock move lines - dùng sudo() để đảm bảo quyền ghi
             move_lines = picking.move_line_ids.sudo()
             
-            if is_pick:
-                # PICK: reset qty_scanned về 0 (quantity do Odoo quản lý, không đụng vào)
+            if uses_qty_scanned:
+                # PICK/IN: reset mobile progress; Odoo quantity is finalized on validate.
                 lines_to_reset = move_lines.filtered(lambda l: l.qty_scanned != 0.0)
                 if lines_to_reset:
                     lines_to_reset.write({'qty_scanned': 0.0})
@@ -1206,7 +1225,7 @@ class HLVMobileBarcodeController(http.Controller):
                     
             # 2. Handle stock moves that were created dynamically on the fly (demand = 0)
             # Only delete if it has no move_orig_ids (meaning it wasn't generated by a previous step)
-            if not is_pick:
+            if not uses_qty_scanned:
                 dynamic_moves = picking.move_ids.sudo().filtered(lambda m: m.product_uom_qty == 0.0 and not m.move_orig_ids)
                 if dynamic_moves:
                     dynamic_moves._action_cancel()
@@ -1615,25 +1634,26 @@ class HLVMobileBarcodeController(http.Controller):
                     return {'error': _('Bạn không có quyền xác nhận phiếu %s tại kho "%s". Vui lòng liên hệ Admin!', code, warehouse.name)}
         try:
             is_pick_picking = _is_pick_picking(picking) and not _is_return_picking(picking)
+            uses_qty_scanned = _uses_qty_scanned_progress(picking)
 
-            # PICK: ghi đè quantity = qty_scanned trước khi validate
-            # Đây là bước chốt: chỉ số lượng thực tế đã quét mới được xác nhận,
-            # không phải số lượng Odoo assign tự động
+            # Finalize mobile scan progress before Odoo validation.
             if is_pick_picking:
                 for ml in picking.sudo().move_line_ids:
                     if ml.quantity > 0:
                         ml.quantity = ml.qty_scanned
                     elif ml.qty_scanned:
                         ml.qty_scanned = 0.0
+            elif uses_qty_scanned:
+                for ml in picking.sudo().move_line_ids:
+                    if ml.package_id or ml.result_package_id:
+                        if ml.qty_scanned:
+                            ml.quantity = ml.qty_scanned
+                    else:
+                        ml.quantity = ml.qty_scanned
 
             # STRICT PRE-VALIDATION STOCK CHECK
             # To completely prevent negative stock due to concurrent transactions
-            pt_type = picking.picking_type_id.code
-            pt_code = (picking.picking_type_id.sequence_code or '').upper()
-            if _is_return_picking(picking):
-                is_putaway = picking.location_dest_id.usage == 'internal'
-            else:
-                is_putaway = (pt_type == 'incoming' or (pt_type == 'internal' and 'INT' not in pt_code and 'IN' in pt_code))
+            is_putaway = _is_putaway_picking(picking)
 
             
             if not is_putaway:
