@@ -15,7 +15,7 @@ import threading
 
 from ._shared import (
     ALLOWED_MIME, MAX_UPLOAD_MB, STREAM_DIR,
-    _meta_path, _file_path, _bg_upload_to_drive,
+    _meta_path, _uploading_meta_path, _file_path, _bg_upload_to_drive,
 )
 
 _logger = logging.getLogger(__name__)
@@ -148,9 +148,23 @@ class RecordingController(http.Controller):
             _logger.info("FINISH_UPLOAD already_finished id=%s", upload_id)
             return {'ok': True, 'msg': 'already finished or no session'}
 
-        meta = json.loads(open(meta_file, 'r', encoding='utf-8').read())
+        claimed_meta_file = _uploading_meta_path(upload_id)
+        try:
+            os.replace(meta_file, claimed_meta_file)
+        except FileNotFoundError:
+            _logger.info("FINISH_UPLOAD already_claimed id=%s", upload_id)
+            return {'ok': True, 'msg': 'already claimed'}
+
+        meta = json.loads(open(claimed_meta_file, 'r', encoding='utf-8').read())
         filepath = meta['path']
         mimetype = meta.get('mimetype') or 'video/webm'
+        picking_id = int(meta.get('picking_id') or picking_id or 0)
+
+        if not os.path.exists(filepath):
+            _logger.warning("FINISH_UPLOAD missing_file id=%s file=%s", upload_id, filepath)
+            try: os.remove(claimed_meta_file)
+            except: pass
+            return {'ok': False, 'msg': 'missing upload file'}
 
         _logger.info("FINISH_UPLOAD id=%s pick=%s file=%s size=%s",
                     upload_id, picking_id, filepath,
@@ -161,6 +175,6 @@ class RecordingController(http.Controller):
                             daemon=True)
         t.start()
 
-        try: os.remove(meta_file)
+        try: os.remove(claimed_meta_file)
         except: pass
         return {'ok': True}
