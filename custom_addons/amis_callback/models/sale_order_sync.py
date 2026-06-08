@@ -2,12 +2,19 @@
 import re
 import uuid
 import logging
+import unicodedata
 from datetime import datetime
 
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
+
+INVOICE_INFO_CHANGE_TAGS = {
+    'thay doi thong tin hoa don',
+    'change invoice information',
+    "Thay đổi thông tin hóa đơn"
+}
 
 
 class SaleOrderAmisSync(models.Model):
@@ -127,6 +134,18 @@ class SaleOrderAmisSync(models.Model):
         for order in self:
             order.amis_draft_invoice_count = len(order.amis_draft_invoice_ids)
 
+    @staticmethod
+    def _normalize_tag_name(name):
+        text = unicodedata.normalize('NFKD', name or '')
+        text = ''.join(ch for ch in text if not unicodedata.combining(ch))
+        return ' '.join(text.casefold().split())
+
+    def _has_invoice_info_change_tag(self):
+        self.ensure_one()
+        tag_names = getattr(self, 'tag_ids', self.env['crm.tag']).mapped('name')
+        normalized_names = {self._normalize_tag_name(name) for name in tag_names}
+        return bool(normalized_names & INVOICE_INFO_CHANGE_TAGS)
+
     def action_confirm(self):
         """Override: sau khi xác nhận, tạo HĐ nháp meInvoice nếu config chọn bước 'confirm'."""
         res = super().action_confirm()
@@ -145,6 +164,13 @@ class SaleOrderAmisSync(models.Model):
 
         # Chỉ xử lý khi có shopee_order_ref
         if not (getattr(self, 'shopee_order_ref', None) or ''):
+            return
+
+        if self._has_invoice_info_change_tag():
+            _logger.info(
+                'Skip auto-draft meInvoice for SO %s: invoice info change tag is present.',
+                self.name,
+            )
             return
 
         config = self.env['amis.callback.config'].sudo().search([], limit=1, order='id asc')
