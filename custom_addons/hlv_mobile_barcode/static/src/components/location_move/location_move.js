@@ -13,8 +13,6 @@ export class LocationMove extends Component {
         sourceQty: { type: Number, optional: true },
         productName: { type: String, optional: true },
         destWarehouseId: { type: [Number, Boolean], optional: true },
-        cameraManuallyOff: { type: Boolean, optional: true },
-        onToggleCamera: { type: Function, optional: true },
         onBack: Function,
         onSuccess: { type: Function, optional: true },
         registerScanner: { type: Function, optional: true },

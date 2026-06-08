@@ -23,15 +23,6 @@
                             <button class="btn btn-primary" t-on-click="onBarcodeInputEnter" t-att-disabled="state.loading" title="Thêm sản phẩm">
                                 <i class="fa fa-arrow-right"></i>
                             </button>
-                            <button t-if="!state.showLocalCamera" class="btn barcode-camera-btn is-off" t-on-click="openLocalCamera" title="Mở Camera">
-                                <i class="fa fa-camera"></i>
-                            </button>
-                            <button t-if="state.showLocalCamera" class="btn barcode-camera-btn is-on" t-on-click="closeLocalCamera" title="Tắt Camera">
-                                <i class="fa fa-camera-slash"></i>
-                            </button>
-                        </div>
-                        <div t-if="state.showLocalCamera" class="batch-local-camera">
-                            <div id="batch-location-move-camera-reader"></div>
                         </div>
                     </div>
                     

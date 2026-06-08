@@ -1,6 +1,6 @@
 /** @odoo-module **/
 
-import { Component, useState, onWillStart, onMounted, onWillUnmount, useRef } from "@odoo/owl";
+import { Component, useState, onWillStart, onMounted, useRef } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
 import { rpc } from "@web/core/network/rpc";
 
@@ -32,10 +32,6 @@ export class BatchLocationMove extends Component {
             if (this.props.registerScanner) {
                 this.props.registerScanner(this.handleScannedBarcode.bind(this));
             }
-        });
-
-        onWillUnmount(() => {
-            this.closeLocalCamera();
         });
 
         onMounted(() => {
