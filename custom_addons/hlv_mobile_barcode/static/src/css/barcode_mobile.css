@@ -7,6 +7,8 @@
   --primary-color: #1e293b; /* Modern slate-800 - elegant dark charcoal navy */
   --primary-light: #f1f5f9; /* Slate-100 */
   --primary-hover: #0f172a; /* Slate-900 */
+  --camera-accent-color: #312e81; /* Indigo-900 - tim than */
+  --camera-accent-hover: #1e1b4b; /* Indigo-950 */
   
   --secondary-color: #64748b; /* Slate-500 */
   
@@ -279,6 +281,11 @@
   border-color: var(--primary-color);
 }
 
+.hlv-barcode-app .scan-input-with-camera {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
 /* ==========================================================================
    BUTTONS
    ========================================================================== */
@@ -442,14 +449,15 @@
   width: 42px;
   min-width: 42px;
   height: 42px;
+  box-sizing: border-box;
   padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 8px;
-  border: 2px solid var(--success-color);
+  border: 2px solid var(--camera-accent-color);
   background: var(--white);
-  color: var(--success-color);
+  color: var(--camera-accent-color);
   box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
   cursor: pointer;
   transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
@@ -462,20 +470,28 @@
 }
 
 .hlv-barcode-app .barcode-camera-btn.input-camera-btn {
+  align-self: stretch;
+  height: auto;
+  margin-left: -2px;
   border-radius: 0 8px 8px 0;
 }
 
 .hlv-barcode-app .barcode-camera-btn.is-on {
-  background: var(--success-color);
+  background: var(--camera-accent-color);
   color: var(--white);
-  border-color: var(--success-color);
-  box-shadow: 0 3px 10px rgba(16, 185, 129, 0.28);
+  border-color: var(--camera-accent-color);
+  box-shadow: 0 3px 10px rgba(49, 46, 129, 0.24);
 }
 
 .hlv-barcode-app .barcode-camera-btn.is-off {
   background: var(--white);
-  color: var(--success-color);
-  border-color: var(--success-color);
+  color: var(--camera-accent-color);
+  border-color: var(--camera-accent-color);
+}
+
+.hlv-barcode-app .barcode-camera-btn.is-on:hover,
+.hlv-barcode-app .barcode-camera-btn.is-off:hover {
+  border-color: var(--camera-accent-hover);
 }
 
 .hlv-barcode-app .barcode-camera-btn:hover {
@@ -489,21 +505,22 @@
 
 .hlv-barcode-app .barcode-camera-action {
   width: 100%;
+  box-sizing: border-box;
   padding: 10px;
   margin-bottom: 10px;
   font-weight: 700;
   border-radius: 8px;
-  border: 2px solid var(--success-color);
+  border: 2px solid var(--camera-accent-color);
   box-shadow: var(--shadow-sm);
 }
 
 .hlv-barcode-app .barcode-camera-action.is-off {
   background: var(--white);
-  color: var(--success-color);
+  color: var(--camera-accent-color);
 }
 
 .hlv-barcode-app .barcode-camera-action.is-on {
-  background: var(--success-color);
+  background: var(--camera-accent-color);
   color: var(--white);
 }
 

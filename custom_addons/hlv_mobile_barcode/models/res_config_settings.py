@@ -1,5 +1,11 @@
 from odoo import fields, models
 
+
+def _str_to_bool(value, default=False):
+    if value is None:
+        return default
+    return str(value).strip().lower() in ('true', '1', 'yes', 'y', 'on')
+
 class ResCompany(models.Model):
     _inherit = 'res.company'
     
@@ -54,14 +60,24 @@ class ResConfigSettings(models.TransientModel):
 
     def get_values(self):
         res = super(ResConfigSettings, self).get_values()
+        ICP = self.env['ir.config_parameter'].sudo()
         res.update(
-            hlv_barcode_show_qty_buttons=self.env['ir.config_parameter'].sudo().get_param('hlv_mobile_barcode.hlv_barcode_show_qty_buttons', 'True') == 'True',
+            hlv_barcode_show_qty_buttons=_str_to_bool(
+                ICP.get_param('hlv_mobile_barcode.hlv_barcode_show_qty_buttons', 'True'),
+                default=True,
+            ),
+            hlv_barcode_same_warehouse_one_step=_str_to_bool(
+                ICP.get_param('hlv_mobile_barcode.hlv_barcode_same_warehouse_one_step', 'True'),
+                default=True,
+            ),
         )
         return res
 
     def set_values(self):
         super(ResConfigSettings, self).set_values()
-        self.env['ir.config_parameter'].sudo().set_param('hlv_mobile_barcode.hlv_barcode_show_qty_buttons', str(self.hlv_barcode_show_qty_buttons))
+        ICP = self.env['ir.config_parameter'].sudo()
+        ICP.set_param('hlv_mobile_barcode.hlv_barcode_show_qty_buttons', 'True' if self.hlv_barcode_show_qty_buttons else 'False')
+        ICP.set_param('hlv_mobile_barcode.hlv_barcode_same_warehouse_one_step', 'True' if self.hlv_barcode_same_warehouse_one_step else 'False')
 
     def action_open_warehouse_permissions(self):
         self.ensure_one()

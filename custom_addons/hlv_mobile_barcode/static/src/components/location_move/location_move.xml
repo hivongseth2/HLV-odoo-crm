@@ -25,7 +25,7 @@
                         <label style="font-size: 0.9rem; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; display: block;">Đến vị trí (Quét hoặc Nhập):</label>
                         <div class="input-group">
                             <span class="input-group-text"><i class="fa fa-map-marker-alt"></i></span>
-                            <input type="text" class="form-control" t-ref="destLocationInput" t-model="state.destLocationInput" t-on-keyup="onDestLocationInputKeyup" placeholder="Quét/Nhập mã vị trí đích" inputmode="none" autocomplete="off" autocapitalize="off" spellcheck="false"/>
+                            <input type="text" class="form-control scan-input-with-camera" t-ref="destLocationInput" t-model="state.destLocationInput" t-on-keyup="onDestLocationInputKeyup" placeholder="Quét/Nhập mã vị trí đích" inputmode="none" autocomplete="off" autocapitalize="off" spellcheck="false"/>
                             <button t-if="props.onToggleCamera" t-attf-class="btn barcode-camera-btn input-camera-btn #{props.cameraManuallyOff ? 'is-off' : 'is-on'}" t-on-click="props.onToggleCamera" title="Bật/Tắt Camera">
                                 <i class="fa fa-camera"></i>
                             </button>
