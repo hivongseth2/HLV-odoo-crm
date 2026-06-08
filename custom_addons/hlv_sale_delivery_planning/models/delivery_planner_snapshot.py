@@ -79,17 +79,14 @@ class DeliveryPlannerSnapshot(models.Model):
         if not ids:
             return
 
-        existing = self.sudo().search([('sale_order_id', 'in', ids)])
+        existing = self.sudo().search([
+            ('sale_order_id', 'in', ids),
+            ('dirty', '=', False),
+        ])
         existing.write({
             'dirty': True,
             'dirty_reason': reason or 'changed',
         })
-
-        existing_so_ids = set(existing.mapped('sale_order_id').ids)
-        missing_ids = [so_id for so_id in ids if so_id not in existing_so_ids]
-        if missing_ids:
-            orders = self.env['sale.order'].sudo().browse(missing_ids).exists()
-            self.sudo().create([self._snapshot_base_vals(order, dirty=True, reason=reason) for order in orders])
 
     @api.model
     def upsert_from_status_data(self, sales, status_by_so):
@@ -128,6 +125,66 @@ class DeliveryPlannerSnapshot(models.Model):
                 to_create.append(vals)
         if to_create:
             self.sudo().create(to_create)
+
+    @api.model
+    def cron_refresh_dirty_snapshots(self, limit=50):
+        limit = max(int(limit or 50), 1)
+        snapshot_model = self.sudo()
+        snapshot_model._ensure_missing_active_snapshots(limit=limit)
+
+        today = fields.Date.context_today(self)
+        snapshots = snapshot_model.search([
+            '|',
+            ('dirty', '=', True),
+            ('snapshot_date', '!=', today),
+        ], order='write_date asc, id asc', limit=limit)
+        orders = snapshots.mapped('sale_order_id').exists()
+        if not orders:
+            return 0
+
+        service = self.env['hlv.delivery.planner.service'].sudo()
+        _sales, _matched_ids, _stats, _availability, status_by_so = \
+            service._calculate_po_and_stock_status(
+                orders,
+                po_date_from='',
+                po_date_to='',
+                po_status='all',
+                filter_delivery_status='all',
+                filter_stock_status='all',
+                filter_packing_status='all',
+                show_completed=True,
+                filter_need_transfer=False,
+                filter_new_orders=False,
+                filter_done_date_from='',
+                filter_done_date_to='',
+                filter_print_status='all',
+                filter_shipper_received='all',
+            )
+        snapshot_model.upsert_from_status_data(orders, status_by_so)
+        return len(orders)
+
+    @api.model
+    def _ensure_missing_active_snapshots(self, limit=50):
+        self.env.cr.execute("""
+            SELECT so.id
+              FROM sale_order so
+             WHERE so.state IN ('sale', 'done')
+               AND NOT EXISTS (
+                    SELECT 1
+                      FROM hlv_delivery_planner_snapshot snap
+                     WHERE snap.sale_order_id = so.id
+               )
+             ORDER BY so.id
+             LIMIT %s
+        """, [int(limit or 50)])
+        order_ids = [row[0] for row in self.env.cr.fetchall()]
+        if not order_ids:
+            return
+        orders = self.env['sale.order'].sudo().browse(order_ids).exists()
+        self.sudo().create([
+            self._snapshot_base_vals(order, dirty=True, reason='missing')
+            for order in orders
+        ])
 
     @api.model
     def _snapshot_base_vals(self, order, dirty=False, reason=''):
