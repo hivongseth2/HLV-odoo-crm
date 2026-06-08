@@ -624,6 +624,8 @@ class HLVMobileBarcodeController(http.Controller):
             move_lines = picking.move_line_ids.filtered(lambda ml: (ml.package_id == package or ml.result_package_id == package) and ml.state not in ['done', 'cancel'])
             if move_lines:
                 processed_lines = []
+                updated_move_line = request.env['stock.move.line'].browse()
+                updated_product = request.env['product.product'].browse()
                 for ml in move_lines:
                     line_demand = ml.move_id.product_uom_qty
                     if picking.source_transfer_id:
@@ -633,18 +635,29 @@ class HLVMobileBarcodeController(http.Controller):
                         if matched_orig:
                             line_demand = sum(matched_orig.mapped('quantity'))
                     
-                    ml.quantity = line_demand
-                    processed_lines.append(f"{ml.quantity} x {ml.product_id.display_name}")
+                    if uses_qty_scanned:
+                        ml.qty_scanned = line_demand
+                        processed_qty = ml.qty_scanned
+                    else:
+                        ml.quantity = line_demand
+                        processed_qty = ml.quantity
+                    if not updated_move_line:
+                        updated_move_line = ml
+                        updated_product = ml.product_id
+                    processed_lines.append(f"{processed_qty} x {ml.product_id.display_name}")
                 return {
                     'success': True,
                     'product_name': f"Kiện hàng {package.name} (Đã quét: {', '.join(processed_lines)})",
-                    'product_id': False,
+                    'product_id': updated_product.id or False,
+                    'move_line_id': updated_move_line.id or False,
                 }
             
             # B. If no move lines for this package, search for the products inside the package (quants)
             quants = request.env['stock.quant'].sudo().search([('package_id', '=', package.id)])
             if quants:
                 processed_products = []
+                updated_move_line = request.env['stock.move.line'].browse()
+                updated_product = request.env['product.product'].browse()
                 for quant in quants:
                     product_in_pkg = quant.product_id
                     qty_in_pkg = quant.quantity
@@ -658,7 +671,7 @@ class HLVMobileBarcodeController(http.Controller):
                     if move:
                         move = move[0]
                         # Check limit to prevent over-scanning
-                        current_qty_done = sum(ml.quantity for ml in move.move_line_ids)
+                        current_qty_done = sum(ml.qty_scanned if uses_qty_scanned else ml.quantity for ml in move.move_line_ids)
                         target_qty = move.product_uom_qty
                         
                         # In case we can scan, determine how much of this package qty we can accept
@@ -670,26 +683,43 @@ class HLVMobileBarcodeController(http.Controller):
                             continue
                             
                         # Update or create move line
-                        move_line = move.move_line_ids.filtered(lambda ml: ml.quantity < ml.quantity_product_uom and not ml.result_package_id)
+                        move_line = move.move_line_ids.filtered(
+                            lambda ml: (
+                                (ml.qty_scanned if uses_qty_scanned else ml.quantity) < ml.quantity_product_uom
+                                and not ml.result_package_id
+                            )
+                        )
                         if move_line:
-                            move_line[0].quantity += acceptable_qty
+                            target_move_line = move_line[0]
+                            if uses_qty_scanned:
+                                target_move_line.qty_scanned += acceptable_qty
+                            else:
+                                target_move_line.quantity += acceptable_qty
                         else:
-                            request.env['stock.move.line'].create({
+                            new_ml_vals = {
                                 'move_id': move.id,
                                 'picking_id': picking.id,
                                 'product_id': product_in_pkg.id,
                                 'product_uom_id': move.product_uom.id,
-                                'quantity': acceptable_qty,
                                 'location_id': picking.location_id.id,
                                 'location_dest_id': picking.location_dest_id.id,
-                            })
+                            }
+                            if uses_qty_scanned:
+                                new_ml_vals['qty_scanned'] = acceptable_qty
+                            else:
+                                new_ml_vals['quantity'] = acceptable_qty
+                            target_move_line = request.env['stock.move.line'].create(new_ml_vals)
+                        if not updated_move_line:
+                            updated_move_line = target_move_line
+                            updated_product = product_in_pkg
                         processed_products.append(f"{acceptable_qty} x {product_in_pkg.display_name}")
                 
                 if processed_products:
                     return {
                         'success': True,
                         'product_name': f"Kiện hàng {package.name} (Đã xử lý: {', '.join(processed_products)})",
-                        'product_id': False,
+                        'product_id': updated_product.id or False,
+                        'move_line_id': updated_move_line.id or False,
                     }
             
             return {'error': _('Kiện hàng "%s" không chứa sản phẩm nào phù hợp với phiếu này.', package.name)}
