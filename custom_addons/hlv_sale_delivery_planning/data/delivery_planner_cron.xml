@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Purpose: scheduled jobs that keep delivery planner snapshots warm outside user requests. -->
+<odoo>
+    <record id="ir_cron_hlv_delivery_planner_snapshot_refresh" model="ir.cron">
+        <field name="name">Delivery Planner: Refresh Dirty Snapshots</field>
+        <field name="model_id" ref="model_hlv_delivery_planner_snapshot"/>
+        <field name="state">code</field>
+        <field name="code">model.cron_refresh_dirty_snapshots(limit=50)</field>
+        <field name="interval_number">1</field>
+        <field name="interval_type">minutes</field>
+        <field name="user_id" ref="base.user_root"/>
+        <field name="active">True</field>
+    </record>
+</odoo>
