@@ -84,7 +84,6 @@ class DeliveryPlannerService(models.AbstractModel):
                     filter_print_status='all',
                     filter_shipper_received='all',
                 )
-            self._store_status_snapshot(page_sales, so_status_dict)
         else:
             sales, matched_ids, dashboard_stats, product_availabilities, so_status_dict = \
                 self._calculate_po_and_stock_status(
@@ -98,7 +97,6 @@ class DeliveryPlannerService(models.AbstractModel):
                     filter_print_status=filter_print_status,
                     filter_shipper_received=filter_shipper_received,
                 )
-            self._store_status_snapshot(sales, so_status_dict)
             page_sales = self.env['sale.order'].browse(
                 matched_ids[int(offset): int(offset) + int(limit)]
             )
@@ -222,23 +220,6 @@ class DeliveryPlannerService(models.AbstractModel):
         return True
 
     @api.model
-    def _store_status_snapshot(self, sales, so_status_dict):
-        """Persist the current status pass for future snapshot-backed reads.
-
-        This is deliberately write-behind for now: dashboard behavior still
-        comes from the existing realtime pipeline, while the snapshot table
-        warms up and provides a migration path for count/filter endpoints.
-        """
-        if not sales or not so_status_dict:
-            return
-        try:
-            self.env['hlv.delivery.planner.snapshot'].sudo().upsert_from_status_data(
-                sales, so_status_dict
-            )
-        except Exception:
-            pass
-
-    @api.model
     def get_orders_subset(self, order_ids, filter_kwargs=None):
         """Lightweight partial refresh used by the bus update flow.
 
@@ -318,7 +299,6 @@ class DeliveryPlannerService(models.AbstractModel):
                     filter_print_status=fk.get('filter_print_status', 'all'),
                     filter_shipper_received=fk.get('filter_shipper_received', 'all'),
                 )
-            self._store_status_snapshot(page_sales, so_status_dict)
             kept_py = set(page_sales.ids)
             for i in existing_ids:
                 if i not in kept_py and i not in removed_ids:
@@ -336,7 +316,6 @@ class DeliveryPlannerService(models.AbstractModel):
                     filter_need_transfer=False,
                     filter_new_orders=False,
                 )
-            self._store_status_snapshot(page_sales, so_status_dict)
 
         po_by_origin = self._fetch_pos_for_sales(page_sales)
         att_by_picking = self._fetch_attachments_for_pickings(page_sales.mapped('picking_ids').ids)
