@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- OWL Client Action for Barcode App -->
+    <record id="action_hlv_mobile_barcode" model="ir.actions.client">
+        <field name="name">Barcode Scanner</field>
+        <field name="tag">hlv_mobile_barcode.BarcodeApp</field>
+        <field name="target">fullscreen</field>
+    </record>
+
+    <!-- Menu Item on the Main App Switcher (Root) -->
+    <menuitem id="menu_hlv_mobile_barcode_root"
+              name="Mobile Barcode Scanner"
+              action="action_hlv_mobile_barcode"
+              web_icon="hlv_mobile_barcode,static/description/icon.png"
+              sequence="1"/>
+
+    <!-- Menu Item under Inventory (Backup) -->
+    <menuitem id="menu_hlv_mobile_barcode_sub"
+              name="Mobile Barcode"
+              parent="stock.menu_stock_root"
+              action="action_hlv_mobile_barcode"
+              sequence="1"/>
+
+    <!-- Server Action to dynamically resolve and route the active warehouse permission action -->
+    <record id="action_open_barcode_permissions_menu" model="ir.actions.server">
+        <field name="name">Phân quyền quét kho</field>
+        <field name="model_id" ref="base.model_res_users"/>
+        <field name="state">code</field>
+        <field name="code">
+use_independent = env['ir.config_parameter'].sudo().get_param('hlv_mobile_barcode.hlv_barcode_use_independent_permissions') == 'True'
+action = False
+if use_independent:
+    action = env.ref('hlv_mobile_barcode.action_barcode_permission', raise_if_not_found=False)
+else:
+    action = env.ref('hlv_warehouse_permission.action_warehouse_permission', raise_if_not_found=False)
+
+if action:
+    action_dict = action.read()[0]
+    action_dict['target'] = 'current'
+    action = action_dict
+else:
+    action = {
+        'type': 'ir.actions.client',
+        'tag': 'display_notification',
+        'params': {
+            'title': 'Không tìm thấy',
+            'message': 'Không tìm thấy cấu hình phân quyền phù hợp! Vui lòng kiểm tra lại.',
+            'type': 'warning',
+            'sticky': False,
+        }
+    }
+        </field>
+    </record>
+
+    <!-- Menu Item for Warehouse Permissions (Only visible when Odoo Debug Mode is turned on) -->
+    <menuitem id="menu_hlv_warehouse_permission_debug"
+              name="Phân quyền quét kho"
+              parent="menu_hlv_mobile_barcode_root"
+              action="action_open_barcode_permissions_menu"
+              groups="base.group_no_one"
+              sequence="90"/>
+</odoo>

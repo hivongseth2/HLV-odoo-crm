@@ -1,0 +1,389 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="hlv_mobile_barcode.BarcodeApp">
+        <div class="hlv-barcode-app" t-ref="app-container">
+            <!-- Hidden input for Ctrl+V and USB barcode scanner test integration -->
+            <input type="text" class="hidden-barcode-input" t-ref="hiddenInput" t-model="state.hiddenBarcode" t-on-keyup="onHiddenInputKeyup" inputmode="none" autocomplete="off" autocapitalize="off" spellcheck="false" style="position: fixed; opacity: 0.01; pointer-events: none; width: 1px; height: 1px; top: 0; left: 0; border: 0; padding: 0; background: transparent; color: transparent; caret-color: transparent; z-index: 1;"/>
+            <div t-attf-class="shipper-container #{state.currentView === 'main' ? 'main-view' : 'sub-view'}">
+                <!-- Header (hidden on main screen) -->
+                <div class="shipper-header" t-if="state.currentView !== 'main'">
+                    <div class="header-title">
+                        <i class="fa fa-boxes"></i>
+                        <t t-if="state.pickingName and state.pickingName.includes('INT') and state.scannedLocationName">
+                            <t t-esc="state.scannedLocationName"/>
+                        </t>
+                        <t t-else="">
+                            Kho <t t-esc="state.warehouseCode || 'HLV'"/>
+                        </t>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <button t-if="state.currentView !== 'picking' and state.currentView !== 'main'" t-on-click="toggleCamera" t-attf-class="btn barcode-camera-btn compact #{state.cameraManuallyOff ? 'is-off' : 'is-on'}" title="Bật/Tắt Camera">
+                            <i class="fa fa-camera" style="font-size: 1rem;"></i>
+                        </button>
+                        <div class="user-info" t-if="state.currentView === 'picking' and state.pickingId and state.pickingState !== 'done'" t-on-click="clearPicking" style="background: var(--danger-bg); border: 1px solid var(--danger-border); color: var(--danger-color); border-radius: 20px; font-weight: 600;">
+                            <i class="fa fa-undo"></i> Làm lại
+                        </div>
+                        <div class="user-info" t-on-click="goToMain" style="background: var(--white); border: 1px solid var(--border-color); color: var(--primary-color); border-radius: 20px; font-weight: 600;">
+                            <i class="fa fa-home"></i> Trang chủ
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Picking Title (Displayed above the camera feed) -->
+                <div class="picking-title-above-camera" t-if="state.currentView === 'picking' and state.pickingName">
+                    <div style="display: flex; flex-direction: column;">
+                        <div class="picking-title-main">
+                            <span>
+                                <t t-if="state.pickingIsReturn">Trả hàng </t>
+                                <t t-elif="state.pickingIsPick">Lấy hàng </t>
+                                <t t-elif="state.pickingTypeCode == 'outgoing'">Xuất kho </t>
+                                <t t-elif="state.pickingTypeCode == 'incoming'">Nhập kho </t>
+                                <t t-elif="state.pickingTypeCode == 'internal'">Chuyển kho </t>
+                                <t t-else="">Kho </t>
+                                <t t-esc="state.pickingName"/>
+                            </span>
+                        </div>
+                        <t t-if="state.pickingSourceTransferName">
+                            <div class="picking-title-sub">
+                                Từ phiếu: <t t-esc="state.pickingSourceTransferName"/>
+                            </div>
+                        </t>
+                    </div>
+                    <!-- Toggle Camera Button next to Picking Title -->
+                    <button t-if="state.pickingState !== 'done'" t-attf-class="btn barcode-camera-btn compact #{state.cameraManuallyOff ? 'is-off' : 'is-on'}" t-on-click="toggleCamera" title="Bật/Tắt Camera">
+                        <i class="fa fa-camera" style="font-size: 1.15rem;"></i>
+                    </button>
+                </div>
+
+                <!-- Persistent Camera Section (Only when NOT on main home screen and picking is not completed) -->
+                <t t-if="state.currentView !== 'main' and state.pickingState !== 'done'">
+                    <div class="persistent-camera-wrapper">
+                        <!-- Error Banners -->
+                        <t t-if="state.cameraErrorMessage">
+                            <div t-if="state.cameraErrorMessage === 'HTTPS_REQUIRED'" class="camera-error-banner">
+                                <i class="fa fa-shield-alt"></i>
+                                <div>
+                                    <strong>Yêu cầu bảo mật (HTTPS):</strong> Trình duyệt bắt buộc kết nối HTTPS bảo mật để mở Camera trực tiếp. Vui lòng truy cập lại bằng địa chỉ <code>https://...</code> để Camera hoạt động và lưu quyền nhớ mãi mãi.
+                                </div>
+                            </div>
+                            <div t-if="state.cameraErrorMessage === 'PERMISSION_DENIED'" class="camera-error-banner">
+                                <i class="fa fa-exclamation-triangle"></i>
+                                <div>
+                                    <strong>Quyền Camera:</strong> Chưa được cấp quyền truy cập Camera.
+                                    <br/>• Nhấp nút <strong>Kích hoạt Camera</strong> bên dưới &gt; Chọn <strong>Cho phép (Allow)</strong>.
+                                    <br/>• <strong>Bắt buộc dùng HTTPS:</strong> Trình duyệt chỉ cho phép nhớ quyền Camera khi dùng địa chỉ <code>https://...</code>. Địa chỉ <code>http://...</code> sẽ luôn bắt hỏi lại mỗi lần tải trang.
+                                    <br/>• <strong>Trên iPhone (Safari):</strong> Nhấp vào chữ <code>aA</code> ở thanh địa chỉ &gt; chọn <strong>Cài đặt trang web (Website Settings)</strong> &gt; chuyển Camera thành <strong>Cho phép (Allow)</strong> để nhớ quyền vĩnh viễn.
+                                </div>
+                            </div>
+                        </t>
+
+                        <t t-if="state.cameraFallback">
+                            <div style="padding: 10px; width: 100%; text-align: center;">
+                                <input type="file" accept="image/*" capture="environment" id="cameraFileInput" style="display: none;" t-on-change="onFileSelected"/>
+                                <label for="cameraFileInput" class="btn btn-primary btn-sm">
+                                    <i class="fa fa-image"/> Chọn Ảnh / Chụp Ảnh
+                                </label>
+                            </div>
+                        </t>
+                        
+                        <div t-if="!state.cameraManuallyOff" t-att-class="'camera-container ' + (state.cameraFallback ? 'd-none' : '')">
+                            <div id="reader"></div>
+                            
+                            <!-- Camera Activation Overlay -->
+                            <div t-if="state.cameraNeedsActivation" class="camera-activation-overlay" t-on-click="() => this.startPersistentCamera(true)">
+                                <div class="activation-btn">
+                                    Kích hoạt Camera
+                                </div>
+                                <div class="activation-hint">
+                                    Nhấp để cấp quyền và mở Camera trực tiếp.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </t>
+
+                <!-- Content area — fills remaining space -->
+                <div class="hlv-barcode-content">
+                    <!-- Main Screen -->
+                    <div t-if="state.currentView === 'main'" class="scrollable-body" style="padding: 15px 4px;">
+                        <div class="shipper-header">
+                            <div class="header-title">
+                                <i class="fa fa-barcode"></i> Máy quét mã vạch
+                            </div>
+                            <div style="display: flex; gap: 8px;">
+                                <div t-if="state.isDebug" class="user-info" t-on-click="openSettings">
+                                    <i class="fa fa-cog"></i> Cài đặt
+                                </div>
+                                <div class="user-info" t-on-click="exitApp">
+                                    <i class="fa fa-sign-out-alt"></i> Thoát
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="home-grid-layout">
+                            <!-- Home View Camera Button Popup Trigger -->
+                            <div class="card-box" style="text-align: center; padding: 40px 15px; cursor: pointer; border: 2px dashed var(--primary-color); background: rgba(44, 62, 80, 0.02); transition: background-color 0.2s;" t-on-click="openPopupCamera">
+                                <i class="fa fa-camera" style="font-size: 60px; color: var(--primary-color); margin-bottom: 20px;"></i>
+                                <h3 style="color: var(--primary-color); margin-bottom: 8px; font-size: 1.15rem; font-weight: 700;">Quét mã vạch bằng Camera</h3>
+                                <p class="text-muted" style="margin-bottom: 20px; font-size: 0.9rem;">Nhấn vào đây để bật Camera và quét phiếu kho, sản phẩm hoặc vị trí</p>
+                                <div class="btn btn-primary btn-lg" style="border-radius: 30px; font-weight: bold; box-shadow: 0 4px 10px rgba(0,0,0,0.15);">
+                                    <i class="fa fa-qrcode" style="font-size: 1.05rem;"></i> Mở máy quét
+                                </div>
+                            </div>
+
+                            <!-- Manual Barcode Input Card -->
+                            <div class="card-box" style="padding: 15px;">
+                                <div style="font-weight: 700; margin-bottom: 10px; font-size: 0.92rem; color: var(--primary-color);"><i class="fa fa-keyboard"></i> Nhập mã thủ công</div>
+                                <div class="input-group-row" style="margin-bottom: 0;">
+                                    <input type="text" class="form-control" placeholder="Nhập mã sản phẩm, vị trí hoặc số phiếu..." t-model="state.manualBarcode" t-on-keyup="onManualBarcodeKeyup" t-ref="manualInput" inputmode="none" autocomplete="off" autocapitalize="off" spellcheck="false"/>
+                                    <button class="btn btn-primary" t-on-click="processManualBarcode" style="font-weight: bold;">
+                                        <i class="fa fa-arrow-right"></i> Đi tiếp
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Multi-Location Transfer Card -->
+                            <div class="card-box" style="padding: 15px; cursor: pointer; border: 1px solid var(--info-border); background: var(--info-bg);" t-on-click="promptMultiLocationMove">
+                                <div style="display: flex; align-items: center; gap: 15px;">
+                                    <i class="fa fa-route" style="font-size: 32px; color: var(--info-color);"></i>
+                                    <div style="flex: 1; text-align: left;">
+                                        <h3 style="color: var(--info-color); margin-bottom: 4px; font-size: 1.05rem; font-weight: 700;">Chuyển kho đa vị trí</h3>
+                                        <p class="text-muted" style="margin-bottom: 0; font-size: 0.85rem;">Gom nhiều hàng hóa từ các kệ khác nhau vào 1 phiếu</p>
+                                    </div>
+                                    <i class="fa fa-chevron-right" style="color: #ccc;"></i>
+                                </div>
+                            </div>
+                            
+                            <div class="card-box" style="padding: 15px; margin-bottom: 0;">
+                                <div style="font-weight: 700; margin-bottom: 12px; font-size: 0.92rem; color: var(--primary-color);">Hướng dẫn quét nhanh:</div>
+                                <div style="text-align: left; background: var(--light-bg); padding: 12px; border-radius: 8px; font-size: 0.88rem; line-height: 1.55;">
+                                    <div style="margin-bottom: 8px;"><i class="fa fa-check-circle" style="color: var(--success-color); margin-right: 6px;"></i> Quét <strong>sản phẩm</strong> để tra cứu và định vị</div>
+                                    <div style="margin-bottom: 8px;"><i class="fa fa-check-circle" style="color: var(--success-color); margin-right: 6px;"></i> Quét <strong>kiện hàng</strong> để mở chi tiết</div>
+                                    <div style="margin-bottom: 8px;"><i class="fa fa-check-circle" style="color: var(--success-color); margin-right: 6px;"></i> Quét <strong>phiếu kho</strong> để xử lý dịch chuyển</div>
+                                    <div><i class="fa fa-check-circle" style="color: var(--success-color); margin-right: 6px;"></i> Quét <strong>vị trí</strong> để chuyển hàng hàng loạt</div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                    
+                    <!-- Picking View -->
+                    <PickingScanner t-if="state.currentView === 'picking'" t-key="state.pickingId" pickingId="state.pickingId" onBack="() => this.goBack()" onSelectPicking="(id, name) => this.selectPicking(id, name)" onStateLoaded="(state) => this.onPickingStateLoaded(state)" onPickingLoaded="(data) => this.onPickingLoaded(data)" onValidated="() => this._executeGoToMain()" lastScannedProduct="state.lastScannedProduct" lastScannedMoveLine="state.lastScannedMoveLine" preferredMoveLineId="state.preferredMoveLineId" onPreferredMoveLineChange="(id) => this.setPreferredMoveLine(id)" scannedLocationName="state.scannedLocationName" refreshTick="state.pickingRefreshTick" scanMode="state.scanMode" isMultiLocationMode="state.isMultiLocationMode" onToggleScanMode="(mode) => this.toggleScanMode(mode)" onDirectGoToMain="() => this._executeGoToMain()"/>
+                    
+                    <!-- Move Component -->
+                    <LocationMove t-if="state.currentView === 'move'" productId="state.recordId" prefillLocationBarcode="state.prefillLocationBarcode" prefillLocationName="state.prefillLocationName" sourceQty="state.sourceQty" productName="state.productName" destWarehouseId="state.destWarehouseId" destLocationId="state.destLocationId" onBack="() => this.goBack()" onSuccess="() => this.onMoveSuccess()" registerScanner="(cb) => this.registerScanner(cb)"/>
+                    
+                    <!-- Batch Move Component -->
+                    <BatchLocationMove t-if="state.currentView === 'batch_move'" sourceLocationBarcode="state.prefillLocationBarcode" sourceLocationName="state.prefillLocationName" onBack="() => this.goBack()" registerScanner="(cb) => this.registerScanner(cb)"/>
+                    
+                    <!-- Lookup Component -->
+                    <InventoryLookup t-if="state.currentView === 'lookup'" t-key="state.lookupType + '_' + state.recordId + '_' + (state.lookupRefreshTick || 0)" lookupType="state.lookupType" recordId="state.recordId" onBack="() => this.goBack()" onMove="(productId, locBarcode, locName, qty, productName) => this.promptMoveWarehouse(productId, locBarcode, locName, qty, productName)" onBatchMove="(locBarcode, locName) => this.promptBatchMoveWarehouse(locBarcode, locName)" onProductSelect="(productId, productName) => this.goToProductLookup(productId, productName)"/>
+                </div>
+            </div>
+
+            <!-- POPUP CAMERA MODAL (Only active on Home Page) -->
+            <div class="modal-overlay" t-if="state.currentView === 'main' and state.showCameraPopup">
+                <div class="modal-content" style="max-width: 480px; width: 92%;">
+                    <div class="modal-header">
+                        <div class="modal-title">
+                            <i class="fa fa-camera"></i> Máy quét mã vạch
+                        </div>
+                        <button class="modal-close" t-on-click="closePopupCamera">
+                            <i class="fa fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="modal-body" style="padding: 15px; display: flex; flex-direction: column; align-items: center; background: var(--light-bg);">
+                        
+                        <!-- Error Banners for Popup -->
+                        <t t-if="state.cameraErrorMessage">
+                            <div t-if="state.cameraErrorMessage === 'HTTPS_REQUIRED'" class="camera-error-banner" style="width: 100%; margin: 0 0 12px 0;">
+                                <i class="fa fa-shield-alt"></i>
+                                <div>
+                                    <strong>Yêu cầu bảo mật (HTTPS):</strong> Trình duyệt bắt buộc kết nối HTTPS bảo mật để mở Camera trực tiếp. Vui lòng truy cập lại bằng địa chỉ <code>https://...</code> để hệ thống ghi nhớ quyền cấp camera.
+                                </div>
+                            </div>
+                            <div t-if="state.cameraErrorMessage === 'PERMISSION_DENIED'" class="camera-error-banner" style="width: 100%; margin: 0 0 12px 0;">
+                                <i class="fa fa-exclamation-triangle"></i>
+                                <div>
+                                    <strong>Quyền Camera:</strong> Chưa được cấp quyền truy cập Camera.
+                                    <br/>• Nhấp nút <strong>Kích hoạt Camera</strong> bên dưới &gt; Chọn <strong>Cho phép (Allow)</strong>.
+                                    <br/>• <strong>Bắt buộc dùng HTTPS:</strong> Trình duyệt chỉ cho phép nhớ quyền Camera khi dùng địa chỉ <code>https://...</code>. Địa chỉ <code>http://...</code> sẽ luôn bắt hỏi lại mỗi lần tải trang.
+                                    <br/>• <strong>Trên iPhone (Safari):</strong> Nhấp vào chữ <code>aA</code> ở thanh địa chỉ &gt; chọn <strong>Cài đặt trang web (Website Settings)</strong> &gt; chuyển Camera thành <strong>Cho phép (Allow)</strong> để nhớ quyền vĩnh viễn.
+                                </div>
+                            </div>
+                        </t>
+
+                        <!-- Camera Fallback for Popup -->
+                        <t t-if="state.cameraFallback">
+                            <div style="padding: 20px 10px; width: 100%; text-align: center; background: white; border-radius: 8px; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm);">
+                                <i class="fa fa-camera-slash" style="font-size: 40px; color: var(--danger-color); margin-bottom: 12px;"/>
+                                <h5 style="font-weight: 600; margin-bottom: 8px; color: var(--primary-color);">Không thể sử dụng Live Camera</h5>
+                                <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 20px;">Vui lòng chụp hoặc tải ảnh chứa mã vạch lên để hệ thống nhận diện:</p>
+                                
+                                <input type="file" accept="image/*" capture="environment" id="cameraFileInputPopup" style="display: none;" t-on-change="onFileSelected"/>
+                                <label for="cameraFileInputPopup" class="btn btn-primary">
+                                    <i class="fa fa-image"/> Chọn Ảnh / Chụp Ảnh
+                                </label>
+                            </div>
+                        </t>
+                        
+                        <!-- Camera Feed inside Popup -->
+                        <div t-att-class="state.cameraFallback ? 'd-none' : ''" style="width: 100%; background: #000; overflow: hidden; position: relative; min-height: 240px; border-radius: 8px; box-shadow: var(--shadow-md);">
+                            <div id="reader" style="width: 100%; height: 100%; min-height: 240px;"></div>
+                            
+                            <!-- Camera Activation Overlay -->
+                            <div t-if="state.cameraNeedsActivation" class="camera-activation-overlay" t-on-click="() => this.startPersistentCamera(true)">
+                                <div class="activation-btn">
+                                    <i class="fa fa-camera"></i> Kích hoạt Camera
+                                </div>
+                                <div class="activation-hint">
+                                    Nhấp để cấp quyền và mở Camera trực tiếp.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- POPUP EXIT OPTIONS -->
+            <div class="modal-overlay" t-if="state.showExitOptions">
+                <div class="modal-content" style="max-width: 400px; width: 90%;">
+                    <div class="modal-header">
+                        <div class="modal-title">
+                            Tùy chọn thoát phiếu
+                        </div>
+                        <button class="modal-close" t-on-click="() => this.confirmExit('cancel')">
+                            <i class="fa fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="modal-body" style="padding: 15px;">
+                        <p style="margin-bottom: 15px; color: var(--text-color);">Bạn muốn thực hiện hành động nào khi thoát phiếu này?</p>
+                        
+                        <button class="btn btn-danger" style="width: 100%; padding: 12px; font-weight: bold; margin-bottom: 10px;"
+                                t-on-click="() => this.confirmExit('clear')">
+                            <i class="fa fa-trash"/> Thoát và xóa số lượng đã quét
+                        </button>
+
+                        <button class="btn btn-primary" style="width: 100%; padding: 12px; font-weight: bold;"
+                                t-on-click="() => this.confirmExit('keep')">
+                            <t t-if="state.pickingIsPick">
+                                <i class="fa fa-save"/> Thoát và lưu tạm (vào lại sẽ tiếp tục)
+                            </t>
+                            <t t-else="">
+                                <i class="fa fa-sign-out-alt"/> Thoát và giữ (Lưu tạm)
+                            </t>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- POPUP DESTINATION SELECT -->
+            <div class="modal-overlay" t-if="state.showWarehouseSelectPopup">
+                <div class="modal-content" style="max-width: 400px; width: 90%;">
+                    <div class="modal-header">
+                        <div class="modal-title">
+                            <i class="fa fa-map-marker-alt"></i> Chọn đích chuyển kho
+                        </div>
+                        <button class="modal-close" t-on-click="closeWarehousePopup">
+                            <i class="fa fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="modal-body" style="padding: 15px; padding-bottom: 0;">
+                        <!-- Popup body now just shows the tabs below -->
+                    </div>
+                    
+                    <!-- Tabs Selection -->
+                    <div style="display: flex; border-bottom: 1px solid var(--border-color);">
+                        <div t-attf-style="flex: 1; text-align: center; padding: 12px; cursor: pointer; font-weight: 600; border-bottom: 3px solid {{ state.destSelectionMode === 'location' ? 'var(--primary-color)' : 'transparent' }}; color: {{ state.destSelectionMode === 'location' ? 'var(--primary-color)' : 'var(--text-muted)' }};"
+                             t-on-click="() => this.setDestSelectionMode('location')">
+                            <i class="fa fa-barcode"></i> Quét vị trí
+                        </div>
+                        <div t-attf-style="flex: 1; text-align: center; padding: 12px; cursor: pointer; font-weight: 600; border-bottom: 3px solid {{ state.destSelectionMode === 'warehouse' ? 'var(--primary-color)' : 'transparent' }}; color: {{ state.destSelectionMode === 'warehouse' ? 'var(--primary-color)' : 'var(--text-muted)' }};"
+                             t-on-click="() => this.setDestSelectionMode('warehouse')">
+                            <i class="fa fa-building"></i> Chọn kho
+                        </div>
+                    </div>
+                    
+                    <div class="modal-body" style="padding: 15px;">
+                        <!-- Source Warehouse Selection (Only for Multi Location) -->
+                        <div t-if="pendingBatchMove and pendingBatchMove.multiLocation" style="margin-bottom: 20px;">
+                            <label style="font-weight: bold; margin-bottom: 8px; display: block; color: var(--primary-color);">
+                                <i class="fa fa-sign-out-alt"></i> Từ Kho (Nguồn):
+                            </label>
+                            <select class="form-control" t-model="state.multiLocationSourceWarehouseId" style="padding: 10px; width: 100%; border: 1px solid var(--border-color); border-radius: 6px;">
+                                <t t-foreach="state.warehouses" t-as="wh" t-key="wh.id">
+                                    <option t-att-value="wh.id"><t t-esc="wh.name"/></option>
+                                </t>
+                            </select>
+                        </div>
+                        
+                        <label style="font-weight: bold; margin-bottom: 8px; display: block; color: var(--primary-color);">
+                            <i class="fa fa-sign-in-alt"></i> Đến (Đích):
+                        </label>
+                        <!-- Location Selection Mode -->
+                        <div t-if="state.destSelectionMode === 'location'">
+                            <p style="margin-bottom: 15px; color: var(--text-color);">Nhập hoặc quét mã vị trí đích:</p>
+                            
+                            <div class="input-group" style="margin-bottom: 15px; display: flex;">
+                                <input type="text" class="form-control" placeholder="Mã vị trí..." 
+                                       t-ref="destLocationInput"
+                                       t-model="state.destLocationBarcode" 
+                                       t-on-keyup="onDestLocationInputKeyup"
+                                       t-on-change="validateDestLocation"
+                                       inputmode="none"
+                                       autocomplete="off"
+                                       autocapitalize="off"
+                                       spellcheck="false"
+                                       style="flex: 1; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px 0 0 6px;" />
+                                <button class="btn btn-secondary" t-on-click="validateDestLocation" t-att-disabled="state.isLocatingDest"
+                                        style="border-radius: 0 6px 6px 0; padding: 10px 15px;">
+                                    <i t-attf-class="fa {{ state.isLocatingDest ? 'fa-spinner fa-spin' : 'fa-search' }}"></i>
+                                </button>
+                            </div>
+
+                            <div style="margin-bottom: 15px;">
+                                <button t-if="!state.showDestLocationCamera" class="btn barcode-camera-action is-off" t-on-click="openDestLocationCamera">
+                                    <i class="fa fa-camera"></i> Quét bằng camera
+                                </button>
+                                <button t-if="state.showDestLocationCamera" class="btn barcode-camera-action is-on" t-on-click="closeDestLocationCamera">
+                                    <i class="fa fa-camera-slash"></i> Tắt camera
+                                </button>
+                                <div t-if="state.showDestLocationCamera" style="width: 100%; background: #000; overflow: hidden; position: relative; min-height: 220px; border-radius: 8px; box-shadow: var(--shadow-md);">
+                                    <div id="destLocationReader" style="width: 100%; height: 100%; min-height: 220px;"></div>
+                                    <div t-if="state.cameraNeedsActivation" class="camera-activation-overlay" t-on-click="() => this.startPersistentCamera(true, 'destLocationReader')">
+                                        <div class="activation-btn">
+                                            <i class="fa fa-camera"></i> Kích hoạt Camera
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div t-if="state.destLocationName" class="alert alert-success" style="padding: 10px; border-radius: 6px; margin-bottom: 15px; background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9;">
+                                <strong><i class="fa fa-check-circle"></i> Vị trí:</strong> <t t-esc="state.destLocationName" />
+                            </div>
+                        </div>
+                        
+                        <!-- Warehouse Selection Mode -->
+                        <div t-if="state.destSelectionMode === 'warehouse'">
+                            <p style="margin-bottom: 15px; color: var(--text-color);">Chọn kho đích từ danh sách:</p>
+                            <div style="max-height: 250px; overflow-y: auto; margin-bottom: 15px;">
+                                <t t-foreach="state.warehouses" t-as="wh" t-key="wh.id">
+                                    <div class="card-box" 
+                                         t-attf-style="padding: 12px; margin-bottom: 8px; cursor: pointer; border: 2px solid {{ state.selectedWarehouseId === wh.id ? 'var(--primary-color)' : 'transparent' }};"
+                                         t-on-click="() => this.selectWarehouse(wh.id)">
+                                        <div style="font-weight: 600; font-size: 1rem;"><t t-esc="wh.name"/></div>
+                                        <div style="font-size: 0.85rem; color: var(--text-muted);">Mã kho: <t t-esc="wh.code"/></div>
+                                    </div>
+                                </t>
+                            </div>
+                        </div>
+                        
+                        <button class="btn btn-primary" style="width: 100%; padding: 12px; font-weight: bold;"
+                                t-on-click="confirmWarehouseSelection">
+                            <i class="fa fa-check"></i> Xác nhận
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </t>
+</templates>

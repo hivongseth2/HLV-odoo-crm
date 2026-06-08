@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="hlv_mobile_barcode.InventoryLookup">
+        <div class="subview-root">
+            <!-- Compact header row -->
+            <div class="shipper-header" style="display: flex; flex-direction: column; align-items: flex-start; gap: 10px; flex-shrink: 0; padding: 10px 0; border-bottom: 1px solid var(--border-color); margin-bottom: 10px;">
+                <div class="header-title" style="font-size: 0.95rem; font-weight: bold;">
+                    <i class="fa fa-search"></i> <t t-esc="state.title"/>
+                </div>
+                <div t-if="props.lookupType !== 'product'" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <button class="btn btn-outline" style="padding: 6px 12px; font-size: 0.85rem;" t-on-click="props.onBack">
+                        <i class="fa fa-arrow-left"></i> Quay lại
+                    </button>
+                    <button t-if="props.lookupType === 'location'" class="btn btn-primary" style="padding: 6px 12px; font-size: 0.85rem; flex: 1;" t-on-click="() => props.onBatchMove(state.location_barcode, state.location_name)">
+                        <i class="fa fa-boxes"></i> Tạo chuyển kho
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Scrollable content -->
+            <div class="subview-scroll-area" style="padding: 0;">
+                <div class="card-box" style="margin-top: 0; padding: 12px; margin-bottom: 0; display: flex; flex-direction: column; flex: 1; overflow: hidden;">
+                    <div t-if="state.loading" style="text-align: center; padding: 30px;">
+                        <i class="fa fa-spin fa-spinner fa-2x" style="color: var(--secondary-color);"></i>
+                    </div>
+                    
+                    <div t-else="" class="scrollable-body" style="padding-right: 5px;">
+                        <t t-if="state.results.length === 0 and (!state.reservations or state.reservations.length === 0)">
+                            <div style="text-align: center; padding: 30px; color: var(--text-muted);">
+                                <i class="fa fa-box-open fa-3x" style="opacity: 0.2; margin-bottom: 10px;"></i>
+                                <div>Không tìm thấy dữ liệu tồn kho.</div>
+                            </div>
+                        </t>
+
+                        <t t-if="state.results.length > 0">
+                            <div style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 4px;">
+                                Tồn kho hiện tại
+                            </div>
+                            <div class="items-list" style="margin-top: 0; margin-bottom: 15px;">
+                                <div t-foreach="state.results" t-as="res" t-key="res_index" class="item-card" t-on-click="props.lookupType === 'location' ? () => props.onProductSelect(res.product_id, res.product_name) : () => this.openLocation(res.quant_id)" style="cursor: pointer; border: 1px solid var(--border-color);">
+                                    <div class="item-info">
+                                        <div class="item-name" style="font-size: 0.95rem;">
+                                            <t t-if="props.lookupType === 'product'"><t t-esc="res.location_name"/></t>
+                                            <t t-else=""><t t-esc="res.product_name"/></t>
+                                        </div>
+                                        <div t-if="props.lookupType === 'location' and res.location_name and res.location_name !== state.title" class="item-barcode" style="margin-top: 3px; color: var(--info-color); font-weight: 500;">
+                                            <i class="fa fa-map-marker-alt me-1"/> <t t-esc="res.location_name"/>
+                                        </div>
+                                        <div t-if="res.package_name" class="item-barcode" style="margin-top: 4px;">
+                                            <span class="item-package-badge" style="box-shadow: none; padding: 2px 8px;">
+                                                <i class="fa fa-box"></i> <t t-esc="res.package_name"/>
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div style="display: flex; align-items: center;">
+                                        <div style="font-weight: 700; font-size: 1.1rem; color: var(--success-color);">
+                                            <t t-esc="res.quantity"/>
+                                        </div>
+                                        <button t-if="props.lookupType === 'product'" class="btn btn-sm btn-outline-primary" style="margin-left: 12px; font-weight: 600; padding: 4px 10px;" t-on-click.stop="() => props.onMove(props.recordId, res.location_barcode, res.location_name, res.quantity, state.title)">
+                                            Chuyển
+                                        </button>
+                                        <i t-else="" class="fa fa-chevron-right" style="color: #ccc; margin-left: 8px; font-size: 0.8rem;"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </t>
+                        
+                        <t t-if="props.lookupType === 'product' and state.reservations and state.reservations.length > 0">
+                            <div style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 4px;">
+                                Đang giữ hàng
+                            </div>
+                            <div class="items-list" style="margin-top: 0;">
+                                <div t-foreach="state.reservations" t-as="r" t-key="r_index" class="item-card" t-on-click="() => this.openPicking(r.picking_id)" style="cursor: pointer; border: 1px solid var(--border-color);">
+                                    <div class="item-info">
+                                        <div class="item-name" style="color: var(--info-color);"><t t-esc="r.picking"/></div>
+                                        <div class="item-barcode" style="margin-top: 2px;"><t t-esc="r.partner or ''"/></div>
+                                    </div>
+                                    <div style="text-align: right;">
+                                        <div style="font-size: 0.7rem; background: var(--light-bg); padding: 2px 5px; border-radius: 4px; display: inline-block; margin-bottom: 3px; font-weight: 600; color: var(--text-color);">
+                                            <t t-esc="r.state_desc"/>
+                                        </div>
+                                        <div style="font-size: 0.85rem; color: var(--text-muted);">
+                                            <strong style="color: var(--text-color);"><t t-esc="r.reserved"/></strong> / <t t-esc="r.demand"/>
+                                        </div>
+                                    </div>
+                                    <i class="fa fa-chevron-right" style="color: #ccc; margin-left: 8px; font-size: 0.8rem;"></i>
+                                </div>
+                            </div>
+                        </t>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </t>
+</templates>

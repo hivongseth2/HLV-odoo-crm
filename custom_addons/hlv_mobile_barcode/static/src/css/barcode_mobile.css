@@ -1,0 +1,1651 @@
+/* ==========================================================================
+   Modern Barcode Scanner UI (Matched with Shipper Style)
+   ========================================================================== */
+
+:root {
+  /* Unified premium dark-navy theme (Tím than) */
+  --primary-color: #1e293b; /* Modern slate-800 - elegant dark charcoal navy */
+  --primary-light: #f1f5f9; /* Slate-100 */
+  --primary-hover: #0f172a; /* Slate-900 */
+  --camera-accent-color: #312e81; /* Indigo-900 - tim than */
+  --camera-accent-hover: #1e1b4b; /* Indigo-950 */
+  
+  --secondary-color: #64748b; /* Slate-500 */
+  
+  /* Modern clean alert/feedback colors instead of raw saturated colors */
+  --success-color: #10b981; /* Emerald-500 - premium clean green */
+  --success-bg: #ecfdf5; /* Emerald-50 - soft pastel green bg */
+  --success-border: #a7f3d0; /* Emerald-200 */
+  
+  --danger-color: #ef4444; /* Red-500 */
+  --danger-bg: #fef2f2; /* Red-50 - soft pastel red bg */
+  --danger-border: #fca5a5; /* Red-300 */
+  
+  --warning-color: #f59e0b; /* Amber-500 */
+  --warning-bg: #fffbeb; /* Amber-50 - soft pastel yellow bg */
+  --warning-border: #fde68a; /* Amber-200 */
+  
+  --info-color: #3b82f6; /* Blue-500 - elegant blue instead of cyan */
+  --info-bg: #eff6ff; /* Blue-50 - soft pastel blue bg */
+  --info-border: #bfdbfe; /* Blue-200 */
+  
+  --light-bg: #f8fafc; /* Slate-50 - clean modern background */
+  --white: #ffffff;
+  --border-color: #e2e8f0; /* Slate-200 - clean thin border */
+  --text-color: #0f172a; /* Slate-900 - dark readable text */
+  --text-muted: #64748b; /* Slate-500 */
+  
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+}
+
+/* ==========================================================================
+   CORE LAYOUT — the single source of truth for viewport fitting
+   Root -> shipper-container -> [camera | hlv-barcode-content -> subview]
+   Everything uses flex column + min-height:0 to prevent overflow.
+   ========================================================================== */
+
+.hlv-barcode-app {
+  position: absolute !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  background-color: var(--light-bg);
+  color: var(--text-color);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  overflow: hidden !important;
+}
+
+.hlv-barcode-app input,
+.hlv-barcode-app textarea {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+}
+
+/* Strictly block selection on barcode text to prevent cheats */
+.hlv-barcode-app .no-copy,
+.hlv-barcode-app .item-barcode {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+}
+
+.hlv-barcode-app .shipper-container {
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 0 12px;
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;        /* KEY: allows flex children to shrink below content size */
+  overflow: hidden;
+  height: 100% !important;
+  max-height: 100% !important;
+}
+
+@media (min-width: 768px) {
+  .hlv-barcode-app .shipper-container {
+    max-width: 1200px;
+    padding: 0 30px;
+  }
+}
+
+/* The main content region below camera */
+.hlv-barcode-app .hlv-barcode-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;        /* KEY */
+  overflow: hidden;
+}
+
+/* Generic scrollable area */
+.hlv-barcode-app .scrollable-body {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ==========================================================================
+   SUBVIEW LAYOUT — used by PickingScanner, LocationMove, BatchLocationMove,
+   InventoryLookup so they fill exactly the remaining space and never overflow.
+   ========================================================================== */
+
+.hlv-barcode-app .picking-scanner-root,
+.hlv-barcode-app .subview-root {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  height: 100%;
+}
+
+/* Picking compact label */
+.hlv-barcode-app .picking-label {
+  padding: 6px 4px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hlv-barcode-app .picking-label i {
+  margin-right: 4px;
+}
+
+/* Scrollable area in subviews */
+.hlv-barcode-app .picking-scroll-area,
+.hlv-barcode-app .subview-scroll-area {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 2px 8px 2px;
+}
+
+/* Fixed footer in subviews */
+.hlv-barcode-app .picking-footer,
+.hlv-barcode-app .subview-footer {
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.97);
+  border-top: 1px solid var(--border-color);
+  padding: 10px 4px;
+  box-sizing: border-box;
+  display: flex;
+  gap: 8px;
+}
+
+/* ==========================================================================
+   HEADER
+   ========================================================================== */
+
+.hlv-barcode-app .shipper-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  flex-shrink: 0;
+}
+
+.hlv-barcode-app .header-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--primary-color);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hlv-barcode-app .user-info {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  background: #fff;
+  padding: 5px 10px;
+  border-radius: 20px;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+}
+
+/* ==========================================================================
+   CARDS
+   ========================================================================== */
+
+.hlv-barcode-app .card-box {
+  background: var(--white);
+  border-radius: 10px;
+  box-shadow: var(--shadow-md);
+  padding: 15px;
+  margin-bottom: 15px;
+  border: 1px solid var(--border-color);
+}
+
+/* Step Header */
+.hlv-barcode-app .step-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 15px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.hlv-barcode-app .step-icon {
+  width: 36px;
+  height: 36px;
+  background: var(--light-bg);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  color: var(--primary-color);
+  flex-shrink: 0;
+}
+
+.hlv-barcode-app .step-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.hlv-barcode-app .step-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--primary-color);
+  margin-bottom: 3px;
+}
+
+.hlv-barcode-app .step-desc {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* ==========================================================================
+   FORM CONTROLS
+   ========================================================================== */
+
+.hlv-barcode-app .input-group-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  align-items: stretch;
+}
+
+.hlv-barcode-app .form-control {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  font-size: 0.95rem;
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  transition: border-color 0.2s;
+  outline: none;
+}
+
+.hlv-barcode-app .form-control:focus {
+  border-color: var(--primary-color);
+}
+
+/* ==========================================================================
+   BUTTONS
+   ========================================================================== */
+
+.hlv-barcode-app .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-weight: 600;
+  text-align: center;
+  vertical-align: middle;
+  user-select: none;
+  padding: 8px 14px;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  border-radius: 8px;
+  transition: all 0.2s;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.hlv-barcode-app .btn-lg {
+  padding: 10px 16px;
+  font-size: 0.95rem;
+}
+
+.hlv-barcode-app .btn-block {
+  width: 100%;
+  display: flex;
+}
+
+.hlv-barcode-app .btn-primary {
+  background-color: var(--primary-color);
+  color: var(--white);
+}
+
+.hlv-barcode-app .btn-primary:hover {
+  background-color: #1a252f;
+}
+
+.hlv-barcode-app .btn-success {
+  background-color: var(--success-color);
+  color: var(--white);
+}
+
+.hlv-barcode-app .btn-secondary {
+  background-color: var(--secondary-color);
+  color: var(--white);
+}
+
+.hlv-barcode-app .btn-warning {
+  background-color: var(--warning-color);
+  color: var(--white);
+}
+
+.hlv-barcode-app .btn-warning:hover {
+  background-color: #d97706;
+}
+
+.hlv-barcode-app .btn-danger {
+  background-color: var(--danger-color);
+  color: var(--white);
+}
+
+.hlv-barcode-app .btn-danger:hover {
+  background-color: #dc2626;
+}
+
+.hlv-barcode-app .btn-outline {
+  background-color: transparent;
+  border: 2px solid var(--border-color);
+  color: var(--text-muted);
+}
+
+.hlv-barcode-app .btn-text {
+  background: none;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* ==========================================================================
+   SEPARATOR
+   ========================================================================== */
+
+.hlv-barcode-app .separator {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  margin: 12px 0;
+}
+
+.hlv-barcode-app .separator::before,
+.hlv-barcode-app .separator::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid var(--border-color);
+}
+.hlv-barcode-app .separator::before { margin-right: 10px; }
+.hlv-barcode-app .separator::after { margin-left: 10px; }
+
+/* ==========================================================================
+   CAMERA
+   ========================================================================== */
+
+.hlv-barcode-app .persistent-camera-wrapper {
+  flex-shrink: 0;
+  background: var(--light-bg);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.hlv-barcode-app .persistent-camera-wrapper .camera-container {
+  width: 100%;
+  max-width: 450px;
+  background: #000;
+  overflow: hidden;
+  position: relative;
+  height: 160px;
+  box-shadow: var(--shadow-sm);
+}
+
+.hlv-barcode-app .persistent-camera-wrapper #reader {
+  width: 100% !important;
+  height: 160px !important;
+  border: none !important;
+}
+
+.hlv-barcode-app .persistent-camera-wrapper #reader video {
+  width: 100% !important;
+  height: 160px !important;
+  object-fit: cover !important;
+}
+
+.hlv-barcode-app .camera-toggle-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  backdrop-filter: blur(4px);
+}
+
+.hlv-barcode-app .barcode-camera-btn {
+  width: 42px;
+  min-width: 42px;
+  height: 42px;
+  box-sizing: border-box;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 2px solid var(--camera-accent-color);
+  background: var(--white);
+  color: var(--camera-accent-color);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.hlv-barcode-app .barcode-camera-btn.compact {
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+}
+
+.hlv-barcode-app .barcode-camera-btn.is-on {
+  background: var(--camera-accent-color);
+  color: var(--white);
+  border-color: var(--camera-accent-color);
+  box-shadow: 0 3px 10px rgba(49, 46, 129, 0.24);
+}
+
+.hlv-barcode-app .barcode-camera-btn.is-off {
+  background: var(--white);
+  color: var(--camera-accent-color);
+  border-color: var(--camera-accent-color);
+}
+
+.hlv-barcode-app .barcode-camera-btn.is-on:hover,
+.hlv-barcode-app .barcode-camera-btn.is-off:hover {
+  border-color: var(--camera-accent-hover);
+}
+
+.hlv-barcode-app .barcode-camera-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.16);
+}
+
+.hlv-barcode-app .barcode-camera-btn:active {
+  transform: scale(0.97);
+}
+
+.hlv-barcode-app .barcode-camera-action {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px;
+  margin-bottom: 10px;
+  font-weight: 700;
+  border-radius: 8px;
+  border: 2px solid var(--camera-accent-color);
+  box-shadow: var(--shadow-sm);
+}
+
+.hlv-barcode-app .barcode-camera-action.is-off {
+  background: var(--white);
+  color: var(--camera-accent-color);
+}
+
+.hlv-barcode-app .barcode-camera-action.is-on {
+  background: var(--camera-accent-color);
+  color: var(--white);
+}
+
+.hlv-barcode-app .camera-off-placeholder {
+  width: 100%;
+  height: 60px;
+  background: #e9ecef;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.hlv-barcode-app .persistent-camera-wrapper .camera-activation-overlay {
+  padding: 5px;
+}
+
+.hlv-barcode-app .persistent-camera-wrapper .camera-activation-overlay .activation-btn {
+  padding: 8px 16px;
+  font-size: 0.85rem;
+}
+
+.hlv-barcode-app .persistent-camera-wrapper .camera-activation-overlay .activation-hint {
+  margin-top: 5px;
+  font-size: 0.72rem;
+}
+
+.hlv-barcode-app .camera-section {
+  margin-bottom: 10px;
+  border-radius: 10px;
+  overflow: hidden;
+  position: relative;
+  box-shadow: var(--shadow-md);
+}
+
+.hlv-barcode-app .camera-reader {
+  width: 100%;
+  height: 220px;
+  background: #000;
+  position: relative;
+  overflow: hidden;
+}
+
+.hlv-barcode-app .camera-reader video {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Camera Error Banner & Activation styles */
+.hlv-barcode-app .camera-error-banner {
+  background: #fff5f5;
+  border: 1px solid #feb2b2;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 8px 12px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 0.82rem;
+  color: #c53030;
+  text-align: left;
+  line-height: 1.45;
+  box-shadow: var(--shadow-sm);
+  width: calc(100% - 24px);
+  box-sizing: border-box;
+}
+
+.hlv-barcode-app .camera-error-banner i {
+  font-size: 1.15rem;
+  margin-top: 2px;
+  color: #e53e3e;
+  flex-shrink: 0;
+}
+
+.hlv-barcode-app .camera-error-banner code {
+  background: #fff;
+  padding: 2px 4px;
+  border-radius: 3px;
+  border: 1px solid #fed7d7;
+  font-family: monospace;
+  font-size: 0.8rem;
+  color: #c53030;
+}
+
+.hlv-barcode-app .camera-activation-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  cursor: pointer;
+  padding: 15px;
+  text-align: center;
+}
+
+.hlv-barcode-app .camera-activation-overlay .activation-btn {
+  background: var(--primary-color);
+  color: var(--white);
+  padding: 12px 24px;
+  border-radius: 30px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: transform 0.2s, background-color 0.2s;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+.hlv-barcode-app .camera-activation-overlay:active .activation-btn {
+  transform: scale(0.96);
+}
+
+.hlv-barcode-app .camera-activation-overlay .activation-hint {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.8rem;
+  margin-top: 10px;
+  max-width: 280px;
+  line-height: 1.4;
+}
+
+/* ==========================================================================
+   ITEMS LIST
+   ========================================================================== */
+
+.hlv-barcode-app .items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.hlv-barcode-app .product-row-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  margin-bottom: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.04);
+  background: var(--white);
+  transition: all 0.25s ease;
+}
+
+.hlv-barcode-app .product-row-card.scanned {
+  border-color: var(--success-border);
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.08);
+}
+
+.hlv-barcode-app .product-row-card.preferred-pick-line {
+  border-color: var(--secondary-color);
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.18), 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.hlv-barcode-app .product-row-card.preferred-pick-line .item-card {
+  background: rgba(245, 158, 11, 0.08);
+  cursor: pointer;
+}
+
+/* Picking Label styling */
+.hlv-barcode-app .picking-label {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--primary-color);
+  padding: 8px 10px;
+  margin-bottom: 15px;
+  border-bottom: 2px dashed var(--border-color);
+  line-height: 1.4;
+  background-color: var(--light-bg);
+  border-radius: 6px;
+}
+.hlv-barcode-app .picking-label i.fa-clipboard-list {
+  color: var(--secondary-color);
+  margin-right: 8px;
+}
+
+.hlv-barcode-app .item-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  background: transparent;
+  border: none;
+  transition: all 0.2s;
+}
+
+.hlv-barcode-app .item-card.scanned {
+  background-color: transparent;
+}
+
+.hlv-barcode-app .item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.hlv-barcode-app .item-name {
+  font-weight: 600;
+  color: var(--primary-color);
+  font-size: 0.9rem;
+  margin-bottom: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hlv-barcode-app .item-barcode {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-family: monospace;
+}
+
+.hlv-barcode-app .item-status-icon {
+  font-size: 1.1rem;
+  margin-left: 8px;
+  color: var(--text-muted);
+}
+.hlv-barcode-app .item-card.scanned .item-status-icon {
+  color: var(--success-color);
+}
+
+/* ==========================================================================
+   ANIMATIONS
+   ========================================================================== */
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ==========================================================================
+   MODAL (camera fallback)
+   ========================================================================== */
+
+.hlv-barcode-app .modal-overlay {
+  position: fixed;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(2px);
+}
+
+.hlv-barcode-app .modal-content {
+  background: var(--white);
+  border-radius: 12px;
+  width: 90%;
+  max-width: 450px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  animation: slideUp 0.3s ease-out;
+}
+
+.hlv-barcode-app .modal-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.hlv-barcode-app .modal-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--primary-color);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hlv-barcode-app .modal-close {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  color: #aaa;
+  cursor: pointer;
+  padding: 5px;
+}
+
+.hlv-barcode-app .modal-body {
+  padding: 16px;
+  overflow-y: auto;
+}
+
+/* ==========================================================================
+   PROGRESS BAR
+   ========================================================================== */
+
+.hlv-barcode-app .global-progress-wrapper {
+  margin-top: 12px;
+}
+.hlv-barcode-app .progress-stats {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.hlv-barcode-app .progress {
+  height: 8px;
+  background-color: #e9ecef;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.hlv-barcode-app .progress-bar {
+  height: 100%;
+  background-color: var(--success-color);
+  width: 0;
+  transition: width 0.4s ease;
+}
+
+/* ==========================================================================
+   DESKTOP OPTIMIZATIONS (Min width 992px)
+   ========================================================================== */
+@media (min-width: 992px) {
+  /* Expand camera container to full width on desktop screen sizes */
+  .hlv-barcode-app .persistent-camera-wrapper .camera-container {
+    max-width: 100% !important;
+    height: 240px !important;
+    border-radius: 12px;
+  }
+  
+  .hlv-barcode-app .persistent-camera-wrapper #reader,
+  .hlv-barcode-app .persistent-camera-wrapper #reader video {
+    height: 240px !important;
+  }
+}
+
+/* ==========================================================================
+   PACKAGE BADGE STYLING
+   ========================================================================== */
+.hlv-barcode-app .item-package-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--info-bg);
+  border: 1px solid var(--info-border);
+  padding: 3px 10px;
+  border-radius: 20px; /* Modern Pill shape */
+  color: var(--info-color);
+  font-weight: 600;
+  font-size: 0.72rem;
+  letter-spacing: 0.3px;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.hlv-barcode-app .item-package-badge:hover {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+.hlv-barcode-app .item-package-badge i.fa-box {
+  color: var(--info-color);
+  font-size: 0.8rem;
+}
+
+.hlv-barcode-app .item-package-badge .btn-unpack {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(12, 84, 96, 0.6);
+  cursor: pointer;
+  margin-left: 2px;
+  font-size: 0.95rem;
+  transition: all 0.2s ease;
+}
+
+.hlv-barcode-app .item-package-badge .btn-unpack:hover {
+  color: var(--danger-color);
+  transform: scale(1.2);
+}
+
+
+/* ==========================================================================
+   PACKAGES SECTION STYLING (COLLAPSIBLE GRID)
+   ========================================================================== */
+.hlv-barcode-app .packages-section {
+  background: white;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  margin-bottom: 15px;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.hlv-barcode-app .packages-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--light-bg);
+  cursor: pointer;
+  user-select: none;
+  border-bottom: 1px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.hlv-barcode-app .packages-header:hover {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.hlv-barcode-app .packages-title {
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: var(--text-color);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hlv-barcode-app .packages-title i {
+  color: var(--primary-color);
+  font-size: 1rem;
+}
+
+.hlv-barcode-app .toggle-icon {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  transition: transform 0.25s ease;
+}
+
+.hlv-barcode-app .packages-list-container {
+  padding: 16px;
+  border-top: 1px solid var(--border-color);
+  background: var(--light-bg);
+}
+
+.hlv-barcode-app .packages-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 576px) {
+  .hlv-barcode-app .packages-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ==========================================================================
+   PACKAGE CARD CUSTOM STYLING
+   ========================================================================== */
+.hlv-barcode-app .package-card-custom {
+  background: white;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.03);
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.hlv-barcode-app .package-card-custom:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06);
+}
+
+.hlv-barcode-app .package-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background: rgba(0, 0, 0, 0.01);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.hlv-barcode-app .package-card-title {
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--text-color);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hlv-barcode-app .package-card-qty-badge {
+  background: var(--secondary-color);
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+.hlv-barcode-app .package-card-body {
+  padding: 12px 14px;
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.hlv-barcode-app .package-card-item-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--text-color);
+  line-height: 1.3;
+}
+
+.hlv-barcode-app .pkg-item-name {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 70%;
+}
+
+.hlv-barcode-app .pkg-item-qty {
+  font-weight: 600;
+  color: var(--primary-color);
+  white-space: nowrap;
+}
+
+.hlv-barcode-app .package-card-footer {
+  padding: 8px 14px;
+  border-top: 1px dashed var(--border-color);
+  display: flex;
+  justify-content: flex-end;
+  background: #fbfbfb;
+}
+
+.hlv-barcode-app .btn-pkg-edit {
+  width: 100%;
+  padding: 5px 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: white;
+  color: var(--text-color);
+  transition: all 0.2s ease;
+}
+
+.hlv-barcode-app .btn-pkg-edit:hover {
+  background: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+}
+
+/* ==========================================================================
+   PACKAGE EDIT MODAL (PREMIUM & MOBILE-FIRST)
+   ========================================================================== */
+.hlv-barcode-app .modal-overlay-custom {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(4px);
+  z-index: 1050;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: fadeInModal 0.25s ease-out;
+}
+
+@media (min-width: 576px) {
+  .hlv-barcode-app .modal-overlay-custom {
+    align-items: center;
+    padding: 20px;
+  }
+}
+
+.hlv-barcode-app .modal-container-custom {
+  background: white;
+  width: 100%;
+  max-width: 500px;
+  height: 90vh;
+  border-top-left-radius: 20px;
+  border-top-right-radius: 20px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 -5px 25px rgba(0, 0, 0, 0.15);
+  animation: slideUpModal 0.28s cubic-bezier(0.32, 0.94, 0.6, 1);
+}
+
+@media (min-width: 576px) {
+  .hlv-barcode-app .modal-container-custom {
+    height: 80vh;
+    border-radius: 16px;
+  }
+}
+
+.hlv-barcode-app .modal-header-custom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--light-bg);
+}
+
+.hlv-barcode-app .modal-title-custom {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-color);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hlv-barcode-app .modal-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.hlv-barcode-app .modal-close-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--text-color);
+}
+
+.hlv-barcode-app .modal-body-custom {
+  padding: 20px;
+  flex-grow: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.hlv-barcode-app .modal-section-title {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+/* Modal Items list */
+.hlv-barcode-app .pkg-edit-items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.hlv-barcode-app .pkg-edit-item-card {
+  background: white;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+}
+
+.hlv-barcode-app .pkg-edit-item-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.hlv-barcode-app .pkg-edit-item-name {
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: var(--text-color);
+  line-height: 1.3;
+}
+
+.hlv-barcode-app .pkg-edit-item-ops {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--light-bg);
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.03);
+}
+
+.hlv-barcode-app .pkg-qty-control-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.hlv-barcode-app .pkg-qty-val {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--primary-color);
+}
+
+.hlv-barcode-app .pkg-action-buttons-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px dashed var(--border-color);
+  padding-top: 8px;
+}
+
+@media (min-width: 480px) {
+  .hlv-barcode-app .pkg-action-buttons-row {
+    flex-direction: row;
+    align-items: center;
+  }
+}
+
+.hlv-barcode-app .btn-pkg-action {
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border-radius: 6px;
+}
+
+.hlv-barcode-app .pkg-transfer-box {
+  flex-grow: 1;
+  background: white;
+  border: 1px solid var(--border-color);
+  padding: 6px;
+  border-radius: 6px;
+}
+
+.hlv-barcode-app .pkg-transfer-inputs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.hlv-barcode-app .pkg-transfer-inputs select {
+  font-size: 0.78rem;
+  padding: 3px 6px;
+  border-radius: 4px;
+  flex-grow: 1;
+}
+
+.hlv-barcode-app .pkg-transfer-inputs input {
+  font-size: 0.78rem;
+  padding: 3px 6px;
+  border-radius: 4px;
+}
+
+/* Add Item Form */
+.hlv-barcode-app .pkg-add-section-container {
+  background: #fdfdfd;
+  border: 1px dashed var(--border-color);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.hlv-barcode-app .pkg-add-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Modal Footer */
+.hlv-barcode-app .modal-footer-custom {
+  display: flex;
+  gap: 10px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--border-color);
+  background: var(--light-bg);
+}
+
+.hlv-barcode-app .modal-footer-custom button {
+  padding: 10px;
+  font-weight: bold;
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+/* Animations */
+@keyframes fadeInModal {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUpModal {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+/* ==========================================================================
+   SCAN MODE TOGGLE STYLING
+   ========================================================================== */
+.hlv-barcode-app .scan-mode-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: white;
+  border-radius: 10px;
+  border-left: 4px solid var(--primary-color);
+  box-shadow: var(--shadow-sm);
+  padding: 10px;
+  margin-bottom: 12px;
+}
+
+.hlv-barcode-app .scan-mode-label {
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: var(--text-color);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hlv-barcode-app .scan-mode-label i {
+  color: var(--primary-color);
+}
+
+.hlv-barcode-app .scan-mode-toggle-group {
+  display: flex;
+  background: var(--light-bg);
+  padding: 3px;
+  border-radius: 20px;
+  border: 1px solid var(--border-color);
+}
+
+.hlv-barcode-app .btn-toggle-item {
+  border: none;
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  font-weight: bold;
+  border-radius: 15px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  background: none;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.hlv-barcode-app .btn-toggle-item.active {
+  background: var(--primary-color) !important;
+  color: white !important;
+  box-shadow: var(--shadow-sm);
+}
+
+.hlv-barcode-app .scan-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.hlv-barcode-app .scan-laser {
+  position: absolute;
+  top: 50%;
+  left: 10%;
+  right: 10%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #ff3b30 20%, #ff3b30 80%, transparent);
+  box-shadow: 0 0 8px rgba(255, 59, 48, 0.6);
+  animation: scan-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes scan-pulse {
+  0%, 100% { opacity: 0.4; transform: translateY(-8px); }
+  50% { opacity: 1; transform: translateY(8px); }
+}
+
+/* Flash Highlight Animation for Scanned Items */
+@keyframes flashHighlight {
+  0% { background-color: var(--light-bg); box-shadow: inset 0 0 0 2px transparent; }
+  10% { background-color: rgba(40, 167, 69, 0.15); box-shadow: inset 0 0 0 2px var(--success-color); }
+  50% { background-color: rgba(40, 167, 69, 0.05); box-shadow: inset 0 0 0 1px var(--success-color); }
+  100% { background-color: white; box-shadow: inset 0 0 0 0 transparent; }
+}
+
+.flash-highlight {
+  animation: flashHighlight 1.5s ease-out forwards;
+}
+
+.hlv-barcode-app .picking-location-group-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  margin: 8px 0 0;
+  padding: 6px 10px;
+  background: #d6dae0;
+  border: 1px solid #c3c8d0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.hlv-barcode-app .picking-location-group-header:first-child {
+  margin-top: 0;
+}
+
+.hlv-barcode-app .picking-location-count {
+  margin-left: auto;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--text-color);
+  font-size: 0.75rem;
+}
+/* ==========================================================================
+   MULTI-LOCATION MODE ACTIVE ROW
+   ========================================================================== */
+.hlv-barcode-app .active-location-row {
+  border: 2px solid var(--info-color) !important;
+  background-color: var(--info-bg) !important;
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.15);
+  transition: all 0.3s ease;
+}
+
+/* ==========================================================================
+   PICKING TITLE ABOVE CAMERA & MODERN LOCATION BANNER
+   ========================================================================== */
+.hlv-barcode-app .picking-title-above-camera {
+  background: var(--primary-light);
+  border-left: 4px solid var(--primary-color);
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  border-radius: 0 6px 6px 0;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.hlv-barcode-app .picking-title-above-camera .picking-title-main {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-color);
+  display: flex;
+  align-items: center;
+}
+
+.hlv-barcode-app .picking-title-above-camera .picking-title-sub {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-weight: 500;
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+}
+
+/* Modern simplified location banner */
+.hlv-barcode-app .modern-location-banner {
+  margin: 6px 0 10px 0;
+  padding: 10px 14px;
+  background: var(--info-bg);
+  border-radius: 8px;
+  border: 1px solid var(--info-border);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.hlv-barcode-app .modern-location-banner .location-info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  font-size: 0.85rem;
+  gap: 8px;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.hlv-barcode-app .modern-location-banner .location-badge {
+  color: var(--text-muted);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.hlv-barcode-app .modern-location-banner .location-val {
+  color: var(--info-color);
+  font-weight: 700;
+  background: var(--white);
+  padding: 3px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--info-border);
+  font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 1em;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+/* Error state when location is missing */
+.hlv-barcode-app .modern-location-banner.error-state {
+  background: var(--danger-bg) !important;
+  border-color: var(--danger-border) !important;
+}
+
+.hlv-barcode-app .modern-location-banner .location-badge.error {
+  color: var(--danger-color) !important;
+  animation: pulse-text 1.5s infinite;
+}
+
+.hlv-barcode-app .modern-location-banner .location-hint {
+  font-size: 1em;
+  color: var(--text-muted);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* Camera controls (matching barcode shipper) */
+.hlv-barcode-app .camera-controls {
+  position: absolute;
+  bottom: 12px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  z-index: 30;
+}
+
+.hlv-barcode-app .camera-controls .btn {
+  background: rgba(0, 0, 0, 0.65) !important;
+  color: white !important;
+  border: 1px solid rgba(255, 255, 255, 0.25) !important;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  font-weight: 600;
+  padding: 6px 18px;
+  font-size: 0.85rem;
+  border-radius: 20px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
+  transition: all 0.2s ease;
+}
+
+.hlv-barcode-app .camera-controls .btn:hover {
+  background: rgba(0, 0, 0, 0.8) !important;
+  transform: scale(1.04);
+}
+
+.hlv-barcode-app .camera-controls .btn:active {
+  transform: scale(0.96);
+}
+
+/* New Metadata Badges styling */
+.hlv-barcode-app .item-metadata-row {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.hlv-barcode-app .item-metadata-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.hlv-barcode-app .item-meta-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: none !important;
+  border: none !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+}
+
+.hlv-barcode-app .item-meta-badge.barcode {
+  color: var(--text-muted);
+}
+
+.hlv-barcode-app .item-meta-badge.location {
+  color: var(--info-color);
+  font-weight: 600;
+}
+
+.hlv-barcode-app .item-meta-badge.stock {
+  color: var(--warning-color);
+  font-weight: 600;
+}
+
+@keyframes pulse-text {
+  0% { opacity: 0.6; }
+  50% { opacity: 1; }
+  100% { opacity: 0.6; }
+}

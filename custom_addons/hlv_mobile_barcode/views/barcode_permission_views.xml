@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Server Action: Tạo tất cả phân quyền -->
+    <record id="action_generate_all_barcode_permissions" model="ir.actions.server">
+        <field name="name">Tạo tất cả phân quyền quét</field>
+        <field name="model_id" ref="model_hlv_barcode_user_permission"/>
+        <field name="state">code</field>
+        <field name="code">action = model.action_generate_all()</field>
+    </record>
+
+    <!-- Tree View: Danh sách phân quyền -->
+    <record id="view_barcode_permission_list" model="ir.ui.view">
+        <field name="name">hlv.barcode.user.permission.list</field>
+        <field name="model">hlv.barcode.user.permission</field>
+        <field name="arch" type="xml">
+            <list>
+                <header>
+                    <button name="%(action_generate_all_barcode_permissions)d" type="action"
+                            string="⚡ Tạo phân quyền cho tất cả"
+                            class="btn-primary"
+                            groups="hlv_mobile_barcode.group_barcode_permission_manager"/>
+                </header>
+                <field name="user_id"/>
+                <field name="warehouse_id"/>
+                <button name="action_open_detail" type="object" string="Phân quyền chi tiết" class="btn btn-secondary btn-sm" icon="fa-arrow-right"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Form View: Chi tiết phân quyền phiếu -->
+    <record id="view_barcode_permission_form" model="ir.ui.view">
+        <field name="name">hlv.barcode.user.permission.form</field>
+        <field name="model">hlv.barcode.user.permission</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <group>
+                        <group string="Thông tin">
+                            <field name="user_id"/>
+                            <field name="warehouse_id"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Phân quyền phiếu quét" name="picking_permissions">
+                            <field name="picking_permission_ids">
+                                <list editable="bottom">
+                                    <field name="picking_type_code" readonly="1"/>
+                                    <field name="can_view" widget="boolean_toggle"/>
+                                    <field name="can_edit" widget="boolean_toggle"/>
+                                    <field name="can_delete" widget="boolean_toggle"/>
+                                    <field name="can_confirm" widget="boolean_toggle"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Search View -->
+    <record id="view_barcode_permission_search" model="ir.ui.view">
+        <field name="name">hlv.barcode.user.permission.search</field>
+        <field name="model">hlv.barcode.user.permission</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="user_id"/>
+                <field name="warehouse_id"/>
+                <group expand="0" string="Nhóm theo">
+                    <filter name="group_user" string="Người dùng"
+                            context="{'group_by': 'user_id'}"/>
+                    <filter name="group_warehouse" string="Kho"
+                            context="{'group_by': 'warehouse_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Action Window -->
+    <record id="action_barcode_permission" model="ir.actions.act_window">
+        <field name="name">Phân quyền quét Barcode di động</field>
+        <field name="res_model">hlv.barcode.user.permission</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_barcode_permission_search"/>
+        <field name="context">{'search_default_group_user': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Chưa có cấu hình phân quyền quét nào
+            </p>
+            <p>
+                Bấm nút <b>"Tạo phân quyền cho tất cả"</b> ở thanh công cụ
+                để tự động tạo phân quyền quét mặc định cho toàn bộ người dùng nội bộ.
+                <br/>Sau đó bấm vào nút <b>"Phân quyền chi tiết"</b> trên từng dòng để thiết lập.
+            </p>
+        </field>
+    </record>
+
+</odoo>

@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="hlv_mobile_barcode.LocationMove">
+        <div class="subview-root">
+            <div class="subview-scroll-area">
+                <div class="card-box" style="margin-top: 10px;">
+                    <div class="step-header">
+                        <div class="step-icon">
+                            <i class="fa fa-box"></i>
+                        </div>
+                        <div class="step-info">
+                            <div class="step-title">Sản phẩm</div>
+                            <div class="step-desc" style="font-weight: 600; color: var(--text-color);"><t t-esc="props.productName || state.productName"/></div>
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom: 15px;">
+                        <label style="font-size: 0.9rem; font-weight: 600; color: var(--text-muted); margin-bottom: 4px; display: block;">Từ vị trí:</label>
+                        <div style="font-weight: 700; color: var(--primary-color); font-size: 1.1rem;">
+                            <t t-esc="props.prefillLocationName || props.prefillLocationBarcode"/>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom: 15px; border-top: 1px dashed var(--border-color); padding-top: 15px;">
+                        <label style="font-size: 0.9rem; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; display: block;">Đến vị trí (Quét hoặc Nhập):</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fa fa-map-marker-alt"></i></span>
+                            <input type="text" class="form-control" t-ref="destLocationInput" t-model="state.destLocationInput" t-on-keyup="onDestLocationInputKeyup" placeholder="Quét/Nhập mã vị trí đích" inputmode="none" autocomplete="off" autocapitalize="off" spellcheck="false"/>
+                        </div>
+                        <div t-if="state.destLocationName" style="margin-top: 5px; color: var(--success-color); font-weight: bold;">
+                            <i class="fa fa-check-circle"></i> <t t-esc="state.destLocationName"/>
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom: 20px; border-top: 1px dashed var(--border-color); padding-top: 15px;">
+                        <label style="font-size: 0.9rem; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; display: block;">Số lượng chuyển:</label>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn btn-sm btn-outline" t-on-click="() => state.qty = props.sourceQty" style="font-weight: bold; font-size: 0.8rem; padding: 4px 8px;">Max: <t t-esc="props.sourceQty"/></button>
+                            <input type="number" class="form-control" style="font-weight: bold; font-size: 1.1rem; text-align: right;" t-model="state.qty" min="0" t-att-max="props.sourceQty" step="0.01"/>
+                        </div>
+                        <div style="font-size: 0.8rem; color: var(--info-color); margin-top: 8px; text-align: right;">
+                            <i class="fa fa-info-circle"></i> Quét mã sản phẩm để tăng số lượng
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Fixed Footer -->
+            <div class="subview-footer">
+                <button class="btn btn-outline btn-lg" style="flex: 1;" t-on-click="props.onBack" t-att-disabled="state.loading">
+                    <i class="fa fa-times"/> Hủy
+                </button>
+                <button class="btn btn-primary btn-lg" style="flex: 1;" t-on-click="doMove" t-att-disabled="state.loading">
+                    <t t-if="!state.loading"><i class="fa fa-check"/> Xác nhận chuyển</t>
+                    <t t-else=""><i class="fa fa-spin fa-spinner"/> Đang xử lý</t>
+                </button>
+            </div>
+        </div>
+    </t>
+</templates>
