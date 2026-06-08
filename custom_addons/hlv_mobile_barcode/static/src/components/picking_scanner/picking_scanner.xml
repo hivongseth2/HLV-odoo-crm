@@ -1,0 +1,380 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="hlv_mobile_barcode.PickingScanner">
+        <div class="picking-scanner-root">
+            <div t-if="state.loading" style="text-align: center; padding: 50px;">
+                <i class="fa fa-spin fa-spinner fa-3x" style="color: var(--secondary-color);"></i>
+            </div>
+            
+            <t t-elif="state.picking">
+                <!-- CONFLICT POPUP: Khi vào lại phiếu PICK, tồn kho đã thay đổi -->
+                <div class="modal-overlay" t-if="state.showConflictPopup" style="z-index: 10000;">
+                    <div class="modal-content" style="max-width: 420px; width: 92%;">
+                        <div class="modal-header" style="background: var(--danger-color, #e74c3c);">
+                            <div class="modal-title">
+                                <i class="fa fa-exclamation-triangle"/> Cảnh báo: Tồn kho thay đổi
+                            </div>
+                        </div>
+                        <div class="modal-body" style="padding: 16px;">
+                            <p style="margin-bottom: 12px; color: var(--text-color); font-weight: 600;">
+                                Phiếu này có dữ liệu quét đã lưu, nhưng tồn kho tại một số vị trí đã thay đổi:
+                            </p>
+                            <div t-foreach="state.conflictItems" t-as="item" t-key="item.move_line_id"
+                                 style="background: var(--card-bg); border: 1px solid var(--danger-color, #e74c3c); border-radius: 8px; padding: 10px; margin-bottom: 8px; font-size: 0.85rem;">
+                                <div style="font-weight: 700; margin-bottom: 4px;"><t t-esc="item.product_name"/></div>
+                                <div style="color: var(--text-muted);">Vị trí: <t t-esc="item.location_name"/></div>
+                                <div style="margin-top: 4px;">
+                                    <span style="color: var(--danger-color, #e74c3c);">Đã quét: <b><t t-esc="item.saved_qty"/> <t t-esc="item.uom_name"/></b></span>
+                                    <span style="margin: 0 8px;">→</span>
+                                    <span style="color: var(--success-color, #27ae60);">Khả dụng: <b><t t-esc="item.available_qty"/> <t t-esc="item.uom_name"/></b></span>
+                                </div>
+                            </div>
+                            <p style="margin-top: 12px; color: var(--text-muted); font-size: 0.85rem;">Bạn muốn xử lý thế nào?</p>
+                        </div>
+                        <div class="modal-footer" style="padding: 12px 16px; display: flex; flex-direction: column; gap: 8px;">
+                            <button class="btn btn-danger" style="width: 100%; padding: 11px; font-weight: bold;"
+                                    t-on-click="() => this.resolveConflict('reset')">
+                                <i class="fa fa-redo"/> Đặt về 0, quét lại từ đầu
+                            </button>
+                            <button class="btn btn-warning" style="width: 100%; padding: 11px; font-weight: bold;"
+                                    t-on-click="() => this.resolveConflict('cap')">
+                                <i class="fa fa-level-down-alt"/> Lấy số tối đa khả dụng
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Location Mode Header (Simplified and Modern) -->
+                <div t-if="state.picking.state !== 'done' and !state.picking.is_putaway and (props.isMultiLocationMode or state.picking.is_pick)" 
+                     t-attf-class="modern-location-banner #{!props.scannedLocationName ? 'error-state' : ''}"
+                     t-ref="locationBannerRef">
+                    <t t-if="props.scannedLocationName">
+                        <div class="location-info-row">
+                            <span class="location-badge">
+                                Đang lấy từ:
+                            </span>
+                            <span class="location-val">
+                                <t t-esc="props.scannedLocationName"/>
+                            </span>
+                        </div>
+                    </t>
+                    <t t-else="">
+                        <div class="location-info-row">
+                            <span class="location-badge error">
+                                CHƯA QUÉT VỊ TRÍ NGUỒN!
+                            </span>
+                            <span class="location-hint">Vui lòng quét vị trí nguồn trước</span>
+                        </div>
+                    </t>
+                </div>
+            
+                <!-- Scrollable product list area -->
+                <div class="picking-scroll-area">
+                    <!-- Location Scanning Mode Toggle removed due to Deltatech conflict -->
+
+                    <div t-if="state.picking.state === 'done' and !state.picking.is_return" style="padding: 0 0 12px 0; display: flex; justify-content: flex-end;">
+                        <button class="btn btn-primary" style="padding: 9px 14px; background-color: var(--secondary-color); font-weight: 700;" t-on-click="openReturnWizard" t-att-disabled="state.returnLoading">
+                            <i class="fa fa-undo"></i> Trả hàng
+                        </button>
+                    </div>
+                    
+                    <!-- Collapsible Packages Section -->
+                    <div t-if="state.picking.packages and state.picking.packages.length > 0" class="packages-section">
+                        <div class="packages-header" t-on-click="togglePackages">
+                            <span class="packages-title">
+                                <i class="fa fa-boxes"></i> Kiện hàng đã đóng (<t t-esc="state.picking.packages.length"/>)
+                            </span>
+                            <i t-attf-class="fa fa-chevron-#{state.packagesExpanded ? 'up' : 'down'} toggle-icon"></i>
+                        </div>
+                        <div t-if="state.packagesExpanded" class="packages-list-container">
+                            <div class="packages-grid">
+                                <t t-foreach="state.picking.packages" t-as="pkg" t-key="pkg.id">
+                                    <div class="package-card-custom">
+                                        <div class="package-card-header">
+                                            <span class="package-card-title">
+                                                <i class="fa fa-box" style="color: var(--secondary-color);"></i>
+                                                <t t-esc="pkg.name"/>
+                                            </span>
+                                            <span class="package-card-qty-badge">
+                                                <t t-esc="pkg.total_done"/> SP
+                                            </span>
+                                        </div>
+                                        <div class="package-card-body">
+                                            <t t-foreach="pkg.lines" t-as="pl" t-key="pl.move_line_id">
+                                                <div class="package-card-item-row">
+                                                    <span class="pkg-item-name"><t t-esc="pl.product_name"/></span>
+                                                    <span class="pkg-item-qty"><t t-esc="pl.qty_done"/> <t t-esc="pl.uom"/></span>
+                                                </div>
+                                            </t>
+                                        </div>
+                                        <div class="package-card-footer" t-if="state.picking.state !== 'done'">
+                                            <button t-if="!state.picking.is_putaway" class="btn btn-outline btn-sm btn-pkg-edit" t-on-click="() => this.openPackageEdit(pkg)">
+                                                <i class="fa fa-edit"></i> Chỉnh sửa
+                                            </button>
+                                            <button class="btn btn-warning btn-sm" style="margin-left: 8px; padding: 4px 12px; font-size: 0.85rem; color: #fff;" t-on-click="() => this.unpackPackage(pkg)">
+                                                <i class="fa fa-box-open"></i> Gỡ đóng gói
+                                            </button>
+                                        </div>
+                                    </div>
+                                </t>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 12px; padding-bottom: 4px;">
+                        Danh sách sản phẩm
+                    </div>
+                    <div class="items-list" style="margin-top: 0;">
+                        <t t-foreach="this.groupedPickingLines" t-as="group" t-key="group.key">
+                            <div class="picking-location-group-header">
+                                <i class="fa fa-map-marker-alt"></i>
+                                <span><t t-esc="group.locationName"/></span>
+                                <span class="picking-location-count"><t t-esc="group.lines.length"/></span>
+                            </div>
+                            <t t-foreach="group.lines" t-as="line" t-key="line.id || group.key + '_draft_' + line.product_id">
+                            <t t-set="is_active_location" t-value="!state.picking.is_putaway and (state.picking.is_pick or props.isMultiLocationMode) and props.scannedLocationName and line.location_name == props.scannedLocationName"/>
+                            <t t-set="is_preferred_line" t-value="state.picking.is_pick and props.preferredMoveLineId and line.id == props.preferredMoveLineId"/>
+                            <div t-attf-class="product-row-card #{line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0 ? 'scanned' : ''} #{is_active_location ? 'active-location-row' : ''} #{is_preferred_line ? 'preferred-pick-line' : ''}" t-att-data-product-id="line.product_id" t-att-data-line-id="line.id">
+                                <div t-attf-class="item-card #{line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0 ? 'scanned' : ''}" style="border: none; margin-bottom: 0; display: flex; align-items: stretch; gap: 10px; padding: 10px;" t-on-click="() => this.togglePreferredLine(line)">
+                                    <!-- Left: Image -->
+                                    <div style="flex-shrink: 0; width: 64px; height: 64px; border-radius: 6px; overflow: hidden; background: #fff; display: flex; align-items: center; justify-content: center;">
+                                        <img t-attf-src="/web/image?model=product.product&amp;id={{line.product_id}}&amp;field=image_128" style="max-width: 100%; max-height: 100%; object-fit: contain;"/>
+                                    </div>
+                                    
+                                    <!-- Middle: Info -->
+                                    <div style="flex-grow: 1; display: flex; flex-direction: column; justify-content: center; min-width: 0;">
+                                        <div class="item-name" style="font-size: 0.95rem; font-weight: 700; color: var(--text-color); line-height: 1.25; margin-bottom: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
+                                            <t t-esc="line.product_name"/>
+                                        </div>
+                                        <div class="item-metadata-row">
+                                            <div class="item-metadata-line">
+                                                <span class="item-meta-badge barcode">
+                                                    <i class="fa fa-barcode"></i> 
+                                                    <span class="no-copy">
+                                                        <t t-if="line.product_barcode"><t t-esc="line.product_barcode"/></t>
+                                                        <t t-else=""><span style="color: var(--danger-color); font-weight: 500;">(Chưa có mã)</span></t>
+                                                    </span>
+                                                </span>
+                                                <span t-if="line.package_name" class="item-package-badge">
+                                                    <i class="fa fa-box"></i> <t t-esc="line.package_name"/>
+                                                </span>
+                                            </div>
+                                            <div class="item-metadata-line">
+                                                <span t-if="line.location_name" class="item-meta-badge location">
+                                                    <i class="fa fa-map-marker-alt"></i> <t t-esc="line.location_name"/>
+                                                </span>
+                                                <span class="item-meta-badge stock">
+                                                    <i class="fa fa-cubes"></i> Tồn: <t t-esc="line.warehouse_qty"/>
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Right: Quantity -->
+                                    <div style="flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; min-width: 50px;">
+                                        <div style="font-size: 1.1rem; font-weight: 800; text-align: right;">
+                                            <span t-attf-style="color: #{line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0 ? 'var(--success-color)' : 'var(--text-color)'}">
+                                                <t t-esc="line.qty_done"/>
+                                            </span> 
+                                            <span style="color: var(--text-muted); font-size: 0.85rem;">/ <t t-esc="line.product_uom_qty"/></span>
+                                        </div>
+                                        <i t-if="line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0" class="fa fa-check-circle" style="color: var(--success-color); font-size: 1.1rem; margin-top: 4px;"></i>
+                                    </div>
+                                </div>
+                                <t t-if="state.picking.show_qty_buttons and (line.product_uom_qty % 1 !== 0 or line.qty_done % 1 !== 0)">
+                                    <div t-if="state.picking.state !== 'done'" style="background-color: transparent; padding: 6px 12px 10px 12px; display: flex; gap: 4px; align-items: center; justify-content: center;">
+                                        <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, -0.1)">-0.1</button>
+                                        <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, -0.01)">-0.01</button>
+                                        <input type="number" class="form-control" style="width: 48px; text-align: center; font-weight: bold; padding: 4px 2px; font-size: 0.85rem;" t-model="line.qty_done" t-on-change="(ev) => this.saveQty(line, ev)" min="0" step="any"/>
+                                        <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, 0.01)">+0.01</button>
+                                        <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, 0.1)">+0.1</button>
+                                        <button t-if="!state.picking.is_pick and !state.picking.source_transfer_id" class="btn btn-danger btn-sm" style="padding: 4px 8px; font-size: 0.78rem; min-width: 28px;" t-on-click="() => this.deleteLine(line)">
+                                            <i class="fa fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </t>
+                                <t t-else="">
+                                    <div t-if="state.picking.state !== 'done'" style="background-color: transparent; padding: 6px 12px 10px 12px; display: flex; gap: 4px; align-items: center; justify-content: flex-end;">
+                                        <button t-if="!state.picking.is_pick and !state.picking.source_transfer_id" class="btn btn-danger btn-sm" style="padding: 4px 12px; font-size: 0.85rem; min-width: 28px;" t-on-click="() => this.deleteLine(line)">
+                                            <i class="fa fa-trash"></i> Xóa
+                                        </button>
+                                    </div>
+                                </t>
+                            </div>
+                            </t>
+                        </t>
+                    </div>
+                </div>
+                
+                <!-- Transition to Step 2 Button -->
+                <div t-if="state.picking.linked_picking_id and !state.picking.is_pick" style="padding: 10px; background: white; border-top: 1px solid var(--border-color); display: flex; gap: 8px;">
+                    <button class="btn btn-primary" style="flex: 1; padding: 12px; font-weight: bold; background-color: var(--primary-color); display: flex; align-items: center; justify-content: center; gap: 8px; border-radius: 8px; box-shadow: var(--shadow-sm);" t-on-click="() => props.onSelectPicking(state.picking.linked_picking_id, state.picking.linked_picking_name)" t-att-disabled="state.loading">
+                        <i class="fa fa-arrow-right"></i> Chuyển sang Bước 2 (<t t-esc="state.picking.linked_picking_name"/>)
+                    </button>
+                </div>
+                
+                <!-- Fixed Footer -->
+                <div class="picking-footer">
+                    <button class="btn btn-outline" style="flex: 1; padding: 10px;" t-on-click="props.onBack">
+                        <i class="fa fa-arrow-left"></i> Quay lại
+                    </button>
+                    <button t-if="state.picking.state !== 'done'" class="btn btn-primary" style="flex: 1; padding: 10px; background-color: var(--info-color);" t-on-click="doPack">
+                        <i class="fa fa-box"></i> Đóng gói
+                    </button>
+                    <button t-if="state.picking.state !== 'done'" class="btn btn-success" style="flex: 1; padding: 10px;" t-on-click="doValidate">
+                        <i class="fa fa-check"></i> Xác nhận
+                    </button>
+                </div>
+
+                <!-- Return Picking Modal -->
+                <div t-if="state.showReturnModal" class="modal-overlay-custom" t-on-click.self="closeReturnModal">
+                    <div class="modal-container-custom" style="max-width: 720px;">
+                        <div class="modal-header-custom">
+                            <h3 class="modal-title-custom">
+                                <i class="fa fa-undo"></i> Trả hàng <t t-if="state.returnPickingName">- <t t-esc="state.returnPickingName"/></t>
+                            </h3>
+                            <button class="modal-close-btn" t-on-click="closeReturnModal" t-att-disabled="state.returnLoading">
+                                <i class="fa fa-times"></i>
+                            </button>
+                        </div>
+                        <div class="modal-body-custom" style="padding: 14px;">
+                            <div style="display: grid; grid-template-columns: minmax(0, 1fr) 92px 72px 36px; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border-color); font-size: 0.82rem; font-weight: 700; color: var(--text-muted);">
+                                <div>Sản phẩm</div>
+                                <div style="text-align: right;">Số lượng</div>
+                                <div>Đơn vị</div>
+                                <div></div>
+                            </div>
+                            <t t-foreach="state.returnLines" t-as="line" t-key="line.line_id">
+                                <div t-if="!line.remove" style="display: grid; grid-template-columns: minmax(0, 1fr) 92px 72px 36px; gap: 8px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border-color);">
+                                    <div style="min-width: 0; font-size: 0.9rem; font-weight: 600; color: var(--text-color); line-height: 1.25;">
+                                        <t t-esc="line.product_name"/>
+                                    </div>
+                                    <input type="number" class="form-control form-control-sm" style="text-align: right; padding: 4px 6px;" t-model="line.quantity" min="0" step="any" t-att-disabled="state.returnLoading"/>
+                                    <div style="font-size: 0.86rem; color: var(--text-muted);">
+                                        <t t-esc="line.uom_name"/>
+                                    </div>
+                                    <button class="btn btn-sm btn-outline-danger" style="padding: 4px 7px;" t-on-click="() => this.removeReturnLine(line)" t-att-disabled="state.returnLoading">
+                                        <i class="fa fa-trash"></i>
+                                    </button>
+                                </div>
+                            </t>
+                        </div>
+                        <div class="modal-footer-custom" style="display: flex; gap: 8px; justify-content: flex-end; padding: 12px 14px;">
+                            <button class="btn btn-primary" t-on-click="() => this.createReturn('selected')" t-att-disabled="state.returnLoading">
+                                <i class="fa fa-undo"></i> Trả hàng
+                            </button>
+                            <button class="btn btn-primary" t-on-click="() => this.createReturn('all')" t-att-disabled="state.returnLoading">
+                                <i class="fa fa-check-double"></i> Trả tất cả
+                            </button>
+                            <button class="btn btn-secondary" t-on-click="closeReturnModal" t-att-disabled="state.returnLoading">
+                                Hủy
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Package Edit Modal -->
+                <div t-if="state.editingPackage" class="modal-overlay-custom" t-on-click.self="closePackageEdit">
+                    <div class="modal-container-custom package-edit-modal">
+                        <!-- Modal Header -->
+                        <div class="modal-header-custom">
+                            <h3 class="modal-title-custom">
+                                <i class="fa fa-box"></i> Chi tiết kiện: <t t-esc="state.editingPackage.name"/>
+                            </h3>
+                            <button class="modal-close-btn" t-on-click="closePackageEdit">
+                                <i class="fa fa-times"></i>
+                            </button>
+                        </div>
+                        
+                        <!-- Modal Body -->
+                        <div class="modal-body-custom">
+                            <!-- Product List in Package -->
+                            <div class="modal-section-title">SẢN PHẨM TRONG KIỆN</div>
+                            <div class="pkg-edit-items-list">
+                                <t t-if="state.packageEditItems.length === 0">
+                                    <div class="text-muted" style="text-align: center; padding: 20px;">
+                                        Kiện hàng trống!
+                                    </div>
+                                </t>
+                                <t t-else="">
+                                    <t t-foreach="state.packageEditItems" t-as="item" t-key="item.move_line_id">
+                                        <div class="pkg-edit-item-card">
+                                            <div class="pkg-edit-item-info">
+                                                <div class="pkg-edit-item-name"><t t-esc="item.product_name"/></div>
+                                                <div class="pkg-edit-item-sub font-monospace" style="font-size: 0.75rem; color: var(--text-muted);">
+                                                    BC: <t t-esc="item.product_barcode"/> | SKU: <t t-esc="item.product_sku"/>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- Operations for Item: Qty edit, Unpack, Transfer -->
+                                            <div class="pkg-edit-item-ops">
+                                                <!-- Qty controls -->
+                                                <div class="pkg-qty-control-row">
+                                                    <button t-if="!state.picking.is_putaway" class="btn btn-outline btn-sm" t-on-click="() => this.pkgAdjustQty(item, -1)">-1</button>
+                                                    <span class="pkg-qty-val" t-attf-style="#{state.picking.is_putaway ? 'font-weight: bold; font-size: 1.1rem;' : ''}">
+                                                        <t t-esc="item.qty_done"/> <t t-esc="item.uom"/>
+                                                    </span>
+                                                    <button t-if="!state.picking.is_putaway" class="btn btn-outline btn-sm" t-on-click="() => this.pkgAdjustQty(item, 1)">+1</button>
+                                                </div>
+                                                
+                                                <div class="pkg-action-buttons-row" t-if="!state.picking.is_putaway">
+                                                    <!-- Unpack -->
+                                                    <button class="btn btn-danger btn-sm btn-pkg-action" style="padding: 4px 8px; font-size: 0.78rem;" t-on-click="() => this.pkgRemoveItem(item)">
+                                                        <i class="fa fa-sign-out-alt"></i> Gỡ kiện
+                                                    </button>
+                                                    
+                                                    <!-- Transfer controls -->
+                                                    <div t-if="state.packageOtherPackages.length > 0" class="pkg-transfer-box">
+                                                        <div class="pkg-transfer-inputs">
+                                                            <select class="form-select form-select-sm" t-model="state.transferTargets[item.move_line_id]">
+                                                                <t t-foreach="state.packageOtherPackages" t-as="op" t-key="op.package_id">
+                                                                    <option t-att-value="op.package_id">
+                                                                        Sang <t t-esc="op.package_name"/>
+                                                                    </option>
+                                                                </t>
+                                                            </select>
+                                                            <input type="number" class="form-control form-control-sm" style="width: 50px; text-align: center;" t-model="state.transferQtys[item.move_line_id]" min="1" t-att-max="item.qty_done" step="any"/>
+                                                            <button class="btn btn-primary btn-sm" style="padding: 4px 8px;" t-on-click="() => this.pkgTransferItem(item)">
+                                                                <i class="fa fa-exchange-alt"></i> Chuyển
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </t>
+                                </t>
+                            </div>
+                            
+                            <!-- Add Item to Package section -->
+                            <div t-if="!state.picking.is_putaway and state.packageAvailableItems.length > 0" class="pkg-add-section-container">
+                                <div class="modal-section-title" style="margin-top: 20px;">THÊM SẢN PHẨM LẺ VÀO KIỆN</div>
+                                <div class="pkg-add-form">
+                                    <select class="form-select form-select-sm" t-model="state.addItemMoveLineId">
+                                        <t t-foreach="state.packageAvailableItems" t-as="av" t-key="av.move_line_id">
+                                            <option t-att-value="av.move_line_id">
+                                                <t t-esc="av.product_name"/> (Sẵn có: <t t-esc="av.qty_available"/>)
+                                            </option>
+                                        </t>
+                                    </select>
+                                    <div style="display: flex; gap: 8px; align-items: center;">
+                                        <input type="number" class="form-control form-control-sm" style="width: 70px; text-align: center;" t-model="state.addItemQty" min="1" step="any"/>
+                                        <button class="btn btn-success btn-sm btn-pkg-action" style="flex: 1; padding: 6px 12px;" t-on-click="pkgAddItem">
+                                            <i class="fa fa-plus"></i> Thêm vào kiện
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Modal Footer -->
+                        <div class="modal-footer-custom">
+                            <button class="btn btn-outline" style="flex: 1;" t-on-click="closePackageEdit">Đóng</button>
+                            <button t-if="!state.picking.is_putaway" class="btn btn-success" style="flex: 1;" t-on-click="savePackageChanges">Lưu thay đổi</button>
+                        </div>
+                    </div>
+                </div>
+            </t>
+        </div>
+    </t>
+</templates>

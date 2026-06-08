@@ -1,0 +1,5 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_barcode_user_permission_manager,hlv.barcode.user.permission.manager,model_hlv_barcode_user_permission,group_barcode_permission_manager,1,1,1,1
+access_barcode_user_permission_user,hlv.barcode.user.permission.user,model_hlv_barcode_user_permission,stock.group_stock_user,1,0,0,0
+access_barcode_picking_permission_manager,hlv.barcode.picking.permission.manager,model_hlv_barcode_picking_permission,group_barcode_permission_manager,1,1,1,1
+access_barcode_picking_permission_user,hlv.barcode.picking.permission.user,model_hlv_barcode_picking_permission,stock.group_stock_user,1,0,0,0
