@@ -822,7 +822,7 @@ class HLVMobileBarcodeController(http.Controller):
             line_demand = move.product_uom_qty
             step2_qty_done = sum(ml.quantity for ml in move.move_line_ids)
             if line_demand > 0.0 and step2_qty_done + 1 > line_demand:
-                return {'error': _('Sáº£n pháº©m "%s" Ä‘Ã£ quÃ©t Ä‘á»§ sá»‘ lÆ°á»£ng yÃªu cáº§u cá»§a phiáº¿u BÆ°á»›c 2 (%g/%g). KhÃ´ng thá»ƒ quÃ©t thÃªm!', product.display_name, step2_qty_done, line_demand)}
+                return {'error': _('Sản phẩm "%s" đã quét đủ số lượng yêu cầu của phiếu Bước 2 (%g/%g). Không thể quét thêm!', product.display_name, step2_qty_done, line_demand)}
         elif picking.source_transfer_id:
             # In Step 2, we specifically restrict the LOOSE product quantity
             line_demand = move.product_uom_qty
@@ -859,7 +859,7 @@ class HLVMobileBarcodeController(http.Controller):
             if available_move_line:
                 move_line = available_move_line
             if not move_line:
-                return {'error': _('KhÃ´ng tÃ¬m tháº¥y dÃ²ng BÆ°á»›c 2 phÃ¹ há»£p cho sáº£n pháº©m "%s". Vui lÃ²ng kiá»ƒm tra phiáº¿u sinh tá»« BÆ°á»›c 1.', product.display_name)}
+                return {'error': _('Không tìm thấy dòng Bước 2 phù hợp cho sản phẩm "%s". Vui lòng kiểm tra phiếu sinh từ Bước 1.', product.display_name)}
         else:
             # Find an unpacked move line that is not in any package
             move_line = move.move_line_ids.filtered(lambda ml: not ml.result_package_id and not ml.package_id)
