@@ -133,6 +133,32 @@ export class PickingScanner extends Component {
         }, () => [this.props.scannedLocationName]);
     }
 
+    get groupedPickingLines() {
+        const lines = this.state.picking?.lines || [];
+        const groupsByLocation = new Map();
+
+        lines.forEach((line, index) => {
+            const locationName = line.location_name || "Chưa có vị trí";
+            if (!groupsByLocation.has(locationName)) {
+                groupsByLocation.set(locationName, {
+                    key: locationName,
+                    locationName,
+                    lines: [],
+                    firstIndex: index,
+                });
+            }
+            groupsByLocation.get(locationName).lines.push(line);
+        });
+
+        return Array.from(groupsByLocation.values()).sort((a, b) => {
+            const nameCompare = a.locationName.localeCompare(b.locationName, undefined, {
+                numeric: true,
+                sensitivity: "base",
+            });
+            return nameCompare || a.firstIndex - b.firstIndex;
+        });
+    }
+
     async loadPicking() {
         this.state.loading = true;
         try {

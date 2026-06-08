@@ -1422,6 +1422,42 @@
 .flash-highlight {
   animation: flashHighlight 1.5s ease-out forwards;
 }
+
+.hlv-barcode-app .picking-location-group-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  margin: 8px 0 0;
+  padding: 6px 10px;
+  background: #d6dae0;
+  border: 1px solid #c3c8d0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.hlv-barcode-app .picking-location-group-header:first-child {
+  margin-top: 0;
+}
+
+.hlv-barcode-app .picking-location-count {
+  margin-left: auto;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--text-color);
+  font-size: 0.75rem;
+}
 /* ==========================================================================
    MULTI-LOCATION MODE ACTIVE ROW
    ========================================================================== */

@@ -125,7 +125,13 @@
                         Danh sách sản phẩm
                     </div>
                     <div class="items-list" style="margin-top: 0;">
-                        <t t-foreach="state.picking.lines" t-as="line" t-key="line.id || 'draft_' + line.product_id">
+                        <t t-foreach="this.groupedPickingLines" t-as="group" t-key="group.key">
+                            <div class="picking-location-group-header">
+                                <i class="fa fa-map-marker-alt"></i>
+                                <span><t t-esc="group.locationName"/></span>
+                                <span class="picking-location-count"><t t-esc="group.lines.length"/></span>
+                            </div>
+                            <t t-foreach="group.lines" t-as="line" t-key="line.id || group.key + '_draft_' + line.product_id">
                             <t t-set="is_active_location" t-value="!state.picking.is_putaway and (state.picking.is_pick or props.isMultiLocationMode) and props.scannedLocationName and line.location_name == props.scannedLocationName"/>
                             <t t-set="is_preferred_line" t-value="state.picking.is_pick and props.preferredMoveLineId and line.id == props.preferredMoveLineId"/>
                             <div t-attf-class="product-row-card #{line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0 ? 'scanned' : ''} #{is_active_location ? 'active-location-row' : ''} #{is_preferred_line ? 'preferred-pick-line' : ''}" t-att-data-product-id="line.product_id" t-att-data-line-id="line.id">
@@ -195,6 +201,7 @@
                                     </div>
                                 </t>
                             </div>
+                            </t>
                         </t>
                     </div>
                 </div>
