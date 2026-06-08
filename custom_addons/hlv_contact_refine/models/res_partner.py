@@ -1,58 +1,593 @@
 # -*- coding: utf-8 -*-
-from odoo import models, fields, api
+from odoo import api, fields, models, _
+
 
 class ResPartner(models.Model):
     _inherit = 'res.partner'
 
-    child_contact_count = fields.Integer(compute='_compute_child_contact_count', string="Number of Child Contacts")
-    hlv_filter_tag_ids = fields.Many2many('hlv.contact.filter.tag', compute='_compute_hlv_filter_tag_ids', 
-                                          string="Filter Tags", store=True)
-    hlv_partner_type = fields.Selection([
-        ('company', 'Công ty'),
-        ('person', 'Cá nhân')
-    ], compute='_compute_hlv_partner_type', string="Loại liên hệ", store=True)
+    def init(self):
+        cr = self.env.cr
+        cr.execute("""
+            UPDATE res_partner
+               SET hlv_partner_type = CASE
+                   WHEN type = 'delivery' THEN 'delivery'
+                   WHEN type = 'invoice' THEN 'invoice'
+                   WHEN parent_id IS NOT NULL THEN 'child_contact'
+                   WHEN is_company IS TRUE THEN 'root_company'
+                   ELSE 'root_person'
+               END
+        """)
+        cr.execute("""
+            UPDATE res_partner
+               SET hlv_misa_code_key = CASE
+                   WHEN COALESCE(NULLIF(TRIM(vat), ''), '') != ''
+                    AND COALESCE(NULLIF(TRIM(ref), ''), NULLIF(TRIM(company_registry), '')) IS NOT NULL
+                   THEN TRIM(vat) || '-' || COALESCE(NULLIF(TRIM(ref), ''), NULLIF(TRIM(company_registry), ''))
+                   ELSE COALESCE(NULLIF(TRIM(ref), ''), NULLIF(TRIM(company_registry), ''))
+               END,
+                   hlv_dirty_child_code = (
+                       parent_id IS NOT NULL
+                       AND (
+                           COALESCE(NULLIF(TRIM(ref), ''), '') != ''
+                           OR COALESCE(NULLIF(TRIM(company_registry), ''), '') != ''
+                       )
+                   ),
+                   hlv_root_code_mismatch = (
+                       parent_id IS NULL
+                       AND COALESCE(NULLIF(TRIM(ref), ''), '') != ''
+                       AND COALESCE(NULLIF(TRIM(company_registry), ''), '') != ''
+                       AND TRIM(ref) != TRIM(company_registry)
+                   )
+        """)
+        cr.execute("UPDATE res_partner SET hlv_has_sale_order = customer_rank > 0")
+        cr.execute("UPDATE res_partner SET hlv_has_purchase_order = supplier_rank > 0")
+        cr.execute("UPDATE res_partner SET hlv_has_shopee_order = FALSE")
+        cr.execute("""
+            UPDATE res_partner
+               SET hlv_has_sale_order = TRUE
+             WHERE id IN (
+                   SELECT DISTINCT COALESCE(cp.id, so.partner_id)
+                     FROM sale_order so
+                     JOIN res_partner p ON p.id = so.partner_id
+                LEFT JOIN res_partner cp ON cp.id = p.commercial_partner_id
+             )
+        """)
+        cr.execute("""
+            UPDATE res_partner
+               SET hlv_has_purchase_order = TRUE
+             WHERE id IN (
+                   SELECT DISTINCT COALESCE(cp.id, po.partner_id)
+                     FROM purchase_order po
+                     JOIN res_partner p ON p.id = po.partner_id
+                LEFT JOIN res_partner cp ON cp.id = p.commercial_partner_id
+             )
+        """)
+        cr.execute("""
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                 WHERE table_name = 'sale_order'
+                   AND column_name = 'shopee_order_ref'
+            )
+        """)
+        has_shopee_ref = cr.fetchone()[0]
+        if has_shopee_ref:
+            cr.execute("""
+                UPDATE res_partner
+                   SET hlv_has_shopee_order = TRUE,
+                       hlv_has_sale_order = TRUE
+                 WHERE id IN (
+                       SELECT DISTINCT COALESCE(cp.id, so.partner_id)
+                         FROM sale_order so
+                         JOIN res_partner p ON p.id = so.partner_id
+                    LEFT JOIN res_partner cp ON cp.id = p.commercial_partner_id
+                        WHERE so.shopee_order_ref IS NOT NULL
+                          AND so.shopee_order_ref != ''
+                 )
+            """)
+        cr.execute("""
+            UPDATE res_partner
+               SET hlv_business_role = CASE
+                   WHEN type = 'delivery' THEN 'delivery_address'
+                   WHEN type = 'invoice' THEN 'invoice_address'
+                   WHEN parent_id IS NOT NULL THEN 'child_contact'
+                   WHEN hlv_has_shopee_order IS TRUE THEN 'customer_shopee'
+                   WHEN hlv_has_sale_order IS TRUE THEN 'customer_crm'
+                   WHEN hlv_has_purchase_order IS TRUE THEN 'supplier'
+                   ELSE 'other'
+               END
+        """)
+        cr.execute("""
+            UPDATE res_partner
+               SET hlv_relationship_label = CASE
+                   WHEN type = 'delivery' THEN 'Giao hàng'
+                   WHEN type = 'invoice' THEN 'Hóa đơn'
+                   WHEN parent_id IS NOT NULL THEN 'Liên hệ con'
+                   ELSE 'Hồ sơ gốc'
+               END
+        """)
 
-    @api.depends('is_company')
+    child_contact_count = fields.Integer(
+        compute='_compute_child_contact_count',
+        string="Số liên hệ con",
+    )
+    hlv_partner_type = fields.Selection([
+        # Legacy values from 18.0.1.0.0. Keep them valid so stored rows do not
+        # break search panel before the classification refresh rewrites them.
+        ('company', 'Công ty'),
+        ('person', 'Cá nhân'),
+        ('root_company', 'Công ty gốc'),
+        ('root_person', 'Cá nhân gốc'),
+        ('child_contact', 'Liên hệ con'),
+        ('delivery', 'Địa chỉ giao hàng'),
+        ('invoice', 'Địa chỉ hóa đơn'),
+    ], compute='_compute_hlv_partner_type', string="Loại liên hệ", store=True)
+    hlv_filter_tag_ids = fields.Many2many(
+        'hlv.contact.filter.tag',
+        compute='_compute_hlv_filter_tag_ids',
+        string="Phân loại",
+        store=True,
+    )
+    hlv_business_role = fields.Selection([
+        ('vendor', 'Nhà cung cấp (cũ)'),
+        ('customer_crm', 'Khách CRM'),
+        ('customer_shopee', 'Khách Shopee'),
+        ('supplier', 'Nhà cung cấp'),
+        ('delivery_address', 'Địa chỉ giao hàng'),
+        ('invoice_address', 'Địa chỉ hóa đơn'),
+        ('child_contact', 'Liên hệ con'),
+        ('other', 'Khác'),
+    ], compute='_compute_hlv_business_role', string="Nghiệp vụ", store=True)
+    hlv_relationship_label = fields.Char(
+        compute='_compute_hlv_relationship_label',
+        string="Quan hệ",
+        store=True,
+    )
+    hlv_has_sale_order = fields.Boolean(
+        compute='_compute_hlv_order_flags',
+        string="Có đơn bán",
+        store=True,
+    )
+    hlv_has_shopee_order = fields.Boolean(
+        compute='_compute_hlv_order_flags',
+        string="Có đơn Shopee",
+        store=True,
+    )
+    hlv_has_purchase_order = fields.Boolean(
+        compute='_compute_hlv_order_flags',
+        string="Có đơn mua",
+        store=True,
+    )
+    hlv_misa_code_key = fields.Char(
+        compute='_compute_hlv_misa_code_key',
+        string="Khóa MST-Mã khách",
+        store=True,
+    )
+    hlv_dirty_child_code = fields.Boolean(
+        compute='_compute_hlv_code_flags',
+        string="Mã nằm trên liên hệ con",
+        store=True,
+    )
+    hlv_root_code_mismatch = fields.Boolean(
+        compute='_compute_hlv_code_flags',
+        string="Root lệch ref/company_registry",
+        store=True,
+    )
+
+    @api.depends('is_company', 'parent_id', 'type')
     def _compute_hlv_partner_type(self):
         for partner in self:
-            partner.hlv_partner_type = 'company' if partner.is_company else 'person'
+            if partner.type == 'delivery':
+                partner.hlv_partner_type = 'delivery'
+            elif partner.type == 'invoice':
+                partner.hlv_partner_type = 'invoice'
+            elif partner.parent_id:
+                partner.hlv_partner_type = 'child_contact'
+            elif partner.is_company:
+                partner.hlv_partner_type = 'root_company'
+            else:
+                partner.hlv_partner_type = 'root_person'
 
     @api.depends('child_ids')
     def _compute_child_contact_count(self):
         for partner in self:
             partner.child_contact_count = len(partner.child_ids)
 
-    @api.depends('customer_rank', 'supplier_rank', 'parent_id', 'type')
+    def _hlv_sale_order_shopee_domain(self, partner):
+        SaleOrder = self.env['sale.order'].sudo()
+        if 'shopee_order_ref' not in SaleOrder._fields:
+            return False
+        return [
+            ('partner_id', 'child_of', partner.id),
+            ('shopee_order_ref', '!=', False),
+        ]
+
+    @api.depends('customer_rank', 'supplier_rank')
+    def _compute_hlv_order_flags(self):
+        SaleOrder = self.env['sale.order'].sudo()
+        PurchaseOrder = self.env['purchase.order'].sudo()
+        Partner = self.env['res.partner'].sudo().with_context(active_test=False)
+        partners = self.filtered('id')
+        partner_ids = set(partners.ids)
+        sale_partner_ids = set()
+        shopee_partner_ids = set()
+        purchase_partner_ids = set()
+
+        if partners:
+            descendants = Partner.search([('id', 'child_of', partners.ids)])
+            descendant_to_roots = {}
+            for descendant in descendants:
+                current = descendant
+                roots = []
+                while current:
+                    if current.id in partner_ids:
+                        roots.append(current.id)
+                    current = current.parent_id
+                if roots:
+                    descendant_to_roots[descendant.id] = roots
+
+            sale_groups = SaleOrder.read_group(
+                [('partner_id', 'in', descendants.ids)],
+                ['partner_id'],
+                ['partner_id'],
+            )
+            for group in sale_groups:
+                direct_id = group.get('partner_id') and group['partner_id'][0]
+                for root_id in descendant_to_roots.get(direct_id, []):
+                    sale_partner_ids.add(root_id)
+
+            shopee_domain = False
+            if 'shopee_order_ref' in SaleOrder._fields:
+                shopee_domain = [
+                    ('partner_id', 'in', descendants.ids),
+                    ('shopee_order_ref', '!=', False),
+                ]
+            if shopee_domain:
+                shopee_groups = SaleOrder.read_group(shopee_domain, ['partner_id'], ['partner_id'])
+                for group in shopee_groups:
+                    direct_id = group.get('partner_id') and group['partner_id'][0]
+                    for root_id in descendant_to_roots.get(direct_id, []):
+                        shopee_partner_ids.add(root_id)
+
+            purchase_groups = PurchaseOrder.read_group(
+                [('partner_id', 'in', descendants.ids)],
+                ['partner_id'],
+                ['partner_id'],
+            )
+            for group in purchase_groups:
+                direct_id = group.get('partner_id') and group['partner_id'][0]
+                for root_id in descendant_to_roots.get(direct_id, []):
+                    purchase_partner_ids.add(root_id)
+
+        for partner in self:
+            if not partner.id:
+                partner.hlv_has_sale_order = False
+                partner.hlv_has_shopee_order = False
+                partner.hlv_has_purchase_order = False
+                continue
+
+            partner.hlv_has_sale_order = bool(
+                partner.customer_rank > 0 or partner.id in sale_partner_ids
+            )
+            partner.hlv_has_shopee_order = partner.id in shopee_partner_ids
+            partner.hlv_has_purchase_order = bool(
+                partner.supplier_rank > 0 or partner.id in purchase_partner_ids
+            )
+
+    @api.depends('vat', 'ref', 'company_registry')
+    def _compute_hlv_misa_code_key(self):
+        for partner in self:
+            code = (partner.ref or partner.company_registry or '').strip()
+            tax_code = (partner.vat or '').strip()
+            partner.hlv_misa_code_key = '%s-%s' % (tax_code, code) if tax_code and code else code or False
+
+    @api.depends('parent_id', 'type', 'hlv_has_sale_order', 'hlv_has_shopee_order', 'hlv_has_purchase_order')
+    def _compute_hlv_business_role(self):
+        for partner in self:
+            if partner.type == 'delivery':
+                partner.hlv_business_role = 'delivery_address'
+            elif partner.type == 'invoice':
+                partner.hlv_business_role = 'invoice_address'
+            elif partner.parent_id:
+                partner.hlv_business_role = 'child_contact'
+            elif partner.hlv_has_shopee_order:
+                partner.hlv_business_role = 'customer_shopee'
+            elif partner.hlv_has_sale_order:
+                partner.hlv_business_role = 'customer_crm'
+            elif partner.hlv_has_purchase_order:
+                partner.hlv_business_role = 'supplier'
+            else:
+                partner.hlv_business_role = 'other'
+
+    @api.depends('parent_id', 'type')
+    def _compute_hlv_relationship_label(self):
+        for partner in self:
+            if partner.type == 'delivery':
+                partner.hlv_relationship_label = 'Giao hàng'
+            elif partner.type == 'invoice':
+                partner.hlv_relationship_label = 'Hóa đơn'
+            elif partner.parent_id:
+                partner.hlv_relationship_label = 'Liên hệ con'
+            else:
+                partner.hlv_relationship_label = 'Hồ sơ gốc'
+
+    @api.depends('parent_id', 'ref', 'company_registry')
+    def _compute_hlv_code_flags(self):
+        for partner in self:
+            ref = (partner.ref or '').strip()
+            company_registry = (partner.company_registry or '').strip()
+            partner.hlv_dirty_child_code = bool(partner.parent_id and (ref or company_registry))
+            partner.hlv_root_code_mismatch = bool(
+                not partner.parent_id and ref and company_registry and ref != company_registry
+            )
+
+    @api.depends(
+        'customer_rank', 'supplier_rank', 'parent_id', 'type', 'is_company',
+        'ref', 'company_registry', 'vat', 'hlv_has_sale_order',
+        'hlv_has_shopee_order', 'hlv_has_purchase_order',
+        'hlv_dirty_child_code', 'hlv_root_code_mismatch', 'hlv_business_role',
+    )
     def _compute_hlv_filter_tag_ids(self):
-        customer_tag = self.env.ref('hlv_contact_refine.tag_customer', raise_if_not_found=False)
-        vendor_tag = self.env.ref('hlv_contact_refine.tag_vendor', raise_if_not_found=False)
-        main_tag = self.env.ref('hlv_contact_refine.tag_main', raise_if_not_found=False)
-        delivery_tag = self.env.ref('hlv_contact_refine.tag_delivery', raise_if_not_found=False)
+        tags = {
+            rec.code: rec
+            for rec in self.env['hlv.contact.filter.tag'].sudo().search([])
+        }
 
         for partner in self:
             tag_ids = []
-            cus_rank = getattr(partner, 'customer_rank', 0)
-            sup_rank = getattr(partner, 'supplier_rank', 0)
-            
-            # 1. Customer: check rank OR actual sales order
-            if cus_rank > 0:
-                if customer_tag: tag_ids.append(customer_tag.id)
-            elif partner.id:
-                if self.env['sale.order'].search_count([('partner_id', 'child_of', partner.id)], limit=1):
-                    if customer_tag: tag_ids.append(customer_tag.id)
 
-            # 2. Vendor: check rank OR actual purchase order
-            if sup_rank > 0:
-                if vendor_tag: tag_ids.append(vendor_tag.id)
-            elif partner.id:
-                if self.env['purchase.order'].search_count([('partner_id', 'child_of', partner.id)], limit=1):
-                    if vendor_tag: tag_ids.append(vendor_tag.id)
-            
-            # 3. Main Contact vs Delivery Address
+            def add(code):
+                tag = tags.get(code)
+                if tag:
+                    tag_ids.append(tag.id)
+
             if not partner.parent_id:
-                if main_tag: tag_ids.append(main_tag.id)
-            
+                add('root')
+                add('company' if partner.is_company else 'person')
+            else:
+                add('child')
+
             if partner.type == 'delivery':
-                if delivery_tag: tag_ids.append(delivery_tag.id)
-                
+                add('delivery')
+            elif partner.type == 'invoice':
+                add('invoice')
+
+            if not partner.parent_id and partner.hlv_has_shopee_order:
+                add('customer_shopee')
+            elif not partner.parent_id and partner.hlv_has_sale_order:
+                add('customer')
+
+            if not partner.parent_id and partner.hlv_has_purchase_order:
+                add('vendor')
+
+            if (partner.ref or partner.company_registry) and not partner.parent_id:
+                add('misa_code')
+
+            partner._compute_hlv_code_flags()
+            if partner.hlv_dirty_child_code:
+                add('dirty_child_code')
+
+            if partner.hlv_root_code_mismatch:
+                add('root_code_mismatch')
+
             partner.hlv_filter_tag_ids = [(6, 0, tag_ids)]
+
+    def action_hlv_refresh_contact_classification(self):
+        partners = self
+        if not partners:
+            partners = self.env['res.partner'].sudo().with_context(active_test=False).search([])
+        partners._compute_hlv_partner_type()
+        partners._compute_hlv_order_flags()
+        partners._compute_hlv_business_role()
+        partners._compute_hlv_relationship_label()
+        partners._compute_hlv_code_flags()
+        partners._compute_hlv_misa_code_key()
+        partners._compute_hlv_filter_tag_ids()
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _('Đã cập nhật phân loại'),
+                'message': _('Đã quét lại %s liên hệ.') % len(partners),
+                'type': 'success',
+                'sticky': False,
+            }
+        }
+
+    def action_hlv_open_merge_wizard(self):
+        destination = self.filtered(lambda p: p.is_company and not p.parent_id)[:1] or self[:1]
+        return {
+            'name': _('Gộp liên hệ'),
+            'type': 'ir.actions.act_window',
+            'res_model': 'hlv.contact.merge.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {
+                'default_source_partner_ids': [(6, 0, self.ids)],
+                'default_destination_partner_id': destination.id,
+            },
+        }
+
+    def action_hlv_open_split_wizard(self):
+        self.ensure_one()
+        return {
+            'name': _('Tách thành khách hàng mới'),
+            'type': 'ir.actions.act_window',
+            'res_model': 'hlv.contact.split.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {
+                'default_source_partner_id': self.id,
+                'default_new_name': self.name,
+                'default_new_vat': self.vat,
+            },
+        }
+
+    @api.model
+    def hlv_contact_explorer_data(self, search_text=False, role='customer_crm', limit=80, offset=0):
+        domain = [('parent_id', '=', False), ('active', '=', True)]
+        if role and role != 'all':
+            domain.append(('hlv_business_role', '=', role))
+        if search_text:
+            domain += ['|', '|', '|',
+                       ('name', 'ilike', search_text),
+                       ('ref', 'ilike', search_text),
+                       ('vat', 'ilike', search_text),
+                       ('phone', 'ilike', search_text)]
+
+        total = self.sudo().search_count(domain)
+        partners = self.sudo().search(domain, order='name asc, id asc', limit=limit, offset=offset)
+        rows = [partner._hlv_explorer_row() for partner in partners]
+        selected = rows[0] if rows else False
+        related = self.browse(selected['id'])._hlv_explorer_related_rows() if selected else []
+        return {
+            'rows': rows,
+            'selected': selected,
+            'related': related,
+            'roles': self._hlv_explorer_role_counts(),
+            'total': total,
+            'offset': offset,
+            'limit': limit,
+        }
+
+    @api.model
+    def hlv_contact_explorer_select(self, partner_id):
+        partner = self.sudo().browse(partner_id).exists()
+        if not partner:
+            return {'selected': False, 'related': []}
+        root = partner.commercial_partner_id or partner
+        return {
+            'selected': root._hlv_explorer_row(),
+            'related': root._hlv_explorer_related_rows(),
+        }
+
+    @api.model
+    def _hlv_explorer_role_counts(self):
+        labels = {
+            'all': _('Tất cả'),
+            'customer_crm': _('Khách CRM'),
+            'customer_shopee': _('Khách Shopee'),
+            'supplier': _('Nhà cung cấp'),
+            'other': _('Khác'),
+        }
+        result = [{'key': 'all', 'label': labels['all'], 'count': self.sudo().search_count([
+            ('parent_id', '=', False),
+            ('active', '=', True),
+        ])}]
+        for key in ('customer_crm', 'customer_shopee', 'supplier', 'other'):
+            result.append({
+                'key': key,
+                'label': labels[key],
+                'count': self.sudo().search_count([
+                    ('parent_id', '=', False),
+                    ('active', '=', True),
+                    ('hlv_business_role', '=', key),
+                ]),
+            })
+        return result
+
+    def _hlv_explorer_row(self):
+        self.ensure_one()
+        dirty = self._hlv_explorer_is_dirty()
+        return {
+            'id': self.id,
+            'name': self.display_name or self.name or '',
+            'role': dict(self._fields['hlv_business_role'].selection).get(self.hlv_business_role, self.hlv_business_role or ''),
+            'role_key': self.hlv_business_role or '',
+            'relationship': self.hlv_relationship_label or '',
+            'relationship_key': self._hlv_explorer_relationship_key(),
+            'ref': self.ref or '',
+            'company_registry': self.company_registry or '',
+            'code_hint': self._hlv_explorer_code_hint(),
+            'vat': self.vat or '',
+            'phone': self.phone or self.mobile or '',
+            'email': self.email or '',
+            'city': self.city or '',
+            'child_count': self.child_contact_count,
+            'has_shopee': bool(self.hlv_has_shopee_order),
+            'dirty': dirty,
+            'dirty_reason': self._hlv_explorer_dirty_reason() if dirty else '',
+        }
+
+    def _hlv_explorer_relationship_key(self):
+        self.ensure_one()
+        if self.type == 'delivery':
+            return 'delivery'
+        if self.type == 'invoice':
+            return 'invoice'
+        if self.parent_id:
+            return 'child'
+        return 'root'
+
+    def _hlv_explorer_dirty_reason(self):
+        self.ensure_one()
+        reasons = []
+        ref = (self.ref or '').strip()
+        company_registry = (self.company_registry or '').strip()
+        if self.parent_id and (ref or company_registry):
+            reasons.append(_('mã MISA đang nằm trên liên hệ con/địa chỉ'))
+        if not self.parent_id and ref and company_registry and ref != company_registry:
+            reasons.append(_('ref và company_registry đang lệch nhau'))
+        return ', '.join(reasons)
+
+    def _hlv_explorer_is_dirty(self):
+        self.ensure_one()
+        ref = (self.ref or '').strip()
+        company_registry = (self.company_registry or '').strip()
+        return bool(
+            (self.parent_id and (ref or company_registry))
+            or (not self.parent_id and ref and company_registry and ref != company_registry)
+        )
+
+    def _hlv_explorer_code_hint(self):
+        self.ensure_one()
+        parts = []
+        if self.ref:
+            parts.append('ref=%s' % self.ref)
+        if self.company_registry:
+            parts.append('registry=%s' % self.company_registry)
+        return ', '.join(parts)
+
+    def _hlv_explorer_related_rows(self):
+        self.ensure_one()
+        related = self | self.child_ids
+        related = related.sorted(lambda p: (0 if p.id == self.id else 1, p.type or '', p.name or ''))
+        return [partner._hlv_explorer_row() for partner in related]
+
+    def action_hlv_open_contact_explorer(self):
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'hlv_contact_explorer_action',
+            'name': _('Liên hệ tinh gọn'),
+        }
+
+    @api.model
+    def hlv_contact_explorer_fix_data(self, partner_id):
+        partner = self.sudo().browse(partner_id).exists()
+        if not partner:
+            return {'selected': False, 'related': []}
+
+        root = partner.commercial_partner_id or partner
+        fixed = []
+
+        if partner.parent_id and (partner.ref or partner.company_registry):
+            partner.write({'ref': False, 'company_registry': False})
+            fixed.append(partner.id)
+        elif not partner.parent_id:
+            dirty_children = partner.child_ids.filtered(lambda p: p.ref or p.company_registry)
+            if dirty_children:
+                dirty_children.write({'ref': False, 'company_registry': False})
+                fixed.extend(dirty_children.ids)
+
+            ref = (partner.ref or '').strip()
+            company_registry = (partner.company_registry or '').strip()
+            if ref and company_registry and ref != company_registry:
+                partner.write({'company_registry': ref})
+                fixed.append(partner.id)
+
+        (root | root.child_ids)._compute_hlv_code_flags()
+        (root | root.child_ids)._compute_hlv_filter_tag_ids()
+        return {
+            'fixed_ids': fixed,
+            'selected': root._hlv_explorer_row(),
+            'related': root._hlv_explorer_related_rows(),
+        }

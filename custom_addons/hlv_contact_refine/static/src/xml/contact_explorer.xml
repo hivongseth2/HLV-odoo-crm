@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="hlv_contact_refine.ContactExplorer" owl="1">
+        <div class="hlv_contact_explorer">
+            <aside class="hlv_contact_left">
+                <div class="hlv_panel_title">Liên hệ liên quan</div>
+
+                <t t-if="state.selected">
+                    <div class="hlv_selected">
+                        <div class="hlv_selected_name" t-esc="state.selected.name"/>
+                        <div class="hlv_selected_meta">
+                            <span t-esc="state.selected.role"/>
+                            <span t-if="state.selected.ref"> · <t t-esc="state.selected.ref"/></span>
+                        </div>
+                        <div class="hlv_selected_meta" t-if="state.selected.vat">
+                            MST: <t t-esc="state.selected.vat"/>
+                        </div>
+                    </div>
+
+                    <div class="hlv_related_list">
+                        <t t-foreach="state.related" t-as="item" t-key="item.id">
+                            <div
+                                    t-att-class="'hlv_related_item relation-' + item.relationship_key + ' ' + (item.id === state.selected.id ? 'is-root' : '')"
+                                    t-on-click="() => this.openPartner(item.id)">
+                                <div>
+                                    <div class="hlv_related_name" t-esc="item.name"/>
+                                    <div class="hlv_related_meta">
+                                        <t t-esc="item.relationship"/> · <t t-esc="item.role"/>
+                                    </div>
+                                    <div t-if="item.code_hint" class="hlv_related_code">
+                                        Mã trên liên hệ này: <t t-esc="item.code_hint"/>
+                                    </div>
+                                    <div t-if="item.dirty_reason" class="hlv_related_reason" t-esc="item.dirty_reason"/>
+                                </div>
+                                <div class="hlv_related_actions">
+                                    <span t-if="item.has_shopee" class="hlv_chip shopee">Shopee</span>
+                                    <span t-if="item.dirty" class="hlv_chip warn">Mã cần kiểm tra</span>
+                                    <button t-if="item.dirty"
+                                            type="button"
+                                            class="hlv_fix_button"
+                                            t-on-click.stop="() => this.fixPartnerData(item.id)">
+                                        Sửa mã
+                                    </button>
+                                </div>
+                            </div>
+                        </t>
+                    </div>
+                </t>
+
+                <t t-else="">
+                    <div class="hlv_empty">Chọn một liên hệ ở danh sách bên phải.</div>
+                </t>
+            </aside>
+
+            <main class="hlv_contact_main_list">
+                <div class="hlv_toolbar">
+                    <div class="hlv_role_tabs">
+                        <t t-foreach="state.roles" t-as="role" t-key="role.key">
+                            <button type="button"
+                                    t-att-class="'hlv_role_tab ' + (state.role === role.key ? 'active' : '')"
+                                    t-on-click="() => this.setRole(role.key)">
+                                <span t-esc="role.label"/>
+                                <b t-esc="role.count"/>
+                            </button>
+                        </t>
+                    </div>
+                    <div class="hlv_toolbar_right">
+                        <div class="hlv_pager">
+                            <button type="button" t-on-click="previousPage" t-att-disabled="state.page &lt;= 1">‹</button>
+                            <span><t t-esc="pageStart"/>-<t t-esc="pageEnd"/> / <t t-esc="state.total"/></span>
+                            <button type="button" t-on-click="nextPage" t-att-disabled="state.page &gt;= pageCount">›</button>
+                        </div>
+                        <input class="hlv_search"
+                               type="search"
+                               placeholder="Tìm tên, mã KH, MST, điện thoại..."
+                               t-att-value="state.search"
+                               t-on-change="onSearch"
+                               t-on-keydown="(ev) => ev.key === 'Enter' &amp;&amp; this.onSearch(ev)"/>
+                    </div>
+                </div>
+
+                <div class="hlv_table">
+                    <div class="hlv_table_header">
+                        <span>Tên liên hệ chính</span>
+                        <span>Nghiệp vụ</span>
+                        <span>Mã KH</span>
+                        <span>MST</span>
+                        <span>Liên quan</span>
+                        <span>Điện thoại</span>
+                    </div>
+
+                    <t t-if="state.loading">
+                        <div class="hlv_loading">Đang tải...</div>
+                    </t>
+                    <t t-else="">
+                        <t t-foreach="state.rows" t-as="row" t-key="row.id">
+                            <button type="button"
+                                    t-att-class="'hlv_table_row ' + (state.selected &amp;&amp; state.selected.id === row.id ? 'active' : '')"
+                                    t-on-click="() => this.selectPartner(row.id)">
+                                <span class="hlv_name_cell">
+                                    <strong t-esc="row.name"/>
+                                    <small t-if="row.city" t-esc="row.city"/>
+                                </span>
+                                <span t-esc="row.role"/>
+                                <span t-esc="row.ref"/>
+                                <span t-esc="row.vat"/>
+                                <span><t t-esc="row.child_count"/> liên hệ</span>
+                                <span t-esc="row.phone"/>
+                            </button>
+                        </t>
+                    </t>
+                </div>
+            </main>
+        </div>
+    </t>
+</templates>

@@ -1,3 +1,6 @@
+"""Adds delivery planner picking fields/actions and invalidates snapshots on picking changes.
+"""
+
 import logging
 from datetime import timedelta
 from markupsafe import Markup, escape
@@ -591,6 +594,12 @@ class StockPicking(models.Model):
         try:
             from ..services.delivery_planner_stats import bump_stats_cache_version
             bump_stats_cache_version()
+        except Exception:
+            pass
+        try:
+            self.env['hlv.delivery.planner.snapshot'].sudo().mark_dirty_for_sale_orders(
+                so_ids, reason='stock.picking'
+            )
         except Exception:
             pass
         try:

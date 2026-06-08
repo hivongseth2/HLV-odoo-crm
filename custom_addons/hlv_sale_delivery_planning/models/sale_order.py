@@ -1,3 +1,6 @@
+"""Extends sale.order with delivery planner RPC wrappers and dashboard invalidation hooks.
+"""
+
 import logging
 from odoo import models, fields, api
 from dateutil.relativedelta import relativedelta
@@ -98,6 +101,12 @@ class SaleOrder(models.Model):
         try:
             from ..services.delivery_planner_stats import bump_stats_cache_version
             bump_stats_cache_version()
+        except Exception:
+            pass
+        try:
+            self.env['hlv.delivery.planner.snapshot'].sudo().mark_dirty_for_sale_orders(
+                ids, reason='sale.order'
+            )
         except Exception:
             pass
         try:
