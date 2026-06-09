@@ -598,6 +598,7 @@ a { color:inherit; }
         max-width: unset;
         width: 100%;
         border-radius: 10px;
+        flex: none;
     }
     .sr-voucher-list { flex-direction: column; gap: 12px; }
     
