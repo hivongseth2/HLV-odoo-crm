@@ -18,7 +18,7 @@
     <record id="stock.group_stock_manager" model="res.groups">
         <field name="implied_ids" eval="[
             (4, ref('group_barcode_permission_manager')),
-            (4, ref('group_stock_barcode_default_user'))
+            (3, ref('group_stock_barcode_default_user'))
         ]"/>
     </record>
 </odoo>
