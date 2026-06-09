@@ -591,9 +591,73 @@ a { color:inherit; }
     .sr-tbl-wrap { background:transparent; box-shadow:none; overflow:visible; border-radius:0; }
     .sr-tbl { display:none; }
     .sr-hist-cards { display:flex; flex-direction:column; gap:8px; }
-    /* Vouchers full width */
-    .sr-voucher-card, .sr-voucher-pill { min-width:unset; max-width:unset; width:100%; }
-    .sr-voucher-list { flex-direction:column; }
+    /* Vouchers full width & compact styling on mobile */
+    .sr-voucher-section { padding: 18px 14px; }
+    .sr-voucher-card, .sr-voucher-pill {
+        min-width: unset;
+        max-width: unset;
+        width: 100%;
+        border-radius: 10px;
+    }
+    .sr-voucher-list { flex-direction: column; gap: 12px; }
+    
+    .sr-v-stub {
+        width: 42px;
+        border-top-left-radius: 9px;
+        border-bottom-left-radius: 9px;
+    }
+    .sr-v-stub .ms {
+        font-size: 18px;
+    }
+    .sr-v-divider {
+        margin: 6px 0;
+    }
+    .sr-v-cutout {
+        width: 10px;
+        height: 10px;
+        left: -5px;
+    }
+    .sr-v-cutout.top {
+        top: -6px;
+    }
+    .sr-v-cutout.bottom {
+        bottom: -6px;
+    }
+    .sr-v-content {
+        padding: 10px 14px;
+        gap: 6px;
+    }
+    .sr-v-row-top {
+        flex-wrap: nowrap;
+        gap: 6px;
+    }
+    .sr-v-code-box {
+        padding: 3px 8px;
+        border-radius: 5px;
+    }
+    .sr-v-code {
+        font-size: 0.85rem;
+    }
+    .sr-v-copy-icon {
+        font-size: 11px;
+    }
+    .sr-v-expiry {
+        font-size: 0.68rem;
+        padding: 2px 6px;
+        border-radius: 4px;
+    }
+    .sr-v-desc {
+        font-size: 0.82rem;
+        line-height: 1.35;
+    }
+    .sr-v-status-badge {
+        font-size: 0.68rem;
+        padding: 2px 6px;
+    }
+    .sr-v-inactive-date {
+        font-size: 0.68rem !important;
+        margin-top: 2px !important;
+    }
     /* Tiers */
     .sr-tier-grid { grid-template-columns:1fr 1fr; gap:14px; }
     /* Top bar full pages */
