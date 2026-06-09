@@ -1076,6 +1076,32 @@ class ZaloMiniAppAPI(http.Controller):
             "remaining_points": partner.loyalty_total_points,
         }, status=201)
 
+    @http.route("/api/v1/loyalty/redeem/requests", type="http", auth="public", methods=["GET"], csrf=False)
+    def loyalty_redeem_requests(self, **kwargs):
+        partner = self._partner_from_session_or_param(kwargs)
+        if not partner:
+            return self._response_error("UNAUTHORIZED", "Missing partner context. Call /auth/zalo first.", status=401)
+
+        requests = request.env["hlv.loyalty.reward.request"].sudo().search([
+            ("partner_id", "=", partner.id),
+        ], order="date_request desc, id desc", limit=50)
+
+        data = []
+        for req in requests:
+            data.append({
+                "id": req.id,
+                "name": req.name,
+                "request_type": req.request_type,
+                "points_required": req.points_required,
+                "cash_value": req.cash_value,
+                "package_name": req.package_id.name if req.package_id else "",
+                "state": req.state,
+                "date_request": req.date_request.isoformat() if req.date_request else None,
+                "customer_note": req.customer_note or "",
+                "voucher_code": req.voucher_id.code if req.voucher_id else "",
+            })
+        return self._response_success({"requests": data})
+
     @http.route("/api/v1/account/change-password", type="http", auth="public", methods=["POST"], csrf=False)
     def api_change_password(self, **kwargs):
         payload = self._request_json()
