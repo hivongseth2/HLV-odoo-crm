@@ -558,6 +558,7 @@ class LoyaltyExternalAPI(http.Controller):
             'date_issued': v.date_issued.isoformat() if v.date_issued else None,
             'date_expiry': v.date_expiry.isoformat() if v.date_expiry else None,
             'package_name': v.package_id.name or '',
+            'reward_type': v.reward_type or 'discount',
         } for v in vouchers])
 
     @http.route('/api/v1/loyalty/voucher/validate', type='json',
