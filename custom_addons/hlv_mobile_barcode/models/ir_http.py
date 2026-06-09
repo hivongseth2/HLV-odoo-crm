@@ -27,7 +27,8 @@ class IrHttp(models.AbstractModel):
     def _dispatch(cls, endpoint):
         path = request.httprequest.path.rstrip('/')
         uid = request.session.uid
-        user = request.env['res.users'].browse(uid).exists() if uid else request.env['res.users']
+        Users = request.env['res.users'].sudo()
+        user = Users.browse(uid).exists() if uid else Users
         if (
             (path == '/odoo/barcode' or path.startswith('/odoo/barcode/'))
             and user
@@ -35,9 +36,8 @@ class IrHttp(models.AbstractModel):
             and not cls._user_in_group(user, 'hlv_mobile_barcode.group_stock_barcode_default_user')
         ):
             _logger.warning(
-                "Blocked default Odoo barcode access for user %s (%s)",
-                user.login,
-                user.id,
+                "Blocked default Odoo barcode access for uid %s",
+                uid,
             )
             raise Forbidden("You are not allowed to access the default Odoo Barcode app.")
 
