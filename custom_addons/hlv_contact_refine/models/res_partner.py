@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import json
-import os
 import time
 import unicodedata
 import uuid
@@ -553,23 +552,24 @@ class ResPartner(models.Model):
 
     @api.model
     def _hlv_misa_crm_headers(self):
-        get_param = self.env['ir.config_parameter'].sudo().get_param
-        authorization = (
-            get_param('MISA_CRM_AUTHORIZATION')
-            or os.environ.get('MISA_CRM_AUTHORIZATION', '')
-        ).strip()
-        if not authorization:
-            raise Exception(_('Thieu MISA_CRM_AUTHORIZATION trong Thiet lap he thong.'))
-        if not authorization.lower().startswith('bearer '):
-            authorization = 'Bearer %s' % authorization
-        return {
+        misa_utils = self.env['misa.api.utils'].sudo()
+        misa_config = self.env['misa.config'].sudo()
+        crm_token = misa_utils._fetch_login_crm_token()
+        if not crm_token:
+            raise Exception(_('Khong lay duoc token MISA CRM.'))
+
+        headers = dict(misa_config.get_crm_header(crm_token))
+        # Let requests calculate this; the fixed value in get_crm_header is
+        # only safe for the original captured payload.
+        headers.pop('content-length', None)
+        headers.pop('Content-Length', None)
+        headers.update({
             'accept': 'application/json, text/plain, */*',
-            'authorization': authorization,
-            'companycode': get_param('misa.crm.company_code') or '3R2PY2F4',
             'content-type': 'application/json',
             'layoutcode': 'account',
             'x-misa-language': 'vi-VN',
-        }
+        })
+        return headers
 
     @api.model
     def _hlv_misa_crm_payload(self, keyword, page=1, page_size=20):
