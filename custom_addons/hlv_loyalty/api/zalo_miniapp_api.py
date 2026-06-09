@@ -1028,6 +1028,9 @@ class ZaloMiniAppAPI(http.Controller):
                 "validity_days": p._get_validity_days(),
                 "apply_on": p.apply_on,
                 "min_order_amount": p.min_order_amount,
+                "reward_type": p.reward_type,
+                "gift_product_name": p.gift_product_id.name if p.gift_product_id else '',
+                "gift_qty": p.gift_qty,
             } for p in packages]
         })
 

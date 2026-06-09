@@ -636,6 +636,8 @@ class LoyaltyExternalAPI(http.Controller):
             'max_discount_amount': p.max_discount_amount,
             'min_order_amount': p.min_order_amount,
             'validity_days': p.validity_days,
+            'gift_product_name': p.gift_product_id.name if p.gift_product_id else '',
+            'gift_qty': p.gift_qty,
         } for p in packages])
 
     @http.route('/api/v1/loyalty/redeem/submit', type='json',
