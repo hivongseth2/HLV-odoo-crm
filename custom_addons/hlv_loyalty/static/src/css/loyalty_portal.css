@@ -242,22 +242,247 @@ a { color:inherit; }
                     border-radius:20px; transition:background .2s, color .2s; }
 .sr-view-all-link:hover { background:var(--c-pri); color:#fff; }
 
-/* ── Vouchers ── */
-.sr-voucher-section { background:var(--c-surf-0); border-radius:12px; padding:24px 32px;
-                      box-shadow:0 4px 24px rgba(0,6,102,.06); margin-bottom:40px; }
-.sr-vs-title    { font-size:1rem; font-weight:800; margin-bottom:16px; }
-.sr-voucher-list { display:flex; flex-wrap:wrap; gap:12px; }
-.sr-voucher-pill { display:inline-flex; align-items:center; gap:8px;
-                   background:#f0fff4; border:2px dashed #198754; border-radius:8px; padding:10px 16px; }
-.sr-voucher-pill .ms { color:#198754; font-size:18px; }
-.sr-v-code { font-family:monospace; font-weight:700; font-size:1rem; color:#198754; }
-.sr-v-val  { font-size:.8rem; color:#198754; font-weight:600; }
-/* Full-page voucher card */
-.sr-voucher-card { background:#f0fff4; border:2px dashed #198754; border-radius:12px;
-                   padding:18px 20px; min-width:220px; max-width:320px; flex:1; }
-.sr-vc-header { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
-.sr-vc-value  { font-size:1rem; font-weight:700; color:#198754; margin-bottom:6px; }
-.sr-vc-expiry { font-size:.78rem; color:#5a7a65; display:flex; align-items:center; gap:4px; }
+/* ── Vouchers Modern Layout ── */
+.sr-voucher-section {
+    background: var(--c-surf-0);
+    border-radius: 12px;
+    padding: 24px 32px;
+    box-shadow: 0 4px 24px rgba(0,6,102,.06);
+    margin-bottom: 40px;
+}
+.sr-vs-title {
+    font-size: 1.15rem;
+    font-weight: 800;
+    margin-bottom: 16px;
+    color: var(--c-pri);
+}
+.sr-voucher-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+/* Base ticket styles for both dashboard pills and full page cards */
+.sr-voucher-pill, .sr-voucher-card {
+    display: flex;
+    align-items: stretch;
+    background: #ffffff;
+    border: 1px solid rgba(25, 135, 84, 0.16);
+    border-radius: 12px;
+    padding: 0 !important;
+    margin-bottom: 0;
+    box-shadow: 0 4px 15px rgba(25, 135, 84, 0.03);
+    position: relative;
+    overflow: visible;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    min-width: 280px;
+    max-width: 100%;
+    flex: 1 1 300px;
+}
+.sr-voucher-pill:hover, .sr-voucher-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(25, 135, 84, 0.08);
+    border-color: rgba(25, 135, 84, 0.3);
+}
+
+/* Left ticket stub */
+.sr-v-stub {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%);
+    color: #ffffff;
+    width: 54px;
+    border-top-left-radius: 11px;
+    border-bottom-left-radius: 11px;
+    flex-shrink: 0;
+    position: relative;
+}
+.sr-v-stub .ms {
+    font-size: 22px;
+    opacity: 0.9;
+    animation: rdmFloat 3s ease-in-out infinite;
+}
+
+/* Ticket divider with circular cutouts */
+.sr-v-divider {
+    width: 1px;
+    position: relative;
+    background-image: linear-gradient(to bottom, rgba(25, 135, 84, 0.2) 60%, rgba(25, 135, 84, 0) 0%);
+    background-position: right;
+    background-size: 1px 6px;
+    background-repeat: repeat-y;
+    flex-shrink: 0;
+    margin: 8px 0;
+}
+.sr-v-cutout {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    background: var(--c-surf-0); /* Matches surrounding card background */
+    border-radius: 50%;
+    left: -6px;
+    z-index: 2;
+    border: 1px solid rgba(25, 135, 84, 0.16);
+}
+.sr-v-cutout.top {
+    top: -8px;
+    clip-path: circle(50% at 50% 100%);
+    border-top-color: transparent !important;
+}
+.sr-v-cutout.bottom {
+    bottom: -8px;
+    clip-path: circle(50% at 50% 0);
+    border-bottom-color: transparent !important;
+}
+
+/* Right main details */
+.sr-v-content {
+    flex: 1;
+    padding: 14px 18px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 8px;
+    min-width: 0;
+}
+.sr-v-row-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+/* Code box copyable */
+.sr-v-code-box {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    background: rgba(46, 125, 50, 0.06);
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px dashed rgba(46, 125, 50, 0.25);
+    position: relative;
+    transition: all 0.2s;
+    user-select: none;
+}
+.sr-v-code-box:hover {
+    background: rgba(46, 125, 50, 0.12);
+    border-color: rgba(46, 125, 50, 0.45);
+}
+.sr-v-code {
+    font-family: 'Manrope', monospace;
+    font-weight: 800;
+    font-size: 0.92rem;
+    color: #1b5e20;
+    letter-spacing: 0.5px;
+}
+.sr-v-copy-icon {
+    font-size: 13px;
+    color: #2e7d32;
+    transition: transform 0.15s;
+}
+.sr-v-code-box:active .sr-v-copy-icon {
+    transform: scale(0.8);
+}
+
+/* Tooltip popup for copy confirmation */
+.sr-v-tooltip {
+    position: absolute;
+    bottom: 125%;
+    left: 50%;
+    transform: translateX(-50%) translateY(4px);
+    background: #1e1e24;
+    color: #ffffff;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 4px 8px;
+    border-radius: 4px;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.2s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+    white-space: nowrap;
+    z-index: 15;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+}
+.sr-v-tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    margin-left: -4px;
+    border-width: 4px;
+    border-style: solid;
+    border-color: #1e1e24 transparent transparent transparent;
+}
+.sr-v-code-box.copied .sr-v-tooltip {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+/* Expiry label */
+.sr-v-expiry {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #454652;
+    background: var(--c-surf-hi);
+    padding: 3px 8px;
+    border-radius: 6px;
+    white-space: nowrap;
+}
+
+/* Description text style */
+.sr-v-desc {
+    font-size: 0.86rem;
+    font-weight: 600;
+    color: var(--c-ink-v);
+    line-height: 1.4;
+    word-break: break-word;
+}
+
+/* Disabled/Inactive State Styling */
+.sr-vcard-disabled {
+    opacity: 0.75;
+    border-color: #ced4da;
+    box-shadow: none;
+}
+.sr-vcard-disabled:hover {
+    transform: none;
+    box-shadow: none;
+    border-color: #ced4da;
+}
+.sr-vcard-disabled .sr-v-stub {
+    background: linear-gradient(135deg, #adb5bd 0%, #6c757d 100%);
+}
+.sr-vcard-disabled .sr-v-stub .ms {
+    animation: none;
+}
+.sr-vcard-disabled .sr-v-divider {
+    background-image: linear-gradient(to bottom, rgba(108, 117, 125, 0.2) 60%, rgba(108, 117, 125, 0) 0%);
+}
+.sr-vcard-disabled .sr-v-cutout {
+    border-color: #ced4da;
+}
+.sr-vcard-disabled .sr-v-code-box {
+    background: #e9ecef;
+    border-color: #ced4da;
+    cursor: default;
+}
+.sr-vcard-disabled .sr-v-code {
+    color: #6c757d;
+}
+.sr-vcard-disabled .sr-v-desc {
+    color: #6c757d;
+}
+.sr-v-status-badge {
+    font-size: 0.72rem;
+    font-weight: 700;
+    background: #e9ecef;
+    padding: 3px 8px;
+    border-radius: 6px;
+}
 
 /* ── History mobile card (shown on mobile, hidden on desktop) ── */
 .sr-hist-cards { display:none; }
@@ -367,7 +592,7 @@ a { color:inherit; }
     .sr-tbl { display:none; }
     .sr-hist-cards { display:flex; flex-direction:column; gap:8px; }
     /* Vouchers full width */
-    .sr-voucher-card { min-width:unset; max-width:unset; width:100%; }
+    .sr-voucher-card, .sr-voucher-pill { min-width:unset; max-width:unset; width:100%; }
     .sr-voucher-list { flex-direction:column; }
     /* Tiers */
     .sr-tier-grid { grid-template-columns:1fr 1fr; gap:14px; }

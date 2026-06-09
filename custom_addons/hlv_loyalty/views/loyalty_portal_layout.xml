@@ -36,6 +36,39 @@
     } else {
         init();
     }
+
+    // Clipboard copy with feedback
+    window.copyCode = function(code, element) {
+        if (!code) return;
+        navigator.clipboard.writeText(code).then(function() {
+            if (element) {
+                element.classList.add('copied');
+                setTimeout(function() {
+                    element.classList.remove('copied');
+                }, 1500);
+            }
+        }).catch(function() {
+            // Fallback for non-HTTPS or non-secure contexts
+            var textArea = document.createElement("textarea");
+            textArea.value = code;
+            textArea.style.position = "fixed";
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                if (element) {
+                    element.classList.add('copied');
+                    setTimeout(function() {
+                        element.classList.remove('copied');
+                    }, 1500);
+                }
+            } catch (err) {
+                console.error('Lỗi sao chép code: ', err);
+            }
+            document.body.removeChild(textArea);
+        });
+    };
 })();
         </script>
     </t>
