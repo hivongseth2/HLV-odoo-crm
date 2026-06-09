@@ -65,6 +65,7 @@ export class BarcodeApp extends Component {
             pickingRefreshTick: 0,
             lastScannedProduct: null,
             lastScannedMoveLine: null,
+            lastScanTarget: null,
             preferredMoveLineId: null,
             pickingState: "",
             scanMode: savedState.scanMode || "source",
@@ -380,6 +381,7 @@ export class BarcodeApp extends Component {
                     this.playSound('success');
                     this.state.scannedLocationId = res.location_id;
                     this.state.scannedLocationName = res.location_name;
+                    this.state.lastScanTarget = "location";
                     this.notification.add(`Đã chọn vị trí: ${res.location_name}`, { type: "success" });
                     
                     if (res.updated_product_id) {
@@ -392,6 +394,7 @@ export class BarcodeApp extends Component {
                     this.notification.add(`Scanned ${res.product_name}`, { type: "success" });
                     this.state.lastScannedProduct = res.product_id;
                     this.state.lastScannedMoveLine = res.move_line_id || null;
+                    this.state.lastScanTarget = "product";
                     this.state.pickingRefreshTick += 1;
                 }
             } catch (e) {
@@ -582,6 +585,7 @@ export class BarcodeApp extends Component {
         this.state.scannedLocationName = "";
         this.state.lastScannedProduct = null;
         this.state.lastScannedMoveLine = null;
+        this.state.lastScanTarget = null;
         this.state.preferredMoveLineId = null;
         this.state.warehouseCode = "";
         this.state.lookupType = null;
@@ -867,6 +871,7 @@ export class BarcodeApp extends Component {
             this.state.scannedLocationName = "";
             this.state.lastScannedProduct = null;
             this.state.lastScannedMoveLine = null;
+            this.state.lastScanTarget = null;
             this.state.preferredMoveLineId = null;
             this.state.pickingState = "";
             this.state.isMultiLocationMode = false;
@@ -1288,6 +1293,7 @@ export class BarcodeApp extends Component {
                 this.state.scannedLocationName = "";
                 this.state.lastScannedProduct = null;
                 this.state.lastScannedMoveLine = null;
+                this.state.lastScanTarget = null;
                 this.state.preferredMoveLineId = null;
                 this.state.pickingRefreshTick += 1;
             }

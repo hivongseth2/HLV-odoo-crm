@@ -15,6 +15,7 @@ export class PickingScanner extends Component {
         onValidated: { type: Function, optional: true },
         lastScannedProduct: { optional: true },
         lastScannedMoveLine: { optional: true },
+        lastScanTarget: { type: [String, Boolean], optional: true },
         preferredMoveLineId: { optional: true },
         onPreferredMoveLineChange: { type: Function, optional: true },
         scannedLocationName: { type: [String, Boolean], optional: true },
@@ -79,7 +80,7 @@ export class PickingScanner extends Component {
         });
 
         useEffect(() => {
-            if (!this.state.loading && this.props.lastScannedProduct) {
+            if (!this.state.loading && this.props.lastScanTarget === "product" && this.props.lastScannedProduct) {
                 const moveLineId = Number(this.props.lastScannedMoveLine || 0);
                 const productId = Number(this.props.lastScannedProduct);
                 const element = (
@@ -97,7 +98,24 @@ export class PickingScanner extends Component {
                     }, 1500);
                 }
             }
-        }, () => [this.props.lastScannedProduct, this.props.lastScannedMoveLine, this.props.refreshTick, this.state.loading]);
+        }, () => [this.props.lastScanTarget, this.props.lastScannedProduct, this.props.lastScannedMoveLine, this.props.refreshTick, this.state.loading]);
+
+        useEffect(() => {
+            if (!this.state.loading && this.props.lastScanTarget === "location" && this.props.scannedLocationName) {
+                const element = Array.from(document.querySelectorAll("[data-location-name]")).find(
+                    (candidate) => candidate.dataset.locationName === this.props.scannedLocationName
+                );
+                if (element) {
+                    element.classList.remove("flash-highlight");
+                    void element.offsetWidth;
+                    element.scrollIntoView({ behavior: "smooth", block: "center" });
+                    element.classList.add("flash-highlight");
+                    setTimeout(() => {
+                        if (element) element.classList.remove("flash-highlight");
+                    }, 1500);
+                }
+            }
+        }, () => [this.props.lastScanTarget, this.props.scannedLocationName, this.props.refreshTick, this.state.loading]);
 
         useEffect(() => {
             if (this.locationBannerRef.el) {

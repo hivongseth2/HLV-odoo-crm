@@ -126,7 +126,7 @@
                     </div>
                     <div class="items-list" style="margin-top: 0;">
                         <t t-foreach="this.groupedPickingLines" t-as="group" t-key="group.key">
-                            <div class="picking-location-group-header">
+                            <div class="picking-location-group-header" t-att-data-location-name="group.locationName">
                                 <i class="fa fa-map-marker-alt"></i>
                                 <span><t t-esc="group.locationName"/></span>
                                 <span class="picking-location-count"><t t-esc="group.lines.length"/></span>
