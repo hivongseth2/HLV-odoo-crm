@@ -2,7 +2,7 @@ import logging
 
 from werkzeug.exceptions import Forbidden
 
-from odoo import models
+from odoo import SUPERUSER_ID, models
 from odoo.http import request
 
 _logger = logging.getLogger(__name__)
@@ -14,16 +14,18 @@ class IrHttp(models.AbstractModel):
     @classmethod
     def _dispatch(cls, endpoint):
         path = request.httprequest.path.rstrip('/')
+        uid = request.session.uid
+        user = request.env['res.users'].browse(uid).exists() if uid else request.env['res.users']
         if (
             (path == '/odoo/barcode' or path.startswith('/odoo/barcode/'))
-            and request.session.uid
-            and not request.env.user._is_superuser()
-            and not request.env.user.has_group('hlv_mobile_barcode.group_stock_barcode_default_user')
+            and user
+            and uid != SUPERUSER_ID
+            and not user.has_group('hlv_mobile_barcode.group_stock_barcode_default_user')
         ):
             _logger.warning(
                 "Blocked default Odoo barcode access for user %s (%s)",
-                request.env.user.login,
-                request.env.user.id,
+                user.login,
+                user.id,
             )
             raise Forbidden("You are not allowed to access the default Odoo Barcode app.")
 
