@@ -1303,6 +1303,15 @@ export class BarcodeApp extends Component {
             this.state.isProcessing = false;
         }
     }
+
+    clearScanState() {
+        this.state.lastScannedProduct = null;
+        this.state.lastScannedMoveLine = null;
+        this.state.lastScanTarget = null;
+        this.state.scannedLocationId = null;
+        this.state.scannedLocationName = "";
+        this.state.preferredMoveLineId = null;
+    }
 }
 
 registry.category("actions").add("hlv_mobile_barcode.BarcodeApp", BarcodeApp);

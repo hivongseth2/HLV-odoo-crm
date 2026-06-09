@@ -13,6 +13,7 @@ export class PickingScanner extends Component {
         onStateLoaded: { type: Function, optional: true },
         onPickingLoaded: { type: Function, optional: true },
         onValidated: { type: Function, optional: true },
+        onClearScanState: { type: Function, optional: true },
         lastScannedProduct: { optional: true },
         lastScannedMoveLine: { optional: true },
         lastScanTarget: { type: [String, Boolean], optional: true },
@@ -473,6 +474,9 @@ export class PickingScanner extends Component {
                     this.notification.add("Xác nhận phiếu thành công!", { type: "success" });
                 }
                 this.playSound('success');
+                if (this.props.onClearScanState) {
+                    this.props.onClearScanState();
+                }
                 if (this.props.onValidated && this.state.picking?.is_pick) {
                     this.props.onValidated();
                     return;
