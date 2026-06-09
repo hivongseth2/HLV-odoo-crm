@@ -167,7 +167,6 @@ class ResPartner(models.Model):
                     partner.sudo().write(vals)
                     updated_count += 1
 
-        _logger.info("MISA Contact Sync completed. Updated %s partners.", updated_count)
 
         return {
             'type': 'ir.actions.client',
