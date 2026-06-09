@@ -64,6 +64,7 @@ export class BarcodeApp extends Component {
             pickingRefreshTick: 0,
             lastScannedProduct: null,
             lastScannedMoveLine: null,
+            preferredMoveLineId: null,
             pickingState: "",
             scanMode: savedState.scanMode || "source",
             warehouses: [],
@@ -282,60 +283,6 @@ export class BarcodeApp extends Component {
         }
     }
 
-    activateManualInput(ev) {
-        const input = ev.target || this.manualInputRef?.el;
-        if (!input) return;
-        input.setAttribute('inputmode', 'text');
-        input.removeAttribute('readonly');
-        setTimeout(() => {
-            input.focus({ preventScroll: true });
-            const pos = input.value ? input.value.length : 0;
-            try {
-                input.setSelectionRange(pos, pos);
-            } catch (e) {}
-        }, 0);
-    }
-
-    onManualInputClick(ev) {
-        this.activateManualInput(ev);
-    }
-
-    onManualInputPointerDown(ev) {
-        const input = ev.target;
-        if (input && input.getAttribute('inputmode') === 'none') {
-            input.setAttribute('inputmode', 'text');
-        }
-    }
-
-    onManualInputBlur(ev) {
-        const input = ev.target;
-        input.setAttribute('inputmode', 'none');
-        if (this.state.showWarehouseSelectPopup) {
-            return;
-        }
-        setTimeout(() => {
-            const active = document.activeElement;
-            if (
-                active &&
-                (
-                    ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(active.tagName) ||
-                    active.closest?.('.modal-overlay, .modal-content, .modal-overlay-custom, .modal-container-custom')
-                )
-            ) {
-                return;
-            }
-            if (this.state.currentView !== 'main' || this.state.showWarehouseSelectPopup) {
-                return;
-            }
-            input.focus({ preventScroll: true });
-            const pos = input.value ? input.value.length : 0;
-            try {
-                input.setSelectionRange(pos, pos);
-            } catch (e) {}
-        }, 0);
-        this.restoreScannerFocus(80);
-    }
-
     async onHiddenInputKeyup(ev) {
         if (this._ignoreNextHiddenKeyup) {
             this._ignoreNextHiddenKeyup = false;
@@ -420,7 +367,8 @@ export class BarcodeApp extends Component {
                     destination_location_id: this.state.scannedLocationId,
                     last_product_id: this.state.lastScannedProduct,
                     location_mode: locationMode,
-                    is_multi_location: this.state.isMultiLocationMode
+                    is_multi_location: this.state.isMultiLocationMode,
+                    preferred_move_line_id: this.state.preferredMoveLineId
                 });
                 if (res.error) {
                     this.playSound('error');
@@ -578,6 +526,7 @@ export class BarcodeApp extends Component {
             this.state.isMultiLocationMode = prevState.isMultiLocationMode || false;
             this.state.cameraManuallyOff = prevState.cameraManuallyOff !== undefined ? prevState.cameraManuallyOff : !this.state.cameraDefaultOn;
             this.state.pickingState = "";
+            this.state.preferredMoveLineId = null;
             this.viewScannerCallback = null;
 
             if (this.state.currentView !== 'main') {
@@ -627,6 +576,7 @@ export class BarcodeApp extends Component {
         this.state.scannedLocationName = "";
         this.state.lastScannedProduct = null;
         this.state.lastScannedMoveLine = null;
+        this.state.preferredMoveLineId = null;
         this.state.warehouseCode = "";
         this.state.lookupType = null;
         this.state.recordId = null;
@@ -863,6 +813,7 @@ export class BarcodeApp extends Component {
                 this.state.scannedLocationName = isMultiLocation ? "" : res.location_name;
                 this.state.currentView = 'picking';
                 this.state.isMultiLocationMode = isMultiLocation;
+                this.state.preferredMoveLineId = null;
                 this.state.cameraManuallyOff = !this.state.cameraDefaultOn;
                 setTimeout(async () => {
                     await this.startPersistentCamera(false);
@@ -909,6 +860,7 @@ export class BarcodeApp extends Component {
             this.state.scannedLocationName = "";
             this.state.lastScannedProduct = null;
             this.state.lastScannedMoveLine = null;
+            this.state.preferredMoveLineId = null;
             this.state.pickingState = "";
             this.state.isMultiLocationMode = false;
             this.state.pickingIsReturn = false;
@@ -950,6 +902,16 @@ export class BarcodeApp extends Component {
         this.state.pickingIsPutaway = data.is_putaway || false;
         this.state.pickingTypeCode = data.picking_type_code;
         this.state.pickingSourceTransferName = data.source_transfer_name;
+        if (this.state.preferredMoveLineId) {
+            const preferredLine = (data.lines || []).find((line) => line.id === this.state.preferredMoveLineId);
+            if (!preferredLine || preferredLine.qty_done >= preferredLine.product_uom_qty) {
+                this.state.preferredMoveLineId = null;
+            }
+        }
+    }
+
+    setPreferredMoveLine(lineId) {
+        this.state.preferredMoveLineId = lineId || null;
     }
 
     openPopupCamera() {
@@ -1317,6 +1279,7 @@ export class BarcodeApp extends Component {
                 this.state.scannedLocationName = "";
                 this.state.lastScannedProduct = null;
                 this.state.lastScannedMoveLine = null;
+                this.state.preferredMoveLineId = null;
                 this.state.pickingRefreshTick += 1;
             }
         } catch (e) {

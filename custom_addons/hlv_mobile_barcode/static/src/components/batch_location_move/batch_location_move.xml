@@ -13,6 +13,18 @@
                             <div style="font-weight: bold; color: var(--success-color); font-size: 1.1rem;"><t t-esc="props.sourceLocationName || props.sourceLocationBarcode"/></div>
                         </div>
                     </div>
+
+                    <div style="margin-bottom: 15px; border-top: 1px dashed var(--border-color); padding-top: 15px;">
+                        <label style="font-size: 0.9rem; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; display: block;">
+                            Quét/Nhập mã sản phẩm
+                        </label>
+                        <div class="input-group-row" style="margin-bottom: 10px;">
+                            <input type="text" class="form-control" t-ref="barcodeInput" t-model="state.barcodeInput" t-on-keyup="onBarcodeInputKeyup" placeholder="Mã sản phẩm..." inputmode="none" autocomplete="off" autocapitalize="off" spellcheck="false"/>
+                            <button class="btn btn-primary" t-on-click="onBarcodeInputEnter" t-att-disabled="state.loading" title="Thêm sản phẩm">
+                                <i class="fa fa-arrow-right"></i>
+                            </button>
+                        </div>
+                    </div>
                     
                     <t t-if="state.lines.length === 0">
                         <div style="text-align: center; padding: 20px; color: var(--text-muted);">

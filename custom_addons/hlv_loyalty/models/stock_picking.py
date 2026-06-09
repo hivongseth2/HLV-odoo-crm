@@ -37,6 +37,14 @@ class StockPicking(models.Model):
         if not partner:
             return
 
+        root_partner = partner._get_loyalty_root()
+        has_active_portal_account = self.env['hlv.loyalty.portal.account'].sudo().search_count([
+            ('partner_id', '=', root_partner.id),
+            ('active', '=', True),
+        ])
+        if not has_active_portal_account:
+            return
+
         # Tìm chương trình loyalty đang active
         program = self.env['hlv.loyalty.program'].sudo().search([
             ('active', '=', True),

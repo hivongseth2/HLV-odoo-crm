@@ -13,6 +13,12 @@
                         type="object"
                         class="btn-secondary"
                         groups="sales_team.group_sale_manager"/>
+                <button name="action_recalculate_points_wizard"
+                        string="Tính lại điểm"
+                        type="object"
+                        class="btn-secondary"
+                        invisible="not active"
+                        groups="sales_team.group_sale_manager"/>
             </header>
             <sheet>
                 <div class="oe_title">
@@ -46,6 +52,10 @@
             <field name="active"/>
             <button name="action_reset_password_wizard" string="Reset mật khẩu"
                     type="object" icon="fa-key" class="btn-sm"
+                    groups="sales_team.group_sale_manager"/>
+            <button name="action_recalculate_points_wizard" string="Tính lại điểm"
+                    type="object" icon="fa-refresh" class="btn-sm"
+                    invisible="not active"
                     groups="sales_team.group_sale_manager"/>
         </list>
     </field>

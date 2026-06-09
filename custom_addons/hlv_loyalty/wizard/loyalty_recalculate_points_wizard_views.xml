@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_loyalty_recalculate_points_wizard_form" model="ir.ui.view">
+        <field name="name">hlv.loyalty.recalculate.points.wizard.form</field>
+        <field name="model">hlv.loyalty.recalculate.points.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Tính lại điểm Loyalty">
+                <group>
+                    <field name="account_id"/>
+                    <field name="partner_id"/>
+                    <field name="start_date"/>
+                </group>
+                <footer>
+                    <button name="action_recalculate"
+                            string="Tính lại điểm"
+                            type="object"
+                            class="btn-primary"
+                            confirm="Bạn có chắc chắn muốn tính lại điểm từ ngày đã chọn?"/>
+                    <button string="Hủy" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

@@ -125,10 +125,17 @@
                         Danh sách sản phẩm
                     </div>
                     <div class="items-list" style="margin-top: 0;">
-                        <t t-foreach="state.picking.lines" t-as="line" t-key="line.id || 'draft_' + line.product_id">
+                        <t t-foreach="this.groupedPickingLines" t-as="group" t-key="group.key">
+                            <div class="picking-location-group-header">
+                                <i class="fa fa-map-marker-alt"></i>
+                                <span><t t-esc="group.locationName"/></span>
+                                <span class="picking-location-count"><t t-esc="group.lines.length"/></span>
+                            </div>
+                            <t t-foreach="group.lines" t-as="line" t-key="line.id || group.key + '_draft_' + line.product_id">
                             <t t-set="is_active_location" t-value="!state.picking.is_putaway and (state.picking.is_pick or props.isMultiLocationMode) and props.scannedLocationName and line.location_name == props.scannedLocationName"/>
-                            <div t-attf-class="product-row-card #{line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0 ? 'scanned' : ''} #{is_active_location ? 'active-location-row' : ''}" t-att-data-product-id="line.product_id" t-att-data-line-id="line.id">
-                                <div t-attf-class="item-card #{line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0 ? 'scanned' : ''}" style="border: none; margin-bottom: 0; display: flex; align-items: stretch; gap: 10px; padding: 10px;">
+                            <t t-set="is_preferred_line" t-value="state.picking.is_pick and props.preferredMoveLineId and line.id == props.preferredMoveLineId"/>
+                            <div t-attf-class="product-row-card #{line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0 ? 'scanned' : ''} #{is_active_location ? 'active-location-row' : ''} #{is_preferred_line ? 'preferred-pick-line' : ''}" t-att-data-product-id="line.product_id" t-att-data-line-id="line.id">
+                                <div t-attf-class="item-card #{line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0 ? 'scanned' : ''}" style="border: none; margin-bottom: 0; display: flex; align-items: stretch; gap: 10px; padding: 10px;" t-on-click="() => this.togglePreferredLine(line)">
                                     <!-- Left: Image -->
                                     <div style="flex-shrink: 0; width: 64px; height: 64px; border-radius: 6px; overflow: hidden; background: #fff; display: flex; align-items: center; justify-content: center;">
                                         <img t-attf-src="/web/image?model=product.product&amp;id={{line.product_id}}&amp;field=image_128" style="max-width: 100%; max-height: 100%; object-fit: contain;"/>
@@ -181,19 +188,20 @@
                                         <input type="number" class="form-control" style="width: 48px; text-align: center; font-weight: bold; padding: 4px 2px; font-size: 0.85rem;" t-model="line.qty_done" t-on-change="(ev) => this.saveQty(line, ev)" min="0" step="any"/>
                                         <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, 0.01)">+0.01</button>
                                         <button class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, 0.1)">+0.1</button>
-                                        <button t-if="!state.picking.is_pick" class="btn btn-danger btn-sm" style="padding: 4px 8px; font-size: 0.78rem; min-width: 28px;" t-on-click="() => this.deleteLine(line)">
+                                        <button t-if="!state.picking.is_pick and !state.picking.source_transfer_id" class="btn btn-danger btn-sm" style="padding: 4px 8px; font-size: 0.78rem; min-width: 28px;" t-on-click="() => this.deleteLine(line)">
                                             <i class="fa fa-trash"></i>
                                         </button>
                                     </div>
                                 </t>
                                 <t t-else="">
                                     <div t-if="state.picking.state !== 'done'" style="background-color: transparent; padding: 6px 12px 10px 12px; display: flex; gap: 4px; align-items: center; justify-content: flex-end;">
-                                        <button t-if="!state.picking.is_pick" class="btn btn-danger btn-sm" style="padding: 4px 12px; font-size: 0.85rem; min-width: 28px;" t-on-click="() => this.deleteLine(line)">
+                                        <button t-if="!state.picking.is_pick and !state.picking.source_transfer_id" class="btn btn-danger btn-sm" style="padding: 4px 12px; font-size: 0.85rem; min-width: 28px;" t-on-click="() => this.deleteLine(line)">
                                             <i class="fa fa-trash"></i> Xóa
                                         </button>
                                     </div>
                                 </t>
                             </div>
+                            </t>
                         </t>
                     </div>
                 </div>

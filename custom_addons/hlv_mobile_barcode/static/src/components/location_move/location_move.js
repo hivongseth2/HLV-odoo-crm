@@ -1,6 +1,6 @@
 /** @odoo-module **/
 
-import { Component, useState, onWillStart } from "@odoo/owl";
+import { Component, useState, onWillStart, onMounted, useRef } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
 import { rpc } from "@web/core/network/rpc";
 
@@ -21,6 +21,7 @@ export class LocationMove extends Component {
     setup() {
         this.action = useService("action");
         this.notification = useService("notification");
+        this.destLocationInputRef = useRef("destLocationInput");
         
         this.state = useState({
             productName: this.props.productName || "Loading...",
@@ -74,12 +75,29 @@ export class LocationMove extends Component {
                 this.props.registerScanner(this.handleScannedBarcode.bind(this));
             }
         });
+
+        onMounted(() => {
+            this.focusScanInput();
+        });
+    }
+
+    focusScanInput(delay = 50) {
+        setTimeout(() => {
+            const input = this.destLocationInputRef?.el;
+            if (!input) return;
+            input.focus({ preventScroll: true });
+            const pos = input.value ? input.value.length : 0;
+            try {
+                input.setSelectionRange(pos, pos);
+            } catch (e) {}
+        }, delay);
     }
 
     onDestLocationInputKeyup(ev) {
         if (ev.key === 'Enter' && this.state.destLocationInput) {
             this.handleScannedBarcode(this.state.destLocationInput);
             this.state.destLocationInput = "";
+            this.focusScanInput();
         }
     }
 
@@ -121,6 +139,7 @@ export class LocationMove extends Component {
                 this.notification.add("Lỗi kết nối", { type: "danger" });
             }
         }
+        this.focusScanInput();
     }
 
     playSound(type) {

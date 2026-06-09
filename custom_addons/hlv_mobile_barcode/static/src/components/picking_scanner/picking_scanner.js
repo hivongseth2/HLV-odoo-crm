@@ -15,6 +15,8 @@ export class PickingScanner extends Component {
         onValidated: { type: Function, optional: true },
         lastScannedProduct: { optional: true },
         lastScannedMoveLine: { optional: true },
+        preferredMoveLineId: { optional: true },
+        onPreferredMoveLineChange: { type: Function, optional: true },
         scannedLocationName: { type: [String, Boolean], optional: true },
         refreshTick: { type: Number, optional: true },
         scanMode: { type: [String, Boolean], optional: true },
@@ -129,6 +131,32 @@ export class PickingScanner extends Component {
                 }
             }
         }, () => [this.props.scannedLocationName]);
+    }
+
+    get groupedPickingLines() {
+        const lines = this.state.picking?.lines || [];
+        const groupsByLocation = new Map();
+
+        lines.forEach((line, index) => {
+            const locationName = line.location_name || "Chưa có vị trí";
+            if (!groupsByLocation.has(locationName)) {
+                groupsByLocation.set(locationName, {
+                    key: locationName,
+                    locationName,
+                    lines: [],
+                    firstIndex: index,
+                });
+            }
+            groupsByLocation.get(locationName).lines.push(line);
+        });
+
+        return Array.from(groupsByLocation.values()).sort((a, b) => {
+            const nameCompare = a.locationName.localeCompare(b.locationName, undefined, {
+                numeric: true,
+                sensitivity: "base",
+            });
+            return nameCompare || a.firstIndex - b.firstIndex;
+        });
     }
 
     async loadPicking() {
@@ -249,6 +277,21 @@ export class PickingScanner extends Component {
             this.state.editingLineId = null;
         } else {
             this.state.editingLineId = moveId;
+        }
+    }
+
+    togglePreferredLine(line) {
+        if (!this.state.picking?.is_pick || this.state.picking.state === 'done' || !line.id) {
+            return;
+        }
+        if (line.product_uom_qty > 0 && line.qty_done >= line.product_uom_qty) {
+            return;
+        }
+        const lineId = Number(line.id);
+        const currentId = Number(this.props.preferredMoveLineId || 0);
+        const nextId = currentId === lineId ? null : lineId;
+        if (this.props.onPreferredMoveLineChange) {
+            this.props.onPreferredMoveLineChange(nextId);
         }
     }
 
