@@ -36,6 +36,11 @@
                                     <strong><t t-esc="account.code || '-'"/></strong>
                                     <span t-esc="account.tax || ''"/>
                                     <small t-esc="account.name"/>
+                                    <button type="button"
+                                            class="hlv_apply_crm_button"
+                                            t-on-click="() => this.applyCRMAccount(account)">
+                                        Dùng mã này
+                                    </button>
                                 </div>
                             </t>
                         </div>
@@ -89,6 +94,12 @@
                         </t>
                     </div>
                     <div class="hlv_toolbar_right">
+                        <button t-if="mergeCount"
+                                type="button"
+                                class="hlv_toolbar_button"
+                                t-on-click="openMergeWizard">
+                            Gộp <t t-esc="mergeCount"/> vào đang chọn
+                        </button>
                         <button t-if="state.role === 'dirty'"
                                 type="button"
                                 class="hlv_toolbar_button"
@@ -111,6 +122,7 @@
 
                 <div class="hlv_table">
                     <div class="hlv_table_header">
+                        <span></span>
                         <span>Tên liên hệ chính</span>
                         <span>Nghiệp vụ</span>
                         <span>Mã KH</span>
@@ -127,6 +139,12 @@
                             <button type="button"
                                     t-att-class="'hlv_table_row ' + (state.selected &amp;&amp; state.selected.id === row.id ? 'active' : '')"
                                     t-on-click="() => this.selectPartner(row.id)">
+                                <span class="hlv_merge_cell">
+                                    <input type="checkbox"
+                                           t-att-checked="state.mergeIds.includes(row.id)"
+                                           t-att-disabled="state.selected &amp;&amp; state.selected.id === row.id"
+                                           t-on-click="(ev) => this.toggleMerge(row.id, ev)"/>
+                                </span>
                                 <span class="hlv_name_cell">
                                     <strong t-esc="row.name"/>
                                     <small t-if="row.city" t-esc="row.city"/>

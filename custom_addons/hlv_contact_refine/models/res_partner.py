@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import json
+import base64
 import time
 import unicodedata
 import uuid
@@ -495,7 +496,22 @@ class ResPartner(models.Model):
 
         root = partner.commercial_partner_id or partner
         try:
-            accounts = self._hlv_fetch_misa_crm_accounts(root.name)
+            keywords = []
+            for value in (root.name, root.ref, root.company_registry, root.vat):
+                value = (value or '').strip()
+                if value and value not in keywords:
+                    keywords.append(value)
+            accounts = []
+            seen_account_ids = set()
+            for keyword in keywords:
+                for account in self._hlv_fetch_misa_crm_accounts(keyword):
+                    account_key = account.get('ID') or '%s-%s' % (
+                        account.get('AccountNumber'), account.get('TaxCode')
+                    )
+                    if account_key in seen_account_ids:
+                        continue
+                    seen_account_ids.add(account_key)
+                    accounts.append(account)
         except Exception as exc:
             return {'ok': False, 'message': str(exc), 'accounts': []}
 
@@ -552,9 +568,8 @@ class ResPartner(models.Model):
 
     @api.model
     def _hlv_misa_crm_headers(self):
-        misa_utils = self.env['misa.api.utils'].sudo()
         misa_config = self.env['misa.config'].sudo()
-        crm_token = misa_utils._fetch_login_crm_token()
+        crm_token = self._hlv_get_cached_misa_crm_token()
         if not crm_token:
             raise Exception(_('Khong lay duoc token MISA CRM.'))
 
@@ -570,6 +585,32 @@ class ResPartner(models.Model):
             'x-misa-language': 'vi-VN',
         })
         return headers
+
+    @api.model
+    def _hlv_get_cached_misa_crm_token(self, force_refresh=False):
+        ICP = self.env['ir.config_parameter'].sudo()
+        now = int(time.time())
+        if not force_refresh:
+            token = (ICP.get_param('hlv_contact_refine.misa_crm_token') or '').strip()
+            exp = int(ICP.get_param('hlv_contact_refine.misa_crm_token_exp') or 0)
+            if token and exp > now + 300:
+                return token
+
+        token = self.env['misa.api.utils'].sudo()._fetch_login_crm_token()
+        exp = self._hlv_decode_jwt_exp(token) or (now + 3600)
+        ICP.set_param('hlv_contact_refine.misa_crm_token', token)
+        ICP.set_param('hlv_contact_refine.misa_crm_token_exp', str(exp))
+        return token
+
+    @api.model
+    def _hlv_decode_jwt_exp(self, token):
+        try:
+            payload_b64 = (token or '').split('.')[1]
+            payload_b64 += '=' * (-len(payload_b64) % 4)
+            payload = json.loads(base64.urlsafe_b64decode(payload_b64.encode('ascii')))
+            return int(payload.get('exp') or 0)
+        except Exception:
+            return 0
 
     @api.model
     def _hlv_misa_crm_payload(self, keyword, page=1, page_size=20):
@@ -614,6 +655,9 @@ class ResPartner(models.Model):
                 ).encode('utf-8'),
                 timeout=30,
             )
+            if response.status_code in (401, 403) and attempt == 0:
+                self._hlv_get_cached_misa_crm_token(force_refresh=True)
+                continue
             response.raise_for_status()
             data = response.json()
             if data.get('Code') != 200 or data.get('Success') is not True:
@@ -629,6 +673,61 @@ class ResPartner(models.Model):
                 return matched
             time.sleep(0.6)
         return last_raw
+
+    @api.model
+    def hlv_contact_explorer_apply_crm_account(self, partner_id, account):
+        partner = self.sudo().browse(partner_id).exists()
+        if not partner:
+            return {'ok': False, 'message': _('Khong tim thay lien he.')}
+        if not isinstance(account, dict):
+            return {'ok': False, 'message': _('Du lieu CRM khong hop le.')}
+
+        root = partner.commercial_partner_id or partner
+        code = (account.get('code') or account.get('AccountNumber') or '').strip()
+        tax_code = (account.get('tax') or account.get('TaxCode') or '').strip()
+        vals = {}
+
+        if code:
+            vals['ref'] = code
+            vals['company_registry'] = code
+        if tax_code:
+            vals['vat'] = tax_code
+
+        field_map = [
+            ('phone', 'phone'),
+            ('OfficeTel', 'phone'),
+            ('email', 'email'),
+            ('OfficeEmail', 'email'),
+            ('address', 'street'),
+            ('BillingAddress', 'street'),
+            ('BillingProvinceIDText', 'city'),
+        ]
+        for source_field, target_field in field_map:
+            value = (account.get(source_field) or '').strip()
+            if value and (root[target_field] or '') != value:
+                vals[target_field] = value
+
+        if not vals:
+            return {
+                'ok': True,
+                'message': _('Khong co field can cap nhat.'),
+                'selected': root._hlv_explorer_row(),
+                'related': root._hlv_explorer_related_rows(),
+            }
+
+        root.write(vals)
+        root.message_post(body=_(
+            'Da gan thong tin tu MISA CRM account %s. Fields: %s'
+        ) % (code or account.get('id') or account.get('ID'), ', '.join(sorted(vals))))
+        (root | root.child_ids)._compute_hlv_code_flags()
+        (root | root.child_ids)._compute_hlv_misa_code_key()
+        (root | root.child_ids)._compute_hlv_filter_tag_ids()
+        return {
+            'ok': True,
+            'message': _('Da gan ma/MST tu CRM vao lien he dang chon.'),
+            'selected': root._hlv_explorer_row(),
+            'related': root._hlv_explorer_related_rows(),
+        }
 
     @api.model
     def _hlv_explorer_role_counts(self):
@@ -828,3 +927,23 @@ class ResPartner(models.Model):
             (root | root.child_ids)._compute_hlv_filter_tag_ids()
 
         return {'fixed_ids': sorted(fixed_ids)}
+
+    @api.model
+    def hlv_contact_explorer_merge_action(self, destination_id, source_ids):
+        destination = self.sudo().browse(destination_id).exists()
+        sources = self.sudo().browse(source_ids or []).exists()
+        if not destination or not sources:
+            return False
+        partner_ids = (destination | sources).ids
+        return {
+            'name': _('Gop lien he'),
+            'type': 'ir.actions.act_window',
+            'res_model': 'hlv.contact.merge.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {
+                'active_ids': partner_ids,
+                'default_source_partner_ids': [(6, 0, partner_ids)],
+                'default_destination_partner_id': destination.id,
+            },
+        }

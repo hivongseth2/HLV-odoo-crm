@@ -24,6 +24,7 @@ export class HlvContactExplorer extends Component {
             roles: [],
             crmChecking: false,
             crmResult: false,
+            mergeIds: [],
         });
 
         onWillStart(async () => {
@@ -45,6 +46,7 @@ export class HlvContactExplorer extends Component {
         this.state.roles = data.roles || [];
         this.state.total = data.total || 0;
         this.state.crmResult = false;
+        this.state.mergeIds = [];
         this.state.loading = false;
     }
 
@@ -53,6 +55,9 @@ export class HlvContactExplorer extends Component {
         this.state.selected = data.selected || false;
         this.state.related = data.related || [];
         this.state.crmResult = false;
+        if (this.state.selected) {
+            this.state.mergeIds = this.state.mergeIds.filter((id) => id !== this.state.selected.id);
+        }
     }
 
     async setRole(role) {
@@ -155,6 +160,59 @@ export class HlvContactExplorer extends Component {
             });
         } finally {
             this.state.crmChecking = false;
+        }
+    }
+
+    async applyCRMAccount(account) {
+        if (!this.state.selected) {
+            return;
+        }
+        const data = await this.orm.call("res.partner", "hlv_contact_explorer_apply_crm_account", [
+            this.state.selected.id,
+            account,
+        ]);
+        this.notification.add(data.message || "Đã cập nhật từ CRM.", {
+            type: data.ok ? "success" : "warning",
+        });
+        if (data.selected) {
+            this.state.selected = data.selected;
+            this.state.related = data.related || [];
+        }
+        const selectedId = data.selected && data.selected.id;
+        await this.load();
+        if (selectedId) {
+            await this.selectPartner(selectedId);
+        }
+    }
+
+    toggleMerge(rowId, ev) {
+        if (ev) {
+            ev.stopPropagation();
+        }
+        if (this.state.selected && rowId === this.state.selected.id) {
+            return;
+        }
+        if (this.state.mergeIds.includes(rowId)) {
+            this.state.mergeIds = this.state.mergeIds.filter((id) => id !== rowId);
+        } else {
+            this.state.mergeIds = [...this.state.mergeIds, rowId];
+        }
+    }
+
+    get mergeCount() {
+        return this.state.mergeIds.length;
+    }
+
+    async openMergeWizard() {
+        if (!this.state.selected || !this.state.mergeIds.length) {
+            return;
+        }
+        const action = await this.orm.call("res.partner", "hlv_contact_explorer_merge_action", [
+            this.state.selected.id,
+            this.state.mergeIds,
+        ]);
+        if (action) {
+            this.action.doAction(action);
         }
     }
 }
