@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="ir_cron_misa_crm_contact_sync" model="ir.cron">
+        <field name="name">MISA CRM Contact Sync Nightly</field>
+        <field name="model_id" ref="model_misa_crm_contact_sync_run"/>
+        <field name="state">code</field>
+        <field name="code">model.cron_sync_contacts_from_crm()</field>
+        <field name="interval_number">1</field>
+        <field name="interval_type">hours</field>
+        <field name="active">True</field>
+    </record>
+</odoo>
