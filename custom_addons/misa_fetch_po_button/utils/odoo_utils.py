@@ -8,15 +8,122 @@ class OdooUtils(models.AbstractModel):
     _name = 'odoo.utils'
     _description = 'Odoo Utilities'
 
-    def _get_or_create_partner(self, name):
-        """Tìm hoặc tạo mới đối tác (partner) dựa trên tên."""
-        name = name.strip()
-        partner = self.env["res.partner"].search([("name", "=", name)], limit=1)
+    def _get_or_create_partner(self, name, misa_code=None, tax_code=None):
+        """Tìm hoặc tạo mới đối tác (partner) dựa trên tên.
+
+        Thứ tự tìm kiếm:
+          1. Tìm root company (parent_id=False) theo misa_code (ref hoặc company_registry).
+          2. Tìm root company theo tên chính xác.
+          3. Nếu không tìm được → tạo mới root company.
+
+        Không bao giờ tạo partner con (parent_id set) để tránh gây duplicate
+        là_company=True dưới một công ty khác.
+        """
+        name = (name or "").strip()
+        misa_code = (misa_code or "").strip()
+        tax_code = (tax_code or "").strip()
+        Partner = self.env["res.partner"].sudo().with_context(active_test=False)
+
+        # MISA CRM can have multiple accounts with the same company name but
+        # different customer codes. When misa_code is provided, use it as the
+        # primary key and never fall back to name matching.
+        if misa_code:
+            candidates = Partner.search([
+                ("parent_id", "=", False),
+                ("is_company", "=", True),
+                "|",
+                ("ref", "=", misa_code),
+                ("company_registry", "=", misa_code),
+            ], order="id asc")
+            partner = candidates.filtered(
+                lambda p: (p.ref or "").strip() == misa_code
+                or (p.company_registry or "").strip() == misa_code
+            )
+            if tax_code:
+                tax_match = partner.filtered(lambda p: (p.vat or "").strip() == tax_code)[:1]
+                if tax_match:
+                    vals = {}
+                    if not tax_match.active:
+                        vals["active"] = True
+                    if tax_match.ref != misa_code:
+                        vals["ref"] = misa_code
+                    if tax_match.company_registry != misa_code:
+                        vals["company_registry"] = misa_code
+                    if vals:
+                        tax_match.write(vals)
+                    _logger.info("Use existing partner by MISA key %s-%s: %s", tax_code, misa_code, tax_match.name)
+                    return tax_match
+
+                no_tax = partner.filtered(lambda p: not (p.vat or "").strip())[:1]
+                if no_tax:
+                    vals = {"vat": tax_code}
+                    if not no_tax.active:
+                        vals["active"] = True
+                    if no_tax.ref != misa_code:
+                        vals["ref"] = misa_code
+                    if no_tax.company_registry != misa_code:
+                        vals["company_registry"] = misa_code
+                    no_tax.write(vals)
+                    _logger.info("Use existing partner by code %s and fill VAT=%s: %s", misa_code, tax_code, no_tax.name)
+                    return no_tax
+
+                if partner:
+                    _logger.warning(
+                        "MISA key mismatch for code %s tax %s. Existing partner ids=%s; creating a new root company.",
+                        misa_code,
+                        tax_code,
+                        partner.ids,
+                    )
+
+            partner = partner[:1]
+            if partner:
+                vals = {}
+                if not partner.active:
+                    vals["active"] = True
+                if partner.ref != misa_code:
+                    vals["ref"] = misa_code
+                if partner.company_registry != misa_code:
+                    vals["company_registry"] = misa_code
+                if vals:
+                    partner.write(vals)
+                _logger.info("Use existing partner by MISA code %s: %s", misa_code, partner.name)
+                return partner
+
+            vals = {
+                "name": name,
+                "customer_rank": 1,
+                "is_company": True,
+                "ref": misa_code,
+                "company_registry": misa_code,
+            }
+            if tax_code:
+                vals["vat"] = tax_code
+            partner = Partner.create(vals)
+            _logger.info("Created partner by MISA key %s-%s: %s", tax_code or "-", misa_code, name)
+            return partner
+
+        partner = Partner.search([
+            ("name", "=", name),
+            ("parent_id", "=", False),
+            ("is_company", "=", True),
+        ], limit=1)
+
         if not partner:
-            partner = self.env["res.partner"].create({"name": name, "supplier_rank": 1})
-            _logger.info("Tạo liên hệ mới: %s", name)
-        else:
-            _logger.info("Dùng liên hệ có sẵn: %s", name)
+            # Fallback: tìm partner bất kỳ (kể cả không is_company) cùng tên + root
+            partner = Partner.search([
+                ("name", "=", name),
+                ("parent_id", "=", False),
+            ], limit=1)
+
+        if partner:
+            if not partner.active:
+                partner.write({"active": True})
+            _logger.info("Use existing partner by name without MISA code: %s", partner.name)
+            return partner
+
+        vals = {"name": name, "customer_rank": 1, "is_company": True}
+        partner = Partner.create(vals)
+        _logger.info("Created partner without MISA code: %s", name)
         return partner
 
     def _get_or_create_uom(self, name):
