@@ -7,6 +7,6 @@
         <field name="code">model.cron_sync_contacts_from_crm()</field>
         <field name="interval_number">1</field>
         <field name="interval_type">hours</field>
-        <field name="active">True</field>
+        <field name="active">False</field>
     </record>
 </odoo>
