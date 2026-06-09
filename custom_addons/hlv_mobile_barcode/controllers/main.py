@@ -440,6 +440,7 @@ class HLVMobileBarcodeController(http.Controller):
             'return_of_name': picking.return_id.name if is_return_picking else False,
             'has_scanned_data': has_scanned_data,
             'hlv_barcode_auto_cleared': getattr(picking, 'hlv_barcode_auto_cleared', False),
+            'packer_name': picking._hlv_mobile_packer_display_name(picking.x_pack_packer_user_id) if picking.x_pack_packer_user_id else '',
         }
 
     @http.route('/hlv_mobile_barcode/get_warehouses', type='json', auth='user')

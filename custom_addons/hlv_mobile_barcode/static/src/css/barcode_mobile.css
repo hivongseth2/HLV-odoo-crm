@@ -1501,6 +1501,51 @@
   align-items: center;
 }
 
+.hlv-barcode-app .picking-title-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.hlv-barcode-app .picking-packer-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 260px;
+  padding: 5px 9px;
+  border: 1px solid #c7c3e6;
+  border-radius: 6px;
+  background: #f2f1fa;
+  color: #312e81;
+  font-size: 0.78rem;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.hlv-barcode-app .picking-packer-badge span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 640px) {
+  .hlv-barcode-app .picking-title-above-camera {
+    align-items: flex-start;
+  }
+
+  .hlv-barcode-app .picking-title-actions {
+    flex-direction: column-reverse;
+    align-items: flex-end;
+  }
+
+  .hlv-barcode-app .picking-packer-badge {
+    max-width: 170px;
+    padding: 4px 7px;
+    font-size: 0.72rem;
+  }
+}
+
 /* Modern simplified location banner */
 .hlv-barcode-app .modern-location-banner {
   margin: 6px 0 10px 0;

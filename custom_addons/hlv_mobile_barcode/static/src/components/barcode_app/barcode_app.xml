@@ -49,10 +49,16 @@
                             </div>
                         </t>
                     </div>
-                    <!-- Toggle Camera Button next to Picking Title -->
-                    <button t-if="state.pickingState !== 'done'" t-attf-class="btn barcode-camera-btn compact #{state.cameraManuallyOff ? 'is-off' : 'is-on'}" t-on-click="toggleCamera" title="Bật/Tắt Camera">
-                        <i class="fa fa-camera" style="font-size: 1.15rem;"></i>
-                    </button>
+                    <div class="picking-title-actions">
+                        <div t-if="state.pickingPackerName" class="picking-packer-badge" title="Người được phân công xử lý phiếu">
+                            <i class="fa fa-user"></i>
+                            <span>Phụ trách: <strong><t t-esc="state.pickingPackerName"/></strong></span>
+                        </div>
+                        <!-- Toggle Camera Button next to Picking Title -->
+                        <button t-if="state.pickingState !== 'done'" t-attf-class="btn barcode-camera-btn compact #{state.cameraManuallyOff ? 'is-off' : 'is-on'}" t-on-click="toggleCamera" title="Bật/Tắt Camera">
+                            <i class="fa fa-camera" style="font-size: 1.15rem;"></i>
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Persistent Camera Section (Only when NOT on main home screen and picking is not completed) -->

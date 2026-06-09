@@ -46,6 +46,7 @@ export class BarcodeApp extends Component {
             pickingIsPutaway: savedState.pickingIsPutaway || false,
             pickingTypeCode: savedState.pickingTypeCode || "",
             pickingSourceTransferName: savedState.pickingSourceTransferName || "",
+            pickingPackerName: savedState.pickingPackerName || "",
             warehouseCode: savedState.warehouseCode || "",
             scannedLocationId: savedState.scannedLocationId || null,
             scannedLocationName: savedState.scannedLocationName || "",
@@ -102,6 +103,7 @@ export class BarcodeApp extends Component {
                 pickingIsPutaway: this.state.pickingIsPutaway,
                 pickingTypeCode: this.state.pickingTypeCode,
                 pickingSourceTransferName: this.state.pickingSourceTransferName,
+                pickingPackerName: this.state.pickingPackerName,
                 warehouseCode: this.state.warehouseCode,
                 scannedLocationId: this.state.scannedLocationId,
                 scannedLocationName: this.state.scannedLocationName,
@@ -123,6 +125,7 @@ export class BarcodeApp extends Component {
             this.state.pickingIsPutaway,
             this.state.pickingTypeCode,
             this.state.pickingSourceTransferName,
+            this.state.pickingPackerName,
             this.state.warehouseCode,
             this.state.scannedLocationId,
             this.state.scannedLocationName,
@@ -471,6 +474,7 @@ export class BarcodeApp extends Component {
             pickingIsPutaway: this.state.pickingIsPutaway,
             pickingTypeCode: this.state.pickingTypeCode,
             pickingSourceTransferName: this.state.pickingSourceTransferName,
+            pickingPackerName: this.state.pickingPackerName,
             warehouseCode: this.state.warehouseCode,
             lookupType: this.state.lookupType,
             recordId: this.state.recordId,
@@ -517,6 +521,7 @@ export class BarcodeApp extends Component {
             this.state.pickingIsPutaway = prevState.pickingIsPutaway || false;
             this.state.pickingTypeCode = prevState.pickingTypeCode || "";
             this.state.pickingSourceTransferName = prevState.pickingSourceTransferName || "";
+            this.state.pickingPackerName = prevState.pickingPackerName || "";
             this.state.warehouseCode = prevState.warehouseCode || "";
             this.state.lookupType = prevState.lookupType;
             this.state.recordId = prevState.recordId;
@@ -572,6 +577,7 @@ export class BarcodeApp extends Component {
         this.state.pickingIsPutaway = false;
         this.state.pickingTypeCode = "";
         this.state.pickingSourceTransferName = "";
+        this.state.pickingPackerName = "";
         this.state.scannedLocationId = null;
         this.state.scannedLocationName = "";
         this.state.lastScannedProduct = null;
@@ -807,6 +813,7 @@ export class BarcodeApp extends Component {
             } else {
                 this.state.pickingId = res.picking_id;
                 this.state.pickingName = res.picking_name;
+                this.state.pickingPackerName = "";
                 this.state.warehouseCode = res.warehouse_code || "HLV";
                 this.state.pickingIsPutaway = false;
                 this.state.scannedLocationId = isMultiLocation ? null : res.location_id;
@@ -875,6 +882,7 @@ export class BarcodeApp extends Component {
                 this.state.pickingIsPutaway = data.is_putaway || false;
                 this.state.pickingTypeCode = data.picking_type_code;
                 this.state.pickingSourceTransferName = data.source_transfer_name;
+                this.state.pickingPackerName = data.packer_name || "";
                 if (!data.is_pick && !data.is_putaway && data.location_name) {
                     this.state.scannedLocationId = data.location_id;
                     this.state.scannedLocationName = data.location_name;
@@ -902,6 +910,7 @@ export class BarcodeApp extends Component {
         this.state.pickingIsPutaway = data.is_putaway || false;
         this.state.pickingTypeCode = data.picking_type_code;
         this.state.pickingSourceTransferName = data.source_transfer_name;
+        this.state.pickingPackerName = data.packer_name || "";
         if (this.state.preferredMoveLineId) {
             const preferredLine = (data.lines || []).find((line) => line.id === this.state.preferredMoveLineId);
             if (!preferredLine || preferredLine.qty_done >= preferredLine.product_uom_qty) {
