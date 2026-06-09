@@ -555,6 +555,7 @@ class SaleOrder(models.Model):
                 pass
         if not partner:
             partner = odoo_utils._get_or_create_partner(partner_name, misa_code=misa_code, tax_code=tax_code)
+        partner = partner.commercial_partner_id or partner
 
         # Địa chỉ/phone KHÔNG cập nhật vào liên hệ cha — ghi vào liên hệ con (delivery contact) bên dưới
 
@@ -603,13 +604,13 @@ class SaleOrder(models.Model):
 
         vals_create = {
             'name': order_no,
-            'partner_id': shipping_id or partner.id,  # Cách B: dùng delivery contact làm KH chính, fallback về cha nếu không có con
+            'partner_id': partner.id,
             'origin': origin,
             'warehouse_id': old_wh.id if old_wh else False,
             'misa_id': str(misa_order_id) if misa_order_id else False,
             'misa_shipping_address': shipping_address_raw or False,
             'partner_shipping_id': shipping_id,
-            'partner_invoice_id': shipping_id,
+            'partner_invoice_id': partner.id,
             'x_studio_zns': zns,
             'x_studio_sdt_giao_hang': data.get('Phone') or False
         }
@@ -1275,6 +1276,7 @@ class SaleOrder(models.Model):
                     misa_code=misa_code,
                     tax_code=tax_code,
                 )
+            partner = partner.commercial_partner_id or partner
 
             delivery_contact = env['sale.api.import.wizard']._get_or_create_delivery_contact(
                 parent_partner=partner,
@@ -1287,8 +1289,9 @@ class SaleOrder(models.Model):
             
             if delivery_contact:
                 self.write({
+                    'partner_id': partner.id,
                     'partner_shipping_id': delivery_contact.id,
-                    'partner_invoice_id': delivery_contact.id
+                    'partner_invoice_id': partner.id
                 })
                 _logger.info("✅ Partial Resync: Updated shipping/invoice address to %s", delivery_contact.display_name)
         except Exception as e_addr:
