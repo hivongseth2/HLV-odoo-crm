@@ -14,6 +14,9 @@
                         <setting string="Tự Động In Nhãn Sau Đóng Gói" help="Bật để máy tự động in nhãn dán ngay khi nhân viên vừa bấm nút 'Đóng Gói' xong.">
                             <field name="hlv_barcode_print_after_pack"/>
                         </setting>
+                        <setting string="Người xử lý mặc định đơn Shopee" help="User này sẽ được assign tự động cho phiếu PICK của sale order có shopee_order_ref hoặc shopee_shop_id.">
+                            <field name="hlv_barcode_shopee_default_picker_user_id" widget="many2one_avatar_user"/>
+                        </setting>
                         <setting string="Cho Phép Quét Kiện Hàng" help="Bật để nhân viên quét 1 mã thùng/kiện và hệ thống tự hiểu tất cả đồ bên trong.">
                             <field name="hlv_barcode_allow_package_scan"/>
                         </setting>
