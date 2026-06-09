@@ -559,15 +559,26 @@ class SaleOrder(models.Model):
 
         # Địa chỉ/phone KHÔNG cập nhật vào liên hệ cha — ghi vào liên hệ con (delivery contact) bên dưới
 
-        order_no      = data.get("MISAOrderNo") or data.get("ListOrderNumber") or data.get("SaleOrderNo") or order_no_fallback
+        crm_order_no = str(data.get("SaleOrderNo") or "").strip()
+        crm_order_name = str(data.get("SaleOrderName") or "").strip()
+        order_no = (
+            crm_order_no
+            or crm_order_name
+            or order_no_fallback
+        )
         # Ưu tiên lấy OtherSysOrderCode, fallback về DeliveryOrderNumber
-        delivery_no   = data.get("DeliveryOrderNumber") or order_no
+        delivery_no = (
+            owner_date.get("other_sys_order_code")
+            or owner_date.get("delivery_order_number")
+            or data.get("DeliveryOrderNumber")
+            or order_no
+        )
         # delivery_no   = data.get("OtherSysOrderCode") or data.get("DeliveryOrderNumber") or order_no
         book_date     = data.get("BookDate") or data.get("InvoiceDate") or data.get("DeliveryDate")
         deadline_date_raw = data.get("DeadlineDate")
         shipping_address_raw = (data.get("ShippingAddress") or "").strip()
         shipping_addr = shipping_address_raw or data.get("BillingAddress") or ''
-        origin        = data.get("SaleOrderName") or ''
+        origin        = crm_order_name or ''
 
         # Địa chỉ giao hàng và lập hóa đơn sử dụng ShippingContactIDText
         try:
@@ -922,6 +933,9 @@ class SaleOrder(models.Model):
                 ('id', '!=', picking.id)
             ], limit=1)
             picking.name = f"{desired}-{picking.id}" if exists else desired
+            picking.partner_id = new_so.partner_id.id
+            for extra_picking in (new_so.picking_ids - picking):
+                extra_picking.partner_id = new_so.partner_id.id
 
         # Toast + log
         # new_so.message_post(body=_("Đồng bộ (xoá & tạo lại) thành công: %s") % (delivery_no or order_no))
@@ -1293,6 +1307,9 @@ class SaleOrder(models.Model):
                     'partner_shipping_id': delivery_contact.id,
                     'partner_invoice_id': partner.id
                 })
+                open_pickings = self.picking_ids.filtered(lambda p: p.state not in ('done', 'cancel'))
+                if open_pickings:
+                    open_pickings.write({'partner_id': partner.id})
                 _logger.info("✅ Partial Resync: Updated shipping/invoice address to %s", delivery_contact.display_name)
         except Exception as e_addr:
             _logger.warning("❌ Partial Resync: Failed to update address: %s", e_addr)

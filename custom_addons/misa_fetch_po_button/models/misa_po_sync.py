@@ -796,8 +796,7 @@ class MisaPOSync(models.TransientModel):
         try:
             access_token = misa_utils._get_misa_token()
             headers      = misa_config.get_default_headers(access_token)
-            crm_token    = misa_utils._fetch_login_crm_token()
-            crm_headers  = misa_config.get_crm_header(crm_token)
+            crm_headers  = misa_utils._get_cached_crm_headers()
         except Exception as e:
             _logger.exception("❌ Lỗi token/headers: %s", e)
             return {'ok': False, 'error': 'auth_failed', 'message': str(e)}

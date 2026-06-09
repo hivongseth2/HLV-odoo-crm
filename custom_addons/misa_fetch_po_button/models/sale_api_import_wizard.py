@@ -1319,6 +1319,7 @@ class SaleApiImportWizard(models.TransientModel):
                             # picking.name = f"{desired}_{picking.id}"
                         else:
                             picking.name = desired
+                        picking.partner_id = sale_order.partner_id.id
                         _logger.info("📦 Đã gán mã phiếu pick: %s cho SO %s", picking.name, order_ref)
 
                 # ========== CASE 2: NHIỀU KHO -> TÁCH NHIỀU SO, THÊM HẬU TỐ ==========
@@ -1560,6 +1561,7 @@ class SaleApiImportWizard(models.TransientModel):
                             new_name = f"{desired_pick_name}-{picking.id}" if exists else desired_pick_name
                             if picking.name != new_name:
                                 picking.name = new_name
+                            picking.partner_id = sale_order.partner_id.id
                             _logger.info("📦 Đã gán mã phiếu pick: %s cho SO %s", picking.name, order_ref)
 
             # --- phân trang ---
