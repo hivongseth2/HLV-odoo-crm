@@ -1024,6 +1024,7 @@ class SaleApiImportWizard(models.TransientModel):
                         misa_code=misa_code_preview,
                         tax_code=ident.get("taxcode"),
                     )
+                partner = partner.commercial_partner_id or partner
 
                 try:
                     if account_id and ident:
@@ -1109,12 +1110,12 @@ class SaleApiImportWizard(models.TransientModel):
                     group_total = sum(line_subtotal(l) for l in grouped_lines)
                     sale_vals = {
                         'name': order_ref,
-                        'partner_id': delivery_contact.id,  # Cách B: delivery contact làm KH chính
+                        'partner_id': partner.id,
                         'date_order': order_date,
                         'amount_total': group_total,
                         'commitment_date': commitment_date,
                         'partner_shipping_id': delivery_contact.id,
-                        'partner_invoice_id': delivery_contact.id,
+                        'partner_invoice_id': partner.id,
                         'origin':origin,
                         'warehouse_id': warehouse.id,
                         'misa_id': misa_id_str, 
@@ -1441,10 +1442,10 @@ class SaleApiImportWizard(models.TransientModel):
                         group_total = sum(line_subtotal(l) for l in grouped_lines)
                         sale_vals = {
                             'name': order_ref,
-                            'partner_id': delivery_contact.id,  # Cách B: delivery contact làm KH chính
+                            'partner_id': partner.id,
                             'date_order': order_date,
                             'partner_shipping_id': delivery_contact.id,
-                            'partner_invoice_id': delivery_contact.id,
+                            'partner_invoice_id': partner.id,
                             'commitment_date': commitment_date,
                             'amount_total': group_total,       # có thể để Odoo tự tính lại sau khi tạo line
                             'warehouse_id': warehouse.id,
