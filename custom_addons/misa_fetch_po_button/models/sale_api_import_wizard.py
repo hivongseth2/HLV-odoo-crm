@@ -1004,36 +1004,39 @@ class SaleApiImportWizard(models.TransientModel):
        
                 # --- NEW LOGIC: Sync from MISA Account API first ---
                 partner = None
+                ident = {}
                 if account_id:
-                     partner = misa_utils._sync_customer_from_misa_account_api(account_id, sale_headers)
-                
-                if not partner:
-                     # Fallback to legacy logic (create by name)
-                     partner_name_for_so = customer_name
-                     partner = odoo_utils._get_or_create_partner(partner_name_for_so)
-                
-                try:
-                    if account_id:
+                    partner = misa_utils._sync_customer_from_misa_account_api(account_id, sale_headers)
+                    # Lấy identity sớm để dùng cho fallback (tránh gọi 2 lần)
+                    try:
                         ident = misa_utils.get_account_identity(account_id, sale_headers) or {}
+                    except Exception as _e:
+                        _logger.warning("Không lấy được account identity cho AccountID=%s: %s", account_id, _e)
+
+                if not partner:
+                    # Fallback tìm theo tên:
+                    # - Nếu tên trùng nhưng mã CRM khác → tạo mới (tránh ghi đè liên hệ của KH khác)
+                    # - Nếu chưa có mã → dùng liên hệ cũ như bình thường
+                    misa_code_preview = ident.get("account_number") or ident.get("id")
+                    partner_name_for_so = customer_name
+                    partner = odoo_utils._get_or_create_partner(
+                        partner_name_for_so,
+                        misa_code=misa_code_preview,
+                        tax_code=ident.get("taxcode"),
+                    )
+                partner = partner.commercial_partner_id or partner
+
+                try:
+                    if account_id and ident:
                         commercial = partner.commercial_partner_id or partner
-
-                        vals, msg = {}, []
+                        # VAT là thông tin công ty → ghi lên cha
                         if ident.get("taxcode") and not commercial.vat:
-                            vals["vat"] = ident["taxcode"]; msg.append(f"VAT=<b>{ident['taxcode']}</b>")
-                        if ident.get("id") and not commercial.company_registry:
-                            vals["company_registry"] = ident["id"]; msg.append(f"ID công ty=<b>{ident['id']}</b>")
-                        if ident.get("account_number") and not commercial.ref:
-                            vals["ref"] = ident["account_number"]; msg.append(f"Tham chiếu=<b>{ident['account_number']}</b>")
-
-                        if vals:
-                            commercial.write(vals)
-                            commercial.message_post(body="Cập nhật từ MISA (FormDataNew): " + ", ".join(msg))
-                        else:
-                            _logger.info("Bỏ qua update đối tác %s (đã có đủ dữ liệu hoặc API rỗng).", commercial.display_name)
+                            commercial.write({"vat": ident["taxcode"]})
+                            commercial.message_post(body=f"Cập nhật từ MISA: VAT=<b>{ident['taxcode']}</b>")
                     else:
                         _logger.info("Không có AccountID trong đơn, bỏ qua cập nhật đối tác.")
                 except Exception as e:
-                    _logger.warning("Không thể cập nhật đối tác từ MISA (AccountID=%s): %s", account_id, e)
+                    _logger.warning("Không thể cập nhật VAT đối tác từ MISA (AccountID=%s): %s", account_id, e)
 
                 # ===== TẠO/GÁN ĐỊA CHỈ GIAO HÀNG (contact delivery) =====
                 _logger.info("📍 [%s] Tạo delivery contact với addr_str='%s', is_e_account=%s", 
@@ -1111,8 +1114,8 @@ class SaleApiImportWizard(models.TransientModel):
                         'date_order': order_date,
                         'amount_total': group_total,
                         'commitment_date': commitment_date,
-                        'partner_shipping_id': delivery_contact.id, 
-                        'partner_invoice_id': delivery_contact.id, 
+                        'partner_shipping_id': delivery_contact.id,
+                        'partner_invoice_id': partner.id,
                         'origin':origin,
                         'warehouse_id': warehouse.id,
                         'misa_id': misa_id_str, 
@@ -1130,6 +1133,8 @@ class SaleApiImportWizard(models.TransientModel):
                         sale_vals['x_studio_httt'] = owner_date['httt']
                     if owner_date.get('htgh'):
                         sale_vals['x_studio_htgh'] = owner_date['htgh']
+                    if owner_date.get('misa_note') and 'x_studio_misa_note' in self.env['sale.order']._fields:
+                        sale_vals['x_studio_misa_note'] = owner_date['misa_note']
 
                     sale_order = self.env['sale.order'].create(sale_vals)
                     _logger.info("✅ [%s] Created SO id=%s with partner_shipping_id=%s (delivery_contact.id=%s)",
@@ -1304,6 +1309,9 @@ class SaleApiImportWizard(models.TransientModel):
                         self.env['sale.order.line'].create(safe_vals_line)
 
                     # Confirm để tạo picking
+                    # Invalidate ORM cache để mrp thấy được phantom BOM vừa tạo trong cùng transaction
+                    self.env.flush_all()
+                    self.env.invalidate_all()
                     sale_order.action_confirm()
 
                     # Đặt tên picking giữ nguyên logic cũ
@@ -1423,7 +1431,8 @@ class SaleApiImportWizard(models.TransientModel):
                                 upd['x_studio_misa_order_date'] = owner_date['sale_order_date']
                             if owner_date.get('misa_delivery'):
                                 upd['x_studio_misa_delivery'] = owner_date['misa_delivery']
-                                
+                            if owner_date.get('misa_note') and 'x_studio_misa_note' in self.env['sale.order']._fields:
+                                upd['x_studio_misa_note'] = owner_date['misa_note']
                             if commitment_date:
                                 upd['commitment_date'] = commitment_date
                             if upd:
@@ -1437,7 +1446,7 @@ class SaleApiImportWizard(models.TransientModel):
                             'partner_id': partner.id,
                             'date_order': order_date,
                             'partner_shipping_id': delivery_contact.id,
-                            'partner_invoice_id': delivery_contact.id,
+                            'partner_invoice_id': partner.id,
                             'commitment_date': commitment_date,
                             'amount_total': group_total,       # có thể để Odoo tự tính lại sau khi tạo line
                             'warehouse_id': warehouse.id,
@@ -1450,6 +1459,8 @@ class SaleApiImportWizard(models.TransientModel):
                             sale_vals['x_studio_misa_order_date'] = owner_date['sale_order_date']
                         if owner_date.get('misa_delivery'):
                             sale_vals['x_studio_misa_delivery'] = owner_date['misa_delivery']
+                        if owner_date.get('misa_note') and 'x_studio_misa_note' in self.env['sale.order']._fields:
+                            sale_vals['x_studio_misa_note'] = owner_date['misa_note']
 
                         sale_order = self.env['sale.order'].create(sale_vals)
 
@@ -1551,6 +1562,9 @@ class SaleApiImportWizard(models.TransientModel):
                             self.env['sale.order.line'].create(safe_line_vals)
 
                         # Confirm -> tạo picking theo từng SO/warehouse
+                        # Invalidate ORM cache để mrp thấy được phantom BOM vừa tạo trong cùng transaction
+                        self.env.flush_all()
+                        self.env.invalidate_all()
                         sale_order.action_confirm()
 
                         # Đặt tên picking: base_pick + hậu tố kho để unique
