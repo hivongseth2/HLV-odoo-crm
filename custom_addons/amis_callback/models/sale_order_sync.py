@@ -10,10 +10,22 @@ from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
 
+INVOICE_INFO_CHANGE_TAG_NAMES = {
+    'Thay đổi thông tin hóa đơn',
+    'Change invoice information',
+}
+
+
+def _normalize_tag_text(name):
+    text = unicodedata.normalize('NFKD', name or '')
+    text = ''.join(ch for ch in text if not unicodedata.combining(ch))
+    text = text.replace('đ', 'd').replace('Đ', 'D')
+    return ' '.join(text.casefold().split())
+
+
 INVOICE_INFO_CHANGE_TAGS = {
-    'thay doi thong tin hoa don',
-    'change invoice information',
-    "Thay đổi thông tin hóa đơn"
+    _normalize_tag_text(name)
+    for name in INVOICE_INFO_CHANGE_TAG_NAMES
 }
 
 
@@ -136,9 +148,7 @@ class SaleOrderAmisSync(models.Model):
 
     @staticmethod
     def _normalize_tag_name(name):
-        text = unicodedata.normalize('NFKD', name or '')
-        text = ''.join(ch for ch in text if not unicodedata.combining(ch))
-        return ' '.join(text.casefold().split())
+        return _normalize_tag_text(name)
 
     def _has_invoice_info_change_tag(self):
         self.ensure_one()

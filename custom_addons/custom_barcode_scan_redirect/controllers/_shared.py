@@ -29,6 +29,10 @@ def _meta_path(upload_id):
     return os.path.join(STREAM_DIR, f'{upload_id}.meta.json')
 
 
+def _uploading_meta_path(upload_id):
+    return os.path.join(STREAM_DIR, f'{upload_id}.uploading.json')
+
+
 def _file_path(upload_id):
     return os.path.join(STREAM_DIR, f'{upload_id}.webm')
 
@@ -104,6 +108,10 @@ def _bg_upload_to_drive(dbname, picking_id, filepath, mimetype):
             _logger.info("BG_UPLOAD start db=%s pick=%s file=%s size=%s",
                          dbname, picking_id, filepath,
                          (os.path.getsize(filepath) if os.path.exists(filepath) else -1))
+
+            if not os.path.exists(filepath):
+                _logger.warning("BG_UPLOAD skipped missing temp file: %s", filepath)
+                return
 
             creds_json = ICP.get_param('gdrive.user_credentials_json') or ''
             if not creds_json:
