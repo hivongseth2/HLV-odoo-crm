@@ -22,6 +22,8 @@ export class HlvContactExplorer extends Component {
             selected: false,
             related: [],
             roles: [],
+            crmChecking: false,
+            crmResult: false,
         });
 
         onWillStart(async () => {
@@ -42,6 +44,7 @@ export class HlvContactExplorer extends Component {
         this.state.related = data.related || [];
         this.state.roles = data.roles || [];
         this.state.total = data.total || 0;
+        this.state.crmResult = false;
         this.state.loading = false;
     }
 
@@ -49,6 +52,7 @@ export class HlvContactExplorer extends Component {
         const data = await this.orm.call("res.partner", "hlv_contact_explorer_select", [partnerId]);
         this.state.selected = data.selected || false;
         this.state.related = data.related || [];
+        this.state.crmResult = false;
     }
 
     async setRole(role) {
@@ -118,6 +122,39 @@ export class HlvContactExplorer extends Component {
         await this.load();
         if (selectedId) {
             await this.selectPartner(selectedId);
+        }
+    }
+
+    async fixVisibleDirty() {
+        const partnerIds = this.state.rows.map((row) => row.id);
+        if (!partnerIds.length) {
+            return;
+        }
+        const data = await this.orm.call("res.partner", "hlv_contact_explorer_fix_many", [partnerIds]);
+        this.notification.add(
+            data.fixed_ids && data.fixed_ids.length
+                ? `Đã sửa ${data.fixed_ids.length} liên hệ trên trang hiện tại.`
+                : "Trang hiện tại không có lỗi mã cần sửa.",
+            { type: "success" }
+        );
+        await this.load();
+    }
+
+    async compareCRM() {
+        if (!this.state.selected) {
+            return;
+        }
+        this.state.crmChecking = true;
+        try {
+            const data = await this.orm.call("res.partner", "hlv_contact_explorer_compare_crm", [
+                this.state.selected.id,
+            ]);
+            this.state.crmResult = data;
+            this.notification.add(data.message || "Đã đối chiếu CRM.", {
+                type: data.ok ? "success" : "warning",
+            });
+        } finally {
+            this.state.crmChecking = false;
         }
     }
 }

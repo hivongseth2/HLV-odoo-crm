@@ -22,18 +22,59 @@
 }
 
 .hlv_selected {
-    background: #fff;
-    border: 1px solid #d9dee7;
+    position: relative;
+    background: #fbf7fc;
+    border: 2px solid #6b4b75;
     border-radius: 8px;
-    padding: 14px;
+    padding: 18px 16px 16px;
     margin-bottom: 14px;
+    box-shadow: 0 8px 20px rgba(43, 29, 48, .10);
+}
+
+.hlv_selected_badge {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    margin-bottom: 8px;
+    border-radius: 999px;
+    background: #6b4b75;
+    color: #fff;
+    padding: 3px 8px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
 }
 
 .hlv_selected_name {
-    font-size: 18px;
+    font-size: 21px;
     line-height: 1.3;
     font-weight: 700;
     color: #1f2937;
+}
+
+.hlv_selected_actions {
+    margin-top: 12px;
+    display: flex;
+    gap: 8px;
+}
+
+.hlv_secondary_button,
+.hlv_toolbar_button {
+    border: 1px solid #6b4b75;
+    border-radius: 6px;
+    background: #fff;
+    color: #4b2858;
+    padding: 6px 10px;
+    font-weight: 700;
+}
+
+.hlv_secondary_button:disabled {
+    opacity: .6;
+    cursor: wait;
+}
+
+.hlv_toolbar_button {
+    white-space: nowrap;
 }
 
 .hlv_selected_meta,
@@ -72,6 +113,7 @@
     border: 1px solid #d9dee7;
     border-radius: 8px;
     background: #fff;
+    cursor: pointer;
 }
 
 .hlv_related_item.is-root {
@@ -136,6 +178,60 @@
     padding: 3px 8px;
     font-size: 12px;
     font-weight: 700;
+}
+
+.hlv_crm_result {
+    border: 1px solid #d9dee7;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 14px;
+    background: #fff;
+}
+
+.hlv_crm_result.ok {
+    border-color: #16a34a;
+    background: #f7fdf9;
+}
+
+.hlv_crm_result.warn {
+    border-color: #f59e0b;
+    background: #fffbeb;
+}
+
+.hlv_crm_title {
+    font-weight: 700;
+    color: #1f2937;
+}
+
+.hlv_crm_message {
+    margin-top: 4px;
+    color: #475467;
+    font-size: 12px;
+}
+
+.hlv_crm_accounts {
+    margin-top: 8px;
+    display: grid;
+    gap: 6px;
+}
+
+.hlv_crm_account {
+    display: grid;
+    gap: 2px;
+    padding: 8px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, .75);
+    border: 1px solid #eaecf0;
+}
+
+.hlv_crm_account.exact {
+    border-color: #16a34a;
+}
+
+.hlv_crm_account span,
+.hlv_crm_account small {
+    color: #667085;
+    font-size: 12px;
 }
 
 .hlv_contact_main_list {

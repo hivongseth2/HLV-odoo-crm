@@ -1,5 +1,31 @@
 # -*- coding: utf-8 -*-
+import json
+import os
+import time
+import unicodedata
+import uuid
+
+import requests
+
 from odoo import api, fields, models, _
+
+
+MISA_CRM_ACCOUNT_GRID_URL = "https://amisapp.misa.vn/crm/g2/api/business/Account/Grid"
+MISA_CRM_FETCH_ATTEMPTS = 3
+MISA_CRM_COLUMNS = (
+    "SUQsVGFnSUQsVGFnSURUZXh0LEFjY291bnROdW1iZXIsQWNjb3VudFR5cGVJRCxBY2NvdW50"
+    "VHlwZUlEVGV4dCxBY2NvdW50TmFtZSxUYXhDb2RlLE9mZmljZVRlbCxPZmZpY2VFbWFpbCxTZWN0"
+    "b3JJRCxTZWN0b3JJRFRleHQsQmlsbGluZ0FkZHJlc3MsQmlsbGluZ1Byb3ZpbmNlSUQsQmls"
+    "bGluZ1Byb3ZpbmNlSURUZXh0LEJpbGxpbmdEaXN0cmljdElELEJpbGxpbmdEaXN0cmljdElE"
+    "VGV4dCxCaWxsaW5nV2FyZElELEJpbGxpbmdXYXJkSURUZXh0LERlc2NyaXB0aW9uLE93bmVy"
+    "SUQsT3duZXJJRFRleHQsTGVhZFNvdXJjZUlELExlYWRTb3VyY2VJRFRleHQsRm9ybUxheW91"
+    "dElELEZvcm1MYXlvdXRJRFRleHQsQXZhdGFyLEluYWN0aXZlLElzQ29ycA=="
+)
+
+
+def _norm_text(value):
+    value = unicodedata.normalize("NFC", (value or "").strip().upper())
+    return " ".join(value.split())
 
 
 class ResPartner(models.Model):
@@ -425,7 +451,9 @@ class ResPartner(models.Model):
     @api.model
     def hlv_contact_explorer_data(self, search_text=False, role='customer_crm', limit=80, offset=0):
         domain = [('parent_id', '=', False), ('active', '=', True)]
-        if role and role != 'all':
+        if role == 'dirty':
+            domain.append(('id', 'in', self._hlv_explorer_dirty_root_ids()))
+        elif role and role != 'all':
             domain.append(('hlv_business_role', '=', role))
         if search_text:
             domain += ['|', '|', '|',
@@ -461,6 +489,148 @@ class ResPartner(models.Model):
         }
 
     @api.model
+    def hlv_contact_explorer_compare_crm(self, partner_id):
+        partner = self.sudo().browse(partner_id).exists()
+        if not partner:
+            return {'ok': False, 'message': _('Khong tim thay lien he.'), 'accounts': []}
+
+        root = partner.commercial_partner_id or partner
+        try:
+            accounts = self._hlv_fetch_misa_crm_accounts(root.name)
+        except Exception as exc:
+            return {'ok': False, 'message': str(exc), 'accounts': []}
+
+        root_ref = (root.ref or '').strip()
+        root_registry = (root.company_registry or '').strip()
+        root_codes = set(code for code in (root_ref, root_registry) if code)
+        root_vat = (root.vat or '').strip()
+        exact = []
+        account_rows = []
+        same_name_count = 0
+
+        for account in accounts:
+            if _norm_text(account.get('AccountName')) == _norm_text(root.name):
+                same_name_count += 1
+            code = (account.get('AccountNumber') or '').strip()
+            tax_code = (account.get('TaxCode') or '').strip()
+            matched_code = bool(code and code in root_codes)
+            matched_tax = bool(tax_code and root_vat and tax_code == root_vat)
+            is_exact = bool(matched_code and (matched_tax or not root_vat or not tax_code))
+            if is_exact:
+                exact.append(account)
+            account_rows.append({
+                'id': account.get('ID'),
+                'code': code,
+                'name': account.get('AccountName') or '',
+                'tax': tax_code,
+                'phone': account.get('OfficeTel') or '',
+                'email': account.get('OfficeEmail') or '',
+                'address': account.get('BillingAddress') or '',
+                'matched_code': matched_code,
+                'matched_tax': matched_tax,
+                'exact': is_exact,
+            })
+
+        if exact:
+            message = _('CRM khop %s account theo ma KH/MST.') % len(exact)
+            ok = True
+        elif account_rows and same_name_count:
+            message = _('CRM co account cung ten nhung chua khop key MST + ma KH.')
+            ok = False
+        elif account_rows:
+            message = _('CRM co tra du lieu nhung khong co AccountName khop chinh xac.')
+            ok = False
+        else:
+            message = _('CRM khong tra ve account nao cung ten.')
+            ok = False
+
+        return {
+            'ok': ok,
+            'message': message,
+            'partner': root._hlv_explorer_row(),
+            'accounts': account_rows,
+        }
+
+    @api.model
+    def _hlv_misa_crm_headers(self):
+        get_param = self.env['ir.config_parameter'].sudo().get_param
+        authorization = (
+            get_param('MISA_CRM_AUTHORIZATION')
+            or os.environ.get('MISA_CRM_AUTHORIZATION', '')
+        ).strip()
+        if not authorization:
+            raise Exception(_('Thieu MISA_CRM_AUTHORIZATION trong Thiet lap he thong.'))
+        if not authorization.lower().startswith('bearer '):
+            authorization = 'Bearer %s' % authorization
+        return {
+            'accept': 'application/json, text/plain, */*',
+            'authorization': authorization,
+            'companycode': get_param('misa.crm.company_code') or '3R2PY2F4',
+            'content-type': 'application/json',
+            'layoutcode': 'account',
+            'x-misa-language': 'vi-VN',
+        }
+
+    @api.model
+    def _hlv_misa_crm_payload(self, keyword, page=1, page_size=20):
+        return {
+            'Columns': MISA_CRM_COLUMNS,
+            'Sorts': [{'SortBy': 'ModifiedDate', 'Type': 0, 'SortDirection': 1}],
+            'Start': (page - 1) * page_size,
+            'Page': page,
+            'PageSize': page_size,
+            'Filters': [],
+            'Formula': '',
+            'LayoutCode': 'Account',
+            'DefaultTotal': True,
+            'IsMappingData': False,
+            'MappingValueObject': {},
+            'IsApproved': False,
+            'CustomPagingData': {},
+            'IsUsedELTS': True,
+            'ListGmailPage': [],
+            'ListFacebookPage': {},
+            'IsListPaging': True,
+            'IsGetCache': False,
+            'IsCheckInactive': False,
+            'IsConverted': False,
+            'SessionID': str(uuid.uuid4()),
+            'LayoutCodeCheckPermission': 'Account',
+            'AISearchKeyword': keyword or '',
+            'SkipNormalSearch': False,
+        }
+
+    @api.model
+    def _hlv_fetch_misa_crm_accounts(self, keyword):
+        expected_name = _norm_text(keyword)
+        last_raw = []
+        for attempt in range(MISA_CRM_FETCH_ATTEMPTS):
+            response = requests.post(
+                MISA_CRM_ACCOUNT_GRID_URL,
+                headers=self._hlv_misa_crm_headers(),
+                data=json.dumps(
+                    self._hlv_misa_crm_payload(keyword),
+                    ensure_ascii=False,
+                ).encode('utf-8'),
+                timeout=30,
+            )
+            response.raise_for_status()
+            data = response.json()
+            if data.get('Code') != 200 or data.get('Success') is not True:
+                raise Exception(_('MISA CRM loi: %s') % data.get('SubCode'))
+
+            raw_accounts = data.get('Data') or []
+            last_raw = raw_accounts
+            matched = [
+                account for account in raw_accounts
+                if _norm_text(account.get('AccountName')) == expected_name
+            ]
+            if matched:
+                return matched
+            time.sleep(0.6)
+        return last_raw
+
+    @api.model
     def _hlv_explorer_role_counts(self):
         labels = {
             'all': _('Tất cả'),
@@ -473,7 +643,7 @@ class ResPartner(models.Model):
             ('parent_id', '=', False),
             ('active', '=', True),
         ])}]
-        for key in ('customer_crm', 'customer_shopee', 'supplier', 'other'):
+        for key in ('customer_crm', 'customer_shopee', 'supplier'):
             result.append({
                 'key': key,
                 'label': labels[key],
@@ -483,7 +653,47 @@ class ResPartner(models.Model):
                     ('hlv_business_role', '=', key),
                 ]),
             })
+        result.append({
+            'key': 'dirty',
+            'label': _('Cần kiểm tra'),
+            'count': len(self._hlv_explorer_dirty_root_ids()),
+        })
+        result.append({
+            'key': 'other',
+            'label': _('Khác'),
+            'count': self.sudo().search_count([
+                ('parent_id', '=', False),
+                ('active', '=', True),
+                ('hlv_business_role', '=', 'other'),
+            ]),
+        })
         return result
+
+    @api.model
+    def _hlv_explorer_dirty_root_ids(self):
+        self.env.cr.execute("""
+            SELECT DISTINCT root.id
+              FROM res_partner root
+         LEFT JOIN res_partner child ON child.parent_id = root.id
+             WHERE root.parent_id IS NULL
+               AND root.active IS TRUE
+               AND (
+                   (
+                       COALESCE(NULLIF(TRIM(root.ref), ''), '') != ''
+                       AND COALESCE(NULLIF(TRIM(root.company_registry), ''), '') != ''
+                       AND TRIM(root.ref) != TRIM(root.company_registry)
+                   )
+                   OR (
+                       child.id IS NOT NULL
+                       AND child.active IS TRUE
+                       AND (
+                           COALESCE(NULLIF(TRIM(child.ref), ''), '') != ''
+                           OR COALESCE(NULLIF(TRIM(child.company_registry), ''), '') != ''
+                       )
+                   )
+               )
+        """)
+        return [row[0] for row in self.env.cr.fetchall()]
 
     def _hlv_explorer_row(self):
         self.ensure_one()
@@ -591,3 +801,30 @@ class ResPartner(models.Model):
             'selected': root._hlv_explorer_row(),
             'related': root._hlv_explorer_related_rows(),
         }
+
+    @api.model
+    def hlv_contact_explorer_fix_many(self, partner_ids):
+        partners = self.sudo().browse(partner_ids or []).exists()
+        fixed_ids = set()
+        for partner in partners:
+            root = partner.commercial_partner_id or partner
+            if partner.parent_id and (partner.ref or partner.company_registry):
+                partner.write({'ref': False, 'company_registry': False})
+                fixed_ids.add(partner.id)
+                continue
+
+            dirty_children = root.child_ids.filtered(lambda p: p.ref or p.company_registry)
+            if dirty_children:
+                dirty_children.write({'ref': False, 'company_registry': False})
+                fixed_ids.update(dirty_children.ids)
+
+            ref = (root.ref or '').strip()
+            company_registry = (root.company_registry or '').strip()
+            if ref and company_registry and ref != company_registry:
+                root.write({'company_registry': ref})
+                fixed_ids.add(root.id)
+
+            (root | root.child_ids)._compute_hlv_code_flags()
+            (root | root.child_ids)._compute_hlv_filter_tag_ids()
+
+        return {'fixed_ids': sorted(fixed_ids)}

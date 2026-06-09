@@ -7,6 +7,7 @@
 
                 <t t-if="state.selected">
                     <div class="hlv_selected">
+                        <div class="hlv_selected_badge">Đang chọn</div>
                         <div class="hlv_selected_name" t-esc="state.selected.name"/>
                         <div class="hlv_selected_meta">
                             <span t-esc="state.selected.role"/>
@@ -14,6 +15,29 @@
                         </div>
                         <div class="hlv_selected_meta" t-if="state.selected.vat">
                             MST: <t t-esc="state.selected.vat"/>
+                        </div>
+                        <div class="hlv_selected_actions">
+                            <button type="button"
+                                    class="hlv_secondary_button"
+                                    t-on-click="compareCRM"
+                                    t-att-disabled="state.crmChecking">
+                                <t t-if="state.crmChecking">Đang đối chiếu...</t>
+                                <t t-else="">Đối chiếu CRM</t>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div t-if="state.crmResult" t-att-class="'hlv_crm_result ' + (state.crmResult.ok ? 'ok' : 'warn')">
+                        <div class="hlv_crm_title">Kết quả CRM</div>
+                        <div class="hlv_crm_message" t-esc="state.crmResult.message"/>
+                        <div class="hlv_crm_accounts">
+                            <t t-foreach="state.crmResult.accounts" t-as="account" t-key="account.id || account.code">
+                                <div t-att-class="'hlv_crm_account ' + (account.exact ? 'exact' : '')">
+                                    <strong><t t-esc="account.code || '-'"/></strong>
+                                    <span t-esc="account.tax || ''"/>
+                                    <small t-esc="account.name"/>
+                                </div>
+                            </t>
                         </div>
                     </div>
 
@@ -65,6 +89,12 @@
                         </t>
                     </div>
                     <div class="hlv_toolbar_right">
+                        <button t-if="state.role === 'dirty'"
+                                type="button"
+                                class="hlv_toolbar_button"
+                                t-on-click="fixVisibleDirty">
+                            Sửa lỗi trang này
+                        </button>
                         <div class="hlv_pager">
                             <button type="button" t-on-click="previousPage" t-att-disabled="state.page &lt;= 1">‹</button>
                             <span><t t-esc="pageStart"/>-<t t-esc="pageEnd"/> / <t t-esc="state.total"/></span>
