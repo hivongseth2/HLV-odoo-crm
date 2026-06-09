@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <function model="hlv.barcode.user.permission" name="configure_default_odoo_barcode_access"/>
+</odoo>

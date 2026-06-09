@@ -14,6 +14,7 @@ Mobile Barcode Scanner
     "depends": [
         "base", 
         "stock", 
+        "stock_barcode",
         "web",
         # === OPTION B: DEPENDS ON WAREHOUSE PERMISSION ===
         # "hlv_warehouse_permission",
@@ -23,6 +24,7 @@ Mobile Barcode Scanner
         # === OPTION A: SELF-CONTAINED BARCODE PERMISSIONS ===
         "security/security.xml",
         "security/ir.model.access.csv",
+        "data/default_odoo_barcode_access.xml",
         "views/barcode_permission_views.xml",
         # ====================================================
         "views/res_config_settings_views.xml",
