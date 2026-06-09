@@ -3,6 +3,7 @@ from os import name
 import requests
 import logging
 import time
+import base64
 from odoo import models
 import re
 from dateutil import parser as dtparser
@@ -613,6 +614,43 @@ class MisaApiUtils(models.AbstractModel):
         if not match:
             raise Exception("Token not found in CRM HTML")
         return match.group("token")
+
+    def _decode_jwt_exp(self, token):
+        try:
+            payload_b64 = (token or "").split(".")[1]
+            payload_b64 += "=" * (-len(payload_b64) % 4)
+            payload = json.loads(base64.urlsafe_b64decode(payload_b64.encode("ascii")))
+            return int(payload.get("exp") or 0)
+        except Exception:
+            return 0
+
+    def _fetch_login_crm_token_cached(self, force_refresh=False):
+        """Fetch CRM token once and reuse it until shortly before JWT expiry."""
+        ICP = self.env["ir.config_parameter"].sudo()
+        now = int(time.time())
+        if not force_refresh:
+            token = (ICP.get_param("misa.crm.cached_token") or "").strip()
+            exp = int(ICP.get_param("misa.crm.cached_token_exp") or 0)
+            if token and exp > now + 300:
+                return token
+
+        token = self._fetch_login_crm_token()
+        exp = self._decode_jwt_exp(token) or (now + 3600)
+        ICP.set_param("misa.crm.cached_token", token)
+        ICP.set_param("misa.crm.cached_token_exp", str(exp))
+        return token
+
+    def _get_cached_crm_headers(self, force_refresh=False):
+        token = self._fetch_login_crm_token_cached(force_refresh=force_refresh)
+        headers = dict(self.env["misa.config"].sudo().get_crm_header(token))
+        headers.pop("content-length", None)
+        headers.pop("Content-Length", None)
+        headers.update({
+            "accept": "application/json, text/plain, */*",
+            "content-type": "application/json",
+            "x-misa-language": "vi-VN",
+        })
+        return headers
 
     #=== Hàm lấy OwnerIDText và SaleOrderDate từ SaleOrder ===#
     def get_saleorder_owner_and_date(self, sale_order_id: int | str, sale_headers: object) -> dict:
