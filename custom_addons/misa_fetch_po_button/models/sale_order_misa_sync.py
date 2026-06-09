@@ -1257,7 +1257,24 @@ class SaleOrder(models.Model):
             shipping_addr = env['misa.api.utils'].extract_shipping_address_from_data(data) or ''
             partner_name  = data.get("AccountIDText") or data.get("BillingAccountIDText") or _("Khách hàng MISA")
             shipping_contact_name = owner_date.get('shipping_contact') or data.get("ShippingContactIDText")
-            partner = odoo_utils._get_or_create_partner(partner_name)
+            account_id = data.get("AccountID") or data.get("AccountId")
+            partner = None
+            misa_code = None
+            tax_code = None
+            if account_id:
+                partner = env['misa.api.utils']._sync_customer_from_misa_account_api(account_id, headers)
+                try:
+                    ident = env['misa.api.utils'].get_account_identity(account_id, headers) or {}
+                    misa_code = ident.get("account_number") or ident.get("id")
+                    tax_code = ident.get("taxcode")
+                except Exception as _e:
+                    _logger.warning("Partial Resync: cannot get Account identity for AccountID=%s: %s", account_id, _e)
+            if not partner:
+                partner = odoo_utils._get_or_create_partner(
+                    partner_name,
+                    misa_code=misa_code,
+                    tax_code=tax_code,
+                )
 
             delivery_contact = env['sale.api.import.wizard']._get_or_create_delivery_contact(
                 parent_partner=partner,

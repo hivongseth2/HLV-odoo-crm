@@ -59,7 +59,8 @@
 }
 
 .hlv_secondary_button,
-.hlv_toolbar_button {
+.hlv_toolbar_button,
+.hlv_apply_crm_button {
     border: 1px solid #6b4b75;
     border-radius: 6px;
     background: #fff;
@@ -75,6 +76,13 @@
 
 .hlv_toolbar_button {
     white-space: nowrap;
+}
+
+.hlv_apply_crm_button {
+    margin-top: 6px;
+    width: fit-content;
+    padding: 4px 8px;
+    font-size: 12px;
 }
 
 .hlv_selected_meta,
@@ -320,9 +328,19 @@
 .hlv_table_header,
 .hlv_table_row {
     display: grid;
-    grid-template-columns: minmax(260px, 2fr) 150px 120px 130px 100px 130px;
+    grid-template-columns: 34px minmax(260px, 2fr) 150px 120px 130px 100px 130px;
     gap: 12px;
     align-items: center;
+}
+
+.hlv_merge_cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.hlv_merge_cell input {
+    cursor: pointer;
 }
 
 .hlv_table_header {

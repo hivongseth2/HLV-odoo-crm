@@ -5,23 +5,24 @@ from odoo.exceptions import UserError
 
 class HlvContactMergeWizard(models.TransientModel):
     _name = 'hlv.contact.merge.wizard'
-    _description = 'Gộp liên hệ'
+    _description = 'Gop lien he'
 
     source_partner_ids = fields.Many2many(
         'res.partner',
-        string='Liên hệ cần gộp',
+        string='Lien he can gop',
         required=True,
     )
     destination_partner_id = fields.Many2one(
         'res.partner',
-        string='Giữ lại liên hệ',
+        string='Giu lai lien he',
         required=True,
     )
     note = fields.Text(
-        string='Ghi chú',
+        string='Ghi chu',
         default=(
-            'Chọn liên hệ chuẩn để giữ lại. Chức năng này gọi cơ chế merge '
-            'chuẩn của Odoo nếu hệ thống có model base.partner.merge.automatic.wizard.'
+            'Chon lien he chuan de giu lai. Field nao tren lien he goc dang trong '
+            'thi lay tu lien he bi gop. Don ban, don mua va lien he con se duoc '
+            'chuyen ve lien he goc. Lien he bi gop se duoc archive.'
         ),
         readonly=True,
     )
@@ -39,34 +40,101 @@ class HlvContactMergeWizard(models.TransientModel):
 
     def action_merge(self):
         self.ensure_one()
-        partners = self.source_partner_ids | self.destination_partner_id
-        partners = partners.exists()
+        partners = (self.source_partner_ids | self.destination_partner_id).exists()
         if len(partners) < 2:
-            raise UserError(_('Cần chọn ít nhất 2 liên hệ để gộp.'))
+            raise UserError(_('Can chon it nhat 2 lien he de gop.'))
         if self.destination_partner_id not in partners:
-            raise UserError(_('Liên hệ giữ lại phải nằm trong danh sách cần gộp.'))
+            raise UserError(_('Lien he giu lai phai nam trong danh sach can gop.'))
 
-        if 'base.partner.merge.automatic.wizard' not in self.env:
-            raise UserError(_('Database này chưa có wizard merge chuẩn của Odoo.'))
+        destination = self.destination_partner_id.sudo()
+        sources = (partners - destination).sudo()
+        source_descendants = self.env['res.partner'].sudo().with_context(active_test=False).search([
+            ('id', 'child_of', sources.ids),
+        ])
 
-        MergeWizard = self.env['base.partner.merge.automatic.wizard'].sudo()
+        copied_fields = self._copy_missing_partner_fields(destination, sources)
+
+        moved_children = sources.mapped('child_ids')
+        if moved_children:
+            moved_children.write({'parent_id': destination.id})
+
+        sale_count = self._move_sale_orders(destination, source_descendants)
+        purchase_count = self._move_purchase_orders(destination, source_descendants)
+
+        sources.write({'active': False})
+        refresh_partners = destination | destination.child_ids | sources
+        refresh_partners._compute_hlv_order_flags()
+        refresh_partners._compute_hlv_business_role()
+        refresh_partners._compute_hlv_relationship_label()
+        refresh_partners._compute_hlv_code_flags()
+        refresh_partners._compute_hlv_misa_code_key()
+        refresh_partners._compute_hlv_filter_tag_ids()
+
+        destination.message_post(body=_(
+            'Da gop lien he %s vao lien he nay. Bo sung field trong: %s. '
+            'Chuyen %s don ban, %s don mua, %s lien he con.'
+        ) % (
+            ', '.join('%s:%s' % (p.id, p.display_name) for p in sources),
+            ', '.join(copied_fields) or '-',
+            sale_count,
+            purchase_count,
+            len(moved_children),
+        ))
+        return {'type': 'ir.actions.act_window_close'}
+
+    def _copy_missing_partner_fields(self, destination, sources):
+        fields_to_copy = [
+            'vat', 'ref', 'company_registry',
+            'phone', 'mobile', 'email', 'website',
+            'street', 'street2', 'city', 'zip',
+            'state_id', 'country_id', 'function', 'comment',
+        ]
         vals = {}
-        if 'partner_ids' in MergeWizard._fields:
-            vals['partner_ids'] = [(6, 0, partners.ids)]
-        if 'dst_partner_id' in MergeWizard._fields:
-            vals['dst_partner_id'] = self.destination_partner_id.id
-        if 'group_by_email' in MergeWizard._fields:
-            vals['group_by_email'] = False
-        if 'group_by_name' in MergeWizard._fields:
-            vals['group_by_name'] = False
+        copied = []
+        for field_name in fields_to_copy:
+            if field_name not in destination._fields or destination[field_name]:
+                continue
+            source = sources.filtered(lambda p: bool(p[field_name]))[:1]
+            if not source:
+                continue
+            field = destination._fields[field_name]
+            vals[field_name] = source[field_name].id if field.type == 'many2one' else source[field_name]
+            copied.append(field_name)
 
-        wizard = MergeWizard.with_context(active_ids=partners.ids).create(vals)
-        for method_name in ('action_merge', 'merge_cb', '_merge'):
-            if hasattr(wizard, method_name):
-                result = getattr(wizard, method_name)()
-                self.destination_partner_id.message_post(body=_(
-                    'Đã gộp các liên hệ %s vào liên hệ này từ HLV Contact Refine.'
-                ) % ', '.join(str(pid) for pid in partners.ids))
-                return result or {'type': 'ir.actions.act_window_close'}
+        if 'category_id' in destination._fields:
+            category_ids = (destination.category_id | sources.mapped('category_id')).ids
+            if category_ids:
+                vals['category_id'] = [(6, 0, category_ids)]
+                copied.append('category_id')
 
-        raise UserError(_('Không tìm thấy method merge trên wizard chuẩn của Odoo.'))
+        if vals:
+            destination.write(vals)
+        return copied
+
+    def _move_sale_orders(self, destination, source_partners):
+        SaleOrder = self.env['sale.order'].sudo()
+        partner_ids = source_partners.ids
+        if not partner_ids:
+            return 0
+
+        orders = SaleOrder.search([('partner_id', 'in', partner_ids)])
+        if orders:
+            orders.write({'partner_id': destination.id})
+
+        for field_name in ('partner_invoice_id', 'partner_shipping_id'):
+            if field_name in SaleOrder._fields:
+                field_orders = SaleOrder.search([(field_name, 'in', partner_ids)])
+                if field_orders:
+                    field_orders.write({field_name: destination.id})
+                    orders |= field_orders
+        return len(orders)
+
+    def _move_purchase_orders(self, destination, source_partners):
+        PurchaseOrder = self.env['purchase.order'].sudo()
+        partner_ids = source_partners.ids
+        if not partner_ids:
+            return 0
+        orders = PurchaseOrder.search([('partner_id', 'in', partner_ids)])
+        if orders:
+            orders.write({'partner_id': destination.id})
+        return len(orders)
