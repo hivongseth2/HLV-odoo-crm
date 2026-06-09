@@ -1,68 +1,52 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <record id="action_convert_to_company" model="ir.actions.server">
-        <field name="name">Cập nhật thành Công ty (Quét tự động)</field>
+    <record id="action_refresh_contact_classification" model="ir.actions.server">
+        <field name="name">Quét lại phân loại liên hệ</field>
         <field name="model_id" ref="base.model_res_partner"/>
         <field name="binding_model_id" ref="base.model_res_partner"/>
         <field name="binding_view_types">list,form</field>
         <field name="state">code</field>
-        <field name="code">
-# Define keywords
-keywords = ['công ty', 'cty', 'doanh nghiệp', 'tnhh', 'chi nhánh', 'dntn', 'corporation', 'inc.', 'ltd']
+        <field name="code">action = model.action_hlv_refresh_contact_classification()</field>
+    </record>
 
-# If triggered from Menu (no active_ids), search ALL candidates
-if not env.context.get('active_ids'):
-    # Search for ALL contacts in the system to ensure children (Delivery Addresses) are also tagged
-    records = env['res.partner'].search([])
+    <record id="action_convert_to_company" model="ir.actions.server">
+        <field name="name">Quét lại phân loại liên hệ</field>
+        <field name="model_id" ref="base.model_res_partner"/>
+        <field name="binding_model_id" ref="base.model_res_partner"/>
+        <field name="binding_view_types">list,form</field>
+        <field name="state">code</field>
+        <field name="code">action = model.action_hlv_refresh_contact_classification()</field>
+    </record>
 
-# Process records
-count_company = 0
-count_tags = 0
-for record in records:
-    # 1. Conversion logic
-    old_is_company = record.is_company
-    if not record.is_company and record.name:
-        name_lower = record.name.lower()
-        if any(kw in name_lower for kw in keywords):
-            record.write({'is_company': True})
-            count_company += 1
-    
-    # 2. Trigger tag recompute (stored field)
-    # We touch a field it depends on or call recompute manually if needed, 
-    # but simplest is to just call the method if it's store=True
-    record._compute_hlv_filter_tag_ids()
-    count_tags += 1
+    <record id="action_hlv_open_merge_wizard" model="ir.actions.server">
+        <field name="name">Gộp liên hệ</field>
+        <field name="model_id" ref="base.model_res_partner"/>
+        <field name="binding_model_id" ref="base.model_res_partner"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="code">action = records.action_hlv_open_merge_wizard()</field>
+    </record>
 
-# Notify user
-if not env.context.get('active_ids'):
-    action = {
-        'type': 'ir.actions.client',
-        'tag': 'display_notification',
-        'params': {
-            'title': 'Hoàn thành quét',
-            'message': 'Đã chuyển đổi %s Công ty và cập nhật phân loại cho %s liên hệ.' % (count_company, count_tags),
-            'type': 'success',
-            'sticky': False,
-            'next': {'type': 'ir.actions.act_window_close'},
-        }
-    }
-        </field>
+    <record id="action_hlv_open_split_wizard" model="ir.actions.server">
+        <field name="name">Tách thành khách hàng mới</field>
+        <field name="model_id" ref="base.model_res_partner"/>
+        <field name="binding_model_id" ref="base.model_res_partner"/>
+        <field name="binding_view_types">form</field>
+        <field name="state">code</field>
+        <field name="code">action = record.action_hlv_open_split_wizard()</field>
     </record>
 
     <record id="action_misa_contact_bulk_sync" model="ir.actions.server">
         <field name="name">Cập nhật thông tin từ MISA</field>
         <field name="model_id" ref="base.model_res_partner"/>
         <field name="state">code</field>
-        <field name="code">
-action = model.action_misa_update_bulk()
-        </field>
+        <field name="code">action = model.action_misa_update_bulk()</field>
     </record>
 
-    <!-- Menu Item to Trigger Global Scan -->
     <menuitem id="menu_convert_company_scan"
-              name="Quét &amp; Chuyển đổi Công ty"
+              name="Quét lại phân loại liên hệ"
               parent="contacts.res_partner_menu_config"
-              action="action_convert_to_company"
+              action="action_refresh_contact_classification"
               sequence="50"/>
 
     <menuitem id="menu_misa_contact_bulk_sync"

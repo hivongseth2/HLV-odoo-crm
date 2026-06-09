@@ -1,24 +1,28 @@
 {
     'name': 'Refine Contact Interface',
-    'version': '18.0.1.0.0',
+    'version': '18.0.2.0.0',
     'category': 'Sales/CRM',
-    'summary': 'Clean up Contact interface by hiding child contacts by default',
+    'summary': 'Refined contact classification, cleanup, merge and split workflows',
     'description': """
-        This module refines the Contacts interface to make it cleaner and more user-friendly.
-        
-        Features:
-        - Adds a default filter "Main Contacts" (Liên hệ chính) to the Contacts view.
-        - This filter hides subordinate addresses (Delivery, Invoice, etc.) which have a parent contact.
-        - Users can still see child contacts by removing the filter or opening the parent contact.
+        Refines Contacts with practical customer/vendor/Shopee/MISA
+        classification and controlled merge/split cleanup workflows.
     """,
     'author': 'Antigravity',
     'depends': ['base', 'contacts', 'sale', 'purchase'],
     'data': [
         'security/ir.model.access.csv',
         'data/filter_tag_data.xml',
+        'views/contact_operation_wizard_views.xml',
         'views/res_partner_views.xml',
         'data/ir_actions_server.xml',
     ],
+    'assets': {
+        'web.assets_backend': [
+            'hlv_contact_refine/static/src/xml/contact_explorer.xml',
+            'hlv_contact_refine/static/src/js/contact_explorer.js',
+            'hlv_contact_refine/static/src/scss/contact_explorer.scss',
+        ],
+    },
     'application': False,
     'installable': True,
     'license': 'LGPL-3',

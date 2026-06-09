@@ -1,27 +1,398 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- Add generic filter for top-level contacts -->
-    <record id="view_res_partner_filter_refine" model="ir.ui.view">
-        <field name="name">res.partner.select.refine</field>
+    <record id="view_res_partner_search_refine" model="ir.ui.view">
+        <field name="name">res.partner.search.hlv.refine</field>
         <field name="model">res.partner</field>
-        <field name="inherit_id" ref="base.view_res_partner_filter"/>
         <field name="arch" type="xml">
-            <xpath expr="//filter[@name='type_person']" position="before">
-                <filter string="Liên hệ chính" name="filter_only_parents" domain="[('parent_id', '=', False)]"/>
-                <filter string="Địa chỉ giao hàng" name="filter_type_delivery" domain="[('type', '=', 'delivery')]"/>
+            <search string="Liên hệ">
+                <field name="name"/>
+                <field name="ref"/>
+                <field name="company_registry"/>
+                <field name="vat"/>
+                <field name="phone"/>
+                <field name="email"/>
                 <separator/>
-            </xpath>
-            <xpath expr="//search" position="inside">
+                <filter string="Công ty gốc" name="root_company" domain="[('parent_id', '=', False), ('is_company', '=', True)]"/>
+                <filter string="Cá nhân" name="root_person" domain="[('parent_id', '=', False), ('is_company', '=', False)]"/>
+                <filter string="Khách cá nhân" name="person_customer" domain="[('parent_id', '=', False), ('is_company', '=', False), ('hlv_business_role', 'in', ['customer_crm', 'customer_shopee'])]"/>
+                <filter string="Liên hệ con" name="child_contact" domain="[('parent_id', '!=', False)]"/>
+                <filter string="Địa chỉ giao hàng" name="delivery" domain="[('type', '=', 'delivery')]"/>
+                <separator/>
+                <filter string="Khách CRM" name="crm_customer" domain="[('hlv_business_role', '=', 'customer_crm')]"/>
+                <filter string="Khách Shopee" name="shopee_customer" domain="[('hlv_business_role', '=', 'customer_shopee')]"/>
+                <filter string="Nhà cung cấp" name="vendor" domain="[('hlv_business_role', '=', 'supplier')]"/>
+                <separator/>
+                <filter string="Có mã MISA" name="has_misa_code" domain="['|', ('ref', '!=', False), ('company_registry', '!=', False)]"/>
+                <filter string="Mã nằm trên liên hệ con" name="dirty_child_code" domain="[('hlv_dirty_child_code', '=', True)]"/>
+                <filter string="Root lệch mã" name="root_code_mismatch" domain="[('hlv_root_code_mismatch', '=', True)]"/>
+                <group expand="0" string="Nhóm">
+                    <filter string="Loại liên hệ" name="group_hlv_type" context="{'group_by': 'hlv_partner_type'}"/>
+                    <filter string="Tỉnh/Thành" name="group_state" context="{'group_by': 'state_id'}"/>
+                    <filter string="Người tạo" name="group_create_uid" context="{'group_by': 'create_uid'}"/>
+                </group>
                 <searchpanel>
-                    <field name="hlv_partner_type" icon="fa-users" enable_counters="1"/>
-                    <field name="hlv_filter_tag_ids" string="Phân loại" icon="fa-tags" select="multi" enable_counters="1"/>
+                    <field name="hlv_partner_type" string="Hồ sơ" icon="fa-users" enable_counters="1"/>
+                    <field name="hlv_business_role" string="Nghiệp vụ" icon="fa-briefcase" enable_counters="1"/>
                 </searchpanel>
+            </search>
+        </field>
+    </record>
+
+    <record id="view_res_partner_list_refine" model="ir.ui.view">
+        <field name="name">res.partner.list.hlv.refine</field>
+        <field name="model">res.partner</field>
+        <field name="arch" type="xml">
+            <list string="Sơ đồ liên hệ" multi_edit="1" default_order="commercial_partner_id asc, parent_id asc, name asc"
+                  decoration-muted="parent_id"
+                  decoration-info="hlv_business_role == 'customer_shopee'"
+                  decoration-warning="hlv_dirty_child_code or hlv_root_code_mismatch">
+                <field name="display_name" string="Tên"/>
+                <field name="commercial_partner_id" string="Thuộc hồ sơ"/>
+                <field name="hlv_relationship_label" string="Quan hệ"/>
+                <field name="hlv_business_role" string="Nghiệp vụ"/>
+                <field name="child_contact_count" string="Con"/>
+                <field name="ref" string="Mã KH"/>
+                <field name="vat" string="MST"/>
+                <field name="parent_id" string="Công ty mẹ"/>
+                <field name="phone"/>
+                <field name="email"/>
+                <field name="city"/>
+                <field name="hlv_partner_type" string="Hồ sơ" optional="hide"/>
+                <field name="company_registry" string="Mã registry" optional="hide"/>
+                <field name="hlv_misa_code_key" string="Khóa MISA" optional="hide"/>
+                <field name="hlv_filter_tag_ids" widget="many2many_tags" string="Phân loại" optional="hide"/>
+                <field name="customer_rank" optional="hide"/>
+                <field name="supplier_rank" optional="hide"/>
+                <field name="hlv_has_shopee_order" string="Shopee"/>
+                <field name="hlv_dirty_child_code" optional="hide"/>
+                <field name="hlv_root_code_mismatch" optional="hide"/>
+                <field name="active" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_res_partner_kanban_refine" model="ir.ui.view">
+        <field name="name">res.partner.kanban.hlv.refine</field>
+        <field name="model">res.partner</field>
+        <field name="arch" type="xml">
+            <kanban class="o_kanban_mobile" default_group_by="hlv_partner_type" sample="1">
+                <field name="display_name"/>
+                <field name="parent_id"/>
+                <field name="hlv_partner_type"/>
+                <field name="hlv_business_role"/>
+                <field name="hlv_filter_tag_ids"/>
+                <field name="ref"/>
+                <field name="company_registry"/>
+                <field name="vat"/>
+                <field name="hlv_misa_code_key"/>
+                <field name="hlv_has_shopee_order"/>
+                <field name="phone"/>
+                <field name="email"/>
+                <field name="city"/>
+                <templates>
+                    <t t-name="card">
+                        <div class="oe_kanban_global_click">
+                            <div class="o_kanban_record_title">
+                                <strong><field name="display_name"/></strong>
+                            </div>
+                            <div class="text-muted" t-if="record.parent_id.raw_value">
+                                <field name="parent_id"/>
+                            </div>
+                            <div class="mt8">
+                                <field name="hlv_filter_tag_ids" widget="many2many_tags"/>
+                            </div>
+                            <div class="mt8">
+                                <span t-if="record.ref.raw_value">Mã: <field name="ref"/></span>
+                                <span t-if="record.vat.raw_value"> | MST: <field name="vat"/></span>
+                            </div>
+                            <div class="text-muted" t-if="record.hlv_misa_code_key.raw_value">
+                                Khóa: <field name="hlv_misa_code_key"/>
+                            </div>
+                            <div class="text-muted">
+                                <span t-if="record.phone.raw_value"><field name="phone"/></span>
+                                <span t-if="record.email.raw_value"> | <field name="email"/></span>
+                            </div>
+                            <div class="text-muted" t-if="record.city.raw_value">
+                                <field name="city"/>
+                            </div>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
+    <record id="view_res_partner_form_refine" model="ir.ui.view">
+        <field name="name">res.partner.form.hlv.refine</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//sheet" position="before">
+                <header>
+                    <button name="action_hlv_refresh_contact_classification" type="object" string="Quét phân loại" class="btn-secondary"/>
+                    <button name="action_hlv_open_split_wizard" type="object" string="Tách khách hàng" class="btn-secondary"/>
+                </header>
+            </xpath>
+            <xpath expr="//field[@name='category_id']" position="after">
+                <field name="hlv_filter_tag_ids" widget="many2many_tags" readonly="1"/>
+                <field name="hlv_partner_type" readonly="1"/>
+                <field name="hlv_business_role" readonly="1"/>
+                <field name="hlv_misa_code_key" readonly="1"/>
+                <field name="hlv_has_sale_order" readonly="1"/>
+                <field name="hlv_has_shopee_order" readonly="1"/>
+                <field name="hlv_has_purchase_order" readonly="1"/>
+            </xpath>
+            <xpath expr="//notebook" position="inside">
+                <page string="Quan hệ" name="hlv_contact_relationships">
+                    <group>
+                        <group string="Hồ sơ hiện tại">
+                            <field name="commercial_partner_id" readonly="1"/>
+                            <field name="parent_id" readonly="1"/>
+                            <field name="hlv_relationship_label" readonly="1"/>
+                            <field name="hlv_business_role" readonly="1"/>
+                        </group>
+                        <group string="Mã dữ liệu">
+                            <field name="ref"/>
+                            <field name="company_registry"/>
+                            <field name="vat"/>
+                            <field name="hlv_misa_code_key" readonly="1"/>
+                        </group>
+                    </group>
+                    <separator string="Liên hệ / địa chỉ thuộc hồ sơ này"/>
+                    <field name="child_ids">
+                        <list editable="bottom">
+                            <field name="name"/>
+                            <field name="type"/>
+                            <field name="hlv_relationship_label"/>
+                            <field name="hlv_business_role"/>
+                            <field name="phone"/>
+                            <field name="email"/>
+                            <field name="ref"/>
+                            <field name="company_registry"/>
+                        </list>
+                    </field>
+                </page>
             </xpath>
         </field>
     </record>
 
-    <record id="contacts.action_contacts" model="ir.actions.act_window">
-        <!-- We remove the search bar default filter to prevent conflict with Search Panel counters -->
+    <record id="view_res_partner_form_refine_drawer" model="ir.ui.view">
+        <field name="name">res.partner.form.hlv.refine.drawer</field>
+        <field name="model">res.partner</field>
+        <field name="active" eval="False"/>
+        <field name="arch" type="xml">
+            <form string="Hồ sơ liên hệ">
+                <header>
+                    <button name="action_hlv_refresh_contact_classification" type="object" string="Quét phân loại" class="btn-secondary"/>
+                    <button name="action_hlv_open_split_wizard" type="object" string="Tách khách hàng" class="btn-secondary"/>
+                    <field name="active" widget="boolean_toggle"/>
+                </header>
+                <sheet class="hlv_contact_sheet">
+                    <div class="hlv_contact_layout">
+                        <div class="hlv_contact_drawer">
+                            <div class="hlv_drawer_title">Hồ sơ</div>
+                            <h2><field name="display_name" readonly="1"/></h2>
+                            <div class="hlv_drawer_line">
+                                <span>Thuộc</span>
+                                <field name="commercial_partner_id" readonly="1" options="{'no_open': False}"/>
+                            </div>
+                            <div class="hlv_drawer_badges">
+                                <field name="hlv_relationship_label" readonly="1"/>
+                                <field name="hlv_business_role" readonly="1"/>
+                            </div>
+
+                            <div class="hlv_drawer_section">
+                                <div class="hlv_drawer_label">Mã dữ liệu</div>
+                                <div class="hlv_key_row">
+                                    <span>Mã KH</span>
+                                    <field name="ref"/>
+                                </div>
+                                <div class="hlv_key_row">
+                                    <span>Registry</span>
+                                    <field name="company_registry"/>
+                                </div>
+                                <div class="hlv_key_row">
+                                    <span>MST</span>
+                                    <field name="vat"/>
+                                </div>
+                                <div class="hlv_key_row">
+                                    <span>Key</span>
+                                    <field name="hlv_misa_code_key" readonly="1"/>
+                                </div>
+                            </div>
+
+                            <div class="hlv_drawer_section">
+                                <div class="hlv_drawer_label">Cờ kiểm tra</div>
+                                <field name="hlv_has_sale_order" readonly="1"/>
+                                <field name="hlv_has_shopee_order" readonly="1"/>
+                                <field name="hlv_has_purchase_order" readonly="1"/>
+                                <field name="hlv_dirty_child_code" readonly="1"/>
+                                <field name="hlv_root_code_mismatch" readonly="1"/>
+                            </div>
+                        </div>
+
+                        <div class="hlv_contact_main">
+                            <div class="hlv_main_header">
+                                <field name="name" placeholder="Tên liên hệ / công ty"/>
+                                <field name="hlv_filter_tag_ids" widget="many2many_tags" readonly="1"/>
+                            </div>
+
+                            <group string="Thông tin chính" col="4">
+                                <field name="is_company"/>
+                                <field name="parent_id"/>
+                                <field name="type"/>
+                                <field name="child_contact_count" readonly="1"/>
+                                <field name="phone"/>
+                                <field name="mobile"/>
+                                <field name="email"/>
+                                <field name="website"/>
+                            </group>
+
+                            <group string="Địa chỉ" col="4">
+                                <field name="street"/>
+                                <field name="street2"/>
+                                <field name="city"/>
+                                <field name="state_id"/>
+                                <field name="country_id"/>
+                                <field name="zip"/>
+                            </group>
+
+                            <notebook>
+                                <page string="Quan hệ">
+                                    <field name="child_ids">
+                                        <list editable="bottom" decoration-muted="parent_id" decoration-warning="hlv_dirty_child_code">
+                                            <field name="name"/>
+                                            <field name="type"/>
+                                            <field name="hlv_relationship_label"/>
+                                            <field name="hlv_business_role"/>
+                                            <field name="phone"/>
+                                            <field name="email"/>
+                                            <field name="ref"/>
+                                            <field name="company_registry"/>
+                                        </list>
+                                    </field>
+                                </page>
+                                <page string="Ghi chú">
+                                    <field name="comment" nolabel="1"/>
+                                </page>
+                                <page string="Kế toán">
+                                    <group col="4">
+                                        <field name="customer_rank"/>
+                                        <field name="supplier_rank"/>
+                                        <field name="property_payment_term_id"/>
+                                        <field name="property_supplier_payment_term_id"/>
+                                    </group>
+                                </page>
+                            </notebook>
+                        </div>
+                    </div>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_hlv_contacts" model="ir.actions.act_window">
+        <field name="name">Liên hệ tinh gọn</field>
+        <field name="res_model">res.partner</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_res_partner_search_refine"/>
         <field name="context">{'default_is_company': True}</field>
+        <field name="view_ids" eval="[
+            (5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('view_res_partner_list_refine')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('base.view_partner_form')})
+        ]"/>
+    </record>
+
+    <record id="action_hlv_contact_explorer" model="ir.actions.client">
+        <field name="name">Liên hệ tinh gọn</field>
+        <field name="tag">hlv_contact_explorer_action</field>
+    </record>
+
+    <record id="action_hlv_contact_crm_customers" model="ir.actions.act_window">
+        <field name="name">Khách CRM</field>
+        <field name="res_model">res.partner</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('hlv_business_role', '=', 'customer_crm')]</field>
+        <field name="search_view_id" ref="view_res_partner_search_refine"/>
+        <field name="view_ids" eval="[
+            (5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('view_res_partner_list_refine')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('base.view_partner_form')})
+        ]"/>
+    </record>
+
+    <record id="action_hlv_contact_shopee_customers" model="ir.actions.act_window">
+        <field name="name">Khách Shopee</field>
+        <field name="res_model">res.partner</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('hlv_business_role', '=', 'customer_shopee')]</field>
+        <field name="search_view_id" ref="view_res_partner_search_refine"/>
+        <field name="view_ids" eval="[
+            (5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('view_res_partner_list_refine')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('base.view_partner_form')})
+        ]"/>
+    </record>
+
+    <record id="action_hlv_contact_suppliers" model="ir.actions.act_window">
+        <field name="name">Nhà cung cấp</field>
+        <field name="res_model">res.partner</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('hlv_business_role', '=', 'supplier')]</field>
+        <field name="search_view_id" ref="view_res_partner_search_refine"/>
+        <field name="view_ids" eval="[
+            (5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('view_res_partner_list_refine')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('base.view_partner_form')})
+        ]"/>
+    </record>
+
+    <record id="action_hlv_contact_delivery_addresses" model="ir.actions.act_window">
+        <field name="name">Địa chỉ giao hàng</field>
+        <field name="res_model">res.partner</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('hlv_business_role', '=', 'delivery_address')]</field>
+        <field name="search_view_id" ref="view_res_partner_search_refine"/>
+        <field name="view_ids" eval="[
+            (5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('view_res_partner_list_refine')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('base.view_partner_form')})
+        ]"/>
+    </record>
+
+    <menuitem id="menu_hlv_contacts_refine"
+              name="Liên hệ tinh gọn"
+              parent="contacts.menu_contacts"
+              action="action_hlv_contact_explorer"
+              sequence="1"/>
+    <menuitem id="menu_hlv_contact_crm_customers"
+              name="Khách CRM"
+              parent="contacts.menu_contacts"
+              action="action_hlv_contact_crm_customers"
+              sequence="2"/>
+    <menuitem id="menu_hlv_contact_shopee_customers"
+              name="Khách Shopee"
+              parent="contacts.menu_contacts"
+              action="action_hlv_contact_shopee_customers"
+              sequence="3"/>
+    <menuitem id="menu_hlv_contact_suppliers"
+              name="Nhà cung cấp"
+              parent="contacts.menu_contacts"
+              action="action_hlv_contact_suppliers"
+              sequence="4"/>
+    <menuitem id="menu_hlv_contact_delivery_addresses"
+              name="Địa chỉ giao hàng"
+              parent="contacts.menu_contacts"
+              action="action_hlv_contact_delivery_addresses"
+              sequence="5"/>
+
+    <record id="contacts.action_contacts" model="ir.actions.act_window">
+        <field name="view_mode">kanban,list,form</field>
+        <field name="search_view_id" eval="False"/>
+        <field name="context">{'default_is_company': True}</field>
+        <field name="view_ids" eval="[
+            (5, 0, 0)
+        ]"/>
     </record>
 </odoo>
