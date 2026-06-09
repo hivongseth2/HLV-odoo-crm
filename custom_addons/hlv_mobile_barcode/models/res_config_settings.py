@@ -20,6 +20,12 @@ class ResCompany(models.Model):
         string='Print Label after Put in Pack',
         default=False
     )
+    hlv_barcode_shopee_default_picker_user_id = fields.Many2one(
+        'res.users',
+        string='Default Shopee Picker',
+        domain="[('share', '=', False), ('active', '=', True)]",
+        help='Default user assigned to process Shopee PICK pickings.',
+    )
 
 class ResConfigSettings(models.TransientModel):
     _inherit = 'res.config.settings'
@@ -30,6 +36,10 @@ class ResConfigSettings(models.TransientModel):
     )
     hlv_barcode_print_after_pack = fields.Boolean(
         related='company_id.hlv_barcode_print_after_pack',
+        readonly=False,
+    )
+    hlv_barcode_shopee_default_picker_user_id = fields.Many2one(
+        related='company_id.hlv_barcode_shopee_default_picker_user_id',
         readonly=False,
     )
     hlv_barcode_use_independent_permissions = fields.Boolean(

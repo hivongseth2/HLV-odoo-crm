@@ -3,6 +3,7 @@ import logging
 from odoo import http, _
 # pyrefly: ignore [missing-import]
 from odoo.http import request
+from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
 
@@ -61,6 +62,13 @@ def _same_warehouse_one_step_enabled():
     )
     return str(param).strip().lower() in ['true', '1']
 
+def _pick_assignment_error(picking):
+    try:
+        picking._check_hlv_mobile_pick_assignment_access(user=request.env.user)
+    except UserError as error:
+        return {'error': str(error)}
+    return False
+
 class HLVMobileBarcodeController(http.Controller):
 
     @http.route('/hlv_mobile_barcode/smart_scan', type='json', auth='user')
@@ -76,6 +84,9 @@ class HLVMobileBarcodeController(http.Controller):
         # 1. Check if it's a Picking
         picking = request.env['stock.picking'].sudo().search([('name', '=', barcode)], limit=1)
         if picking:
+            assignment_error = _pick_assignment_error(picking)
+            if assignment_error:
+                return assignment_error
             is_return_picking = _is_return_picking(picking)
             # Block PACK and OUT steps (keep only PICK allowed)
             pt_name = (picking.picking_type_id.name or '').lower()
@@ -136,6 +147,9 @@ class HLVMobileBarcodeController(http.Controller):
         picking = request.env['stock.picking'].browse(picking_id)
         if not picking.exists():
             return {'error': _('Picking not found')}
+        assignment_error = _pick_assignment_error(picking)
+        if assignment_error:
+            return assignment_error
 
         is_return_picking = _is_return_picking(picking)
 
@@ -559,6 +573,10 @@ class HLVMobileBarcodeController(http.Controller):
         picking = request.env['stock.picking'].browse(picking_id)
         if not picking.exists() or picking.state not in ['draft', 'confirmed', 'assigned']:
             return {'error': _('Phiếu này không thể xử lý thêm sản phẩm.')}
+
+        assignment_error = _pick_assignment_error(picking)
+        if assignment_error:
+            return assignment_error
 
         # Enforce warehouse edit permission (can_edit)
         use_independent = request.env['ir.config_parameter'].sudo().get_param('hlv_mobile_barcode.hlv_barcode_use_independent_permissions') == 'True'
@@ -1047,6 +1065,9 @@ class HLVMobileBarcodeController(http.Controller):
             
         if move.picking_id.state not in ['draft', 'confirmed', 'assigned']:
             return {'error': _('Phiếu không ở trạng thái cho phép sửa số lượng')}
+        assignment_error = _pick_assignment_error(move.picking_id)
+        if assignment_error:
+            return assignment_error
 
         # Enforce warehouse edit permission (can_edit)
         use_independent = request.env['ir.config_parameter'].sudo().get_param('hlv_mobile_barcode.hlv_barcode_use_independent_permissions') == 'True'
@@ -1218,6 +1239,9 @@ class HLVMobileBarcodeController(http.Controller):
         picking = request.env['stock.picking'].sudo().browse(picking_id)
         if not picking.exists() or picking.state not in ['draft', 'waiting', 'confirmed', 'assigned']:
             return {'error': _('Không thể xoá số lượng của phiếu này')}
+        assignment_error = _pick_assignment_error(picking)
+        if assignment_error:
+            return assignment_error
             
         try:
             uses_qty_scanned = _uses_qty_scanned_progress(picking)
@@ -1285,6 +1309,9 @@ class HLVMobileBarcodeController(http.Controller):
         picking = request.env['stock.picking'].sudo().browse(picking_id)
         if not picking.exists() or not _is_pick_picking(picking):
             return {'has_conflicts': False, 'conflicts': [], 'has_saved_data': False}
+        assignment_error = _pick_assignment_error(picking)
+        if assignment_error:
+            return {'has_conflicts': False, 'conflicts': [], 'has_saved_data': False, **assignment_error}
 
         conflicts = []
         has_saved_data = False
@@ -1346,6 +1373,9 @@ class HLVMobileBarcodeController(http.Controller):
         picking = request.env['stock.picking'].sudo().browse(picking_id)
         if not picking.exists() or not _is_pick_picking(picking):
             return {'error': _('Phiếu không hợp lệ')}
+        assignment_error = _pick_assignment_error(picking)
+        if assignment_error:
+            return assignment_error
 
         for ml in picking.move_line_ids:
             if ml.qty_scanned <= 0:
@@ -1510,6 +1540,9 @@ class HLVMobileBarcodeController(http.Controller):
         # Không cho phép tự động hủy phiếu Bước 2
         if picking.source_transfer_id:
             return {'error': _('Không thể hủy phiếu Bước 2 được tự động sinh ra. Bạn sẽ thoát khỏi phiếu mà không hủy.')}
+        assignment_error = _pick_assignment_error(picking)
+        if assignment_error:
+            return assignment_error
             
         try:
             # 1. Clear quantities first to release any dynamic scanning
@@ -1542,6 +1575,9 @@ class HLVMobileBarcodeController(http.Controller):
             
         if picking.state not in ['draft', 'confirmed', 'assigned']:
             return {'error': _('Phiếu không ở trạng thái cho phép xóa sản phẩm')}
+        assignment_error = _pick_assignment_error(picking)
+        if assignment_error:
+            return assignment_error
 
         if picking.source_transfer_id:
             return {'error': _('Không được phép xóa dòng sản phẩm trong phiếu Bước 2 được tự động sinh ra.')}
@@ -1580,6 +1616,9 @@ class HLVMobileBarcodeController(http.Controller):
         picking = request.env['stock.picking'].browse(picking_id)
         if not picking.exists():
             return {'error': _('Picking not found')}
+        assignment_error = _pick_assignment_error(picking)
+        if assignment_error:
+            return assignment_error
             
         try:
             res = picking.action_put_in_pack()
@@ -1617,6 +1656,9 @@ class HLVMobileBarcodeController(http.Controller):
             
         if ml.picking_id.state not in ['draft', 'confirmed', 'assigned']:
             return {'error': _('Phiếu không ở trạng thái cho phép chỉnh sửa')}
+        assignment_error = _pick_assignment_error(ml.picking_id)
+        if assignment_error:
+            return assignment_error
             
         # Clear packages
         ml.write({
@@ -1630,6 +1672,9 @@ class HLVMobileBarcodeController(http.Controller):
         picking = request.env['stock.picking'].browse(picking_id)
         if not picking.exists() or picking.state in ['done', 'cancel']:
             return {'error': _('Phiếu không tồn tại hoặc đã hoàn thành/hủy.')}
+        assignment_error = _pick_assignment_error(picking)
+        if assignment_error:
+            return assignment_error
             
         move_lines = request.env['stock.move.line'].search([
             ('picking_id', '=', picking.id),
@@ -1652,6 +1697,9 @@ class HLVMobileBarcodeController(http.Controller):
         picking = request.env['stock.picking'].browse(picking_id)
         if not picking.exists():
             return {'error': _('Picking not found')}
+        assignment_error = _pick_assignment_error(picking)
+        if assignment_error:
+            return assignment_error
 
         # Enforce warehouse validation permission (can_confirm)
         use_independent = request.env['ir.config_parameter'].sudo().get_param('hlv_mobile_barcode.hlv_barcode_use_independent_permissions') == 'True'
@@ -2102,6 +2150,9 @@ class HLVMobileBarcodeController(http.Controller):
         picking = request.env['stock.picking'].browse(picking_id)
         if not picking.exists():
             return {'error': _('Picking not found')}
+        assignment_error = _pick_assignment_error(picking)
+        if assignment_error:
+            return assignment_error
 
         Package = request.env['stock.quant.package']
         package = Package.sudo().browse(package_id)
@@ -2246,6 +2297,9 @@ class HLVMobileBarcodeController(http.Controller):
         picking = request.env['stock.picking'].browse(picking_id)
         if not picking.exists():
             return {'error': _('Picking not found')}
+        assignment_error = _pick_assignment_error(picking)
+        if assignment_error:
+            return assignment_error
 
         move_line = request.env['stock.move.line'].sudo().browse(move_line_id)
         if not move_line.exists() or move_line.picking_id.id != picking.id:
@@ -2312,6 +2366,9 @@ class HLVMobileBarcodeController(http.Controller):
         picking = request.env['stock.picking'].browse(picking_id)
         if not picking.exists():
             return {'error': _('Picking not found')}
+        assignment_error = _pick_assignment_error(picking)
+        if assignment_error:
+            return assignment_error
 
         move_line = request.env['stock.move.line'].sudo().browse(move_line_id)
         if not move_line.exists() or move_line.picking_id.id != picking.id:
@@ -2334,6 +2391,9 @@ class HLVMobileBarcodeController(http.Controller):
         picking = request.env['stock.picking'].browse(picking_id)
         if not picking.exists():
             return {'error': _('Picking not found')}
+        assignment_error = _pick_assignment_error(picking)
+        if assignment_error:
+            return assignment_error
 
         move_line = request.env['stock.move.line'].sudo().browse(move_line_id)
         if not move_line.exists() or move_line.picking_id.id != picking.id:
@@ -2407,6 +2467,9 @@ class HLVMobileBarcodeController(http.Controller):
         picking = request.env['stock.picking'].browse(picking_id)
         if not picking.exists():
             return {'error': _('Picking not found')}
+        assignment_error = _pick_assignment_error(picking)
+        if assignment_error:
+            return assignment_error
 
         if from_package_id == to_package_id:
             return {'error': _('Gói nguồn và gói đích phải khác nhau!')}

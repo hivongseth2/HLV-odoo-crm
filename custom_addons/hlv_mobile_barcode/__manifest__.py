@@ -14,8 +14,10 @@ Mobile Barcode Scanner
     "depends": [
         "base", 
         "stock", 
+        "sale_stock",
         "stock_barcode",
         "web",
+        "hlv_sale_delivery_planning",
         # === OPTION B: DEPENDS ON WAREHOUSE PERMISSION ===
         # "hlv_warehouse_permission",
         # =================================================
