@@ -6,7 +6,7 @@
         <field name="binding_model_id" ref="base.model_res_partner"/>
         <field name="binding_view_types">list,form</field>
         <field name="state">code</field>
-        <field name="code">action = records.action_hlv_refresh_contact_classification()</field>
+        <field name="code">action = model.action_hlv_refresh_contact_classification()</field>
     </record>
 
     <record id="action_convert_to_company" model="ir.actions.server">
@@ -15,7 +15,7 @@
         <field name="binding_model_id" ref="base.model_res_partner"/>
         <field name="binding_view_types">list,form</field>
         <field name="state">code</field>
-        <field name="code">action = records.action_hlv_refresh_contact_classification()</field>
+        <field name="code">action = model.action_hlv_refresh_contact_classification()</field>
     </record>
 
     <record id="action_hlv_open_merge_wizard" model="ir.actions.server">

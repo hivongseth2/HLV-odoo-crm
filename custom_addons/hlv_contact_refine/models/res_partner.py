@@ -421,11 +421,13 @@ class ResPartner(models.Model):
 
     def action_hlv_open_merge_wizard(self):
         destination = self.filtered(lambda p: p.is_company and not p.parent_id)[:1] or self[:1]
+        view = self.env.ref('hlv_contact_refine.view_hlv_contact_merge_wizard_form', raise_if_not_found=False)
         return {
             'name': _('Gộp liên hệ'),
             'type': 'ir.actions.act_window',
             'res_model': 'hlv.contact.merge.wizard',
             'view_mode': 'form',
+            'views': [(view.id if view else False, 'form')],
             'target': 'new',
             'context': {
                 'default_source_partner_ids': [(6, 0, self.ids)],
@@ -435,11 +437,13 @@ class ResPartner(models.Model):
 
     def action_hlv_open_split_wizard(self):
         self.ensure_one()
+        view = self.env.ref('hlv_contact_refine.view_hlv_contact_split_wizard_form', raise_if_not_found=False)
         return {
             'name': _('Tách thành khách hàng mới'),
             'type': 'ir.actions.act_window',
             'res_model': 'hlv.contact.split.wizard',
             'view_mode': 'form',
+            'views': [(view.id if view else False, 'form')],
             'target': 'new',
             'context': {
                 'default_source_partner_id': self.id,
@@ -935,11 +939,13 @@ class ResPartner(models.Model):
         if not destination or not sources:
             return False
         partner_ids = (destination | sources).ids
+        view = self.env.ref('hlv_contact_refine.view_hlv_contact_merge_wizard_form', raise_if_not_found=False)
         return {
             'name': _('Gop lien he'),
             'type': 'ir.actions.act_window',
             'res_model': 'hlv.contact.merge.wizard',
             'view_mode': 'form',
+            'views': [(view.id if view else False, 'form')],
             'target': 'new',
             'context': {
                 'active_ids': partner_ids,

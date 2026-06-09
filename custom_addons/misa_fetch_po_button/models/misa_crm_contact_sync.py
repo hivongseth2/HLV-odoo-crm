@@ -51,11 +51,16 @@ class MisaCrmContactSyncRun(models.Model):
 
     def action_run_now(self):
         run = self.sudo().cron_sync_contacts_from_crm(force=True)
+        view = self.env.ref(
+            "misa_fetch_po_button.view_misa_crm_contact_sync_run_form",
+            raise_if_not_found=False,
+        )
         return {
             "type": "ir.actions.act_window",
             "res_model": self._name,
             "res_id": run.id,
             "view_mode": "form",
+            "views": [(view.id if view else False, "form")],
             "target": "current",
         }
 
