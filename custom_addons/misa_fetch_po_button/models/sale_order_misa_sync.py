@@ -542,42 +542,22 @@ class SaleOrder(models.Model):
         # --- NEW LOGIC: Sync from MISA Account API first ---
         account_id = data.get("AccountID") or data.get("AccountId")
         partner = None
+        misa_code = None
+        tax_code = None
         if account_id:
-             partner = env['misa.api.utils']._sync_customer_from_misa_account_api(account_id, headers)
-        if not partner:
-             partner = odoo_utils._get_or_create_partner(partner_name)
-
-        # Cập nhật thông tin partner chính từ MISA (địa chỉ, phone, province...)
-        partner_vals = {}
-        billing_addr = data.get("BillingAddress")
-        partner_phone = data.get("Phone")
-        partner_province = data.get("ShippingProvinceIDText") or data.get("BillingProvinceIDText") 
-
-        if billing_addr and partner.street != billing_addr:
-            partner_vals['street'] = data.get("ShippingAddress") or billing_addr
-        if partner_phone and partner.phone != partner_phone:
-            partner_vals['phone'] = partner_phone
-        if partner_province and partner.city != partner_province:
-            partner_vals['city'] = partner_province
-            # Cập nhật state_id nếu cần
+            partner = env['misa.api.utils']._sync_customer_from_misa_account_api(account_id, headers)
+            # Lấy mã CRM dù có tìm thấy partner hay không — dùng cho fallback và ghi vào liên hệ con
             try:
-                state = env['sale.api.import.wizard']._vn_state_by_name(partner_province)
-                if state and partner.state_id != state:
-                    partner_vals['state_id'] = state.id
+                ident = env['misa.api.utils'].get_account_identity(account_id, headers) or {}
+                misa_code = ident.get("account_number") or ident.get("id")
+                tax_code = ident.get("taxcode")
             except Exception:
                 pass
+        if not partner:
+            partner = odoo_utils._get_or_create_partner(partner_name, misa_code=misa_code, tax_code=tax_code)
+        partner = partner.commercial_partner_id or partner
 
-        # Đảm bảo country là Việt Nam
-        try:
-            vn_country = env['sale.api.import.wizard']._vn_country()
-            if vn_country and partner.country_id != vn_country:
-                partner_vals['country_id'] = vn_country.id
-        except Exception:
-            pass
-
-        if partner_vals:
-            partner.write(partner_vals)
-            _logger.info("Cập nhật thông tin partner %s: %s", partner.name, partner_vals.keys())
+        # Địa chỉ/phone KHÔNG cập nhật vào liên hệ cha — ghi vào liên hệ con (delivery contact) bên dưới
 
         order_no      = data.get("MISAOrderNo") or data.get("ListOrderNumber") or data.get("SaleOrderNo") or order_no_fallback
         # Ưu tiên lấy OtherSysOrderCode, fallback về DeliveryOrderNumber
@@ -630,7 +610,7 @@ class SaleOrder(models.Model):
             'misa_id': str(misa_order_id) if misa_order_id else False,
             'misa_shipping_address': shipping_address_raw or False,
             'partner_shipping_id': shipping_id,
-            'partner_invoice_id': shipping_id,
+            'partner_invoice_id': partner.id,
             'x_studio_zns': zns,
             'x_studio_sdt_giao_hang': data.get('Phone') or False
         }
@@ -657,6 +637,8 @@ class SaleOrder(models.Model):
             vals_create['x_studio_httt'] = owner_date['httt']
         if owner_date.get('htgh'):
             vals_create['x_studio_htgh'] = owner_date['htgh']
+        if owner_date.get('misa_note') and 'x_studio_misa_note' in env['sale.order']._fields:
+            vals_create['x_studio_misa_note'] = owner_date['misa_note']
 
         new_so = env['sale.order'].create(vals_create)
 
@@ -928,11 +910,8 @@ class SaleOrder(models.Model):
 
         # ===== 9) Confirm & đặt tên picking theo MISA =====
         if new_so.state in ('draft', 'sent'):
-            # Flush + invalidate để đảm bảo BOM mới tạo ở bước 8.0b
-            # được nhìn thấy bởi mrp.bom._bom_find() khi action_confirm() chạy.
-            # Nếu không invalidate, ORM cache có thể giữ kết quả "no BOM"
-            # → phantom BOM explosion không trigger → has_kits=False.
             env.flush_all()
+            # Invalidate ORM cache để mrp thấy được phantom BOM vừa tạo trong cùng transaction
             env.invalidate_all()
             new_so.action_confirm()
         if new_so.picking_ids:
@@ -1248,6 +1227,8 @@ class SaleOrder(models.Model):
             vals_header_upd['x_studio_httt'] = owner_date['httt']
         if owner_date.get('htgh'):
             vals_header_upd['x_studio_htgh'] = owner_date['htgh']
+        if owner_date.get('misa_note') and 'x_studio_misa_note' in env['sale.order']._fields:
+            vals_header_upd['x_studio_misa_note'] = owner_date['misa_note']
         shipping_address_raw = (data.get('ShippingAddress') or '').strip()
         vals_header_upd['misa_shipping_address'] = shipping_address_raw or False
         vals_header_upd['x_studio_sdt_giao_hang'] = data.get('Phone') or False
@@ -1295,6 +1276,7 @@ class SaleOrder(models.Model):
                     misa_code=misa_code,
                     tax_code=tax_code,
                 )
+            partner = partner.commercial_partner_id or partner
 
             delivery_contact = env['sale.api.import.wizard']._get_or_create_delivery_contact(
                 parent_partner=partner,
@@ -1307,8 +1289,9 @@ class SaleOrder(models.Model):
             
             if delivery_contact:
                 self.write({
+                    'partner_id': partner.id,
                     'partner_shipping_id': delivery_contact.id,
-                    'partner_invoice_id': delivery_contact.id
+                    'partner_invoice_id': partner.id
                 })
                 _logger.info("✅ Partial Resync: Updated shipping/invoice address to %s", delivery_contact.display_name)
         except Exception as e_addr:
@@ -1463,11 +1446,37 @@ class SaleOrder(models.Model):
             except Exception:
                 return dv
 
+        # Build combo_codes_with_bom: combo parent có phantom BOM → Odoo tự explode via BOM Kit
+        # → SKIP children khỏi misa_total (nếu tính children thì delivered=0 → needed > 0 → trigger
+        #   procurement thừa, hoặc code cũ sẽ tạo manual moves bypass BOM explosion)
+        combo_codes_with_bom_step2 = set()
+        for ln in (lines or []):
+            if ln.get("IsSetProduct"):
+                combo_code = (ln.get("ProductIDText") or "").strip()
+                if combo_code:
+                    prod_check = env['product.product'].search([('default_code', '=', combo_code)], limit=1)
+                    if prod_check and env['mrp.bom'].search_count([
+                        ('product_tmpl_id', '=', prod_check.product_tmpl_id.id),
+                        ('type', '=', 'phantom'),
+                        ('active', '=', True),
+                    ]) > 0:
+                        combo_codes_with_bom_step2.add(combo_code)
+
         misa_total_by_product = {}
+        current_parent_code_step2 = None
         for ln in (lines or []):
             product_code = ln.get("ProductIDText")
             if not product_code:
                 continue
+
+            if ln.get("IsSetProduct"):
+                current_parent_code_step2 = product_code
+
+            # Skip combo children nếu parent có phantom BOM — delivery tracking qua parent SOL
+            if ln.get("IsChildProduct"):
+                if current_parent_code_step2 and current_parent_code_step2 in combo_codes_with_bom_step2:
+                    _logger.debug("Step2: skip child '%s' (parent '%s' có BoM Kit)", product_code, current_parent_code_step2)
+                    continue
 
             desc     = ln.get("Description") or product_code
             qty      = _flt(ln.get("Amount"), 0.0)
@@ -1729,5 +1738,4 @@ class SaleOrder(models.Model):
             'name': so_new.name,
             'detail': 'created_then_resynced',
         }
-
 
