@@ -46,6 +46,46 @@ class HlvBarcodeUserPermission(models.Model):
         }
 
     @api.model
+    def configure_default_odoo_barcode_access(self):
+        """Attach the dedicated access group to Odoo's default Barcode action/menu."""
+        group = self.env.ref(
+            'hlv_mobile_barcode.group_stock_barcode_default_user',
+            raise_if_not_found=False,
+        )
+        if not group:
+            return True
+
+        actions = self.env['ir.actions.client'].sudo()
+        action = self.env.ref(
+            'stock_barcode.stock_barcode_action_main_menu',
+            raise_if_not_found=False,
+        )
+        if action:
+            actions |= action
+        actions |= self.env['ir.actions.client'].sudo().search([
+            ('tag', 'in', ['stock_barcode_main_menu', 'stock_barcode.MainMenu']),
+        ])
+
+        if actions and 'groups_id' in actions._fields:
+            actions.write({'groups_id': [(4, group.id)]})
+
+        menus = self.env['ir.ui.menu'].sudo()
+        for action in actions:
+            menus |= self.env['ir.ui.menu'].sudo().search([
+                ('action', '=', 'ir.actions.client,%s' % action.id),
+            ])
+
+        for xmlid in ['stock_barcode.stock_barcode_main_menu', 'stock_barcode.stock_barcode_menu']:
+            menu = self.env.ref(xmlid, raise_if_not_found=False)
+            if menu:
+                menus |= menu
+
+        if menus:
+            menus.write({'groups_id': [(4, group.id)]})
+
+        return True
+
+    @api.model
     def check_picking_operation(self, user, warehouse, picking_type_code, operation_field):
         """Check if user can perform scan operation on a specific picking type at warehouse inside the Barcode Mobile App.
 
