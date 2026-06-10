@@ -898,11 +898,6 @@ class SaleApiImportWizard(models.TransientModel):
                 if customer_name in e_accounts and not order.get('DeliveryOrderNumber'):
                     continue
 
-                # base_pick_name logic has been moved down
-                # if customer_name in e_accounts:
-                #     base_pick_name = order.get('DeliveryOrderNumber')
-                # else:
-                #     base_pick_name = order.get('SaleOrderNo')
                 product_lines = misa_utils.get_list_product_by_order_crm(order_detail_url, sale_headers, payload_detail)
                 
 
