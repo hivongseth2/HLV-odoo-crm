@@ -60,6 +60,7 @@ class MisaApiUtils(models.AbstractModel):
                 misa_code=account_number,
                 tax_code=tax_code,
             )
+            partner = partner.commercial_partner_id or partner
 
             vals = {}
             if account_name and partner.name != account_name:
