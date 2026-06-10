@@ -1031,7 +1031,12 @@ a { color:inherit; }
     .sr-rdm-stat-icon { font-size: 24px; margin-bottom: 2px; }
     .sr-rdm-stat-val { font-size: 1.15rem; }
     .sr-rdm-stat-lbl { font-size: 0.6rem; letter-spacing: 0.5px; }
-    .sr-rdm-tab { padding:12px 14px; font-size:.82rem; }
+    
+    .sr-rdm-tab-strip { padding: 0 8px; }
+    .sr-rdm-tab-inner { justify-content: space-between; }
+    .sr-rdm-tab { padding: 12px 8px; font-size: 0.8rem; flex: 1; justify-content: center; gap: 5px; }
+    .sr-rdm-tab .ms { font-size: 16px; }
+    
     .sr-pkg-grid { grid-template-columns:1fr 1fr; }
     .sr-cash-wrap { max-width:100%; }
     .sr-cf-card { padding:18px 16px; }
@@ -1043,6 +1048,12 @@ a { color:inherit; }
     .sr-rdm-stat-val { font-size: 1.05rem; }
     .sr-rdm-stat-lbl { font-size: 0.55rem; letter-spacing: 0; }
     .sr-rdm-stat-unit { font-size: 0.55rem; }
+    
+    .sr-rdm-tab-strip { padding: 0 4px; }
+    .sr-rdm-tab { padding: 10px 4px; font-size: 0.72rem; gap: 3px; }
+    .sr-rdm-tab .ms { font-size: 14px; }
+    .sr-rdm-tab-badge { font-size: 0.6rem; padding: 1px 5px; min-width: 14px; }
+    
     .sr-pkg-grid { grid-template-columns:1fr; }
     .sr-rq-lbl { min-width:90px; }
 }
