@@ -5,6 +5,7 @@ from odoo import models, fields, api, _
 from markupsafe import Markup
 from dateutil.parser import parse as dtparse
 from odoo.exceptions import UserError
+import json
 
 _logger = logging.getLogger(__name__)
 class SaleOrder(models.Model):
@@ -41,6 +42,11 @@ class SaleOrder(models.Model):
         r = requests.post(url, headers=headers, json=payload, timeout=60)
         r.raise_for_status()
         js = r.json()
+        _logger.info(
+            "MISA FormDataNew response for misa_id=%s:\n%s",
+            self.misa_id,
+            json.dumps(js, ensure_ascii=False, indent=2)
+        )
         if not js.get("Success"):
             raise ValueError(_("MISA trả về lỗi (FormDataNew): %s") % js)
         return js.get("Data", {}).get("CurrentData", {})
@@ -283,74 +289,7 @@ class SaleOrder(models.Model):
         revenue_status_id = data.get("RevenueStatusID")
         revenue_status_text = (data.get("RevenueStatusIDText") or "").strip().lower()
 
-        # if revenue_status_id == 4 or revenue_status_text == "từ chối ghi":
-        #     self.ensure_one()
-        #     _logger.info("🚫 SO %s: MISA 'Từ chối ghi' → force-cancel", self.name)
-        #     try:
-        #         # 1) Hủy các picking còn mở
-        #         for p in (self.picking_ids or []):
-        #             st = p.state
-        #             if st in ('waiting', 'confirmed', 'assigned'):
-        #                 try:
-        #                     p.sudo().action_cancel()
-        #                 except Exception as pe:
-        #                     _logger.warning("Không thể cancel picking %s: %s", p.name, pe)
-        #             elif st == 'draft':
-        #                 try:
-        #                     p.sudo().unlink()
-        #                 except Exception as pe:
-        #                     _logger.warning("Không thể xóa picking draft %s: %s", p.name, pe)
-
-        #         # 2) Hủy invoice chưa ghi sổ; nếu đã posted → chặn
-        #         for inv in (self.invoice_ids or []):
-        #             st = getattr(inv, 'state', None)
-        #             if st in ('draft', 'cancel'):
-        #                 try:
-        #                     if hasattr(inv, 'button_cancel'):
-        #                         inv.sudo().button_cancel()
-        #                     elif hasattr(inv, 'action_cancel'):
-        #                         inv.sudo().action_cancel()
-        #                 except Exception as ie:
-        #                     _logger.warning("Không thể hủy invoice %s: %s", getattr(inv, 'name', 'n/a'), ie)
-        #             elif st == 'posted':
-        #                 raise UserError(_("Đơn có hóa đơn đã ghi sổ (%s). Hãy hủy/bỏ ghi sổ trước khi hủy đơn.") % inv.name)
-
-        #         # 3) Hủy SO. Nếu action_cancel() lỗi → fallback hủy dòng rồi set state=cancel
-        #         if self.state not in ('cancel', 'done'):
-        #             try:
-        #                 self.sudo().action_cancel()
-        #             except Exception as e1:
-        #                 _logger.warning("action_cancel thất bại: %s → fallback _action_cancel + write(cancel)", e1)
-        #                 if hasattr(self.order_line, '_action_cancel'):
-        #                     self.order_line.sudo()._action_cancel()
-        #                 self.sudo().write({'state': 'cancel'})
-
-        #         # 4) Kiểm tra lại trạng thái bằng cách browse mới
-        #         state_now = self.sudo().browse(self.id).state
-        #         if state_now != 'cancel':
-        #             # Thêm một lần fallback an toàn nữa
-        #             if hasattr(self.order_line, '_action_cancel'):
-        #                 self.order_line.sudo()._action_cancel()
-        #             self.sudo().write({'state': 'cancel'})
-        #             state_now = self.sudo().browse(self.id).state
-
-        #         if state_now == 'cancel':
-        #             self.message_post(body=_("Phiếu bị hủy khi đồng bộ do trạng thái MISA: Từ chối ghi"))
-        #             return {
-        #                 'type': 'ir.actions.client',
-        #                 'tag': 'display_notification',
-        #                 'params': {
-        #                     'title': _("Phiếu đã bị hủy"),
-        #                     'message': _("Trạng thái MISA: Từ chối ghi"),
-        #                     'type': 'warning'
-        #                 }
-        #             }
-        #         else:
-        #             raise UserError(_("Không thể đưa phiếu về trạng thái hủy. Kiểm tra picking/invoice ràng buộc."))
-
-        #     except Exception as e:
-        #         raise UserError(_("Không thể hủy phiếu khi đồng bộ: %s") % e)
-
+        
         # 2) Chặn các trường hợp không an toàn
         if any(p.state == 'done' for p in self.picking_ids):
             # raise UserError(_("Không thể xoá & tạo lại vì có phiếu giao đã 'done'."))
@@ -358,17 +297,8 @@ class SaleOrder(models.Model):
         if self.invoice_ids.filtered(lambda m: m.state == 'posted'):
             raise UserError(_("Không thể xoá & tạo lại vì đã có hoá đơn 'posted'."))
 
-        # Lưu info trước khi xoá
-        # Ưu tiên lấy warehouse từ picking đầu tiên (giải quyết vấn đề combo không có kho ở dòng cha)
-        # old_wh = self.warehouse_id
-        # if not old_wh and self.picking_ids:
-        #     # Nếu SO không có warehouse, lấy từ picking đầu tiên
-        #     first_pick = self.picking_ids.filtered(lambda p: p.picking_type_id and p.picking_type_id.warehouse_id)[:1]
-        #     if first_pick:
-        #         old_wh = first_pick.picking_type_id.warehouse_id
-        # order_no_fallback = self.name
         
-                # ===== Xác định warehouse theo dòng đầu tiên có StockIDText =====
+        # ===== Xác định warehouse theo dòng đầu tiên có StockIDText =====
         stock_mapping = {
             "HCM": "TSN/Stock",
             "BENCAM": "KBC/Tồn kho",

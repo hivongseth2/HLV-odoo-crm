@@ -46,7 +46,7 @@ class MisaApiSaleOrder(http.Controller):
         token = (raw_token or "").strip()
 
         # Log nhẹ xem server nhận gì (không dùng request.jsonrequest nữa)
-        _logger.info("MISA API /resync payload=%r token=%r", payload, token)
+        # _logger.info("MISA API /resync payload=%r token=%r", payload, token)
 
         # ---- Token check (có thể thay bằng system parameter nếu bạn muốn) ----
         expected = request.env['ir.config_parameter'].sudo().get_param('misa.api.token') or "hoanglongvu"
