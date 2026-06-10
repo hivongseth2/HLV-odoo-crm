@@ -67,14 +67,11 @@ class StockPicking(models.Model):
 
         # ── Điểm đổi thưởng: dựa trên tiền chiết khấu ──
         discount_amount = sum(
-            move.sale_line_id.price_unit * move.quantity
-            * (move.sale_line_id.loyalty_discount_pct / 100.0)
+            self._get_loyalty_discount_amount_for_move(move)
             for move in self.move_ids
-            if move.state == 'done'
-            and move.sale_line_id
-            and move.sale_line_id.loyalty_discount_pct > 0
+            if move.state == 'done' and move.sale_line_id
         )
-        # Fallback: không có dòng nào đặt loyalty_discount_pct → dùng % mặc định của contact
+        # Fallback: không có dòng nào có amount/% loyalty → dùng % mặc định của contact
         if discount_amount <= 0:
             root_partner_lookup = partner._get_loyalty_root()
             # loyalty_default_discount lưu dạng 0-1 (Odoo convention: 0.05 = 5%)
@@ -134,6 +131,26 @@ class StockPicking(models.Model):
             'Loyalty: Tích ranking=%d exchange=%d cho %s từ phiếu %s (SO: %s)',
             ranking_points, exchange_points, partner.name, self.name, sale_order.name,
         )
+
+    def _get_loyalty_discount_amount_for_move(self, move):
+        """Return loyalty discount amount for one delivered move."""
+        sale_line = move.sale_line_id
+        if not sale_line:
+            return 0.0
+
+        direct_amount = getattr(sale_line, 'x_studio_loyalty_discount_amount', 0.0) or 0.0
+        if direct_amount > 0:
+            ordered_qty = sale_line.product_uom_qty or 0.0
+            if ordered_qty > 0:
+                return direct_amount * min(move.quantity / ordered_qty, 1.0)
+            return direct_amount
+
+        discount_pct = sale_line.loyalty_discount_pct or 0.0
+        if discount_pct <= 0:
+            return 0.0
+
+        discount_rate = discount_pct if discount_pct <= 1.0 else discount_pct / 100.0
+        return sale_line.price_unit * move.quantity * discount_rate
 
     def _loyalty_return_points(self):
         """Thu hồi điểm khi trả hàng.
