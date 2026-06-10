@@ -160,11 +160,11 @@
                                                 </span>
                                             </div>
                                             <div class="item-metadata-line">
-                                                <span t-if="line.location_name" class="item-meta-badge location">
+                                                <!-- <span t-if="line.location_name" class="item-meta-badge location">
                                                     <i class="fa fa-map-marker-alt"></i> <t t-esc="line.location_name"/>
-                                                </span>
+                                                </span> -->
                                                 <span class="item-meta-badge stock">
-                                                    <i class="fa fa-cubes"></i> Tồn: <t t-esc="line.warehouse_qty"/>
+                                                    <i class="fa fa-cubes"></i> Tồn: <t t-esc="line.warehouse_qty"/> <t t-esc="line.uom_name"/>
                                                 </span>
                                             </div>
                                         </div>
@@ -176,7 +176,7 @@
                                             <span t-attf-style="color: #{line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0 ? 'var(--success-color)' : 'var(--text-color)'}">
                                                 <t t-esc="line.qty_done"/>
                                             </span> 
-                                            <span style="color: var(--text-muted); font-size: 0.85rem;">/ <t t-esc="line.product_uom_qty"/></span>
+                                            <span style="color: var(--text-muted); font-size: 0.85rem;">/ <t t-esc="line.product_uom_qty"/> <t t-esc="line.uom_name"/></span>
                                         </div>
                                         <i t-if="line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0" class="fa fa-check-circle" style="color: var(--success-color); font-size: 1.1rem; margin-top: 4px;"></i>
                                     </div>
@@ -191,8 +191,8 @@
                                 <t t-if="has_fractional or has_large_qty">
                                     <div t-if="state.picking.state !== 'done'" style="position: relative;">
                                         <!-- Overlay for locked state -->
-                                        <div t-if="!can_edit_qty" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(248, 249, 250, 0.6); z-index: 10; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
-                                            <span class="text-muted" style="font-size: 0.85rem; font-style: italic; background: white; padding: 4px 10px; border-radius: 20px; border: 1px solid #e9ecef; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                                        <div t-if="!can_edit_qty" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 10; display: flex; align-items: center; justify-content: center; ">
+                                            <span class="text-muted" style="font-size: 0.55rem; font-style: italic; color: #aa1b1b !important; padding: 0px 8px; border-radius: 20px; border: 1px solid #aa1b1b; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
                                                 <i class="fa fa-lock text-warning" style="margin-right: 4px;"></i> Vui lòng quét vị trí chứa sản phẩm trước
                                             </span>
                                         </div>
@@ -221,8 +221,8 @@
                                 </t>
                                 <t t-else="">
                                     <div t-if="state.picking.state !== 'done'" style="position: relative;">
-                                        <div t-if="!can_edit_qty" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(248, 249, 250, 0.6); z-index: 10; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
-                                            <span class="text-muted" style="font-size: 0.85rem; font-style: italic; background: white; padding: 4px 10px; border-radius: 20px; border: 1px solid #e9ecef; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                                         <div t-if="!can_edit_qty" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 10; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
+                                            <span class="text-muted" style="font-size: 0.55rem; font-style: italic; color: #aa1b1b !important; padding: 0px 8px; border-radius: 20px; border: 1px solid #aa1b1b; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
                                                 <i class="fa fa-lock text-warning" style="margin-right: 4px;"></i> Vui lòng quét vị trí chứa sản phẩm trước
                                             </span>
                                         </div>
