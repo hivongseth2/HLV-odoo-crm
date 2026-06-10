@@ -27,7 +27,7 @@
                 </div>
                 <group>
                     <group string="Thông tin tài khoản">
-                        <field name="partner_id" domain="[('hlv_partner_type','in',['root_company','root_person'])]" context="{'show_vat': True}"/>
+                        <field name="partner_id" domain="[('is_company','=',True),('parent_id','=',False),('active','=',True)]" context="{'show_vat': True}"/>
                         <field name="portal_phone" placeholder="vd: 0912345678"/>
                         <field name="active"/>
                     </group>
@@ -46,7 +46,7 @@
     <field name="model">hlv.loyalty.portal.account</field>
     <field name="arch" type="xml">
         <list string="Tài khoản Portal Loyalty" editable="bottom">
-            <field name="partner_id" domain="[('hlv_partner_type','in',['root_company','root_person'])]" context="{'show_vat': True}"/>
+            <field name="partner_id" domain="[('is_company','=',True),('parent_id','=',False),('active','=',True)]" context="{'show_vat': True}"/>
             <field name="username"/>
             <field name="portal_phone"/>
             <field name="active"/>
