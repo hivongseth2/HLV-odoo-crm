@@ -181,10 +181,10 @@
                                         <i t-if="line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0" class="fa fa-check-circle" style="color: var(--success-color); font-size: 1.1rem; margin-top: 4px;"></i>
                                     </div>
                                 </div>
-                                <t t-set="has_fractional" t-value="line.product_uom_qty % 1 !== 0 || line.qty_done % 1 !== 0"/>
+                                <t t-set="has_fractional" t-value="line.product_uom_qty % 1 !== 0 or line.qty_done % 1 !== 0"/>
                                 <t t-set="threshold" t-value="state.picking.qty_button_threshold !== undefined ? state.picking.qty_button_threshold : 50"/>
-                                <t t-set="has_large_qty" t-value="state.picking.show_qty_buttons && line.product_uom_qty > threshold"/>
-                                <t t-if="has_fractional || has_large_qty">
+                                <t t-set="has_large_qty" t-value="state.picking.show_qty_buttons and line.product_uom_qty &gt; threshold"/>
+                                <t t-if="has_fractional or has_large_qty">
                                     <div t-if="state.picking.state !== 'done'" style="background-color: transparent; padding: 6px 12px 10px 12px; display: flex; gap: 4px; align-items: center; justify-content: center; flex-wrap: wrap;">
                                         <button t-if="has_large_qty" class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, -10)">-10</button>
                                         <button t-if="has_large_qty" class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, -1)">-1</button>
