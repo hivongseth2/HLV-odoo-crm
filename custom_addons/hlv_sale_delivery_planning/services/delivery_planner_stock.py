@@ -314,13 +314,13 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 qty_del = line.get('qty_delivered') or 0
                 qty_ord = line.get('product_uom_qty') or 0
                 pending_qty = qty_ord - qty_del
+                if pdata.get('type') == 'service':
+                    # Service products have no incoming/outgoing picking flow,
+                    # so they must not create delivery or packing demand.
+                    continue
                 has_deliverable_line = True
                 if qty_del > 0:
                     has_delivered = True
-                if pdata.get('type') == 'service':
-                    if pending_qty > 0:
-                        has_delivery_pending = True
-                    continue
                 tmpl_raw = pdata.get('product_tmpl_id')
                 p_tmpl_id = tmpl_raw[0] if isinstance(tmpl_raw, (list, tuple)) else tmpl_raw
                 is_kit = bool(p_tmpl_id and p_tmpl_id in kit_tmpl_ids)
@@ -368,10 +368,6 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 stock_status = 'ready' if is_fully_ready else (
                     'partial_ready' if total_avail > 0 else 'out_of_stock'
                 )
-            elif has_delivery_pending:
-                # Service lines have no stock moves/quants, so pending service
-                # work is ready from an inventory perspective.
-                stock_status = 'ready'
             else:
                 stock_status = 'delivered'
 
