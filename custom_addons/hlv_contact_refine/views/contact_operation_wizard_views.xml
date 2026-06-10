@@ -26,15 +26,37 @@
         <field name="name">hlv.contact.split.wizard.form</field>
         <field name="model">hlv.contact.split.wizard</field>
         <field name="arch" type="xml">
-            <form string="Tách thành khách hàng mới">
+            <form string="Tách / chuyển dữ liệu khách hàng">
                 <sheet>
                     <group>
                         <field name="source_partner_id" options="{'no_create': True}"/>
+                        <field name="split_mode" widget="radio"/>
+                    </group>
+                    <group string="Công ty nhận dữ liệu" invisible="split_mode != 'existing'">
+                        <field name="destination_partner_id" options="{'no_create': True}"/>
+                    </group>
+                    <group string="Tạo công ty mới" invisible="split_mode != 'new'">
                         <field name="new_name"/>
                         <field name="new_vat"/>
                         <field name="new_ref"/>
                     </group>
                     <notebook>
+                        <page string="Nạp đơn từ Excel">
+                            <group>
+                                <field name="excel_file" filename="excel_filename"/>
+                                <field name="excel_filename" invisible="1"/>
+                                <button name="action_load_sale_orders_from_excel"
+                                        type="object"
+                                        string="Nạp đơn từ file"
+                                        class="btn-secondary"
+                                        invisible="not excel_file"/>
+                            </group>
+                            <group>
+                                <field name="excel_row_count" readonly="1"/>
+                                <field name="excel_match_count" readonly="1"/>
+                            </group>
+                            <field name="excel_message" readonly="1" nolabel="1"/>
+                        </page>
                         <page string="Chuyển dữ liệu">
                             <group>
                                 <field name="child_partner_ids" widget="many2many_tags" domain="[('parent_id', '=', source_partner_id)]"/>
@@ -48,7 +70,7 @@
                     </notebook>
                 </sheet>
                 <footer>
-                    <button name="action_split" type="object" string="Tạo và chuyển dữ liệu" class="btn-primary"/>
+                    <button name="action_split" type="object" string="Chuyển dữ liệu" class="btn-primary"/>
                     <button string="Hủy" special="cancel" class="btn-secondary"/>
                 </footer>
             </form>
