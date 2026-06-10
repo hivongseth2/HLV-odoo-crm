@@ -27,6 +27,7 @@ class HlvLoyaltyPortalAccount(models.Model):
     partner_id = fields.Many2one(
         'res.partner', string='Khách hàng', required=True,
         ondelete='cascade', index=True,
+        domain=[('hlv_partner_type', 'in', ['root_company', 'root_person']), ('active', '=', True)],
     )
     username = fields.Char(
         string='Tên đăng nhập', required=True, copy=False, index=True,
