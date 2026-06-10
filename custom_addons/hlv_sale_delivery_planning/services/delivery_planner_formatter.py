@@ -237,8 +237,15 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             p_name = line.product_id.display_name if line.product_id else 'Unknown'
             p_type = line.product_id.type if line.product_id else 'service'
             is_kit = line.product_id.product_tmpl_id.id in kit_tmpl_ids
+            product_wh_key = False
+            reserved_here = 0.0
+            pending_qty_line = max(line.product_uom_qty - line.qty_delivered, 0.0)
 
-            if is_kit:
+            if p_type == 'service':
+                # Service products have no stock moves/quants. Treat pending
+                # service qty as available from an inventory perspective.
+                qty_avail = pending_qty_line
+            elif is_kit:
                 # Phantom BOM kit: tính số kit hoàn chỉnh từ linh kiện
                 bom = kit_bom_map.get(line.product_id.product_tmpl_id.id)
                 if bom and so.warehouse_id:
@@ -277,7 +284,6 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                 else:
                     qty_avail = 0.0
             else:
-                product_wh_key = False
                 if line.product_id and so.warehouse_id:
                     product_wh_key = (line.product_id.id, so.warehouse_id.id)
                     if product_wh_key not in remaining_free_by_product:
@@ -287,7 +293,6 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                 reserved_here = sum(
                     line.move_ids.filtered(lambda m: m.state not in ('cancel', 'done')).mapped('quantity')
                 )
-                pending_qty_line = max(line.product_uom_qty - line.qty_delivered, 0.0)
                 allocated_free = min(base_free_remaining, pending_qty_line) if pending_qty_line > 0 else 0.0
                 qty_avail = allocated_free + reserved_here
                 if product_wh_key and allocated_free > 0:
@@ -401,14 +406,13 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                 'delivered_total': round(delivered_total, 0),
             })
 
-            if p_type != 'service' and not is_kit:
-                pending_qty = line.product_uom_qty - line.qty_delivered
-                if pending_qty > 0:
-                    has_pending = True
-                    if qty_avail < pending_qty:
-                        is_fully_ready = False
-                if line.qty_delivered > 0:
-                    has_delivered = True
+            pending_qty = line.product_uom_qty - eff_qty_del
+            if pending_qty > 0:
+                has_pending = True
+                if p_type != 'service' and not is_kit and qty_avail < pending_qty:
+                    is_fully_ready = False
+            if eff_qty_del > 0:
+                has_delivered = True
 
         # --- Stock + packing status từ dict đã tính sẵn ---
         packing_status = so_status_dict.get('packing_status', 'unknown')
@@ -474,8 +478,8 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
 
         # --- Real delivery status ---
         # Uu tien gia tri da tinh o service stock de dong bo voi filter backend.
-        storable_lines = [l for l in so_lines_data if l.get('product_type') != 'service']
-        if not storable_lines:
+        deliverable_lines = [l for l in so_lines_data if l.get('product_id')]
+        if not deliverable_lines:
             fallback_real_delivery_status = 'full'
         elif has_pending and not has_delivered:
             fallback_real_delivery_status = 'unshipped'

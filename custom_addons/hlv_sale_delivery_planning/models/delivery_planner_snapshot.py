@@ -8,6 +8,8 @@ on every request once snapshots are clean.
 
 from odoo import api, fields, models
 
+SNAPSHOT_LOGIC_VERSION = 'service_line_delivery_v2'
+
 
 class DeliveryPlannerSnapshot(models.Model):
     _name = 'hlv.delivery.planner.snapshot'
@@ -64,6 +66,7 @@ class DeliveryPlannerSnapshot(models.Model):
     dirty_reason = fields.Char()
     last_computed_at = fields.Datetime(index=True)
     snapshot_date = fields.Date(index=True)
+    logic_version = fields.Char(default=SNAPSHOT_LOGIC_VERSION, index=True)
 
     _sql_constraints = [
         (
@@ -117,6 +120,7 @@ class DeliveryPlannerSnapshot(models.Model):
                 'dirty_reason': False,
                 'last_computed_at': now,
                 'snapshot_date': today,
+                'logic_version': SNAPSHOT_LOGIC_VERSION,
             })
             snap = by_so_id.get(order.id)
             if snap:

@@ -9,6 +9,8 @@ the existing full realtime pipeline.
 
 from odoo import api, fields, models
 
+from ..models.delivery_planner_snapshot import SNAPSHOT_LOGIC_VERSION
+
 
 class DeliveryPlannerServiceSnapshotQuery(models.AbstractModel):
     _inherit = 'hlv.delivery.planner.service'
@@ -28,7 +30,12 @@ class DeliveryPlannerServiceSnapshotQuery(models.AbstractModel):
         if len(snapshots) != len(sales):
             return None
         today = fields.Date.context_today(self)
-        if any(snap.dirty or snap.snapshot_date != today for snap in snapshots):
+        if any(
+            snap.dirty
+            or snap.snapshot_date != today
+            or snap.logic_version != SNAPSHOT_LOGIC_VERSION
+            for snap in snapshots
+        ):
             return None
 
         sale_order_pos = {so_id: idx for idx, so_id in enumerate(sales.ids)}

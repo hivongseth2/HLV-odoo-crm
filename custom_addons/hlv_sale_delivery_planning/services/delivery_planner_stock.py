@@ -299,9 +299,10 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                     and not filter_done_date_from and not filter_done_date_to):
                 continue
 
-            has_pending = False
+            has_delivery_pending = False
+            has_stock_pending = False
             has_delivered = False
-            has_storable_line = False
+            has_deliverable_line = False
             is_fully_ready = True
             total_pending, total_avail = 0, 0
 
@@ -310,14 +311,19 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 if not pid:
                     continue
                 pdata = product_map.get(pid, {})
+                qty_del = line.get('qty_delivered') or 0
+                qty_ord = line.get('product_uom_qty') or 0
+                pending_qty = qty_ord - qty_del
+                has_deliverable_line = True
+                if qty_del > 0:
+                    has_delivered = True
                 if pdata.get('type') == 'service':
+                    if pending_qty > 0:
+                        has_delivery_pending = True
                     continue
-                has_storable_line = True
                 tmpl_raw = pdata.get('product_tmpl_id')
                 p_tmpl_id = tmpl_raw[0] if isinstance(tmpl_raw, (list, tuple)) else tmpl_raw
                 is_kit = bool(p_tmpl_id and p_tmpl_id in kit_tmpl_ids)
-                qty_del = line.get('qty_delivered') or 0
-                qty_ord = line.get('product_uom_qty') or 0
                 # Kit Fallback: BOM explosion xảy ra nhưng bom_line_id=NULL →
                 # Odoo không tính qty_delivered. Dùng done outgoing moves trực tiếp.
                 if is_kit and qty_del == 0 and p_tmpl_id:
@@ -330,12 +336,11 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                         if _kits_ratio != float('inf') and _kits_ratio > 0:
                             qty_del = min(_kits_ratio, qty_ord)
                             is_kit = False  # Treat as non-kit: pending_qty sẽ xử lý đúng
-                if qty_del > 0:
-                    has_delivered = True
                 pending_qty = qty_ord - qty_del
                 if pending_qty <= 0:
                     continue
-                has_pending = True
+                has_delivery_pending = True
+                has_stock_pending = True
                 total_pending += pending_qty
                 if is_kit:
                     cmp_moves = moves_by_line.get(line['id'], [])
@@ -359,9 +364,16 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                     if qty_avail < pending_qty:
                         is_fully_ready = False
 
-            stock_status = ('ready' if is_fully_ready else (
-                'partial_ready' if total_avail > 0 else 'out_of_stock'
-            )) if has_pending else 'delivered'
+            if has_stock_pending:
+                stock_status = 'ready' if is_fully_ready else (
+                    'partial_ready' if total_avail > 0 else 'out_of_stock'
+                )
+            elif has_delivery_pending:
+                # Service lines have no stock moves/quants, so pending service
+                # work is ready from an inventory perspective.
+                stock_status = 'ready'
+            else:
+                stock_status = 'delivered'
 
             has_transfer_option = False
             if filter_need_transfer and stock_status != 'ready' and wh_id:
@@ -391,17 +403,20 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                     if has_transfer_option:
                         break
 
-            if not has_storable_line:
+            if not has_deliverable_line:
                 real_delivery_status = 'full'
-            elif has_pending and not has_delivered:
+            elif has_delivery_pending and not has_delivered:
                 real_delivery_status = 'unshipped'
-            elif has_pending and has_delivered:
+            elif has_delivery_pending and has_delivered:
                 real_delivery_status = 'partial'
             else:
                 real_delivery_status = 'full'
 
-            if not has_pending:
+            if not has_delivery_pending:
                 packing_status = 'delivered'
+            elif not has_stock_pending:
+                # Service-only pending orders have no pick/pack flow.
+                packing_status = 'unpacked'
             elif total_avail <= 0:
                 packing_status = 'waiting_stock'
             else:
@@ -457,7 +472,7 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             so_meta_dict[so_id] = {
                 'stock_status': stock_status,
                 'packing_status': packing_status,
-                'has_pending': has_pending,
+                'has_pending': has_delivery_pending,
                 'has_transfer_option': has_transfer_option,
                 'has_unread_message': bool(so_rec.get('x_plan_unread_message', False)),
             }
