@@ -14,11 +14,20 @@
                         <setting string="Tự Động In Nhãn Sau Đóng Gói" help="Bật để máy tự động in nhãn dán ngay khi nhân viên vừa bấm nút 'Đóng Gói' xong.">
                             <field name="hlv_barcode_print_after_pack"/>
                         </setting>
+                        <setting string="Người xử lý mặc định đơn Shopee" help="User này sẽ được assign tự động cho phiếu PICK của sale order có shopee_order_ref hoặc shopee_shop_id.">
+                            <field name="hlv_barcode_shopee_default_picker_user_id" widget="many2one_avatar_user"/>
+                        </setting>
                         <setting string="Cho Phép Quét Kiện Hàng" help="Bật để nhân viên quét 1 mã thùng/kiện và hệ thống tự hiểu tất cả đồ bên trong.">
                             <field name="hlv_barcode_allow_package_scan"/>
                         </setting>
                         <setting string="Hiện Nút Bấm Chỉnh Số Lượng" help="Bật để hiện các nút bấm +1, -1, +10 trên màn hình điện thoại/máy quét để bấm nhanh.">
                             <field name="hlv_barcode_show_qty_buttons"/>
+                            <div class="content-group mt-2" invisible="not hlv_barcode_show_qty_buttons">
+                                <div class="row">
+                                    <label for="hlv_barcode_qty_button_threshold" class="col-lg-5 o_light_label"/>
+                                    <field name="hlv_barcode_qty_button_threshold" class="col-lg-7"/>
+                                </div>
+                            </div>
                         </setting>
                         <setting string="Camera Mặc Định Bật" help="Bật: Camera tự mở sẵn khi vào phiếu. Tắt: Camera đóng sẵn, nhân viên bấm nút để bật khi cần.">
                             <field name="hlv_barcode_camera_default_on"/>
