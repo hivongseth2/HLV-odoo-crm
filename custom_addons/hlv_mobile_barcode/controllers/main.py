@@ -64,7 +64,7 @@ def _step2_canonical_line_entries(picking):
         lambda ml: ml.quantity > 0 and ml.state not in ['cancel']
     ).sorted('id')
     target_lines = picking.move_line_ids.filtered(
-        lambda ml: ml.state not in ['done', 'cancel']
+        lambda ml: ml.state != 'cancel'
     )
     used_target_ids = set()
     entries = []
