@@ -242,9 +242,9 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             pending_qty_line = max(line.product_uom_qty - line.qty_delivered, 0.0)
 
             if p_type == 'service':
-                # Service products have no stock moves/quants. Treat pending
-                # service qty as available from an inventory perspective.
-                qty_avail = pending_qty_line
+                # Service products have no stock moves/quants or pick/pack
+                # flow. Treat them as fulfilled for delivery-planning columns.
+                qty_avail = 0.0
             elif is_kit:
                 # Phantom BOM kit: tính số kit hoàn chỉnh từ linh kiện
                 bom = kit_bom_map.get(line.product_id.product_tmpl_id.id)
@@ -335,6 +335,8 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             # Kit Fallback: BOM explosion xảy ra nhưng bom_line_id=NULL →
             # Odoo không tính qty_delivered. Dùng done outgoing moves của kit SOL.
             eff_qty_del = line.qty_delivered
+            if p_type == 'service':
+                eff_qty_del = line.product_uom_qty
             if is_kit and line.qty_delivered == 0 and line.product_id:
                 _fb_bom = kit_bom_map.get(line.product_id.product_tmpl_id.id)
                 if _fb_bom:
