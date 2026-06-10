@@ -20,6 +20,12 @@ class ResCompany(models.Model):
         string='Print Label after Put in Pack',
         default=False
     )
+    hlv_barcode_shopee_default_picker_user_id = fields.Many2one(
+        'res.users',
+        string='Default Shopee Picker',
+        domain="[('share', '=', False), ('active', '=', True)]",
+        help='Default user assigned to process Shopee PICK pickings.',
+    )
 
 class ResConfigSettings(models.TransientModel):
     _inherit = 'res.config.settings'
@@ -30,6 +36,10 @@ class ResConfigSettings(models.TransientModel):
     )
     hlv_barcode_print_after_pack = fields.Boolean(
         related='company_id.hlv_barcode_print_after_pack',
+        readonly=False,
+    )
+    hlv_barcode_shopee_default_picker_user_id = fields.Many2one(
+        related='company_id.hlv_barcode_shopee_default_picker_user_id',
         readonly=False,
     )
     hlv_barcode_use_independent_permissions = fields.Boolean(
@@ -45,6 +55,12 @@ class ResConfigSettings(models.TransientModel):
     hlv_barcode_show_qty_buttons = fields.Boolean(
         string='Hiện Nút Bấm Cộng/Trừ Số Lượng',
         help='Hiển thị các nút +1, -1, +10, -10 trên màn hình quét để nhân viên bấm nhanh không cần gõ phím.'
+    )
+    hlv_barcode_qty_button_threshold = fields.Float(
+        string='Ngưỡng Số Lượng Hiện Nút',
+        config_parameter='hlv_mobile_barcode.hlv_barcode_qty_button_threshold',
+        default=50.0,
+        help='Chỉ những sản phẩm có số lượng lớn hơn số này mới hiện nút -10, -1, +1, +10 khi bật tính năng Hiện Nút Bấm.'
     )
     hlv_barcode_camera_default_on = fields.Boolean(
         string='Camera Mặc Định BẬT Khi Vào Phiếu',
