@@ -181,35 +181,47 @@
                                         <i t-if="line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0" class="fa fa-check-circle" style="color: var(--success-color); font-size: 1.1rem; margin-top: 4px;"></i>
                                     </div>
                                 </div>
-                                <t t-set="has_fractional" t-value="line.product_uom_qty % 1 !== 0 || line.qty_done % 1 !== 0"/>
-                                <t t-set="threshold" t-value="state.picking.qty_button_threshold !== undefined ? state.picking.qty_button_threshold : 50"/>
-                                <t t-set="has_large_qty" t-value="state.picking.show_qty_buttons && line.product_uom_qty > threshold"/>
-                                <t t-if="has_fractional || has_large_qty">
-                                    <div t-if="state.picking.state !== 'done'" style="background-color: transparent; padding: 6px 12px 10px 12px; display: flex; gap: 4px; align-items: center; justify-content: center; flex-wrap: wrap;">
-                                        <button t-if="has_large_qty" class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, -10)">-10</button>
-                                        <button t-if="has_large_qty" class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, -1)">-1</button>
-                                        
-                                        <button t-if="has_fractional" class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, -0.1)">-0.1</button>
-                                        <button t-if="has_fractional" class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, -0.01)">-0.01</button>
-                                        
-                                        <input type="number" class="form-control" style="width: 48px; text-align: center; font-weight: bold; padding: 4px 2px; font-size: 0.85rem;" t-model="line.qty_done" t-on-change="(ev) => this.saveQty(line, ev)" min="0" step="any"/>
-                                        
-                                        <button t-if="has_fractional" class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, 0.01)">+0.01</button>
-                                        <button t-if="has_fractional" class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, 0.1)">+0.1</button>
-                                        
-                                        <button t-if="has_large_qty" class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, 1)">+1</button>
-                                        <button t-if="has_large_qty" class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, 10)">+10</button>
-                                        
-                                        <button t-if="!state.picking.is_pick and !state.picking.source_transfer_id" class="btn btn-danger btn-sm" style="padding: 4px 8px; font-size: 0.78rem; min-width: 28px;" t-on-click="() => this.deleteLine(line)">
-                                            <i class="fa fa-trash"></i>
-                                        </button>
-                                    </div>
+                                <t t-set="needs_location_scan" t-value="!state.picking.is_putaway and (state.picking.is_pick or props.isMultiLocationMode)"/>
+                                <t t-set="can_edit_qty" t-value="!needs_location_scan or is_active_location"/>
+                                
+                                <t t-if="can_edit_qty">
+                                    <t t-set="has_fractional" t-value="line.product_uom_qty % 1 !== 0 or line.qty_done % 1 !== 0"/>
+                                    <t t-set="threshold" t-value="state.picking.qty_button_threshold !== undefined ? state.picking.qty_button_threshold : 50"/>
+                                    <t t-set="has_large_qty" t-value="state.picking.show_qty_buttons and line.product_uom_qty &gt; threshold"/>
+                                    <t t-if="has_fractional or has_large_qty">
+                                        <div t-if="state.picking.state !== 'done'" style="background-color: transparent; padding: 6px 12px 10px 12px; display: flex; gap: 4px; align-items: center; justify-content: center; flex-wrap: wrap;">
+                                            <button t-if="has_large_qty" class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, -10)">-10</button>
+                                            <button t-if="has_large_qty" class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, -1)">-1</button>
+                                            
+                                            <button t-if="has_fractional" class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, -0.1)">-0.1</button>
+                                            <button t-if="has_fractional" class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, -0.01)">-0.01</button>
+                                            
+                                            <input type="number" class="form-control" style="width: 48px; text-align: center; font-weight: bold; padding: 4px 2px; font-size: 0.85rem;" t-model="line.qty_done" t-on-change="(ev) => this.saveQty(line, ev)" min="0" step="any"/>
+                                            
+                                            <button t-if="has_fractional" class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, 0.01)">+0.01</button>
+                                            <button t-if="has_fractional" class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, 0.1)">+0.1</button>
+                                            
+                                            <button t-if="has_large_qty" class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, 1)">+1</button>
+                                            <button t-if="has_large_qty" class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, 10)">+10</button>
+                                            
+                                            <button t-if="!state.picking.is_pick and !state.picking.source_transfer_id" class="btn btn-danger btn-sm" style="padding: 4px 8px; font-size: 0.78rem; min-width: 28px;" t-on-click="() => this.deleteLine(line)">
+                                                <i class="fa fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </t>
+                                    <t t-else="">
+                                        <div t-if="state.picking.state !== 'done'" style="background-color: transparent; padding: 6px 12px 10px 12px; display: flex; gap: 4px; align-items: center; justify-content: flex-end;">
+                                            <button t-if="!state.picking.is_pick and !state.picking.source_transfer_id" class="btn btn-danger btn-sm" style="padding: 4px 12px; font-size: 0.85rem; min-width: 28px;" t-on-click="() => this.deleteLine(line)">
+                                                <i class="fa fa-trash"></i> Xóa
+                                            </button>
+                                        </div>
+                                    </t>
                                 </t>
                                 <t t-else="">
-                                    <div t-if="state.picking.state !== 'done'" style="background-color: transparent; padding: 6px 12px 10px 12px; display: flex; gap: 4px; align-items: center; justify-content: flex-end;">
-                                        <button t-if="!state.picking.is_pick and !state.picking.source_transfer_id" class="btn btn-danger btn-sm" style="padding: 4px 12px; font-size: 0.85rem; min-width: 28px;" t-on-click="() => this.deleteLine(line)">
-                                            <i class="fa fa-trash"></i> Xóa
-                                        </button>
+                                    <div t-if="state.picking.state !== 'done'" style="padding: 10px 12px 12px 12px; display: flex; gap: 8px; align-items: center; justify-content: center;">
+                                        <span class="text-muted" style="font-size: 0.85rem; font-style: italic; background: #f8f9fa; padding: 6px 12px; border-radius: 20px; border: 1px solid #e9ecef;">
+                                            <i class="fa fa-lock text-warning" style="margin-right: 4px;"></i> Vui lòng quét vị trí chứa sản phẩm trước
+                                        </span>
                                     </div>
                                 </t>
                             </div>

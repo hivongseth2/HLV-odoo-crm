@@ -64,7 +64,7 @@ def _step2_canonical_line_entries(picking):
         lambda ml: ml.quantity > 0 and ml.state not in ['cancel']
     ).sorted('id')
     target_lines = picking.move_line_ids.filtered(
-        lambda ml: ml.state not in ['done', 'cancel']
+        lambda ml: ml.state != 'cancel'
     )
     used_target_ids = set()
     entries = []
@@ -275,6 +275,8 @@ class HLVMobileBarcodeController(http.Controller):
                         line_demand = ml.quantity
                     elif step2_entry:
                         line_demand = step2_entry['demand']
+                    elif ml.quantity > 0 or len(move.move_line_ids) > 1:
+                        line_demand = ml.quantity
 
                     lines.append({
                         'id': ml.id,
