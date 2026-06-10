@@ -275,6 +275,8 @@ class HLVMobileBarcodeController(http.Controller):
                         line_demand = ml.quantity
                     elif step2_entry:
                         line_demand = step2_entry['demand']
+                    elif ml.quantity > 0 or len(move.move_line_ids) > 1:
+                        line_demand = ml.quantity
 
                     lines.append({
                         'id': ml.id,
