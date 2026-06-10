@@ -56,6 +56,12 @@ class ResConfigSettings(models.TransientModel):
         string='Hiện Nút Bấm Cộng/Trừ Số Lượng',
         help='Hiển thị các nút +1, -1, +10, -10 trên màn hình quét để nhân viên bấm nhanh không cần gõ phím.'
     )
+    hlv_barcode_qty_button_threshold = fields.Float(
+        string='Ngưỡng Số Lượng Hiện Nút',
+        config_parameter='hlv_mobile_barcode.hlv_barcode_qty_button_threshold',
+        default=50.0,
+        help='Chỉ những sản phẩm có số lượng lớn hơn số này mới hiện nút -10, -1, +1, +10 khi bật tính năng Hiện Nút Bấm.'
+    )
     hlv_barcode_camera_default_on = fields.Boolean(
         string='Camera Mặc Định BẬT Khi Vào Phiếu',
         config_parameter='hlv_mobile_barcode.hlv_barcode_camera_default_on',

@@ -458,6 +458,12 @@ class HLVMobileBarcodeController(http.Controller):
                 })
 
         show_qty_buttons = request.env['ir.config_parameter'].sudo().get_param('hlv_mobile_barcode.hlv_barcode_show_qty_buttons', 'True') == 'True'
+        qty_button_threshold_param = request.env['ir.config_parameter'].sudo().get_param('hlv_mobile_barcode.hlv_barcode_qty_button_threshold', '50.0')
+        try:
+            qty_button_threshold = float(qty_button_threshold_param)
+        except ValueError:
+            qty_button_threshold = 50.0
+
         camera_param = request.env['ir.config_parameter'].sudo().get_param('hlv_mobile_barcode.hlv_barcode_camera_default_on')
         camera_default_on = camera_param is None or str(camera_param).strip().lower() in ['true', '1']
 
@@ -482,6 +488,7 @@ class HLVMobileBarcodeController(http.Controller):
             'source_transfer_name': picking.source_transfer_id.name if picking.source_transfer_id else False,
             'is_putaway': is_putaway,
             'show_qty_buttons': show_qty_buttons,
+            'qty_button_threshold': qty_button_threshold,
             'camera_default_on': camera_default_on,
             'is_pick': is_pick_picking,
             'is_return': is_return_picking,
