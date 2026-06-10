@@ -1006,7 +1006,6 @@ class MisaApiUtils(models.AbstractModel):
             
             # Lấy dữ liệu trang hiện tại
             products = data.get("Data", []) or []
-            page_count_api = data.get("PageCount", 1)  # Không tin cậy
             total_api = data.get("Total", 0)
             
             # Lưu total từ lần đầu
@@ -1016,8 +1015,7 @@ class MisaApiUtils(models.AbstractModel):
             # Tính số trang thực tế dựa vào Total
             actual_pages_needed = (total_expected + page_size - 1) // page_size  # Làm tròn lên
             
-            _logger.info("   ✓ Page %d/%d: %d products | Total=%d (API PageCount=%d - IGNORED)", 
-                        page, actual_pages_needed, len(products), total_api, page_count_api)
+
             
             # Thêm vào danh sách tổng
             all_products.extend(products)

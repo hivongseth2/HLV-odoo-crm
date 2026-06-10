@@ -171,7 +171,7 @@ class MisaConfig(models.AbstractModel):
     def get_crm_sale_order_detail_payload(self,id):
         
         return {
-            "Columns": "SUQsU29ydE9yZGVyLFByb2R1Y3RJRCxQcm9kdWN0SURUZXh0LFN0b2NrSUQsU3RvY2tJRFRleHQsRGVzY3JpcHRpb24sRGVzY3JpcHRpb25Qcm9kdWN0LEN1c3RvbUZpZWxkMixDdXN0b21GaWVsZDQsVW5pdElELFVuaXRJRFRleHQsQW1vdW50LFNoaXBwaW5nQW1vdW50LFByaWNlQWZ0ZXJUYXgsUHJpY2UsVG9DdXJyZW5jeSxEaXNjb3VudFBlcmNlbnQsRGlzY291bnQsVGF4UGVyY2VudElELFRheFBlcmNlbnRJRFRleHQsVGF4LFRvdGFsLFByb21vdGlvbklELFByb21vdGlvbklEVGV4dCxDdXN0b21GaWVsZDEsSXNTZXRQcm9kdWN0LElzQ2hpbGRQcm9kdWN0",
+            "Columns": "SUQsU29ydE9yZGVyLFByb2R1Y3RJRCxQcm9kdWN0SURUZXh0LFN0b2NrSUQsU3RvY2tJRFRleHQsQ3VzdG9tRmllbGQyLERlc2NyaXB0aW9uLERlc2NyaXB0aW9uUHJvZHVjdCxVbml0SUQsVW5pdElEVGV4dCxBbW91bnQsU2hpcHBpbmdBbW91bnQsUHJpY2UsUHJpY2VBZnRlclRheCxUYXhQZXJjZW50SUQsVGF4UGVyY2VudElEVGV4dCxUb0N1cnJlbmN5LERpc2NvdW50UGVyY2VudCxEaXNjb3VudCxUYXgsQ3VzdG9tRmllbGQxMCxDdXN0b21GaWVsZDksVG90YWwsUHJvbW90aW9uSUQsUHJvbW90aW9uSURUZXh0LElzTm90ZVJvdyxJc1NldFByb2R1Y3QsSXNDaGlsZFByb2R1Y3Q",
             "Sorts": [],
             "Start": 0,
             "Page": 1,
@@ -189,7 +189,7 @@ class MisaConfig(models.AbstractModel):
             "CustomPagingData": {
                 "SubFormConfig": {
                     "ColumnFieldSubForm": "",
-                    "ColumnAggregateSubForm": "TotalSummary,TaxSummary,DiscountAfterTaxSummary,DiscountSummary,ToCurrencySummary,ShippingAmountSummary,AmountSummary,DiscountOverall,DiscountOverallOC,TaxOverall,TaxOverallOC,TotalOverall,TotalOverallOC,IsDiscountDirectlyOverall,DiscountPercentOverall,TaxPercentOverallID,ProducedQuantitySummary,ToCurrencyAfterDiscountSummary,ToCurrencyOCAfterDiscountSummary,TotalSummaryOC,TaxSummaryOC,DiscountSummaryOC,ToCurrencySummaryOC,UsageUnitAmountSummary,PromotionOverAllID,IsPromotionDiscountOverAll",
+                    "ColumnAggregateSubForm": "TotalSummary,TotalAmountDeliveredSummary,CustomField9Summary,TaxSummary,DiscountAfterTaxSummary,DiscountSummary,ToCurrencySummary,ShippingAmountSummary,AmountSummary,DiscountOverall,DiscountOverallOC,TaxOverall,TaxOverallOC,TotalOverall,TotalOverallOC,IsDiscountDirectlyOverall,DiscountPercentOverall,TaxPercentOverallID,ProducedQuantitySummary,ToCurrencyAfterDiscountSummary,ToCurrencyOCAfterDiscountSummary,TotalSummaryOC,TaxSummaryOC,DiscountSummaryOC,ToCurrencySummaryOC,UsageUnitAmountSummary,PromotionOverAllID,IsPromotionDiscountOverAll",
                     "TableName": "sale_order_product",
                     "IsSystem": True,
                     "ParentIDKey": "CustomID",

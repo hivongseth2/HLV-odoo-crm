@@ -42,11 +42,7 @@ class SaleOrder(models.Model):
         r = requests.post(url, headers=headers, json=payload, timeout=60)
         r.raise_for_status()
         js = r.json()
-        _logger.info(
-            "MISA FormDataNew response for misa_id=%s:\n%s",
-            self.misa_id,
-            json.dumps(js, ensure_ascii=False, indent=2)
-        )
+        
         if not js.get("Success"):
             raise ValueError(_("MISA trả về lỗi (FormDataNew): %s") % js)
         return js.get("Data", {}).get("CurrentData", {})
@@ -62,7 +58,7 @@ class SaleOrder(models.Model):
         order_detail_url = "https://amisapp.misa.vn/crm/g2/api/business/SaleOrder/DataSubPaging"
         payload_detail = misa_config.get_crm_sale_order_detail_payload(misa_order_id)
         product_lines = misa_utils.get_list_product_by_order_crm(order_detail_url, headers, payload_detail)
-        logging.debug("productline", product_lines)
+        # logging.debug("productline", product_lines)
         return product_lines or []
         # ===== Helpers lấy/convert UoM từ MISA =====
 
@@ -598,7 +594,6 @@ class SaleOrder(models.Model):
         parent_id_to_code = {}  # {parent_id: parent_code}
         parent_code_set = set()  # Set các parent_code để kiểm tra
         
-        _logger.info("📦 Bắt đầu build combo map từ %s dòng", len(lines or []))
         
         # Bước 1: Scan tất cả parent để build mapping ID->CODE
         for line in (lines or []):
@@ -672,11 +667,8 @@ class SaleOrder(models.Model):
                         combo_parent_map[child_misa_id] = current_parent_code  # KEY = MISA LINE ID
                         children_by_parent.setdefault(current_parent_code, []).append(it)
                         matched_child_ids.add(child_misa_id)  # Đánh dấu đã match
-                        _logger.info("   🔗 Smart map: MISA_ID=%s ('%s') → parent '%s'", 
-                                   child_misa_id, child_code, current_parent_code)
+                        
         
-        _logger.info("🔍 Combo map cuối cùng: %s", combo_parent_map)
-        _logger.info("📊 Children by parent: %s", {k: len(v) for k, v in children_by_parent.items()})
 
         # ===== 8.0a) ĐỒNG BỘ TÊN SẢN PHẨM TỪ MISA (TRƯỚC KHI TẠO LINES) =====
         _logger.info("🔄 Đồng bộ tên sản phẩm từ MISA cho đơn %s...", order_no)
@@ -758,6 +750,8 @@ class SaleOrder(models.Model):
             note_text    = (ln.get("DescriptionProduct")
                 or ln.get("Note")
                 or "")
+            loyalty_discount_pct = (ln.get("CustomField10") or 0.1)
+            loyalty_discount_amount = (ln.get("CustomField9") or 0)
             
             tth = (ln.get("CustomField4") or "").strip()
             # Xác định loại dòng (để gán Studio fields)
@@ -805,7 +799,9 @@ class SaleOrder(models.Model):
                 'price_unit': price_for_odoo,
                 'discount': discount_pct,
                 'note': note_text,
-                'x_studio_product_status': tth
+                'x_studio_product_status': tth,
+                "loyalty_discount_pct" : loyalty_discount_pct,
+                "x_studio_loyalty_discount_amount" : loyalty_discount_amount,
             }
             # Nếu có convert, ép UoM line về UoM mặc định của product
             if not use_default_uom and product.uom_id:
