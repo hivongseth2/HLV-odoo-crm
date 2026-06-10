@@ -667,6 +667,36 @@ class SaleApiImportWizard(models.TransientModel):
           - Dùng type='contact' để hiển thị tên contact thay vì tên công ty cha
         """
         Partner = self.env['res.partner']
+        parent_partner = parent_partner.commercial_partner_id or parent_partner
+        addr_str = (addr_str or '').strip()
+        contact_name = (contact_name or '').strip()
+        if isinstance(phone, str):
+            phone = phone.strip()
+        if isinstance(province_text, str):
+            province_text = province_text.strip()
+
+        def _clear_customer_code(contact):
+            if contact and contact.parent_id and (contact.ref or contact.company_registry):
+                contact.write({'ref': False, 'company_registry': False})
+            return contact
+
+        if not addr_str and not contact_name:
+            _logger.info(
+                "Skip delivery contact creation: missing address and contact name for parent=%s",
+                parent_partner.id,
+            )
+            return parent_partner
+        if (
+            not is_e_account
+            and contact_name
+            and contact_name == (parent_partner.name or '').strip()
+            and not addr_str
+        ):
+            _logger.info(
+                "Skip delivery contact creation: contact name equals parent and address is empty for parent=%s",
+                parent_partner.id,
+            )
+            return parent_partner
         country = self._vn_country()
         state = self._vn_state_by_name(province_text) if province_text else False
 
@@ -734,7 +764,7 @@ class SaleApiImportWizard(models.TransientModel):
                 existing.write(vals_upd)
             else:
                 _logger.info("♻️ Existing delivery contact %s found, NO CHANGES detected.", existing.name)
-            return existing
+            return _clear_customer_code(existing)
 
         # Tạo mới contact
         # Với e_accounts: dùng type='delivery' để hiển thị icon xe tải
@@ -751,7 +781,7 @@ class SaleApiImportWizard(models.TransientModel):
             'state_id': state.id if state else False,
         }
         _logger.info("🆕 Creating new delivery contact (type=%s) with vals: %s", contact_type, vals)
-        return Partner.create(vals)
+        return _clear_customer_code(Partner.create(vals))
 
     def action_import_from_api(self):
         odoo_utils = self.env['odoo.utils']

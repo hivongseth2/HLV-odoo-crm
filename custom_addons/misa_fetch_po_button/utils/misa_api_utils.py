@@ -57,12 +57,13 @@ class MisaApiUtils(models.AbstractModel):
                 _logger.warning("⚠️ MISA Account ID %s has no AccountNumber", account_id)
                 return None
                 
-            Partner = self.env['res.partner']
-            
-            # Find by ref (AccountNumber)
-            # Case-insensitive search ideally, but 'ref' is usually exact.
-            partner = Partner.search([('ref', '=', account_number)], limit=1)
-            
+            partner = self.env['odoo.utils']._get_or_create_partner(
+                account_name or account_number,
+                misa_code=account_number,
+                tax_code=tax_code,
+            )
+            partner = partner.commercial_partner_id or partner
+
             vals = {}
             # Always update name if provided? Or only if different?
             # User wants to update info.
