@@ -25,10 +25,12 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 po_domain.append(('date_planned', '>=', po_date_from))
             if po_date_to:
                 po_domain.append(('date_planned', '<=', po_date_to + ' 23:59:59'))
+            matching_pos = self.env['purchase.order'].search(po_domain)
             if po_status and po_status != 'all':
-                po_domain.append(('receipt_status', '=', po_status))
-            matching_pos = self.env['purchase.order'].search_read(po_domain, ['origin'])
-            origins = list({po['origin'] for po in matching_pos if po['origin']})
+                matching_pos = matching_pos.filtered(
+                    lambda po: self._delivery_planner_po_receipt_status(po) == po_status
+                )
+            origins = list({po.origin for po in matching_pos if po.origin})
             sales = sales.filtered(lambda s: s.name in origins)
 
         # --- 1b. Lọc theo ngày hoàn thành (date_done của phiếu OUT) ---

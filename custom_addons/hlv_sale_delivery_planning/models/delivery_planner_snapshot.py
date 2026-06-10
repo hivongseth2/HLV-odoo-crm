@@ -8,7 +8,7 @@ on every request once snapshots are clean.
 
 from odoo import api, fields, models
 
-SNAPSHOT_LOGIC_VERSION = 'service_line_no_stock_flow_v3'
+SNAPSHOT_LOGIC_VERSION = 'service_receipt_amount_v4'
 
 
 class DeliveryPlannerSnapshot(models.Model):

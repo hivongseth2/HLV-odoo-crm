@@ -5,6 +5,12 @@ import pytz
 class DeliveryPlannerServiceFormatter(models.AbstractModel):
     _inherit = 'hlv.delivery.planner.service'
 
+    def _delivery_planner_po_receipt_status(self, po):
+        product_lines = po.order_line.filtered(lambda l: not l.display_type and l.product_id)
+        if product_lines and all(line.product_id.type == 'service' for line in product_lines):
+            return 'full'
+        return po.receipt_status if hasattr(po, 'receipt_status') else 'unknown'
+
     def _compute_transfer_suggestions(self, so, so_lines_data):
         """
         Đề xuất chuyển kho: tìm sản phẩm thiếu ở kho hiện tại
@@ -151,7 +157,7 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
         po_data = [
             {
                 'id': po.id, 'name': po.name, 'state': po.state,
-                'receipt_status': po.receipt_status if hasattr(po, 'receipt_status') else 'unknown',
+                'receipt_status': self._delivery_planner_po_receipt_status(po),
                 'date_planned': po.date_planned.replace(tzinfo=pytz.utc).astimezone(user_tz).strftime('%Y-%m-%d %H:%M:%S') if po.date_planned else False,
                 'partner_id': [po.partner_id.id, po.partner_id.name] if po.partner_id else False,
                 'amount_total': po.amount_total,
@@ -369,12 +375,12 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             price_unit = line.price_unit
             discount = line.discount
             price_after_discount = price_unit * (1.0 - discount / 100.0)
-            if line.qty_delivered > 0:
+            if eff_qty_del > 0:
                 if line.tax_id:
                     tax_res = line.tax_id.with_context(round=False).compute_all(
                         price_after_discount,
                         currency=line.order_id.currency_id,
-                        quantity=line.qty_delivered,
+                        quantity=eff_qty_del,
                         product=line.product_id,
                         partner=line.order_id.partner_shipping_id,
                     )
@@ -382,7 +388,7 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                     delivered_tax = sum(t['amount'] for t in tax_res['taxes'])
                     delivered_total = tax_res['total_included']
                 else:
-                    delivered_subtotal = price_after_discount * line.qty_delivered
+                    delivered_subtotal = price_after_discount * eff_qty_del
                     delivered_tax = 0.0
                     delivered_total = delivered_subtotal
             else:
