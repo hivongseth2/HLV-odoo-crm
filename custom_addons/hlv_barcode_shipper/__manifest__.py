@@ -17,14 +17,25 @@
         "views/barcode_scan_log_views.xml",
         "views/stock_picking_views.xml",
         "views/barcode_shipper_views.xml",
+        "views/barcode_shipper_v2_views.xml",
         "views/res_config_settings_views.xml",
         "views/shipper_management_views.xml",
         "views/res_users_views.xml",
     ],
     "assets": {
+        "web.assets_common": [
+            "hlv_barcode_shipper/static/src/css/hlv_global_colors.css",
+        ],
         "web.assets_frontend": [
             "hlv_barcode_shipper/static/src/css/barcode_shipper.css",
             "hlv_barcode_shipper/static/src/js/barcode_scanner.js",
+        ],
+        "web.assets_backend": [
+            "hlv_barcode_shipper/static/src/services/**/*",
+            "hlv_barcode_shipper/static/src/components/**/*",
+        ],
+        "hlv_barcode_shipper.assets_shipper_v2": [
+            "hlv_barcode_shipper/static/src/main_v2.js",
         ],
     },
     "installable": True,

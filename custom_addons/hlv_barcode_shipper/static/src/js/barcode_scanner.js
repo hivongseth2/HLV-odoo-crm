@@ -173,9 +173,27 @@ class BarcodeShipper {
     showStep(id) { this.showDeliverStep(id); }
 
     bindEvents() {
-        // Tab switching
+        // Sidebar and Tab switching logic
+        const btnOpenSidebar = document.getElementById('btn-open-sidebar');
+        const btnCloseSidebar = document.getElementById('btn-close-sidebar');
+        const sidebarOverlay = document.getElementById('sidebar-overlay');
+        const sidebarNav = document.getElementById('shipper-sidebar');
+        const closeSidebarFn = () => {
+            if (sidebarNav) sidebarNav.classList.remove('open');
+            if (sidebarOverlay) sidebarOverlay.classList.remove('show');
+        };
+        if (btnOpenSidebar) btnOpenSidebar.addEventListener('click', () => {
+            sidebarNav.classList.add('open');
+            sidebarOverlay.classList.add('show');
+        });
+        if (btnCloseSidebar) btnCloseSidebar.addEventListener('click', closeSidebarFn);
+        if (sidebarOverlay) sidebarOverlay.addEventListener('click', closeSidebarFn);
+
         document.querySelectorAll('.tab-btn').forEach(btn => {
-            btn.addEventListener('click', () => this.switchTab(btn.dataset.tab));
+            btn.addEventListener('click', () => {
+                this.switchTab(btn.dataset.tab);
+                closeSidebarFn();
+            });
         });
 
         // === DELIVER TAB ===
