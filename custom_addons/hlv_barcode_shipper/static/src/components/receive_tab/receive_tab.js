@@ -67,9 +67,14 @@ export class ReceiveTab extends Component {
                             </t>
                         </t>
                         <t t-else="">
-                            <div class="text-center p-3 text-muted">
-                                <i class="fa fa-archive fa-2x mb-2"></i>
-                                <p>Chưa có dữ liệu phiếu Nhận Hàng.</p>
+                            <div class="text-center p-5 text-muted" style="margin-top: 30px;">
+                                <i class="fas fa-search" style="font-size: 4rem; color: #e0e0e0; margin-bottom: 15px;"></i>
+                                <p style="color: #999;">Nhập mã phiếu hoặc đơn hàng để tìm kiếm</p>
+                                
+                                <div class="mt-5 d-flex justify-content-center gap-5">
+                                    <button class="btn btn-text text-secondary" style="font-size: 0.95rem;"><i class="fas fa-history"></i> Lịch sử</button>
+                                    <button class="btn btn-text text-secondary" style="font-size: 0.95rem;"><i class="fas fa-question-circle"></i> Hướng dẫn</button>
+                                </div>
                             </div>
                         </t>
                     </t>
