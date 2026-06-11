@@ -4,6 +4,7 @@
 import base64
 import json
 import logging
+import re
 from datetime import timedelta
 
 from markupsafe import Markup, escape
@@ -670,20 +671,65 @@ class BarcodeShipperController(http.Controller):
             },
         )
 
-    def _get_picking_misa_shipping_address(self, picking):
-        """Return the best known MISA shipping address for a picking."""
-        picking_address = getattr(picking, "x_misa_shipping_address", False)
-        if picking_address:
-            return picking_address
+    def _get_sale_order_for_picking(self, picking):
+        """Resolve the sale order linked to a picking without relying only on origin."""
+        SaleOrder = request.env["sale.order"]
 
-        SaleOrder = request.env.get("sale.order")
-        if not SaleOrder or not picking.origin:
-            return ""
+        sale_orders = SaleOrder.sudo().browse()
+        if "sale_id" in picking._fields and picking.sale_id:
+            sale_orders |= picking.sale_id.sudo()
+        if "move_ids" in picking._fields and "sale_line_id" in request.env["stock.move"]._fields:
+            sale_orders |= picking.move_ids.mapped("sale_line_id.order_id").sudo()
+        if "move_line_ids" in picking._fields and "sale_line_id" in request.env["stock.move"]._fields:
+            sale_orders |= picking.move_line_ids.mapped("move_id.sale_line_id.order_id").sudo()
+        if "group_id" in picking._fields and picking.group_id and "sale_id" in picking.group_id._fields:
+            sale_orders |= picking.group_id.sale_id.sudo()
 
-        sale_order = SaleOrder.sudo().search([("name", "=", picking.origin)], limit=1)
+        if sale_orders:
+            with_address = sale_orders.filtered(lambda so: bool(getattr(so, "misa_shipping_address", False)))
+            return (with_address or sale_orders)[:1]
+
+        origin = (picking.origin or "").strip()
+        if not origin:
+            return False
+
+        origin_names = [origin]
+        origin_names += [
+            token.strip()
+            for token in re.split(r"[,;|\s]+", origin)
+            if token.strip()
+        ]
+        sale_order = SaleOrder.sudo().search([("name", "in", list(dict.fromkeys(origin_names)))], limit=1)
         if not sale_order:
-            return ""
-        return getattr(sale_order, "misa_shipping_address", False) or ""
+            sale_order = SaleOrder.sudo().search([("name", "ilike", origin)], limit=1)
+        return sale_order
+
+    def _get_first_text_field(self, record, field_names):
+        """Return the first non-empty text value among possible fields."""
+        for field_name in field_names:
+            if field_name in record._fields:
+                value = getattr(record, field_name, False)
+                if value:
+                    return value, field_name
+        return "", ""
+
+    def _get_picking_misa_shipping_address(self, picking):
+        """Return delivery address from picking first, then sale.order.misa_shipping_address."""
+        picking_address, source_field = self._get_first_text_field(picking, [
+            "x_studio_dia_chi_giao_hang",
+            "x_misa_shipping_address",
+        ])
+        if picking_address:
+            return picking_address, picking.origin or "", source_field
+
+        sale_order = self._get_sale_order_for_picking(picking)
+        if not sale_order:
+            return "", "", ""
+
+        sale_address, source_field = self._get_first_text_field(sale_order, [
+            "misa_shipping_address",
+        ])
+        return sale_address, sale_order.name or "", source_field
 
     # ===== API: delivery route stops =====
     @http.route(
@@ -714,9 +760,13 @@ class BarcodeShipperController(http.Controller):
             stops = []
             missing_address = []
             for sequence, picking in enumerate(pickings, start=1):
-                address = self._get_picking_misa_shipping_address(picking)
+                address, sale_order_name, address_source = self._get_picking_misa_shipping_address(picking)
                 if not address:
-                    missing_address.append(picking.name)
+                    missing_address.append({
+                        "picking_name": picking.name,
+                        "origin": picking.origin or "",
+                        "sale_order_name": sale_order_name,
+                    })
                     continue
 
                 item_count = len(picking.package_level_ids) + len(
@@ -727,8 +777,10 @@ class BarcodeShipperController(http.Controller):
                     "sequence": sequence,
                     "picking_name": picking.name,
                     "origin": picking.origin or "",
+                    "sale_order_name": sale_order_name,
                     "partner_name": picking.partner_id.name or "",
                     "address": address,
+                    "address_source": address_source,
                     "item_count": item_count,
                     "receive_time": (
                         (picking.shipper_receive_time + VN_OFFSET).strftime("%H:%M %d/%m")
@@ -740,6 +792,7 @@ class BarcodeShipperController(http.Controller):
                 "success": True,
                 "stops": stops,
                 "missing_address": missing_address,
+                "received_count": len(pickings),
                 "google_maps_api_key": request.env.company.hlv_barcode_google_maps_api_key or "",
             }
         except Exception:

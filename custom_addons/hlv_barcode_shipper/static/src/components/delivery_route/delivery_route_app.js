@@ -112,7 +112,10 @@ export class DeliveryRouteApp extends Component {
                 this.state.warningMessage = `${res.missing_address.length} phiếu chưa có địa chỉ giao hàng`;
             }
             if (!this.state.rawStops.length) {
-                this.state.errorMessage = "Chưa có đơn đã nhận có địa chỉ giao hàng.";
+                const receivedCount = res.received_count || 0;
+                this.state.errorMessage = receivedCount
+                    ? `Có ${receivedCount} đơn đã nhận nhưng chưa tìm được địa chỉ giao hàng.`
+                    : "Chưa có đơn đã nhận để lập tuyến giao hàng.";
                 return;
             }
             await this.buildInitialRoute();
