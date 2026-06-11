@@ -178,6 +178,14 @@ export class PickingScanner extends Component {
         });
     }
 
+    formatQty(value) {
+        const number = Number(value || 0);
+        return number.toLocaleString("vi-VN", {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 2,
+        });
+    }
+
     async loadPicking() {
         this.state.loading = true;
         try {
