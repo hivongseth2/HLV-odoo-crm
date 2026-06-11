@@ -1,11 +1,11 @@
 /* hlv_barcode_shipper/static/src/css/barcode_shipper.css */
 
 :root {
-  /* Kế thừa từ HLV Global Colors */
-  --primary-color: var(--hlv-primary-blue-dark);
-  --secondary-color: var(--hlv-primary-blue);
-  --info-color: var(--hlv-primary-blue-light);
-  --highlight-bg: var(--hlv-primary-bg);
+  /* Kế thừa từ HLV Global Colors (với Fallback để không lỗi khi chưa Upgrade module) */
+  --primary-color: var(--hlv-primary-blue-dark, #2C5EAD);
+  --secondary-color: var(--hlv-primary-blue, #1591DC);
+  --info-color: var(--hlv-primary-blue-light, #4BB8FA);
+  --highlight-bg: var(--hlv-primary-bg, #C4E2F5);
 
   /* Semantic Colors */
   --success-color: #28a745;
