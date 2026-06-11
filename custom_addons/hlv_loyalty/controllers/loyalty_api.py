@@ -244,8 +244,10 @@ class LoyaltyExternalAPI(http.Controller):
                         status=status, content_type='application/json')
 
     @staticmethod
-    def _json_err(msg, status=400):
-        return Response(json.dumps({'error': msg}),
+    def _json_err(msg, status=400, **extra):
+        body = {'error': msg}
+        body.update(extra)
+        return Response(json.dumps(body, default=str),
                         status=status, content_type='application/json')
 
     @staticmethod
@@ -255,6 +257,15 @@ class LoyaltyExternalAPI(http.Controller):
             return json.loads(raw.decode('utf-8')) if raw else {}
         except Exception:
             return {}
+
+    @staticmethod
+    def _mask_secret(value, keep=6):
+        value = str(value or '')
+        if not value:
+            return ''
+        if len(value) <= keep * 2:
+            return value[:2] + '***'
+        return value[:keep] + '...' + value[-keep:]
 
     @staticmethod
     def _normalize_vn_phone(phone):
