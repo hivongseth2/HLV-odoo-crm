@@ -641,6 +641,18 @@ class BarcodeShipperController(http.Controller):
             "hlv_barcode_shipper.shipper_interface", {"user": request.env.user}
         )
 
+    # ===== Web UI V2: /barcode/shipper_v2 (OWL) =====
+    @http.route("/barcode/shipper_v2", type="http", auth="user", website=False)
+    def shipper_interface_v2(self, **kwargs):
+        """V2 shipper interface page using OWL."""
+        if not request.env.user.has_group("hlv_barcode_shipper.group_shipper"):
+            return request.render(
+                "hlv_barcode_shipper.access_denied", {"user": request.env.user}
+            )
+        return request.render(
+            "hlv_barcode_shipper.shipper_interface_v2", {"user": request.env.user}
+        )
+
     # ===== API: get settings =====
     @http.route(
         "/api/barcode/get_settings",
