@@ -81,7 +81,8 @@ class BarcodeShipper {
         await this.loadSettings();
         this.bindEvents();
         this.setupBarcodeInputs();
-        this.switchTab('receive');
+        const initialTab = (window.location.hash || '').replace('#', '');
+        this.switchTab(['receive', 'deliver', 'return', 'delivered'].includes(initialTab) ? initialTab : 'receive');
         this.loadReturnList();
 
         window.addEventListener('beforeunload', (e) => {
@@ -191,6 +192,10 @@ class BarcodeShipper {
 
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.addEventListener('click', () => {
+                if (btn.dataset.tab === 'deliver' && window.location.hash !== '#deliver') {
+                    window.location.href = '/barcode/shipper_route';
+                    return;
+                }
                 this.switchTab(btn.dataset.tab);
                 closeSidebarFn();
             });

@@ -893,7 +893,6 @@ body {
   transition: background 0.18s ease, box-shadow 0.18s ease, color 0.18s ease;
   text-align: center;
   position: relative;
-  border-radius: 11px;
   line-height: 1.25;
   -webkit-tap-highlight-color: transparent;
 }
@@ -1505,7 +1504,6 @@ body {
   display: flex;
   align-items: center;
   gap: 15px;
-  border-radius: 12px;
   transition: all 0.2s ease-in-out;
   width: 100%;
 }
@@ -1519,7 +1517,6 @@ body {
   background: var(--highlight-bg);
   color: var(--primary-color);
   border-left: 5px solid var(--secondary-color);
-  border-radius: 0 12px 12px 0;
 }
 
 .sidebar-tabs .tab-btn i {

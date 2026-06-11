@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <template id="delivery_route_interface" name="Delivery Route Planner">
+            <t t-call="web.layout">
+                <t t-set="head">
+                    <title>Tuyến giao hàng</title>
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+                    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css"/>
+                    <t t-call-assets="web.assets_backend" t-js="true" t-css="true"/>
+                    <t t-call-assets="hlv_barcode_shipper.assets_delivery_route" t-js="true" t-css="true"/>
+                    <link rel="stylesheet" href="/hlv_barcode_shipper/static/src/css/hlv_global_colors.css"/>
+                    <link rel="stylesheet" href="/hlv_barcode_shipper/static/src/css/barcode_shipper.css"/>
+                    <script type="text/javascript">
+                        window.HLV_SHIPPER_ROUTE_CONFIG = {
+                            googleMapsApiKey: "<t t-esc='google_maps_api_key'/>",
+                            scannerUrl: "/barcode/shipper#deliver"
+                        };
+                    </script>
+                </t>
+                <body class="o_web_client bg-light">
+                    <div id="shipper_delivery_route_root"></div>
+                </body>
+            </t>
+        </template>
+    </data>
+</odoo>

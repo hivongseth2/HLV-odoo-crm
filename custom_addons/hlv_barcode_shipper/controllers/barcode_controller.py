@@ -653,6 +653,98 @@ class BarcodeShipperController(http.Controller):
             "hlv_barcode_shipper.shipper_interface_v2", {"user": request.env.user}
         )
 
+    # ===== Web UI: /barcode/shipper_route (delivery route planner) =====
+    @http.route("/barcode/shipper_route", type="http", auth="user", website=False)
+    def shipper_delivery_route(self, **kwargs):
+        """Route planner page for already received delivery orders."""
+        if not request.env.user.has_group("hlv_barcode_shipper.group_shipper"):
+            return request.render(
+                "hlv_barcode_shipper.access_denied", {"user": request.env.user}
+            )
+        return request.render(
+            "hlv_barcode_shipper.delivery_route_interface",
+            {
+                "user": request.env.user,
+                "google_maps_api_key": request.env.company.hlv_barcode_google_maps_api_key or "",
+            },
+        )
+
+    def _get_picking_misa_shipping_address(self, picking):
+        """Return the best known MISA shipping address for a picking."""
+        picking_address = getattr(picking, "x_misa_shipping_address", False)
+        if picking_address:
+            return picking_address
+
+        SaleOrder = request.env.get("sale.order")
+        if not SaleOrder or not picking.origin:
+            return ""
+
+        sale_order = SaleOrder.sudo().search([("name", "=", picking.origin)], limit=1)
+        if not sale_order:
+            return ""
+        return getattr(sale_order, "misa_shipping_address", False) or ""
+
+    # ===== API: delivery route stops =====
+    @http.route(
+        "/api/barcode/delivery_route_stops",
+        type="json",
+        auth="user",
+        methods=["POST"],
+        csrf=False,
+    )
+    def delivery_route_stops(self, **kwargs):
+        """Return received OUT pickings as route stops for the current shipper."""
+        try:
+            access = self._check_shipper_access()
+            if not access["success"]:
+                return access
+
+            uid = request.env.user.id
+            pickings = request.env["stock.picking"].sudo().search([
+                ("shipper_received", "=", True),
+                ("shipper_returned", "=", False),
+                ("picking_type_id.code", "=", "outgoing"),
+                ("state", "in", ["assigned", "partially_available"]),
+                "|",
+                ("shipper_received_by", "=", uid),
+                ("shipper_user_id", "=", uid),
+            ], order="shipper_receive_time desc, scheduled_date asc, name asc")
+
+            stops = []
+            missing_address = []
+            for sequence, picking in enumerate(pickings, start=1):
+                address = self._get_picking_misa_shipping_address(picking)
+                if not address:
+                    missing_address.append(picking.name)
+                    continue
+
+                item_count = len(picking.package_level_ids) + len(
+                    picking.move_line_ids.filtered(lambda ml: not ml.result_package_id)
+                )
+                stops.append({
+                    "id": picking.id,
+                    "sequence": sequence,
+                    "picking_name": picking.name,
+                    "origin": picking.origin or "",
+                    "partner_name": picking.partner_id.name or "",
+                    "address": address,
+                    "item_count": item_count,
+                    "receive_time": (
+                        (picking.shipper_receive_time + VN_OFFSET).strftime("%H:%M %d/%m")
+                        if picking.shipper_receive_time else ""
+                    ),
+                })
+
+            return {
+                "success": True,
+                "stops": stops,
+                "missing_address": missing_address,
+                "google_maps_api_key": request.env.company.hlv_barcode_google_maps_api_key or "",
+            }
+        except Exception:
+            _logger.exception("Error in delivery_route_stops")
+            return {"success": False, "error": "Không thể tải danh sách điểm giao"}
+
     # ===== API: get settings =====
     @http.route(
         "/api/barcode/get_settings",

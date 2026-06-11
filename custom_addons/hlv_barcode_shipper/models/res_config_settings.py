@@ -46,6 +46,10 @@ class ResCompany(models.Model):
         string="Bỏ qua quét SP lẻ khi trả",
         default=False,
     )
+    hlv_barcode_google_maps_api_key = fields.Char(
+        string="Google Maps API Key",
+        help="API key used by the delivery route planner.",
+    )
 
 
 class ResConfigSettings(models.TransientModel):
@@ -87,5 +91,8 @@ class ResConfigSettings(models.TransientModel):
         related="company_id.hlv_barcode_return_skip_product_scan",
         readonly=False,
     )
-
+    hlv_barcode_google_maps_api_key = fields.Char(
+        related="company_id.hlv_barcode_google_maps_api_key",
+        readonly=False,
+    )
 

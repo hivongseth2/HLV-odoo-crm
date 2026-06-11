@@ -18,6 +18,7 @@
         "views/stock_picking_views.xml",
         "views/barcode_shipper_views.xml",
         "views/barcode_shipper_v2_views.xml",
+        "views/delivery_route_views.xml",
         "views/res_config_settings_views.xml",
         "views/shipper_management_views.xml",
         "views/res_users_views.xml",
@@ -36,6 +37,9 @@
         ],
         "hlv_barcode_shipper.assets_shipper_v2": [
             "hlv_barcode_shipper/static/src/main_v2.js",
+        ],
+        "hlv_barcode_shipper.assets_delivery_route": [
+            "hlv_barcode_shipper/static/src/main_delivery_route.js",
         ],
     },
     "installable": True,
