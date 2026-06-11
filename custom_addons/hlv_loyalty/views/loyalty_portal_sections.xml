@@ -27,28 +27,50 @@
             <div class="sr-voucher-list">
                 <t t-foreach="active_vouchers" t-as="v">
                     <div class="sr-voucher-pill">
-                        <span class="ms">confirmation_number</span>
-                        <span class="sr-v-code"><t t-out="v.code"/></span>
-                        <span class="sr-v-val">
-                            <t t-if="v.reward_type == 'free_shipping'">Miễn phí vận chuyển</t>
-                            <t t-elif="v.reward_type == 'gift'">
-                                Quà tặng kèm
-                                <t t-if="v.gift_product_id">
-                                    (<t t-out="v.gift_qty"/> x <t t-out="v.gift_product_id.name"/>)
+                        <!-- Left stub -->
+                        <div class="sr-v-stub">
+                            <span class="ms">confirmation_number</span>
+                        </div>
+                        
+                        <!-- Divider with cutouts -->
+                        <div class="sr-v-divider">
+                            <div class="sr-v-cutout top"></div>
+                            <div class="sr-v-dashed"></div>
+                            <div class="sr-v-cutout bottom"></div>
+                        </div>
+                        
+                        <!-- Right main body -->
+                        <div class="sr-v-content">
+                            <div class="sr-v-row-top">
+                                <span class="sr-v-code-box" t-att-onclick="'copyCode(\'' + v.code + '\', this)'" title="Click để sao chép">
+                                    <span class="sr-v-code"><t t-out="v.code"/></span>
+                                    <span class="ms sr-v-copy-icon">content_copy</span>
+                                    <span class="sr-v-tooltip">Đã chép!</span>
+                                </span>
+                                <t t-if="v.date_expiry">
+                                    <span class="sr-v-expiry">
+                                        HSD: <t t-out="v.date_expiry.strftime('%d/%m/%Y')"/>
+                                    </span>
                                 </t>
-                            </t>
-                            <t t-elif="v.discount_type == 'fixed'">
-                                – <t t-out="'{:,.0f}'.format(v.discount_value)"/>đ
-                            </t>
-                            <t t-else="">– <t t-out="v.discount_value"/>%
-                                <t t-if="v.max_discount_amount">
-                                    (tối đa <t t-out="'{:,.0f}'.format(v.max_discount_amount)"/>đ)
+                            </div>
+                            <div class="sr-v-desc">
+                                <t t-if="v.reward_type == 'free_shipping'">Miễn phí vận chuyển</t>
+                                <t t-elif="v.reward_type == 'gift'">
+                                    Quà tặng kèm
+                                    <t t-if="v.gift_product_id">
+                                        (<t t-out="v.gift_qty"/> x <t t-out="v.gift_product_id.name"/>)
+                                    </t>
                                 </t>
-                            </t>
-                            <t t-if="v.date_expiry">
-                                · HSD <t t-out="v.date_expiry.strftime('%d/%m/%Y')"/>
-                            </t>
-                        </span>
+                                <t t-elif="v.discount_type == 'fixed'">
+                                    Giảm <t t-out="'{:,.0f}'.format(v.discount_value)"/>đ
+                                </t>
+                                <t t-else="">Giảm <t t-out="v.discount_value"/>%
+                                    <t t-if="v.max_discount_amount">
+                                        (tối đa <t t-out="'{:,.0f}'.format(v.max_discount_amount)"/>đ)
+                                    </t>
+                                </t>
+                            </div>
+                        </div>
                     </div>
                 </t>
             </div>

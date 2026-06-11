@@ -34,34 +34,50 @@
                     <div class="sr-voucher-list">
                         <t t-foreach="all_vouchers" t-as="v">
                             <div class="sr-voucher-card">
-                                <div class="sr-vc-header">
-                                    <span class="ms" style="font-size:28px;color:#198754">confirmation_number</span>
-                                    <span class="sr-v-code" style="font-size:1.15rem"><t t-out="v.code"/></span>
+                                <!-- Left stub -->
+                                <div class="sr-v-stub">
+                                    <span class="ms">confirmation_number</span>
                                 </div>
-                                <div class="sr-vc-value">
-                                    <t t-if="v.reward_type == 'free_shipping'">Miễn phí vận chuyển</t>
-                                    <t t-elif="v.reward_type == 'gift'">
-                                        Quà tặng kèm
-                                        <t t-if="v.gift_product_id">
-                                            (<t t-out="v.gift_qty"/> x <t t-out="v.gift_product_id.name"/>)
-                                        </t>
-                                    </t>
-                                    <t t-elif="v.discount_type == 'fixed'">
-                                        Giảm <t t-out="'{:,.0f}'.format(v.discount_value)"/>đ
-                                    </t>
-                                    <t t-else="">
-                                        Giảm <t t-out="v.discount_value"/>%
-                                        <t t-if="v.max_discount_amount">
-                                            (tối đa <t t-out="'{:,.0f}'.format(v.max_discount_amount)"/>đ)
-                                        </t>
-                                    </t>
+                                
+                                <!-- Divider with cutouts -->
+                                <div class="sr-v-divider">
+                                    <div class="sr-v-cutout top"></div>
+                                    <div class="sr-v-dashed"></div>
+                                    <div class="sr-v-cutout bottom"></div>
                                 </div>
-                                <t t-if="v.date_expiry">
-                                    <div class="sr-vc-expiry">
-                                        <span class="ms" style="font-size:14px">schedule</span>
-                                        HSD: <t t-out="v.date_expiry.strftime('%d/%m/%Y')"/>
+                                
+                                <!-- Right main body -->
+                                <div class="sr-v-content">
+                                    <div class="sr-v-row-top">
+                                        <span class="sr-v-code-box" t-att-onclick="'copyCode(\'' + v.code + '\', this)'" title="Click để sao chép">
+                                            <span class="sr-v-code"><t t-out="v.code"/></span>
+                                            <span class="ms sr-v-copy-icon">content_copy</span>
+                                            <span class="sr-v-tooltip">Đã chép!</span>
+                                        </span>
+                                        <t t-if="v.date_expiry">
+                                            <span class="sr-v-expiry">
+                                                HSD: <t t-out="v.date_expiry.strftime('%d/%m/%Y')"/>
+                                            </span>
+                                        </t>
                                     </div>
-                                </t>
+                                    <div class="sr-v-desc">
+                                        <t t-if="v.reward_type == 'free_shipping'">Miễn phí vận chuyển</t>
+                                        <t t-elif="v.reward_type == 'gift'">
+                                            Quà tặng kèm
+                                            <t t-if="v.gift_product_id">
+                                                (<t t-out="v.gift_qty"/> x <t t-out="v.gift_product_id.name"/>)
+                                            </t>
+                                        </t>
+                                        <t t-elif="v.discount_type == 'fixed'">
+                                            Giảm <t t-out="'{:,.0f}'.format(v.discount_value)"/>đ
+                                        </t>
+                                        <t t-else="">Giảm <t t-out="v.discount_value"/>%
+                                            <t t-if="v.max_discount_amount">
+                                                (tối đa <t t-out="'{:,.0f}'.format(v.max_discount_amount)"/>đ)
+                                            </t>
+                                        </t>
+                                    </div>
+                                </div>
                             </div>
                         </t>
                     </div>
@@ -89,21 +105,45 @@
                     </div>
                     <div class="sr-voucher-list">
                         <t t-foreach="inactive_vouchers" t-as="v">
-                            <div class="sr-voucher-card" style="opacity:.55;background:#f8f9fa;border-color:#ced4da">
-                                <div class="sr-vc-header">
-                                    <span class="ms" style="font-size:28px;color:#adb5bd">confirmation_number</span>
-                                    <span class="sr-v-code" style="font-size:1.15rem;color:#6c757d;text-decoration:line-through"><t t-out="v.code"/></span>
+                            <div class="sr-voucher-card sr-vcard-disabled">
+                                <!-- Left stub -->
+                                <div class="sr-v-stub">
+                                    <span class="ms">confirmation_number</span>
                                 </div>
-                                <div class="sr-vc-value" style="color:#6c757d">
-                                    <t t-if="v.reward_type == 'free_shipping'">Miễn phí vận chuyển</t>
-                                    <t t-elif="v.reward_type == 'gift'">Quà tặng kèm</t>
-                                    <t t-elif="v.discount_type == 'fixed'">Giảm <t t-out="'{:,.0f}'.format(v.discount_value)"/>đ</t>
-                                    <t t-else="">Giảm <t t-out="v.discount_value"/>%</t>
+                                
+                                <!-- Divider with cutouts -->
+                                <div class="sr-v-divider">
+                                    <div class="sr-v-cutout top"></div>
+                                    <div class="sr-v-dashed"></div>
+                                    <div class="sr-v-cutout bottom"></div>
                                 </div>
-                                <div style="margin-top:6px;font-size:.8rem">
-                                    <span t-if="v.state == 'used'" style="color:#0d6efd">✓ Đã sử dụng<t t-if="v.used_date"> – <t t-out="v.used_date.strftime('%d/%m/%Y')"/></t></span>
-                                    <span t-elif="v.state == 'expired'" style="color:#dc3545">⌛ Hết hạn<t t-if="v.date_expiry"> – <t t-out="v.date_expiry.strftime('%d/%m/%Y')"/></t></span>
-                                    <span t-else="" style="color:#6c757d">× Đã hủy</span>
+                                
+                                <!-- Right main body -->
+                                <div class="sr-v-content">
+                                    <div class="sr-v-row-top">
+                                        <span class="sr-v-code-box">
+                                            <span class="sr-v-code" style="text-decoration:line-through"><t t-out="v.code"/></span>
+                                        </span>
+                                        <div class="sr-v-status-badge">
+                                            <span t-if="v.state == 'used'" style="color:#0d6efd; font-weight: 700;">✓ Đã dùng</span>
+                                            <span t-elif="v.state == 'expired'" style="color:#dc3545; font-weight: 700;">⌛ Hết hạn</span>
+                                            <span t-else="" style="color:#6c757d; font-weight: 700;">× Đã hủy</span>
+                                        </div>
+                                    </div>
+                                    <div class="sr-v-desc">
+                                        <t t-if="v.reward_type == 'free_shipping'">Miễn phí vận chuyển</t>
+                                        <t t-elif="v.reward_type == 'gift'">Quà tặng kèm</t>
+                                        <t t-elif="v.discount_type == 'fixed'">Giảm <t t-out="'{:,.0f}'.format(v.discount_value)"/>đ</t>
+                                        <t t-else="">Giảm <t t-out="v.discount_value"/>%</t>
+                                    </div>
+                                    <div class="sr-v-inactive-date" style="font-size: 0.72rem; color: #888; margin-top: 4px;">
+                                        <t t-if="v.state == 'used' and v.used_date">
+                                            Ngày sử dụng: <t t-out="v.used_date.strftime('%d/%m/%Y')"/>
+                                        </t>
+                                        <t t-elif="v.state == 'expired' and v.date_expiry">
+                                            Ngày hết hạn: <t t-out="v.date_expiry.strftime('%d/%m/%Y')"/>
+                                        </t>
+                                    </div>
                                 </div>
                             </div>
                         </t>

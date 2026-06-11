@@ -1028,6 +1028,9 @@ class ZaloMiniAppAPI(http.Controller):
                 "validity_days": p._get_validity_days(),
                 "apply_on": p.apply_on,
                 "min_order_amount": p.min_order_amount,
+                "reward_type": p.reward_type,
+                "gift_product_name": p.gift_product_id.name if p.gift_product_id else '',
+                "gift_qty": p.gift_qty,
             } for p in packages]
         })
 
@@ -1075,3 +1078,95 @@ class ZaloMiniAppAPI(http.Controller):
             "voucher": self._voucher_to_dict(voucher),
             "remaining_points": partner.loyalty_total_points,
         }, status=201)
+
+    @http.route("/api/v1/loyalty/redeem/requests", type="http", auth="public", methods=["GET"], csrf=False)
+    def loyalty_redeem_requests(self, **kwargs):
+        partner = self._partner_from_session_or_param(kwargs)
+        if not partner:
+            return self._response_error("UNAUTHORIZED", "Missing partner context. Call /auth/zalo first.", status=401)
+
+        requests = request.env["hlv.loyalty.reward.request"].sudo().search([
+            ("partner_id", "=", partner.id),
+        ], order="date_request desc, id desc", limit=50)
+
+        data = []
+        for req in requests:
+            data.append({
+                "id": req.id,
+                "name": req.name,
+                "request_type": req.request_type,
+                "points_required": req.points_required,
+                "cash_value": req.cash_value,
+                "package_name": req.package_id.name if req.package_id else "",
+                "state": req.state,
+                "date_request": req.date_request.isoformat() if req.date_request else None,
+                "customer_note": req.customer_note or "",
+                "voucher_code": req.voucher_id.code if req.voucher_id else "",
+            })
+        return self._response_success({"requests": data})
+
+    @http.route("/api/v1/account/change-password", type="http", auth="public", methods=["POST"], csrf=False)
+    def api_change_password(self, **kwargs):
+        payload = self._request_json()
+        partner = self._partner_from_session_or_param(payload)
+        if not partner:
+            return self._response_error("UNAUTHORIZED", "Missing partner context. Call /auth/zalo first.", status=401)
+
+        account = request.env['hlv.loyalty.portal.account'].sudo().search([
+            ('partner_id', '=', partner.id),
+            ('active', '=', True)
+        ], limit=1)
+        if not account:
+            return self._response_error("NOT_FOUND", "No active portal account found.", status=404)
+
+        old_password = (payload.get('old_password') or '').strip()
+        new_password = (payload.get('new_password') or '').strip()
+        confirm_password = (payload.get('confirm_password') or '').strip()
+
+        if not old_password or not new_password or not confirm_password:
+            return self._response_error("INVALID_INPUT", "Vui lòng điền đầy đủ thông tin.", status=400)
+
+        if not account._verify_password(old_password, account.password_hash):
+            return self._response_error("INVALID_OLD_PASSWORD", "Mật khẩu hiện tại không đúng.", status=400)
+
+        if new_password != confirm_password:
+            return self._response_error("PASSWORD_MISMATCH", "Mật khẩu mới và xác nhận không khớp.", status=400)
+
+        if len(new_password) < 6:
+            return self._response_error("PASSWORD_TOO_SHORT", "Mật khẩu mới phải có ít nhất 6 ký tự.", status=400)
+
+        try:
+            account.set_password(new_password)
+        except Exception as e:
+            return self._response_error("SAVE_ERROR", str(e), status=500)
+
+        return self._response_success({"message": "Đổi mật khẩu thành công."})
+
+    @http.route("/api/v1/account/change-phone", type="http", auth="public", methods=["POST"], csrf=False)
+    def api_change_phone(self, **kwargs):
+        payload = self._request_json()
+        partner = self._partner_from_session_or_param(payload)
+        if not partner:
+            return self._response_error("UNAUTHORIZED", "Missing partner context. Call /auth/zalo first.", status=401)
+
+        account = request.env['hlv.loyalty.portal.account'].sudo().search([
+            ('partner_id', '=', partner.id),
+            ('active', '=', True)
+        ], limit=1)
+        if not account:
+            return self._response_error("NOT_FOUND", "No active portal account found.", status=404)
+
+        new_phone = (payload.get('new_phone') or '').strip()
+        if not new_phone:
+            return self._response_error("INVALID_INPUT", "Số điện thoại không được để trống.", status=400)
+
+        import re
+        if not re.match(r'^[\d\s\-\+]{7,15}$', new_phone):
+            return self._response_error("INVALID_INPUT", "Số điện thoại không hợp lệ.", status=400)
+
+        try:
+            account.write({'portal_phone': new_phone})
+        except Exception as e:
+            return self._response_error("SAVE_ERROR", str(e), status=500)
+
+        return self._response_success({"message": "Đổi số điện thoại đăng ký thành công."})

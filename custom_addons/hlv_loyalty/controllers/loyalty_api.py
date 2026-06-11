@@ -303,6 +303,7 @@ class LoyaltyExternalAPI(http.Controller):
         tiers = request.env['hlv.loyalty.tier'].sudo().search([], order='min_points asc')
         tier = partner.loyalty_tier_id
         pts = partner.loyalty_total_points
+        exc_pts = partner.loyalty_exchange_points
         # tiers sorted asc — next tier là tier đầu tiên có min_points > pts
         next_tier = next((t for t in tiers if t.min_points > pts), None)
         return {
@@ -310,6 +311,9 @@ class LoyaltyExternalAPI(http.Controller):
             'name': partner.name,
             'phone': partner.phone or '',
             'email': partner.email or '',
+            'ranking_points': pts,
+            'exchange_points': exc_pts,
+            # backward-compat alias
             'total_points': pts,
             'image_url': LoyaltyExternalAPI._partner_image_url(partner),
             'tier': LoyaltyExternalAPI._tier_dict(tier),
@@ -358,18 +362,31 @@ class LoyaltyExternalAPI(http.Controller):
         if not phone and not email:
             return self._json_err('Cần truyền phone hoặc email')
 
-        domain = [('customer_rank', '>', 0)]
-        if phone:
-            domain.append(('phone', 'like', phone))
-        elif email:
-            domain.append(('email', '=ilike', email))
+        partner_ids = set()
 
-        partners = request.env['res.partner'].sudo().search(domain, limit=5)
+        if phone:
+            # Chỉ tìm qua portal_phone (đã chuẩn hóa)
+            accounts = request.env['hlv.loyalty.portal.account'].sudo().search(
+                [('portal_phone', 'like', phone), ('active', '=', True)], limit=5
+            )
+            for acc in accounts:
+                partner_ids.add(acc.partner_id.id)
+        elif email:
+            partners_by_email = request.env['res.partner'].sudo().search(
+                [('email', '=ilike', email)], limit=5
+            )
+            for p in partners_by_email:
+                partner_ids.add(p.id)
+
+        if not partner_ids:
+            return self._json_err('Không tìm thấy khách hàng', status=404)
+
+        partners = request.env['res.partner'].sudo().browse(list(partner_ids))
         # Ưu tiên commercial_partner_id (root)
         results = []
         seen = set()
         for p in partners:
-            root = p.commercial_partner_id or p
+            root = p._get_loyalty_root()
             if root.id not in seen:
                 seen.add(root.id)
                 results.append(self._partner_summary(root))
@@ -388,7 +405,7 @@ class LoyaltyExternalAPI(http.Controller):
         if not partner.exists():
             return self._json_err('Khách hàng không tồn tại', status=404)
 
-        root = partner.commercial_partner_id or partner
+        root = partner._get_loyalty_root()
         summary = self._partner_summary(root)
 
         # Voucher active
@@ -411,7 +428,9 @@ class LoyaltyExternalAPI(http.Controller):
             'id': h.id,
             'date': h.date.isoformat() if h.date else None,
             'point_amount': h.point_amount,
+            'point_type': h.point_type or 'ranking',
             'transaction_type': h.transaction_type,
+            'state': h.state,
             'description': h.description or '',
         } for h in history]
 
@@ -427,16 +446,17 @@ class LoyaltyExternalAPI(http.Controller):
 
         limit = min(int(kwargs.get('limit', 20)), 100)
         offset = int(kwargs.get('offset', 0))
+        root = partner._get_loyalty_root()
         history = request.env['hlv.loyalty.history'].sudo().search(
-            [('partner_id', '=', partner.commercial_partner_id.id or partner_id)],
+            [('partner_id', '=', root.id)],
             limit=limit, offset=offset, order='date desc',
         )
         total = request.env['hlv.loyalty.history'].sudo().search_count(
-            [('partner_id', '=', partner.commercial_partner_id.id or partner_id)]
+            [('partner_id', '=', root.id)]
         )
         return self._json_ok({
             'partner_id': partner_id,
-            'total_points': (partner.commercial_partner_id or partner).loyalty_total_points,
+            'total_points': root.loyalty_total_points,
             'total_records': total,
             'limit': limit,
             'offset': offset,
@@ -444,7 +464,9 @@ class LoyaltyExternalAPI(http.Controller):
                 'id': h.id,
                 'date': h.date.isoformat() if h.date else None,
                 'point_amount': h.point_amount,
+                'point_type': h.point_type or 'ranking',
                 'transaction_type': h.transaction_type,
+                'state': h.state,
                 'description': h.description or '',
             } for h in history],
         })
@@ -489,7 +511,7 @@ class LoyaltyExternalAPI(http.Controller):
         if not partner:
             return {'error': 'Không tìm thấy khách hàng'}
 
-        root = partner.commercial_partner_id or partner
+        root = partner._get_loyalty_root()
 
         if points < 0 and root.loyalty_total_points + points < 0:
             return {'error': f'Không đủ điểm. Hiện có {root.loyalty_total_points}'}
@@ -519,7 +541,7 @@ class LoyaltyExternalAPI(http.Controller):
         if not partner.exists():
             return self._json_err('Khách hàng không tồn tại', status=404)
 
-        root_id = (partner.commercial_partner_id or partner).id
+        root_id = partner._get_loyalty_root().id
         domain = [('partner_id', '=', root_id)]
         if kwargs.get('state'):
             domain.append(('state', '=', kwargs['state']))
@@ -536,6 +558,7 @@ class LoyaltyExternalAPI(http.Controller):
             'date_issued': v.date_issued.isoformat() if v.date_issued else None,
             'date_expiry': v.date_expiry.isoformat() if v.date_expiry else None,
             'package_name': v.package_id.name or '',
+            'reward_type': v.reward_type or 'discount',
         } for v in vouchers])
 
     @http.route('/api/v1/loyalty/voucher/validate', type='json',
@@ -575,5 +598,141 @@ class LoyaltyExternalAPI(http.Controller):
                 'partner_id': voucher.partner_id.id,
                 'partner_name': voucher.partner_id.name,
             },
+        }
+
+    @http.route('/api/v1/loyalty/program/config', type='http',
+                auth='public', methods=['GET'], csrf=False)
+    def get_program_config(self, **kwargs):
+        """GET /api/v1/loyalty/program/config
+        Trả về cấu hình chương trình: tỷ lệ quy đổi, mô tả điểm.
+        """
+        program = request.env['hlv.loyalty.program'].sudo().search(
+            [('active', '=', True)], limit=1
+        )
+        if not program:
+            return self._json_err('Chưa có chương trình loyalty', status=404)
+        return self._json_ok({
+            'cash_rate_per_point': program.cash_rate_per_point,
+            'voucher_validity_days': program.voucher_validity_days,
+            'ranking_desc': program.portal_ranking_desc or '',
+            'exchange_desc': program.portal_exchange_desc or '',
+        })
+
+    @http.route('/api/v1/loyalty/redeem/packages', type='http',
+                auth='public', methods=['GET'], csrf=False)
+    def list_redeem_packages(self, **kwargs):
+        """GET /api/v1/loyalty/redeem/packages
+        Danh sách gói quà có thể đổi (active).
+        """
+        packages = request.env['hlv.loyalty.voucher.package'].sudo().search(
+            [('active', '=', True)], order='points_required asc'
+        )
+        return self._json_ok([{
+            'id': p.id,
+            'name': p.name,
+            'points_required': p.points_required,
+            'reward_type': p.reward_type,
+            'discount_type': p.discount_type,
+            'discount_value': p.discount_value,
+            'max_discount_amount': p.max_discount_amount,
+            'min_order_amount': p.min_order_amount,
+            'validity_days': p.validity_days,
+            'gift_product_name': p.gift_product_id.name if p.gift_product_id else '',
+            'gift_qty': p.gift_qty,
+        } for p in packages])
+
+    @http.route('/api/v1/loyalty/redeem/submit', type='json',
+                auth='public', methods=['POST'], csrf=False)
+    def submit_redeem(self, **kwargs):
+        """POST /api/v1/loyalty/redeem/submit
+        Tạo yêu cầu đổi thưởng (quà hoặc tiền mặt).
+
+        Body — đổi quà:
+        {
+            "partner_id": 42,
+            "request_type": "gift",
+            "package_id": 3
+        }
+
+        Body — đổi tiền mặt:
+        {
+            "partner_id": 42,
+            "request_type": "cash",
+            "points_to_redeem": 500,
+            "bank_name": "Vietcombank",
+            "account_number": "1234567890",
+            "account_name": "NGUYEN VAN A",
+            "customer_note": "..."
+        }
+        """
+        partner_id = kwargs.get('partner_id')
+        request_type = kwargs.get('request_type', 'gift')
+
+        if not partner_id:
+            return {'error': 'Thiếu partner_id'}
+        if request_type not in ('gift', 'cash'):
+            return {'error': 'request_type phải là gift hoặc cash'}
+
+        partner = request.env['res.partner'].sudo().browse(int(partner_id))
+        if not partner.exists():
+            return {'error': 'Khách hàng không tồn tại'}
+
+        root = partner._get_loyalty_root()
+        avail_exchange = root.loyalty_exchange_points
+
+        vals = {
+            'partner_id': root.id,
+            'request_type': request_type,
+            'balance_at_request': avail_exchange,
+            'company_id': request.env.company.id,
+        }
+
+        if request_type == 'gift':
+            package_id = kwargs.get('package_id')
+            if not package_id:
+                return {'error': 'Thiếu package_id cho đổi quà'}
+            package = request.env['hlv.loyalty.voucher.package'].sudo().browse(int(package_id))
+            if not package.exists() or not package.active:
+                return {'error': 'Gói quà không tồn tại hoặc đã ngừng'}
+            if avail_exchange < package.points_required:
+                return {
+                    'error': f'Không đủ điểm đổi thưởng. '
+                             f'Cần {package.points_required:,} điểm, bạn có {avail_exchange:,} điểm.'
+                }
+            vals['package_id'] = package.id
+
+        elif request_type == 'cash':
+            points_to_redeem = int(kwargs.get('points_to_redeem') or 0)
+            if points_to_redeem <= 0:
+                return {'error': 'points_to_redeem phải lớn hơn 0'}
+            if avail_exchange < points_to_redeem:
+                return {
+                    'error': f'Không đủ điểm đổi thưởng. '
+                             f'Cần {points_to_redeem:,} điểm, bạn có {avail_exchange:,} điểm.'
+                }
+            bank_name = (kwargs.get('bank_name') or '').strip()
+            account_number = (kwargs.get('account_number') or '').strip()
+            account_name = (kwargs.get('account_name') or '').strip()
+            if not bank_name or not account_number or not account_name:
+                return {'error': 'Cần điền đầy đủ thông tin ngân hàng (bank_name, account_number, account_name)'}
+            vals.update({
+                'points_to_redeem': points_to_redeem,
+                'bank_name': bank_name,
+                'account_number': account_number,
+                'account_name': account_name,
+                'customer_note': kwargs.get('customer_note') or '',
+            })
+
+        req = request.env['hlv.loyalty.reward.request'].sudo().create(vals)
+
+        return {
+            'success': True,
+            'request_id': req.id,
+            'request_name': req.name,
+            'request_type': req.request_type,
+            'points_required': req.points_required,
+            'cash_value': req.cash_value,
+            'exchange_points_remaining': avail_exchange - req.points_required,
+            'message': 'Yêu cầu đổi thưởng đã được gửi thành công. Vui lòng chờ xét duyệt.',
         }
 

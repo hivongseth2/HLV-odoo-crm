@@ -27,6 +27,7 @@ class HlvLoyaltyPortalAccount(models.Model):
     partner_id = fields.Many2one(
         'res.partner', string='Khách hàng', required=True,
         ondelete='cascade', index=True,
+        domain=[('is_company', '=', True), ('parent_id', '=', False), ('active', '=', True)],
     )
     username = fields.Char(
         string='Tên đăng nhập', required=True, copy=False, index=True,
@@ -144,6 +145,17 @@ class HlvLoyaltyPortalAccount(models.Model):
             'type': 'ir.actions.act_window',
             'name': 'Reset mật khẩu',
             'res_model': 'hlv.loyalty.reset.password.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {'default_account_id': self.id},
+        }
+
+    def action_recalculate_points_wizard(self):
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Tính lại điểm Loyalty',
+            'res_model': 'hlv.loyalty.recalculate.points.wizard',
             'view_mode': 'form',
             'target': 'new',
             'context': {'default_account_id': self.id},
