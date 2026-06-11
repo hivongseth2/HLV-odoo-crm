@@ -76,7 +76,7 @@
                     <div class="shipper-container">
 
                         <!-- Header -->
-                        <div class="shipper-header">
+                        <div class="shipper-header" style="padding: 15px;">
                             <div class="header-title" id="btn-open-sidebar" style="cursor: pointer;">
                                 <i class="fa fa-shipping-fast"></i> Shipper
                             </div>
@@ -91,26 +91,28 @@
                                 <div class="header-title">
                                     <i class="fa fa-shipping-fast"></i> Menu
                                 </div>
-                                <button id="btn-close-sidebar" class="btn btn-text"><i class="fa fa-times"></i></button>
+                                <button id="btn-close-sidebar" class="btn btn-text" style="color: #6c757d; font-size: 1.2rem; padding: 0;"><i class="fa fa-times"></i></button>
                             </div>
-                            <div class="tab-nav sidebar-tabs">
-                                <button class="tab-btn active" data-tab="receive">
-                                    <i class="fa fa-inbox"></i> Nhận hàng
-                                </button>
-                                <button class="tab-btn" data-tab="deliver">
-                                    <i class="fa fa-truck"></i> Giao hàng
-                                </button>
-                                <button class="tab-btn" data-tab="return">
-                                    <i class="fa fa-undo-alt"></i> Trả hàng
-                                </button>
-                                <button class="tab-btn" data-tab="delivered">
-                                    <i class="fa fa-clipboard-check"></i> Đã giao
-                                </button>
-                            </div>
-                            <div class="sidebar-footer" style="margin-top: auto; padding: 15px; border-top: 1px solid #e9ecef; color: #6c757d;">
-                                <div class="user-info" style="box-shadow: none; padding: 0; background: transparent; font-size: 1rem; font-weight: 600;">
-                                    <i class="fa fa-user-circle"></i> <t t-esc="user.shipper_name or user.name"/>
+                            <div class="sidebar-body">
+                                <div class="tab-nav sidebar-tabs">
+                                    <button class="tab-btn active" data-tab="receive">
+                                        <i class="fa fa-inbox"></i> Nhận hàng
+                                    </button>
+                                    <button class="tab-btn" data-tab="deliver">
+                                        <i class="fa fa-truck"></i> Giao hàng
+                                    </button>
+                                    <button class="tab-btn" data-tab="return">
+                                        <i class="fa fa-undo-alt"></i> Trả hàng
+                                    </button>
+                                    <button class="tab-btn" data-tab="delivered">
+                                        <i class="fa fa-clipboard-check"></i> Đã giao
+                                    </button>
                                 </div>
+                            </div>
+                            <div class="sidebar-footer" style="margin-top: auto; padding: 15px; border-top: 1px solid #f0f0f0;">
+                                <button class="btn btn-text" style="width: 100%; text-align: left; padding: 10px 5px; color: #6c757d; font-weight: 600; font-size: 0.95rem; justify-content: flex-start; gap: 8px;">
+                                    <i class="fa fa-user-circle"></i> Tài xế khác
+                                </button>
                             </div>
                         </div>
 
