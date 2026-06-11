@@ -341,14 +341,14 @@ class LoyaltyExternalAPI(http.Controller):
             'points_to_next': (next_tier.min_points - pts) if next_tier else 0,
         }
 
-    @http.route('/api/v1/loyalty/tiers/<int:tier_id>/image', type='http', auth='public', methods=['GET'], csrf=False)
+    @http.route('/api/v1/loyalty/tiers/<int:tier_id>/image', type='http', auth='public', methods=['GET'], csrf=False, cors='*')
     def tier_image(self, tier_id, **kwargs):
         tier = request.env['hlv.loyalty.tier'].sudo().with_context(bin_size=False).browse(tier_id)
         if not tier.exists():
             return Response(status=404, response='Tier not found', content_type='text/plain; charset=utf-8')
         return self._image_response(tier.tier_image)
 
-    @http.route('/api/v1/loyalty/partners/<int:partner_id>/image', type='http', auth='public', methods=['GET'], csrf=False)
+    @http.route('/api/v1/loyalty/partners/<int:partner_id>/image', type='http', auth='public', methods=['GET'], csrf=False, cors='*')
     def partner_image(self, partner_id, **kwargs):
         partner = request.env['res.partner'].sudo().with_context(bin_size=False).browse(partner_id)
         if not partner.exists():
@@ -358,7 +358,7 @@ class LoyaltyExternalAPI(http.Controller):
     # ── Endpoints ────────────────────────────────────────────────────────────
 
     @http.route('/api/v1/loyalty/tiers', type='http',
-                auth='public', methods=['GET'], csrf=False)
+                auth='public', methods=['GET'], csrf=False, cors='*')
     def list_tiers(self, **kwargs):
         """GET /api/v1/loyalty/tiers
         Trả về danh sách hạng thành viên kèm ảnh và quyền lợi.
@@ -367,7 +367,7 @@ class LoyaltyExternalAPI(http.Controller):
         return self._json_ok([self._tier_dict(t) for t in tiers])
 
     @http.route('/api/v1/loyalty/partner/lookup', type='http',
-                auth='public', methods=['GET'], csrf=False)
+                auth='public', methods=['GET'], csrf=False, cors='*')
     def lookup_partner(self, **kwargs):
         """GET /api/v1/loyalty/partner/lookup?phone=0901234567
            GET /api/v1/loyalty/partner/lookup?email=abc@example.com
@@ -414,7 +414,7 @@ class LoyaltyExternalAPI(http.Controller):
         return self._json_ok(results if len(results) > 1 else results[0])
 
     @http.route('/api/v1/loyalty/zalo/phone', type='http',
-                auth='public', methods=['POST'], csrf=False)
+                auth='public', methods=['POST'], csrf=False, cors='*')
     def resolve_zalo_phone(self, **kwargs):
         """Exchange Zalo Mini App getPhoneNumber token for the real phone.
 
@@ -481,7 +481,7 @@ class LoyaltyExternalAPI(http.Controller):
         })
 
     @http.route('/api/v1/loyalty/partner/<int:partner_id>', type='http',
-                auth='public', methods=['GET'], csrf=False)
+                auth='public', methods=['GET'], csrf=False, cors='*')
     def get_partner(self, partner_id, **kwargs):
         """GET /api/v1/loyalty/partner/<id>
         Lấy thông tin điểm + hạng + voucher đang có.
@@ -522,7 +522,7 @@ class LoyaltyExternalAPI(http.Controller):
         return self._json_ok(summary)
 
     @http.route('/api/v1/loyalty/partner/<int:partner_id>/history', type='http',
-                auth='public', methods=['GET'], csrf=False)
+                auth='public', methods=['GET'], csrf=False, cors='*')
     def get_partner_history(self, partner_id, **kwargs):
         """GET /api/v1/loyalty/partner/<id>/history?limit=20&offset=0"""
         partner = request.env['res.partner'].sudo().browse(partner_id)
@@ -557,7 +557,7 @@ class LoyaltyExternalAPI(http.Controller):
         })
 
     @http.route('/api/v1/loyalty/points/add', type='json',
-                auth='public', methods=['POST'], csrf=False)
+                auth='public', methods=['POST'], csrf=False, cors='*')
     def add_points(self, **kwargs):
         """POST /api/v1/loyalty/points/add
         Cộng/trừ điểm thủ công.
@@ -619,7 +619,7 @@ class LoyaltyExternalAPI(http.Controller):
         }
 
     @http.route('/api/v1/loyalty/vouchers/<int:partner_id>', type='http',
-                auth='public', methods=['GET'], csrf=False)
+                auth='public', methods=['GET'], csrf=False, cors='*')
     def get_partner_vouchers(self, partner_id, **kwargs):
         """GET /api/v1/loyalty/vouchers/<id>?state=active"""
         partner = request.env['res.partner'].sudo().browse(partner_id)
@@ -647,7 +647,7 @@ class LoyaltyExternalAPI(http.Controller):
         } for v in vouchers])
 
     @http.route('/api/v1/loyalty/voucher/validate', type='json',
-                auth='public', methods=['POST'], csrf=False)
+                auth='public', methods=['POST'], csrf=False, cors='*')
     def validate_voucher_external(self, **kwargs):
         """POST /api/v1/loyalty/voucher/validate
         Body: {"code": "VHQ-XXXXX", "partner_id": 42, "order_amount": 500000}
@@ -686,7 +686,7 @@ class LoyaltyExternalAPI(http.Controller):
         }
 
     @http.route('/api/v1/loyalty/program/config', type='http',
-                auth='public', methods=['GET'], csrf=False)
+                auth='public', methods=['GET'], csrf=False, cors='*')
     def get_program_config(self, **kwargs):
         """GET /api/v1/loyalty/program/config
         Trả về cấu hình chương trình: tỷ lệ quy đổi, mô tả điểm.
@@ -704,7 +704,7 @@ class LoyaltyExternalAPI(http.Controller):
         })
 
     @http.route('/api/v1/loyalty/redeem/packages', type='http',
-                auth='public', methods=['GET'], csrf=False)
+                auth='public', methods=['GET'], csrf=False, cors='*')
     def list_redeem_packages(self, **kwargs):
         """GET /api/v1/loyalty/redeem/packages
         Danh sách gói quà có thể đổi (active).
@@ -727,7 +727,7 @@ class LoyaltyExternalAPI(http.Controller):
         } for p in packages])
 
     @http.route('/api/v1/loyalty/redeem/submit', type='json',
-                auth='public', methods=['POST'], csrf=False)
+                auth='public', methods=['POST'], csrf=False, cors='*')
     def submit_redeem(self, **kwargs):
         """POST /api/v1/loyalty/redeem/submit
         Tạo yêu cầu đổi thưởng (quà hoặc tiền mặt).
