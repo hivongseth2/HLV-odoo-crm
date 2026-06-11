@@ -19,6 +19,9 @@
                     <!-- Global Colors -->
                     <link rel="stylesheet" href="/hlv_barcode_shipper/static/src/css/hlv_global_colors.css"/>
                     <link rel="stylesheet" href="/hlv_barcode_shipper/static/src/css/barcode_shipper.css"/>
+                    
+                    <!-- Polyfill cho BarcodeDetector -->
+                    <script src="https://fastly.jsdelivr.net/npm/barcode-detector@3/dist/iife/polyfill.min.js"></script>
                 </t>
                 
                 <body class="o_web_client bg-light">
