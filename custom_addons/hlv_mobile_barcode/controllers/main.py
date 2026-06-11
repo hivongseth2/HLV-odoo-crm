@@ -728,7 +728,7 @@ class HLVMobileBarcodeController(http.Controller):
                 updated_move_line = request.env['stock.move.line'].browse()
                 updated_product = request.env['product.product'].browse()
                 for ml in move_lines:
-                    line_demand = ml.move_id.product_uom_qty
+                    line_demand = ml.move_id.product_uom_qty or ml.quantity or ml.quantity_product_uom
                     
                     if uses_qty_scanned:
                         ml.qty_scanned = line_demand
@@ -750,27 +750,54 @@ class HLVMobileBarcodeController(http.Controller):
             # B. If no move lines for this package, search for the products inside the package (quants)
             quants = request.env['stock.quant'].sudo().search([('package_id', '=', package.id)])
             if quants:
+                package_source_loc_ids = request.env['stock.location'].sudo().search([('id', 'child_of', picking.location_id.id)]).ids
                 processed_products = []
                 updated_move_line = request.env['stock.move.line'].browse()
                 updated_product = request.env['product.product'].browse()
                 for quant in quants:
                     product_in_pkg = quant.product_id
-                    qty_in_pkg = quant.quantity
-                    if qty_in_pkg <= 0:
+                    qty_in_pkg = quant.quantity - quant.reserved_quantity
+                    if qty_in_pkg <= 0 or quant.location_id.usage != 'internal' or quant.location_id.id not in package_source_loc_ids:
                         continue
                     
                     # Find a move for this product in the picking
                     move = picking.move_ids.filtered(
                         lambda m: m.product_id == product_in_pkg and m.state not in ['done', 'cancel']
                     )
+                    if not move and not is_pick_picking:
+                        allow_add = request.env['ir.config_parameter'].sudo().get_param('hlv_mobile_barcode.hlv_barcode_allow_add_product', 'True') == 'True'
+                        if not allow_add:
+                            continue
+                        move = request.env['stock.move'].create({
+                            'name': product_in_pkg.display_name,
+                            'picking_id': picking.id,
+                            'product_id': product_in_pkg.id,
+                            'product_uom_qty': 0.0,
+                            'product_uom': product_in_pkg.uom_id.id,
+                            'location_id': picking.location_id.id,
+                            'location_dest_id': picking.location_dest_id.id,
+                        })
+                        if picking.state == 'draft':
+                            picking.action_confirm()
+                            picking = picking.exists()
+                        move = picking.move_ids.filtered(
+                            lambda m: m.product_id == product_in_pkg and m.state not in ['done', 'cancel']
+                        )
                     if move:
                         move = move[0]
                         # Check limit to prevent over-scanning
                         current_qty_done = sum(ml.qty_scanned if uses_qty_scanned else ml.quantity for ml in move.move_line_ids)
                         target_qty = move.product_uom_qty
+                        reserved_by_this_package = sum(
+                            ml.product_uom_id._compute_quantity(ml.quantity_product_uom, product_in_pkg.uom_id)
+                            for ml in picking.move_line_ids
+                            if ml.product_id == product_in_pkg
+                            and ml.location_id == quant.location_id
+                            and ml.package_id == package
+                        )
+                        acceptable_qty = qty_in_pkg + reserved_by_this_package
                         
                         # In case we can scan, determine how much of this package qty we can accept
-                        acceptable_qty = qty_in_pkg
                         if target_qty > 0.0 and current_qty_done + acceptable_qty > target_qty:
                             acceptable_qty = max(0.0, target_qty - current_qty_done)
                             
@@ -782,6 +809,8 @@ class HLVMobileBarcodeController(http.Controller):
                             lambda ml: (
                                 (ml.qty_scanned if uses_qty_scanned else ml.quantity) < ml.quantity_product_uom
                                 and not ml.result_package_id
+                                and ml.package_id == package
+                                and ml.location_id == quant.location_id
                             )
                         )
                         if move_line:
@@ -796,8 +825,9 @@ class HLVMobileBarcodeController(http.Controller):
                                 'picking_id': picking.id,
                                 'product_id': product_in_pkg.id,
                                 'product_uom_id': move.product_uom.id,
-                                'location_id': picking.location_id.id,
+                                'location_id': quant.location_id.id,
                                 'location_dest_id': picking.location_dest_id.id,
+                                'package_id': package.id,
                             }
                             if uses_qty_scanned:
                                 new_ml_vals['qty_scanned'] = acceptable_qty
@@ -887,34 +917,46 @@ class HLVMobileBarcodeController(http.Controller):
         # PRE-CHECK: Physical stock check BEFORE creating any new move
         temp_move_line = move.move_line_ids.filtered(lambda ml: not ml.result_package_id and not ml.package_id) if move else []
         ml_src_id = destination_location_id if (destination_location_id and not is_putaway) else (temp_move_line[0].location_id.id if temp_move_line else picking.location_id.id)
+        scan_quant = request.env['stock.quant'].sudo().browse()
+        scan_package = request.env['stock.quant.package'].sudo().browse()
         
         if not is_putaway:
-            quants = request.env['stock.quant'].sudo().search([
+            source_loc = request.env['stock.location'].sudo().browse(ml_src_id)
+            candidate_quants = request.env['stock.quant'].sudo().search([
                 ('product_id', '=', product.id),
                 ('location_id', 'child_of', ml_src_id),
                 ('company_id', '=', picking.company_id.id),
-                ('package_id', '=', False)
-            ])
-            free_qty = sum(q.quantity - q.reserved_quantity for q in quants)
-            
-            source_loc = request.env['stock.location'].sudo().browse(ml_src_id)
-            child_loc_ids = request.env['stock.location'].sudo().search([('id', 'child_of', ml_src_id)]).ids
-            
-            reserved_by_this = sum(
-                ml.product_uom_id._compute_quantity(ml.quantity_product_uom, product.uom_id)
-                for ml in picking.move_line_ids
-                if ml.product_id == product and ml.location_id.id in child_loc_ids and not ml.package_id
-            )
-            available_qty = free_qty + reserved_by_this
-            
-            processed_qty_from_loc_base = sum(
-                ml.product_uom_id._compute_quantity(
-                    ml.qty_scanned if is_pick_picking else ml.quantity,
-                    product.uom_id
+            ]).sorted(key=lambda q: (1 if q.package_id else 0, -q.quantity))
+            available_qty = 0.0
+            processed_qty_from_loc_base = 0.0
+
+            for candidate_quant in candidate_quants:
+                candidate_package = candidate_quant.package_id
+                reserved_by_this = sum(
+                    ml.product_uom_id._compute_quantity(ml.quantity_product_uom, product.uom_id)
+                    for ml in picking.move_line_ids
+                    if ml.product_id == product
+                    and ml.location_id == candidate_quant.location_id
+                    and ml.package_id == candidate_package
                 )
-                for ml in picking.move_line_ids
-                if ml.product_id == product and ml.location_id.id in child_loc_ids
-            )
+                candidate_available_qty = candidate_quant.quantity - candidate_quant.reserved_quantity + reserved_by_this
+                candidate_processed_qty = sum(
+                    ml.product_uom_id._compute_quantity(
+                        ml.qty_scanned if is_pick_picking else ml.quantity,
+                        product.uom_id
+                    )
+                    for ml in picking.move_line_ids
+                    if ml.product_id == product
+                    and ml.location_id == candidate_quant.location_id
+                    and ml.package_id == candidate_package
+                )
+                if candidate_available_qty - candidate_processed_qty > 0:
+                    scan_quant = candidate_quant
+                    scan_package = candidate_package
+                    available_qty = candidate_available_qty
+                    processed_qty_from_loc_base = candidate_processed_qty
+                    ml_src_id = candidate_quant.location_id.id
+                    break
             
             if available_qty <= 0:
                 return {'error': _('Sản phẩm "%s" không có tồn kho khả dụng tại vị trí "%s" (bao gồm các vị trí con). Không thể quét!', product.display_name, source_loc.display_name)}
@@ -1033,7 +1075,10 @@ class HLVMobileBarcodeController(http.Controller):
                 return {'error': _('Không tìm thấy dòng Bước 2 phù hợp cho sản phẩm "%s". Vui lòng kiểm tra phiếu sinh từ Bước 1.', product.display_name)}
         else:
             # Find an unpacked move line that is not in any package
-            move_line = move.move_line_ids.filtered(lambda ml: not ml.result_package_id and not ml.package_id)
+            if scan_package:
+                move_line = move.move_line_ids.filtered(lambda ml: not ml.result_package_id and ml.package_id == scan_package)
+            else:
+                move_line = move.move_line_ids.filtered(lambda ml: not ml.result_package_id and not ml.package_id)
 
         if is_pick_picking:
             if destination_location_id:
@@ -1068,21 +1113,26 @@ class HLVMobileBarcodeController(http.Controller):
             # Resolve actual child location where stock exists for accurate move line creation
             # If stock is not directly at ml_src_id but at a child location, use the child location
             actual_src_id = ml_src_id
-            direct_quants = request.env['stock.quant'].sudo().search([
-                ('product_id', '=', product.id),
-                ('location_id', '=', ml_src_id),
-                ('quantity', '>', 0)
-            ])
-            if not direct_quants:
-                # No stock at exact location, find the child location that has stock
-                child_quants = request.env['stock.quant'].sudo().search([
+            if scan_quant:
+                actual_src_id = scan_quant.location_id.id
+            else:
+                direct_quants = request.env['stock.quant'].sudo().search([
                     ('product_id', '=', product.id),
-                    ('location_id', 'child_of', ml_src_id),
-                    ('quantity', '>', 0)
-                ], order='quantity desc')
-                if child_quants:
-                    # Use the child location with the most stock
-                    actual_src_id = child_quants[0].location_id.id
+                    ('location_id', '=', ml_src_id),
+                    ('quantity', '>', 0),
+                    ('package_id', '=', False)
+                ])
+                if not direct_quants:
+                    # No stock at exact location, find the child location that has stock
+                    child_quants = request.env['stock.quant'].sudo().search([
+                        ('product_id', '=', product.id),
+                        ('location_id', 'child_of', ml_src_id),
+                        ('quantity', '>', 0),
+                        ('package_id', '=', False)
+                    ], order='quantity desc')
+                    if child_quants:
+                        # Use the child location with the most stock
+                        actual_src_id = child_quants[0].location_id.id
             
             ml_src_id = actual_src_id
         
@@ -1101,6 +1151,8 @@ class HLVMobileBarcodeController(http.Controller):
                     'location_id': ml_src_id,
                     'location_dest_id': ml_dest_id,
                 }
+                if scan_package:
+                    new_ml_vals['package_id'] = scan_package.id
                 if uses_qty_scanned:
                     new_ml_vals['qty_scanned'] = 1
                 else:
@@ -1122,6 +1174,8 @@ class HLVMobileBarcodeController(http.Controller):
                 'location_id': ml_src_id,
                 'location_dest_id': ml_dest_id,
             }
+            if scan_package:
+                new_ml_vals['package_id'] = scan_package.id
             if uses_qty_scanned:
                 new_ml_vals['qty_scanned'] = 1
             else:
