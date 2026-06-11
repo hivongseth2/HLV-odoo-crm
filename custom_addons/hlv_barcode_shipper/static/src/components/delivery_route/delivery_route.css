@@ -33,23 +33,23 @@
     padding: 0 10px;
     height: 44px;
     border: 1px solid #e5e7eb;
-    border-radius: 50%;
+    border-radius: 6px;
     background: #ffffff;
     color: #1f2937;
     font-size: 1.35rem;
     font-weight: 800;
-    box-shadow: 0 4px 14px rgba(31, 41, 51, 0.16);
+    box-shadow: 0 2px 8px rgba(31, 41, 51, 0.12);
 }
 
 .hlv-history-open-btn {
     width: 72px;
-    border-radius: 22px;
+    border-radius: 6px;
     font-size: 0.78rem;
 }
 
 .hlv-route-summary {
     min-height: 40px;
-    border-radius: 20px;
+    border-radius: 6px;
     background: rgba(255, 255, 255, 0.96);
     color: #344054;
     font-weight: 800;
@@ -58,7 +58,7 @@
     align-items: center;
     justify-content: center;
     padding: 0 12px;
-    box-shadow: 0 4px 14px rgba(31, 41, 51, 0.14);
+    box-shadow: 0 2px 8px rgba(31, 41, 51, 0.12);
 }
 
 .hlv-route-warning {
@@ -81,25 +81,28 @@
     right: 0;
     bottom: 0;
     z-index: 5;
-    height: 48vh;
+    height: 48dvh;
     display: flex;
     flex-direction: column;
-    background: #f8fafc;
+    background: #f9fafb;
     border-top: 1px solid #d8dee6;
-    box-shadow: 0 -8px 28px rgba(31, 41, 51, 0.16);
-    transition: height 0.2s ease, border-radius 0.2s ease;
+    box-shadow: 0 -4px 16px rgba(31, 41, 51, 0.12);
+    transition: height 0.18s ease, top 0.18s ease;
 }
 
 .hlv-route-sheet.is-expanded {
-    height: calc(100vh - env(safe-area-inset-top, 0px));
-    border-radius: 0;
+    top: calc(66px + env(safe-area-inset-top, 0px));
+    bottom: 0;
+    height: auto;
+    max-height: none;
+    border-top: 1px solid #d8dee6;
 }
 
 .hlv-route-sheet-handle {
-    width: 54px;
-    height: 6px;
-    border-radius: 999px;
-    background: #d1d5db;
+    width: 46px;
+    height: 4px;
+    border-radius: 4px;
+    background: #c7ced6;
     margin: 9px auto 7px;
     cursor: grab;
     flex: 0 0 auto;
@@ -118,7 +121,7 @@
 }
 
 .hlv-route-next strong {
-    border-radius: 6px;
+    border-radius: 4px;
     background: #e5e7eb;
     color: #374151;
     padding: 5px 10px;
@@ -128,30 +131,31 @@
 .hlv-route-stop-list {
     overflow: auto;
     -webkit-overflow-scrolling: touch;
-    padding: 0 12px 84px;
+    padding: 0 12px 92px;
+    overscroll-behavior: contain;
 }
 
 .hlv-route-stop {
     display: grid;
-    grid-template-columns: 28px 1fr 24px;
-    gap: 10px;
+    grid-template-columns: 42px 1fr 42px;
+    gap: 8px;
     align-items: start;
-    margin-bottom: 10px;
-    border: 1px solid #d7e0d9;
+    margin-bottom: 8px;
+    border: 1px solid #dce3e8;
     border-left: 5px solid #238636;
-    border-radius: 8px;
+    border-radius: 4px;
     background: #ffffff;
-    padding: 12px 10px;
-    box-shadow: 0 2px 8px rgba(31, 41, 51, 0.08);
+    padding: 12px 8px 12px 10px;
+    box-shadow: 0 1px 3px rgba(31, 41, 51, 0.08);
     touch-action: pan-y;
     user-select: none;
 }
 
 .hlv-route-stop.is-dragging,
 .hlv-route-dragging .hlv-route-stop:hover {
-    opacity: 0.92;
-    transform: scale(1.015);
-    box-shadow: 0 8px 22px rgba(31, 41, 51, 0.2);
+    opacity: 0.96;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 14px rgba(31, 41, 51, 0.18);
 }
 
 body.hlv-route-dragging {
@@ -159,15 +163,15 @@ body.hlv-route-dragging {
 }
 
 .hlv-stop-order {
-    width: 24px;
-    height: 24px;
+    width: 32px;
+    height: 32px;
     border-radius: 50%;
     background: #238636;
     color: #ffffff;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.78rem;
+    font-size: 0.9rem;
     font-weight: 800;
 }
 
@@ -177,14 +181,15 @@ body.hlv-route-dragging {
     justify-content: space-between;
     gap: 8px;
     color: #111827;
-    font-size: 0.95rem;
+    font-size: 1rem;
+    line-height: 1.25;
 }
 
 .hlv-stop-badge {
-    border-radius: 6px;
+    border-radius: 4px;
     background: #e6f1f7;
     color: #31556a;
-    padding: 4px 8px;
+    padding: 5px 8px;
     white-space: nowrap;
     font-size: 0.72rem;
     font-weight: 700;
@@ -194,21 +199,30 @@ body.hlv-route-dragging {
     margin-top: 7px;
     color: #243b53;
     font-weight: 800;
-    font-size: 0.82rem;
+    font-size: 0.92rem;
+    line-height: 1.35;
 }
 
 .hlv-stop-address {
     margin-top: 5px;
     color: #64748b;
-    font-size: 0.78rem;
+    font-size: 0.88rem;
     line-height: 1.35;
 }
 
 .hlv-stop-grip {
-    color: #9aa5b1;
+    width: 38px;
+    height: 38px;
+    border: 0;
+    border-left: 1px solid #eef2f7;
+    background: transparent;
+    color: #8a97a6;
     align-self: center;
-    font-size: 1.25rem;
+    justify-self: end;
+    font-size: 1.45rem;
     line-height: 1;
+    touch-action: none;
+    cursor: grab;
 }
 
 .hlv-mini-icon {
@@ -224,13 +238,13 @@ body.hlv-route-dragging {
     bottom: calc(14px + env(safe-area-inset-bottom, 0px));
     z-index: 8;
     border: 0;
-    border-radius: 8px;
+    border-radius: 5px;
     background: #238636;
     color: #ffffff;
     min-height: 54px;
     font-weight: 800;
     font-size: 1rem;
-    box-shadow: 0 6px 18px rgba(35, 134, 54, 0.32);
+    box-shadow: 0 4px 12px rgba(35, 134, 54, 0.26);
 }
 
 .hlv-navigation-panel {
@@ -244,9 +258,9 @@ body.hlv-route-dragging {
 .hlv-navigation-card {
     background: rgba(255, 255, 255, 0.96);
     border: 1px solid #d8dee6;
-    border-radius: 10px;
+    border-radius: 5px;
     padding: 12px;
-    box-shadow: 0 6px 18px rgba(31, 41, 51, 0.18);
+    box-shadow: 0 3px 12px rgba(31, 41, 51, 0.16);
 }
 
 .hlv-nav-label {
@@ -261,7 +275,7 @@ body.hlv-route-dragging {
 .hlv-nav-label strong {
     min-width: 46px;
     min-height: 38px;
-    border-radius: 19px;
+    border-radius: 4px;
     background: #83c96e;
     color: #0b3d16;
     display: inline-flex;
@@ -316,7 +330,7 @@ body.hlv-route-dragging {
     width: 100%;
     height: 48px;
     border: 1px solid #d0d7de;
-    border-radius: 24px;
+    border-radius: 5px;
     background: #edf1f2;
     color: #31556a;
     display: grid;
@@ -330,7 +344,7 @@ body.hlv-route-dragging {
     transform: translateX(var(--swipe-x, 0));
     width: 46px;
     height: 46px;
-    border-radius: 23px;
+    border-radius: 4px;
     margin-left: 1px;
     background: #238636;
     color: #ffffff;
@@ -531,7 +545,9 @@ body.hlv-route-dragging {
     }
 
     .hlv-route-sheet.is-expanded {
-        height: calc(100vh - 48px);
+        top: 72px;
+        bottom: 24px;
+        height: auto;
     }
 
     .hlv-route-start-btn {

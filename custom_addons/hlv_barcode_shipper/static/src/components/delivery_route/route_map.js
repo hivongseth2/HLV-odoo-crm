@@ -40,6 +40,8 @@ export class RouteMap extends Component {
                 mapTypeControl: false,
                 streetViewControl: false,
                 fullscreenControl: false,
+                clickableIcons: false,
+                gestureHandling: "greedy",
             });
             this.directionsService = new maps.DirectionsService();
             this.directionsRenderer = new maps.DirectionsRenderer({
