@@ -729,6 +729,8 @@ class HLVMobileBarcodeController(http.Controller):
                 updated_product = request.env['product.product'].browse()
                 for ml in move_lines:
                     line_demand = ml.move_id.product_uom_qty or ml.quantity or ml.quantity_product_uom
+                    if ml.package_id == package and not ml.result_package_id and not is_pick_picking:
+                        ml.result_package_id = package.id
                     
                     if uses_qty_scanned:
                         ml.qty_scanned = line_demand
@@ -828,6 +830,7 @@ class HLVMobileBarcodeController(http.Controller):
                                 'location_id': quant.location_id.id,
                                 'location_dest_id': picking.location_dest_id.id,
                                 'package_id': package.id,
+                                'result_package_id': package.id,
                             }
                             if uses_qty_scanned:
                                 new_ml_vals['qty_scanned'] = acceptable_qty
@@ -926,6 +929,7 @@ class HLVMobileBarcodeController(http.Controller):
                 ('product_id', '=', product.id),
                 ('location_id', 'child_of', ml_src_id),
                 ('company_id', '=', picking.company_id.id),
+                ('package_id', '=', False),
             ]).sorted(key=lambda q: (1 if q.package_id else 0, -q.quantity))
             available_qty = 0.0
             processed_qty_from_loc_base = 0.0
@@ -959,6 +963,15 @@ class HLVMobileBarcodeController(http.Controller):
                     break
             
             if available_qty <= 0:
+                packaged_quants = request.env['stock.quant'].sudo().search([
+                    ('product_id', '=', product.id),
+                    ('location_id', 'child_of', ml_src_id),
+                    ('company_id', '=', picking.company_id.id),
+                    ('package_id', '!=', False),
+                    ('quantity', '>', 0),
+                ], limit=1)
+                if packaged_quants:
+                    return {'error': _('Sản phẩm "%s" đang nằm trong kiện "%s". Vui lòng quét mã kiện để chuyển nguyên kiện, hoặc gỡ kiện trước khi chuyển lẻ sản phẩm.', product.display_name, packaged_quants.package_id.name)}
                 return {'error': _('Sản phẩm "%s" không có tồn kho khả dụng tại vị trí "%s" (bao gồm các vị trí con). Không thể quét!', product.display_name, source_loc.display_name)}
                 
             scan_qty_base = 1.0
