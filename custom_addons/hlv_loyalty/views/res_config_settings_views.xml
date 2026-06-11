@@ -31,6 +31,11 @@
                                  help="Mật khẩu mặc định gán khi tạo tài khoản Portal Loyalty mới (tối thiểu 6 ký tự)">
                             <field name="loyalty_portal_default_password" password="True"/>
                         </setting>
+                        <setting id="loyalty_zalo_secret_key_setting"
+                                 string="Zalo App Secret Key"
+                                 help="Server-side secret key used to exchange getPhoneNumber token for a phone number">
+                            <field name="loyalty_zalo_secret_key" password="True"/>
+                        </setting>
                     </block>
                 </app>
             </xpath>

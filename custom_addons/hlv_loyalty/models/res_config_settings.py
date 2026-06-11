@@ -5,6 +5,11 @@ from odoo import models, fields
 class ResConfigSettings(models.TransientModel):
     _inherit = 'res.config.settings'
 
+    loyalty_zalo_secret_key = fields.Char(
+        string='Zalo App Secret Key',
+        config_parameter='hlv_loyalty.zalo_secret_key',
+    )
+
     loyalty_program_id = fields.Many2one(
         related='company_id.loyalty_program_id',
         readonly=False,

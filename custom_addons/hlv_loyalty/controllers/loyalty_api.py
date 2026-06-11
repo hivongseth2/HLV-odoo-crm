@@ -2,6 +2,7 @@
 import base64
 import json
 import logging
+import requests
 from datetime import timedelta
 from odoo import fields as odoo_fields, http
 from odoo.http import request, Response
@@ -248,6 +249,23 @@ class LoyaltyExternalAPI(http.Controller):
                         status=status, content_type='application/json')
 
     @staticmethod
+    def _request_json():
+        raw = request.httprequest.data or b'{}'
+        try:
+            return json.loads(raw.decode('utf-8')) if raw else {}
+        except Exception:
+            return {}
+
+    @staticmethod
+    def _normalize_vn_phone(phone):
+        if not phone:
+            return ''
+        digits = ''.join(ch for ch in str(phone).strip() if ch.isdigit())
+        if digits.startswith('84'):
+            digits = '0' + digits[2:]
+        return digits
+
+    @staticmethod
     def _guess_image_mimetype(raw_bytes):
         if raw_bytes.startswith(b'\xff\xd8\xff'):
             return 'image/jpeg'
@@ -394,6 +412,73 @@ class LoyaltyExternalAPI(http.Controller):
         if not results:
             return self._json_err('Không tìm thấy khách hàng', status=404)
         return self._json_ok(results if len(results) > 1 else results[0])
+
+    @http.route('/api/v1/loyalty/zalo/phone', type='http',
+                auth='public', methods=['POST'], csrf=False)
+    def resolve_zalo_phone(self, **kwargs):
+        """Exchange Zalo Mini App getPhoneNumber token for the real phone.
+
+        Body: {"token": "...", "access_token": "..."}
+        Zalo requires app secret_key server-side, never from the Mini App.
+        """
+        payload = self._request_json()
+        phone_token = (payload.get('token') or payload.get('code') or '').strip()
+        access_token = (payload.get('access_token') or '').strip()
+
+        if not phone_token or not access_token:
+            return self._json_err('Thiếu token hoặc access_token', status=400)
+
+        ICP = request.env['ir.config_parameter'].sudo()
+        secret_key = (
+            ICP.get_param('hlv_loyalty.zalo_secret_key')
+            or ICP.get_param('zalo.secret_key')
+            or ''
+        ).strip()
+        if not secret_key:
+            return self._json_err('Chưa cấu hình Zalo secret_key trên Odoo', status=500)
+
+        try:
+            zalo_res = requests.get(
+                'https://graph.zalo.me/v2.0/me/info',
+                headers={
+                    'access_token': access_token,
+                    'code': phone_token,
+                    'secret_key': secret_key,
+                },
+                timeout=10,
+            )
+            zalo_res.raise_for_status()
+            zalo_data = zalo_res.json()
+        except requests.exceptions.RequestException:
+            _logger.exception('Zalo phone token exchange request failed')
+            return self._json_err('Không thể kết nối Zalo để lấy số điện thoại', status=502)
+        except ValueError:
+            _logger.exception('Zalo phone token exchange returned invalid JSON')
+            return self._json_err('Zalo trả về dữ liệu không hợp lệ', status=502)
+
+        if zalo_data.get('error') not in (0, '0', None):
+            _logger.warning(
+                'Zalo phone token exchange failed: %s',
+                zalo_data.get('message') or zalo_data.get('error'),
+            )
+            return self._json_err(
+                zalo_data.get('message') or 'Zalo từ chối token số điện thoại',
+                status=400,
+            )
+
+        raw_number = (
+            (zalo_data.get('data') or {}).get('number')
+            or zalo_data.get('number')
+            or ''
+        )
+        phone = self._normalize_vn_phone(raw_number)
+        if not phone:
+            return self._json_err('Zalo không trả về số điện thoại', status=404)
+
+        return self._json_ok({
+            'phone': phone,
+            'number': raw_number,
+        })
 
     @http.route('/api/v1/loyalty/partner/<int:partner_id>', type='http',
                 auth='public', methods=['GET'], csrf=False)
