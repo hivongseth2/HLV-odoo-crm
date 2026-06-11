@@ -9,7 +9,18 @@ export class CameraScanner extends Component {
             </div>
             
             <t t-if="state.error">
-                <div class="alert alert-danger mt-2"><t t-esc="state.error"/></div>`;
+                <div class="alert alert-danger mt-2"><t t-esc="state.error"/></div>
+            </t>
+
+            <div class="camera-controls mt-2 text-center">
+                <button t-if="!state.isRunning" class="btn btn-primary btn-sm" t-on-click="startCamera">
+                    <i class="fa fa-camera"></i> Mở Camera
+                </button>
+                <button t-else="" class="btn btn-secondary btn-sm" t-on-click="onClose">
+                    <i class="fa fa-times"></i> Đóng Camera
+                </button>
+            </div>
+        </div>`;
     static props = {
         onBarcodeScanned: { type: Function },
         onClose: { type: Function },

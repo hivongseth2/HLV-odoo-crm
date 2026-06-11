@@ -25,12 +25,26 @@ export class BarcodeShipperApp extends Component {
                     activeTab="state.activeTab"
                     onClose="() => state.isSidebarOpen = false"
                     onTabChange="switchTab.bind(this)"
-                />
+                ></Sidebar>
 
                 <!-- Tab Contents (sẽ được implement dần) -->
                 <div class="tab-content-area">
                     <t t-if="state.activeTab === 'receive'">
-                        <ReceiveTab />`;
+                        <ReceiveTab></ReceiveTab>
+                    </t>
+                    <t t-if="state.activeTab === 'deliver'">
+                        <DeliverTab></DeliverTab>
+                    </t>
+                    <t t-if="state.activeTab === 'return'">
+                        <ReturnTab></ReturnTab>
+                    </t>
+                    <t t-if="state.activeTab === 'delivered'">
+                        <DeliveredTab></DeliveredTab>
+                    </t>
+                </div>
+
+            </div>
+        </div>`;
     static components = { Sidebar, ReceiveTab, DeliverTab, ReturnTab, DeliveredTab };
 
     setup() {
