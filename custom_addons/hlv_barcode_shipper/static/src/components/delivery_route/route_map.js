@@ -1,6 +1,6 @@
 /** @odoo-module **/
 
-import { Component, onMounted, onPatched, useRef } from "@odoo/owl";
+import { Component, onMounted, onPatched, useRef, xml } from "@odoo/owl";
 import { loadGoogleMaps } from "../../services/google_maps_utils";
 
 export class RouteMap extends Component {
@@ -13,7 +13,7 @@ export class RouteMap extends Component {
         onError: { type: Function, optional: true },
     };
 
-    static template = "hlv_barcode_shipper.RouteMap";
+    static template = xml`<div class="hlv-route-map" t-ref="map"/>`;
 
     setup() {
         this.mapRef = useRef("map");
