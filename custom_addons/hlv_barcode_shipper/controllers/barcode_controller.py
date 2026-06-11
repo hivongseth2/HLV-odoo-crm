@@ -316,6 +316,7 @@ class BarcodeShipperController(http.Controller):
                 "success": True,
                 "multiple": True, # Luôn coi là multiple để hiện giao diện chọn
                 "customer_name": partner.name or "Khách hàng",
+                "customer_address": partner.contact_address or "",
                 "so_groups": so_groups_list,
                 "message": f"Tìm thấy {len(all_partner_outs)} phiếu của {partner.name}",
             }
