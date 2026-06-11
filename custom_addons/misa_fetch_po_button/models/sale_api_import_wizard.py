@@ -680,9 +680,9 @@ class SaleApiImportWizard(models.TransientModel):
                 contact.write({'ref': False, 'company_registry': False})
             return contact
 
-        if not addr_str and not contact_name:
+        if not addr_str and not contact_name and not phone:
             _logger.info(
-                "Skip delivery contact creation: missing address and contact name for parent=%s",
+                "Skip delivery contact creation: missing address, contact name and phone for parent=%s",
                 parent_partner.id,
             )
             return parent_partner
@@ -691,9 +691,10 @@ class SaleApiImportWizard(models.TransientModel):
             and contact_name
             and contact_name == (parent_partner.name or '').strip()
             and not addr_str
+            and not phone
         ):
             _logger.info(
-                "Skip delivery contact creation: contact name equals parent and address is empty for parent=%s",
+                "Skip delivery contact creation: contact name equals parent and address/phone are empty for parent=%s",
                 parent_partner.id,
             )
             return parent_partner
