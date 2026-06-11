@@ -22,6 +22,9 @@
         "views/res_users_views.xml",
     ],
     "assets": {
+        "web.assets_common": [
+            "hlv_barcode_shipper/static/src/css/hlv_global_colors.css",
+        ],
         "web.assets_frontend": [
             "hlv_barcode_shipper/static/src/css/barcode_shipper.css",
             "hlv_barcode_shipper/static/src/js/barcode_scanner.js",
