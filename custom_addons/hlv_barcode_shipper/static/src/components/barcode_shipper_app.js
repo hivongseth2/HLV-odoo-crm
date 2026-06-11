@@ -15,7 +15,7 @@ export class BarcodeShipperApp extends Component {
                 <!-- Header -->
                 <div class="shipper-header" style="padding: 15px;">
                     <div class="header-title" t-on-click="() => state.isSidebarOpen = true" style="cursor: pointer;">
-                        <i class="fa fa-shipping-fast"></i> Shipper
+                        <i class="fas fa-shipping-fast"></i> Shipper
                     </div>
                 </div>
 
