@@ -1,9 +1,15 @@
 /** @odoo-module **/
 
-import { Component, useState, onWillDestroy, useRef } from "@odoo/owl";
+import { Component, xml, useState, onWillDestroy, useRef } from "@odoo/owl";
 
 export class CameraScanner extends Component {
-    static template = "hlv_barcode_shipper.CameraScanner";
+    static template = xml`<div class="camera-section active">
+            <div class="camera-reader">
+                <video t-ref="videoElement" autoplay="1" playsinline="1" muted="1" style="width: 100%; max-height: 40vh; object-fit: cover; border-radius: 8px;"></video>
+            </div>
+            
+            <t t-if="state.error">
+                <div class="alert alert-danger mt-2"><t t-esc="state.error"/></div>`;
     static props = {
         onBarcodeScanned: { type: Function },
         onClose: { type: Function },

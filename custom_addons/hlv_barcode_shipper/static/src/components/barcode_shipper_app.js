@@ -1,6 +1,6 @@
 /** @odoo-module **/
 
-import { Component, useState, onWillStart } from "@odoo/owl";
+import { Component, xml, useState, onWillStart } from "@odoo/owl";
 import { registry } from "@web/core/registry";
 import { Sidebar } from "./sidebar/sidebar";
 import { ReceiveTab } from "./receive_tab/receive_tab";
@@ -9,7 +9,28 @@ import { ReturnTab } from "./return_tab/return_tab";
 import { DeliveredTab } from "./delivered_tab/delivered_tab";
 
 export class BarcodeShipperApp extends Component {
-    static template = "hlv_barcode_shipper.BarcodeShipperApp";
+    static template = xml`<div class="hlv-barcode-shipper">
+            <div class="shipper-container">
+                
+                <!-- Header -->
+                <div class="shipper-header" style="padding: 15px;">
+                    <div class="header-title" t-on-click="() => state.isSidebarOpen = true" style="cursor: pointer;">
+                        <i class="fa fa-shipping-fast"></i> Shipper
+                    </div>
+                </div>
+
+                <!-- Sidebar Component -->
+                <Sidebar 
+                    isOpen="state.isSidebarOpen"
+                    activeTab="state.activeTab"
+                    onClose="() => state.isSidebarOpen = false"
+                    onTabChange="switchTab.bind(this)"
+                />
+
+                <!-- Tab Contents (sẽ được implement dần) -->
+                <div class="tab-content-area">
+                    <t t-if="state.activeTab === 'receive'">
+                        <ReceiveTab />`;
     static components = { Sidebar, ReceiveTab, DeliverTab, ReturnTab, DeliveredTab };
 
     setup() {

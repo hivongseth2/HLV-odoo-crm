@@ -1,11 +1,20 @@
 /** @odoo-module **/
 
-import { Component, useState } from "@odoo/owl";
+import { Component, xml, useState } from "@odoo/owl";
 import { CameraScanner } from "../camera_scanner/camera_scanner";
 import { BarcodeApiService } from "../../services/barcode_api_service";
 
 export class ReceiveTab extends Component {
-    static template = "hlv_barcode_shipper.ReceiveTab";
+    static template = xml`<div class="tab-content active">
+            <!-- Step 1: Scan / Search List -->
+            <div t-if="state.step === 'list'" class="scan-step active">
+                
+                <!-- Bọc Camera component dùng chung -->
+                <t t-if="state.showCamera">
+                    <CameraScanner 
+                        onBarcodeScanned="onBarcodeScanned.bind(this)" 
+                        onClose="() => state.showCamera = false" 
+                    />`;
     static components = { CameraScanner };
 
     setup() {
