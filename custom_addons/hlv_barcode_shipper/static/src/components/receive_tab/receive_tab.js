@@ -68,7 +68,7 @@ export class ReceiveTab extends Component {
                         </t>
                         <t t-else="">
                             <div class="text-center p-3 text-muted">
-                                <i class="fa fa-box-open fa-2x mb-2"></i>
+                                <i class="fa fa-archive fa-2x mb-2"></i>
                                 <p>Chưa có dữ liệu phiếu Nhận Hàng.</p>
                             </div>
                         </t>
