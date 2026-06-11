@@ -568,11 +568,15 @@ class BarcodeShipperController(http.Controller):
 
             result = []
             for p in pickings:
+                address, sale_order_name, address_source = self._get_picking_misa_shipping_address(p)
                 result.append({
                     "id": p.id,
                     "name": p.name,
                     "origin": p.origin or "",
+                    "sale_order_name": sale_order_name,
                     "partner_name": p.partner_id.name or "",
+                    "address": address,
+                    "address_source": address_source,
                     "date_done": (p.date_done + VN_OFFSET).strftime("%H:%M %d/%m/%Y") if p.date_done else "",
                 })
 

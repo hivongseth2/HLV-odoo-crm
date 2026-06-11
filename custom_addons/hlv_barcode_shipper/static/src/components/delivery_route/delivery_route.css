@@ -1,19 +1,19 @@
 .hlv-delivery-route {
     min-height: 100vh;
     background: #eef3ef;
-    color: #1f2933;
+    color: #111827;
     overflow: hidden;
+    touch-action: manipulation;
+}
+
+.hlv-route-map-wrap,
+.hlv-route-map {
+    position: fixed;
+    inset: 0;
 }
 
 .hlv-route-map-wrap {
-    position: fixed;
-    inset: 0;
     background: #dbe8df;
-}
-
-.hlv-route-map {
-    width: 100%;
-    height: 100%;
 }
 
 .hlv-route-topbar {
@@ -21,33 +21,39 @@
     top: calc(12px + env(safe-area-inset-top, 0px));
     left: 12px;
     right: 12px;
-    z-index: 5;
+    z-index: 6;
     display: grid;
-    grid-template-columns: 44px 1fr 44px;
+    grid-template-columns: 44px 1fr 72px;
     gap: 10px;
     align-items: center;
 }
 
 .hlv-route-icon-btn {
-    width: 44px;
+    min-width: 44px;
+    padding: 0 10px;
     height: 44px;
-    border: 0;
+    border: 1px solid #e5e7eb;
     border-radius: 50%;
     background: #ffffff;
-    color: #243b53;
-    box-shadow: 0 4px 14px rgba(31, 41, 51, 0.18);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
+    color: #1f2937;
+    font-size: 1.35rem;
+    font-weight: 800;
+    box-shadow: 0 4px 14px rgba(31, 41, 51, 0.16);
+}
+
+.hlv-history-open-btn {
+    width: 72px;
+    border-radius: 22px;
+    font-size: 0.78rem;
 }
 
 .hlv-route-summary {
     min-height: 40px;
     border-radius: 20px;
-    background: rgba(255, 255, 255, 0.94);
+    background: rgba(255, 255, 255, 0.96);
     color: #344054;
-    font-weight: 700;
-    font-size: 0.88rem;
+    font-weight: 800;
+    font-size: 0.86rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -60,7 +66,7 @@
     top: calc(66px + env(safe-area-inset-top, 0px));
     left: 14px;
     right: 14px;
-    z-index: 5;
+    z-index: 7;
     border-radius: 8px;
     background: #fff8e1;
     color: #7a4f01;
@@ -74,26 +80,29 @@
     left: 0;
     right: 0;
     bottom: 0;
-    z-index: 4;
-    max-height: 48vh;
+    z-index: 5;
+    height: 48vh;
     display: flex;
     flex-direction: column;
     background: #f8fafc;
     border-top: 1px solid #d8dee6;
     box-shadow: 0 -8px 28px rgba(31, 41, 51, 0.16);
-    transition: transform 0.24s ease;
+    transition: height 0.2s ease, border-radius 0.2s ease;
 }
 
-.hlv-delivery-route.is-started .hlv-route-sheet {
-    transform: translateY(calc(100% - 18px));
+.hlv-route-sheet.is-expanded {
+    height: calc(100vh - env(safe-area-inset-top, 0px));
+    border-radius: 0;
 }
 
 .hlv-route-sheet-handle {
-    width: 46px;
-    height: 5px;
+    width: 54px;
+    height: 6px;
     border-radius: 999px;
     background: #d1d5db;
-    margin: 8px auto 6px;
+    margin: 9px auto 7px;
+    cursor: grab;
+    flex: 0 0 auto;
 }
 
 .hlv-route-next {
@@ -102,9 +111,10 @@
     justify-content: space-between;
     padding: 8px 14px 10px;
     color: #52616f;
-    font-size: 0.76rem;
+    font-size: 0.74rem;
     font-weight: 800;
     letter-spacing: 0;
+    flex: 0 0 auto;
 }
 
 .hlv-route-next strong {
@@ -117,6 +127,7 @@
 
 .hlv-route-stop-list {
     overflow: auto;
+    -webkit-overflow-scrolling: touch;
     padding: 0 12px 84px;
 }
 
@@ -132,6 +143,19 @@
     background: #ffffff;
     padding: 12px 10px;
     box-shadow: 0 2px 8px rgba(31, 41, 51, 0.08);
+    touch-action: pan-y;
+    user-select: none;
+}
+
+.hlv-route-stop.is-dragging,
+.hlv-route-dragging .hlv-route-stop:hover {
+    opacity: 0.92;
+    transform: scale(1.015);
+    box-shadow: 0 8px 22px rgba(31, 41, 51, 0.2);
+}
+
+body.hlv-route-dragging {
+    overflow: hidden;
 }
 
 .hlv-stop-order {
@@ -169,7 +193,7 @@
 .hlv-stop-partner {
     margin-top: 7px;
     color: #243b53;
-    font-weight: 700;
+    font-weight: 800;
     font-size: 0.82rem;
 }
 
@@ -183,6 +207,14 @@
 .hlv-stop-grip {
     color: #9aa5b1;
     align-self: center;
+    font-size: 1.25rem;
+    line-height: 1;
+}
+
+.hlv-mini-icon {
+    display: inline-block;
+    width: 14px;
+    text-align: center;
 }
 
 .hlv-route-start-btn {
@@ -190,7 +222,7 @@
     left: 12px;
     right: 12px;
     bottom: calc(14px + env(safe-area-inset-bottom, 0px));
-    z-index: 6;
+    z-index: 8;
     border: 0;
     border-radius: 8px;
     background: #238636;
@@ -201,23 +233,116 @@
     box-shadow: 0 6px 18px rgba(35, 134, 54, 0.32);
 }
 
-.hlv-route-fab {
+.hlv-navigation-panel {
     position: fixed;
-    right: 18px;
-    bottom: calc(92px + env(safe-area-inset-bottom, 0px));
-    z-index: 7;
-    min-width: 132px;
-    height: 58px;
-    border: 0;
-    border-radius: 29px;
-    background: #39a844;
-    color: #ffffff;
-    box-shadow: 0 8px 22px rgba(35, 134, 54, 0.35);
+    left: 8px;
+    right: 8px;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    z-index: 8;
+}
+
+.hlv-navigation-card {
+    background: rgba(255, 255, 255, 0.96);
+    border: 1px solid #d8dee6;
+    border-radius: 10px;
+    padding: 12px;
+    box-shadow: 0 6px 18px rgba(31, 41, 51, 0.18);
+}
+
+.hlv-nav-label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: #31556a;
+    font-size: 0.68rem;
+    font-weight: 900;
+}
+
+.hlv-nav-label strong {
+    min-width: 46px;
+    min-height: 38px;
+    border-radius: 19px;
+    background: #83c96e;
+    color: #0b3d16;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    font-weight: 800;
+    text-align: center;
+    padding: 0 8px;
+}
+
+.hlv-navigation-card h2 {
+    margin: 4px 0 6px;
+    font-size: 1rem;
+    line-height: 1.25;
+    font-weight: 900;
+}
+
+.hlv-navigation-card p {
+    margin: 0 0 10px;
+    color: #4b5563;
+    font-size: 0.82rem;
+}
+
+.hlv-nav-metrics {
+    border-top: 1px solid #e5e7eb;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    padding-top: 9px;
+}
+
+.hlv-nav-metrics span {
+    display: grid;
+    grid-template-columns: 24px 1fr;
+    grid-template-rows: auto auto;
+    column-gap: 6px;
+    color: #31556a;
+    font-size: 1rem;
+}
+
+.hlv-nav-metrics small {
+    color: #64748b;
+    font-size: 0.68rem;
+}
+
+.hlv-nav-metrics b {
+    font-size: 0.9rem;
+    color: #238636;
+}
+
+.hlv-route-swipe {
+    margin-top: 10px;
+    width: 100%;
+    height: 48px;
+    border: 1px solid #d0d7de;
+    border-radius: 24px;
+    background: #edf1f2;
+    color: #31556a;
+    display: grid;
+    grid-template-columns: 54px 1fr;
+    align-items: center;
+    padding: 0;
+    overflow: hidden;
+}
+
+.hlv-route-swipe span {
+    transform: translateX(var(--swipe-x, 0));
+    width: 46px;
+    height: 46px;
+    border-radius: 23px;
+    margin-left: 1px;
+    background: #238636;
+    color: #ffffff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    transition: transform 0.16s ease;
+}
+
+.hlv-route-swipe b {
+    font-size: 0.82rem;
 }
 
 .hlv-route-loading,
@@ -236,17 +361,162 @@
     color: #334e68;
 }
 
-.hlv-route-loading i,
-.hlv-route-empty i {
-    font-size: 2rem;
+.hlv-loading-dot,
+.hlv-empty-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #238636;
+    color: #ffffff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.hlv-loading-dot {
+    animation: hlvPulse 0.9s infinite alternate;
+}
+
+@keyframes hlvPulse {
+    from { opacity: 0.45; transform: scale(0.9); }
+    to { opacity: 1; transform: scale(1.05); }
+}
+
+.hlv-history-view {
+    min-height: 100vh;
+    background: #f8fafc;
+    padding: calc(14px + env(safe-area-inset-top, 0px)) 8px calc(84px + env(safe-area-inset-bottom, 0px));
+    overflow: auto;
+}
+
+.hlv-history-header h1 {
+    margin: 0 0 4px;
+    font-size: 1rem;
+    font-weight: 900;
+}
+
+.hlv-history-header p {
+    margin: 0;
+    color: #64748b;
+    font-size: 0.78rem;
+}
+
+.hlv-history-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin: 16px 0 20px;
+}
+
+.hlv-history-stats article,
+.hlv-history-card {
+    background: #ffffff;
+    border: 1px solid #d8dee6;
+    border-radius: 8px;
+}
+
+.hlv-history-stats article {
+    padding: 12px 10px;
+}
+
+.hlv-history-stats span,
+.hlv-history-card-top span {
+    color: #31556a;
+    font-size: 0.64rem;
+    font-weight: 900;
+}
+
+.hlv-history-stats strong {
+    display: block;
+    margin-top: 8px;
+    font-size: 0.86rem;
+}
+
+.hlv-history-view h2 {
+    margin: 0 0 10px;
+    font-size: 0.88rem;
+    font-weight: 900;
+}
+
+.hlv-history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.hlv-history-card {
+    padding: 12px;
+}
+
+.hlv-history-card-top,
+.hlv-history-card-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.hlv-history-card-top strong {
+    display: block;
+    margin-top: 3px;
+    font-size: 0.86rem;
+}
+
+.hlv-history-card-top em {
+    border: 1px solid #9bd39b;
+    border-radius: 999px;
     color: #238636;
+    background: #effaf0;
+    padding: 3px 8px;
+    font-size: 0.68rem;
+    font-style: normal;
+    font-weight: 800;
+}
+
+.hlv-history-address {
+    display: grid;
+    grid-template-columns: 20px 1fr;
+    gap: 6px;
+    margin: 12px 0;
+    color: #0f172a;
+    font-size: 0.8rem;
+    line-height: 1.35;
+}
+
+.hlv-history-address span {
+    color: #2c5ead;
+}
+
+.hlv-history-card-foot {
+    border-top: 1px solid #eef2f7;
+    padding-top: 9px;
+    color: #31556a;
+    font-size: 0.76rem;
+}
+
+.hlv-history-empty {
+    border: 1px dashed #cbd5e1;
+    border-radius: 8px;
+    padding: 20px;
+    color: #64748b;
+    text-align: center;
+}
+
+.hlv-history-back {
+    width: 100%;
+    min-height: 44px;
+    margin-top: 22px;
+    border: 1px solid #9aa5b1;
+    border-radius: 7px;
+    background: #ffffff;
+    color: #31556a;
+    font-weight: 700;
 }
 
 @media (min-width: 768px) {
     .hlv-route-topbar {
         left: 24px;
         right: 24px;
-        grid-template-columns: 48px minmax(260px, 420px) 48px;
+        grid-template-columns: 48px minmax(260px, 420px) 78px;
         justify-content: center;
     }
 
@@ -255,13 +525,13 @@
         right: auto;
         bottom: 24px;
         width: 420px;
-        max-height: calc(100vh - 140px);
+        height: min(540px, calc(100vh - 150px));
         border: 1px solid #d8dee6;
         border-radius: 8px;
     }
 
-    .hlv-delivery-route.is-started .hlv-route-sheet {
-        transform: translateY(calc(100% - 18px));
+    .hlv-route-sheet.is-expanded {
+        height: calc(100vh - 48px);
     }
 
     .hlv-route-start-btn {
@@ -269,5 +539,17 @@
         right: auto;
         width: 384px;
         bottom: 40px;
+    }
+
+    .hlv-navigation-panel {
+        left: 24px;
+        right: auto;
+        width: 420px;
+        bottom: 24px;
+    }
+
+    .hlv-history-view {
+        max-width: 520px;
+        margin: 0 auto;
     }
 }

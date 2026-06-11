@@ -432,23 +432,40 @@ class LoyaltyExternalAPI(http.Controller):
         Body: {"token": "...", "access_token": "..."}
         Zalo requires app secret_key server-side, never from the Mini App.
         """
-        payload = self._request_json()
-        phone_token = (payload.get('token') or payload.get('code') or '').strip()
-        access_token = (payload.get('access_token') or '').strip()
-
-        if not phone_token or not access_token:
-            return self._json_err('Thiếu token hoặc access_token', status=400)
-
-        ICP = request.env['ir.config_parameter'].sudo()
-        secret_key = (
-            ICP.get_param('hlv_loyalty.zalo_secret_key')
-            or ICP.get_param('zalo.secret_key')
-            or ''
-        ).strip()
-        if not secret_key:
-            return self._json_err('Chưa cấu hình Zalo secret_key trên Odoo', status=500)
-
         try:
+            payload = self._request_json()
+            phone_token = (payload.get('token') or payload.get('code') or '').strip()
+            access_token = (payload.get('access_token') or '').strip()
+
+            _logger.info(
+                'Zalo phone exchange input: has_token=%s token=%s has_access_token=%s access_token=%s',
+                bool(phone_token),
+                self._mask_secret(phone_token),
+                bool(access_token),
+                self._mask_secret(access_token),
+            )
+
+            if not phone_token or not access_token:
+                return self._json_err(
+                    'Missing token or access_token',
+                    status=400,
+                    code='missing_token',
+                )
+
+            ICP = request.env['ir.config_parameter'].sudo()
+            secret_key = (
+                ICP.get_param('hlv_loyalty.zalo_secret_key')
+                or ICP.get_param('zalo.secret_key')
+                or ''
+            ).strip()
+            if not secret_key:
+                _logger.error('Zalo phone exchange blocked: missing hlv_loyalty.zalo_secret_key')
+                return self._json_err(
+                    'Missing Zalo secret_key configuration on Odoo',
+                    status=503,
+                    code='missing_secret_key',
+                )
+
             zalo_res = requests.get(
                 'https://graph.zalo.me/v2.0/me/info',
                 headers={
@@ -458,23 +475,59 @@ class LoyaltyExternalAPI(http.Controller):
                 },
                 timeout=10,
             )
+            response_text = (zalo_res.text or '')[:2000]
+            _logger.info(
+                'Zalo phone exchange response: status=%s body=%s',
+                zalo_res.status_code,
+                response_text,
+            )
             zalo_res.raise_for_status()
             zalo_data = zalo_res.json()
         except requests.exceptions.RequestException:
-            _logger.exception('Zalo phone token exchange request failed')
-            return self._json_err('Không thể kết nối Zalo để lấy số điện thoại', status=502)
+            status_code = getattr(locals().get('zalo_res'), 'status_code', None)
+            body = getattr(locals().get('zalo_res'), 'text', '') or ''
+            _logger.exception(
+                'Zalo phone token exchange request failed: status=%s body=%s',
+                status_code,
+                body[:2000],
+            )
+            return self._json_err(
+                'Cannot exchange Zalo phone token',
+                status=502,
+                code='zalo_request_failed',
+                zalo_status=status_code,
+                zalo_body=body[:1000],
+            )
         except ValueError:
-            _logger.exception('Zalo phone token exchange returned invalid JSON')
-            return self._json_err('Zalo trả về dữ liệu không hợp lệ', status=502)
+            body = getattr(locals().get('zalo_res'), 'text', '') or ''
+            _logger.exception('Zalo phone token exchange returned invalid JSON: body=%s', body[:2000])
+            return self._json_err(
+                'Zalo returned invalid JSON',
+                status=502,
+                code='zalo_invalid_json',
+                zalo_body=body[:1000],
+            )
+        except Exception:
+            _logger.exception('Unexpected error in Zalo phone token exchange')
+            return self._json_err(
+                'Unexpected Zalo phone exchange error',
+                status=500,
+                code='unexpected_error',
+            )
 
         if zalo_data.get('error') not in (0, '0', None):
             _logger.warning(
-                'Zalo phone token exchange failed: %s',
+                'Zalo phone token exchange failed: error=%s message=%s data=%s',
+                zalo_data.get('error'),
                 zalo_data.get('message') or zalo_data.get('error'),
+                zalo_data,
             )
             return self._json_err(
-                zalo_data.get('message') or 'Zalo từ chối token số điện thoại',
+                zalo_data.get('message') or 'Zalo rejected phone token',
                 status=400,
+                code='zalo_rejected_token',
+                zalo_error=zalo_data.get('error'),
+                zalo_data=zalo_data,
             )
 
         raw_number = (
@@ -484,7 +537,13 @@ class LoyaltyExternalAPI(http.Controller):
         )
         phone = self._normalize_vn_phone(raw_number)
         if not phone:
-            return self._json_err('Zalo không trả về số điện thoại', status=404)
+            _logger.warning('Zalo phone token exchange returned no phone number: %s', zalo_data)
+            return self._json_err(
+                'Zalo did not return a phone number',
+                status=404,
+                code='zalo_missing_phone',
+                zalo_data=zalo_data,
+            )
 
         return self._json_ok({
             'phone': phone,

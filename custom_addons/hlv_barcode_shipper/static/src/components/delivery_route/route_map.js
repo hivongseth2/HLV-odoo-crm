@@ -9,11 +9,12 @@ export class RouteMap extends Component {
         origin: { type: Object, optional: true },
         stops: { type: Array, optional: true },
         started: { type: Boolean, optional: true },
+        focusStopId: { type: Number, optional: true },
         onRouteSummary: { type: Function, optional: true },
         onError: { type: Function, optional: true },
     };
 
-    static template = xml`<div class="hlv-route-map" t-ref="map"/>`;
+    static template = xml`<div class="hlv-route-map" t-ref="map"></div>`;
 
     setup() {
         this.mapRef = useRef("map");
@@ -58,8 +59,10 @@ export class RouteMap extends Component {
 
     signature() {
         const origin = this.props.origin ? `${this.props.origin.lat},${this.props.origin.lng}` : "";
-        const stops = (this.props.stops || []).map((stop) => `${stop.id}:${stop.geocode.lat},${stop.geocode.lng}`).join("|");
-        return `${origin}|${stops}`;
+        const stops = (this.props.stops || [])
+            .map((stop) => `${stop.id}:${stop.geocode.lat},${stop.geocode.lng}`)
+            .join("|");
+        return `${origin}|${stops}|${this.props.focusStopId || ""}|${this.props.started ? "1" : "0"}`;
     }
 
     clearMarkers() {
@@ -84,22 +87,29 @@ export class RouteMap extends Component {
         }
 
         const maps = window.google.maps;
-        const originMarker = new maps.Marker({
+        const markerIcon = (text, fill) => ({
+            url: this.markerSvg(text, fill),
+            scaledSize: new maps.Size(36, 42),
+            anchor: new maps.Point(18, 42),
+            labelOrigin: new maps.Point(18, 15),
+        });
+
+        this.markers.push(new maps.Marker({
             map: this.map,
             position: this.props.origin,
-            label: { text: "K", color: "#ffffff", fontWeight: "700" },
-            title: "Vị trí hiện tại",
-        });
-        this.markers.push(originMarker);
+            icon: markerIcon("K", "#238636"),
+            title: "Current position",
+        }));
 
         stops.forEach((stop, index) => {
-            const marker = new maps.Marker({
+            const isFocus = this.props.focusStopId === stop.id;
+            this.markers.push(new maps.Marker({
                 map: this.map,
                 position: stop.geocode,
-                label: { text: String(index + 1), color: "#ffffff", fontWeight: "700" },
+                icon: markerIcon(String(index + 1), isFocus ? "#39a844" : "#31556a"),
                 title: stop.picking_name,
-            });
-            this.markers.push(marker);
+                zIndex: isFocus ? 20 : 10,
+            }));
         });
 
         const destination = stops[stops.length - 1].geocode;
@@ -116,7 +126,7 @@ export class RouteMap extends Component {
             travelMode: maps.TravelMode.DRIVING,
         }, (response, status) => {
             if (status !== "OK") {
-                this.props.onError?.(`Không thể vẽ tuyến: ${status}`);
+                this.props.onError?.(`Cannot draw route: ${status}`);
                 return;
             }
             this.directionsRenderer.setDirections(response);
@@ -124,6 +134,20 @@ export class RouteMap extends Component {
             const distance = legs.reduce((sum, leg) => sum + (leg.distance?.value || 0), 0);
             const duration = legs.reduce((sum, leg) => sum + (leg.duration?.value || 0), 0);
             this.props.onRouteSummary?.({ distance, duration });
+            if (this.props.started && stops[0]?.geocode) {
+                this.map.panTo(stops[0].geocode);
+                this.map.setZoom(15);
+            }
         });
+    }
+
+    markerSvg(text, fill) {
+        const safeText = String(text).replace(/[<>&"]/g, "");
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="42" viewBox="0 0 36 42">
+            <path d="M18 41s14-13.2 14-25A14 14 0 1 0 4 16c0 11.8 14 25 14 25z" fill="${fill}"/>
+            <circle cx="18" cy="16" r="10.5" fill="rgba(255,255,255,.18)"/>
+            <text x="18" y="20" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="700" fill="#fff">${safeText}</text>
+        </svg>`;
+        return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
     }
 }
