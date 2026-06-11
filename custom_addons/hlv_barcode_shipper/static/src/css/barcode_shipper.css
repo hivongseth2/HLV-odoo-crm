@@ -872,7 +872,6 @@ body {
 .tab-nav {
   display: flex;
   background: #d5dce6;
-  border-radius: 14px;
   padding: 4px;
   gap: 3px;
   box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.18);
