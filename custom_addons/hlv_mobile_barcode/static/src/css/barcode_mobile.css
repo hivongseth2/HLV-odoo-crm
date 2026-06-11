@@ -668,6 +668,22 @@
   box-shadow: 0 2px 8px rgba(16, 185, 129, 0.08);
 }
 
+.hlv-barcode-app .product-row-card.locked-location-row {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  box-shadow: none;
+}
+
+.hlv-barcode-app .product-row-card.locked-location-row > .item-card {
+  opacity: 0.48;
+  filter: grayscale(1);
+}
+
+.hlv-barcode-app .product-row-card.locked-location-row .item-meta-badge.stock,
+.hlv-barcode-app .product-row-card.locked-location-row .item-meta-badge.barcode {
+  color: #64748b;
+}
+
 .hlv-barcode-app .product-row-card.preferred-pick-line {
   border-color: var(--secondary-color);
   box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.18), 0 2px 8px rgba(0, 0, 0, 0.05);
@@ -1652,7 +1668,6 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin-top: 6px;
 }
 
 .hlv-barcode-app .item-metadata-line {

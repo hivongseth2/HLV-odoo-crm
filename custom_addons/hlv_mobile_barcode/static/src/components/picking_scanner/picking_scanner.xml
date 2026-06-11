@@ -134,7 +134,9 @@
                             <t t-foreach="group.lines" t-as="line" t-key="line.id || group.key + '_draft_' + line.product_id">
                             <t t-set="is_active_location" t-value="!state.picking.is_putaway and (state.picking.is_pick or props.isMultiLocationMode) and props.scannedLocationName and line.location_name == props.scannedLocationName"/>
                             <t t-set="is_preferred_line" t-value="state.picking.is_pick and props.preferredMoveLineId and line.id == props.preferredMoveLineId"/>
-                            <div t-attf-class="product-row-card #{line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0 ? 'scanned' : ''} #{is_active_location ? 'active-location-row' : ''} #{is_preferred_line ? 'preferred-pick-line' : ''}" t-att-data-product-id="line.product_id" t-att-data-line-id="line.id">
+                            <t t-set="needs_location_scan" t-value="!state.picking.is_putaway and (state.picking.is_pick or props.isMultiLocationMode)"/>
+                            <t t-set="can_edit_qty" t-value="!needs_location_scan or is_active_location"/>
+                            <div t-attf-class="product-row-card #{line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0 ? 'scanned' : ''} #{is_active_location ? 'active-location-row' : ''} #{is_preferred_line ? 'preferred-pick-line' : ''} #{!can_edit_qty ? 'locked-location-row' : ''}" t-att-data-product-id="line.product_id" t-att-data-line-id="line.id">
                                 <div t-attf-class="item-card #{line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0 ? 'scanned' : ''}" style="border: none; margin-bottom: 0; display: flex; align-items: stretch; gap: 10px; padding: 10px;" t-on-click="() => this.togglePreferredLine(line)">
                                     <!-- Left: Image -->
                                     <div style="flex-shrink: 0; width: 64px; height: 64px; border-radius: 6px; overflow: hidden; background: #fff; display: flex; align-items: center; justify-content: center;">
@@ -164,7 +166,7 @@
                                                     <i class="fa fa-map-marker-alt"></i> <t t-esc="line.location_name"/>
                                                 </span> -->
                                                 <span class="item-meta-badge stock">
-                                                    <i class="fa fa-cubes"></i> Tồn: <t t-esc="line.warehouse_qty"/> <t t-esc="line.uom_name"/>
+                                                    <i class="fa fa-cubes"></i> Tồn: <t t-esc="this.formatQty(line.warehouse_qty)"/> <t t-esc="line.uom_name"/>
                                                 </span>
                                             </div>
                                         </div>
@@ -181,9 +183,6 @@
                                         <i t-if="line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0" class="fa fa-check-circle" style="color: var(--success-color); font-size: 1.1rem; margin-top: 4px;"></i>
                                     </div>
                                 </div>
-                                <t t-set="needs_location_scan" t-value="!state.picking.is_putaway and (state.picking.is_pick or props.isMultiLocationMode)"/>
-                                <t t-set="can_edit_qty" t-value="!needs_location_scan or is_active_location"/>
-                                
                                 <t t-set="has_fractional" t-value="line.product_uom_qty % 1 !== 0 or line.qty_done % 1 !== 0"/>
                                 <t t-set="threshold" t-value="state.picking.qty_button_threshold !== undefined ? state.picking.qty_button_threshold : 50"/>
                                 <t t-set="has_large_qty" t-value="state.picking.show_qty_buttons and line.product_uom_qty &gt; threshold"/>
@@ -191,8 +190,8 @@
                                 <t t-if="has_fractional or has_large_qty">
                                     <div t-if="state.picking.state !== 'done'" style="position: relative;">
                                         <!-- Overlay for locked state -->
-                                        <div t-if="!can_edit_qty" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 10; display: flex; align-items: center; justify-content: center; ">
-                                            <span class="text-muted" style="font-size: 0.55rem; font-style: italic; color: #aa1b1b !important; padding: 0px 8px; border-radius: 20px; border: 1px solid #aa1b1b; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                                        <div t-if="!can_edit_qty" style="position: absolute; top: 0; left: 0; right: 0; bottom: 10px; z-index: 10; display: flex; align-items: center; justify-content: center; ">
+                                            <span class="text-muted" style="font-size: 0.55rem; font-style: italic; color: #64748b !important; background: #f8fafc; padding: 0px 8px; border-radius: 20px; border: 1px solid #cbd5e1; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
                                                 <i class="fa fa-lock text-warning" style="margin-right: 4px;"></i> Vui lòng quét vị trí chứa sản phẩm trước
                                             </span>
                                         </div>
@@ -221,8 +220,8 @@
                                 </t>
                                 <t t-else="">
                                     <div t-if="state.picking.state !== 'done'" style="position: relative;">
-                                         <div t-if="!can_edit_qty" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 10; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
-                                            <span class="text-muted" style="font-size: 0.55rem; font-style: italic; color: #aa1b1b !important; padding: 0px 8px; border-radius: 20px; border: 1px solid #aa1b1b; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                                         <div t-if="!can_edit_qty" style="position: absolute; top: 0; left: 0; right: 0; bottom: 10px; z-index: 10; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
+                                            <span class="text-muted" style="font-size: 0.55rem; font-style: italic; color: #64748b !important; background: #f8fafc; padding: 0px 8px; border-radius: 20px; border: 1px solid #cbd5e1; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
                                                 <i class="fa fa-lock text-warning" style="margin-right: 4px;"></i> Vui lòng quét vị trí chứa sản phẩm trước
                                             </span>
                                         </div>
