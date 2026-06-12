@@ -457,6 +457,22 @@ export class PickingScanner extends Component {
             if (res.error) {
                 this.notification.add(res.error, { type: "danger" });
             } else if (res.success) {
+                if (res.remainder_packages && res.remainder_packages.length) {
+                    const names = res.remainder_packages.map((pkg) => pkg.name).join(", ");
+                    this.notification.add(`Đã tạo kiện phần dư: ${names}`, {
+                        type: "info",
+                        sticky: true,
+                    });
+                    await this.actionService.doAction(
+                        "hlv_mobile_barcode.action_report_remainder_package_label",
+                        {
+                            additionalContext: {
+                                active_ids: res.remainder_packages.map((pkg) => pkg.id),
+                                active_model: "stock.quant.package",
+                            },
+                        }
+                    );
+                }
                 if (res.backorder_created) {
                     this.notification.add(`Xác nhận thành công! Phiếu tách kiện ${res.backorder_name} đã được tạo cho số lượng còn lại.`, { 
                         type: "info",

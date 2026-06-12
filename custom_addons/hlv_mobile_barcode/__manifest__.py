@@ -32,6 +32,7 @@ Mobile Barcode Scanner
         # ====================================================
         "views/res_config_settings_views.xml",
         "views/barcode_menu.xml",
+        "report/remainder_package_label.xml",
     ],
     "assets": {
         "web.assets_backend": [

@@ -131,7 +131,7 @@
                             <div class="card-box" style="text-align: center; padding: 40px 15px; cursor: pointer; border: 2px dashed var(--primary-color); background: rgba(44, 62, 80, 0.02); transition: background-color 0.2s;" t-on-click="openPopupCamera">
                                 <i class="fa fa-camera" style="font-size: 60px; color: var(--primary-color); margin-bottom: 20px;"></i>
                                 <h3 style="color: var(--primary-color); margin-bottom: 8px; font-size: 1.15rem; font-weight: 700;">Quét mã vạch bằng Camera</h3>
-                                <p class="text-muted" style="margin-bottom: 20px; font-size: 0.9rem;">Nhấn vào đây để bật Camera và quét phiếu kho, sản phẩm hoặc vị trí</p>
+                                <p class="text-muted" style="margin-bottom: 20px; font-size: 0.9rem;">Nhấn vào đây để bật Camera và quét phiếu kho, sản phẩm, vị trí hoặc kiện hàng</p>
                                 <div class="btn btn-primary btn-lg" style="border-radius: 30px; font-weight: bold; box-shadow: 0 4px 10px rgba(0,0,0,0.15);">
                                     <i class="fa fa-qrcode" style="font-size: 1.05rem;"></i> Mở máy quét
                                 </div>
