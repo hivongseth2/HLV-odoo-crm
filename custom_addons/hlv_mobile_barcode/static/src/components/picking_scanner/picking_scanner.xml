@@ -187,7 +187,7 @@
                                 <t t-set="threshold" t-value="state.picking.qty_button_threshold !== undefined ? state.picking.qty_button_threshold : 50"/>
                                 <t t-set="has_large_qty" t-value="state.picking.show_qty_buttons and line.product_uom_qty &gt; threshold"/>
                                 
-                                <t t-if="has_fractional or has_large_qty">
+                                <t t-if="line.is_package_transfer_line or has_fractional or has_large_qty">
                                     <div t-if="state.picking.state !== 'done'" style="position: relative;">
                                         <!-- Overlay for locked state -->
                                         <div t-if="!can_edit_qty" style="position: absolute; top: 0; left: 0; right: 0; bottom: 10px; z-index: 10; display: flex; align-items: center; justify-content: center; ">
@@ -199,20 +199,20 @@
                                         <!-- Buttons Container -->
                                         <div t-attf-style="background-color: transparent; padding: 6px 12px 10px 12px; display: flex; gap: 4px; align-items: center; justify-content: center; flex-wrap: wrap; #{!can_edit_qty ? 'opacity: 0.5; pointer-events: none;' : ''}">
                                             <button t-if="has_large_qty" class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, -10)">-10</button>
-                                            <button t-if="has_large_qty" class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, -1)">-1</button>
+                                            <button t-if="line.is_package_transfer_line or has_large_qty" class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, -1)">-1</button>
                                             
                                             <button t-if="has_fractional" class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, -0.1)">-0.1</button>
                                             <button t-if="has_fractional" class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, -0.01)">-0.01</button>
                                             
-                                            <input type="number" class="form-control" style="width: 48px; text-align: center; font-weight: bold; padding: 4px 2px; font-size: 0.85rem;" t-model="line.qty_done" t-on-change="(ev) => this.saveQty(line, ev)" min="0" step="any" t-att-disabled="!can_edit_qty"/>
+                                            <input type="number" class="form-control" style="width: 58px; text-align: center; font-weight: bold; padding: 4px 2px; font-size: 0.85rem;" t-model="line.qty_done" t-on-change="(ev) => this.saveQty(line, ev)" min="0" t-att-max="line.is_package_transfer_line ? line.package_physical_qty : undefined" step="any" t-att-disabled="!can_edit_qty"/>
                                             
                                             <button t-if="has_fractional" class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, 0.01)">+0.01</button>
                                             <button t-if="has_fractional" class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, 0.1)">+0.1</button>
                                             
-                                            <button t-if="has_large_qty" class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, 1)">+1</button>
+                                            <button t-if="line.is_package_transfer_line or has_large_qty" class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, 1)">+1</button>
                                             <button t-if="has_large_qty" class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, 10)">+10</button>
                                             
-                                            <button t-if="!state.picking.is_pick and !state.picking.source_transfer_id" class="btn btn-danger btn-sm" style="padding: 4px 8px; font-size: 0.78rem; min-width: 28px;" t-on-click="() => this.deleteLine(line)">
+                                            <button t-if="!line.is_package_transfer_line and !state.picking.is_pick and !state.picking.source_transfer_id" class="btn btn-danger btn-sm" style="padding: 4px 8px; font-size: 0.78rem; min-width: 28px;" t-on-click="() => this.deleteLine(line)">
                                                 <i class="fa fa-trash"></i>
                                             </button>
                                         </div>
