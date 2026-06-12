@@ -2046,9 +2046,9 @@ class HLVMobileBarcodeController(http.Controller):
                     if actual_demand > 0:
                         move.product_uom_qty = actual_demand
 
-            # --- FIX: Prevent "split package" error ---
+            # --- FIX: Prevent "split package" error & auto-repacking ---
             # Odoo does not allow partially moving a package while keeping the same result_package_id.
-            # Since a package can span multiple move lines, we calculate total qty for the package.
+            # Also, if package_level_ids exists, Odoo will FORCE the package to move, causing errors.
             package_totals = {}
             for ml in picking.sudo().move_line_ids:
                 if ml.result_package_id:
@@ -2061,10 +2061,15 @@ class HLVMobileBarcodeController(http.Controller):
             
             for pkg_id, data in package_totals.items():
                 if 0 < data['qty'] < data['qty_uom']:
-                    # Package is partially scanned. Unpack the done items.
+                    # Package is partially scanned.
+                    # 1. Remove package_level so Odoo doesn't force the package to move.
+                    pkg_levels = picking.sudo().package_level_ids.filtered(lambda pl: pl.package_id.id == pkg_id)
+                    if pkg_levels:
+                        pkg_levels.unlink()
+                        
+                    # 2. Clear result_package_id for ALL lines so Odoo unpacks the done items.
                     for ml in data['mls']:
-                        if ml.quantity > 0:
-                            ml.result_package_id = False
+                        ml.result_package_id = False
             # ------------------------------------------
 
             res_dict = picking.button_validate()
@@ -2089,14 +2094,14 @@ class HLVMobileBarcodeController(http.Controller):
                 ])
                 if new_backorders:
                     # Kế thừa source_transfer_id và package cho backorder
-                    # của phiếu Bước 2 (vì source_transfer_id có copy=False)
                     for bo in new_backorders:
                         if picking.source_transfer_id and not bo.source_transfer_id:
                             bo.sudo().source_transfer_id = picking.source_transfer_id.id
 
                         # Kế thừa package trên move_line_ids từ phiếu gốc
                         for bo_ml in bo.move_line_ids:
-                            if bo_ml.package_id or bo_ml.result_package_id:
+                            # Use AND instead of OR because package_id might be inherited but result_package_id is cleared
+                            if bo_ml.package_id and bo_ml.result_package_id:
                                 continue
                             original_mls = picking.move_line_ids.filtered(
                                 lambda ml, prod=bo_ml.product_id: (
@@ -2110,6 +2115,9 @@ class HLVMobileBarcodeController(http.Controller):
                                     'package_id': pkg.id,
                                     'result_package_id': pkg.id,
                                 })
+                        
+                        # Assign backorder so it's ready for the next operation
+                        bo.sudo().action_assign()
 
                     backorder_info = {
                         'backorder_created': True,
