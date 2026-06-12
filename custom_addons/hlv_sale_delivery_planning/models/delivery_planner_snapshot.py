@@ -147,7 +147,7 @@ class DeliveryPlannerSnapshot(models.Model):
             return 0
 
         service = self.env['hlv.delivery.planner.service'].sudo()
-        _sales, _matched_ids, _stats, _availability, status_by_so = \
+        _sales, _matched_ids, _stats, _availability, _on_hand, status_by_so = \
             service._calculate_po_and_stock_status(
                 orders,
                 po_date_from='',
