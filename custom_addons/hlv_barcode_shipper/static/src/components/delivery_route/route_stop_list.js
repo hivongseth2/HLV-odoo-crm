@@ -16,7 +16,10 @@ export class RouteStopList extends Component {
 
     static template = xml`<div class="hlv-route-sheet" t-att-class="{ 'is-expanded': props.expanded }">
             <div class="hlv-route-sheet-handle"
-                 t-on-pointerdown="onHandlePointerDown"></div>
+                 t-on-click="toggleSheet"
+                 t-on-pointerdown="onHandlePointerDown">
+                <span></span>
+            </div>
             <div class="hlv-route-next">
                 <span>DIEM TIEP THEO</span>
                 <strong>Cach <t t-esc="formatDistance(props.nextDistance || 0)"/></strong>
@@ -49,6 +52,7 @@ export class RouteStopList extends Component {
         this.draggingIndex = null;
         this.longPressTimer = null;
         this.handleStartY = 0;
+        this.handleMoved = false;
         this.lastTargetIndex = null;
         this.dragGhost = null;
         this.dragOffsetY = 0;
@@ -59,13 +63,19 @@ export class RouteStopList extends Component {
     }
 
     onHandlePointerDown(ev) {
+        ev.preventDefault();
         this.handleStartY = ev.clientY;
+        this.handleMoved = false;
+        ev.currentTarget?.setPointerCapture?.(ev.pointerId);
         const onMove = (moveEv) => {
+            moveEv.preventDefault();
             const delta = moveEv.clientY - this.handleStartY;
-            if (delta < -18) {
+            if (delta < -14) {
+                this.handleMoved = true;
                 this.props.onExpand?.();
                 cleanup();
-            } else if (delta > 18) {
+            } else if (delta > 14) {
+                this.handleMoved = true;
                 this.props.onCollapse?.();
                 cleanup();
             }
@@ -75,9 +85,21 @@ export class RouteStopList extends Component {
             document.removeEventListener("pointerup", cleanup);
             document.removeEventListener("pointercancel", cleanup);
         };
-        document.addEventListener("pointermove", onMove, { passive: true });
+        document.addEventListener("pointermove", onMove, { passive: false });
         document.addEventListener("pointerup", cleanup);
         document.addEventListener("pointercancel", cleanup);
+    }
+
+    toggleSheet() {
+        if (this.handleMoved) {
+            this.handleMoved = false;
+            return;
+        }
+        if (this.props.expanded) {
+            this.props.onCollapse?.();
+        } else {
+            this.props.onExpand?.();
+        }
     }
 
     onGripPointerDown(index, id, ev) {

@@ -1,6 +1,6 @@
 /** @odoo-module **/
 
-import { Component, onWillStart, useState, xml } from "@odoo/owl";
+import { Component, onWillStart, onWillUnmount, useState, xml } from "@odoo/owl";
 import { rpc } from "@web/core/network/rpc";
 import { geocodeStops, getCurrentPosition } from "../../services/google_maps_utils";
 import { sortNearestStops, formatDistance, formatDuration, distanceMeters } from "../../services/route_math";
@@ -84,7 +84,7 @@ export class DeliveryRouteApp extends Component {
                     <section class="hlv-route-map-wrap">
                         <RouteMap apiKey="state.apiKey"
                                   origin="state.origin"
-                                  stops="state.routeStops"
+                                  stops="mapStops"
                                   started="state.started"
                                   focusStopId="currentStop ? currentStop.id : 0"
                                   onRouteSummary="onRouteSummary.bind(this)"
@@ -116,17 +116,28 @@ export class DeliveryRouteApp extends Component {
                     </t>
 
                     <t t-if="state.started &amp;&amp; currentStop">
-                        <section class="hlv-navigation-panel">
+                        <section class="hlv-navigation-panel" t-att-class="{ 'is-collapsed': state.navCardCollapsed }">
                             <div class="hlv-navigation-card">
                                 <div class="hlv-nav-label">
                                     <span>ĐANG DI CHUYỂN ĐẾN</span>
                                     <strong>Điểm <t t-esc="currentStopIndex + 1"/></strong>
                                 </div>
+                                <button class="hlv-nav-collapse-btn"
+                                        t-on-click="toggleNavCard"
+                                        t-att-title="state.navCardCollapsed ? 'Mo thong tin' : 'Thu gon'">
+                                    <t t-esc="state.navCardCollapsed ? 'Mo' : 'Thu'"/>
+                                </button>
+                                <div class="hlv-nav-card-body">
                                 <h2><t t-esc="currentStop.partner_name || currentStop.picking_name"/></h2>
                                 <p><t t-esc="currentStop.address"/></p>
                                 <div class="hlv-nav-metrics">
                                     <span>◷ <small>Dự kiến</small><b><t t-esc="nextDurationText"/></b></span>
                                     <span>⇅ <small>Quãng đường</small><b><t t-esc="formatDistance(nextDistance)"/></b></span>
+                                </div>
+                                <div class="hlv-nav-actions">
+                                    <button class="hlv-nav-primary-btn" t-on-click="openTurnByTurn">Mo chi duong</button>
+                                    <button class="hlv-nav-secondary-btn" t-on-click="refreshCurrentPosition">Dinh vi lai</button>
+                                </div>
                                 </div>
                             </div>
                             <button class="hlv-route-swipe"
@@ -167,12 +178,15 @@ export class DeliveryRouteApp extends Component {
             fabDragX: 0,
             fabDragMax: 0,
             fabDragging: false,
+            navCardCollapsed: false,
         });
+        this.watchId = null;
 
         onWillStart(async () => {
             await this.bootstrapRoute();
             await this.loadDeliveryHistory();
         });
+        onWillUnmount(() => this.stopPositionWatch());
     }
 
     async bootstrapRoute() {
@@ -266,6 +280,8 @@ export class DeliveryRouteApp extends Component {
     startDelivery() {
         this.state.started = true;
         this.state.sheetExpanded = false;
+        this.state.navCardCollapsed = false;
+        this.startPositionWatch();
     }
 
     openHistory() {
@@ -283,6 +299,68 @@ export class DeliveryRouteApp extends Component {
 
     openScanner() {
         window.location.href = this.state.scannerUrl;
+    }
+
+    toggleNavCard() {
+        this.state.navCardCollapsed = !this.state.navCardCollapsed;
+    }
+
+    async refreshCurrentPosition() {
+        try {
+            const position = await getCurrentPosition({ maximumAge: 0, timeout: 10000 });
+            this.state.origin = {
+                lat: position.coords.latitude,
+                lng: position.coords.longitude,
+            };
+        } catch (error) {
+            this.state.warningMessage = "Khong lay duoc vi tri hien tai";
+        }
+    }
+
+    startPositionWatch() {
+        this.stopPositionWatch();
+        if (!navigator.geolocation) {
+            return;
+        }
+        this.watchId = navigator.geolocation.watchPosition(
+            (position) => {
+                this.state.origin = {
+                    lat: position.coords.latitude,
+                    lng: position.coords.longitude,
+                };
+            },
+            () => {
+                this.state.warningMessage = "Dang mat tin hieu GPS, dung vi tri gan nhat";
+            },
+            {
+                enableHighAccuracy: true,
+                maximumAge: 5000,
+                timeout: 15000,
+            },
+        );
+    }
+
+    stopPositionWatch() {
+        if (this.watchId !== null && navigator.geolocation) {
+            navigator.geolocation.clearWatch(this.watchId);
+        }
+        this.watchId = null;
+    }
+
+    openTurnByTurn() {
+        if (!this.currentStop?.geocode) {
+            return;
+        }
+        const params = new URLSearchParams({
+            api: "1",
+            destination: `${this.currentStop.geocode.lat},${this.currentStop.geocode.lng}`,
+            travelmode: "driving",
+            dir_action: "navigate",
+        });
+        if (this.state.origin) {
+            params.set("origin", `${this.state.origin.lat},${this.state.origin.lng}`);
+        }
+        window.open(`https://www.google.com/maps/dir/?${params.toString()}`, "_blank", "noopener");
     }
 
     onFabTouchStart(ev) {
@@ -339,6 +417,10 @@ export class DeliveryRouteApp extends Component {
 
     get currentStop() {
         return this.state.routeStops[this.currentStopIndex] || null;
+    }
+
+    get mapStops() {
+        return this.state.started && this.currentStop ? [this.currentStop] : this.state.routeStops;
     }
 
     get nextDistance() {

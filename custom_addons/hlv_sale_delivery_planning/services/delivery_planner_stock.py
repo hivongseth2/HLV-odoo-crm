@@ -251,6 +251,23 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                         product_availabilities[(pid, wh_id)] = 0.0
                     if (pid, wh_id) not in product_on_hand:
                         product_on_hand[(pid, wh_id)] = 0.0
+            if all_cloc_ids:
+                for mv in self.env['stock.move'].sudo().search_read([
+                    ('product_id', 'in', list(all_prod_ids_needed)),
+                    ('state', 'in', ('assigned', 'partially_available')),
+                    ('picking_id.picking_type_code', '=', 'internal'),
+                    ('picking_id.state', 'not in', ('done', 'cancel')),
+                    ('sale_line_id', '=', False),
+                    ('location_id', 'in', all_cloc_ids),
+                ], ['product_id', 'location_id', 'quantity']):
+                    pid = mv['product_id'][0]
+                    wh_id = loc_to_wh_id.get(mv['location_id'][0])
+                    if wh_id:
+                        key = (pid, wh_id)
+                        product_availabilities[key] = min(
+                            product_availabilities.get(key, 0.0) + (mv.get('quantity') or 0.0),
+                            product_on_hand.get(key, 0.0),
+                        )
 
         all_warehouse_ids = set(k[1] for k in product_availabilities.keys())
 

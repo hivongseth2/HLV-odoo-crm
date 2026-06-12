@@ -42,6 +42,7 @@ export class RouteMap extends Component {
                 fullscreenControl: false,
                 clickableIcons: false,
                 gestureHandling: "greedy",
+                backgroundColor: "#e8f3ec",
             });
             const routesLib = await maps.importLibrary("routes");
             this.Route = routesLib.Route;
@@ -138,9 +139,9 @@ export class RouteMap extends Component {
             this.polylines = route.createPolylines();
             this.polylines.forEach((polyline) => {
                 polyline.setOptions({
-                    strokeColor: "#1f7a1f",
-                    strokeWeight: 5,
-                    strokeOpacity: 0.92,
+                    strokeColor: this.props.started ? "#00a859" : "#118a42",
+                    strokeWeight: this.props.started ? 7 : 5,
+                    strokeOpacity: 0.95,
                 });
                 polyline.setMap(this.map);
             });
@@ -148,10 +149,12 @@ export class RouteMap extends Component {
             const distance = route.distanceMeters || 0;
             const duration = route.durationMillis ? Math.round(route.durationMillis / 1000) : 0;
             this.props.onRouteSummary?.({ distance, duration });
-            if (this.props.started && stops[0]?.geocode) {
-                this.map.panTo(stops[0].geocode);
-                this.map.setZoom(15);
+            if (this.props.started && this.props.origin) {
+                this.map.panTo(this.props.origin);
+                this.map.setZoom(17);
+                this.map.setTilt?.(45);
             } else {
+                this.map.setTilt?.(0);
                 this.fitRouteBounds(maps);
             }
             maps.event.trigger(this.map, "resize");
