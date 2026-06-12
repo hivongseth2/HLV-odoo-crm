@@ -141,7 +141,7 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
         return suggestions
 
     def _format_dashboard_order(
-        self, so, po_by_origin, product_availabilities,
+        self, so, po_by_origin, product_availabilities, product_on_hand,
         att_by_picking, so_packages_dict, so_status_dict,
         transfer_suggestions=None,
         page_kit_tmpl_ids=None, page_kit_bom_map=None, page_blocking_by_so=None,
@@ -151,6 +151,8 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
         Serialize một Sale Order thành dict để trả về cho OWL Dashboard.
         Tính real_delivery_status, gom thông tin lines, pickings, packages.
         """
+        product_on_hand = product_on_hand or {}
+
         # --- PO data ---
         user_tz = pytz.timezone(self.env.context.get('tz') or self.env.user.tz or 'Asia/Ho_Chi_Minh')
         pos = po_by_origin.get(so.name, [])
@@ -300,7 +302,10 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                     line.move_ids.filtered(lambda m: m.state not in ('cancel', 'done')).mapped('quantity')
                 )
                 allocated_free = min(base_free_remaining, pending_qty_line) if pending_qty_line > 0 else 0.0
-                qty_avail = allocated_free + reserved_here
+                qty_avail = min(
+                    allocated_free + reserved_here,
+                    product_on_hand.get(product_wh_key, 0.0) if product_wh_key else 0.0,
+                )
                 if product_wh_key and allocated_free > 0:
                     remaining_free_by_product[product_wh_key] = max(base_free_remaining - allocated_free, 0.0)
             qty_packed = 0.0
@@ -333,7 +338,10 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                 reserved_line = 0.0  # Kit qty_avail đã bao gồm reservations rồi
             elif product_wh_key:
                 raw_free = product_availabilities.get(product_wh_key, 0.0)
-                reserved_line = reserved_here  # reuse biến đã tính ở trên
+                reserved_line = max(
+                    min(reserved_here, product_on_hand.get(product_wh_key, 0.0) - raw_free),
+                    0.0,
+                )
             else:
                 raw_free = 0.0
                 reserved_line = 0.0

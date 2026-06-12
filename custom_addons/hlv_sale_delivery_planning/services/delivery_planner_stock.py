@@ -204,6 +204,7 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             all_needed_wh_ids |= set(self.env['stock.warehouse'].search([]).ids)
 
         product_availabilities = {}
+        product_on_hand = {}
         loc_to_wh_id = {}
         if all_prod_ids_needed and all_needed_wh_ids:
             all_wh_objs = self.env['stock.warehouse'].browse(list(all_needed_wh_ids))
@@ -239,28 +240,17 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                     loc_id = loc_raw[0] if isinstance(loc_raw, (list, tuple)) else loc_raw
                     wh_id = loc_to_wh_id.get(loc_id)
                     if wh_id:
-                        free = max((row.get('quantity') or 0) - (row.get('reserved_quantity') or 0), 0.0)
+                        qty = row.get('quantity') or 0.0
+                        free = max(qty - (row.get('reserved_quantity') or 0), 0.0)
                         key = (pid, wh_id)
+                        product_on_hand[key] = product_on_hand.get(key, 0.0) + max(qty, 0.0)
                         product_availabilities[key] = product_availabilities.get(key, 0.0) + free
             for wh_id, prod_ids in product_qty_cache.items():
                 for pid in prod_ids:
                     if (pid, wh_id) not in product_availabilities:
                         product_availabilities[(pid, wh_id)] = 0.0
-            if all_cloc_ids:
-                for mv in self.env['stock.move'].sudo().search_read([
-                    ('product_id', 'in', list(all_prod_ids_needed)),
-                    ('state', 'in', ('assigned', 'partially_available')),
-                    ('picking_id.picking_type_code', '=', 'internal'),
-                    ('picking_id.state', 'not in', ('done', 'cancel')),
-                    ('sale_line_id', '=', False),
-                    ('location_id', 'in', all_cloc_ids),
-                ], ['product_id', 'location_id', 'quantity']):
-                    pid = mv['product_id'][0]
-                    wh_id = loc_to_wh_id.get(mv['location_id'][0])
-                    if wh_id:
-                        key = (pid, wh_id)
-                        if key in product_availabilities:
-                            product_availabilities[key] += mv['quantity']
+                    if (pid, wh_id) not in product_on_hand:
+                        product_on_hand[(pid, wh_id)] = 0.0
 
         all_warehouse_ids = set(k[1] for k in product_availabilities.keys())
 
@@ -353,14 +343,22 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                             c_pid = cm['product_id'][0] if cm.get('product_id') else None
                             c_pending = cm.get('product_uom_qty') or 0
                             if c_pending > 0 and c_pid and wh_id:
-                                c_avail = product_availabilities.get((c_pid, wh_id), 0.0) + (cm.get('quantity') or 0)
+                                c_key = (c_pid, wh_id)
+                                c_avail = min(
+                                    product_availabilities.get(c_key, 0.0) + (cm.get('quantity') or 0),
+                                    product_on_hand.get(c_key, 0.0),
+                                )
                                 if c_avail > 0:
                                     total_avail += min(c_avail, c_pending)
                                 if c_avail < c_pending:
                                     is_fully_ready = False
                 else:
-                    base_free = product_availabilities.get((pid, wh_id), 0.0) if wh_id else 0.0
-                    qty_avail = base_free + line_reserved_qty.get(line['id'], 0.0)
+                    key = (pid, wh_id) if wh_id else None
+                    base_free = product_availabilities.get(key, 0.0) if key else 0.0
+                    qty_avail = min(
+                        base_free + line_reserved_qty.get(line['id'], 0.0),
+                        product_on_hand.get(key, 0.0) if key else 0.0,
+                    )
                     if qty_avail > 0:
                         total_avail += min(qty_avail, pending_qty)
                     if qty_avail < pending_qty:
@@ -392,7 +390,11 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                     pending_qty = (line.get('product_uom_qty') or 0) - (line.get('qty_delivered') or 0)
                     if pending_qty <= 0:
                         continue
-                    if (product_availabilities.get((pid, wh_id), 0.0) + line_reserved_qty.get(line['id'], 0.0)) >= pending_qty:
+                    key = (pid, wh_id)
+                    if min(
+                        product_availabilities.get(key, 0.0) + line_reserved_qty.get(line['id'], 0.0),
+                        product_on_hand.get(key, 0.0),
+                    ) >= pending_qty:
                         continue
                     for other_wh_id in all_warehouse_ids:
                         if other_wh_id != wh_id and product_availabilities.get((pid, other_wh_id), 0.0) > 0:
@@ -591,4 +593,4 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 elif ps == 'waiting_stock':
                     dashboard_stats['packing_waiting'] += 1
 
-        return sales, matched_sale_ids, dashboard_stats, product_availabilities, so_status_dict
+        return sales, matched_sale_ids, dashboard_stats, product_availabilities, product_on_hand, so_status_dict

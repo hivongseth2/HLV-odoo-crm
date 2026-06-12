@@ -71,7 +71,7 @@ class DeliveryPlannerService(models.AbstractModel):
             page_sales = self.env['sale.order'].browse(
                 matched_ids[int(offset): int(offset) + int(limit)]
             )
-            page_sales, _page_ids, _stats, product_availabilities, so_status_dict = \
+            page_sales, _page_ids, _stats, product_availabilities, product_on_hand, so_status_dict = \
                 self._calculate_po_and_stock_status(
                     page_sales, filter_po_date_from, filter_po_date_to,
                     filter_po_status, filter_delivery_status, filter_stock_status,
@@ -85,7 +85,7 @@ class DeliveryPlannerService(models.AbstractModel):
                     filter_shipper_received='all',
                 )
         else:
-            sales, matched_ids, dashboard_stats, product_availabilities, so_status_dict = \
+            sales, matched_ids, dashboard_stats, product_availabilities, product_on_hand, so_status_dict = \
                 self._calculate_po_and_stock_status(
                     sales, filter_po_date_from, filter_po_date_to,
                     filter_po_status, filter_delivery_status, filter_stock_status, filter_packing_status,
@@ -152,7 +152,7 @@ class DeliveryPlannerService(models.AbstractModel):
 
         result = [
             self._format_dashboard_order(
-                so, po_by_origin, product_availabilities,
+                so, po_by_origin, product_availabilities, product_on_hand,
                 att_by_picking, so_packages_dict, so_status_dict.get(so.id, {}),
                 transfer_suggestions=transfer_map.get(so.id),
                 page_kit_tmpl_ids=page_kit_tmpl_ids,
@@ -282,7 +282,7 @@ class DeliveryPlannerService(models.AbstractModel):
         # Khi không có filter_kwargs (legacy callers): giữ nguyên hành vi cũ
         # (show_completed=True, không filter status) — chỉ refresh data.
         if fk:
-            page_sales, _matched_ids, _stats, product_availabilities, so_status_dict = \
+            page_sales, _matched_ids, _stats, product_availabilities, product_on_hand, so_status_dict = \
                 self._calculate_po_and_stock_status(
                     page_sales,
                     fk.get('filter_po_date_from', ''),
@@ -306,7 +306,7 @@ class DeliveryPlannerService(models.AbstractModel):
             if not page_sales:
                 return {'orders': [], 'removed_ids': removed_ids}
         else:
-            page_sales, _matched_ids, _stats, product_availabilities, so_status_dict = \
+            page_sales, _matched_ids, _stats, product_availabilities, product_on_hand, so_status_dict = \
                 self._calculate_po_and_stock_status(
                     page_sales,
                     po_date_from='', po_date_to='', po_status='all',
@@ -349,7 +349,7 @@ class DeliveryPlannerService(models.AbstractModel):
 
         orders = [
             self._format_dashboard_order(
-                so, po_by_origin, product_availabilities,
+                so, po_by_origin, product_availabilities, product_on_hand,
                 att_by_picking, so_packages_dict, so_status_dict.get(so.id, {}),
                 transfer_suggestions=transfer_map.get(so.id),
                 page_kit_tmpl_ids=page_kit_tmpl_ids,

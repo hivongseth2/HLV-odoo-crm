@@ -160,7 +160,7 @@ class DeliveryPlannerServiceStats(models.AbstractModel):
                     'source': 'snapshot',
                 }
 
-        _, matched_ids, dashboard_stats, _, _ = self._calculate_po_and_stock_status(
+        _, matched_ids, dashboard_stats, _, _, _ = self._calculate_po_and_stock_status(
             sales, filter_po_date_from, filter_po_date_to,
             filter_po_status, filter_delivery_status,
             filter_stock_status, filter_packing_status,
