@@ -107,11 +107,11 @@
                                                 </div>
                                             </t>
                                         </div>
-                                        <div class="package-card-footer" t-if="state.picking.state !== 'done'">
-                                            <button t-if="!state.picking.is_putaway" class="btn btn-outline btn-sm btn-pkg-edit" t-on-click="() => this.openPackageEdit(pkg)">
+                                        <div class="package-card-footer" t-if="state.picking.state !== 'done' and state.picking.can_edit_packages">
+                                            <button t-if="state.picking.can_edit_packages" class="btn btn-outline btn-sm btn-pkg-edit" t-on-click="() => this.openPackageEdit(pkg)">
                                                 <i class="fa fa-edit"></i> Chỉnh sửa
                                             </button>
-                                            <button class="btn btn-warning btn-sm" style="margin-left: 8px; padding: 4px 12px; font-size: 0.85rem; color: #fff;" t-on-click="() => this.unpackPackage(pkg)">
+                                            <button t-if="state.picking.can_edit_packages" class="btn btn-warning btn-sm" style="margin-left: 8px; padding: 4px 12px; font-size: 0.85rem; color: #fff;" t-on-click="() => this.unpackPackage(pkg)">
                                                 <i class="fa fa-box-open"></i> Gỡ đóng gói
                                             </button>
                                         </div>
@@ -187,7 +187,7 @@
                                 <t t-set="threshold" t-value="state.picking.qty_button_threshold !== undefined ? state.picking.qty_button_threshold : 50"/>
                                 <t t-set="has_large_qty" t-value="state.picking.show_qty_buttons and line.product_uom_qty &gt; threshold"/>
                                 
-                                <t t-if="has_fractional or has_large_qty">
+                                <t t-if="line.is_package_transfer_line or has_fractional or has_large_qty">
                                     <div t-if="state.picking.state !== 'done'" style="position: relative;">
                                         <!-- Overlay for locked state -->
                                         <div t-if="!can_edit_qty" style="position: absolute; top: 0; left: 0; right: 0; bottom: 10px; z-index: 10; display: flex; align-items: center; justify-content: center; ">
@@ -199,20 +199,20 @@
                                         <!-- Buttons Container -->
                                         <div t-attf-style="background-color: transparent; padding: 6px 12px 10px 12px; display: flex; gap: 4px; align-items: center; justify-content: center; flex-wrap: wrap; #{!can_edit_qty ? 'opacity: 0.5; pointer-events: none;' : ''}">
                                             <button t-if="has_large_qty" class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, -10)">-10</button>
-                                            <button t-if="has_large_qty" class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, -1)">-1</button>
+                                            <button t-if="line.is_package_transfer_line or has_large_qty" class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, -1)">-1</button>
                                             
                                             <button t-if="has_fractional" class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, -0.1)">-0.1</button>
                                             <button t-if="has_fractional" class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, -0.01)">-0.01</button>
                                             
-                                            <input type="number" class="form-control" style="width: 48px; text-align: center; font-weight: bold; padding: 4px 2px; font-size: 0.85rem;" t-model="line.qty_done" t-on-change="(ev) => this.saveQty(line, ev)" min="0" step="any" t-att-disabled="!can_edit_qty"/>
+                                            <input type="number" class="form-control" style="width: 58px; text-align: center; font-weight: bold; padding: 4px 2px; font-size: 0.85rem;" t-model="line.qty_done" t-on-change="(ev) => this.saveQty(line, ev)" min="0" t-att-max="line.is_package_transfer_line ? line.package_physical_qty : undefined" step="any" t-att-disabled="!can_edit_qty"/>
                                             
                                             <button t-if="has_fractional" class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, 0.01)">+0.01</button>
                                             <button t-if="has_fractional" class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, 0.1)">+0.1</button>
                                             
-                                            <button t-if="has_large_qty" class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, 1)">+1</button>
+                                            <button t-if="line.is_package_transfer_line or has_large_qty" class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, 1)">+1</button>
                                             <button t-if="has_large_qty" class="btn btn-outline btn-sm" style="flex: 1; min-width: 28px; padding: 4px 2px; font-size: 0.78rem;" t-on-click="() => this.adjustQty(line, 10)">+10</button>
                                             
-                                            <button t-if="!state.picking.is_pick and !state.picking.source_transfer_id" class="btn btn-danger btn-sm" style="padding: 4px 8px; font-size: 0.78rem; min-width: 28px;" t-on-click="() => this.deleteLine(line)">
+                                            <button t-if="!line.is_package_transfer_line and !state.picking.is_pick and !state.picking.source_transfer_id" class="btn btn-danger btn-sm" style="padding: 4px 8px; font-size: 0.78rem; min-width: 28px;" t-on-click="() => this.deleteLine(line)">
                                                 <i class="fa fa-trash"></i>
                                             </button>
                                         </div>
@@ -342,14 +342,14 @@
                                             <div class="pkg-edit-item-ops">
                                                 <!-- Qty controls -->
                                                 <div class="pkg-qty-control-row">
-                                                    <button t-if="!state.picking.is_putaway" class="btn btn-outline btn-sm" t-on-click="() => this.pkgAdjustQty(item, -1)">-1</button>
+                                                    <button t-if="state.picking.can_edit_packages" class="btn btn-outline btn-sm" t-on-click="() => this.pkgAdjustQty(item, -1)">-1</button>
                                                     <span class="pkg-qty-val" t-attf-style="#{state.picking.is_putaway ? 'font-weight: bold; font-size: 1.1rem;' : ''}">
                                                         <t t-esc="item.qty_done"/> <t t-esc="item.uom"/>
                                                     </span>
-                                                    <button t-if="!state.picking.is_putaway" class="btn btn-outline btn-sm" t-on-click="() => this.pkgAdjustQty(item, 1)">+1</button>
+                                                    <button t-if="state.picking.can_edit_packages" class="btn btn-outline btn-sm" t-on-click="() => this.pkgAdjustQty(item, 1)">+1</button>
                                                 </div>
                                                 
-                                                <div class="pkg-action-buttons-row" t-if="!state.picking.is_putaway">
+                                                <div class="pkg-action-buttons-row" t-if="state.picking.can_edit_packages">
                                                     <!-- Unpack -->
                                                     <button class="btn btn-danger btn-sm btn-pkg-action" style="padding: 4px 8px; font-size: 0.78rem;" t-on-click="() => this.pkgRemoveItem(item)">
                                                         <i class="fa fa-sign-out-alt"></i> Gỡ kiện
@@ -379,7 +379,7 @@
                             </div>
                             
                             <!-- Add Item to Package section -->
-                            <div t-if="!state.picking.is_putaway and state.packageAvailableItems.length > 0" class="pkg-add-section-container">
+                            <div t-if="state.picking.can_edit_packages and state.packageAvailableItems.length > 0" class="pkg-add-section-container">
                                 <div class="modal-section-title" style="margin-top: 20px;">THÊM SẢN PHẨM LẺ VÀO KIỆN</div>
                                 <div class="pkg-add-form">
                                     <select class="form-select form-select-sm" t-model="state.addItemMoveLineId">
@@ -402,7 +402,7 @@
                         <!-- Modal Footer -->
                         <div class="modal-footer-custom">
                             <button class="btn btn-outline" style="flex: 1;" t-on-click="closePackageEdit">Đóng</button>
-                            <button t-if="!state.picking.is_putaway" class="btn btn-success" style="flex: 1;" t-on-click="savePackageChanges">Lưu thay đổi</button>
+                            <button t-if="state.picking.can_edit_packages" class="btn btn-success" style="flex: 1;" t-on-click="savePackageChanges">Lưu thay đổi</button>
                         </div>
                     </div>
                 </div>

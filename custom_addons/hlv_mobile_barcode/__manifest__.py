@@ -18,6 +18,7 @@ Mobile Barcode Scanner
         "stock_barcode",
         "web",
         "hlv_sale_delivery_planning",
+        "hlv_pack_sequence",
         # === OPTION B: DEPENDS ON WAREHOUSE PERMISSION ===
         # "hlv_warehouse_permission",
         # =================================================

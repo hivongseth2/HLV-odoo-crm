@@ -16,3 +16,16 @@ class StockMoveLine(models.Model):
             "Khi xác nhận phiếu, giá trị này sẽ được ghi đè lên field 'quantity'."
         )
     )
+
+    package_transfer_qty = fields.Float(
+        string="Package Transfer Quantity",
+        default=0.0,
+        digits='Product Unit of Measure',
+        copy=False,
+        help="Quantity selected to move while the full source package remains reserved.",
+    )
+    package_transfer_qty_set = fields.Boolean(
+        string="Package Transfer Quantity Set",
+        default=False,
+        copy=False,
+    )
