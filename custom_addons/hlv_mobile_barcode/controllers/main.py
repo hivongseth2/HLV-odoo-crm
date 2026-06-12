@@ -260,6 +260,9 @@ def _add_exact_package_to_new_transfer(picking, package):
 
 def _prepare_partial_packages_for_validation(picking):
     """Keep the remainder in the source package and move the selected part in a new package."""
+    if not _is_new_internal_transfer(picking):
+        raise UserError(_('Luồng tách kiện này chỉ áp dụng cho phiếu INT tạo từ Mobile Barcode.'))
+
     selection_lines = picking.sudo().move_line_ids.filtered(
         lambda ml: ml.package_transfer_qty_set
         and ml.package_id
@@ -408,6 +411,28 @@ def _prepare_partial_packages_for_validation(picking):
         )
         if float_compare(new_package_qty, expected_qty, precision_rounding=0.00001) != 0:
             raise UserError(_('Kiểm tra kiện chuyển mới "%s" sau khi tách không khớp.', transfer_package.name))
+        old_package_lines = MoveLine.search([
+            ('picking_id', '=', picking.id),
+            ('state', 'not in', ['done', 'cancel']),
+            ('quantity', '>', 0),
+            '|',
+            ('package_id', '=', package.id),
+            ('result_package_id', '=', package.id),
+        ])
+        if old_package_lines:
+            raise UserError(_(
+                'Phiếu chuyển vẫn còn giữ kiện cũ "%s". Giao dịch đã được hoàn tác.',
+                package.name,
+            ))
+        old_package_qty = sum(Quant.search([
+            ('package_id', '=', package.id),
+            ('quantity', '>', 0),
+        ]).mapped('quantity'))
+        if float_compare(old_package_qty, 0.0, precision_rounding=0.00001) <= 0:
+            raise UserError(_(
+                'Kiện cũ "%s" không còn phần hàng ở lại kho nguồn. Giao dịch đã được hoàn tác.',
+                package.name,
+            ))
 
     for move in picking.sudo().move_ids.filtered(lambda m: m.state not in ['done', 'cancel']):
         demand = sum(
@@ -989,7 +1014,10 @@ class HLVMobileBarcodeController(http.Controller):
             'is_putaway': is_putaway,
             'can_edit_packages': (
                 _can_edit_packages(picking)
-                and not picking.move_line_ids.filtered('package_transfer_qty_set')
+                and not (
+                    _is_new_internal_transfer(picking)
+                    and picking.move_line_ids.filtered('package_transfer_qty_set')
+                )
             ),
             'show_qty_buttons': show_qty_buttons,
             'qty_button_threshold': qty_button_threshold,
@@ -1969,7 +1997,11 @@ class HLVMobileBarcodeController(http.Controller):
                     lines_to_reset.write({'qty_scanned': 0.0})
                     changed = True
             else:
-                package_selection_lines = move_lines.filtered('package_transfer_qty_set')
+                package_selection_lines = (
+                    move_lines.filtered('package_transfer_qty_set')
+                    if _is_new_internal_transfer(picking)
+                    else request.env['stock.move.line']
+                )
                 package_selection_moves = package_selection_lines.mapped('move_id')
                 if package_selection_lines:
                     package_selection_lines.unlink()
@@ -2569,7 +2601,13 @@ class HLVMobileBarcodeController(http.Controller):
             # Also, if package_level_ids exists, Odoo will FORCE the package to move, causing errors.
             package_totals = {}
             for ml in picking.sudo().move_line_ids:
-                if ml.result_package_id:
+                if (
+                    ml.result_package_id
+                    and not (
+                        _is_new_internal_transfer(picking)
+                        and ml.package_transfer_qty_set
+                    )
+                ):
                     pkg_id = ml.result_package_id.id
                     if pkg_id not in package_totals:
                         package_totals[pkg_id] = {'qty': 0.0, 'qty_uom': 0.0, 'mls': []}
