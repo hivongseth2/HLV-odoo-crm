@@ -4,6 +4,7 @@ from odoo import http, _
 # pyrefly: ignore [missing-import]
 from odoo.http import request
 from odoo.exceptions import UserError
+from odoo.tools.float_utils import float_compare
 
 _logger = logging.getLogger(__name__)
 
@@ -88,7 +89,7 @@ def _loose_package_vals():
     }
 
 def _step2_canonical_line_entries(picking):
-    """Match each source line to one existing Step 2 line without mutating stock data."""
+    """Use current Step 2 lines while validating totals against the source transfer."""
     if not picking or not picking.exists() or not picking.source_transfer_id:
         return [], []
 
@@ -96,52 +97,30 @@ def _step2_canonical_line_entries(picking):
         lambda ml: ml.quantity > 0 and ml.state not in ['cancel']
     ).sorted('id')
     target_lines = picking.move_line_ids.filtered(
-        lambda ml: ml.state != 'cancel'
-    )
-    used_target_ids = set()
+        lambda ml: ml.quantity > 0 and ml.state != 'cancel'
+    ).sorted('id')
     entries = []
     missing_source_lines = []
 
-    def _sorted_candidates(candidates, source_line):
-        candidates = candidates.sorted(key=lambda ml: (
-            0 if ml.quantity == source_line.quantity else 1,
-            0 if ml.quantity > 0 else 1,
-            ml.id,
-        ))
-        return candidates
+    for product in source_lines.mapped('product_id'):
+        product_source_lines = source_lines.filtered(lambda ml: ml.product_id == product)
+        product_target_lines = target_lines.filtered(lambda ml: ml.product_id == product)
+        source_qty = sum(product_source_lines.mapped('quantity'))
+        target_qty = sum(product_target_lines.mapped('quantity'))
+        if (
+            not product_target_lines
+            or float_compare(source_qty, target_qty, precision_rounding=product.uom_id.rounding) != 0
+        ):
+            missing_source_lines.extend(product_source_lines)
+            continue
 
-    def _add_entry(source_line, candidates):
-        if not candidates:
-            return False
-        target_line = candidates[0]
-        used_target_ids.add(target_line.id)
-        entries.append({
-            'source_line': source_line,
-            'target_line': target_line,
-            'demand': source_line.quantity,
-            'package': _line_package(target_line),
-        })
-        return True
-
-    unmatched_source_lines = []
-    for source_line in source_lines:
-        source_package = source_line.result_package_id
-        exact_candidates = target_lines.filtered(
-            lambda ml: (
-                ml.id not in used_target_ids
-                and ml.product_id == source_line.product_id
-                and _line_package(ml) == source_package
-            )
-        )
-        if not _add_entry(source_line, _sorted_candidates(exact_candidates, source_line)):
-            unmatched_source_lines.append(source_line)
-
-    for source_line in unmatched_source_lines:
-        product_candidates = target_lines.filtered(
-            lambda ml: ml.id not in used_target_ids and ml.product_id == source_line.product_id
-        )
-        if not _add_entry(source_line, _sorted_candidates(product_candidates, source_line)):
-            missing_source_lines.append(source_line)
+        for target_line in product_target_lines:
+            entries.append({
+                'source_line': product_source_lines[0],
+                'target_line': target_line,
+                'demand': target_line.quantity,
+                'package': _line_package(target_line),
+            })
 
     return entries, missing_source_lines
 
@@ -285,9 +264,6 @@ class HLVMobileBarcodeController(http.Controller):
         step2_entries, missing_step2_lines = _step2_canonical_line_entries(picking)
         if missing_step2_lines:
             return {'error': _step2_line_error(missing_step2_lines)}
-        step2_entry_by_line_id = {
-            entry['target_line'].id: entry for entry in step2_entries
-        }
 
         product_ids = picking.move_ids.mapped('product_id').ids
         warehouse_qty_by_product = {}
@@ -304,9 +280,6 @@ class HLVMobileBarcodeController(http.Controller):
         for move in moves_to_render:
             if move.move_line_ids:
                 for ml in move.move_line_ids:
-                    step2_entry = step2_entry_by_line_id.get(ml.id)
-                    if picking.source_transfer_id and not step2_entry:
-                        continue
                     if is_putaway:
                         loc_name = ml.location_dest_id.display_name
                     else:
@@ -320,8 +293,8 @@ class HLVMobileBarcodeController(http.Controller):
                         if ml.quantity <= 0:
                             continue
                         line_demand = ml.quantity
-                    elif step2_entry:
-                        line_demand = step2_entry['demand']
+                    elif picking.source_transfer_id:
+                        line_demand = ml.quantity
                     elif ml.quantity > 0 or len(move.move_line_ids) > 1:
                         line_demand = ml.quantity
 
@@ -492,10 +465,7 @@ class HLVMobileBarcodeController(http.Controller):
             
         packages = []
         # Hỗ trợ cả result_package_id (khi đóng gói ở Bước 1) và package_id (kiện hàng đi kèm ở Bước 2)
-        canonical_step2_lines = request.env['stock.move.line'].browse(
-            [entry['target_line'].id for entry in step2_entries]
-        )
-        package_source_lines = canonical_step2_lines if picking.source_transfer_id else picking.move_line_ids
+        package_source_lines = picking.move_line_ids
         all_pkgs = request.env['stock.quant.package'].browse(list(dict.fromkeys(
             pkg.id for pkg in (_line_package(ml) for ml in package_source_lines) if pkg
         )))
@@ -503,15 +473,12 @@ class HLVMobileBarcodeController(http.Controller):
             pkg_mls = package_source_lines.filtered(
                 lambda ml: _line_package(ml) == pkg
             )
-            total_done = sum(
-                step2_entry_by_line_id[ml.id]['demand'] if picking.source_transfer_id else ml.quantity
-                for ml in pkg_mls
-            )
+            total_done = sum(ml.quantity for ml in pkg_mls)
             package_lines = [{
                 'move_line_id': ml.id,
                 'product_name': ml.product_id.display_name,
                 'product_barcode': ml.product_id.barcode or '',
-                'qty_done': step2_entry_by_line_id[ml.id]['demand'] if picking.source_transfer_id else (ml.quantity or ml.product_uom_id._compute_quantity(ml.move_id.product_uom_qty, ml.product_id.uom_id) if ml.move_id else 0),
+                'qty_done': ml.quantity,
                 'uom': ml.product_uom_id.name,
             } for ml in pkg_mls]
             if package_lines:

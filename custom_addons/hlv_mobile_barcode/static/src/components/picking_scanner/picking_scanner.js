@@ -89,18 +89,13 @@ export class PickingScanner extends Component {
                         ? document.querySelector(`[data-line-id="${moveLineId}"] .item-card`)
                         : null
                 ) || document.querySelector(`[data-product-id="${productId}"] .item-card`);
-                const elements = Array.from(
-                    document.querySelectorAll(`[data-product-id="${productId}"] .item-card`)
-                );
                 if (targetElement) {
+                    targetElement.classList.remove('flash-highlight');
+                    void targetElement.offsetWidth; // Force CSS reflow to restart animation
                     targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }
-                for (const element of elements) {
-                    element.classList.remove('flash-highlight');
-                    void element.offsetWidth; // Force CSS reflow to restart animation
-                    element.classList.add('flash-highlight');
+                    targetElement.classList.add('flash-highlight');
                     setTimeout(() => {
-                        if (element) element.classList.remove('flash-highlight');
+                        if (targetElement) targetElement.classList.remove('flash-highlight');
                     }, 1500);
                 }
             }
