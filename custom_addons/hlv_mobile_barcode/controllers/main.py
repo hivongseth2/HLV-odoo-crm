@@ -2059,6 +2059,7 @@ class HLVMobileBarcodeController(http.Controller):
                     package_totals[pkg_id]['qty_uom'] += ml.quantity_product_uom
                     package_totals[pkg_id]['mls'].append(ml)
             
+            deleted_packages_info = []
             for pkg_id, data in package_totals.items():
                 if 0 < data['qty'] < data['qty_uom']:
                     # Package is partially scanned.
@@ -2067,9 +2068,20 @@ class HLVMobileBarcodeController(http.Controller):
                     if pkg_levels:
                         pkg_levels.unlink()
                         
-                    # 2. Clear result_package_id for ALL lines so Odoo unpacks the done items.
+                    # 2. Tách dòng đã quét thành dòng lẻ (result_package_id = False) 
+                    # và XÓA dòng chưa quét khỏi move_line để tránh lỗi validate của Odoo.
                     for ml in data['mls']:
-                        ml.result_package_id = False
+                        if ml.quantity > 0:
+                            ml.result_package_id = False
+                        else:
+                            deleted_packages_info.append({
+                                'product_id': ml.product_id.id,
+                                'location_id': ml.location_id.id,
+                                'package_id': ml.package_id.id,
+                                'product_uom_id': ml.product_uom_id.id,
+                                'qty_demand': ml.quantity_product_uom,
+                            })
+                            ml.unlink()
             # ------------------------------------------
 
             res_dict = picking.button_validate()
@@ -2098,25 +2110,24 @@ class HLVMobileBarcodeController(http.Controller):
                         if picking.source_transfer_id and not bo.source_transfer_id:
                             bo.sudo().source_transfer_id = picking.source_transfer_id.id
 
-                        # Kế thừa package trên move_line_ids từ phiếu gốc
-                        for bo_ml in bo.move_line_ids:
-                            # Use AND instead of OR because package_id might be inherited but result_package_id is cleared
-                            if bo_ml.package_id and bo_ml.result_package_id:
-                                continue
-                            original_mls = picking.move_line_ids.filtered(
-                                lambda ml, prod=bo_ml.product_id: (
-                                    ml.product_id == prod
-                                    and (ml.package_id or ml.result_package_id)
-                                )
-                            )
-                            if original_mls:
-                                pkg = original_mls[0].package_id or original_mls[0].result_package_id
-                                bo_ml.sudo().write({
-                                    'package_id': pkg.id,
-                                    'result_package_id': pkg.id,
+                        # Tự tạo lại move_line với chính xác package đã bị xóa
+                        for info in deleted_packages_info:
+                            bo_move = bo.move_ids.filtered(lambda m: m.product_id.id == info['product_id'] and m.state not in ['done', 'cancel'])
+                            if bo_move:
+                                request.env['stock.move.line'].sudo().create({
+                                    'move_id': bo_move[0].id,
+                                    'picking_id': bo.id,
+                                    'product_id': info['product_id'],
+                                    'location_id': info['location_id'],
+                                    'location_dest_id': bo.location_dest_id.id,
+                                    'package_id': info['package_id'],
+                                    'result_package_id': info['package_id'],
+                                    'quantity_product_uom': info['qty_demand'],
+                                    'quantity': 0,
+                                    'product_uom_id': info['product_uom_id'],
                                 })
-                        
-                        # Assign backorder so it's ready for the next operation
+
+                        # Assign backorder để Odoo tự động tìm tồn kho cho các sản phẩm KHÁC chưa được assign
                         bo.sudo().action_assign()
 
                     backorder_info = {
