@@ -2036,6 +2036,14 @@ class HLVMobileBarcodeController(http.Controller):
                     if actual_demand > 0:
                         move.product_uom_qty = actual_demand
 
+            # --- FIX: Prevent "split package" error ---
+            # Odoo does not allow partially moving a package while keeping the same result_package_id.
+            # We must clear result_package_id for partially scanned lines so they are "unpacked" at destination.
+            for ml in picking.sudo().move_line_ids:
+                if 0 < ml.quantity < ml.quantity_product_uom and ml.result_package_id:
+                    ml.result_package_id = False
+            # ------------------------------------------
+
             res_dict = picking.button_validate()
             
             # Xử lý tự động tạo backorder nếu quét không đủ số lượng
