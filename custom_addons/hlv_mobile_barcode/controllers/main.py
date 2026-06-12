@@ -55,6 +55,38 @@ def _uses_qty_scanned_progress(picking):
         return False
     return bool(picking.source_transfer_id) or _is_pick_picking(picking) or _is_putaway_picking(picking)
 
+def _can_edit_packages(picking):
+    return bool(
+        picking
+        and picking.exists()
+        and picking.state not in ['done', 'cancel']
+        and (picking.source_transfer_id or not _is_putaway_picking(picking))
+    )
+
+def _line_package(line):
+    if line.picking_id.source_transfer_id:
+        return line.result_package_id
+    return line.result_package_id or line.package_id
+
+def _line_in_package(line, package_id):
+    return bool(
+        line
+        and package_id
+        and _line_package(line).id == package_id
+    )
+
+def _package_write_vals(picking, package_id):
+    vals = {'result_package_id': package_id}
+    if picking.source_transfer_id:
+        vals['package_id'] = package_id
+    return vals
+
+def _loose_package_vals():
+    return {
+        'result_package_id': False,
+        'package_id': False,
+    }
+
 def _step2_canonical_line_entries(picking):
     """Match each source line to one existing Step 2 line without mutating stock data."""
     if not picking or not picking.exists() or not picking.source_transfer_id:
@@ -70,31 +102,46 @@ def _step2_canonical_line_entries(picking):
     entries = []
     missing_source_lines = []
 
-    for source_line in source_lines:
-        package = source_line.result_package_id
-        candidates = target_lines.filtered(
-            lambda ml: (
-                ml.id not in used_target_ids
-                and ml.product_id == source_line.product_id
-                and (
-                    (package and (ml.package_id == package or ml.result_package_id == package))
-                    or (not package and not ml.package_id and not ml.result_package_id)
-                )
-            )
-        )
-        candidates = candidates.sorted(key=lambda ml: (0 if ml.quantity > 0 else 1, ml.id))
-        if not candidates:
-            missing_source_lines.append(source_line)
-            continue
+    def _sorted_candidates(candidates, source_line):
+        candidates = candidates.sorted(key=lambda ml: (
+            0 if ml.quantity == source_line.quantity else 1,
+            0 if ml.quantity > 0 else 1,
+            ml.id,
+        ))
+        return candidates
 
+    def _add_entry(source_line, candidates):
+        if not candidates:
+            return False
         target_line = candidates[0]
         used_target_ids.add(target_line.id)
         entries.append({
             'source_line': source_line,
             'target_line': target_line,
             'demand': source_line.quantity,
-            'package': package,
+            'package': _line_package(target_line),
         })
+        return True
+
+    unmatched_source_lines = []
+    for source_line in source_lines:
+        source_package = source_line.result_package_id
+        exact_candidates = target_lines.filtered(
+            lambda ml: (
+                ml.id not in used_target_ids
+                and ml.product_id == source_line.product_id
+                and _line_package(ml) == source_package
+            )
+        )
+        if not _add_entry(source_line, _sorted_candidates(exact_candidates, source_line)):
+            unmatched_source_lines.append(source_line)
+
+    for source_line in unmatched_source_lines:
+        product_candidates = target_lines.filtered(
+            lambda ml: ml.id not in used_target_ids and ml.product_id == source_line.product_id
+        )
+        if not _add_entry(source_line, _sorted_candidates(product_candidates, source_line)):
+            missing_source_lines.append(source_line)
 
     return entries, missing_source_lines
 
@@ -265,7 +312,7 @@ class HLVMobileBarcodeController(http.Controller):
                     else:
                         loc_name = ml.location_id.display_name
 
-                    package_name = ml.result_package_id.name or ml.package_id.name or False
+                    package_name = _line_package(ml).name or False
                     
                     # Calculate individual line demand for Step 2
                     line_demand = move.product_uom_qty
@@ -327,6 +374,14 @@ class HLVMobileBarcodeController(http.Controller):
         linked_picking_name = False
         
         if picking.picking_type_id.code == 'internal':
+            exact_step2 = request.env['stock.picking'].sudo().search([
+                ('source_transfer_id', '=', picking.id),
+                ('state', 'not in', ['cancel']),
+            ], order='id asc', limit=1)
+            if exact_step2:
+                linked_picking_id = exact_step2.id
+                linked_picking_name = exact_step2.name
+
             _logger.info(
                 "[LINKED_PICKING_SEARCH] === START for picking %s (id=%s, state=%s, dest_loc=%s) ===",
                 picking.name, picking.id, picking.state, picking.location_dest_id.display_name
@@ -339,7 +394,7 @@ class HLVMobileBarcodeController(http.Controller):
             messages = request.env['mail.message'].sudo().search([
                 ('model', '=', 'stock.picking'),
                 ('body', 'like', picking.name)
-            ], order='id desc', limit=10)
+            ], order='id desc', limit=10) if not linked_picking_id else request.env['mail.message'].browse()
             _logger.info(
                 "[LINKED_PICKING_SEARCH] Method 1 (Chatter): found %d messages for picking.name='%s' with model='stock.picking'",
                 len(messages), picking.name
@@ -423,6 +478,12 @@ class HLVMobileBarcodeController(http.Controller):
                     linked_picking_id = origin_pickings.id
                     linked_picking_name = origin_pickings.name
                     _logger.info("[LINKED_PICKING_SEARCH] Method 4 (Origin): ✅ FOUND linked picking %s (id=%s)", linked_picking_name, linked_picking_id)
+
+            if linked_picking_id:
+                linked_picking = request.env['stock.picking'].sudo().browse(linked_picking_id)
+                if linked_picking.source_transfer_id != picking:
+                    linked_picking_id = False
+                    linked_picking_name = False
             
             _logger.info(
                 "[LINKED_PICKING_SEARCH] === END for picking %s: result linked_picking_id=%s, linked_picking_name=%s ===",
@@ -435,10 +496,12 @@ class HLVMobileBarcodeController(http.Controller):
             [entry['target_line'].id for entry in step2_entries]
         )
         package_source_lines = canonical_step2_lines if picking.source_transfer_id else picking.move_line_ids
-        all_pkgs = package_source_lines.mapped('result_package_id') | package_source_lines.mapped('package_id')
+        all_pkgs = request.env['stock.quant.package'].browse(list(dict.fromkeys(
+            pkg.id for pkg in (_line_package(ml) for ml in package_source_lines) if pkg
+        )))
         for pkg in all_pkgs:
             pkg_mls = package_source_lines.filtered(
-                lambda ml: ml.result_package_id.id == pkg.id or ml.package_id.id == pkg.id
+                lambda ml: _line_package(ml) == pkg
             )
             total_done = sum(
                 step2_entry_by_line_id[ml.id]['demand'] if picking.source_transfer_id else ml.quantity
@@ -489,6 +552,7 @@ class HLVMobileBarcodeController(http.Controller):
             'source_transfer_id': picking.source_transfer_id.id if picking.source_transfer_id else False,
             'source_transfer_name': picking.source_transfer_id.name if picking.source_transfer_id else False,
             'is_putaway': is_putaway,
+            'can_edit_packages': _can_edit_packages(picking),
             'show_qty_buttons': show_qty_buttons,
             'qty_button_threshold': qty_button_threshold,
             'camera_default_on': camera_default_on,
@@ -1832,12 +1896,11 @@ class HLVMobileBarcodeController(http.Controller):
         assignment_error = _pick_assignment_error(ml.picking_id)
         if assignment_error:
             return assignment_error
+        if not _can_edit_packages(ml.picking_id):
+            return {'error': _('Phiếu này không cho phép chỉnh sửa kiện hàng.')}
             
         # Clear packages
-        ml.write({
-            'result_package_id': False,
-            'package_id': False
-        })
+        ml.write(_loose_package_vals())
         return {'success': True}
 
     @http.route('/hlv_mobile_barcode/unpack_package', type='json', auth='user')
@@ -1848,21 +1911,15 @@ class HLVMobileBarcodeController(http.Controller):
         assignment_error = _pick_assignment_error(picking)
         if assignment_error:
             return assignment_error
+        if not _can_edit_packages(picking):
+            return {'error': _('Phiếu này không cho phép chỉnh sửa kiện hàng.')}
             
-        move_lines = request.env['stock.move.line'].search([
-            ('picking_id', '=', picking.id),
-            '|',
-            ('result_package_id', '=', package_id),
-            ('package_id', '=', package_id)
-        ])
+        move_lines = picking.move_line_ids.filtered(lambda ml: _line_in_package(ml, package_id))
         
         if not move_lines:
             return {'error': _('Không tìm thấy sản phẩm nào trong kiện này.')}
             
-        move_lines.write({
-            'result_package_id': False,
-            'package_id': False
-        })
+        move_lines.write(_loose_package_vals())
         return {'success': True}
 
     @http.route('/hlv_mobile_barcode/validate_picking', type='json', auth='user')
@@ -2384,18 +2441,13 @@ class HLVMobileBarcodeController(http.Controller):
         if not package.exists():
             return {'error': _('Gói hàng không tồn tại!')}
 
-        # Lấy move_lines của package này trong picking hiện tại
-        move_lines = request.env['stock.move.line'].sudo().search([
-            ('picking_id', '=', picking.id),
-            '|',
-            ('result_package_id', '=', package.id),
-            ('package_id', '=', package.id)
-        ])
-
         # Lấy TẤT CẢ move_lines của picking
         all_move_lines = request.env['stock.move.line'].sudo().search([
             ('picking_id', '=', picking.id)
         ])
+        move_lines = all_move_lines.filtered(lambda ml: _line_in_package(ml, package.id))
+        if not move_lines:
+            return {'error': _('Kiện hàng không còn thuộc phiếu này.'), 'package_missing': True}
 
         items = []
         for ml in move_lines:
@@ -2417,10 +2469,9 @@ class HLVMobileBarcodeController(http.Controller):
             })
 
         # Lấy các packages khác trong picking này
-        all_packages_in_picking = request.env['stock.move.line'].sudo().search([
-            ('picking_id', '=', picking.id),
-            ('result_package_id', '!=', False)
-        ]).mapped('result_package_id')
+        all_packages_in_picking = request.env['stock.quant.package'].browse(list(dict.fromkeys(
+            pkg.id for pkg in (_line_package(ml) for ml in all_move_lines) if pkg
+        )))
 
         other_packages = []
         for pkg in all_packages_in_picking:
@@ -2451,7 +2502,7 @@ class HLVMobileBarcodeController(http.Controller):
             qty = float(ml.quantity or 0)
             product_map[pid]['total_scanned'] += qty
             
-            if not ml.result_package_id and qty > 0:
+            if not _line_package(ml) and qty > 0:
                 product_map[pid]['unassigned_scanned'] += qty
 
         # Quét từ Demand
@@ -2524,13 +2575,15 @@ class HLVMobileBarcodeController(http.Controller):
         assignment_error = _pick_assignment_error(picking)
         if assignment_error:
             return assignment_error
+        if not _can_edit_packages(picking):
+            return {'error': _('Phiếu này không cho phép chỉnh sửa kiện hàng.')}
 
         move_line = request.env['stock.move.line'].sudo().browse(move_line_id)
         if not move_line.exists() or move_line.picking_id.id != picking.id:
             return {'error': _('Dòng điều chuyển không tồn tại!')}
 
-        if move_line.result_package_id.id != package_id:
-            return {'error': _('Sản phẩm này không thuộc gói này!')}
+        if not _line_in_package(move_line, package_id):
+            return {'error': _('Sản phẩm này không còn thuộc gói này!'), 'package_stale': True}
 
         if new_qty < 0:
             return {'error': _('Số lượng không được âm!')}
@@ -2555,7 +2608,7 @@ class HLVMobileBarcodeController(http.Controller):
             
             # 1. Cập nhật dòng hiện tại trong package
             if new_qty == 0:
-                move_line.with_context(skip_qty_validation=True).write({'result_package_id': False})
+                move_line.with_context(skip_qty_validation=True).write(_loose_package_vals())
             else:
                 move_line.with_context(skip_qty_validation=True).write({'quantity': new_qty})
                 
@@ -2564,6 +2617,7 @@ class HLVMobileBarcodeController(http.Controller):
                     ('picking_id', '=', picking.id),
                     ('product_id', '=', move_line.product_id.id),
                     ('result_package_id', '=', False),
+                    ('package_id', '=', False),
                     ('location_id', '=', move_line.location_id.id),
                     ('location_dest_id', '=', move_line.location_dest_id.id),
                 ], limit=1)
@@ -2575,7 +2629,7 @@ class HLVMobileBarcodeController(http.Controller):
                 else:
                     move_line.with_context(skip_qty_validation=True).copy({
                         'quantity': diff,
-                        'result_package_id': False
+                        **_loose_package_vals(),
                     })
 
         return {
@@ -2593,17 +2647,17 @@ class HLVMobileBarcodeController(http.Controller):
         assignment_error = _pick_assignment_error(picking)
         if assignment_error:
             return assignment_error
+        if not _can_edit_packages(picking):
+            return {'error': _('Phiếu này không cho phép chỉnh sửa kiện hàng.')}
 
         move_line = request.env['stock.move.line'].sudo().browse(move_line_id)
         if not move_line.exists() or move_line.picking_id.id != picking.id:
             return {'error': _('Dòng điều chuyển không tồn tại!')}
 
-        if move_line.result_package_id.id != package_id:
-            return {'error': _('Sản phẩm này không thuộc gói này!')}
+        if not _line_in_package(move_line, package_id):
+            return {'error': _('Sản phẩm này không còn thuộc gói này!'), 'package_stale': True}
 
-        move_line.with_context(skip_qty_validation=True).write({
-            'result_package_id': False
-        })
+        move_line.with_context(skip_qty_validation=True).write(_loose_package_vals())
         
         return {
             'success': True,
@@ -2618,6 +2672,8 @@ class HLVMobileBarcodeController(http.Controller):
         assignment_error = _pick_assignment_error(picking)
         if assignment_error:
             return assignment_error
+        if not _can_edit_packages(picking):
+            return {'error': _('Phiếu này không cho phép chỉnh sửa kiện hàng.')}
 
         move_line = request.env['stock.move.line'].sudo().browse(move_line_id)
         if not move_line.exists() or move_line.picking_id.id != picking.id:
@@ -2625,6 +2681,9 @@ class HLVMobileBarcodeController(http.Controller):
 
         if qty <= 0:
             return {'error': _('Số lượng thêm phải lớn hơn 0!')}
+
+        if not picking.move_line_ids.filtered(lambda ml: _line_in_package(ml, package_id)):
+            return {'error': _('Kiện hàng không còn thuộc phiếu này.'), 'package_stale': True}
 
         product = move_line.product_id
 
@@ -2635,7 +2694,7 @@ class HLVMobileBarcodeController(http.Controller):
         ])
 
         # Tính unassigned scanned
-        unassigned_lines = all_product_lines.filtered(lambda ml: not ml.result_package_id and ml.quantity > 0)
+        unassigned_lines = all_product_lines.filtered(lambda ml: not _line_package(ml) and ml.quantity > 0)
         total_unassigned = sum(float(ml.quantity or 0) for ml in unassigned_lines)
         
         if qty > total_unassigned:
@@ -2655,7 +2714,7 @@ class HLVMobileBarcodeController(http.Controller):
                 take = min(remaining_qty_to_add, available)
                 
                 # Tìm dòng trong package đích
-                dest_line = all_product_lines.filtered(lambda l: l.result_package_id.id == package_id and l.id != ml.id)
+                dest_line = all_product_lines.filtered(lambda l: _line_in_package(l, package_id) and l.id != ml.id)
                 
                 if dest_line:
                     # Giảm source trước
@@ -2671,12 +2730,12 @@ class HLVMobileBarcodeController(http.Controller):
                 else:
                     # Không có dòng đích
                     if take == available:
-                        ml.with_context(skip_qty_validation=True).write({'result_package_id': package_id})
+                        ml.with_context(skip_qty_validation=True).write(_package_write_vals(picking, package_id))
                     else:
                         ml.with_context(skip_qty_validation=True).write({'quantity': ml.quantity - take})
                         ml.with_context(skip_qty_validation=True).copy({
                             'quantity': take,
-                            'result_package_id': package_id
+                            **_package_write_vals(picking, package_id),
                         })
                 
                 remaining_qty_to_add -= take
@@ -2694,6 +2753,8 @@ class HLVMobileBarcodeController(http.Controller):
         assignment_error = _pick_assignment_error(picking)
         if assignment_error:
             return assignment_error
+        if not _can_edit_packages(picking):
+            return {'error': _('Phiếu này không cho phép chỉnh sửa kiện hàng.')}
 
         if from_package_id == to_package_id:
             return {'error': _('Gói nguồn và gói đích phải khác nhau!')}
@@ -2702,8 +2763,8 @@ class HLVMobileBarcodeController(http.Controller):
         if not move_line.exists() or move_line.picking_id.id != picking.id:
             return {'error': _('Dòng điều chuyển không tồn tại!')}
 
-        if move_line.result_package_id.id != from_package_id:
-            return {'error': _('Sản phẩm này không thuộc gói nguồn!')}
+        if not _line_in_package(move_line, from_package_id):
+            return {'error': _('Sản phẩm này không còn thuộc gói nguồn!'), 'package_stale': True}
 
         if qty <= 0 or qty > move_line.quantity:
             return {'error': _('Số lượng chuyển không hợp lệ!')}
@@ -2713,10 +2774,8 @@ class HLVMobileBarcodeController(http.Controller):
             return {'error': _('Gói đích không tồn tại!')}
 
         # Kiểm tra xem gói đích có trong phiếu này không
-        to_ml_exists = request.env['stock.move.line'].sudo().search([
-            ('picking_id', '=', picking.id),
-            ('result_package_id', '=', to_package_id)
-        ], limit=1)
+        picking_lines = picking.sudo().move_line_ids
+        to_ml_exists = picking_lines.filtered(lambda ml: _line_in_package(ml, to_package_id))[:1]
         if not to_ml_exists:
             return {'error': _('Gói đích không tồn tại hoặc không hợp lệ trong phiếu này!')}
 
@@ -2725,12 +2784,13 @@ class HLVMobileBarcodeController(http.Controller):
         new_qty = move_line.quantity - qty
         
         # Tìm xem sản phẩm có trong package đích không
-        existing_in_target = request.env['stock.move.line'].sudo().search([
-            ('picking_id', '=', picking.id),
-            ('product_id', '=', move_line.product_id.id),
-            ('result_package_id', '=', to_package_id),
-            ('move_id', '=', move_line.move_id.id)
-        ], limit=1)
+        existing_in_target = picking_lines.filtered(
+            lambda ml: (
+                ml.product_id == move_line.product_id
+                and ml.move_id == move_line.move_id
+                and _line_in_package(ml, to_package_id)
+            )
+        )[:1]
 
         # Giảm số lượng ở nguồn trước
         if new_qty == 0:
@@ -2740,9 +2800,7 @@ class HLVMobileBarcodeController(http.Controller):
                 })
                 move_line.with_context(ctx).unlink()
             else:
-                move_line.with_context(ctx).write({
-                    'result_package_id': to_package_id
-                })
+                move_line.with_context(ctx).write(_package_write_vals(picking, to_package_id))
         else:
             move_line.with_context(ctx).write({'quantity': new_qty})
             if existing_in_target:
@@ -2751,8 +2809,8 @@ class HLVMobileBarcodeController(http.Controller):
                 })
             else:
                 move_line.with_context(ctx).copy({
-                    'result_package_id': to_package_id,
-                    'quantity': qty
+                    'quantity': qty,
+                    **_package_write_vals(picking, to_package_id),
                 })
 
         return {
