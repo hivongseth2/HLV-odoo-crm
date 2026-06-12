@@ -259,7 +259,7 @@ def _add_exact_package_to_new_transfer(picking, package):
     return created_lines
 
 def _prepare_partial_packages_for_validation(picking):
-    """Repack the physical remainder while keeping the selected part in its source package."""
+    """Keep the remainder in the source package and move the selected part in a new package."""
     selection_lines = picking.sudo().move_line_ids.filtered(
         lambda ml: ml.package_transfer_qty_set
         and ml.package_id
@@ -284,7 +284,7 @@ def _prepare_partial_packages_for_validation(picking):
             ', '.join(sorted(set(conflicts.mapped('picking_id.name')))),
         ))
 
-    remainder_packages = request.env['stock.quant.package']
+    transfer_packages = request.env['stock.quant.package']
     Quant = request.env['stock.quant'].sudo()
     MoveLine = request.env['stock.move.line'].sudo()
     for package in selection_lines.mapped('package_id'):
@@ -318,8 +318,8 @@ def _prepare_partial_packages_for_validation(picking):
         if not package_quants:
             raise UserError(_('Kiện "%s" không còn tồn kho để tách.', package.name))
 
-        remainder_package = request.env['stock.quant.package'].sudo().create({})
-        remainder_packages |= remainder_package
+        transfer_package = request.env['stock.quant.package'].sudo().create({})
+        transfer_packages |= transfer_package
         picking.package_level_ids.filtered(lambda level: level.package_id == package).unlink()
 
         selected_by_key = {}
@@ -337,7 +337,6 @@ def _prepare_partial_packages_for_validation(picking):
             selected_by_key[key] = selected_by_key.get(key, 0.0) + selected_base
             ml.with_context(skip_qty_validation=True).write({
                 'quantity': ml.package_transfer_qty,
-                'result_package_id': package.id,
             })
 
         for quant in package_quants:
@@ -349,9 +348,8 @@ def _prepare_partial_packages_for_validation(picking):
             )
             selected_qty = min(quant.quantity, selected_by_key.get(key, 0.0))
             selected_by_key[key] = max(0.0, selected_by_key.get(key, 0.0) - selected_qty)
-            remainder_qty = quant.quantity - selected_qty
             if float_compare(
-                remainder_qty,
+                selected_qty,
                 0.0,
                 precision_rounding=quant.product_id.uom_id.rounding,
             ) <= 0:
@@ -359,7 +357,7 @@ def _prepare_partial_packages_for_validation(picking):
             Quant._update_available_quantity(
                 quant.product_id,
                 quant.location_id,
-                -remainder_qty,
+                -selected_qty,
                 lot_id=quant.lot_id,
                 package_id=package,
                 owner_id=quant.owner_id,
@@ -367,11 +365,16 @@ def _prepare_partial_packages_for_validation(picking):
             Quant._update_available_quantity(
                 quant.product_id,
                 quant.location_id,
-                remainder_qty,
+                selected_qty,
                 lot_id=quant.lot_id,
-                package_id=remainder_package,
+                package_id=transfer_package,
                 owner_id=quant.owner_id,
             )
+
+        package_lines.filtered(lambda ml: ml.quantity > 0).with_context(skip_qty_validation=True).write({
+            'package_id': transfer_package.id,
+            'result_package_id': transfer_package.id,
+        })
 
         unmatched = [
             key for key, qty in selected_by_key.items()
@@ -394,17 +397,17 @@ def _prepare_partial_packages_for_validation(picking):
         if zero_lines:
             zero_lines.unlink()
 
-        old_qty = sum(Quant.search([('package_id', '=', package.id)]).mapped('quantity'))
+        new_package_qty = sum(Quant.search([('package_id', '=', transfer_package.id)]).mapped('quantity'))
         expected_qty = sum(
             ml.product_uom_id._compute_quantity(ml.quantity, ml.product_id.uom_id)
             for ml in MoveLine.search([
                 ('picking_id', '=', picking.id),
-                ('package_id', '=', package.id),
+                ('package_id', '=', transfer_package.id),
                 ('quantity', '>', 0),
             ])
         )
-        if float_compare(old_qty, expected_qty, precision_rounding=0.00001) != 0:
-            raise UserError(_('Kiểm tra kiện "%s" sau khi tách không khớp.', package.name))
+        if float_compare(new_package_qty, expected_qty, precision_rounding=0.00001) != 0:
+            raise UserError(_('Kiểm tra kiện chuyển mới "%s" sau khi tách không khớp.', transfer_package.name))
 
     for move in picking.sudo().move_ids.filtered(lambda m: m.state not in ['done', 'cancel']):
         demand = sum(
@@ -421,7 +424,7 @@ def _prepare_partial_packages_for_validation(picking):
     if empty_moves:
         empty_moves._action_cancel()
         empty_moves.unlink()
-    return remainder_packages
+    return transfer_packages
 
 def _lock_package_reservations(package_ids):
     if not package_ids:
@@ -2434,7 +2437,7 @@ class HLVMobileBarcodeController(http.Controller):
             uses_qty_scanned = _uses_qty_scanned_progress(picking)
             savepoint = request.env.cr.savepoint()
             savepoint.__enter__()
-            remainder_packages = request.env['stock.quant.package']
+            transfer_packages = request.env['stock.quant.package']
 
             # Finalize mobile scan progress before Odoo validation.
             demand_by_line_id = {}
@@ -2478,7 +2481,7 @@ class HLVMobileBarcodeController(http.Controller):
                         ml.quantity = ml.qty_scanned
 
             if _is_new_internal_transfer(picking):
-                remainder_packages = _prepare_partial_packages_for_validation(picking)
+                transfer_packages = _prepare_partial_packages_for_validation(picking)
 
             # STRICT PRE-VALIDATION STOCK CHECK
             # To completely prevent negative stock due to concurrent transactions
@@ -2688,10 +2691,10 @@ class HLVMobileBarcodeController(http.Controller):
                     
             result = {
                 'success': True,
-                'remainder_packages': [{
+                'transfer_packages': [{
                     'id': package.id,
                     'name': package.name,
-                } for package in remainder_packages],
+                } for package in transfer_packages],
             }
             result.update(backorder_info)
             savepoint.__exit__(None, None, None)
