@@ -1,6 +1,6 @@
 /** @odoo-module **/
 
-import { Component, onWillStart, onWillUnmount, useState, xml } from "@odoo/owl";
+import { Component, onWillStart, useState, xml } from "@odoo/owl";
 import { rpc } from "@web/core/network/rpc";
 import { geocodeStops, getCurrentPosition } from "../../services/google_maps_utils";
 import { sortNearestStops, formatDistance, formatDuration, distanceMeters } from "../../services/route_math";
@@ -9,7 +9,7 @@ import { RouteStopList } from "./route_stop_list";
 
 export class DeliveryRouteApp extends Component {
     static template = xml`<main class="hlv-delivery-route"
-                                t-att-class="{ 'is-started': state.started, 'is-history': state.view === 'history' }">
+                                t-att-class="{ 'is-history': state.view === 'history' }">
             <t t-if="state.isLoading">
                 <div class="hlv-route-loading">
                     <span class="hlv-loading-dot"></span>
@@ -84,8 +84,8 @@ export class DeliveryRouteApp extends Component {
                     <section class="hlv-route-map-wrap">
                         <RouteMap apiKey="state.apiKey"
                                   origin="state.origin"
-                                  stops="mapStops"
-                                  started="state.started"
+                                  stops="state.routeStops"
+                                  started="false"
                                   focusStopId="currentStop ? currentStop.id : 0"
                                   onRouteSummary="onRouteSummary.bind(this)"
                                   onError="onMapError.bind(this)"></RouteMap>
@@ -103,60 +103,24 @@ export class DeliveryRouteApp extends Component {
                         <div class="hlv-route-warning"><t t-esc="state.warningMessage"/></div>
                     </t>
 
-                    <t t-if="!state.started">
-                        <RouteStopList stops="state.routeStops"
-                                       expanded="state.sheetExpanded"
-                                       started="state.started"
-                                       nextDistance="nextDistance"
-                                       onExpand="expandSheet.bind(this)"
-                                       onCollapse="collapseSheet.bind(this)"
-                                       onReorder="onReorder.bind(this)"></RouteStopList>
+                    <RouteStopList stops="state.routeStops"
+                                   expanded="state.sheetExpanded"
+                                   started="false"
+                                   nextDistance="nextDistance"
+                                   onExpand="expandSheet.bind(this)"
+                                   onCollapse="collapseSheet.bind(this)"
+                                   onReorder="onReorder.bind(this)"
+                                   onNavigate="openTurnByTurn.bind(this)"></RouteStopList>
 
-                        <button class="hlv-route-start-btn" t-on-click="startDelivery">
-                            <i class="fa fa-location-arrow me-2"></i>Bắt đầu giao hàng
-                        </button>
-                    </t>
-
-                    <t t-if="state.started &amp;&amp; currentStop">
-                        <section class="hlv-navigation-panel" t-att-class="{ 'is-collapsed': state.navCardCollapsed }">
-                            <div class="hlv-navigation-card">
-                                <div class="hlv-nav-label">
-                                    <span>ĐANG DI CHUYỂN ĐẾN</span>
-                                    <strong>Điểm <t t-esc="currentStopIndex + 1"/></strong>
-                                </div>
-                                <button class="hlv-nav-collapse-btn"
-                                        t-on-click="toggleNavCard"
-                                        t-att-title="state.navCardCollapsed ? 'Mở thông tin' : 'Thu gọn'">
-                                    <t t-esc="state.navCardCollapsed ? 'Mở' : 'Thu'"/>
-                                </button>
-                                <div class="hlv-nav-card-body">
-                                <h2><t t-esc="currentStop.partner_name || currentStop.picking_name"/></h2>
-                                <p><t t-esc="currentStop.address"/></p>
-                                <div class="hlv-nav-metrics">
-                                    <span><i class="fa fa-clock-o"></i><small>Dự kiến</small><b><t t-esc="nextDurationText"/></b></span>
-                                    <span><i class="fa fa-road"></i><small>Quãng đường</small><b><t t-esc="formatDistance(nextDistance)"/></b></span>
-                                </div>
-                                <div class="hlv-nav-actions">
-                                    <button class="hlv-nav-primary-btn" t-on-click="openTurnByTurn">
-                                        <i class="fa fa-location-arrow me-1"></i>Mở chỉ đường
-                                    </button>
-                                    <button class="hlv-nav-secondary-btn" t-on-click="refreshCurrentPosition">
-                                        <i class="fa fa-crosshairs me-1"></i>Định vị lại
-                                    </button>
-                                </div>
-                                </div>
-                            </div>
-                            <button class="hlv-route-swipe"
-                                    t-att-style="'--swipe-x:' + state.fabDragX + 'px'"
-                                    t-on-touchstart="onFabTouchStart"
-                                    t-on-touchmove="onFabTouchMove"
-                                    t-on-touchend="onFabTouchEnd"
-                                    t-on-pointerdown="onFabPointerDown">
-                                <span><i class="fa fa-angle-right"></i></span>
-                                <b>Vuốt để giao hàng</b>
-                            </button>
-                        </section>
-                    </t>
+                    <button class="hlv-route-swipe hlv-route-swipe-fixed"
+                            t-att-style="'--swipe-x:' + state.fabDragX + 'px'"
+                            t-on-touchstart="onFabTouchStart"
+                            t-on-touchmove="onFabTouchMove"
+                            t-on-touchend="onFabTouchEnd"
+                            t-on-pointerdown="onFabPointerDown">
+                        <span><i class="fa fa-angle-right"></i></span>
+                        <b>Vuốt để giao hàng</b>
+                    </button>
                 </t>
             </t>
         </main>`;
@@ -171,7 +135,6 @@ export class DeliveryRouteApp extends Component {
             isLoading: true,
             isRouting: false,
             historyLoading: false,
-            started: false,
             sheetExpanded: false,
             errorMessage: "",
             warningMessage: "",
@@ -184,16 +147,12 @@ export class DeliveryRouteApp extends Component {
             fabDragX: 0,
             fabDragMax: 0,
             fabDragging: false,
-            navCardCollapsed: false,
         });
-        this.watchId = null;
-        this.lastRouteOriginAt = 0;
 
         onWillStart(async () => {
             await this.bootstrapRoute();
             await this.loadDeliveryHistory();
         });
-        onWillUnmount(() => this.stopPositionWatch());
     }
 
     async bootstrapRoute() {
@@ -281,13 +240,6 @@ export class DeliveryRouteApp extends Component {
         this.state.sheetExpanded = false;
     }
 
-    startDelivery() {
-        this.state.started = true;
-        this.state.sheetExpanded = false;
-        this.state.navCardCollapsed = false;
-        this.startPositionWatch();
-    }
-
     openHistory() {
         this.state.view = "history";
         this.loadDeliveryHistory();
@@ -305,65 +257,22 @@ export class DeliveryRouteApp extends Component {
         window.location.href = this.state.scannerUrl;
     }
 
-    toggleNavCard() {
-        this.state.navCardCollapsed = !this.state.navCardCollapsed;
-    }
-
-    async refreshCurrentPosition() {
-        try {
-            const position = await getCurrentPosition({ maximumAge: 0, timeout: 10000 });
-            this.updateRouteOrigin(position, { force: true });
-        } catch (error) {
-            this.state.warningMessage = "Không lấy được vị trí hiện tại";
-        }
-    }
-
-    startPositionWatch() {
-        this.stopPositionWatch();
-        if (!navigator.geolocation) {
-            return;
-        }
-        this.watchId = navigator.geolocation.watchPosition(
-            (position) => this.updateRouteOrigin(position),
-            () => {
-                this.state.warningMessage = "Đang mất tín hiệu GPS, dùng vị trí gần nhất";
-            },
-            {
-                enableHighAccuracy: true,
-                maximumAge: 5000,
-                timeout: 15000,
-            },
-        );
-    }
-
-    stopPositionWatch() {
-        if (this.watchId !== null && navigator.geolocation) {
-            navigator.geolocation.clearWatch(this.watchId);
-        }
-        this.watchId = null;
-    }
-
-    updateRouteOrigin(position, options = {}) {
+    updateRouteOrigin(position) {
         const nextOrigin = {
             lat: position.coords.latitude,
             lng: position.coords.longitude,
         };
-        const now = Date.now();
-        const moved = this.state.origin ? distanceMeters(this.state.origin, nextOrigin) : Number.POSITIVE_INFINITY;
-        const stale = now - this.lastRouteOriginAt > 30000;
-        if (options.force || !this.state.started || moved >= 50 || stale) {
-            this.state.origin = nextOrigin;
-            this.lastRouteOriginAt = now;
-        }
+        this.state.origin = nextOrigin;
     }
 
-    openTurnByTurn() {
-        if (!this.currentStop?.geocode) {
+    openTurnByTurn(stop = null) {
+        const target = stop || this.currentStop;
+        if (!target?.geocode) {
             return;
         }
         const params = new URLSearchParams({
             api: "1",
-            destination: `${this.currentStop.geocode.lat},${this.currentStop.geocode.lng}`,
+            destination: `${target.geocode.lat},${target.geocode.lng}`,
             travelmode: "driving",
             dir_action: "navigate",
         });
@@ -427,10 +336,6 @@ export class DeliveryRouteApp extends Component {
 
     get currentStop() {
         return this.state.routeStops[this.currentStopIndex] || null;
-    }
-
-    get mapStops() {
-        return this.state.started && this.currentStop ? [this.currentStop] : this.state.routeStops;
     }
 
     get nextDistance() {

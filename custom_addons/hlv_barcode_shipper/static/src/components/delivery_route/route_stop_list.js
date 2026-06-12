@@ -12,6 +12,7 @@ export class RouteStopList extends Component {
         onExpand: { type: Function, optional: true },
         onCollapse: { type: Function, optional: true },
         nextDistance: { type: Number, optional: true },
+        onNavigate: { type: Function, optional: true },
     };
 
     static template = xml`<div class="hlv-route-sheet" t-att-class="{ 'is-expanded': props.expanded }">
@@ -42,12 +43,20 @@ export class RouteStopList extends Component {
                                 <i class="fa fa-map-marker me-1"></i><t t-esc="stop.address"/>
                             </div>
                         </div>
-                        <button class="hlv-stop-grip"
-                                t-if="!props.started"
-                                t-on-pointerdown="(ev) => this.onGripPointerDown(stop_index, stop.id, ev)"
-                                title="Nhấn giữ để sắp xếp">
-                            <i class="fa fa-bars"></i>
-                        </button>
+                        <div class="hlv-stop-actions">
+                            <button class="hlv-stop-nav"
+                                    t-on-click.stop="() => this.openNavigate(stop)"
+                                    title="Mở chỉ đường">
+                                <i class="fa fa-location-arrow"></i>
+                                <span>Chỉ đường</span>
+                            </button>
+                            <button class="hlv-stop-grip"
+                                    t-if="!props.started"
+                                    t-on-pointerdown="(ev) => this.onGripPointerDown(stop_index, stop.id, ev)"
+                                    title="Nhấn giữ để sắp xếp">
+                                <i class="fa fa-bars"></i>
+                            </button>
+                        </div>
                     </article>
                 </t>
             </div>
@@ -106,6 +115,10 @@ export class RouteStopList extends Component {
         } else {
             this.props.onExpand?.();
         }
+    }
+
+    openNavigate(stop) {
+        this.props.onNavigate?.(stop);
     }
 
     onGripPointerDown(index, id, ev) {
