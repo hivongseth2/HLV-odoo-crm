@@ -56,11 +56,11 @@ export class DeliveryRouteApp extends Component {
                                             <em>✓ Thành công</em>
                                         </div>
                                         <div class="hlv-history-address">
-                                            <span>⌖</span>
+                                            <span><i class="fa fa-map-marker"></i></span>
                                             <b><t t-esc="item.address || item.partner_name || 'Không có địa chỉ'"/></b>
                                         </div>
                                         <div class="hlv-history-card-foot">
-                                            <span>◷ <t t-esc="item.date_done || '--:--'"/></span>
+                                            <span><i class="fa fa-clock-o me-1"></i><t t-esc="item.date_done || '--:--'"/></span>
                                             <span>›</span>
                                         </div>
                                     </article>
@@ -75,7 +75,7 @@ export class DeliveryRouteApp extends Component {
                 </t>
                 <t t-elif="state.errorMessage">
                     <div class="hlv-route-empty">
-                        <span class="hlv-empty-icon">⌖</span>
+                        <span class="hlv-empty-icon"><i class="fa fa-map-marker"></i></span>
                         <strong><t t-esc="state.errorMessage"/></strong>
                         <a class="btn btn-primary" t-att-href="state.scannerUrl">Mở giao hàng</a>
                     </div>
@@ -92,7 +92,9 @@ export class DeliveryRouteApp extends Component {
                     </section>
 
                     <div class="hlv-route-topbar">
-                        <button class="hlv-route-icon-btn" t-on-click="goBack" title="Quay lại">‹</button>
+                        <button class="hlv-route-icon-btn" t-on-click="goBack" title="Quay lại">
+                            <i class="fa fa-chevron-left"></i>
+                        </button>
                         <div class="hlv-route-summary"><t t-esc="routeSummaryText"/></div>
                         <button class="hlv-route-icon-btn hlv-history-open-btn" t-on-click="openHistory" title="Lịch sử">Lịch sử</button>
                     </div>
@@ -111,7 +113,7 @@ export class DeliveryRouteApp extends Component {
                                        onReorder="onReorder.bind(this)"></RouteStopList>
 
                         <button class="hlv-route-start-btn" t-on-click="startDelivery">
-                            △ Bắt đầu giao hàng
+                            <i class="fa fa-location-arrow me-2"></i>Bắt đầu giao hàng
                         </button>
                     </t>
 
@@ -124,19 +126,23 @@ export class DeliveryRouteApp extends Component {
                                 </div>
                                 <button class="hlv-nav-collapse-btn"
                                         t-on-click="toggleNavCard"
-                                        t-att-title="state.navCardCollapsed ? 'Mo thong tin' : 'Thu gon'">
-                                    <t t-esc="state.navCardCollapsed ? 'Mo' : 'Thu'"/>
+                                        t-att-title="state.navCardCollapsed ? 'Mở thông tin' : 'Thu gọn'">
+                                    <t t-esc="state.navCardCollapsed ? 'Mở' : 'Thu'"/>
                                 </button>
                                 <div class="hlv-nav-card-body">
                                 <h2><t t-esc="currentStop.partner_name || currentStop.picking_name"/></h2>
                                 <p><t t-esc="currentStop.address"/></p>
                                 <div class="hlv-nav-metrics">
-                                    <span>◷ <small>Dự kiến</small><b><t t-esc="nextDurationText"/></b></span>
-                                    <span>⇅ <small>Quãng đường</small><b><t t-esc="formatDistance(nextDistance)"/></b></span>
+                                    <span><i class="fa fa-clock-o"></i><small>Dự kiến</small><b><t t-esc="nextDurationText"/></b></span>
+                                    <span><i class="fa fa-road"></i><small>Quãng đường</small><b><t t-esc="formatDistance(nextDistance)"/></b></span>
                                 </div>
                                 <div class="hlv-nav-actions">
-                                    <button class="hlv-nav-primary-btn" t-on-click="openTurnByTurn">Mo chi duong</button>
-                                    <button class="hlv-nav-secondary-btn" t-on-click="refreshCurrentPosition">Dinh vi lai</button>
+                                    <button class="hlv-nav-primary-btn" t-on-click="openTurnByTurn">
+                                        <i class="fa fa-location-arrow me-1"></i>Mở chỉ đường
+                                    </button>
+                                    <button class="hlv-nav-secondary-btn" t-on-click="refreshCurrentPosition">
+                                        <i class="fa fa-crosshairs me-1"></i>Định vị lại
+                                    </button>
                                 </div>
                                 </div>
                             </div>
@@ -146,7 +152,7 @@ export class DeliveryRouteApp extends Component {
                                     t-on-touchmove="onFabTouchMove"
                                     t-on-touchend="onFabTouchEnd"
                                     t-on-pointerdown="onFabPointerDown">
-                                <span>➜</span>
+                                <span><i class="fa fa-angle-right"></i></span>
                                 <b>Vuốt để giao hàng</b>
                             </button>
                         </section>
@@ -181,6 +187,7 @@ export class DeliveryRouteApp extends Component {
             navCardCollapsed: false,
         });
         this.watchId = null;
+        this.lastRouteOriginAt = 0;
 
         onWillStart(async () => {
             await this.bootstrapRoute();
@@ -221,10 +228,7 @@ export class DeliveryRouteApp extends Component {
         this.state.isRouting = true;
         try {
             const position = await getCurrentPosition();
-            this.state.origin = {
-                lat: position.coords.latitude,
-                lng: position.coords.longitude,
-            };
+            this.updateRouteOrigin(position, { force: true });
             const geocoded = await geocodeStops(this.state.rawStops, {
                 apiKey: this.state.apiKey,
                 country: "VN",
@@ -308,12 +312,9 @@ export class DeliveryRouteApp extends Component {
     async refreshCurrentPosition() {
         try {
             const position = await getCurrentPosition({ maximumAge: 0, timeout: 10000 });
-            this.state.origin = {
-                lat: position.coords.latitude,
-                lng: position.coords.longitude,
-            };
+            this.updateRouteOrigin(position, { force: true });
         } catch (error) {
-            this.state.warningMessage = "Khong lay duoc vi tri hien tai";
+            this.state.warningMessage = "Không lấy được vị trí hiện tại";
         }
     }
 
@@ -323,14 +324,9 @@ export class DeliveryRouteApp extends Component {
             return;
         }
         this.watchId = navigator.geolocation.watchPosition(
-            (position) => {
-                this.state.origin = {
-                    lat: position.coords.latitude,
-                    lng: position.coords.longitude,
-                };
-            },
+            (position) => this.updateRouteOrigin(position),
             () => {
-                this.state.warningMessage = "Dang mat tin hieu GPS, dung vi tri gan nhat";
+                this.state.warningMessage = "Đang mất tín hiệu GPS, dùng vị trí gần nhất";
             },
             {
                 enableHighAccuracy: true,
@@ -345,6 +341,20 @@ export class DeliveryRouteApp extends Component {
             navigator.geolocation.clearWatch(this.watchId);
         }
         this.watchId = null;
+    }
+
+    updateRouteOrigin(position, options = {}) {
+        const nextOrigin = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+        };
+        const now = Date.now();
+        const moved = this.state.origin ? distanceMeters(this.state.origin, nextOrigin) : Number.POSITIVE_INFINITY;
+        const stale = now - this.lastRouteOriginAt > 30000;
+        if (options.force || !this.state.started || moved >= 50 || stale) {
+            this.state.origin = nextOrigin;
+            this.lastRouteOriginAt = now;
+        }
     }
 
     openTurnByTurn() {

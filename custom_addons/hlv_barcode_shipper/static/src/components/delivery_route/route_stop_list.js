@@ -21,8 +21,8 @@ export class RouteStopList extends Component {
                 <span></span>
             </div>
             <div class="hlv-route-next">
-                <span>DIEM TIEP THEO</span>
-                <strong>Cach <t t-esc="formatDistance(props.nextDistance || 0)"/></strong>
+                <span>ĐIỂM TIẾP THEO</span>
+                <strong>Cách <t t-esc="formatDistance(props.nextDistance || 0)"/></strong>
             </div>
             <div class="hlv-route-stop-list">
                 <t t-foreach="props.stops || []" t-as="stop" t-key="stop.id">
@@ -33,15 +33,21 @@ export class RouteStopList extends Component {
                         <div class="hlv-stop-body">
                             <div class="hlv-stop-title">
                                 <strong><t t-esc="stop.picking_name"/></strong>
-                                <span class="hlv-stop-badge">□ <t t-esc="stop.item_count"/> kien</span>
+                                <span class="hlv-stop-badge">
+                                    <i class="fa fa-cube me-1"></i><t t-esc="stop.item_count"/> kiện
+                                </span>
                             </div>
                             <div class="hlv-stop-partner"><t t-esc="stop.partner_name"/></div>
-                            <div class="hlv-stop-address">⌖ <t t-esc="stop.address"/></div>
+                            <div class="hlv-stop-address">
+                                <i class="fa fa-map-marker me-1"></i><t t-esc="stop.address"/>
+                            </div>
                         </div>
                         <button class="hlv-stop-grip"
                                 t-if="!props.started"
                                 t-on-pointerdown="(ev) => this.onGripPointerDown(stop_index, stop.id, ev)"
-                                title="Nhan giu de sap xep">≡</button>
+                                title="Nhấn giữ để sắp xếp">
+                            <i class="fa fa-bars"></i>
+                        </button>
                     </article>
                 </t>
             </div>

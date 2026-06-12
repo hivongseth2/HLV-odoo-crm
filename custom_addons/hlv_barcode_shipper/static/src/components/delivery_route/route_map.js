@@ -102,7 +102,7 @@ export class RouteMap extends Component {
         this.markers.push(new maps.Marker({
             map: this.map,
             position: this.props.origin,
-            icon: markerIcon("K", "#238636"),
+            icon: markerIcon("K", "#1591DC"),
             title: "Current position",
         }));
 
@@ -111,7 +111,7 @@ export class RouteMap extends Component {
             this.markers.push(new maps.Marker({
                 map: this.map,
                 position: stop.geocode,
-                icon: markerIcon(String(index + 1), isFocus ? "#39a844" : "#31556a"),
+                icon: markerIcon(String(index + 1), isFocus ? "#4BB8FA" : "#2C5EAD"),
                 title: stop.picking_name,
                 zIndex: isFocus ? 20 : 10,
             }));
@@ -139,7 +139,7 @@ export class RouteMap extends Component {
             this.polylines = route.createPolylines();
             this.polylines.forEach((polyline) => {
                 polyline.setOptions({
-                    strokeColor: this.props.started ? "#00a859" : "#118a42",
+                    strokeColor: this.props.started ? "#1591DC" : "#2C5EAD",
                     strokeWeight: this.props.started ? 7 : 5,
                     strokeOpacity: 0.95,
                 });
