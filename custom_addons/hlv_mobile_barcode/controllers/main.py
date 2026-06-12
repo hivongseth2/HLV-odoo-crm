@@ -2038,10 +2038,23 @@ class HLVMobileBarcodeController(http.Controller):
 
             # --- FIX: Prevent "split package" error ---
             # Odoo does not allow partially moving a package while keeping the same result_package_id.
-            # We must clear result_package_id for partially scanned lines so they are "unpacked" at destination.
+            # Since a package can span multiple move lines, we calculate total qty for the package.
+            package_totals = {}
             for ml in picking.sudo().move_line_ids:
-                if 0 < ml.quantity < ml.quantity_product_uom and ml.result_package_id:
-                    ml.result_package_id = False
+                if ml.result_package_id:
+                    pkg_id = ml.result_package_id.id
+                    if pkg_id not in package_totals:
+                        package_totals[pkg_id] = {'qty': 0.0, 'qty_uom': 0.0, 'mls': []}
+                    package_totals[pkg_id]['qty'] += ml.quantity
+                    package_totals[pkg_id]['qty_uom'] += ml.quantity_product_uom
+                    package_totals[pkg_id]['mls'].append(ml)
+            
+            for pkg_id, data in package_totals.items():
+                if 0 < data['qty'] < data['qty_uom']:
+                    # Package is partially scanned. Unpack the done items.
+                    for ml in data['mls']:
+                        if ml.quantity > 0:
+                            ml.result_package_id = False
             # ------------------------------------------
 
             res_dict = picking.button_validate()
