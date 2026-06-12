@@ -458,20 +458,16 @@ export class PickingScanner extends Component {
                 this.notification.add(res.error, { type: "danger" });
             } else if (res.success) {
                 if (res.backorder_created) {
-                    this.notification.add(`Xác nhận thành công. Nhấn vào mã đơn dưới đây để xem đơn tách kiện:`, { 
+                    this.notification.add(`Xác nhận thành công! Phiếu tách kiện ${res.backorder_name} đã được tạo cho số lượng còn lại.`, { 
                         type: "info",
                         sticky: true,
                         buttons: [
                             {
                                 name: res.backorder_name,
                                 onClick: () => {
-                                    this.actionService.doAction({
-                                        type: 'ir.actions.act_window',
-                                        res_model: 'stock.picking',
-                                        res_id: res.backorder_id,
-                                        views: [[false, 'form']],
-                                        target: 'current',
-                                    });
+                                    if (this.props.onSelectPicking) {
+                                        this.props.onSelectPicking(res.backorder_id, res.backorder_name);
+                                    }
                                 },
                                 primary: true,
                             }

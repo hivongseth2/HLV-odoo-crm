@@ -2057,6 +2057,29 @@ class HLVMobileBarcodeController(http.Controller):
                     ('id', 'not in', existing_backorders)
                 ])
                 if new_backorders:
+                    # Kế thừa source_transfer_id và package cho backorder
+                    # của phiếu Bước 2 (vì source_transfer_id có copy=False)
+                    for bo in new_backorders:
+                        if picking.source_transfer_id and not bo.source_transfer_id:
+                            bo.sudo().source_transfer_id = picking.source_transfer_id.id
+
+                        # Kế thừa package trên move_line_ids từ phiếu gốc
+                        for bo_ml in bo.move_line_ids:
+                            if bo_ml.package_id or bo_ml.result_package_id:
+                                continue
+                            original_mls = picking.move_line_ids.filtered(
+                                lambda ml, prod=bo_ml.product_id: (
+                                    ml.product_id == prod
+                                    and (ml.package_id or ml.result_package_id)
+                                )
+                            )
+                            if original_mls:
+                                pkg = original_mls[0].package_id or original_mls[0].result_package_id
+                                bo_ml.sudo().write({
+                                    'package_id': pkg.id,
+                                    'result_package_id': pkg.id,
+                                })
+
                     backorder_info = {
                         'backorder_created': True,
                         'backorder_id': new_backorders[0].id,
