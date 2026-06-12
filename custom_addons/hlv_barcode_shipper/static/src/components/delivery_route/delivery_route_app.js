@@ -2,9 +2,6 @@
 
 import { Component, onWillStart, useState, xml } from "@odoo/owl";
 import { rpc } from "@web/core/network/rpc";
-import { geocodeStops, getCurrentPosition } from "../../services/google_maps_utils";
-import { sortNearestStops, formatDistance, formatDuration, distanceMeters } from "../../services/route_math";
-import { RouteMap } from "./route_map";
 import { RouteStopList } from "./route_stop_list";
 
 export class DeliveryRouteApp extends Component {
@@ -81,16 +78,6 @@ export class DeliveryRouteApp extends Component {
                     </div>
                 </t>
                 <t t-else="">
-                    <section class="hlv-route-map-wrap">
-                        <RouteMap apiKey="state.apiKey"
-                                  origin="state.origin"
-                                  stops="state.routeStops"
-                                  started="false"
-                                  focusStopId="currentStop ? currentStop.id : 0"
-                                  onRouteSummary="onRouteSummary.bind(this)"
-                                  onError="onMapError.bind(this)"></RouteMap>
-                    </section>
-
                     <div class="hlv-route-topbar">
                         <button class="hlv-route-icon-btn" t-on-click="goBack" title="Quay lại">
                             <i class="fa fa-chevron-left"></i>
@@ -106,11 +93,11 @@ export class DeliveryRouteApp extends Component {
                     <RouteStopList stops="state.routeStops"
                                    expanded="state.sheetExpanded"
                                    started="false"
-                                   nextDistance="nextDistance"
                                    onExpand="expandSheet.bind(this)"
                                    onCollapse="collapseSheet.bind(this)"
                                    onReorder="onReorder.bind(this)"
-                                   onNavigate="openTurnByTurn.bind(this)"></RouteStopList>
+                                   onNavigate="openTurnByTurn.bind(this)"
+                                   onNavigateAll="openAllTurnByTurn.bind(this)"></RouteStopList>
 
                     <button class="hlv-route-swipe hlv-route-swipe-fixed"
                             t-att-style="'--swipe-x:' + state.fabDragX + 'px'"
@@ -124,26 +111,21 @@ export class DeliveryRouteApp extends Component {
                 </t>
             </t>
         </main>`;
-    static components = { RouteMap, RouteStopList };
+    static components = { RouteStopList };
 
     setup() {
         const config = window.HLV_SHIPPER_ROUTE_CONFIG || {};
         this.state = useState({
-            apiKey: config.googleMapsApiKey || "",
             scannerUrl: config.scannerUrl || "/barcode/shipper#deliver",
             view: "map",
             isLoading: true,
-            isRouting: false,
             historyLoading: false,
             sheetExpanded: false,
             errorMessage: "",
             warningMessage: "",
-            origin: null,
             rawStops: [],
             routeStops: [],
             deliveredPickings: [],
-            geocodeErrors: [],
-            routeSummary: { distance: 0, duration: 0 },
             fabDragX: 0,
             fabDragMax: 0,
             fabDragging: false,
@@ -163,7 +145,6 @@ export class DeliveryRouteApp extends Component {
             if (!res.success) {
                 throw new Error(res.error || "Không thể tải điểm giao");
             }
-            this.state.apiKey = this.state.apiKey || res.google_maps_api_key || "";
             this.state.rawStops = res.stops || [];
             if (res.missing_address?.length) {
                 this.state.warningMessage = `${res.missing_address.length} phiếu chưa có địa chỉ giao hàng`;
@@ -175,30 +156,11 @@ export class DeliveryRouteApp extends Component {
                     : "Chưa có đơn đã nhận để lập tuyến giao hàng.";
                 return;
             }
-            await this.buildInitialRoute();
+            this.state.routeStops = this.state.rawStops;
         } catch (error) {
             this.state.errorMessage = error.message;
         } finally {
             this.state.isLoading = false;
-        }
-    }
-
-    async buildInitialRoute() {
-        this.state.isRouting = true;
-        try {
-            const position = await getCurrentPosition();
-            this.updateRouteOrigin(position, { force: true });
-            const geocoded = await geocodeStops(this.state.rawStops, {
-                apiKey: this.state.apiKey,
-                country: "VN",
-            });
-            this.state.geocodeErrors = geocoded.errors;
-            this.state.routeStops = sortNearestStops(this.state.origin, geocoded.stops);
-            if (!this.state.routeStops.length) {
-                throw new Error("Không geocode được địa chỉ giao hàng nào.");
-            }
-        } finally {
-            this.state.isRouting = false;
         }
     }
 
@@ -222,14 +184,6 @@ export class DeliveryRouteApp extends Component {
 
     onReorder(stops) {
         this.state.routeStops = stops;
-    }
-
-    onRouteSummary(summary) {
-        this.state.routeSummary = summary;
-    }
-
-    onMapError(message) {
-        this.state.warningMessage = message;
     }
 
     expandSheet() {
@@ -257,29 +211,39 @@ export class DeliveryRouteApp extends Component {
         window.location.href = this.state.scannerUrl;
     }
 
-    updateRouteOrigin(position) {
-        const nextOrigin = {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-        };
-        this.state.origin = nextOrigin;
-    }
-
     openTurnByTurn(stop = null) {
         const target = stop || this.currentStop;
-        if (!target?.geocode) {
+        if (!target?.address) {
             return;
         }
         const params = new URLSearchParams({
             api: "1",
-            destination: `${target.geocode.lat},${target.geocode.lng}`,
+            destination: target.address,
             travelmode: "driving",
             dir_action: "navigate",
         });
-        if (this.state.origin) {
-            params.set("origin", `${this.state.origin.lat},${this.state.origin.lng}`);
+        window.location.href = `https://www.google.com/maps/dir/?${params.toString()}`;
+    }
+
+    openAllTurnByTurn() {
+        const stops = (this.state.routeStops || []).filter((stop) => stop.address);
+        if (!stops.length) {
+            return;
         }
-        window.open(`https://www.google.com/maps/dir/?${params.toString()}`, "_blank", "noopener");
+        if (stops.length === 1) {
+            this.openTurnByTurn(stops[0]);
+            return;
+        }
+        const destination = stops[stops.length - 1].address;
+        const waypoints = stops.slice(0, -1).map((stop) => stop.address).join("|");
+        const params = new URLSearchParams({
+            api: "1",
+            destination,
+            waypoints,
+            travelmode: "driving",
+            dir_action: "navigate",
+        });
+        window.location.href = `https://www.google.com/maps/dir/?${params.toString()}`;
     }
 
     onFabTouchStart(ev) {
@@ -338,33 +302,12 @@ export class DeliveryRouteApp extends Component {
         return this.state.routeStops[this.currentStopIndex] || null;
     }
 
-    get nextDistance() {
-        if (!this.state.origin || !this.currentStop) {
-            return 0;
-        }
-        return distanceMeters(this.state.origin, this.currentStop.geocode);
-    }
-
-    get nextDurationText() {
-        const meters = this.nextDistance;
-        if (!meters) {
-            return "--";
-        }
-        return formatDuration((meters / 1000 / 30) * 3600);
-    }
-
     get historyAverageText() {
         return this.state.deliveredPickings.length ? "12 phút/đơn" : "--";
     }
 
     get routeSummaryText() {
         const count = this.state.routeStops.length;
-        const distance = formatDistance(this.state.routeSummary.distance);
-        const duration = formatDuration(this.state.routeSummary.duration);
-        return `${count} điểm giao · ${distance} · ${duration}`;
-    }
-
-    formatDistance(value) {
-        return formatDistance(value);
+        return `${count} điểm giao`;
     }
 }

@@ -39,10 +39,9 @@
             "hlv_barcode_shipper/static/src/main_v2.js",
         ],
         "hlv_barcode_shipper.assets_delivery_route": [
-            "hlv_barcode_shipper/static/src/services/google_maps_utils.js",
-            "hlv_barcode_shipper/static/src/services/route_math.js",
-            "hlv_barcode_shipper/static/src/components/delivery_route/*.js",
-            "hlv_barcode_shipper/static/src/components/delivery_route/*.css",
+            "hlv_barcode_shipper/static/src/components/delivery_route/route_stop_list.js",
+            "hlv_barcode_shipper/static/src/components/delivery_route/delivery_route_app.js",
+            "hlv_barcode_shipper/static/src/components/delivery_route/delivery_route.css",
             "hlv_barcode_shipper/static/src/main_delivery_route.js",
         ],
     },

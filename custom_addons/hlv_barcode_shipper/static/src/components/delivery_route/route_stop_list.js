@@ -1,7 +1,6 @@
 /** @odoo-module **/
 
 import { Component, xml } from "@odoo/owl";
-import { formatDistance } from "../../services/route_math";
 
 export class RouteStopList extends Component {
     static props = {
@@ -11,8 +10,8 @@ export class RouteStopList extends Component {
         onReorder: { type: Function, optional: true },
         onExpand: { type: Function, optional: true },
         onCollapse: { type: Function, optional: true },
-        nextDistance: { type: Number, optional: true },
         onNavigate: { type: Function, optional: true },
+        onNavigateAll: { type: Function, optional: true },
     };
 
     static template = xml`<div class="hlv-route-sheet" t-att-class="{ 'is-expanded': props.expanded }">
@@ -22,8 +21,10 @@ export class RouteStopList extends Component {
                 <span></span>
             </div>
             <div class="hlv-route-next">
-                <span>ĐIỂM TIẾP THEO</span>
-                <strong>Cách <t t-esc="formatDistance(props.nextDistance || 0)"/></strong>
+                <span><t t-esc="(props.stops || []).length"/> điểm giao</span>
+                <button class="hlv-route-all-nav" t-on-click="openNavigateAll">
+                    <i class="fa fa-location-arrow me-1"></i>Chỉ đường tất cả
+                </button>
             </div>
             <div class="hlv-route-stop-list">
                 <t t-foreach="props.stops || []" t-as="stop" t-key="stop.id">
@@ -37,6 +38,9 @@ export class RouteStopList extends Component {
                                 <span class="hlv-stop-badge">
                                     <i class="fa fa-cube me-1"></i><t t-esc="stop.item_count"/> kiện
                                 </span>
+                            </div>
+                            <div t-if="stop.origin" class="hlv-stop-origin">
+                                <i class="fa fa-file-text-o me-1"></i><t t-esc="stop.origin"/>
                             </div>
                             <div class="hlv-stop-partner"><t t-esc="stop.partner_name"/></div>
                             <div class="hlv-stop-address">
@@ -71,10 +75,6 @@ export class RouteStopList extends Component {
         this.lastTargetIndex = null;
         this.dragGhost = null;
         this.dragOffsetY = 0;
-    }
-
-    formatDistance(value) {
-        return formatDistance(value);
     }
 
     onHandlePointerDown(ev) {
@@ -119,6 +119,10 @@ export class RouteStopList extends Component {
 
     openNavigate(stop) {
         this.props.onNavigate?.(stop);
+    }
+
+    openNavigateAll() {
+        this.props.onNavigateAll?.();
     }
 
     onGripPointerDown(index, id, ev) {
