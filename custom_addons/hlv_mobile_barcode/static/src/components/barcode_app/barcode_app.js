@@ -370,6 +370,7 @@ export class BarcodeApp extends Component {
                     barcode: barcode,
                     destination_location_id: this.state.scannedLocationId,
                     last_product_id: this.state.lastScannedProduct,
+                    last_move_line_id: this.state.lastScannedMoveLine,
                     location_mode: locationMode,
                     is_multi_location: this.state.isMultiLocationMode,
                     preferred_move_line_id: this.state.preferredMoveLineId
@@ -384,10 +385,8 @@ export class BarcodeApp extends Component {
                     this.state.lastScanTarget = "location";
                     this.notification.add(`Đã chọn vị trí: ${res.location_name}`, { type: "success" });
                     
-                    if (res.updated_product_id) {
-                        this.state.lastScannedProduct = res.updated_product_id;
-                        this.state.lastScannedMoveLine = res.updated_move_line_id || null;
-                    }
+                    this.state.lastScannedProduct = null;
+                    this.state.lastScannedMoveLine = null;
                     this.state.pickingRefreshTick += 1;
                 } else {
                     this.playSound('success');
