@@ -89,27 +89,37 @@ def _loose_package_vals():
     }
 
 def _step2_canonical_line_entries(picking):
-    """Use current Step 2 lines while validating totals against the source transfer."""
+    """Use current Step 2 lines while validating totals against the source transfer.
+    Relaxed strict equality to support backorders (where Step 2 demand < Step 1 done).
+    """
     if not picking or not picking.exists() or not picking.source_transfer_id:
         return [], []
 
     source_lines = picking.source_transfer_id.move_line_ids.filtered(
         lambda ml: ml.quantity > 0 and ml.state not in ['cancel']
     ).sorted('id')
+    
+    # In Odoo 18, newly created backorders might have quantity = 0, but quantity_product_uom > 0
     target_lines = picking.move_line_ids.filtered(
-        lambda ml: ml.quantity > 0 and ml.state != 'cancel'
+        lambda ml: (ml.quantity > 0 or ml.quantity_product_uom > 0) and ml.state != 'cancel'
     ).sorted('id')
+    
     entries = []
     missing_source_lines = []
 
     for product in source_lines.mapped('product_id'):
         product_source_lines = source_lines.filtered(lambda ml: ml.product_id == product)
         product_target_lines = target_lines.filtered(lambda ml: ml.product_id == product)
+        
         source_qty = sum(product_source_lines.mapped('quantity'))
-        target_qty = sum(product_target_lines.mapped('quantity'))
+        
+        # Use quantity_product_uom (demand) for the target lines, fallback to quantity if needed
+        target_qty = sum(product_target_lines.mapped(lambda ml: ml.quantity_product_uom or ml.quantity))
+        
+        # Allow target_qty to be LESS than source_qty (due to partial backorders)
         if (
             not product_target_lines
-            or float_compare(source_qty, target_qty, precision_rounding=product.uom_id.rounding) != 0
+            or float_compare(source_qty, target_qty, precision_rounding=product.uom_id.rounding) < 0
         ):
             missing_source_lines.extend(product_source_lines)
             continue
@@ -118,7 +128,7 @@ def _step2_canonical_line_entries(picking):
             entries.append({
                 'source_line': product_source_lines[0],
                 'target_line': target_line,
-                'demand': target_line.quantity,
+                'demand': target_line.quantity_product_uom or target_line.quantity,
                 'package': _line_package(target_line),
             })
 
