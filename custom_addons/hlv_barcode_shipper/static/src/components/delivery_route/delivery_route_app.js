@@ -131,10 +131,10 @@ export class DeliveryRouteApp extends Component {
                             </div>
                             <button class="hlv-route-swipe"
                                     t-att-style="'--swipe-x:' + state.fabDragX + 'px'"
-                                    t-on-click="openScanner"
                                     t-on-touchstart="onFabTouchStart"
                                     t-on-touchmove="onFabTouchMove"
-                                    t-on-touchend="onFabTouchEnd">
+                                    t-on-touchend="onFabTouchEnd"
+                                    t-on-pointerdown="onFabPointerDown">
                                 <span>➜</span>
                                 <b>Vuốt để giao hàng</b>
                             </button>
@@ -165,6 +165,7 @@ export class DeliveryRouteApp extends Component {
             geocodeErrors: [],
             routeSummary: { distance: 0, duration: 0 },
             fabDragX: 0,
+            fabDragMax: 0,
             fabDragging: false,
         });
 
@@ -287,6 +288,7 @@ export class DeliveryRouteApp extends Component {
     onFabTouchStart(ev) {
         const touch = ev.touches?.[0];
         this.fabStartX = touch ? touch.clientX : 0;
+        this.state.fabDragMax = Math.max(0, (ev.currentTarget?.clientWidth || 0) - 54);
         this.state.fabDragging = true;
         this.state.fabDragX = 0;
     }
@@ -296,16 +298,39 @@ export class DeliveryRouteApp extends Component {
         if (!touch || !this.state.fabDragging) {
             return;
         }
-        this.state.fabDragX = Math.max(0, Math.min(104, touch.clientX - this.fabStartX));
+        this.state.fabDragX = Math.max(0, Math.min(this.state.fabDragMax, touch.clientX - this.fabStartX));
     }
 
     onFabTouchEnd() {
-        if (this.state.fabDragX > 62) {
+        if (this.state.fabDragMax && this.state.fabDragX > this.state.fabDragMax * 0.88) {
             this.openScanner();
             return;
         }
         this.state.fabDragging = false;
         this.state.fabDragX = 0;
+    }
+
+    onFabPointerDown(ev) {
+        if (ev.pointerType === "touch") {
+            return;
+        }
+        const target = ev.currentTarget;
+        this.fabStartX = ev.clientX;
+        this.state.fabDragMax = Math.max(0, target.clientWidth - 54);
+        this.state.fabDragging = true;
+        target.setPointerCapture?.(ev.pointerId);
+        const onMove = (moveEv) => {
+            this.state.fabDragX = Math.max(0, Math.min(this.state.fabDragMax, moveEv.clientX - this.fabStartX));
+        };
+        const onUp = () => {
+            this.onFabTouchEnd();
+            document.removeEventListener("pointermove", onMove);
+            document.removeEventListener("pointerup", onUp);
+            document.removeEventListener("pointercancel", onUp);
+        };
+        document.addEventListener("pointermove", onMove);
+        document.addEventListener("pointerup", onUp);
+        document.addEventListener("pointercancel", onUp);
     }
 
     get currentStopIndex() {

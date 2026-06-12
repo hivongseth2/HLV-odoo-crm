@@ -19,8 +19,8 @@ export class RouteMap extends Component {
     setup() {
         this.mapRef = useRef("map");
         this.map = null;
-        this.directionsService = null;
-        this.directionsRenderer = null;
+        this.Route = null;
+        this.polylines = [];
         this.markers = [];
         this.lastSignature = "";
 
@@ -43,15 +43,11 @@ export class RouteMap extends Component {
                 clickableIcons: false,
                 gestureHandling: "greedy",
             });
-            this.directionsService = new maps.DirectionsService();
-            this.directionsRenderer = new maps.DirectionsRenderer({
-                map: this.map,
-                suppressMarkers: true,
-                polylineOptions: {
-                    strokeColor: "#1f7a1f",
-                    strokeWeight: 5,
-                    strokeOpacity: 0.92,
-                },
+            const routesLib = await maps.importLibrary("routes");
+            this.Route = routesLib.Route;
+            requestAnimationFrame(() => {
+                maps.event.trigger(this.map, "resize");
+                this.map.setCenter(center);
             });
             this.renderRouteIfChanged(true);
         } catch (error) {
@@ -72,8 +68,13 @@ export class RouteMap extends Component {
         this.markers = [];
     }
 
+    clearPolylines() {
+        this.polylines.forEach((polyline) => polyline.setMap(null));
+        this.polylines = [];
+    }
+
     async renderRouteIfChanged(force = false) {
-        if (!this.map || !this.directionsService || !this.directionsRenderer) {
+        if (!this.map || !this.Route) {
             return;
         }
         const signature = this.signature();
@@ -82,6 +83,7 @@ export class RouteMap extends Component {
         }
         this.lastSignature = signature;
         this.clearMarkers();
+        this.clearPolylines();
 
         const stops = this.props.stops || [];
         if (!this.props.origin || !stops.length) {
@@ -120,27 +122,53 @@ export class RouteMap extends Component {
             stopover: true,
         }));
 
-        this.directionsService.route({
-            origin: this.props.origin,
-            destination,
-            waypoints,
-            optimizeWaypoints: false,
-            travelMode: maps.TravelMode.DRIVING,
-        }, (response, status) => {
-            if (status !== "OK") {
-                this.props.onError?.(`Cannot draw route: ${status}`);
+        try {
+            const { routes } = await this.Route.computeRoutes({
+                origin: this.props.origin,
+                destination,
+                intermediates: waypoints.map((waypoint) => ({ location: waypoint.location })),
+                travelMode: "DRIVING",
+                fields: ["path", "distanceMeters", "durationMillis"],
+            });
+            if (!routes || !routes.length) {
+                this.props.onError?.("Cannot draw route: no route found");
                 return;
             }
-            this.directionsRenderer.setDirections(response);
-            const legs = response.routes?.[0]?.legs || [];
-            const distance = legs.reduce((sum, leg) => sum + (leg.distance?.value || 0), 0);
-            const duration = legs.reduce((sum, leg) => sum + (leg.duration?.value || 0), 0);
+            const route = routes[0];
+            this.polylines = route.createPolylines();
+            this.polylines.forEach((polyline) => {
+                polyline.setOptions({
+                    strokeColor: "#1f7a1f",
+                    strokeWeight: 5,
+                    strokeOpacity: 0.92,
+                });
+                polyline.setMap(this.map);
+            });
+
+            const distance = route.distanceMeters || 0;
+            const duration = route.durationMillis ? Math.round(route.durationMillis / 1000) : 0;
             this.props.onRouteSummary?.({ distance, duration });
             if (this.props.started && stops[0]?.geocode) {
                 this.map.panTo(stops[0].geocode);
                 this.map.setZoom(15);
+            } else {
+                this.fitRouteBounds(maps);
             }
-        });
+            maps.event.trigger(this.map, "resize");
+        } catch (error) {
+            this.props.onError?.(`Cannot draw route: ${error.message}`);
+        }
+    }
+
+    fitRouteBounds(maps) {
+        const bounds = new maps.LatLngBounds();
+        if (this.props.origin) {
+            bounds.extend(this.props.origin);
+        }
+        (this.props.stops || []).forEach((stop) => bounds.extend(stop.geocode));
+        if (!bounds.isEmpty()) {
+            this.map.fitBounds(bounds, 48);
+        }
     }
 
     markerSvg(text, fill) {

@@ -6,14 +6,22 @@
     touch-action: manipulation;
 }
 
-.hlv-route-map-wrap,
-.hlv-route-map {
+.hlv-route-map-wrap {
     position: fixed;
     inset: 0;
 }
 
 .hlv-route-map-wrap {
     background: #dbe8df;
+    z-index: 1;
+}
+
+.hlv-route-map {
+    position: absolute;
+    inset: 0;
+    width: 100vw;
+    height: 100dvh;
+    min-height: 100vh;
 }
 
 .hlv-route-topbar {
@@ -153,9 +161,17 @@
 
 .hlv-route-stop.is-dragging,
 .hlv-route-dragging .hlv-route-stop:hover {
-    opacity: 0.96;
-    transform: translateY(-1px);
-    box-shadow: 0 6px 14px rgba(31, 41, 51, 0.18);
+    opacity: 0.38;
+}
+
+.hlv-route-drag-ghost {
+    position: fixed;
+    z-index: 9999;
+    pointer-events: none;
+    opacity: 0.98;
+    transform: translate3d(0, 0, 0) scale(1.015);
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.22);
+    transition: none;
 }
 
 body.hlv-route-dragging {
@@ -352,7 +368,7 @@ body.hlv-route-dragging {
     align-items: center;
     justify-content: center;
     font-size: 1.4rem;
-    transition: transform 0.16s ease;
+    transition: none;
 }
 
 .hlv-route-swipe b {

@@ -2,7 +2,7 @@
 
 let googleMapsPromise = null;
 
-export function loadGoogleMaps(apiKey, libraries = ["places", "geometry"]) {
+export function loadGoogleMaps(apiKey, libraries = ["places", "geometry", "routes"]) {
     if (window.google && window.google.maps) {
         return Promise.resolve(window.google.maps);
     }

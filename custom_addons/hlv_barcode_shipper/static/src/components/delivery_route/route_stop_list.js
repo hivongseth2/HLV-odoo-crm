@@ -16,7 +16,6 @@ export class RouteStopList extends Component {
 
     static template = xml`<div class="hlv-route-sheet" t-att-class="{ 'is-expanded': props.expanded }">
             <div class="hlv-route-sheet-handle"
-                 t-on-click="toggleExpanded"
                  t-on-pointerdown="onHandlePointerDown"></div>
             <div class="hlv-route-next">
                 <span>DIEM TIEP THEO</span>
@@ -51,18 +50,12 @@ export class RouteStopList extends Component {
         this.longPressTimer = null;
         this.handleStartY = 0;
         this.lastTargetIndex = null;
+        this.dragGhost = null;
+        this.dragOffsetY = 0;
     }
 
     formatDistance(value) {
         return formatDistance(value);
-    }
-
-    toggleExpanded() {
-        if (this.props.expanded) {
-            this.props.onCollapse?.();
-        } else {
-            this.props.onExpand?.();
-        }
     }
 
     onHandlePointerDown(ev) {
@@ -106,6 +99,7 @@ export class RouteStopList extends Component {
             grip.setPointerCapture?.(ev.pointerId);
             document.body.classList.add("hlv-route-dragging");
             card?.classList.add("is-dragging");
+            this.createDragGhost(card, ev.clientX, ev.clientY);
         }, 140);
 
         const onMove = (moveEv) => {
@@ -119,6 +113,7 @@ export class RouteStopList extends Component {
             }
 
             moveEv.preventDefault();
+            this.moveDragGhost(moveEv.clientX, moveEv.clientY);
             const element = document.elementFromPoint(moveEv.clientX, moveEv.clientY);
             const targetCard = element?.closest?.(".hlv-route-stop");
             if (!targetCard) {
@@ -145,6 +140,7 @@ export class RouteStopList extends Component {
             this.draggingIndex = null;
             this.lastTargetIndex = null;
             card?.classList.remove("is-dragging");
+            this.removeDragGhost();
             document.body.classList.remove("hlv-route-dragging");
             document.removeEventListener("pointermove", onMove);
             document.removeEventListener("pointerup", onUp);
@@ -154,5 +150,33 @@ export class RouteStopList extends Component {
         document.addEventListener("pointermove", onMove, { passive: false });
         document.addEventListener("pointerup", onUp);
         document.addEventListener("pointercancel", onUp);
+    }
+
+    createDragGhost(card, x, y) {
+        if (!card) {
+            return;
+        }
+        const rect = card.getBoundingClientRect();
+        this.dragOffsetY = y - rect.top;
+        const ghost = card.cloneNode(true);
+        ghost.classList.add("hlv-route-drag-ghost");
+        ghost.style.width = `${rect.width}px`;
+        ghost.style.left = `${rect.left}px`;
+        ghost.style.top = `${rect.top}px`;
+        ghost.style.transform = "translate3d(0,0,0)";
+        document.body.appendChild(ghost);
+        this.dragGhost = ghost;
+    }
+
+    moveDragGhost(x, y) {
+        if (!this.dragGhost) {
+            return;
+        }
+        this.dragGhost.style.top = `${y - this.dragOffsetY}px`;
+    }
+
+    removeDragGhost() {
+        this.dragGhost?.remove();
+        this.dragGhost = null;
     }
 }
