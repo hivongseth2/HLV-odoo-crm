@@ -67,6 +67,29 @@
                         </div>
                     </t>
                 </div>
+
+                <div t-if="state.picking.state !== 'done' and state.picking.is_putaway"
+                     t-attf-class="modern-location-banner #{!props.scannedLocationName ? '' : ''}"
+                     t-ref="locationBannerRef">
+                    <t t-if="props.scannedLocationName">
+                        <div class="location-info-row">
+                            <span class="location-badge">
+                                Đang nhập vào:
+                            </span>
+                            <span class="location-val">
+                                <t t-esc="props.scannedLocationName"/>
+                            </span>
+                        </div>
+                    </t>
+                    <t t-else="">
+                        <div class="location-info-row">
+                            <span class="location-badge">
+                                Nhập vào vị trí mặc định
+                            </span>
+                            <span class="location-hint">Có thể quét vị trí cụ thể trước khi quét sản phẩm</span>
+                        </div>
+                    </t>
+                </div>
             
                 <!-- Scrollable product list area -->
                 <div class="picking-scroll-area">

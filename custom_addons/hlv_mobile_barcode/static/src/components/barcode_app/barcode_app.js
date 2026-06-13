@@ -390,7 +390,11 @@ export class BarcodeApp extends Component {
                     this.state.pickingRefreshTick += 1;
                 } else {
                     this.playSound('success');
-                    this.notification.add(`Scanned ${res.product_name}`, { type: "success" });
+                    if (res.override_location) {
+                        this.notification.add(`Đã đổi vị trí lấy hàng sang ${res.location_name || this.state.scannedLocationName}: ${res.product_name}`, { type: "success" });
+                    } else {
+                        this.notification.add(`Scanned ${res.product_name}`, { type: "success" });
+                    }
                     this.state.lastScannedProduct = res.product_id;
                     this.state.lastScannedMoveLine = res.move_line_id || null;
                     this.state.lastScanTarget = "product";
