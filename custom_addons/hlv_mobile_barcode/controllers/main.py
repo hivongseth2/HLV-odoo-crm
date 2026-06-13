@@ -1859,10 +1859,23 @@ class HLVMobileBarcodeController(http.Controller):
                 loc_msg = _(' tại vị trí này') if destination_location_id else ''
                 return {'error': _('Sản phẩm "%s"%s đã được quét đủ số lượng phân bổ (%g).', product.display_name, loc_msg, sum(move_line.mapped('qty_scanned')))}
             move_line = available_move_line
-        elif uses_qty_scanned and destination_location_id and not is_incoming_receipt:
-            # Đối với phiếu nhập IN, KHÔNG lọc theo location_dest_id
-            # vì ta sẽ ghi đè location_dest_id của dòng gốc thay vì tạo dòng mới
-            move_line = move_line.filtered(lambda ml: ml.location_dest_id.id == destination_location_id)
+        elif uses_qty_scanned and destination_location_id:
+            if is_incoming_receipt:
+                # === PHIẾU NHẬP IN: Logic 3 tầng ưu tiên ===
+                # 1. Ưu tiên dòng đã có đúng vị trí đích (quét tiếp cùng vị trí → tăng qty)
+                matching_dest = move_line.filtered(lambda ml: ml.location_dest_id.id == destination_location_id)
+                if matching_dest:
+                    move_line = matching_dest
+                else:
+                    # 2. Tìm dòng chưa quét (qty_scanned==0, dòng mặc định WH/Stock) → sẽ ghi đè location
+                    untouched = move_line.filtered(lambda ml: ml.qty_scanned == 0)
+                    if untouched:
+                        move_line = untouched[:1]  # Chỉ lấy 1 dòng để override
+                    else:
+                        # 3. Tất cả dòng đã quét ở vị trí khác → để trống → tạo dòng mới
+                        move_line = request.env['stock.move.line'].browse()
+            else:
+                move_line = move_line.filtered(lambda ml: ml.location_dest_id.id == destination_location_id)
 
         if is_pick_picking:
             updated_move_line = move_line[0]
@@ -1917,16 +1930,34 @@ class HLVMobileBarcodeController(http.Controller):
                 or (not is_putaway and destination_location_id and last_ml.location_id.id != ml_src_id)
             )
             if location_differs and is_incoming_receipt:
-                # === PHIẾU NHẬP IN: Ghi đè location_dest_id thay vì tạo dòng mới ===
-                # Khi thủ kho quét vị trí cụ thể (VD: TSN/Stock/T1) rồi quét sản phẩm,
-                # ta override dòng gốc (đang trỏ WH/Stock) sang vị trí vừa quét,
-                # và cộng số lượng quét lên. Không tạo dòng mới.
-                last_ml.location_dest_id = destination_location_id
-                if uses_qty_scanned:
-                    last_ml.qty_scanned += 1
+                # === PHIẾU NHẬP IN: Chỉ ghi đè dòng chưa quét (mặc định WH/Stock) ===
+                # Dòng chưa quét (qty_scanned==0): override location_dest_id sang vị trí vừa quét
+                # Dòng đã quét (qty_scanned>0): KHÔNG ghi đè → rơi xuống nhánh tạo dòng mới
+                existing_qty = last_ml.qty_scanned if uses_qty_scanned else last_ml.quantity
+                if existing_qty == 0:
+                    last_ml.location_dest_id = destination_location_id
+                    if uses_qty_scanned:
+                        last_ml.qty_scanned += 1
+                    else:
+                        last_ml.quantity += 1
+                    updated_move_line = last_ml
                 else:
-                    last_ml.quantity += 1
-                updated_move_line = last_ml
+                    # Dòng đã có số lượng quét ở vị trí khác → tạo dòng mới cho vị trí mới
+                    new_ml_vals = {
+                        'move_id': move.id,
+                        'picking_id': picking.id,
+                        'product_id': product.id,
+                        'product_uom_id': product.uom_id.id,
+                        'location_id': ml_src_id,
+                        'location_dest_id': ml_dest_id,
+                    }
+                    if scan_package:
+                        new_ml_vals['package_id'] = scan_package.id
+                    if uses_qty_scanned:
+                        new_ml_vals['qty_scanned'] = 1
+                    else:
+                        new_ml_vals['quantity'] = 1
+                    updated_move_line = request.env['stock.move.line'].create(new_ml_vals)
             elif location_differs:
                 # Các loại phiếu khác: tạo dòng mới khi vị trí khác nhau
                 new_ml_vals = {
