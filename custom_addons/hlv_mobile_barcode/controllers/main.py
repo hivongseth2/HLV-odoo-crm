@@ -1380,9 +1380,12 @@ class HLVMobileBarcodeController(http.Controller):
                     and updated_ml.picking_id == picking
                     and updated_ml.state not in ['done', 'cancel']
                 ):
-                    updated_ml.location_dest_id = location.id
-                    res['updated_product_id'] = updated_ml.product_id.id
-                    res['updated_move_line_id'] = updated_ml.id
+                    # Không kéo theo sản phẩm khi quét vị trí đối với phiếu nhập IN
+                    # Điều này cho phép thủ kho tách 1 sản phẩm ra nhiều vị trí khác nhau
+                    if not is_incoming_receipt:
+                        updated_ml.location_dest_id = location.id
+                        res['updated_product_id'] = updated_ml.product_id.id
+                        res['updated_move_line_id'] = updated_ml.id
             return res
 
         # 1.5. Try to find package
@@ -1916,16 +1919,6 @@ class HLVMobileBarcodeController(http.Controller):
                         actual_src_id = child_quants[0].location_id.id
             ml_src_id = actual_src_id
 
-        def _incoming_redistribute_demand(source_ml):
-            """Phan bo lai demand khi tach dong phieu nhap IN.
-            Khoa demand dong goc = so da quet, tra lai demand con lai cho dong moi."""
-            orig_demand = source_ml.quantity
-            locked = source_ml.qty_scanned if uses_qty_scanned else source_ml.quantity
-            remaining = max(0, orig_demand - locked)
-            if uses_qty_scanned and remaining > 0:
-                source_ml.quantity = locked
-            return remaining
-
         updated_move_line = request.env['stock.move.line'].browse()
         if move_line:
             last_ml = move_line[-1]
@@ -1934,10 +1927,10 @@ class HLVMobileBarcodeController(http.Controller):
                 or (not is_putaway and destination_location_id and last_ml.location_id.id != ml_src_id)
             )
             if location_differs and is_incoming_receipt:
-                # === PHIEU NHAP IN ===
+                # === PHIẾU NHẬP IN ===
                 existing_qty = last_ml.qty_scanned if uses_qty_scanned else last_ml.quantity
                 if existing_qty == 0:
-                    # Dong chua quet -> override location_dest_id
+                    # Dòng chưa quét → override location_dest_id
                     last_ml.location_dest_id = destination_location_id
                     if uses_qty_scanned:
                         last_ml.qty_scanned += 1
@@ -1945,8 +1938,7 @@ class HLVMobileBarcodeController(http.Controller):
                         last_ml.quantity += 1
                     updated_move_line = last_ml
                 else:
-                    # Dong da quet o vi tri khac -> tao dong moi + phan bo demand
-                    remaining_demand = _incoming_redistribute_demand(last_ml)
+                    # Dòng đã quét ở vị trí khác → tạo dòng mới
                     new_ml_vals = {
                         'move_id': move.id,
                         'picking_id': picking.id,
@@ -1955,8 +1947,6 @@ class HLVMobileBarcodeController(http.Controller):
                         'location_id': ml_src_id,
                         'location_dest_id': ml_dest_id,
                     }
-                    if remaining_demand > 0:
-                        new_ml_vals['quantity'] = remaining_demand
                     if scan_package:
                         new_ml_vals['package_id'] = scan_package.id
                     if uses_qty_scanned:
@@ -1965,7 +1955,7 @@ class HLVMobileBarcodeController(http.Controller):
                         new_ml_vals['quantity'] = 1
                     updated_move_line = request.env['stock.move.line'].create(new_ml_vals)
             elif location_differs:
-                # Cac loai phieu khac: tao dong moi khi vi tri khac nhau
+                # Các loại phiếu khác: tạo dòng mới khi vị trí khác nhau
                 new_ml_vals = {
                     'move_id': move.id,
                     'picking_id': picking.id,
@@ -1997,21 +1987,6 @@ class HLVMobileBarcodeController(http.Controller):
                 'location_id': ml_src_id,
                 'location_dest_id': ml_dest_id,
             }
-            # === PHIEU NHAP IN: Phan bo demand cho dong moi khi tach vi tri ===
-            if is_incoming_receipt and uses_qty_scanned and destination_location_id:
-                existing_mls = move.move_line_ids.filtered(
-                    lambda ml: ml.state not in ['done', 'cancel'] and not ml.result_package_id
-                )
-                total_demand = move.product_uom_qty
-                total_locked = 0
-                for eml in existing_mls:
-                    scanned = eml.qty_scanned
-                    if scanned > 0 and eml.quantity != scanned:
-                        eml.quantity = scanned
-                    total_locked += scanned
-                remaining_demand = max(0, total_demand - total_locked)
-                if remaining_demand > 0:
-                    new_ml_vals['quantity'] = remaining_demand
             if scan_package:
                 new_ml_vals['package_id'] = scan_package.id
             if uses_qty_scanned:
@@ -2019,6 +1994,25 @@ class HLVMobileBarcodeController(http.Controller):
             else:
                 new_ml_vals['quantity'] = 1
             updated_move_line = request.env['stock.move.line'].create(new_ml_vals)
+
+        # === DYNAMIC DEMAND RECALCULATION CỦA PHIẾU NHẬP IN ===
+        if is_incoming_receipt and updated_move_line:
+            existing_mls = move.move_line_ids.filtered(
+                lambda ml: ml.state not in ['done', 'cancel'] and not ml.result_package_id
+            )
+            total_demand = move.product_uom_qty
+            total_locked = 0
+            for eml in existing_mls:
+                if eml.id != updated_move_line.id:
+                    scanned = eml.qty_scanned if uses_qty_scanned else eml.quantity
+                    if scanned > 0 and eml.quantity != scanned:
+                        eml.quantity = scanned
+                    total_locked += scanned
+            
+            remaining_demand = max(0, total_demand - total_locked)
+            if updated_move_line.quantity != remaining_demand:
+                updated_move_line.quantity = remaining_demand
+
 
 
         return {
