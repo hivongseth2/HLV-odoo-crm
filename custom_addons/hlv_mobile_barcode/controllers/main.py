@@ -1855,20 +1855,8 @@ class HLVMobileBarcodeController(http.Controller):
                 loc_msg = _(' tại vị trí này') if destination_location_id else ''
                 return {'error': _('Sản phẩm "%s"%s đã được quét đủ số lượng phân bổ (%g).', product.display_name, loc_msg, sum(move_line.mapped('qty_scanned')))}
             move_line = available_move_line
-        elif destination_location_id:
-            if is_putaway:
-                exact_match = move_line.filtered(lambda ml: ml.location_dest_id.id == destination_location_id)
-                if exact_match:
-                    move_line = exact_match
-                else:
-                    qty_field = 'qty_scanned' if uses_qty_scanned else 'quantity'
-                    empty_lines = move_line.filtered(lambda ml: getattr(ml, qty_field) == 0)
-                    if empty_lines:
-                        move_line = empty_lines
-                    else:
-                        move_line = move_line.browse()
-            elif uses_qty_scanned:
-                move_line = move_line.filtered(lambda ml: ml.location_dest_id.id == destination_location_id)
+        elif uses_qty_scanned and destination_location_id and not is_putaway:
+            move_line = move_line.filtered(lambda ml: ml.location_dest_id.id == destination_location_id)
 
         if is_pick_picking:
             updated_move_line = move_line[0]
@@ -1916,17 +1904,18 @@ class HLVMobileBarcodeController(http.Controller):
         
         updated_move_line = request.env['stock.move.line'].browse()
         if move_line:
-            # Check if location matches, otherwise we might need a new move line
             last_ml = move_line[-1]
             qty_field = 'qty_scanned' if uses_qty_scanned else 'quantity'
-            if (is_putaway and destination_location_id and last_ml.location_dest_id.id != destination_location_id) or \
-               (not is_putaway and destination_location_id and last_ml.location_id.id != ml_src_id):
+            
+            is_incoming = picking.picking_type_id.code == 'incoming'
+            # Luôn override location_dest_id cho phiếu nhập IN (incoming) mà không tạo mới
+            if is_incoming and destination_location_id and last_ml.location_dest_id.id != destination_location_id:
+                last_ml.location_dest_id = destination_location_id
                 
+            if (not is_incoming and is_putaway and destination_location_id and last_ml.location_dest_id.id != destination_location_id) or \
+               (not is_putaway and destination_location_id and last_ml.location_id.id != ml_src_id):
                 if getattr(last_ml, qty_field) == 0:
-                    if is_putaway:
-                        last_ml.location_dest_id = destination_location_id
-                    else:
-                        last_ml.location_id = ml_src_id
+                    last_ml.location_id = ml_src_id
                     
                     if uses_qty_scanned:
                         last_ml.qty_scanned += 1
