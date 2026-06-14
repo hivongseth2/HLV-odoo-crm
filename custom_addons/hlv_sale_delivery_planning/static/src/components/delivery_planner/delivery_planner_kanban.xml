@@ -172,7 +172,7 @@
             <t t-foreach="this.kanbanColumnDefs" t-as="col" t-key="col.value">
 
                 <div class="hlv-kanban-column kanban-custom-width d-flex flex-column flex-grow-1"
-                    style="width: 350px;"
+                    style="width: 295px;"
                      t-att-data-col="col.value"
                      t-on-dragover="(ev) => this.onDragOver(ev, col.value)"
                      t-on-dragleave="(ev) => this.onDragLeave(ev)"
