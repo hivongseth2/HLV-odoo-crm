@@ -149,7 +149,7 @@
     .hlv-kanban-board {
         min-height: 60vh;
         align-items: flex-start;
-        width: 100%;
+        width: fit-content;
         flex-wrap: nowrap;
     }
     .kanban-custom-width {
