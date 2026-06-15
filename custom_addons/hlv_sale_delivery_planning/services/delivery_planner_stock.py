@@ -208,7 +208,11 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
         loc_to_wh_id = {}
         if all_prod_ids_needed and all_needed_wh_ids:
             all_wh_objs = self.env['stock.warehouse'].browse(list(all_needed_wh_ids))
-            root_loc_ids = [wh.lot_stock_id.id for wh in all_wh_objs if wh.lot_stock_id]
+            root_loc_ids = [
+                (wh.view_location_id or wh.lot_stock_id).id
+                for wh in all_wh_objs
+                if wh.view_location_id or wh.lot_stock_id
+            ]
             all_child_locs = self.env['stock.location'].sudo().search([
                 ('id', 'child_of', root_loc_ids), ('usage', '=', 'internal'),
             ]) if root_loc_ids else self.env['stock.location']
@@ -217,9 +221,10 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                     continue
                 best_wh_id, best_pos = None, -1
                 for wh in all_wh_objs:
-                    if not wh.lot_stock_id:
+                    wh_root = wh.view_location_id or wh.lot_stock_id
+                    if not wh_root:
                         continue
-                    pos = loc.parent_path.find(f'/{wh.lot_stock_id.id}/')
+                    pos = loc.parent_path.find(f'/{wh_root.id}/')
                     if pos > best_pos:
                         best_pos, best_wh_id = pos, wh.id
                 if best_wh_id is not None:

@@ -202,8 +202,13 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
 
         # --- Batch load tồn kho thực cho TẤT CẢ Kit components (Fix N+1) ---
         # Dùng kit_bom_map.values() thay vì ORM recordset 'kits' (hoạt động cả 2 nhánh)
+        wh_stock_root = (
+            so.warehouse_id.view_location_id or so.warehouse_id.lot_stock_id
+            if so.warehouse_id
+            else False
+        )
         kit_comp_true_free = {}
-        if kit_bom_map and so.warehouse_id and so.warehouse_id.lot_stock_id:
+        if kit_bom_map and so.warehouse_id and wh_stock_root:
             all_comp_prod_ids = list(set(
                 comp.product_id.id
                 for bom in kit_bom_map.values()
@@ -212,7 +217,8 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             ))
             if all_comp_prod_ids:
                 comp_locs = self.env['stock.location'].sudo().search([
-                    ('id', 'child_of', so.warehouse_id.lot_stock_id.id),
+                    ('id', 'child_of', wh_stock_root.id),
+                    ('usage', '=', 'internal'),
                 ])
                 comp_q_rows = self.env['stock.quant'].sudo().read_group(
                     domain=[
@@ -269,7 +275,8 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                             # Tính từ quants: quantity - reserved_quantity (tất cả reservations)
                             quants = self.env['stock.quant'].sudo().search([
                                 ('product_id', '=', comp_line.product_id.id),
-                                ('location_id', 'child_of', so.warehouse_id.lot_stock_id.id),
+                                ('location_id', 'child_of', wh_stock_root.id),
+                                ('location_id.usage', '=', 'internal'),
                             ])
                             kit_comp_true_free[comp_key] = sum(
                                 max(float(q.quantity) - float(q.reserved_quantity), 0.0)
@@ -455,11 +462,12 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                     blocked_by_product[pid] = entries
 
             # Fallback: nếu không có data batch (gọi standalone), query trực tiếp
-            if page_blocking_by_so is None and so.warehouse_id and so.warehouse_id.lot_stock_id:
+            if page_blocking_by_so is None and so.warehouse_id and wh_stock_root:
                 blocking_moves = self.env['stock.move'].sudo().search([
                     ('product_id', 'in', pending_product_ids),
                     ('state', 'in', ('assigned', 'partially_available', 'confirmed', 'waiting')),
-                    ('location_id', 'child_of', so.warehouse_id.lot_stock_id.id),
+                    ('location_id', 'child_of', wh_stock_root.id),
+                    ('location_id.usage', '=', 'internal'),
                     ('picking_id', '!=', False),
                     ('picking_id.state', 'not in', ('done', 'cancel')),
                     ('sale_line_id', '=', False),
