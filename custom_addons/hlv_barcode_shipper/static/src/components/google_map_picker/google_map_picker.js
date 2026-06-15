@@ -48,28 +48,29 @@ export class GoogleMapPicker extends Component {
                     center: { lat, lng },
                     zoom: 15,
                     disableDefaultUI: false,
+                    mapId: "DEMO_MAP_ID",
                 });
                 
-                this.marker = new maps.Marker({
+                this.marker = new maps.marker.AdvancedMarkerElement({
                     position: { lat, lng },
                     map: this.map,
-                    draggable: true,
+                    gmpDraggable: true,
                 });
                 
                 this.marker.addListener("dragend", () => {
-                    const pos = this.marker.getPosition();
+                    const pos = this.marker.position;
                     this.props.record.update({
-                        latitude: pos.lat(),
-                        longitude: pos.lng()
+                        latitude: typeof pos.lat === "function" ? pos.lat() : pos.lat,
+                        longitude: typeof pos.lng === "function" ? pos.lng() : pos.lng
                     });
                 });
                 
                 this.map.addListener("click", (e) => {
                     const pos = e.latLng;
-                    this.marker.setPosition(pos);
+                    this.marker.position = pos;
                     this.props.record.update({
-                        latitude: pos.lat(),
-                        longitude: pos.lng()
+                        latitude: typeof pos.lat === "function" ? pos.lat() : pos.lat,
+                        longitude: typeof pos.lng === "function" ? pos.lng() : pos.lng
                     });
                 });
             }, 100);
