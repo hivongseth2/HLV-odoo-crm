@@ -13,7 +13,7 @@
                     </group>
                 </group>
                 <div class="o_google_map_picker_container" style="width: 100%; height: 400px; margin-top: 15px; border: 1px solid #ccc;">
-                    <field name="map_view" widget="google_map_picker"/>
+                    <field name="map_view" widget="google_map_picker" nolabel="1" class="d-block w-100 h-100"/>
                 </div>
                 <footer>
                     <button name="action_save" type="object" string="Lưu Tọa Độ" class="btn-primary"/>

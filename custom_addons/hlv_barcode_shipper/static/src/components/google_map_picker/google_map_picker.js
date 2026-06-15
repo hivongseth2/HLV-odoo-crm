@@ -12,52 +12,103 @@ export class GoogleMapPicker extends Component {
 
     setup() {
         this.mapRef = useRef("mapContainer");
+        this.searchInputRef = useRef("searchInput");
         this.orm = useService("orm");
         
         onMounted(async () => {
-            const configs = await this.orm.call("ir.config_parameter", "get_param", ["hlv_barcode_shipper.google_maps_api_key"]);
-            if (!configs) {
-                console.error("Missing Google Maps API Key in Settings");
+            // First try to get the API key from Barcode Shipper company settings
+            const companyData = await this.orm.searchRead("res.company", [], ["hlv_barcode_google_maps_api_key"], { limit: 1 });
+            let apiKey = companyData && companyData.length ? companyData[0].hlv_barcode_google_maps_api_key : null;
+            
+            // If not found, try to get it from standard Odoo base_geolocalize settings
+            if (!apiKey) {
+                apiKey = await this.orm.call("ir.config_parameter", "get_param", ["base_geolocalize.google_map_api_key"]);
+            }
+            
+            if (!apiKey) {
+                console.error("Missing Google Maps API Key in Company Settings or General Settings");
                 return;
             }
-            const maps = await loadGoogleMaps(configs);
+            
+            let maps;
+            try {
+                maps = await loadGoogleMaps(apiKey);
+            } catch (error) {
+                console.error("Lỗi khi tải Google Maps (Có thể do Trình chặn quảng cáo / Adblock):", error);
+                alert("Không thể tải bản đồ. Vui lòng tắt trình chặn quảng cáo (Adblock) hoặc kiểm tra kết nối mạng!");
+                return;
+            }
             
             // Get coordinates from the record
             let lat = this.props.record.data.latitude || 21.028511; // Default Hanoi
             let lng = this.props.record.data.longitude || 105.804817;
             
-            this.map = new maps.Map(this.mapRef.el, {
-                center: { lat, lng },
-                zoom: 15,
-                disableDefaultUI: false,
-            });
-            
-            this.marker = new maps.Marker({
-                position: { lat, lng },
-                map: this.map,
-                draggable: true,
-            });
-            
-            this.marker.addListener("dragend", () => {
-                const pos = this.marker.getPosition();
-                this.props.record.update({
-                    latitude: pos.lat(),
-                    longitude: pos.lng()
+            // Fix modal display issue by using timeout
+            setTimeout(() => {
+                this.map = new maps.Map(this.mapRef.el, {
+                    center: { lat, lng },
+                    zoom: 15,
+                    disableDefaultUI: false,
+                    mapId: "DEMO_MAP_ID",
                 });
-            });
-            
-            this.map.addListener("click", (e) => {
-                const pos = e.latLng;
-                this.marker.setPosition(pos);
-                this.props.record.update({
-                    latitude: pos.lat(),
-                    longitude: pos.lng()
+                
+                this.marker = new maps.marker.AdvancedMarkerElement({
+                    position: { lat, lng },
+                    map: this.map,
+                    gmpDraggable: true,
                 });
-            });
+                
+                this.marker.addListener("dragend", () => {
+                    const pos = this.marker.position;
+                    this.props.record.update({
+                        latitude: typeof pos.lat === "function" ? pos.lat() : pos.lat,
+                        longitude: typeof pos.lng === "function" ? pos.lng() : pos.lng
+                    });
+                });
+                
+                this.map.addListener("click", (e) => {
+                    const pos = e.latLng;
+                    this.marker.position = pos;
+                    this.props.record.update({
+                        latitude: typeof pos.lat === "function" ? pos.lat() : pos.lat,
+                        longitude: typeof pos.lng === "function" ? pos.lng() : pos.lng
+                    });
+                });
+            }, 100);
+        });
+    }
+
+    onKeydownSearch(ev) {
+        if (ev.key === "Enter") {
+            ev.preventDefault();
+            this.searchAddress();
+        }
+    }
+
+    searchAddress() {
+        const address = this.searchInputRef.el.value;
+        if (!address) return;
+        
+        const geocoder = new window.google.maps.Geocoder();
+        geocoder.geocode({ address: address }, (results, status) => {
+            if (status === "OK" && results && results.length > 0) {
+                const pos = results[0].geometry.location;
+                this.map.setCenter(pos);
+                this.map.setZoom(16);
+                this.marker.position = pos;
+                
+                this.props.record.update({
+                    latitude: typeof pos.lat === "function" ? pos.lat() : pos.lat,
+                    longitude: typeof pos.lng === "function" ? pos.lng() : pos.lng
+                });
+            } else {
+                alert("Không tìm thấy vị trí cho địa chỉ này trên bản đồ!");
+            }
         });
     }
 }
 
 registry.category("fields").add("google_map_picker", {
     component: GoogleMapPicker,
+    supportedTypes: ["char", "text"],
 });

@@ -671,7 +671,7 @@ class BarcodeShipperController(http.Controller):
             "hlv_barcode_shipper.delivery_route_interface",
             {
                 "user": request.env.user,
-                "google_maps_api_key": request.env.company.hlv_barcode_google_maps_api_key or "",
+                "google_maps_api_key": request.env.company.hlv_barcode_google_maps_api_key or request.env['ir.config_parameter'].sudo().get_param('base_geolocalize.google_map_api_key') or "",
             },
         )
 

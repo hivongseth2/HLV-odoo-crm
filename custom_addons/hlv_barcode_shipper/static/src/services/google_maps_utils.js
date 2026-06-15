@@ -2,7 +2,7 @@
 
 let googleMapsPromise = null;
 
-export function loadGoogleMaps(apiKey, libraries = ["places", "geometry", "routes"]) {
+export function loadGoogleMaps(apiKey, libraries = ["places", "geometry", "routes", "marker"]) {
     if (window.google && window.google.maps) {
         return Promise.resolve(window.google.maps);
     }
@@ -21,7 +21,7 @@ export function loadGoogleMaps(apiKey, libraries = ["places", "geometry", "route
         };
 
         const script = document.createElement("script");
-        script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&libraries=${libraries.join(",")}&callback=${callbackName}`;
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&libraries=${libraries.join(",")}&loading=async&callback=${callbackName}`;
         script.async = true;
         script.defer = true;
         script.onerror = () => {
