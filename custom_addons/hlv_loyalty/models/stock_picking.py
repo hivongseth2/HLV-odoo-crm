@@ -74,11 +74,12 @@ class StockPicking(models.Model):
         )
 
         # ── Điểm đổi thưởng: dựa trên tiền chiết khấu ──
-        discount_amount = sum(
-            self._get_loyalty_discount_amount_for_move(move)
+        discount_details = [
+            self._get_loyalty_discount_detail_for_move(move)
             for move in self.move_ids
             if move.state == 'done' and move.sale_line_id
-        )
+        ]
+        discount_amount = sum(item['discount_amount'] for item in discount_details)
         discount_formula_source = 'Tổng chiết khấu loyalty theo dòng giao'
         # Fallback: không có dòng nào có amount/% loyalty → dùng % mặc định của contact
         if discount_amount <= 0:
@@ -86,6 +87,11 @@ class StockPicking(models.Model):
             # loyalty_default_discount lưu dạng 0-1 (Odoo convention: 0.05 = 5%)
             fallback_pct = root_partner_lookup.loyalty_default_discount or 0.0
             discount_amount = delivered_subtotal * fallback_pct
+            discount_details = [
+                self._get_loyalty_discount_detail_for_move(move, fallback_pct=fallback_pct)
+                for move in self.move_ids
+                if move.state == 'done'
+            ]
             discount_formula_source = (
                 'Doanh số giao x % chiết khấu mặc định KH '
                 f'({fallback_pct:.2%})'
@@ -101,6 +107,7 @@ class StockPicking(models.Model):
             1,
             exchange_points,
             source_label=discount_formula_source,
+            detail_lines=discount_details,
         )
 
         if ranking_points <= 0 and exchange_points <= 0:
@@ -110,8 +117,14 @@ class StockPicking(models.Model):
         existing = self.env['hlv.loyalty.history'].sudo().search([
             ('picking_id', '=', self.id),
             ('transaction_type', '=', 'earn'),
-        ], limit=1)
+        ])
         if existing:
+            ranking_hist = existing.filtered(lambda hist: hist.point_type == 'ranking')[:1]
+            exchange_hist = existing.filtered(lambda hist: hist.point_type == 'exchange')[:1]
+            if ranking_hist:
+                ranking_hist.write({'point_formula': ranking_formula})
+            if exchange_hist:
+                exchange_hist.write({'point_formula': exchange_formula})
             return
 
         # Luôn tích vào công ty gốc (đi lên hết chuỗi parent_id)
@@ -157,27 +170,67 @@ class StockPicking(models.Model):
 
     def _get_loyalty_discount_amount_for_move(self, move):
         """Return loyalty discount amount for one delivered move."""
+        return self._get_loyalty_discount_detail_for_move(move)['discount_amount']
+
+    def _get_loyalty_discount_detail_for_move(self, move, fallback_pct=None):
+        """Return loyalty discount detail for one delivered move."""
         sale_line = move.sale_line_id
+        product_name = move.product_id.display_name or ''
+        qty = move.quantity or 0.0
+        price_unit = sale_line.price_unit if sale_line else move.product_id.lst_price
+        subtotal = price_unit * qty
+        detail = {
+            'product': product_name,
+            'qty': qty,
+            'price_unit': price_unit,
+            'subtotal': subtotal,
+            'source': 'Không tính điểm đổi thưởng',
+            'discount_rate': 0.0,
+            'discount_amount': 0.0,
+        }
+
+        if fallback_pct is not None:
+            detail.update({
+                'source': 'Fallback % mặc định khách hàng',
+                'discount_rate': fallback_pct,
+                'discount_amount': subtotal * fallback_pct,
+            })
+            return detail
+
         if not sale_line:
-            return 0.0
+            return detail
 
         direct_amount = getattr(sale_line, 'x_studio_loyalty_discount_amount', 0.0) or 0.0
         if direct_amount > 0:
             ordered_qty = sale_line.product_uom_qty or 0.0
             if ordered_qty > 0:
-                return direct_amount * min(move.quantity / ordered_qty, 1.0)
-            return direct_amount
+                prorated_amount = direct_amount * min(qty / ordered_qty, 1.0)
+            else:
+                prorated_amount = direct_amount
+            detail.update({
+                'source': 'Số tiền CK loyalty trực tiếp trên dòng',
+                'discount_rate': (prorated_amount / subtotal) if subtotal else 0.0,
+                'discount_amount': prorated_amount,
+                'direct_amount': direct_amount,
+                'ordered_qty': ordered_qty,
+            })
+            return detail
 
         discount_pct = sale_line.loyalty_discount_pct or 0.0
         if discount_pct <= 0:
-            return 0.0
+            return detail
 
         discount_rate = discount_pct if discount_pct <= 1.0 else discount_pct / 100.0
-        return sale_line.price_unit * move.quantity * discount_rate
+        detail.update({
+            'source': 'CK loyalty % trên dòng bán hàng',
+            'discount_rate': discount_rate,
+            'discount_amount': subtotal * discount_rate,
+        })
+        return detail
 
     def _format_loyalty_point_formula(
         self, label, numerator, divisor, multiplier, points,
-        source_label='', multiplier_label='',
+        source_label='', multiplier_label='', detail_lines=None,
     ):
         """Build a human-readable formula snapshot for QC."""
         self.ensure_one()
@@ -193,6 +246,22 @@ class StockPicking(models.Model):
         base += f' = {points:,} điểm'
         if source_label:
             base += f'\nNguồn tiền quy đổi: {source_label}.'
+        if detail_lines:
+            base += '\nChi tiết dòng giao:'
+            for item in detail_lines:
+                base += (
+                    '\n- {product}: SL giao {qty:g} x đơn giá {price:,.0f}'
+                    ' = {subtotal:,.0f}; {source}; tỷ lệ {rate:.2%};'
+                    ' tiền quy đổi {discount:,.0f}'
+                ).format(
+                    product=item.get('product') or '',
+                    qty=item.get('qty') or 0.0,
+                    price=item.get('price_unit') or 0.0,
+                    subtotal=item.get('subtotal') or 0.0,
+                    source=item.get('source') or '',
+                    rate=item.get('discount_rate') or 0.0,
+                    discount=item.get('discount_amount') or 0.0,
+                )
         return base
 
     def _loyalty_return_points(self):

@@ -21,6 +21,20 @@
                                  help="Cho phép Admin HQ điều chỉnh điểm loyalty bằng tay">
                             <field name="loyalty_allow_manual_adjust"/>
                         </setting>
+                        <setting id="loyalty_bulk_default_discount_setting"
+                                 string="Cập nhật CK mặc định cho toàn bộ khách hàng"
+                                 help="Ghi đè loyalty_default_discount của tất cả khách hàng/liên hệ. Nhập dạng thập phân: 0.005 = 0.5%, 0.05 = 5%."
+                                 groups="hlv_loyalty.group_loyalty_admin">
+                            <div class="content-group">
+                                <field name="loyalty_bulk_default_discount"/>
+                                <button name="action_update_all_partner_loyalty_default_discount"
+                                        string="Áp dụng cho tất cả khách hàng"
+                                        type="object"
+                                        class="btn-secondary mt-2"
+                                        groups="hlv_loyalty.group_loyalty_admin"
+                                        confirm="Bạn có chắc muốn ghi đè % chiết khấu Loyalty mặc định của TẤT CẢ khách hàng/liên hệ? Thao tác này sẽ cập nhật trường loyalty_default_discount hàng loạt."/>
+                            </div>
+                        </setting>
                         <setting id="loyalty_notification_setting"
                                  string="Gửi thông báo tích điểm"
                                  help="Gửi email/thông báo cho khách khi được tích điểm">
