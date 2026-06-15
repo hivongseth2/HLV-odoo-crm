@@ -15,12 +15,20 @@ export class GoogleMapPicker extends Component {
         this.orm = useService("orm");
         
         onMounted(async () => {
-            const configs = await this.orm.call("ir.config_parameter", "get_param", ["hlv_barcode_shipper.google_maps_api_key"]);
-            if (!configs) {
-                console.error("Missing Google Maps API Key in Settings");
+            // First try to get the API key from Barcode Shipper company settings
+            const companyData = await this.orm.searchRead("res.company", [], ["hlv_barcode_google_maps_api_key"], { limit: 1 });
+            let apiKey = companyData && companyData.length ? companyData[0].hlv_barcode_google_maps_api_key : null;
+            
+            // If not found, try to get it from standard Odoo base_geolocalize settings
+            if (!apiKey) {
+                apiKey = await this.orm.call("ir.config_parameter", "get_param", ["base_geolocalize.google_map_api_key"]);
+            }
+            
+            if (!apiKey) {
+                console.error("Missing Google Maps API Key in Company Settings or General Settings");
                 return;
             }
-            const maps = await loadGoogleMaps(configs);
+            const maps = await loadGoogleMaps(apiKey);
             
             // Get coordinates from the record
             let lat = this.props.record.data.latitude || 21.028511; // Default Hanoi
@@ -60,4 +68,5 @@ export class GoogleMapPicker extends Component {
 
 registry.category("fields").add("google_map_picker", {
     component: GoogleMapPicker,
+    supportedTypes: ["char", "text"],
 });
