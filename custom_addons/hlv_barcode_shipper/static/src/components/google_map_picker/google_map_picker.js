@@ -74,6 +74,31 @@ export class GoogleMapPicker extends Component {
                         longitude: typeof pos.lng === "function" ? pos.lng() : pos.lng
                     });
                 });
+
+                // Tích hợp Places Autocomplete
+                if (maps.places && maps.places.Autocomplete) {
+                    const autocomplete = new maps.places.Autocomplete(this.searchInputRef.el, {
+                        componentRestrictions: { country: "vn" },
+                        fields: ["geometry", "name", "formatted_address"],
+                    });
+                    
+                    autocomplete.addListener("place_changed", () => {
+                        const place = autocomplete.getPlace();
+                        if (!place.geometry || !place.geometry.location) {
+                            return; // Fallback to searchAddress when user presses Enter
+                        }
+                        
+                        const pos = place.geometry.location;
+                        this.map.setCenter(pos);
+                        this.map.setZoom(16);
+                        this.marker.position = pos;
+                        
+                        this.props.record.update({
+                            latitude: typeof pos.lat === "function" ? pos.lat() : pos.lat,
+                            longitude: typeof pos.lng === "function" ? pos.lng() : pos.lng
+                        });
+                    });
+                }
             }, 100);
         });
     }
@@ -90,7 +115,7 @@ export class GoogleMapPicker extends Component {
         if (!address) return;
         
         const geocoder = new window.google.maps.Geocoder();
-        geocoder.geocode({ address: address }, (results, status) => {
+        geocoder.geocode({ address: address, componentRestrictions: { country: "VN" } }, (results, status) => {
             if (status === "OK" && results && results.length > 0) {
                 const pos = results[0].geometry.location;
                 this.map.setCenter(pos);

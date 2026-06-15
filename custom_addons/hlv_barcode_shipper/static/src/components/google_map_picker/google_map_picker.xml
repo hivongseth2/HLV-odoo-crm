@@ -2,7 +2,7 @@
 <templates xml:space="preserve">
     <t t-name="hlv_barcode_shipper.GoogleMapPicker" owl="1">
         <div class="d-block w-100" style="position: relative; min-height: 400px;">
-            <div style="position: absolute; top: 10px; left: 10px; z-index: 10; width: 350px; display: flex; gap: 5px;">
+            <div style="position: absolute; top: 60px; left: 10px; z-index: 10; width: 350px; display: flex; gap: 5px;">
                 <input type="text" t-ref="searchInput" class="form-control shadow-sm" placeholder="Nhập địa chỉ cần tìm..." t-on-keydown="onKeydownSearch" />
                 <button class="btn btn-primary shadow-sm" t-on-click="searchAddress"><i class="fa fa-search"></i> Tìm</button>
             </div>
