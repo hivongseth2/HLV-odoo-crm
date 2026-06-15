@@ -18,6 +18,7 @@
         "views/webhook_queue_views.xml",
         "views/meinvoice_mail_queue_views.xml",
         "views/amis_callback_views.xml",
+        "views/shopee_meinvoice_reconcile_wizard_views.xml",
     ],
     "installable": True,
     "application": True,
