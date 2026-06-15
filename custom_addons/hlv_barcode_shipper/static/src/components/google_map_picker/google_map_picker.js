@@ -19,6 +19,7 @@ export class GoogleMapPicker extends Component {
         onMounted(async () => {
             // First try to get the API key from Barcode Shipper company settings
             const companyData = await this.orm.searchRead("res.company", [], ["hlv_barcode_google_maps_api_key"], { limit: 1 });
+            let apiKey = companyData && companyData.length ? companyData[0].hlv_barcode_google_maps_api_key : null;
             
             // If not found, try to get it from standard Odoo base_geolocalize settings
             if (!apiKey) {
