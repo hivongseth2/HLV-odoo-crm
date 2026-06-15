@@ -14,6 +14,7 @@
     "data": [
         "security/hlv_barcode_shipper_security.xml",
         "security/ir.model.access.csv",
+        "wizard/geocode_picker_wizard_views.xml",
         "views/barcode_scan_log_views.xml",
         "views/stock_picking_views.xml",
         "views/barcode_shipper_views.xml",
@@ -22,6 +23,7 @@
         "views/res_config_settings_views.xml",
         "views/shipper_management_views.xml",
         "views/res_users_views.xml",
+        "views/res_partner_views.xml",
     ],
     "assets": {
         "web.assets_common": [
@@ -32,6 +34,7 @@
             "hlv_barcode_shipper/static/src/js/barcode_scanner.js",
         ],
         "web.assets_backend": [
+            "hlv_barcode_shipper/static/src/components/google_map_picker/**/*",
             "hlv_barcode_shipper/static/src/services/**/*",
             "hlv_barcode_shipper/static/src/components/**/*",
         ],

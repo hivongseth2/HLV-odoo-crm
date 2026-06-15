@@ -773,6 +773,17 @@ class BarcodeShipperController(http.Controller):
                     })
                     continue
 
+                lat = False
+                lng = False
+                if picking.partner_id:
+                    root_partner = picking.partner_id.commercial_partner_id or picking.partner_id
+                    clean_address = address.strip().lower()
+                    for loc in root_partner.hlv_delivery_location_ids:
+                        if loc.address and loc.address.strip().lower() == clean_address:
+                            lat = loc.latitude
+                            lng = loc.longitude
+                            break
+
                 item_count = len(picking.package_level_ids) + len(
                     picking.move_line_ids.filtered(lambda ml: not ml.result_package_id)
                 )
@@ -783,8 +794,11 @@ class BarcodeShipperController(http.Controller):
                     "origin": picking.origin or "",
                     "sale_order_name": sale_order_name,
                     "partner_name": picking.partner_id.name or "",
+                    "partner_id": picking.partner_id.id,
                     "address": address,
                     "address_source": address_source,
+                    "lat": lat,
+                    "lng": lng,
                     "item_count": item_count,
                     "receive_time": (
                         (picking.shipper_receive_time + VN_OFFSET).strftime("%H:%M %d/%m")
@@ -802,6 +816,58 @@ class BarcodeShipperController(http.Controller):
         except Exception:
             _logger.exception("Error in delivery_route_stops")
             return {"success": False, "error": "Không thể tải danh sách điểm giao"}
+
+    @http.route(
+        "/api/barcode/save_geocode",
+        type="json",
+        auth="user",
+        methods=["POST"],
+        csrf=False,
+    )
+    def save_geocode(self, **kwargs):
+        """Save a new geocode for a root partner's address."""
+        try:
+            access = self._check_shipper_access()
+            if not access["success"]:
+                return access
+
+            data = json.loads(request.httprequest.data.decode("utf-8"))
+            partner_id = data.get("partner_id")
+            address = data.get("address")
+            lat = data.get("lat")
+            lng = data.get("lng")
+
+            if not partner_id or not address or lat is None or lng is None:
+                return {"success": False, "error": "Thiếu dữ liệu"}
+
+            partner = request.env["res.partner"].sudo().browse(partner_id)
+            if not partner.exists():
+                return {"success": False, "error": "Không tìm thấy đối tác"}
+
+            root_partner = partner.commercial_partner_id or partner
+            clean_address = address.strip().lower()
+
+            Location = request.env["res.partner.delivery.location"].sudo()
+            
+            exists = False
+            for loc in root_partner.hlv_delivery_location_ids:
+                if loc.address and loc.address.strip().lower() == clean_address:
+                    exists = True
+                    # Update if coordinates are significantly different? (optional, skip for now as user just wants to save new)
+                    break
+            
+            if not exists:
+                Location.create({
+                    "partner_id": root_partner.id,
+                    "address": address.strip(),
+                    "latitude": lat,
+                    "longitude": lng,
+                })
+            
+            return {"success": True}
+        except Exception:
+            _logger.exception("Error in save_geocode")
+            return {"success": False}
 
     # ===== API: get settings =====
     @http.route(
