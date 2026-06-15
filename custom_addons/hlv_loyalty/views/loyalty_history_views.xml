@@ -65,6 +65,7 @@
                                    decoration-danger="transaction_type == 'return'"
                                    decoration-info="transaction_type == 'manual'"/>
                             <field name="description"/>
+                            <field name="point_formula" widget="text"/>
                         </group>
                         <group string="Tham chiếu">
                             <field name="picking_id"/>
@@ -110,6 +111,7 @@
                        decoration-info="transaction_type == 'manual'"/>
                 <field name="point_amount" sum="Tổng điểm"/>
                 <field name="description"/>
+                <field name="point_formula" optional="hide"/>
                 <field name="picking_id" optional="show"/>
                 <field name="sale_order_id" optional="show"/>
                 <field name="voucher_id" optional="hide"/>

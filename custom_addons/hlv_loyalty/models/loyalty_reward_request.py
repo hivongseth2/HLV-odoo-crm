@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 from datetime import timedelta
-from odoo import models, fields, api
+from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
@@ -133,7 +133,62 @@ class HlvLoyaltyRewardRequest(models.Model):
                     self.env['ir.sequence'].next_by_code('hlv.loyalty.reward.request')
                     or 'New'
                 )
-        return super().create(vals_list)
+        records = super().create(vals_list)
+        records._send_loyalty_reward_bus_notification('request_created')
+        return records
+
+    def _get_loyalty_notification_users(self):
+        self.ensure_one()
+        company = self.company_id or self.env.company
+        return company.sudo().loyalty_notification_user_ids.filtered(
+            lambda user: user.active and user.partner_id
+        )
+
+    def _send_loyalty_reward_bus_notification(self, event):
+        """Send configured in-app bus notifications for reward events."""
+        bus = self.env['bus.bus'].sudo()
+        for rec in self:
+            users = rec._get_loyalty_notification_users()
+            if not users:
+                continue
+
+            if event == 'gift_redeemed':
+                title = _('Khách đã đổi quà Loyalty')
+                package = rec.package_id.display_name if rec.package_id else _('Gói quà')
+                voucher = rec.voucher_id.code if rec.voucher_id else ''
+                message = _(
+                    '%(customer)s đã đổi %(package)s (%(points)s điểm).%(voucher)s',
+                    customer=rec.partner_id.display_name,
+                    package=package,
+                    points=f'{rec.points_required:,}',
+                    voucher=f' Voucher: {voucher}' if voucher else '',
+                )
+            else:
+                type_label = dict(rec._fields['request_type'].selection).get(rec.request_type, rec.request_type)
+                title = _('Yêu cầu đổi thưởng Loyalty mới')
+                message = _(
+                    '%(customer)s gửi %(request_type)s %(points)s điểm. Mã: %(name)s',
+                    customer=rec.partner_id.display_name,
+                    request_type=type_label,
+                    points=f'{rec.points_required:,}',
+                    name=rec.name,
+                )
+
+            payload = {
+                'title': title,
+                'message': message,
+                'type': 'info',
+                'sticky': True,
+            }
+            for user in users:
+                try:
+                    bus._sendone(user.partner_id, 'simple_notification', payload)
+                except Exception:
+                    _logger.debug(
+                        'Failed to send loyalty reward bus notification to user %s',
+                        user.id,
+                        exc_info=True,
+                    )
 
     # ── Business logic ─────────────────────────────────────────────────────
 
@@ -188,6 +243,8 @@ class HlvLoyaltyRewardRequest(models.Model):
                 'history_id': hist.id,
                 'voucher_id': voucher_id or False,
             })
+            if rec.request_type == 'gift':
+                rec._send_loyalty_reward_bus_notification('gift_redeemed')
             _logger.info(
                 'Loyalty RewardRequest: %s done (%s) – %d pts deducted from %s',
                 rec.name, rec.request_type, rec.points_required, rec.partner_id.name,

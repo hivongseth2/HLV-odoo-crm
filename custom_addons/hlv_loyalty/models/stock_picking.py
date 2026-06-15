@@ -64,6 +64,14 @@ class StockPicking(models.Model):
         ranking_points = 0
         if delivered_subtotal > 0 and program.earning_amount > 0:
             ranking_points = int(delivered_subtotal / program.earning_amount) * program.earning_points
+        ranking_formula = self._format_loyalty_point_formula(
+            'Điểm xếp hạng',
+            delivered_subtotal,
+            program.earning_amount,
+            program.earning_points,
+            ranking_points,
+            multiplier_label='điểm/mốc',
+        )
 
         # ── Điểm đổi thưởng: dựa trên tiền chiết khấu ──
         discount_amount = sum(
@@ -71,16 +79,29 @@ class StockPicking(models.Model):
             for move in self.move_ids
             if move.state == 'done' and move.sale_line_id
         )
+        discount_formula_source = 'Tổng chiết khấu loyalty theo dòng giao'
         # Fallback: không có dòng nào có amount/% loyalty → dùng % mặc định của contact
         if discount_amount <= 0:
             root_partner_lookup = partner._get_loyalty_root()
             # loyalty_default_discount lưu dạng 0-1 (Odoo convention: 0.05 = 5%)
             fallback_pct = root_partner_lookup.loyalty_default_discount or 0.0
             discount_amount = delivered_subtotal * fallback_pct
+            discount_formula_source = (
+                'Doanh số giao x % chiết khấu mặc định KH '
+                f'({fallback_pct:.2%})'
+            )
 
         exchange_points = 0
         if discount_amount > 0 and program.discount_per_point > 0:
             exchange_points = int(discount_amount / program.discount_per_point)
+        exchange_formula = self._format_loyalty_point_formula(
+            'Điểm đổi thưởng',
+            discount_amount,
+            program.discount_per_point,
+            1,
+            exchange_points,
+            source_label=discount_formula_source,
+        )
 
         if ranking_points <= 0 and exchange_points <= 0:
             return
@@ -114,6 +135,7 @@ class StockPicking(models.Model):
                 'point_type': 'ranking',
                 'state': 'confirmed',
                 'description': f'Tích điểm xếp hạng {sale_order.name} - Phiếu {self.name}',
+                'point_formula': ranking_formula,
             })
 
         # 2. Điểm đổi thưởng – chờ nhân viên xác nhận
@@ -124,6 +146,7 @@ class StockPicking(models.Model):
                 'point_type': 'exchange',
                 'state': 'pending',
                 'description': f'Tích điểm đổi thưởng {sale_order.name} - Phiếu {self.name}',
+                'point_formula': exchange_formula,
             })
 
         self.loyalty_points_earned = ranking_points
@@ -151,6 +174,26 @@ class StockPicking(models.Model):
 
         discount_rate = discount_pct if discount_pct <= 1.0 else discount_pct / 100.0
         return sale_line.price_unit * move.quantity * discount_rate
+
+    def _format_loyalty_point_formula(
+        self, label, numerator, divisor, multiplier, points,
+        source_label='', multiplier_label='',
+    ):
+        """Build a human-readable formula snapshot for QC."""
+        self.ensure_one()
+        if divisor <= 0:
+            return f'{label}: không tính được vì cấu hình mẫu số <= 0.'
+
+        base = (
+            f'{label} = floor({numerator:,.0f} / {divisor:,.0f})'
+        )
+        if multiplier != 1:
+            suffix = f' {multiplier_label}' if multiplier_label else ''
+            base += f' x {multiplier:g}{suffix}'
+        base += f' = {points:,} điểm'
+        if source_label:
+            base += f'\nNguồn tiền quy đổi: {source_label}.'
+        return base
 
     def _loyalty_return_points(self):
         """Thu hồi điểm khi trả hàng.

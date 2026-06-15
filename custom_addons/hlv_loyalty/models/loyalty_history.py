@@ -41,6 +41,11 @@ class HlvLoyaltyHistory(models.Model):
     ], string='Trạng thái', default='confirmed', index=True, tracking=True)
 
     description = fields.Char(string='Mô tả')
+    point_formula = fields.Text(
+        string='Công thức tính điểm',
+        readonly=True,
+        help='Snapshot công thức và tham số dùng để tính ra số điểm tại thời điểm phát sinh.',
+    )
 
     # Tham chiếu chéo
     picking_id = fields.Many2one('stock.picking', string='Phiếu kho', readonly=True)

@@ -10,7 +10,7 @@ Optional override:
 """
 
 import os
-from collections import defaultdict
+import inspect
 
 
 ORDER_NAME = os.environ.get("CHECK_SO", "DH125524949232834").strip()
@@ -286,5 +286,91 @@ try:
             )
 except Exception as exc:
     print("Dashboard RPC check failed: %s" % exc)
+
+line("DIRECT FORMATTER CHECK")
+try:
+    service = env["hlv.delivery.planner.service"].sudo()
+    formatter_src = inspect.getsource(type(service)._format_dashboard_order)
+    service_src = inspect.getsource(type(service).get_dashboard_data)
+    print("runtime formatter has by_product map support: %s" % ("by_product" in formatter_src))
+    print("runtime service has by_product map support: %s" % ("by_product" in service_src))
+
+    page_tmpl_ids = so.order_line.mapped("product_id.product_tmpl_id").ids
+    page_kits = env["mrp.bom"].sudo().search([
+        ("product_tmpl_id", "in", page_tmpl_ids),
+        ("type", "=", "phantom"),
+    ]) if page_tmpl_ids else env["mrp.bom"].sudo().browse()
+    page_kit_tmpl_ids = set(page_kits.mapped("product_tmpl_id").ids)
+    page_kit_bom_map = {"by_product": {}, "by_template": {}}
+    for kbom in page_kits:
+        if kbom.product_id:
+            page_kit_bom_map["by_product"][kbom.product_id.id] = kbom
+        else:
+            page_kit_bom_map["by_template"].setdefault(kbom.product_tmpl_id.id, kbom)
+    print("page_kits found: %s" % len(page_kits))
+    for kbom in page_kits:
+        print(
+            "  bom id=%s tmpl=%s product=%s components=%s"
+            % (
+                kbom.id,
+                kbom.product_tmpl_id.display_name,
+                kbom.product_id.display_name or "(template)",
+                ", ".join(
+                    "%s x %.2f" % (bl.product_id.display_name, qty(bl.product_qty))
+                    for bl in kbom.bom_line_ids
+                ),
+            )
+        )
+
+    _sales, _matched_ids, _stats, product_availabilities, product_on_hand, so_status_dict = (
+        service._calculate_po_and_stock_status(
+            so,
+            "",
+            "",
+            "all",
+            "all",
+            "all",
+            "all",
+            show_completed=True,
+            filter_need_transfer=False,
+            filter_new_orders=False,
+        )
+    )
+    direct_order = service._format_dashboard_order(
+        so,
+        service._fetch_pos_for_sales(so),
+        product_availabilities,
+        product_on_hand,
+        service._fetch_attachments_for_pickings(so.mapped("picking_ids").ids),
+        service._fetch_packages_for_sales(so),
+        so_status_dict.get(so.id, {}),
+        transfer_suggestions=[],
+        page_kit_tmpl_ids=page_kit_tmpl_ids,
+        page_kit_bom_map=page_kit_bom_map,
+        page_blocking_by_so=service._batch_blocking_moves(so),
+    )
+    print(
+        "direct formatter order: stock_status=%s packing_status=%s real_delivery_status=%s"
+        % (
+            direct_order.get("stock_status"),
+            direct_order.get("packing_status"),
+            direct_order.get("real_delivery_status"),
+        )
+    )
+    for ldata in direct_order.get("lines") or []:
+        pname = ldata.get("product_id")[1] if ldata.get("product_id") else ""
+        eff_stock = qty(ldata.get("qty_warehouse_free")) + qty(ldata.get("qty_reserved_here"))
+        print(
+            "  direct line=%s kit=%s wh_free=%.2f reserved=%.2f eff_stock=%.2f"
+            % (
+                pname,
+                ldata.get("is_kit"),
+                qty(ldata.get("qty_warehouse_free")),
+                qty(ldata.get("qty_reserved_here")),
+                eff_stock,
+            )
+        )
+except Exception as exc:
+    print("Direct formatter check failed: %s" % exc)
 
 line("DONE")
