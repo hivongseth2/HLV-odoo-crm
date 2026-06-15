@@ -1318,7 +1318,7 @@ class HLVMobileBarcodeController(http.Controller):
         }
 
     @http.route('/hlv_mobile_barcode/process_barcode', type='json', auth='user')
-    def process_barcode(self, picking_id, barcode, destination_location_id=None, last_product_id=None, last_move_line_id=None, location_mode=None, is_multi_location=False, preferred_move_line_id=None):
+    def process_barcode(self, picking_id, barcode, destination_location_id=None, last_product_id=None, last_move_line_id=None, location_mode=None, is_multi_location=False, preferred_move_line_id=None, force_partial_package=False, create_loose_lines_only=False):
         picking = request.env['stock.picking'].browse(picking_id)
         if not picking.exists() or picking.state not in ['draft', 'confirmed', 'assigned']:
             return {'error': _('Phiếu này không thể xử lý thêm sản phẩm.')}
@@ -1469,7 +1469,7 @@ class HLVMobileBarcodeController(http.Controller):
                 package_source_loc_ids = request.env['stock.location'].sudo().search([('id', 'child_of', picking.location_id.id)]).ids
                 
                 # --- PRE-CHECK FOR PARTIAL PACKAGE SCENARIOS (PICK) ---
-                if is_pick_picking:
+                if is_pick_picking and not force_partial_package and not create_loose_lines_only:
                     for quant in quants:
                         product_in_pkg = quant.product_id
                         qty_in_pkg = quant.quantity - quant.reserved_quantity
@@ -1480,7 +1480,12 @@ class HLVMobileBarcodeController(http.Controller):
                             lambda m: m.product_id == product_in_pkg and m.state not in ['done', 'cancel']
                         )
                         if not move:
-                            return {'error': _('Kiện "%s" chứa sản phẩm "%s" KHÔNG có trong phiếu lấy hàng.\n👉 Vui lòng tách kiện và quét lẻ sản phẩm!', package.name, product_in_pkg.display_name)}
+                            return {
+                                'action': 'ask_partial_package',
+                                'package_id': package.id,
+                                'package_name': package.name,
+                                'reason': _('Kiện "%s" chứa sản phẩm "%s" KHÔNG có trong phiếu lấy hàng.\n👉 Chọn cách xử lý bên dưới:', package.name, product_in_pkg.display_name)
+                            }
                         
                         move = move[0]
                         current_qty_done = sum(ml.qty_scanned if uses_qty_scanned else ml.quantity for ml in move.move_line_ids)
@@ -1497,7 +1502,12 @@ class HLVMobileBarcodeController(http.Controller):
                         
                         if target_qty > 0.0 and current_qty_done + total_pkg_qty > target_qty:
                             needed_qty = max(0.0, target_qty - current_qty_done)
-                            return {'error': _('Kiện "%s" chứa %g %s sản phẩm "%s", nhưng phiếu chỉ cần lấy thêm %g %s.\n👉 Vui lòng tách kiện và quét lẻ sản phẩm!', package.name, total_pkg_qty, product_in_pkg.uom_id.name, product_in_pkg.display_name, needed_qty, product_in_pkg.uom_id.name)}
+                            return {
+                                'action': 'ask_partial_package',
+                                'package_id': package.id,
+                                'package_name': package.name,
+                                'reason': _('Kiện "%s" chứa %g %s sản phẩm "%s", nhưng phiếu chỉ cần lấy thêm %g %s.\n👉 Chọn cách xử lý bên dưới:', package.name, total_pkg_qty, product_in_pkg.uom_id.name, product_in_pkg.display_name, needed_qty, product_in_pkg.uom_id.name)
+                            }
                 # -----------------------------------------------
                 
                 processed_products = []
@@ -1562,6 +1572,7 @@ class HLVMobileBarcodeController(http.Controller):
                                 and ml.location_id == quant.location_id
                             )
                         )
+                        actual_qty_scanned = acceptable_qty
                         if is_pick_picking:
                             loose_lines = move.move_line_ids.filtered(
                                 lambda ml: not ml.package_id and not ml.result_package_id and _pick_line_remaining_qty(ml) > 0
@@ -1576,11 +1587,16 @@ class HLVMobileBarcodeController(http.Controller):
                                 ll.with_context(skip_qty_validation=True).write({'quantity': ll.quantity - steal_amount})
                                 qty_to_steal -= steal_amount
 
+                            # Xử lý cờ xé kiện
+                            actual_qty_scanned = 0.0 if create_loose_lines_only else acceptable_qty
+                            actual_result_package_id = False if (force_partial_package or create_loose_lines_only or acceptable_qty < qty_in_pkg) else package.id
+
                             if move_line:
                                 target_move_line = move_line[0]
                                 target_move_line.with_context(skip_qty_validation=True).write({
-                                    'qty_scanned': target_move_line.qty_scanned + acceptable_qty,
-                                    'quantity': target_move_line.quantity + (acceptable_qty - qty_to_steal)
+                                    'qty_scanned': target_move_line.qty_scanned + actual_qty_scanned,
+                                    'quantity': target_move_line.quantity + (acceptable_qty - qty_to_steal),
+                                    'result_package_id': actual_result_package_id
                                 })
                             else:
                                 new_ml_vals = {
@@ -1591,12 +1607,10 @@ class HLVMobileBarcodeController(http.Controller):
                                     'location_id': quant.location_id.id,
                                     'location_dest_id': picking.location_dest_id.id,
                                     'package_id': package.id,
-                                    'result_package_id': False, # Lấy hàng từ kiện ra, không ép result_package_id nếu không cần thiết, tuy nhiên hệ thống cũ set package.id, ta giữ nguyên cho nhất quán nếu họ muốn bưng cả kiện.
+                                    'result_package_id': actual_result_package_id,
+                                    'qty_scanned': actual_qty_scanned,
+                                    'quantity': acceptable_qty - qty_to_steal,
                                 }
-                                # Trong phiếu PICK, khi lấy nguyên kiện ta ghi nhận cả result_package_id
-                                new_ml_vals['result_package_id'] = package.id
-                                new_ml_vals['qty_scanned'] = acceptable_qty
-                                new_ml_vals['quantity'] = acceptable_qty - qty_to_steal
                                 target_move_line = request.env['stock.move.line'].sudo().with_context(skip_qty_validation=True).create(new_ml_vals)
                         else:
                             if move_line:
@@ -1624,15 +1638,23 @@ class HLVMobileBarcodeController(http.Controller):
                         if not updated_move_line:
                             updated_move_line = target_move_line
                             updated_product = product_in_pkg
-                        processed_products.append(f"{acceptable_qty} x {product_in_pkg.display_name}")
+                        processed_products.append(f"{actual_qty_scanned} x {product_in_pkg.display_name}")
                 
                 if processed_products:
-                    return {
-                        'success': True,
-                        'product_name': f"Kiện hàng {package.name} (Đã xử lý: {', '.join(processed_products)})",
-                        'product_id': updated_product.id or False,
-                        'move_line_id': updated_move_line.id or False,
-                    }
+                    if create_loose_lines_only:
+                        return {
+                            'success': True,
+                            'product_name': f"Đã chuẩn bị dòng, vui lòng quét lẻ từng sản phẩm trong kiện {package.name}!",
+                            'product_id': updated_product.id or False,
+                            'move_line_id': updated_move_line.id or False,
+                        }
+                    else:
+                        return {
+                            'success': True,
+                            'product_name': f"Kiện hàng {package.name} (Đã xử lý: {', '.join(processed_products)})",
+                            'product_id': updated_product.id or False,
+                            'move_line_id': updated_move_line.id or False,
+                        }
             
             return {'error': _('Kiện hàng "%s" không chứa sản phẩm nào phù hợp với phiếu này.', package.name)}
 

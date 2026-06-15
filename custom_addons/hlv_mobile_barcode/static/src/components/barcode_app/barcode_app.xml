@@ -282,6 +282,35 @@
                 </div>
             </div>
 
+            <!-- POPUP PARTIAL PACKAGE -->
+            <div class="modal-overlay" t-if="state.showPartialPackagePopup">
+                <div class="modal-content" style="max-width: 400px; width: 90%;">
+                    <div class="modal-header">
+                        <div class="modal-title">
+                            <i class="fa fa-box-open" style="color: var(--warning-color);"></i> Xử lý Kiện hàng
+                        </div>
+                        <button class="modal-close" t-on-click="() => { this.state.showPartialPackagePopup = false; this.state.partialPackageData = null; }">
+                            <i class="fa fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="modal-body" style="padding: 15px;">
+                        <div style="margin-bottom: 15px; color: var(--text-color); font-size: 0.95rem; white-space: pre-line;">
+                            <t t-esc="state.partialPackageData?.reason"/>
+                        </div>
+                        
+                        <button class="btn btn-primary" style="width: 100%; padding: 12px; font-weight: bold; margin-bottom: 10px;"
+                                t-on-click="handlePartialPackageAuto">
+                            <i class="fa fa-magic"/> Tự xác nhận phần cần thiết
+                        </button>
+
+                        <button class="btn btn-secondary" style="width: 100%; padding: 12px; font-weight: bold;"
+                                t-on-click="handlePartialPackageManual">
+                            <i class="fa fa-barcode"/> Tạo dòng mới cần quét lẻ lại từng sản phẩm
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <!-- POPUP DESTINATION SELECT -->
             <div class="modal-overlay" t-if="state.showWarehouseSelectPopup">
                 <div class="modal-content" style="max-width: 400px; width: 90%;">
