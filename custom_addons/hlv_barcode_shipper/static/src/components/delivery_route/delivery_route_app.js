@@ -100,13 +100,18 @@ export class DeliveryRouteApp extends Component {
                                    onNavigateAll="openAllTurnByTurn.bind(this)"></RouteStopList>
 
                     <button class="hlv-route-swipe hlv-route-swipe-fixed"
-                            t-att-style="'--swipe-x:' + state.fabDragX + 'px'"
+                            t-att-class="{ 'is-animating': state.isAnimating, 'is-success': state.isSuccess }"
+                            t-att-style="'--swipe-x:' + state.fabDragX + 'px; --swipe-progress:' + (state.fabDragX / (state.fabDragMax || 1))"
                             t-on-touchstart="onFabTouchStart"
                             t-on-touchmove="onFabTouchMove"
                             t-on-touchend="onFabTouchEnd"
                             t-on-pointerdown="onFabPointerDown">
-                        <span><i class="fa fa-angle-right"></i></span>
-                        <b>Vuốt để giao hàng</b>
+                        <div class="swipe-progress-bg"></div>
+                        <span>
+                            <i t-if="!state.isSuccess" class="fa fa-angle-double-right"></i>
+                            <i t-else="" class="fa fa-check"></i>
+                        </span>
+                        <b class="swipe-text">Vuốt để giao hàng</b>
                     </button>
                 </t>
             </t>
@@ -129,6 +134,8 @@ export class DeliveryRouteApp extends Component {
             fabDragX: 0,
             fabDragMax: 0,
             fabDragging: false,
+            isAnimating: false,
+            isSuccess: false,
         });
 
         onWillStart(async () => {
@@ -247,14 +254,17 @@ export class DeliveryRouteApp extends Component {
     }
 
     onFabTouchStart(ev) {
+        if (this.state.isSuccess) return;
         const touch = ev.touches?.[0];
         this.fabStartX = touch ? touch.clientX : 0;
         this.state.fabDragMax = Math.max(0, (ev.currentTarget?.clientWidth || 0) - 54);
         this.state.fabDragging = true;
         this.state.fabDragX = 0;
+        this.state.isAnimating = false;
     }
 
     onFabTouchMove(ev) {
+        if (this.state.isSuccess) return;
         const touch = ev.touches?.[0];
         if (!touch || !this.state.fabDragging) {
             return;
@@ -263,22 +273,36 @@ export class DeliveryRouteApp extends Component {
     }
 
     onFabTouchEnd() {
+        if (this.state.isSuccess) return;
+        this.state.fabDragging = false;
         if (this.state.fabDragMax && this.state.fabDragX > this.state.fabDragMax * 0.88) {
-            this.openScanner();
+            this.state.fabDragX = this.state.fabDragMax;
+            this.state.isAnimating = true;
+            this.state.isSuccess = true;
+            setTimeout(() => {
+                this.openScanner();
+                // Reset after transition if they come back
+                setTimeout(() => {
+                    this.state.isSuccess = false;
+                    this.state.fabDragX = 0;
+                    this.state.isAnimating = false;
+                }, 500);
+            }, 300);
             return;
         }
-        this.state.fabDragging = false;
+        this.state.isAnimating = true;
         this.state.fabDragX = 0;
     }
 
     onFabPointerDown(ev) {
-        if (ev.pointerType === "touch") {
+        if (ev.pointerType === "touch" || this.state.isSuccess) {
             return;
         }
         const target = ev.currentTarget;
         this.fabStartX = ev.clientX;
         this.state.fabDragMax = Math.max(0, target.clientWidth - 54);
         this.state.fabDragging = true;
+        this.state.isAnimating = false;
         target.setPointerCapture?.(ev.pointerId);
         const onMove = (moveEv) => {
             this.state.fabDragX = Math.max(0, Math.min(this.state.fabDragMax, moveEv.clientX - this.fabStartX));
