@@ -12,6 +12,7 @@ export class GoogleMapPicker extends Component {
 
     setup() {
         this.mapRef = useRef("mapContainer");
+        this.searchInputRef = useRef("searchInput");
         this.orm = useService("orm");
         
         onMounted(async () => {
@@ -74,6 +75,35 @@ export class GoogleMapPicker extends Component {
                     });
                 });
             }, 100);
+        });
+    }
+
+    onKeydownSearch(ev) {
+        if (ev.key === "Enter") {
+            ev.preventDefault();
+            this.searchAddress();
+        }
+    }
+
+    searchAddress() {
+        const address = this.searchInputRef.el.value;
+        if (!address) return;
+        
+        const geocoder = new window.google.maps.Geocoder();
+        geocoder.geocode({ address: address }, (results, status) => {
+            if (status === "OK" && results && results.length > 0) {
+                const pos = results[0].geometry.location;
+                this.map.setCenter(pos);
+                this.map.setZoom(16);
+                this.marker.position = pos;
+                
+                this.props.record.update({
+                    latitude: typeof pos.lat === "function" ? pos.lat() : pos.lat,
+                    longitude: typeof pos.lng === "function" ? pos.lng() : pos.lng
+                });
+            } else {
+                alert("Không tìm thấy vị trí cho địa chỉ này trên bản đồ!");
+            }
         });
     }
 }
