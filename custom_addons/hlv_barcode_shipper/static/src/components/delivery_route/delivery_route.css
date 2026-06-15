@@ -332,13 +332,13 @@ body.hlv-route-dragging {
 
 .hlv-route-swipe span {
     position: absolute;
-    top: 0;
+    top: 50%;
     left: 0;
-    transform: translateX(var(--swipe-x, 0));
-    width: 46px;
-    height: 46px;
+    transform: translate(var(--swipe-x, 0), -50%);
+    width: 44px;
+    height: 44px;
     border-radius: 999px;
-    margin: 1px;
+    margin-left: 2px;
     background: var(--hlv-primary-blue, #1591DC);
     color: #ffffff;
     display: inline-flex;

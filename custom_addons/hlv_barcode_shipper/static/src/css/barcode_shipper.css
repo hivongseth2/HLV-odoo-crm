@@ -58,11 +58,22 @@ body {
 
 .header-title {
   font-size: 1.25rem;
-  font-weight: 700;
-  color: var(--primary-color);
+  font-weight: 800;
+  color: var(--primary-color, #1591DC);
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.current-tab-badge {
+    background: #eef8ff;
+    color: var(--primary-color, #1591DC);
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-size: 0.9rem;
+    font-weight: 800;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+    border: 1px solid #dbeafe;
 }
 
 .user-info {
