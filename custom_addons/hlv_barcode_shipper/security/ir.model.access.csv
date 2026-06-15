@@ -13,3 +13,4 @@ access_stock_picking_type_shipper,stock.picking.type shipper,stock.model_stock_p
 access_stock_location_shipper,stock.location shipper,stock.model_stock_location,group_shipper,1,0,0,0
 access_res_partner_delivery_location_user,res.partner.delivery.location user,model_res_partner_delivery_location,base.group_user,1,1,1,1
 access_res_partner_delivery_location_shipper,res.partner.delivery.location shipper,model_res_partner_delivery_location,group_shipper,1,1,1,0
+access_geocode_picker_wizard_user,geocode.picker.wizard user,model_geocode_picker_wizard,base.group_user,1,1,1,1
