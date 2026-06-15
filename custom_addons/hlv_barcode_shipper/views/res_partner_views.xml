@@ -8,12 +8,57 @@
             <xpath expr="//notebook" position="inside">
                 <page string="Tọa độ Giao Hàng" invisible="parent_id != False">
                     <field name="hlv_delivery_location_ids" context="{'default_partner_id': id}">
-                        <list editable="bottom">
-                            <field name="address"/>
-                            <field name="latitude"/>
-                            <field name="longitude"/>
-                            <button name="action_open_map_picker" type="object" icon="fa-map-marker" string="Chọn trên bản đồ" title="Mở bản đồ để chọn tọa độ" class="btn-primary"/>
-                        </list>
+                        <kanban>
+                            <templates>
+                                <t t-name="kanban-box">
+                                    <div class="oe_kanban_global_click" style="border-radius: 8px; border: 1px solid #e0e0e0; box-shadow: 0 2px 4px rgba(0,0,0,0.05); padding: 12px; margin-bottom: 10px;">
+                                        <div class="o_kanban_record_top mb-2">
+                                            <div class="o_kanban_record_headings w-100">
+                                                <strong class="o_kanban_record_title d-block text-truncate" style="font-size: 14px; color: #212529;">
+                                                    <i class="fa fa-map-marker text-danger me-2"></i>
+                                                    <field name="address"/>
+                                                </strong>
+                                            </div>
+                                        </div>
+                                        <div class="o_kanban_record_bottom d-flex justify-content-between align-items-center">
+                                            <div class="oe_kanban_bottom_left">
+                                                <span t-if="record.latitude.raw_value and record.longitude.raw_value" class="badge text-bg-success" style="font-size: 12px;">
+                                                    <i class="fa fa-check-circle me-1"></i>Đã ghim vị trí
+                                                </span>
+                                                <span t-else="" class="badge text-bg-warning" style="font-size: 12px;">
+                                                    <i class="fa fa-exclamation-triangle me-1"></i>Chưa có tọa độ
+                                                </span>
+                                            </div>
+                                            <div class="oe_kanban_bottom_right">
+                                                <button name="action_open_map_picker" type="object" class="btn btn-sm btn-primary" title="Mở bản đồ">
+                                                    <i class="fa fa-map"></i> Bản đồ
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </t>
+                            </templates>
+                        </kanban>
+                        <form string="Địa chỉ Giao Hàng">
+                            <sheet>
+                                <div class="oe_title mb-4">
+                                    <label for="address" class="oe_edit_only"/>
+                                    <h1><field name="address" placeholder="Nhập địa chỉ giao hàng..."/></h1>
+                                </div>
+                                <group>
+                                    <group>
+                                        <field name="latitude" readonly="1" force_save="1"/>
+                                        <field name="longitude" readonly="1" force_save="1"/>
+                                    </group>
+                                    <group>
+                                        <div class="d-flex flex-column align-items-start">
+                                            <span class="text-muted mb-2">Bạn có thể chọn vị trí chính xác trên bản đồ thay vì nhập thủ công.</span>
+                                            <button name="action_open_map_picker" type="object" class="btn-primary" icon="fa-map-marker" string=" Mở Bản Đồ"/>
+                                        </div>
+                                    </group>
+                                </group>
+                            </sheet>
+                        </form>
                     </field>
                 </page>
             </xpath>
