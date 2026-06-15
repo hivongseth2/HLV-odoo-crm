@@ -13,12 +13,12 @@ export class GoogleMapPicker extends Component {
     setup() {
         this.mapRef = useRef("mapContainer");
         this.searchInputRef = useRef("searchInput");
+        this.coordDisplayRef = useRef("coordDisplay");
         this.orm = useService("orm");
         
         onMounted(async () => {
             // First try to get the API key from Barcode Shipper company settings
             const companyData = await this.orm.searchRead("res.company", [], ["hlv_barcode_google_maps_api_key"], { limit: 1 });
-            let apiKey = companyData && companyData.length ? companyData[0].hlv_barcode_google_maps_api_key : null;
             
             // If not found, try to get it from standard Odoo base_geolocalize settings
             if (!apiKey) {
@@ -52,33 +52,32 @@ export class GoogleMapPicker extends Component {
                     mapId: "DEMO_MAP_ID",
                 });
                 
-                this.marker = new maps.marker.AdvancedMarkerElement({
+                this.marker = new maps.Marker({
                     position: { lat, lng },
                     map: this.map,
-                    gmpDraggable: true,
+                    draggable: true,
                 });
                 
                 this.marker.addListener("dragend", () => {
-                    const pos = this.marker.position;
-                    this.props.record.update({
-                        latitude: typeof pos.lat === "function" ? pos.lat() : pos.lat,
-                        longitude: typeof pos.lng === "function" ? pos.lng() : pos.lng
-                    });
+                    const pos = this.marker.getPosition();
+                    const lLat = typeof pos.lat === "function" ? pos.lat() : pos.lat;
+                    const lLng = typeof pos.lng === "function" ? pos.lng() : pos.lng;
+                    this.props.record.update({ latitude: lLat, longitude: lLng });
+                    this.updateCoordDisplay(lLat, lLng);
                 });
                 
                 this.map.addListener("click", (e) => {
                     const pos = e.latLng;
-                    this.marker.position = pos;
-                    this.props.record.update({
-                        latitude: typeof pos.lat === "function" ? pos.lat() : pos.lat,
-                        longitude: typeof pos.lng === "function" ? pos.lng() : pos.lng
-                    });
+                    this.marker.setPosition(pos);
+                    const lLat = typeof pos.lat === "function" ? pos.lat() : pos.lat;
+                    const lLng = typeof pos.lng === "function" ? pos.lng() : pos.lng;
+                    this.props.record.update({ latitude: lLat, longitude: lLng });
+                    this.updateCoordDisplay(lLat, lLng);
                 });
 
                 // Tích hợp Places Autocomplete
                 if (maps.places && maps.places.Autocomplete) {
                     const autocomplete = new maps.places.Autocomplete(this.searchInputRef.el, {
-                        componentRestrictions: { country: "vn" },
                         fields: ["geometry", "name", "formatted_address"],
                     });
                     
@@ -90,15 +89,18 @@ export class GoogleMapPicker extends Component {
                         
                         const pos = place.geometry.location;
                         this.map.setCenter(pos);
-                        this.map.setZoom(16);
-                        this.marker.position = pos;
+                        this.map.setZoom(18);
+                        this.marker.setPosition(pos);
                         
-                        this.props.record.update({
-                            latitude: typeof pos.lat === "function" ? pos.lat() : pos.lat,
-                            longitude: typeof pos.lng === "function" ? pos.lng() : pos.lng
-                        });
+                        const lLat = typeof pos.lat === "function" ? pos.lat() : pos.lat;
+                        const lLng = typeof pos.lng === "function" ? pos.lng() : pos.lng;
+                        this.props.record.update({ latitude: lLat, longitude: lLng });
+                        this.updateCoordDisplay(lLat, lLng);
                     });
                 }
+                
+                // Initialize display
+                this.updateCoordDisplay(lat, lng);
             }, 100);
         });
     }
@@ -115,21 +117,38 @@ export class GoogleMapPicker extends Component {
         if (!address) return;
         
         const geocoder = new window.google.maps.Geocoder();
-        geocoder.geocode({ address: address, componentRestrictions: { country: "VN" } }, (results, status) => {
+        geocoder.geocode({ address: address }, (results, status) => {
             if (status === "OK" && results && results.length > 0) {
                 const pos = results[0].geometry.location;
                 this.map.setCenter(pos);
-                this.map.setZoom(16);
-                this.marker.position = pos;
+                this.map.setZoom(18);
+                this.marker.setPosition(pos);
                 
-                this.props.record.update({
-                    latitude: typeof pos.lat === "function" ? pos.lat() : pos.lat,
-                    longitude: typeof pos.lng === "function" ? pos.lng() : pos.lng
-                });
+                const lLat = typeof pos.lat === "function" ? pos.lat() : pos.lat;
+                const lLng = typeof pos.lng === "function" ? pos.lng() : pos.lng;
+                this.props.record.update({ latitude: lLat, longitude: lLng });
+                this.updateCoordDisplay(lLat, lLng);
             } else {
                 alert("Không tìm thấy vị trí cho địa chỉ này trên bản đồ!");
             }
         });
+    }
+
+    updateCoordDisplay(lat, lng) {
+        if (this.coordDisplayRef.el) {
+            this.coordDisplayRef.el.innerText = `${lat.toFixed(7)}, ${lng.toFixed(7)}`;
+        }
+    }
+
+    copyCoords() {
+        if (this.coordDisplayRef.el) {
+            const text = this.coordDisplayRef.el.innerText;
+            navigator.clipboard.writeText(text).then(() => {
+                alert("Đã copy tọa độ: " + text + "\n(Bây giờ bạn có thể dán vào Google Maps)");
+            }).catch(err => {
+                console.error("Lỗi copy clipboard: ", err);
+            });
+        }
     }
 }
 
