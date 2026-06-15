@@ -114,7 +114,12 @@ class DeliveryPlannerService(models.AbstractModel):
         ]) if page_tmpl_ids else self.env['mrp.bom']
         page_kit_tmpl_ids = set(page_kits.mapped('product_tmpl_id').ids)
         # Kit BOM map: {tmpl_id: bom} để tra nhanh
-        page_kit_bom_map = {bom.product_tmpl_id.id: bom for bom in page_kits}
+        page_kit_bom_map = {'by_product': {}, 'by_template': {}}
+        for bom in page_kits:
+            if bom.product_id:
+                page_kit_bom_map['by_product'][bom.product_id.id] = bom
+            else:
+                page_kit_bom_map['by_template'].setdefault(bom.product_tmpl_id.id, bom)
 
         # Batch load blocking moves cho tất cả 12 SO trang (thay thế 12× stock.move.search per-SO)
         # Chỉ load khi có kho, gom theo (so_id, product_id)
@@ -326,7 +331,12 @@ class DeliveryPlannerService(models.AbstractModel):
             ('product_tmpl_id', 'in', page_tmpl_ids), ('type', '=', 'phantom'),
         ]) if page_tmpl_ids else self.env['mrp.bom']
         page_kit_tmpl_ids = set(page_kits.mapped('product_tmpl_id').ids)
-        page_kit_bom_map = {bom.product_tmpl_id.id: bom for bom in page_kits}
+        page_kit_bom_map = {'by_product': {}, 'by_template': {}}
+        for bom in page_kits:
+            if bom.product_id:
+                page_kit_bom_map['by_product'][bom.product_id.id] = bom
+            else:
+                page_kit_bom_map['by_template'].setdefault(bom.product_tmpl_id.id, bom)
 
         page_blocking_by_so = self._batch_blocking_moves(page_sales)
         transfer_map = self._batch_transfer_suggestions(page_sales, product_availabilities)
