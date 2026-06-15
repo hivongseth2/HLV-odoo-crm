@@ -10,6 +10,9 @@
                     <div class="header-title" t-on-click="() => state.isSidebarOpen = true" style="cursor: pointer;">
                         <i class="fa fa-shipping-fast"></i> Shipper
                     </div>
+                    <div id="header-current-tab-name" style="font-size: 1rem; font-weight: 600; color: var(--primary-color);">
+                        <t t-esc="currentTabName"/>
+                    </div>
                 </div>
 
                 <!-- Sidebar Component -->

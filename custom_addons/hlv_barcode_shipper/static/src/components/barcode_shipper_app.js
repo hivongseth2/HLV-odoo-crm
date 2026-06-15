@@ -17,6 +17,9 @@ export class BarcodeShipperApp extends Component {
                     <div class="header-title" t-on-click="() => state.isSidebarOpen = true" style="cursor: pointer;">
                         <i class="fas fa-shipping-fast"></i> Shipper
                     </div>
+                    <div id="header-current-tab-name" style="font-size: 1rem; font-weight: 600; color: var(--primary-color);">
+                        <t t-esc="currentTabName"/>
+                    </div>
                 </div>
 
                 <!-- Sidebar Component -->
@@ -66,6 +69,16 @@ export class BarcodeShipperApp extends Component {
 
     switchTab(tabName) {
         this.state.activeTab = tabName;
+    }
+
+    get currentTabName() {
+        const tabNames = {
+            receive: "Nhận hàng",
+            deliver: "Giao hàng",
+            return: "Trả hàng",
+            delivered: "Đã giao"
+        };
+        return tabNames[this.state.activeTab] || "";
     }
 }
 

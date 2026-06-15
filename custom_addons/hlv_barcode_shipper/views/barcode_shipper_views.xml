@@ -81,6 +81,7 @@
                             <div class="header-title" id="btn-open-sidebar" style="cursor: pointer;">
                                 <i class="fa fa-shipping-fast"></i> Shipper
                             </div>
+                            <div id="header-current-tab-name" style="font-size: 1rem; font-weight: 600; color: var(--primary-color);">Nhận hàng</div>
                         </div>
 
                         <!-- Sidebar Overlay -->

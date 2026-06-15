@@ -138,6 +138,18 @@ class BarcodeShipper {
         document.querySelectorAll('.tab-content').forEach(tc => {
             tc.classList.toggle('active', tc.id === `tab-${tabName}`);
         });
+
+        const tabNames = {
+            'receive': 'Nhận hàng',
+            'deliver': 'Giao hàng',
+            'return': 'Trả hàng',
+            'delivered': 'Đã giao'
+        };
+        const headerTabName = document.getElementById('header-current-tab-name');
+        if (headerTabName) {
+            headerTabName.textContent = tabNames[tabName] || '';
+        }
+
         if (tabName === 'receive') {
             this.showReceiveStep('receive-step-scan');
             this._showReceivePrompt();
