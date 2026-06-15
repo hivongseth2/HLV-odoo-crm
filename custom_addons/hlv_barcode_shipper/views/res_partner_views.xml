@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_partner_form_inherit_delivery_location" model="ir.ui.view">
+        <field name="name">res.partner.form.inherit.delivery.location</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page string="Tọa độ Giao Hàng" invisible="parent_id != False">
+                    <field name="hlv_delivery_location_ids" context="{'default_partner_id': id}">
+                        <list editable="bottom">
+                            <field name="address"/>
+                            <field name="latitude"/>
+                            <field name="longitude"/>
+                            <button name="action_open_map_picker" type="object" icon="fa-map-marker" string="Chọn trên bản đồ" title="Mở bản đồ để chọn tọa độ" class="btn-primary"/>
+                        </list>
+                    </field>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>

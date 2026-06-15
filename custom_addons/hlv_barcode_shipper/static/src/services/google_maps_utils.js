@@ -84,11 +84,29 @@ export async function geocodeStops(stops, options = {}) {
     const errors = [];
 
     for (const stop of stops) {
+        if (stop.lat && stop.lng) {
+            results.push({
+                ...stop,
+                geocode: { lat: stop.lat, lng: stop.lng, placeId: null, raw: null }
+            });
+            continue;
+        }
+
         try {
             const geocode = await searchPlaceGeocode(stop.address, {
                 ...options,
                 geocoder,
             });
+            
+            if (options.saveGeocodeFn && stop.partner_id) {
+                options.saveGeocodeFn({
+                    partner_id: stop.partner_id,
+                    address: stop.address,
+                    lat: geocode.lat,
+                    lng: geocode.lng
+                }).catch(err => console.error("Auto-cache geocode failed", err));
+            }
+            
             results.push({ ...stop, geocode });
         } catch (error) {
             errors.push({ stop, error: error.message });
