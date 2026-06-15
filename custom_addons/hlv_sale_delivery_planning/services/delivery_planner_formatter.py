@@ -198,7 +198,39 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                 ('type', '=', 'phantom'),
             ])
             kit_tmpl_ids = set(kits.mapped('product_tmpl_id').ids)
-            kit_bom_map = {bom.product_tmpl_id.id: bom for bom in kits}
+            kit_bom_map = {'by_product': {}, 'by_template': {}}
+            for bom in kits:
+                if bom.product_id:
+                    kit_bom_map['by_product'][bom.product_id.id] = bom
+                else:
+                    kit_bom_map['by_template'].setdefault(bom.product_tmpl_id.id, bom)
+
+        def _kit_bom_values():
+            if isinstance(kit_bom_map, dict) and (
+                'by_product' in kit_bom_map or 'by_template' in kit_bom_map
+            ):
+                seen = set()
+                values = []
+                for bom in list(kit_bom_map.get('by_product', {}).values()) + list(kit_bom_map.get('by_template', {}).values()):
+                    if bom and bom.id not in seen:
+                        values.append(bom)
+                        seen.add(bom.id)
+                return values
+            return list(kit_bom_map.values()) if hasattr(kit_bom_map, 'values') else []
+
+        def _kit_bom_for_product(product):
+            if not product:
+                return False
+            tmpl_id = product.product_tmpl_id.id
+            if isinstance(kit_bom_map, dict) and (
+                'by_product' in kit_bom_map or 'by_template' in kit_bom_map
+            ):
+                return (
+                    kit_bom_map.get('by_product', {}).get(product.id)
+                    or kit_bom_map.get('by_template', {}).get(tmpl_id)
+                    or False
+                )
+            return kit_bom_map.get(tmpl_id) if hasattr(kit_bom_map, 'get') else False
 
         # --- Batch load tồn kho thực cho TẤT CẢ Kit components (Fix N+1) ---
         # Dùng kit_bom_map.values() thay vì ORM recordset 'kits' (hoạt động cả 2 nhánh)
@@ -211,7 +243,7 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
         if kit_bom_map and so.warehouse_id and wh_stock_root:
             all_comp_prod_ids = list(set(
                 comp.product_id.id
-                for bom in kit_bom_map.values()
+                for bom in _kit_bom_values()
                 for comp in bom.bom_line_ids
                 if comp.product_id
             ))
@@ -261,7 +293,7 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                 qty_avail = 0.0
             elif is_kit:
                 # Phantom BOM kit: tính số kit hoàn chỉnh từ linh kiện
-                bom = kit_bom_map.get(line.product_id.product_tmpl_id.id)
+                bom = _kit_bom_for_product(line.product_id)
                 if bom and so.warehouse_id:
                     # Lấy pickings active của đơn này để cộng lại reserved cho chính đơn
                     so_active_pickings = so.picking_ids.filtered(
@@ -325,7 +357,7 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             # parent product. Convert packed component quantities back to
             # completed kit quantity, mirroring the qty_delivered fallback below.
             if is_kit and line.product_id:
-                _pack_bom = kit_bom_map.get(line.product_id.product_tmpl_id.id)
+                _pack_bom = _kit_bom_for_product(line.product_id)
                 if _pack_bom:
                     _bom_qty = _pack_bom.product_qty or 1.0
                     _packed_kits_ratio = float('inf')
@@ -359,7 +391,7 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             if p_type == 'service':
                 eff_qty_del = line.product_uom_qty
             if is_kit and line.qty_delivered == 0 and line.product_id:
-                _fb_bom = kit_bom_map.get(line.product_id.product_tmpl_id.id)
+                _fb_bom = _kit_bom_for_product(line.product_id)
                 if _fb_bom:
                     _done_out_mvs = self.env['stock.move'].sudo().search_read(
                         [
