@@ -1484,7 +1484,7 @@ class HLVMobileBarcodeController(http.Controller):
                                 'action': 'ask_partial_package',
                                 'package_id': package.id,
                                 'package_name': package.name,
-                                'reason': _('Kiện "%s" chứa sản phẩm "%s" KHÔNG có trong phiếu lấy hàng.\n👉 Chọn cách xử lý bên dưới:', package.name, product_in_pkg.display_name)
+                                'reason': _('Phát hiện sản phẩm không thuộc phiếu!\nKiện %s chứa sản phẩm "%s" nhưng phiếu không yêu cầu lấy sản phẩm này.\nBạn muốn xử lý kiện hàng này như thế nào?', package.name, product_in_pkg.display_name)
                             }
                         
                         move = move[0]
@@ -1506,7 +1506,7 @@ class HLVMobileBarcodeController(http.Controller):
                                 'action': 'ask_partial_package',
                                 'package_id': package.id,
                                 'package_name': package.name,
-                                'reason': _('Kiện "%s" chứa %g %s sản phẩm "%s", nhưng phiếu chỉ cần lấy thêm %g %s.\n👉 Chọn cách xử lý bên dưới:', package.name, total_pkg_qty, product_in_pkg.uom_id.name, product_in_pkg.display_name, needed_qty, product_in_pkg.uom_id.name)
+                                'reason': _('Phát hiện dư thừa số lượng!\nKiện %s đang chứa %g %s (%s), nhưng phiếu chỉ yêu cầu lấy thêm %g %s.\nBạn muốn xử lý phần chênh lệch này như thế nào?', package.name, total_pkg_qty, product_in_pkg.uom_id.name, product_in_pkg.display_name, needed_qty, product_in_pkg.uom_id.name)
                             }
                 # -----------------------------------------------
                 
