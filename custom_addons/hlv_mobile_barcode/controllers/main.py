@@ -1467,6 +1467,39 @@ class HLVMobileBarcodeController(http.Controller):
             quants = request.env['stock.quant'].sudo().search([('package_id', '=', package.id)])
             if quants:
                 package_source_loc_ids = request.env['stock.location'].sudo().search([('id', 'child_of', picking.location_id.id)]).ids
+                
+                # --- PRE-CHECK FOR PARTIAL PACKAGE SCENARIOS (PICK) ---
+                if is_pick_picking:
+                    for quant in quants:
+                        product_in_pkg = quant.product_id
+                        qty_in_pkg = quant.quantity - quant.reserved_quantity
+                        if qty_in_pkg <= 0 or quant.location_id.usage != 'internal' or quant.location_id.id not in package_source_loc_ids:
+                            continue
+                        
+                        move = picking.move_ids.filtered(
+                            lambda m: m.product_id == product_in_pkg and m.state not in ['done', 'cancel']
+                        )
+                        if not move:
+                            return {'error': _('Kiện "%s" chứa sản phẩm "%s" KHÔNG có trong phiếu lấy hàng.\n👉 Vui lòng tách kiện và quét lẻ sản phẩm!', package.name, product_in_pkg.display_name)}
+                        
+                        move = move[0]
+                        current_qty_done = sum(ml.qty_scanned if uses_qty_scanned else ml.quantity for ml in move.move_line_ids)
+                        target_qty = move.product_uom_qty
+                        
+                        reserved_by_this_package = sum(
+                            ml.product_uom_id._compute_quantity(ml.quantity_product_uom, product_in_pkg.uom_id)
+                            for ml in picking.move_line_ids
+                            if ml.product_id == product_in_pkg
+                            and ml.location_id == quant.location_id
+                            and ml.package_id == package
+                        )
+                        total_pkg_qty = qty_in_pkg + reserved_by_this_package
+                        
+                        if target_qty > 0.0 and current_qty_done + total_pkg_qty > target_qty:
+                            needed_qty = max(0.0, target_qty - current_qty_done)
+                            return {'error': _('Kiện "%s" chứa %g %s sản phẩm "%s", nhưng phiếu chỉ cần lấy thêm %g %s.\n👉 Vui lòng tách kiện và quét lẻ sản phẩm!', package.name, total_pkg_qty, product_in_pkg.uom_id.name, product_in_pkg.display_name, needed_qty, product_in_pkg.uom_id.name)}
+                # -----------------------------------------------
+                
                 processed_products = []
                 updated_move_line = request.env['stock.move.line'].browse()
                 updated_product = request.env['product.product'].browse()
