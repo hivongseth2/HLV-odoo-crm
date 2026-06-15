@@ -16,9 +16,10 @@ class DeliveryPlannerServiceStockHelpers(models.AbstractModel):
         so_wh_locs = {}
         all_pending_pids = set()
         for so in page_sales:
-            if not so.warehouse_id or not so.warehouse_id.lot_stock_id:
+            wh_root = so.warehouse_id.view_location_id or so.warehouse_id.lot_stock_id if so.warehouse_id else False
+            if not so.warehouse_id or not wh_root:
                 continue
-            so_wh_locs[so.id] = (so.warehouse_id.id, so.warehouse_id.lot_stock_id.id)
+            so_wh_locs[so.id] = (so.warehouse_id.id, wh_root.id)
             for line in so.order_line:
                 if line.display_type or not line.product_id:
                     continue
