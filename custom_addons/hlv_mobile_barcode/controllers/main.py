@@ -132,14 +132,15 @@ def _redistribute_pick_reservation_to_location(source_line, dest_location):
 
     quants = request.env['stock.quant'].sudo().search(quant_domain)
     available_qty = sum(quant.quantity - quant.reserved_quantity for quant in quants)
-    if float_compare(available_qty, qty_to_move, precision_rounding=rounding) < 0:
+    if float_compare(available_qty, 0.0, precision_rounding=rounding) <= 0:
         raise UserError(_(
-            'Không đủ tồn khả dụng của sản phẩm "%s" tại vị trí "%s" để đổi kệ (%g/%g).',
+            'Không có tồn khả dụng của sản phẩm "%s" tại vị trí "%s" để đổi kệ.',
             product.display_name,
             dest_location.display_name,
-            available_qty,
-            qty_to_move,
         ))
+
+    if float_compare(available_qty, qty_to_move, precision_rounding=rounding) < 0:
+        qty_to_move = available_qty
 
     actual_dest_location = dest_location
     matching_quant = quants[:1]
@@ -162,7 +163,7 @@ def _redistribute_pick_reservation_to_location(source_line, dest_location):
         )
     )[:1]
 
-    source_new_qty = source_line.qty_scanned or 0.0
+    source_new_qty = source_line.quantity - qty_to_move
     if float_compare(source_new_qty, 0.0, precision_rounding=rounding) <= 0:
         source_line.with_context(skip_qty_validation=True).write({'quantity': 0.0})
     else:
