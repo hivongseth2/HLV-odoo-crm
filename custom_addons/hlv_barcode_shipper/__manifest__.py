@@ -17,7 +17,7 @@
         "views/barcode_scan_log_views.xml",
         "views/stock_picking_views.xml",
         "views/barcode_shipper_views.xml",
-        "views/barcode_shipper_v2_views.xml",
+        # "views/barcode_shipper_v2_views.xml",  # Tạm ngưng V2
         "views/delivery_route_views.xml",
         "views/res_config_settings_views.xml",
         "views/shipper_management_views.xml",
@@ -35,9 +35,9 @@
             "hlv_barcode_shipper/static/src/services/**/*",
             "hlv_barcode_shipper/static/src/components/**/*",
         ],
-        "hlv_barcode_shipper.assets_shipper_v2": [
-            "hlv_barcode_shipper/static/src/main_v2.js",
-        ],
+        # "hlv_barcode_shipper.assets_shipper_v2": [
+        #     "hlv_barcode_shipper/static/src/main_v2.js",
+        # ],
         "hlv_barcode_shipper.assets_delivery_route": [
             "hlv_barcode_shipper/static/src/components/delivery_route/route_stop_list.js",
             "hlv_barcode_shipper/static/src/components/delivery_route/delivery_route_app.js",

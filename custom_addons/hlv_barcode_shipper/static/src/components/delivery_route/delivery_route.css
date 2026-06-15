@@ -285,11 +285,18 @@ body.hlv-route-dragging {
     border-radius: 999px;
     background: #eef8ff;
     color: var(--hlv-primary-blue-dark, #2C5EAD);
-    display: grid;
-    grid-template-columns: 54px 1fr;
-    align-items: center;
+    position: relative;
     padding: 0;
     overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    transition: background 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+}
+
+.hlv-route-swipe.is-success {
+    background: #4caf50;
+    border-color: #388e3c;
+    color: #ffffff;
 }
 
 .hlv-route-swipe-fixed {
@@ -308,12 +315,30 @@ body.hlv-route-dragging {
     box-shadow: 0 8px 18px rgba(21, 145, 220, 0.18);
 }
 
+.swipe-progress-bg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: calc(var(--swipe-x, 0) + 24px);
+    background: rgba(21, 145, 220, 0.15);
+    border-radius: 999px 0 0 999px;
+    pointer-events: none;
+}
+
+.hlv-route-swipe.is-animating .swipe-progress-bg {
+    transition: width 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
 .hlv-route-swipe span {
+    position: absolute;
+    top: 0;
+    left: 0;
     transform: translateX(var(--swipe-x, 0));
     width: 46px;
     height: 46px;
     border-radius: 999px;
-    margin-left: 1px;
+    margin: 1px;
     background: var(--hlv-primary-blue, #1591DC);
     color: #ffffff;
     display: inline-flex;
@@ -321,10 +346,38 @@ body.hlv-route-dragging {
     justify-content: center;
     font-size: 1.4rem;
     transition: none;
+    z-index: 2;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
 }
 
-.hlv-route-swipe b {
+.hlv-route-swipe.is-success span {
+    background: #ffffff;
+    color: #4caf50;
+    transition: background 0.3s ease, color 0.3s ease;
+}
+
+.hlv-route-swipe.is-animating span {
+    transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.hlv-route-swipe .swipe-text {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     font-size: 0.82rem;
+    font-weight: bold;
+    z-index: 1;
+    pointer-events: none;
+    opacity: calc(1 - var(--swipe-progress, 0));
+}
+
+.hlv-route-swipe.is-animating .swipe-text {
+    transition: opacity 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 .hlv-route-loading,

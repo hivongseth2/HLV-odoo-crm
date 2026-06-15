@@ -88,6 +88,109 @@ def _loose_package_vals():
         'package_id': False,
     }
 
+def _pick_line_remaining_qty(move_line):
+    return max(0.0, (move_line.quantity or 0.0) - (move_line.qty_scanned or 0.0))
+
+def _can_override_pick_line(move_line):
+    return bool(
+        move_line
+        and move_line.exists()
+        and move_line.state not in ['done', 'cancel']
+        and not move_line.package_id
+        and not move_line.result_package_id
+        and not move_line.package_level_id
+        and _pick_line_remaining_qty(move_line) > 0
+    )
+
+def _redistribute_pick_reservation_to_location(source_line, dest_location):
+    """Move the unscanned PICK reservation of one loose line to a scanned source location."""
+    if not _can_override_pick_line(source_line):
+        raise UserError(_('Dòng lấy hàng đã chọn không còn số lượng chưa quét để đổi vị trí.'))
+    if source_line.location_id == dest_location:
+        return source_line
+
+    picking = source_line.picking_id
+    product = source_line.product_id
+    rounding = source_line.product_uom_id.rounding
+    qty_to_move = _pick_line_remaining_qty(source_line)
+
+    quant_domain = [
+        ('product_id', '=', product.id),
+        ('location_id', 'child_of', dest_location.id),
+        ('company_id', '=', picking.company_id.id),
+        ('package_id', '=', False),
+        ('quantity', '>', 0),
+    ]
+    if source_line.lot_id:
+        quant_domain.append(('lot_id', '=', source_line.lot_id.id))
+    else:
+        quant_domain.append(('lot_id', '=', False))
+    if source_line.owner_id:
+        quant_domain.append(('owner_id', '=', source_line.owner_id.id))
+    else:
+        quant_domain.append(('owner_id', '=', False))
+
+    quants = request.env['stock.quant'].sudo().search(quant_domain)
+    available_qty = sum(quant.quantity - quant.reserved_quantity for quant in quants)
+    if float_compare(available_qty, 0.0, precision_rounding=rounding) <= 0:
+        raise UserError(_(
+            'Không có tồn khả dụng của sản phẩm "%s" tại vị trí "%s" để đổi kệ.',
+            product.display_name,
+            dest_location.display_name,
+        ))
+
+    if float_compare(available_qty, qty_to_move, precision_rounding=rounding) < 0:
+        qty_to_move = available_qty
+
+    actual_dest_location = dest_location
+    matching_quant = quants[:1]
+    if matching_quant:
+        actual_dest_location = matching_quant.location_id
+
+    dest_line = source_line.move_id.move_line_ids.filtered(
+        lambda ml: (
+            ml.id != source_line.id
+            and ml.state not in ['done', 'cancel']
+            and ml.product_id == product
+            and ml.location_id == actual_dest_location
+            and ml.location_dest_id == source_line.location_dest_id
+            and ml.product_uom_id == source_line.product_uom_id
+            and ml.lot_id == source_line.lot_id
+            and ml.owner_id == source_line.owner_id
+            and not ml.package_id
+            and not ml.result_package_id
+            and not ml.package_level_id
+        )
+    )[:1]
+
+    source_new_qty = source_line.quantity - qty_to_move
+    if float_compare(source_new_qty, 0.0, precision_rounding=rounding) <= 0:
+        source_line.with_context(skip_qty_validation=True).write({'quantity': 0.0})
+    else:
+        source_line.with_context(skip_qty_validation=True).write({'quantity': source_new_qty})
+
+    if dest_line:
+        dest_line.with_context(skip_qty_validation=True).write({
+            'quantity': dest_line.quantity + qty_to_move,
+        })
+    else:
+        dest_line = request.env['stock.move.line'].sudo().with_context(skip_qty_validation=True).create({
+            'move_id': source_line.move_id.id,
+            'picking_id': picking.id,
+            'product_id': product.id,
+            'product_uom_id': source_line.product_uom_id.id,
+            'location_id': actual_dest_location.id,
+            'location_dest_id': source_line.location_dest_id.id,
+            'lot_id': source_line.lot_id.id or False,
+            'owner_id': source_line.owner_id.id or False,
+            'quantity': qty_to_move,
+            'qty_scanned': 0.0,
+        })
+
+    if not _can_override_pick_line(dest_line):
+        raise UserError(_('Không thể tạo dòng lấy hàng mới tại vị trí "%s". Giao dịch đã được hoàn tác.', dest_location.display_name))
+    return dest_line
+
 def _step2_canonical_line_entries(picking):
     """Use current Step 2 lines while validating totals against the source transfer.
     Relaxed strict equality to support backorders (where Step 2 demand < Step 1 done).
@@ -826,6 +929,10 @@ class HLVMobileBarcodeController(http.Controller):
                         line_demand = ml.quantity
                     elif picking.source_transfer_id:
                         line_demand = ml.quantity
+                    elif uses_qty_scanned and is_putaway and len(move.move_line_ids) > 1:
+                        if ml.quantity <= 0 and ml.qty_scanned <= 0:
+                            continue
+                        line_demand = max(ml.quantity, ml.qty_scanned)
                     elif ml.quantity > 0 or len(move.move_line_ids) > 1:
                         line_demand = ml.quantity
 
@@ -1253,6 +1360,10 @@ class HLVMobileBarcodeController(http.Controller):
         elif location_mode == 'source' and (is_multi_location or is_pick_picking):
             is_putaway = False
 
+        # Cờ nhận diện phiếu nhập thuần (Incoming Receipt - IN)
+        # Dùng cho logic ghi đè location_dest_id khi quét vị trí cụ thể
+        is_incoming_receipt = (pt_type == 'incoming') and not is_return_picking and not picking.source_transfer_id
+
         uses_qty_scanned = is_pick_picking or (is_putaway and not is_return_picking)
         
         # 1. Try to find location first
@@ -1270,9 +1381,12 @@ class HLVMobileBarcodeController(http.Controller):
                     and updated_ml.picking_id == picking
                     and updated_ml.state not in ['done', 'cancel']
                 ):
-                    updated_ml.location_dest_id = location.id
-                    res['updated_product_id'] = updated_ml.product_id.id
-                    res['updated_move_line_id'] = updated_ml.id
+                    # Không kéo theo sản phẩm khi quét vị trí đối với phiếu nhập IN
+                    # Điều này cho phép thủ kho tách 1 sản phẩm ra nhiều vị trí khác nhau
+                    if not is_incoming_receipt:
+                        updated_ml.location_dest_id = location.id
+                        res['updated_product_id'] = updated_ml.product_id.id
+                        res['updated_move_line_id'] = updated_ml.id
             return res
 
         # 1.5. Try to find package
@@ -1503,7 +1617,9 @@ class HLVMobileBarcodeController(http.Controller):
                 lines = lines.filtered(lambda ml: ml.location_id.id == destination_location_id)
             return lines.sorted('id')
 
+        product_moves = move
         preferred_move_line = request.env['stock.move.line'].browse()
+        preferred_override_line = request.env['stock.move.line'].browse()
         if is_pick_picking and preferred_move_line_id:
             try:
                 preferred_id = int(preferred_move_line_id)
@@ -1511,7 +1627,10 @@ class HLVMobileBarcodeController(http.Controller):
                 preferred_id = 0
             candidate_line = request.env['stock.move.line'].browse(preferred_id) if preferred_id else preferred_move_line
             if candidate_line.exists() and candidate_line.picking_id == picking and candidate_line.product_id == product:
-                if destination_location_id and candidate_line.location_id.id != destination_location_id:
+                if destination_location_id and candidate_line.location_id.id != destination_location_id and _can_override_pick_line(candidate_line):
+                    preferred_override_line = candidate_line
+                    move = candidate_line.move_id
+                if destination_location_id and candidate_line.location_id.id != destination_location_id and not preferred_override_line:
                     return {'error': _('Dòng ưu tiên của sản phẩm "%s" không thuộc vị trí đang quét. Vui lòng chọn đúng dòng tại vị trí này hoặc bỏ chọn ưu tiên!', product.display_name)}
                 if _pick_available_lines(candidate_line.move_id).filtered(lambda ml: ml.id == candidate_line.id):
                     preferred_move_line = candidate_line
@@ -1694,37 +1813,92 @@ class HLVMobileBarcodeController(http.Controller):
                 move_line = move.move_line_ids.filtered(lambda ml: not ml.result_package_id and not ml.package_id)
 
         if is_pick_picking:
+            override_location_used = False
             if destination_location_id:
                 move_line = move_line.filtered(lambda ml: ml.location_id.id == destination_location_id)
+                if preferred_override_line:
+                    destination_location = request.env['stock.location'].sudo().browse(destination_location_id)
+                    try:
+                        with request.env.cr.savepoint():
+                            move_line = _redistribute_pick_reservation_to_location(
+                                preferred_override_line,
+                                destination_location,
+                            )
+                            override_location_used = True
+                    except UserError as error:
+                        return {'error': str(error)}
+                if not move_line:
+                    override_candidates = product_moves.mapped('move_line_ids').filtered(
+                        lambda ml: (
+                            ml.product_id == product
+                            and ml.location_id.id != destination_location_id
+                            and _can_override_pick_line(ml)
+                        )
+                    ).sorted('id')
+                    override_move_line = request.env['stock.move.line'].browse()
+                    if len(override_candidates) == 1:
+                        override_move_line = override_candidates[0]
+                    elif len(override_candidates) > 1:
+                        return {'error': _('Sản phẩm "%s" có nhiều dòng ở vị trí khác còn có thể lấy. Vui lòng chọn đúng dòng cần đổi kệ rồi quét lại sản phẩm.', product.display_name)}
+                    if override_move_line:
+                        destination_location = request.env['stock.location'].sudo().browse(destination_location_id)
+                        try:
+                            with request.env.cr.savepoint():
+                                move_line = _redistribute_pick_reservation_to_location(
+                                    override_move_line,
+                                    destination_location,
+                                )
+                                override_location_used = True
+                        except UserError as error:
+                            return {'error': str(error)}
                 if not move_line:
                     return {'error': _('Sản phẩm "%s" không có dòng lấy hàng tại vị trí đang quét.', product.display_name)}
             
             # Lọc các dòng chưa quét đủ số lượng assign (số lượng tại vị trí)
             available_move_line = preferred_move_line if preferred_move_line else _pick_available_lines(move)
+            if destination_location_id and move_line:
+                available_move_line = move_line.filtered(lambda ml: ml.qty_scanned < ml.quantity)
             if not available_move_line:
                 # Nếu tất cả dòng đã quét đủ quantity
                 loc_msg = _(' tại vị trí này') if destination_location_id else ''
                 return {'error': _('Sản phẩm "%s"%s đã được quét đủ số lượng phân bổ (%g).', product.display_name, loc_msg, sum(move_line.mapped('qty_scanned')))}
             move_line = available_move_line
         elif uses_qty_scanned and destination_location_id:
-            move_line = move_line.filtered(lambda ml: ml.location_dest_id.id == destination_location_id)
-
+            if is_incoming_receipt:
+                # === PHIẾU NHẬP IN: Logic 3 tầng ưu tiên ===
+                # 1. Ưu tiên dòng đã có đúng vị trí đích (quét tiếp cùng vị trí → tăng qty)
+                matching_dest = move_line.filtered(lambda ml: ml.location_dest_id.id == destination_location_id)
+                if matching_dest:
+                    move_line = matching_dest
+                else:
+                    # 2. Tìm dòng chưa quét (qty_scanned==0, dòng mặc định WH/Stock) → sẽ ghi đè location
+                    untouched = move_line.filtered(lambda ml: ml.qty_scanned == 0)
+                    if untouched:
+                        move_line = untouched[:1]  # Chỉ lấy 1 dòng để override
+                    else:
+                        # 3. Tất cả dòng đã quét ở vị trí khác → để trống → tạo dòng mới
+                        move_line = request.env['stock.move.line'].browse()
+            else:
+                move_line = move_line.filtered(lambda ml: ml.location_dest_id.id == destination_location_id)
         if is_pick_picking:
             updated_move_line = move_line[0]
             updated_move_line.qty_scanned += 1
-            return {
+            res = {
                 'success': True,
                 'type': 'product',
                 'product_id': product.id,
                 'product_name': product.display_name,
                 'move_line_id': updated_move_line.id or False,
             }
-        
+            if override_location_used:
+                res['override_location'] = True
+                res['location_name'] = updated_move_line.location_id.display_name
+            return res
+
         ml_dest_id = destination_location_id if (destination_location_id and is_putaway) else (move_line[0].location_dest_id.id if move_line else picking.location_dest_id.id)
-        
+
         if not is_putaway:
-            # Resolve actual child location where stock exists for accurate move line creation
-            # If stock is not directly at ml_src_id but at a child location, use the child location
+            # Resolve actual child location where stock exists
             actual_src_id = ml_src_id
             if scan_quant:
                 actual_src_id = scan_quant.location_id.id
@@ -1736,7 +1910,6 @@ class HLVMobileBarcodeController(http.Controller):
                     ('package_id', '=', False)
                 ])
                 if not direct_quants:
-                    # No stock at exact location, find the child location that has stock
                     child_quants = request.env['stock.quant'].sudo().search([
                         ('product_id', '=', product.id),
                         ('location_id', 'child_of', ml_src_id),
@@ -1744,18 +1917,46 @@ class HLVMobileBarcodeController(http.Controller):
                         ('package_id', '=', False)
                     ], order='quantity desc')
                     if child_quants:
-                        # Use the child location with the most stock
                         actual_src_id = child_quants[0].location_id.id
-            
             ml_src_id = actual_src_id
-        
+
         updated_move_line = request.env['stock.move.line'].browse()
         if move_line:
-            # Check if location matches, otherwise we might need a new move line
             last_ml = move_line[-1]
-            if (is_putaway and destination_location_id and last_ml.location_dest_id.id != destination_location_id) or \
-               (not is_putaway and destination_location_id and last_ml.location_id.id != ml_src_id):
-                # Locations differ, create a new move line
+            location_differs = (
+                (is_putaway and destination_location_id and last_ml.location_dest_id.id != destination_location_id)
+                or (not is_putaway and destination_location_id and last_ml.location_id.id != ml_src_id)
+            )
+            if location_differs and is_incoming_receipt:
+                # === PHIẾU NHẬP IN ===
+                existing_qty = last_ml.qty_scanned if uses_qty_scanned else last_ml.quantity
+                if existing_qty == 0:
+                    # Dòng chưa quét → override location_dest_id
+                    last_ml.location_dest_id = destination_location_id
+                    if uses_qty_scanned:
+                        last_ml.qty_scanned += 1
+                    else:
+                        last_ml.quantity += 1
+                    updated_move_line = last_ml
+                else:
+                    # Dòng đã quét ở vị trí khác → tạo dòng mới
+                    new_ml_vals = {
+                        'move_id': move.id,
+                        'picking_id': picking.id,
+                        'product_id': product.id,
+                        'product_uom_id': product.uom_id.id,
+                        'location_id': ml_src_id,
+                        'location_dest_id': ml_dest_id,
+                    }
+                    if scan_package:
+                        new_ml_vals['package_id'] = scan_package.id
+                    if uses_qty_scanned:
+                        new_ml_vals['qty_scanned'] = 1
+                    else:
+                        new_ml_vals['quantity'] = 1
+                    updated_move_line = request.env['stock.move.line'].create(new_ml_vals)
+            elif location_differs:
+                # Các loại phiếu khác: tạo dòng mới khi vị trí khác nhau
                 new_ml_vals = {
                     'move_id': move.id,
                     'picking_id': picking.id,
@@ -1794,7 +1995,27 @@ class HLVMobileBarcodeController(http.Controller):
             else:
                 new_ml_vals['quantity'] = 1
             updated_move_line = request.env['stock.move.line'].create(new_ml_vals)
+
+        # === DYNAMIC DEMAND RECALCULATION CỦA PHIẾU NHẬP IN ===
+        if is_incoming_receipt and updated_move_line:
+            existing_mls = move.move_line_ids.filtered(
+                lambda ml: ml.state not in ['done', 'cancel'] and not ml.result_package_id
+            )
+            total_demand = move.product_uom_qty
+            total_locked = 0
+            for eml in existing_mls:
+                if eml.id != updated_move_line.id:
+                    scanned = eml.qty_scanned if uses_qty_scanned else eml.quantity
+                    if scanned > 0 and eml.quantity != scanned:
+                        eml.quantity = scanned
+                    total_locked += scanned
             
+            remaining_demand = max(0, total_demand - total_locked)
+            if updated_move_line.quantity != remaining_demand:
+                updated_move_line.quantity = remaining_demand
+
+
+
         return {
             'success': True,
             'type': 'product',
