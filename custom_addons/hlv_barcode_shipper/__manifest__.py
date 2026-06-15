@@ -34,7 +34,6 @@
             "hlv_barcode_shipper/static/src/js/barcode_scanner.js",
         ],
         "web.assets_backend": [
-            "hlv_barcode_shipper/static/src/css/shipper_management.css",
             "hlv_barcode_shipper/static/src/components/google_map_picker/**/*",
             "hlv_barcode_shipper/static/src/services/**/*",
             "hlv_barcode_shipper/static/src/components/**/*",
