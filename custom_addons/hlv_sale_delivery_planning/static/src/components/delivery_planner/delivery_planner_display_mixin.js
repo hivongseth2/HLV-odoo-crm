@@ -86,10 +86,23 @@ export class DeliveryPlannerDisplayMixin {
 
     async onSearchKeyup(ev) {
         if (ev.key === "Enter") {
+            if (this._searchDebounceTimer) {
+                clearTimeout(this._searchDebounceTimer);
+                this._searchDebounceTimer = null;
+            }
             this.state.currentPage = 1;
             this.state.selectedSOIds = new Set();
             await this.fetchData();
+            return;
         }
+        if (this._searchDebounceTimer) {
+            clearTimeout(this._searchDebounceTimer);
+        }
+        this._searchDebounceTimer = setTimeout(async () => {
+            this.state.currentPage = 1;
+            this.state.selectedSOIds = new Set();
+            await this.fetchData();
+        }, 350);
     }
 
     async onTagFilterChange(ev) {
