@@ -28,40 +28,51 @@ export class GoogleMapPicker extends Component {
                 console.error("Missing Google Maps API Key in Company Settings or General Settings");
                 return;
             }
-            const maps = await loadGoogleMaps(apiKey);
+            
+            let maps;
+            try {
+                maps = await loadGoogleMaps(apiKey);
+            } catch (error) {
+                console.error("Lỗi khi tải Google Maps (Có thể do Trình chặn quảng cáo / Adblock):", error);
+                alert("Không thể tải bản đồ. Vui lòng tắt trình chặn quảng cáo (Adblock) hoặc kiểm tra kết nối mạng!");
+                return;
+            }
             
             // Get coordinates from the record
             let lat = this.props.record.data.latitude || 21.028511; // Default Hanoi
             let lng = this.props.record.data.longitude || 105.804817;
             
-            this.map = new maps.Map(this.mapRef.el, {
-                center: { lat, lng },
-                zoom: 15,
-                disableDefaultUI: false,
-            });
-            
-            this.marker = new maps.Marker({
-                position: { lat, lng },
-                map: this.map,
-                draggable: true,
-            });
-            
-            this.marker.addListener("dragend", () => {
-                const pos = this.marker.getPosition();
-                this.props.record.update({
-                    latitude: pos.lat(),
-                    longitude: pos.lng()
+            // Fix modal display issue by using timeout
+            setTimeout(() => {
+                this.map = new maps.Map(this.mapRef.el, {
+                    center: { lat, lng },
+                    zoom: 15,
+                    disableDefaultUI: false,
                 });
-            });
-            
-            this.map.addListener("click", (e) => {
-                const pos = e.latLng;
-                this.marker.setPosition(pos);
-                this.props.record.update({
-                    latitude: pos.lat(),
-                    longitude: pos.lng()
+                
+                this.marker = new maps.Marker({
+                    position: { lat, lng },
+                    map: this.map,
+                    draggable: true,
                 });
-            });
+                
+                this.marker.addListener("dragend", () => {
+                    const pos = this.marker.getPosition();
+                    this.props.record.update({
+                        latitude: pos.lat(),
+                        longitude: pos.lng()
+                    });
+                });
+                
+                this.map.addListener("click", (e) => {
+                    const pos = e.latLng;
+                    this.marker.setPosition(pos);
+                    this.props.record.update({
+                        latitude: pos.lat(),
+                        longitude: pos.lng()
+                    });
+                });
+            }, 100);
         });
     }
 }
