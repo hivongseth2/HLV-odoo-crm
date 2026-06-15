@@ -1529,28 +1529,65 @@ class HLVMobileBarcodeController(http.Controller):
                                 and ml.location_id == quant.location_id
                             )
                         )
-                        if move_line:
-                            target_move_line = move_line[0]
-                            if uses_qty_scanned:
-                                target_move_line.qty_scanned += acceptable_qty
+                        if is_pick_picking:
+                            loose_lines = move.move_line_ids.filtered(
+                                lambda ml: not ml.package_id and not ml.result_package_id and _pick_line_remaining_qty(ml) > 0
+                            ).sorted('id')
+                            
+                            qty_to_steal = acceptable_qty
+                            for ll in loose_lines:
+                                if qty_to_steal <= 0:
+                                    break
+                                ll_remaining = _pick_line_remaining_qty(ll)
+                                steal_amount = min(qty_to_steal, ll_remaining)
+                                ll.with_context(skip_qty_validation=True).write({'quantity': ll.quantity - steal_amount})
+                                qty_to_steal -= steal_amount
+
+                            if move_line:
+                                target_move_line = move_line[0]
+                                target_move_line.with_context(skip_qty_validation=True).write({
+                                    'qty_scanned': target_move_line.qty_scanned + acceptable_qty,
+                                    'quantity': target_move_line.quantity + (acceptable_qty - qty_to_steal)
+                                })
                             else:
-                                target_move_line.quantity += acceptable_qty
-                        else:
-                            new_ml_vals = {
-                                'move_id': move.id,
-                                'picking_id': picking.id,
-                                'product_id': product_in_pkg.id,
-                                'product_uom_id': move.product_uom.id,
-                                'location_id': quant.location_id.id,
-                                'location_dest_id': picking.location_dest_id.id,
-                                'package_id': package.id,
-                                'result_package_id': package.id,
-                            }
-                            if uses_qty_scanned:
+                                new_ml_vals = {
+                                    'move_id': move.id,
+                                    'picking_id': picking.id,
+                                    'product_id': product_in_pkg.id,
+                                    'product_uom_id': move.product_uom.id,
+                                    'location_id': quant.location_id.id,
+                                    'location_dest_id': picking.location_dest_id.id,
+                                    'package_id': package.id,
+                                    'result_package_id': False, # Lấy hàng từ kiện ra, không ép result_package_id nếu không cần thiết, tuy nhiên hệ thống cũ set package.id, ta giữ nguyên cho nhất quán nếu họ muốn bưng cả kiện.
+                                }
+                                # Trong phiếu PICK, khi lấy nguyên kiện ta ghi nhận cả result_package_id
+                                new_ml_vals['result_package_id'] = package.id
                                 new_ml_vals['qty_scanned'] = acceptable_qty
+                                new_ml_vals['quantity'] = acceptable_qty - qty_to_steal
+                                target_move_line = request.env['stock.move.line'].sudo().with_context(skip_qty_validation=True).create(new_ml_vals)
+                        else:
+                            if move_line:
+                                target_move_line = move_line[0]
+                                if uses_qty_scanned:
+                                    target_move_line.qty_scanned += acceptable_qty
+                                else:
+                                    target_move_line.quantity += acceptable_qty
                             else:
-                                new_ml_vals['quantity'] = acceptable_qty
-                            target_move_line = request.env['stock.move.line'].create(new_ml_vals)
+                                new_ml_vals = {
+                                    'move_id': move.id,
+                                    'picking_id': picking.id,
+                                    'product_id': product_in_pkg.id,
+                                    'product_uom_id': move.product_uom.id,
+                                    'location_id': quant.location_id.id,
+                                    'location_dest_id': picking.location_dest_id.id,
+                                    'package_id': package.id,
+                                    'result_package_id': package.id,
+                                }
+                                if uses_qty_scanned:
+                                    new_ml_vals['qty_scanned'] = acceptable_qty
+                                else:
+                                    new_ml_vals['quantity'] = acceptable_qty
+                                target_move_line = request.env['stock.move.line'].sudo().with_context(skip_qty_validation=True).create(new_ml_vals)
                         if not updated_move_line:
                             updated_move_line = target_move_line
                             updated_product = product_in_pkg
