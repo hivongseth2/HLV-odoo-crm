@@ -80,6 +80,8 @@ export class BarcodeApp extends Component {
             showExitOptions: false,
             pendingExitAction: null,
             isMultiLocationMode: savedState.isMultiLocationMode || false,
+            showPartialPackagePopup: false,
+            partialPackageData: null,
             isDebug: !!session.debug,
         });
 
@@ -322,6 +324,94 @@ export class BarcodeApp extends Component {
         }
     }
 
+    async handlePartialPackageAuto() {
+        if (!this.state.partialPackageData) return;
+        const barcode = this.state.partialPackageData.barcode;
+        this.state.showPartialPackagePopup = false;
+        this.state.partialPackageData = null;
+        
+        // Gọi lại process_barcode với cờ force_partial_package = True
+        this.state.isProcessing = true;
+        try {
+            const locationMode = this.state.pickingIsPutaway ? null : this.state.scanMode;
+            const res = await rpc("/hlv_mobile_barcode/process_barcode", { 
+                picking_id: this.state.pickingId, 
+                barcode: barcode,
+                destination_location_id: this.state.scannedLocationId,
+                last_product_id: this.state.lastScannedProduct,
+                last_move_line_id: this.state.lastScannedMoveLine,
+                location_mode: locationMode,
+                is_multi_location: this.state.isMultiLocationMode,
+                preferred_move_line_id: this.state.preferredMoveLineId,
+                force_partial_package: true
+            });
+            this._handleProcessBarcodeResult(res);
+        } catch (e) {
+            this.playSound('error');
+            this.notification.add("Server error", { type: "danger" });
+        } finally {
+            this.state.isProcessing = false;
+        }
+    }
+
+    async handlePartialPackageManual() {
+        if (!this.state.partialPackageData) return;
+        const barcode = this.state.partialPackageData.barcode;
+        this.state.showPartialPackagePopup = false;
+        this.state.partialPackageData = null;
+        
+        // Gọi lại process_barcode với cờ create_loose_lines_only = True
+        this.state.isProcessing = true;
+        try {
+            const locationMode = this.state.pickingIsPutaway ? null : this.state.scanMode;
+            const res = await rpc("/hlv_mobile_barcode/process_barcode", { 
+                picking_id: this.state.pickingId, 
+                barcode: barcode,
+                destination_location_id: this.state.scannedLocationId,
+                last_product_id: this.state.lastScannedProduct,
+                last_move_line_id: this.state.lastScannedMoveLine,
+                location_mode: locationMode,
+                is_multi_location: this.state.isMultiLocationMode,
+                preferred_move_line_id: this.state.preferredMoveLineId,
+                create_loose_lines_only: true
+            });
+            this._handleProcessBarcodeResult(res);
+        } catch (e) {
+            this.playSound('error');
+            this.notification.add("Server error", { type: "danger" });
+        } finally {
+            this.state.isProcessing = false;
+        }
+    }
+
+    _handleProcessBarcodeResult(res) {
+        if (res.error) {
+            this.playSound('error');
+            this.notification.add(res.error, { type: "danger" });
+        } else if (res.type === 'location') {
+            this.playSound('success');
+            this.state.scannedLocationId = res.location_id;
+            this.state.scannedLocationName = res.location_name;
+            this.state.lastScanTarget = "location";
+            this.notification.add(`Đã chọn vị trí: ${res.location_name}`, { type: "success" });
+            
+            this.state.lastScannedProduct = null;
+            this.state.lastScannedMoveLine = null;
+            this.state.pickingRefreshTick += 1;
+        } else {
+            this.playSound('success');
+            if (res.override_location) {
+                this.notification.add(`Đã đổi vị trí lấy hàng sang ${res.location_name || this.state.scannedLocationName}: ${res.product_name}`, { type: "success" });
+            } else {
+                this.notification.add(`Scanned ${res.product_name}`, { type: "success" });
+            }
+            this.state.lastScannedProduct = res.product_id;
+            this.state.lastScannedMoveLine = res.move_line_id || null;
+            this.state.lastScanTarget = "product";
+            this.state.pickingRefreshTick += 1;
+        }
+    }
+
     async processBarcode(barcode) {
         if (!barcode) return;
         
@@ -375,7 +465,16 @@ export class BarcodeApp extends Component {
                     is_multi_location: this.state.isMultiLocationMode,
                     preferred_move_line_id: this.state.preferredMoveLineId
                 });
-                if (res.error) {
+                if (res.action === 'ask_partial_package') {
+                    this.playSound('error');
+                    this.state.partialPackageData = {
+                        barcode: barcode,
+                        reason: res.reason,
+                        packageName: res.package_name,
+                        packageId: res.package_id
+                    };
+                    this.state.showPartialPackagePopup = true;
+                } else if (res.error) {
                     this.playSound('error');
                     this.notification.add(res.error, { type: "danger" });
                 } else if (res.type === 'location') {
