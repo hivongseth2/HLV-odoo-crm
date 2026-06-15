@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
     <t t-name="hlv_barcode_shipper.GoogleMapPicker" owl="1">
-        <div style="width: 100%; height: 100%; position: relative;">
+        <div class="d-block w-100" style="position: relative; min-height: 400px;">
             <div t-ref="mapContainer" style="width: 100%; height: 100%; min-height: 400px; border-radius: 8px;"></div>
-            <div style="position: absolute; top: 10px; left: 50%; transform: translateX(-50%); background: white; padding: 5px 15px; border-radius: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); font-weight: bold; pointer-events: none; z-index: 10; font-size: 14px; color: #333;">
+            <div style="position: absolute; top: 10px; left: 50%; transform: translateX(-50%); background: white; padding: 5px 15px; border-radius: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); font-weight: bold; pointer-events: none; z-index: 10; font-size: 14px; color: #333; white-space: nowrap;">
                 Kéo thả ghim hoặc bấm vào bản đồ để chọn vị trí
             </div>
         </div>
