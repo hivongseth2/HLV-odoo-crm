@@ -26,6 +26,13 @@
                                  help="Gửi email/thông báo cho khách khi được tích điểm">
                             <field name="loyalty_send_notification"/>
                         </setting>
+                        <setting id="loyalty_notification_users_setting"
+                                 string="Người nhận thông báo đổi thưởng"
+                                 help="Các user nội bộ nhận noti bus khi có yêu cầu đổi thưởng hoặc khách đổi quà">
+                            <field name="loyalty_notification_user_ids"
+                                   widget="many2many_tags"
+                                   options="{'no_create': True}"/>
+                        </setting>
                         <setting id="loyalty_portal_default_password_setting"
                                  string="Mật khẩu mặc định Portal"
                                  help="Mật khẩu mặc định gán khi tạo tài khoản Portal Loyalty mới (tối thiểu 6 ký tự)">

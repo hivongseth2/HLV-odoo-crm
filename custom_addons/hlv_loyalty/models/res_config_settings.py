@@ -25,6 +25,11 @@ class ResConfigSettings(models.TransientModel):
         readonly=False,
         string='Gửi thông báo tích điểm',
     )
+    loyalty_notification_user_ids = fields.Many2many(
+        related='company_id.loyalty_notification_user_ids',
+        readonly=False,
+        string='Người nhận thông báo Loyalty',
+    )
     loyalty_portal_default_password = fields.Char(
         related='company_id.loyalty_portal_default_password',
         readonly=False,

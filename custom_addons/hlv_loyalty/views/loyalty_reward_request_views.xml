@@ -135,6 +135,7 @@
                                    decoration-success="state == 'confirmed'"
                                    decoration-muted="state == 'cancelled'"/>
                             <field name="description" string="Mô tả"/>
+                            <field name="point_formula" string="Công thức" optional="hide"/>
                             <field name="company_name" optional="show" string="Chi nhánh"/>
                         </list>
                     </field>
