@@ -249,7 +249,7 @@ body.hlv-route-dragging {
     height: 48px;
     border: 1px solid #d0d7de;
     border-radius: 999px;
-    background: #eef8ff;
+    background: #ffffff;
     color: var(--hlv-primary-blue-dark, #2C5EAD);
     position: relative;
     padding: 0;
@@ -312,13 +312,17 @@ body.hlv-route-dragging {
     height: 100%;
     width: calc(var(--swipe-x, 0) + 44px);
     background: #d0ebff;
-    border-radius: 999px 0 0 999px;
+    border-radius: 999px;
     pointer-events: none;
     z-index: 1;
 }
 
 .hlv-route-swipe.is-animating .swipe-progress-bg {
     transition: width 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.hlv-route-swipe.is-success .swipe-progress-bg {
+    display: none;
 }
 
 .hlv-route-swipe.is-success span {
