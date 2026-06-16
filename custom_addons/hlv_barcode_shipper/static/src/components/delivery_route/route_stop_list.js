@@ -51,7 +51,7 @@ export class RouteStopList extends Component {
                                     <div class="text-success fw-bold w-100 text-center"><i class="fa fa-check-circle me-1"></i>Đã giao hàng</div>
                                 </t>
                                 <t t-else="">
-                                    <button class="btn btn-sm btn-light border rounded-pill px-3"
+                                    <button class="hlv-stop-grip btn btn-sm btn-light border rounded-pill px-3"
                                             t-if="!props.started"
                                             t-on-pointerdown="(ev) => this.onGripPointerDown(stop_index, stop.id, ev)"
                                             title="Nhấn giữ để sắp xếp">

@@ -152,6 +152,13 @@
     box-shadow: 0 2px 5px rgba(31, 41, 51, 0.05);
     touch-action: pan-y;
     user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+}
+
+.hlv-stop-grip {
+    touch-action: none;
+    cursor: grab;
 }
 
 .hlv-route-stop.is-dragging,
