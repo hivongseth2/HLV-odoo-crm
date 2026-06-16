@@ -8,14 +8,16 @@
                 <!-- Header (hidden on main screen) -->
                 <div class="shipper-header" t-if="state.currentView !== 'main'">
                     <div style="display: flex; gap: 8px; align-items: center;">
-                        <button class="btn btn-outline-secondary btn-sm" t-on-click="goBack" style="border: none; padding: 4px 8px; font-size: 1.2rem; color: var(--primary-color);">
+                        <button class="btn btn-outline-secondary btn-sm" t-on-click="goBack" style="border: 1px solid var(--border-color); width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 4px; padding: 0; font-size: 1.2rem; color: var(--primary-color); background: var(--white);">
                             <i class="fa fa-arrow-left"></i>
                         </button>
                     </div>
                     <div class="header-title" style="flex: 1; margin: 0;">
                         <t t-if="state.pickingName and state.pickingName.includes('INT') and state.pickingLocationName">
                             <span style="font-size: 0.85em; display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px;">
-                                <t t-esc="state.pickingLocationName"/> <i class="fa fa-arrow-right" style="margin: 0 4px; font-size: 0.85em;"></i> <t t-esc="state.pickingLocationDestName"/>
+                                <span style="color: var(--success-color); font-weight: 700;"><t t-esc="state.pickingLocationName"/></span> 
+                                <i class="fa fa-arrow-right" style="margin: 0 4px; font-size: 0.85em; color: var(--text-muted);"></i> 
+                                <span style="color: var(--text-muted);"><t t-esc="state.pickingLocationDestName"/></span>
                             </span>
                         </t>
                         <t t-else="">
@@ -35,7 +37,7 @@
                 <!-- Picking Title (Displayed above the camera feed) -->
                 <div class="picking-title-above-camera" t-if="state.currentView === 'picking' and state.pickingName">
                     <div style="display: flex; flex-direction: column;">
-                        <div class="picking-title-main">
+                        <div class="picking-title-main" style="display: flex; align-items: center; gap: 8px;">
                             <span>
                                 <t t-if="state.pickingIsReturn">Trả hàng </t>
                                 <t t-elif="state.pickingIsPick">Lấy hàng </t>
@@ -45,6 +47,9 @@
                                 <t t-else="">Kho </t>
                                 <t t-esc="state.pickingName"/>
                             </span>
+                            <button t-if="state.pickingState !== 'done'" t-on-click="clearPicking" class="btn btn-sm" style="background: var(--danger-bg); color: var(--danger-color); border: 1px solid var(--danger-border); border-radius: 4px; height: 28px; width: 28px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05);" title="Làm lại">
+                                <i class="fa fa-undo"></i>
+                            </button>
                         </div>
                         <t t-if="state.pickingSourceTransferName">
                             <div class="picking-title-sub">
@@ -57,9 +62,6 @@
                             <i class="fa fa-user"></i>
                             <span>Phụ trách: <strong><t t-esc="state.pickingPackerName"/></strong></span>
                         </div>
-                        <button t-if="state.pickingState !== 'done'" t-on-click="clearPicking" class="btn btn-sm" style="background: var(--danger-bg); color: var(--danger-color); border: 1px solid var(--danger-border); border-radius: 20px; height: 32px; width: 32px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05);" title="Làm lại">
-                            <i class="fa fa-undo"></i>
-                        </button>
                     </div>
                 </div>
 
