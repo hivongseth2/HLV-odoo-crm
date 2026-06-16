@@ -6,8 +6,11 @@
 .map-search-container {
     position: absolute;
     top: 10px;
-    left: 170px;
-    right: 260px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: calc(100% - 450px); /* Đảm bảo không đè lên nút Map/Satellite (trái) và chữ (phải) */
+    min-width: 250px;
+    max-width: 450px;
     z-index: 10;
     display: flex;
     gap: 5px;

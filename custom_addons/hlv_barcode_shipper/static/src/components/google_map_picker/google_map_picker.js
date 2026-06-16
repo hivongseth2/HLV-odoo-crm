@@ -82,6 +82,9 @@ export class GoogleMapPicker extends Component {
                         fields: ["geometry", "name", "formatted_address"],
                     });
                     
+                    // Ưu tiên hiển thị kết quả gần khu vực đang xem trên bản đồ (tức là VN)
+                    autocomplete.bindTo("bounds", this.map);
+                    
                     autocomplete.addListener("place_changed", () => {
                         this.placeChangedFired = true;
                         setTimeout(() => { this.placeChangedFired = false; }, 500);
@@ -126,7 +129,10 @@ export class GoogleMapPicker extends Component {
         if (!address) return;
         
         const geocoder = new window.google.maps.Geocoder();
-        geocoder.geocode({ address: address }, (results, status) => {
+        geocoder.geocode({ 
+            address: address,
+            region: "VN" // Ưu tiên Việt Nam nhưng không giới hạn
+        }, (results, status) => {
             if (status === "OK" && results && results.length > 0) {
                 const pos = results[0].geometry.location;
                 this.map.setCenter(pos);
