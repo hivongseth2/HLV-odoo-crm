@@ -44,3 +44,37 @@
         display: none; /* Ẩn dòng chữ nhắc nhở trên mobile để tiết kiệm diện tích */
     }
 }
+
+/* Custom Autocomplete Dropdown */
+.custom-pac-container {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 48px; /* Chừa nút Tìm */
+    margin-top: 5px;
+    background-color: white;
+    border-radius: 4px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1), 0 1px 3px rgba(0,0,0,0.08);
+    border: 1px solid #ccc;
+    z-index: 100000;
+    max-height: 250px;
+    overflow-y: auto;
+}
+
+.custom-pac-item {
+    padding: 10px 15px;
+    cursor: pointer;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 14px;
+    color: #333;
+    display: flex;
+    align-items: center;
+}
+
+.custom-pac-item:last-child {
+    border-bottom: none;
+}
+
+.custom-pac-item:hover {
+    background-color: #f8f9fa;
+}

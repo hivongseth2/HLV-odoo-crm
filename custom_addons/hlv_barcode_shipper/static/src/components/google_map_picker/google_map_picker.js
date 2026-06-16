@@ -2,7 +2,7 @@
 
 import { registry } from "@web/core/registry";
 import { standardFieldProps } from "@web/views/fields/standard_field_props";
-import { Component, onMounted, useRef } from "@odoo/owl";
+import { Component, onMounted, useRef, useState } from "@odoo/owl";
 import { loadGoogleMaps } from "@hlv_barcode_shipper/services/google_maps_utils";
 import { useService } from "@web/core/utils/hooks";
 
@@ -15,6 +15,11 @@ export class GoogleMapPicker extends Component {
         this.searchInputRef = useRef("searchInput");
         this.coordDisplayRef = useRef("coordDisplay");
         this.orm = useService("orm");
+        
+        this.state = useState({ suggestions: [], showSuggestions: false });
+        this.debounceTimeout = null;
+        this.placesService = null;
+        this.autocompleteService = null;
         
         onMounted(async () => {
             // First try to get the API key from Barcode Shipper company settings
@@ -74,36 +79,13 @@ export class GoogleMapPicker extends Component {
                     const lLng = typeof pos.lng === "function" ? pos.lng() : pos.lng;
                     this.props.record.update({ latitude: lLat, longitude: lLng });
                     this.updateCoordDisplay(lLat, lLng);
+                    this.state.showSuggestions = false;
                 });
 
-                // Tích hợp Places Autocomplete
-                if (maps.places && maps.places.Autocomplete) {
-                    const autocomplete = new maps.places.Autocomplete(this.searchInputRef.el, {
-                        fields: ["geometry", "name", "formatted_address"],
-                    });
-                    
-                    // Ưu tiên hiển thị kết quả gần khu vực đang xem trên bản đồ (tức là VN)
-                    autocomplete.bindTo("bounds", this.map);
-                    
-                    autocomplete.addListener("place_changed", () => {
-                        this.placeChangedFired = true;
-                        setTimeout(() => { this.placeChangedFired = false; }, 500);
-                        
-                        const place = autocomplete.getPlace();
-                        if (!place.geometry || !place.geometry.location) {
-                            return; // Fallback to searchAddress when user presses Enter
-                        }
-                        
-                        const pos = place.geometry.location;
-                        this.map.setCenter(pos);
-                        this.map.setZoom(18);
-                        this.marker.setPosition(pos);
-                        
-                        const lLat = typeof pos.lat === "function" ? pos.lat() : pos.lat;
-                        const lLng = typeof pos.lng === "function" ? pos.lng() : pos.lng;
-                        this.props.record.update({ latitude: lLat, longitude: lLng });
-                        this.updateCoordDisplay(lLat, lLng);
-                    });
+                // Khởi tạo Custom Autocomplete Service
+                if (maps.places && maps.places.AutocompleteService) {
+                    this.autocompleteService = new maps.places.AutocompleteService();
+                    this.placesService = new maps.places.PlacesService(this.map);
                 }
                 
                 // Initialize display
@@ -112,15 +94,63 @@ export class GoogleMapPicker extends Component {
         });
     }
 
+    onInputSearch(ev) {
+        const val = ev.target.value;
+        if (!val) {
+            this.state.suggestions = [];
+            this.state.showSuggestions = false;
+            return;
+        }
+
+        if (this.debounceTimeout) {
+            clearTimeout(this.debounceTimeout);
+        }
+
+        this.debounceTimeout = setTimeout(() => {
+            if (this.autocompleteService) {
+                const request = {
+                    input: val,
+                    bounds: this.map ? this.map.getBounds() : undefined,
+                };
+                this.autocompleteService.getPlacePredictions(request, (predictions, status) => {
+                    if (status === window.google.maps.places.PlacesServiceStatus.OK && predictions) {
+                        this.state.suggestions = predictions;
+                        this.state.showSuggestions = true;
+                    } else {
+                        this.state.suggestions = [];
+                        this.state.showSuggestions = false;
+                    }
+                });
+            }
+        }, 500);
+    }
+
+    selectSuggestion(suggestion) {
+        this.searchInputRef.el.value = suggestion.description;
+        this.state.showSuggestions = false;
+        
+        if (this.placesService) {
+            this.placesService.getDetails({ placeId: suggestion.place_id, fields: ['geometry', 'name'] }, (place, status) => {
+                if (status === window.google.maps.places.PlacesServiceStatus.OK && place.geometry && place.geometry.location) {
+                    const pos = place.geometry.location;
+                    this.map.setCenter(pos);
+                    this.map.setZoom(18);
+                    this.marker.setPosition(pos);
+                    
+                    const lLat = typeof pos.lat === "function" ? pos.lat() : pos.lat;
+                    const lLng = typeof pos.lng === "function" ? pos.lng() : pos.lng;
+                    this.props.record.update({ latitude: lLat, longitude: lLng });
+                    this.updateCoordDisplay(lLat, lLng);
+                }
+            });
+        }
+    }
+
     onKeydownSearch(ev) {
         if (ev.key === "Enter") {
             ev.preventDefault();
-            // Delay to allow place_changed to fire first if user selected from dropdown
-            setTimeout(() => {
-                if (!this.placeChangedFired) {
-                    this.searchAddress();
-                }
-            }, 200);
+            this.state.showSuggestions = false;
+            this.searchAddress();
         }
     }
 
