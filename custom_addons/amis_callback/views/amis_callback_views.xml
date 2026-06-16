@@ -143,6 +143,7 @@
                     </group>
                     <group>
                         <group>
+                            <field name="sync_purchase_order_enabled"/>
                             <field name="sync_incoming_po_enabled"/>
                             <field name="sync_outgoing_so_enabled"/>
                             <field name="sync_shopee_only"/>
@@ -305,6 +306,45 @@
         </field>
     </record>
 
+    <!-- Purchase Order View inherit - add MISA pu_order sync -->
+    <record id="view_purchase_order_form_amis_inherit" model="ir.ui.view">
+        <field name="name">purchase.order.form.amis.inherit</field>
+        <field name="model">purchase.order</field>
+        <field name="inherit_id" ref="purchase.purchase_order_form"/>
+        <field name="arch" type="xml">
+            <data>
+                <xpath expr="//div[@name='button_box']" position="inside">
+                    <button name="action_sync_misa_purchase_order" type="object"
+                            class="oe_stat_button" icon="fa-cloud-upload"
+                            invisible="state not in ('purchase','done') or misa_purchase_order_synced">
+                        <div class="o_field_widget o_stat_info">
+                            <span class="o_stat_text">Sync</span>
+                            <span class="o_stat_text">PO MISA</span>
+                        </div>
+                    </button>
+                    <button name="action_reset_misa_purchase_order" type="object"
+                            class="oe_stat_button" icon="fa-refresh"
+                            invisible="not misa_purchase_order_synced"
+                            confirm="Reset se cho phep sync lai Don mua hang MISA. Tiep tuc?">
+                        <div class="o_field_widget o_stat_info">
+                            <span class="o_stat_text">Reset</span>
+                            <span class="o_stat_text">PO MISA</span>
+                        </div>
+                    </button>
+                </xpath>
+                <xpath expr="//notebook" position="inside">
+                    <page string="MISA" name="misa_purchase_info"
+                          invisible="not misa_purchase_order_synced and not misa_purchase_order_org_refid">
+                        <group string="Don mua hang (pu_order)">
+                            <field name="misa_purchase_order_synced" readonly="1"/>
+                            <field name="misa_purchase_order_org_refid" readonly="1"/>
+                        </group>
+                    </page>
+                </xpath>
+            </data>
+        </field>
+    </record>
+
     <!-- Sale Order View inherit - add SAInvoice button -->
     <record id="view_sale_order_form_amis_inherit" model="ir.ui.view">
         <field name="name">sale.order.form.amis.inherit</field>
@@ -454,6 +494,7 @@
                 <field name="create_date" string="Tạo lúc"/>
                 <field name="picking_id" optional="show"/>
                 <field name="sale_order_id" optional="show"/>
+                <field name="purchase_order_id" optional="show"/>
                 <field name="direction"/>
                 <field name="status"/>
                 <field name="retry_count"/>
@@ -484,6 +525,7 @@
                         <group>
                             <field name="picking_id"/>
                             <field name="sale_order_id"/>
+                            <field name="purchase_order_id"/>
                             <field name="direction"/>
                             <field name="status"/>
                         </group>
