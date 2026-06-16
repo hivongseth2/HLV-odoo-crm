@@ -7,24 +7,25 @@
             <div t-attf-class="shipper-container #{state.currentView === 'main' ? 'main-view' : 'sub-view'}" style="padding: 0 4px;">
                 <!-- Header (hidden on main screen) -->
                 <div class="shipper-header" t-if="state.currentView !== 'main'">
-                    <div class="header-title">
-                        <i class="fa fa-boxes"></i>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <button class="btn btn-outline-secondary btn-sm" t-on-click="goBack" style="border: none; padding: 4px 8px; font-size: 1.2rem; color: var(--primary-color);">
+                            <i class="fa fa-arrow-left"></i>
+                        </button>
+                    </div>
+                    <div class="header-title" style="flex: 1; margin: 0;">
                         <t t-if="state.pickingName and state.pickingName.includes('INT') and state.pickingLocationName">
                             <span style="font-size: 0.85em; display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px;">
                                 <t t-esc="state.pickingLocationName"/> <i class="fa fa-arrow-right" style="margin: 0 4px; font-size: 0.85em;"></i> <t t-esc="state.pickingLocationDestName"/>
                             </span>
                         </t>
                         <t t-else="">
-                            Kho <t t-esc="state.warehouseCode || 'HLV'"/>
+                            <i class="fa fa-boxes" style="margin-right: 6px;"></i> Kho <t t-esc="state.warehouseCode || 'HLV'"/>
                         </t>
                     </div>
                     <div style="display: flex; gap: 8px; align-items: center;">
                         <button t-if="state.currentView !== 'picking' and state.currentView !== 'main'" t-on-click="toggleCamera" t-attf-class="btn barcode-camera-btn compact #{state.cameraManuallyOff ? 'is-off' : 'is-on'}" title="Bật/Tắt Camera">
                             <i class="fa fa-camera" style="font-size: 1rem;"></i>
                         </button>
-                        <div class="user-info" t-if="state.currentView === 'picking' and state.pickingId and state.pickingState !== 'done'" t-on-click="clearPicking" style="background: var(--danger-bg); border: 1px solid var(--danger-border); color: var(--danger-color); border-radius: 20px; font-weight: 600;" title="Làm lại">
-                            <i class="fa fa-undo"></i>
-                        </div>
                         <div class="user-info" t-on-click="goToMain" style="background: var(--white); border: 1px solid var(--border-color); color: var(--primary-color); border-radius: 20px; font-weight: 600;" title="Trang chủ">
                             <i class="fa fa-home"></i>
                         </div>
@@ -51,14 +52,13 @@
                             </div>
                         </t>
                     </div>
-                    <div class="picking-title-actions">
+                    <div class="picking-title-actions" style="display: flex; gap: 6px; align-items: center;">
                         <div t-if="state.pickingPackerName" class="picking-packer-badge" title="Người được phân công xử lý phiếu">
                             <i class="fa fa-user"></i>
                             <span>Phụ trách: <strong><t t-esc="state.pickingPackerName"/></strong></span>
                         </div>
-                        <!-- Toggle Camera Button next to Picking Title -->
-                        <button t-if="state.pickingState !== 'done'" t-attf-class="btn barcode-camera-btn compact #{state.cameraManuallyOff ? 'is-off' : 'is-on'}" t-on-click="toggleCamera" title="Bật/Tắt Camera">
-                            <i class="fa fa-camera" style="font-size: 1.15rem;"></i>
+                        <button t-if="state.pickingState !== 'done'" t-on-click="clearPicking" class="btn btn-sm" style="background: var(--danger-bg); color: var(--danger-color); border: 1px solid var(--danger-border); border-radius: 20px; height: 32px; width: 32px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05);" title="Làm lại">
+                            <i class="fa fa-undo"></i>
                         </button>
                     </div>
                 </div>
@@ -176,7 +176,7 @@
                     </div>
                     
                     <!-- Picking View -->
-                    <PickingScanner t-if="state.currentView === 'picking'" t-key="state.pickingId" pickingId="state.pickingId" onBack="() => this.goBack()" onSelectPicking="(id, name) => this.selectPicking(id, name)" onStateLoaded="(state) => this.onPickingStateLoaded(state)" onPickingLoaded="(data) => this.onPickingLoaded(data)" onValidated="() => this._executeGoToMain()" onClearScanState="() => this.clearScanState()" lastScannedProduct="state.lastScannedProduct" lastScannedMoveLine="state.lastScannedMoveLine" lastScanTarget="state.lastScanTarget" preferredMoveLineId="state.preferredMoveLineId" onPreferredMoveLineChange="(id) => this.setPreferredMoveLine(id)" scannedLocationName="state.scannedLocationName" refreshTick="state.pickingRefreshTick" scanMode="state.scanMode" isMultiLocationMode="state.isMultiLocationMode" onToggleScanMode="(mode) => this.toggleScanMode(mode)" onDirectGoToMain="() => this._executeGoToMain()"/>
+                    <PickingScanner t-if="state.currentView === 'picking'" t-key="state.pickingId" pickingId="state.pickingId" onBack="() => this.goBack()" onSelectPicking="(id, name) => this.selectPicking(id, name)" onStateLoaded="(state) => this.onPickingStateLoaded(state)" onPickingLoaded="(data) => this.onPickingLoaded(data)" onValidated="() => this._executeGoToMain()" onClearScanState="() => this.clearScanState()" lastScannedProduct="state.lastScannedProduct" lastScannedMoveLine="state.lastScannedMoveLine" lastScanTarget="state.lastScanTarget" preferredMoveLineId="state.preferredMoveLineId" onPreferredMoveLineChange="(id) => this.setPreferredMoveLine(id)" scannedLocationName="state.scannedLocationName" refreshTick="state.pickingRefreshTick" scanMode="state.scanMode" isMultiLocationMode="state.isMultiLocationMode" onToggleScanMode="(mode) => this.toggleScanMode(mode)" onDirectGoToMain="() => this._executeGoToMain()" onToggleCamera="() => this.toggleCamera()" cameraManuallyOff="state.cameraManuallyOff" />
                     
                     <!-- Move Component -->
                     <LocationMove t-if="state.currentView === 'move'" productId="state.recordId" prefillLocationBarcode="state.prefillLocationBarcode" prefillLocationName="state.prefillLocationName" sourceQty="state.sourceQty" productName="state.productName" destWarehouseId="state.destWarehouseId" destLocationId="state.destLocationId" onBack="() => this.goBack()" onSuccess="() => this.onMoveSuccess()" registerScanner="(cb) => this.registerScanner(cb)"/>
