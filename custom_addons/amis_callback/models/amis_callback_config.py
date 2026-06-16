@@ -68,6 +68,11 @@ class AmisCallbackConfig(models.Model):
         default=False,
         help='Bật để tự động đẩy phiếu nhập kho (incoming) có nguồn từ đơn mua hàng lên MISA.',
     )
+    sync_purchase_order_enabled = fields.Boolean(
+        string='Đồng bộ đơn mua hàng',
+        default=False,
+        help='Bật để tự động đẩy purchase.order đã xác nhận lên MISA dưới dạng Đơn mua hàng (pu_order).',
+    )
     sync_outgoing_so_enabled = fields.Boolean(
         string='Đồng bộ phiếu xuất kho từ SO',
         default=False,
@@ -786,6 +791,17 @@ class AmisCallbackConfig(models.Model):
         return False
 
     def push_inward_voucher(self, voucher_payload, dictionary_items=None):
+        self.ensure_one()
+        payload = {
+            'app_id': self.app_id,
+            'org_company_code': self.org_company_code,
+            'voucher': [voucher_payload],
+            'dictionary': dictionary_items or [],
+        }
+        return self._post_actopen('/apir/sync/actopen/save', payload, include_token=True)
+
+    def push_purchase_order(self, voucher_payload, dictionary_items=None):
+        """Push pu_order (Don mua hang, voucher_type=21) len MISA."""
         self.ensure_one()
         payload = {
             'app_id': self.app_id,

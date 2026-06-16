@@ -19,7 +19,11 @@ class AmisSyncJob(models.Model):
     sale_order_id = fields.Many2one(
         'sale.order', string='Đơn bán hàng', required=False, ondelete='cascade', index=True,
     )
+    purchase_order_id = fields.Many2one(
+        'purchase.order', string='Đơn mua hàng', required=False, ondelete='cascade', index=True,
+    )
     direction = fields.Selection([
+        ('purchase_order', 'Đơn mua hàng (pu_order)'),
         ('incoming', 'Nhập kho (InwardVoucher)'),
         ('outgoing', 'Xuất kho / Bán hàng (SAVoucher)'),
         ('sa_invoice', 'Hóa đơn bán hàng (SAInvoice)'),
@@ -61,8 +65,14 @@ class AmisSyncJob(models.Model):
         self.ensure_one()
         pick = self.picking_id
         so = self.sale_order_id
+        po = self.purchase_order_id
         try:
-            if self.direction == 'incoming':
+            if self.direction == 'purchase_order':
+                if po:
+                    po._sync_purchase_order_to_misa()
+                else:
+                    raise ValueError('purchase_order job thieu purchase_order_id')
+            elif self.direction == 'incoming':
                 pick._sync_incoming_po_to_misa()
             elif self.direction == 'outgoing':
                 pick._sync_outgoing_so_to_misa()
