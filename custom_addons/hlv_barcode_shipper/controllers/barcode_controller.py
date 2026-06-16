@@ -751,15 +751,27 @@ class BarcodeShipperController(http.Controller):
                 return access
 
             uid = request.env.user.id
-            pickings = request.env["stock.picking"].sudo().search([
+            from datetime import datetime
+            today = datetime.now()
+            today_start = today.replace(hour=0, minute=0, second=0) - VN_OFFSET
+
+            domain = [
                 ("shipper_received", "=", True),
                 ("shipper_returned", "=", False),
                 ("picking_type_id.code", "=", "outgoing"),
-                ("state", "in", ["assigned", "partially_available"]),
                 "|",
                 ("shipper_received_by", "=", uid),
                 ("shipper_user_id", "=", uid),
-            ], order="shipper_receive_time desc, scheduled_date asc, name asc")
+                "|",
+                ("state", "in", ["assigned", "partially_available"]),
+                "&",
+                ("state", "=", "done"),
+                ("date_done", ">=", today_start),
+            ]
+
+            pickings = request.env["stock.picking"].sudo().search(
+                domain, order="state desc, shipper_receive_time desc, scheduled_date asc, name asc"
+            )
 
             stops = []
             missing_address = []
@@ -799,6 +811,7 @@ class BarcodeShipperController(http.Controller):
                     "address_source": address_source,
                     "lat": lat,
                     "lng": lng,
+                    "state": picking.state,
                     "item_count": item_count,
                     "receive_time": (
                         (picking.shipper_receive_time + VN_OFFSET).strftime("%H:%M %d/%m")

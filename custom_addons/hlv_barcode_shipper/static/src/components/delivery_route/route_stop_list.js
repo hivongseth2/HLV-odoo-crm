@@ -33,33 +33,37 @@ export class RouteStopList extends Component {
                              t-att-class="{ 'is-dragging': draggingId === stop.id }">
                         <div class="hlv-stop-order"><t t-esc="stop_index + 1"/></div>
                         <div class="hlv-stop-body">
-                            <div class="hlv-stop-title">
-                                <strong><t t-esc="stop.picking_name"/></strong>
-                                <span class="hlv-stop-badge">
+                            <div class="d-flex justify-content-between align-items-start mb-1">
+                                <div>
+                                    <div class="hlv-stop-partner"><t t-esc="stop.partner_name || stop.picking_name"/></div>
+                                    <div class="hlv-stop-origin text-muted mt-1" style="font-size: 0.75rem;"><i class="fa fa-file-text-o me-1"></i><t t-esc="stop.picking_name"/><t t-if="stop.origin"> - <t t-esc="stop.origin"/></t></div>
+                                </div>
+                                <span class="hlv-stop-badge flex-shrink-0 ms-2">
                                     <i class="fa fa-cube me-1"></i><t t-esc="stop.item_count"/> kiện
                                 </span>
                             </div>
-                            <div t-if="stop.origin" class="hlv-stop-origin">
-                                <i class="fa fa-file-text-o me-1"></i><t t-esc="stop.origin"/>
+                            <div class="hlv-stop-address text-muted mb-2 mt-2" style="font-size: 0.8rem; line-height: 1.3;">
+                                <i class="fa fa-map-marker me-1 text-danger"></i><t t-esc="stop.address"/>
                             </div>
-                            <div class="hlv-stop-partner"><t t-esc="stop.partner_name"/></div>
-                            <div class="hlv-stop-address">
-                                <i class="fa fa-map-marker me-1"></i><t t-esc="stop.address"/>
+                            
+                            <div class="d-flex justify-content-between align-items-center mt-3 pt-2 border-top">
+                                <t t-if="stop.state === 'done'">
+                                    <div class="text-success fw-bold w-100 text-center"><i class="fa fa-check-circle me-1"></i>Đã giao hàng</div>
+                                </t>
+                                <t t-else="">
+                                    <button class="btn btn-sm btn-light border rounded-pill px-3"
+                                            t-if="!props.started"
+                                            t-on-pointerdown="(ev) => this.onGripPointerDown(stop_index, stop.id, ev)"
+                                            title="Nhấn giữ để sắp xếp">
+                                        <i class="fa fa-bars me-1 text-muted"></i> Sắp xếp
+                                    </button>
+                                    <button class="btn btn-sm btn-primary rounded-pill px-3"
+                                            t-on-click.stop="() => this.openNavigate(stop)"
+                                            title="Mở chỉ đường">
+                                        <i class="fa fa-location-arrow me-1"></i> Chỉ đường
+                                    </button>
+                                </t>
                             </div>
-                        </div>
-                        <div class="hlv-stop-actions">
-                            <button class="hlv-stop-nav"
-                                    t-on-click.stop="() => this.openNavigate(stop)"
-                                    title="Mở chỉ đường">
-                                <i class="fa fa-location-arrow"></i>
-                                <span>Chỉ đường</span>
-                            </button>
-                            <button class="hlv-stop-grip"
-                                    t-if="!props.started"
-                                    t-on-pointerdown="(ev) => this.onGripPointerDown(stop_index, stop.id, ev)"
-                                    title="Nhấn giữ để sắp xếp">
-                                <i class="fa fa-bars"></i>
-                            </button>
                         </div>
                     </article>
                 </t>
