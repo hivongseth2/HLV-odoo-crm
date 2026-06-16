@@ -144,12 +144,12 @@
                         </div>
                     </div>
                     
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 4px; border-bottom: 1px solid var(--border-color);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-top: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color);">
                         <div style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">
                             Danh sách sản phẩm
                         </div>
-                        <button t-if="state.picking.state !== 'done'" t-attf-class="btn barcode-camera-btn compact #{props.cameraManuallyOff ? 'is-off' : 'is-on'}" t-on-click="props.onToggleCamera" title="Bật/Tắt Camera" style="margin: 0; padding: 0; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 4px;">
-                            <i class="fa fa-camera" style="font-size: 1rem;"></i>
+                        <button t-if="state.picking.state !== 'done'" t-attf-class="btn barcode-camera-btn compact #{props.cameraManuallyOff ? 'is-off' : 'is-on'}" t-on-click="props.onToggleCamera" title="Bật/Tắt Camera" style="margin: 0; padding: 0; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 4px;">
+                            <i class="fa fa-camera" style="font-size: 1.1rem;"></i>
                         </button>
                     </div>
                     <div class="items-list" style="margin-top: 0;">

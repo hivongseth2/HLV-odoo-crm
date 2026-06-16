@@ -7,8 +7,8 @@
             <div t-attf-class="shipper-container #{state.currentView === 'main' ? 'main-view' : 'sub-view'}" style="padding: 0 4px;">
                 <!-- Header (hidden on main screen) -->
                 <div class="shipper-header" t-if="state.currentView !== 'main'">
-                    <div style="display: flex; gap: 8px; align-items: center;">
-                        <button class="btn btn-outline-secondary btn-sm" t-on-click="goBack" style="border: 1px solid var(--border-color); width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 4px; padding: 0; font-size: 1.2rem; color: var(--primary-color); background: var(--white);">
+                    <div style="display: flex; gap: 8px; align-items: center; margin-right: 8px; margin-left: 4px;">
+                        <button class="btn btn-outline-secondary btn-sm" t-on-click="goBack" style="border: 1px solid var(--border-color); width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; border-radius: 6px; padding: 0; font-size: 1.3rem; color: var(--primary-color); background: var(--white);">
                             <i class="fa fa-arrow-left"></i>
                         </button>
                     </div>
