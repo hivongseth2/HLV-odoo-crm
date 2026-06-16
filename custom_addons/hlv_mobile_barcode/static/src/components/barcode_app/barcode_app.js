@@ -749,6 +749,10 @@ export class BarcodeApp extends Component {
         this.state.destWarehouseId = destWarehouseId;
         this.state.destLocationId = destLocationId;
         this.state.currentView = 'move';
+        
+        setTimeout(async () => {
+            await this.startPersistentCamera(false);
+        }, 200);
     }
 
     promptMoveWarehouse(productId, locBarcode, locName, qty, productName) {
@@ -772,6 +776,7 @@ export class BarcodeApp extends Component {
         this.resetDestPopupState();
         this.state.showWarehouseSelectPopup = true;
         this.focusDestLocationInput();
+        setTimeout(() => this.openDestLocationCamera(), 200);
     }
 
     promptMultiLocationMove() {
@@ -780,6 +785,7 @@ export class BarcodeApp extends Component {
         this.resetDestPopupState();
         this.state.showWarehouseSelectPopup = true;
         this.focusDestLocationInput();
+        setTimeout(() => this.openDestLocationCamera(), 200);
     }
 
     resetDestPopupState() {
@@ -924,6 +930,8 @@ export class BarcodeApp extends Component {
                 this.state.pickingIsPutaway = false;
                 this.state.scannedLocationId = isMultiLocation ? null : res.location_id;
                 this.state.scannedLocationName = isMultiLocation ? "" : res.location_name;
+                this.state.pickingLocationName = res.location_name;
+                this.state.pickingLocationDestName = res.location_dest_name;
                 this.state.currentView = 'picking';
                 this.state.isMultiLocationMode = isMultiLocation;
                 this.state.preferredMoveLineId = null;
@@ -994,6 +1002,8 @@ export class BarcodeApp extends Component {
                     this.state.scannedLocationId = data.location_id;
                     this.state.scannedLocationName = data.location_name;
                 }
+                this.state.pickingLocationName = data.location_name;
+                this.state.pickingLocationDestName = data.location_dest_name;
             }
             
             setTimeout(async () => {

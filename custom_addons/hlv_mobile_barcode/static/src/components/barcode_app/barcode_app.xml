@@ -9,8 +9,10 @@
                 <div class="shipper-header" t-if="state.currentView !== 'main'">
                     <div class="header-title">
                         <i class="fa fa-boxes"></i>
-                        <t t-if="state.pickingName and state.pickingName.includes('INT') and state.scannedLocationName">
-                            <t t-esc="state.scannedLocationName"/>
+                        <t t-if="state.pickingName and state.pickingName.includes('INT') and state.pickingLocationName">
+                            <span style="font-size: 0.85em; display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px;">
+                                <t t-esc="state.pickingLocationName"/> <i class="fa fa-long-arrow-alt-right"/> <t t-esc="state.pickingLocationDestName"/>
+                            </span>
                         </t>
                         <t t-else="">
                             Kho <t t-esc="state.warehouseCode || 'HLV'"/>
@@ -20,11 +22,11 @@
                         <button t-if="state.currentView !== 'picking' and state.currentView !== 'main'" t-on-click="toggleCamera" t-attf-class="btn barcode-camera-btn compact #{state.cameraManuallyOff ? 'is-off' : 'is-on'}" title="Bật/Tắt Camera">
                             <i class="fa fa-camera" style="font-size: 1rem;"></i>
                         </button>
-                        <div class="user-info" t-if="state.currentView === 'picking' and state.pickingId and state.pickingState !== 'done'" t-on-click="clearPicking" style="background: var(--danger-bg); border: 1px solid var(--danger-border); color: var(--danger-color); border-radius: 20px; font-weight: 600;">
-                            <i class="fa fa-undo"></i> Làm lại
+                        <div class="user-info" t-if="state.currentView === 'picking' and state.pickingId and state.pickingState !== 'done'" t-on-click="clearPicking" style="background: var(--danger-bg); border: 1px solid var(--danger-border); color: var(--danger-color); border-radius: 20px; font-weight: 600;" title="Làm lại">
+                            <i class="fa fa-undo"></i>
                         </div>
-                        <div class="user-info" t-on-click="goToMain" style="background: var(--white); border: 1px solid var(--border-color); color: var(--primary-color); border-radius: 20px; font-weight: 600;">
-                            <i class="fa fa-home"></i> Trang chủ
+                        <div class="user-info" t-on-click="goToMain" style="background: var(--white); border: 1px solid var(--border-color); color: var(--primary-color); border-radius: 20px; font-weight: 600;" title="Trang chủ">
+                            <i class="fa fa-home"></i>
                         </div>
                     </div>
                 </div>

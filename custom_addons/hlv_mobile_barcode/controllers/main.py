@@ -1164,6 +1164,7 @@ class HLVMobileBarcodeController(http.Controller):
             'warehouse_code': picking.picking_type_id.warehouse_id.code or 'HLV',
             'location_id': picking.location_id.id,
             'location_name': picking.location_id.display_name or picking.location_id.name,
+            'location_dest_name': picking.location_dest_id.display_name or picking.location_dest_id.name,
             'lines': lines,
             'packages': packages,
             'linked_picking_id': linked_picking_id,
@@ -1314,7 +1315,8 @@ class HLVMobileBarcodeController(http.Controller):
             'picking_name': picking_int.name, 
             'warehouse_code': picking_int.picking_type_id.warehouse_id.code or 'HLV',
             'location_id': source_loc.id,
-            'location_name': source_loc.display_name or source_loc.name
+            'location_name': source_loc.display_name or source_loc.name,
+            'location_dest_name': picking_int.location_dest_id.display_name or picking_int.location_dest_id.name
         }
 
     @http.route('/hlv_mobile_barcode/process_barcode', type='json', auth='user')
