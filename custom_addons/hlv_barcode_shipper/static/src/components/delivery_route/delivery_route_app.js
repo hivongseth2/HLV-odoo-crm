@@ -106,6 +106,7 @@ export class DeliveryRouteApp extends Component {
                             t-on-touchmove="onFabTouchMove"
                             t-on-touchend="onFabTouchEnd"
                             t-on-pointerdown="onFabPointerDown">
+                        <div class="swipe-progress-bg"></div>
                         <span>
                             <i t-if="!state.isSuccess" class="fa fa-angle-double-right"></i>
                             <i t-else="" class="fa fa-check"></i>

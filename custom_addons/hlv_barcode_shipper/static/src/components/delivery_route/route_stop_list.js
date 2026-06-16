@@ -141,22 +141,15 @@ export class RouteStopList extends Component {
         const startX = ev.clientX;
         const startY = ev.clientY;
 
-        this.longPressTimer = setTimeout(() => {
-            this.draggingId = id;
-            this.draggingIndex = index;
-            this.lastTargetIndex = index;
-            grip.setPointerCapture?.(ev.pointerId);
-            document.body.classList.add("hlv-route-dragging");
-            card?.classList.add("is-dragging");
-            this.createDragGhost(card, ev.clientX, ev.clientY);
-        }, 140);
+        this.draggingId = id;
+        this.draggingIndex = index;
+        this.lastTargetIndex = index;
+        grip.setPointerCapture?.(ev.pointerId);
+        document.body.classList.add("hlv-route-dragging");
+        card?.classList.add("is-dragging");
+        this.createDragGhost(card, ev.clientX, ev.clientY);
 
         const onMove = (moveEv) => {
-            const moved = Math.abs(moveEv.clientX - startX) + Math.abs(moveEv.clientY - startY);
-            if (!this.draggingId && moved > 10) {
-                clearTimeout(this.longPressTimer);
-                return;
-            }
             if (!this.draggingId) {
                 return;
             }
@@ -184,7 +177,6 @@ export class RouteStopList extends Component {
         };
 
         const onUp = () => {
-            clearTimeout(this.longPressTimer);
             this.draggingId = null;
             this.draggingIndex = null;
             this.lastTargetIndex = null;

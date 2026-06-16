@@ -296,6 +296,22 @@ body.hlv-route-dragging {
     box-shadow: 0 2px 5px rgba(0,0,0,0.2);
 }
 
+.swipe-progress-bg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: calc(var(--swipe-x, 0) + 44px);
+    background: #d0ebff;
+    border-radius: 999px 0 0 999px;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.hlv-route-swipe.is-animating .swipe-progress-bg {
+    transition: width 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
 .hlv-route-swipe.is-success span {
     background: #ffffff;
     color: #4caf50;
