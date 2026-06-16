@@ -3,6 +3,7 @@ import logging
 from datetime import timedelta
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
+from odoo.tools import html_escape
 
 _logger = logging.getLogger(__name__)
 
@@ -145,34 +146,15 @@ class HlvLoyaltyRewardRequest(models.Model):
         )
 
     def _send_loyalty_reward_bus_notification(self, event):
-        """Send configured in-app bus notifications for reward events."""
+        """Send configured realtime and persistent notifications for reward events."""
         bus = self.env['bus.bus'].sudo()
         for rec in self:
             users = rec._get_loyalty_notification_users()
             if not users:
                 continue
 
-            if event == 'gift_redeemed':
-                title = _('Khách đã đổi quà Loyalty')
-                package = rec.package_id.display_name if rec.package_id else _('Gói quà')
-                voucher = rec.voucher_id.code if rec.voucher_id else ''
-                message = _(
-                    '%(customer)s đã đổi %(package)s (%(points)s điểm).%(voucher)s',
-                    customer=rec.partner_id.display_name,
-                    package=package,
-                    points=f'{rec.points_required:,}',
-                    voucher=f' Voucher: {voucher}' if voucher else '',
-                )
-            else:
-                type_label = dict(rec._fields['request_type'].selection).get(rec.request_type, rec.request_type)
-                title = _('Yêu cầu đổi thưởng Loyalty mới')
-                message = _(
-                    '%(customer)s gửi %(request_type)s %(points)s điểm. Mã: %(name)s',
-                    customer=rec.partner_id.display_name,
-                    request_type=type_label,
-                    points=f'{rec.points_required:,}',
-                    name=rec.name,
-                )
+            title, message = rec._get_loyalty_reward_notification_content(event)
+            rec._post_loyalty_reward_mail_notification(users, title, message)
 
             payload = {
                 'title': title,
@@ -189,6 +171,64 @@ class HlvLoyaltyRewardRequest(models.Model):
                         user.id,
                         exc_info=True,
                     )
+
+    def _get_loyalty_reward_notification_content(self, event):
+        self.ensure_one()
+        if event == 'gift_redeemed':
+            package = self.package_id.display_name if self.package_id else _('Gói quà')
+            voucher = self.voucher_id.code if self.voucher_id else ''
+            title = _('Khách đã đổi quà Loyalty')
+            message = _(
+                '%(customer)s đã đổi %(package)s (%(points)s điểm).%(voucher)s',
+                customer=self.partner_id.display_name,
+                package=package,
+                points=f'{self.points_required:,}',
+                voucher=f' Voucher: {voucher}' if voucher else '',
+            )
+        else:
+            type_label = dict(self._fields['request_type'].selection).get(
+                self.request_type,
+                self.request_type,
+            )
+            title = _('Yêu cầu đổi thưởng Loyalty mới')
+            message = _(
+                '%(customer)s gửi %(request_type)s %(points)s điểm. Mã: %(name)s',
+                customer=self.partner_id.display_name,
+                request_type=type_label,
+                points=f'{self.points_required:,}',
+                name=self.name,
+            )
+        return title, message
+
+    def _post_loyalty_reward_mail_notification(self, users, title, message):
+        self.ensure_one()
+        partner_ids = users.mapped('partner_id').ids
+        if not partner_ids:
+            return
+
+        body = (
+            f'<p><strong>{html_escape(title)}</strong></p>'
+            f'<p>{html_escape(message)}</p>'
+            f'<ul>'
+            f'<li>{html_escape(_("Khách hàng"))}: {html_escape(self.partner_id.display_name or "")}</li>'
+            f'<li>{html_escape(_("Số điểm"))}: {self.points_required:,}</li>'
+            f'<li>{html_escape(_("Trạng thái"))}: {html_escape(dict(self._fields["state"].selection).get(self.state, self.state))}</li>'
+            f'</ul>'
+        )
+        try:
+            self.sudo().with_context(mail_post_autofollow=False).message_post(
+                body=body,
+                subject=title,
+                partner_ids=partner_ids,
+                message_type='comment',
+                subtype_xmlid='mail.mt_comment',
+            )
+        except Exception:
+            _logger.debug(
+                'Failed to post loyalty reward mail notification for request %s',
+                self.id,
+                exc_info=True,
+            )
 
     # ── Business logic ─────────────────────────────────────────────────────
 
