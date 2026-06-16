@@ -60,12 +60,17 @@ class ResConfigSettings(models.TransientModel):
                 'Ví dụ: 0.005 = 0.5%, 0.05 = 5%, 0.1 = 10%.'
             ))
 
-        partners = self.env['res.partner'].sudo().with_context(active_test=False).search([])
-        partners.write({'loyalty_default_discount': self.loyalty_bulk_default_discount})
+        rate = self.loyalty_bulk_default_discount
         self.env['ir.config_parameter'].sudo().set_param(
             'hlv_loyalty.bulk_default_discount',
-            self.loyalty_bulk_default_discount,
+            rate,
         )
+        self.env.cr.execute(
+            'UPDATE res_partner SET loyalty_default_discount = %s',
+            [rate],
+        )
+        updated_count = self.env.cr.rowcount
+        self.env['res.partner'].invalidate_model(['loyalty_default_discount'])
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
@@ -73,8 +78,8 @@ class ResConfigSettings(models.TransientModel):
                 'title': _('Đã cập nhật chiết khấu Loyalty mặc định'),
                 'message': _(
                     'Đã cập nhật %(count)s khách hàng/liên hệ sang %(rate).2f%%.',
-                    count=len(partners),
-                    rate=self.loyalty_bulk_default_discount * 100,
+                    count=updated_count,
+                    rate=rate * 100,
                 ),
                 'type': 'success',
                 'sticky': False,
