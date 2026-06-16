@@ -65,13 +65,16 @@
                                    decoration-danger="transaction_type == 'return'"
                                    decoration-info="transaction_type == 'manual'"/>
                             <field name="description"/>
-                            <field name="point_formula" widget="text"/>
                         </group>
                         <group string="Tham chiếu">
                             <field name="picking_id"/>
                             <field name="sale_order_id"/>
                             <field name="voucher_id"/>
                         </group>
+                    </group>
+                    <group string="Công thức tính điểm" invisible="not point_formula_html and not point_formula">
+                        <field name="point_formula_html" nolabel="1" widget="html" invisible="not point_formula_html"/>
+                        <field name="point_formula" nolabel="1" widget="text" invisible="point_formula_html"/>
                     </group>
                     <group string="Thông tin đối soát" groups="base.group_multi_company">
                         <group>

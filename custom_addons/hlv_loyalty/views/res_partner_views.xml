@@ -194,7 +194,7 @@
                             <field name="loyalty_default_discount"
                                    string="% Chiết khấu mặc định (Loyalty)"
                                    widget="percentage"
-                                   help="Nhập theo %, VD: 5 = 5%. Dùng để tính điểm khi dòng hàng không có CK Loyalty."/>
+                                   help="Nhập theo %, VD: 5 = 5%. Hệ thống lưu dạng 0.05 và dùng để tính điểm khi dòng hàng không có CK Loyalty."/>
                         </group>
                     </group>
                     <!-- Tài khoản Portal Loyalty -->
