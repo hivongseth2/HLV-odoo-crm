@@ -47,6 +47,8 @@ export class BarcodeApp extends Component {
             pickingTypeCode: savedState.pickingTypeCode || "",
             pickingSourceTransferName: savedState.pickingSourceTransferName || "",
             pickingPackerName: savedState.pickingPackerName || "",
+            pickingLocationName: savedState.pickingLocationName || "",
+            pickingLocationDestName: savedState.pickingLocationDestName || "",
             warehouseCode: savedState.warehouseCode || "",
             scannedLocationId: savedState.scannedLocationId || null,
             scannedLocationName: savedState.scannedLocationName || "",
@@ -107,6 +109,8 @@ export class BarcodeApp extends Component {
                 pickingTypeCode: this.state.pickingTypeCode,
                 pickingSourceTransferName: this.state.pickingSourceTransferName,
                 pickingPackerName: this.state.pickingPackerName,
+                pickingLocationName: this.state.pickingLocationName,
+                pickingLocationDestName: this.state.pickingLocationDestName,
                 warehouseCode: this.state.warehouseCode,
                 scannedLocationId: this.state.scannedLocationId,
                 scannedLocationName: this.state.scannedLocationName,
@@ -129,6 +133,8 @@ export class BarcodeApp extends Component {
             this.state.pickingTypeCode,
             this.state.pickingSourceTransferName,
             this.state.pickingPackerName,
+            this.state.pickingLocationName,
+            this.state.pickingLocationDestName,
             this.state.warehouseCode,
             this.state.scannedLocationId,
             this.state.scannedLocationName,
@@ -580,6 +586,8 @@ export class BarcodeApp extends Component {
             pickingTypeCode: this.state.pickingTypeCode,
             pickingSourceTransferName: this.state.pickingSourceTransferName,
             pickingPackerName: this.state.pickingPackerName,
+            pickingLocationName: this.state.pickingLocationName,
+            pickingLocationDestName: this.state.pickingLocationDestName,
             warehouseCode: this.state.warehouseCode,
             lookupType: this.state.lookupType,
             recordId: this.state.recordId,
@@ -627,6 +635,8 @@ export class BarcodeApp extends Component {
             this.state.pickingTypeCode = prevState.pickingTypeCode || "";
             this.state.pickingSourceTransferName = prevState.pickingSourceTransferName || "";
             this.state.pickingPackerName = prevState.pickingPackerName || "";
+            this.state.pickingLocationName = prevState.pickingLocationName || "";
+            this.state.pickingLocationDestName = prevState.pickingLocationDestName || "";
             this.state.warehouseCode = prevState.warehouseCode || "";
             this.state.lookupType = prevState.lookupType;
             this.state.recordId = prevState.recordId;
@@ -1028,6 +1038,8 @@ export class BarcodeApp extends Component {
         this.state.pickingTypeCode = data.picking_type_code;
         this.state.pickingSourceTransferName = data.source_transfer_name;
         this.state.pickingPackerName = data.packer_name || "";
+        this.state.pickingLocationName = data.location_name || "";
+        this.state.pickingLocationDestName = data.location_dest_name || "";
         if (this.state.preferredMoveLineId) {
             const preferredLine = (data.lines || []).find((line) => line.id === this.state.preferredMoveLineId);
             if (!preferredLine || preferredLine.qty_done >= preferredLine.product_uom_qty) {

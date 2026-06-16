@@ -148,7 +148,7 @@
                         <div style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">
                             Danh sách sản phẩm
                         </div>
-                        <button t-if="state.picking.state !== 'done'" t-attf-class="btn barcode-camera-btn compact #{props.cameraManuallyOff ? 'is-off' : 'is-on'}" t-on-click="props.onToggleCamera" title="Bật/Tắt Camera" style="margin: 0; padding: 4px 10px; height: auto;">
+                        <button t-if="state.picking.state !== 'done'" t-attf-class="btn barcode-camera-btn compact #{props.cameraManuallyOff ? 'is-off' : 'is-on'}" t-on-click="props.onToggleCamera" title="Bật/Tắt Camera" style="margin: 0; padding: 0; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 4px;">
                             <i class="fa fa-camera" style="font-size: 1rem;"></i>
                         </button>
                     </div>
