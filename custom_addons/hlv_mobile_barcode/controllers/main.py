@@ -1472,8 +1472,16 @@ class HLVMobileBarcodeController(http.Controller):
                 if is_pick_picking and not force_partial_package and not create_loose_lines_only:
                     for quant in quants:
                         product_in_pkg = quant.product_id
-                        qty_in_pkg = quant.quantity - quant.reserved_quantity
-                        if qty_in_pkg <= 0 or quant.location_id.usage != 'internal' or quant.location_id.id not in package_source_loc_ids:
+                        reserved_by_this_package = sum(
+                            ml.product_uom_id._compute_quantity(ml.quantity_product_uom, product_in_pkg.uom_id)
+                            for ml in picking.move_line_ids
+                            if ml.product_id == product_in_pkg
+                            and ml.location_id == quant.location_id
+                            and ml.package_id == package
+                        )
+                        total_pkg_qty = quant.quantity - quant.reserved_quantity + reserved_by_this_package
+                        
+                        if total_pkg_qty <= 0 or quant.location_id.usage != 'internal' or quant.location_id.id not in package_source_loc_ids:
                             continue
                         
                         move = picking.move_ids.filtered(
@@ -1491,15 +1499,6 @@ class HLVMobileBarcodeController(http.Controller):
                         current_qty_done = sum(ml.qty_scanned if uses_qty_scanned else ml.quantity for ml in move.move_line_ids)
                         target_qty = move.product_uom_qty
                         
-                        reserved_by_this_package = sum(
-                            ml.product_uom_id._compute_quantity(ml.quantity_product_uom, product_in_pkg.uom_id)
-                            for ml in picking.move_line_ids
-                            if ml.product_id == product_in_pkg
-                            and ml.location_id == quant.location_id
-                            and ml.package_id == package
-                        )
-                        total_pkg_qty = qty_in_pkg + reserved_by_this_package
-                        
                         if target_qty > 0.0 and current_qty_done + total_pkg_qty > target_qty:
                             needed_qty = max(0.0, target_qty - current_qty_done)
                             return {
@@ -1515,7 +1514,15 @@ class HLVMobileBarcodeController(http.Controller):
                 updated_product = request.env['product.product'].browse()
                 for quant in quants:
                     product_in_pkg = quant.product_id
-                    qty_in_pkg = quant.quantity - quant.reserved_quantity
+                    reserved_by_this_package = sum(
+                        ml.product_uom_id._compute_quantity(ml.quantity_product_uom, product_in_pkg.uom_id)
+                        for ml in picking.move_line_ids
+                        if ml.product_id == product_in_pkg
+                        and ml.location_id == quant.location_id
+                        and ml.package_id == package
+                    )
+                    qty_in_pkg = quant.quantity - quant.reserved_quantity + reserved_by_this_package
+                    
                     if qty_in_pkg <= 0 or quant.location_id.usage != 'internal' or quant.location_id.id not in package_source_loc_ids:
                         continue
                     
@@ -1547,14 +1554,7 @@ class HLVMobileBarcodeController(http.Controller):
                         # Check limit to prevent over-scanning
                         current_qty_done = sum(ml.qty_scanned if uses_qty_scanned else ml.quantity for ml in move.move_line_ids)
                         target_qty = move.product_uom_qty
-                        reserved_by_this_package = sum(
-                            ml.product_uom_id._compute_quantity(ml.quantity_product_uom, product_in_pkg.uom_id)
-                            for ml in picking.move_line_ids
-                            if ml.product_id == product_in_pkg
-                            and ml.location_id == quant.location_id
-                            and ml.package_id == package
-                        )
-                        acceptable_qty = qty_in_pkg + reserved_by_this_package
+                        acceptable_qty = qty_in_pkg
                         
                         # In case we can scan, determine how much of this package qty we can accept
                         if target_qty > 0.0 and current_qty_done + acceptable_qty > target_qty:

@@ -140,16 +140,16 @@
 
 .hlv-route-stop {
     display: grid;
-    grid-template-columns: 32px minmax(0, 1fr) 72px;
-    gap: 7px;
+    grid-template-columns: 32px minmax(0, 1fr);
+    gap: 10px;
     align-items: start;
-    margin-bottom: 7px;
+    margin-bottom: 12px;
     border: 1px solid #dce3e8;
-    border-left: 5px solid var(--hlv-primary-blue, #1591DC);
-    border-radius: 14px;
+    border-left: 4px solid var(--hlv-primary-blue, #1591DC);
+    border-radius: 12px;
     background: #ffffff;
-    padding: 9px 7px 9px 8px;
-    box-shadow: 0 1px 3px rgba(31, 41, 51, 0.08);
+    padding: 12px 10px;
+    box-shadow: 0 2px 5px rgba(31, 41, 51, 0.05);
     touch-action: pan-y;
     user-select: none;
 }
@@ -216,60 +216,19 @@ body.hlv-route-dragging {
 }
 
 .hlv-stop-partner {
-    margin-top: 5px;
     color: #243b53;
     font-weight: 800;
-    font-size: 0.8rem;
+    font-size: 0.9rem;
     line-height: 1.25;
 }
 
 .hlv-stop-address {
-    margin-top: 4px;
     color: #64748b;
-    font-size: 0.74rem;
-    line-height: 1.25;
+    font-size: 0.8rem;
+    line-height: 1.35;
 }
 
-.hlv-stop-grip {
-    width: 30px;
-    height: 30px;
-    border: 1px solid #dbeafe;
-    border-radius: 14px;
-    background: #ffffff;
-    color: #8a97a6;
-    font-size: 1rem;
-    line-height: 1;
-    touch-action: none;
-    cursor: grab;
-}
 
-.hlv-stop-actions {
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 5px;
-    align-self: center;
-}
-
-.hlv-stop-nav {
-    min-height: 31px;
-    border: 0;
-    border-radius: 999px;
-    background: var(--hlv-primary-blue, #1591DC);
-    color: #ffffff;
-    font-size: 0.66rem;
-    font-weight: 900;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-    padding: 0 6px;
-    box-shadow: 0 5px 12px rgba(21, 145, 220, 0.22);
-}
-
-.hlv-stop-nav span {
-    line-height: 1;
-}
 
 .hlv-mini-icon {
     display: inline-block;
@@ -290,6 +249,8 @@ body.hlv-route-dragging {
     overflow: hidden;
     user-select: none;
     -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    touch-action: none;
     transition: background 0.3s ease, border-color 0.3s ease, color 0.3s ease;
 }
 
@@ -315,20 +276,7 @@ body.hlv-route-dragging {
     box-shadow: 0 8px 18px rgba(21, 145, 220, 0.18);
 }
 
-.swipe-progress-bg {
-    position: absolute;
-    top: 0;
-    left: 0;
-    height: 100%;
-    width: calc(var(--swipe-x, 0) + 24px);
-    background: rgba(21, 145, 220, 0.15);
-    border-radius: 999px 0 0 999px;
-    pointer-events: none;
-}
 
-.hlv-route-swipe.is-animating .swipe-progress-bg {
-    transition: width 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
 
 .hlv-route-swipe span {
     position: absolute;
@@ -348,6 +296,22 @@ body.hlv-route-dragging {
     transition: none;
     z-index: 2;
     box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.swipe-progress-bg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: calc(var(--swipe-x, 0) + 44px);
+    background: #d0ebff;
+    border-radius: 999px 0 0 999px;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.hlv-route-swipe.is-animating .swipe-progress-bg {
+    transition: width 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 .hlv-route-swipe.is-success span {
