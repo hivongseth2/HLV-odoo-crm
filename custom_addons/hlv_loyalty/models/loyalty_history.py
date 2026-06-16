@@ -46,6 +46,12 @@ class HlvLoyaltyHistory(models.Model):
         readonly=True,
         help='Snapshot công thức và tham số dùng để tính ra số điểm tại thời điểm phát sinh.',
     )
+    point_formula_html = fields.Html(
+        string='Công thức tính điểm',
+        readonly=True,
+        sanitize=True,
+        help='Phiên bản HTML của công thức tính điểm để đối chiếu chi tiết theo bảng.',
+    )
 
     # Tham chiếu chéo
     picking_id = fields.Many2one('stock.picking', string='Phiếu kho', readonly=True)

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import logging
+from html import escape
 from odoo import models, fields, api
 
 _logger = logging.getLogger(__name__)
@@ -72,6 +73,14 @@ class StockPicking(models.Model):
             ranking_points,
             multiplier_label='điểm/mốc',
         )
+        ranking_formula_html = self._format_loyalty_point_formula_html(
+            'Điểm xếp hạng',
+            delivered_subtotal,
+            program.earning_amount,
+            program.earning_points,
+            ranking_points,
+            multiplier_label='điểm/mốc',
+        )
 
         # ── Điểm đổi thưởng: dựa trên tiền chiết khấu ──
         discount_details = [
@@ -109,6 +118,15 @@ class StockPicking(models.Model):
             source_label=discount_formula_source,
             detail_lines=discount_details,
         )
+        exchange_formula_html = self._format_loyalty_point_formula_html(
+            'Điểm đổi thưởng',
+            discount_amount,
+            program.discount_per_point,
+            1,
+            exchange_points,
+            source_label=discount_formula_source,
+            detail_lines=discount_details,
+        )
 
         if ranking_points <= 0 and exchange_points <= 0:
             return
@@ -122,9 +140,15 @@ class StockPicking(models.Model):
             ranking_hist = existing.filtered(lambda hist: hist.point_type == 'ranking')[:1]
             exchange_hist = existing.filtered(lambda hist: hist.point_type == 'exchange')[:1]
             if ranking_hist:
-                ranking_hist.write({'point_formula': ranking_formula})
+                ranking_hist.write({
+                    'point_formula': ranking_formula,
+                    'point_formula_html': ranking_formula_html,
+                })
             if exchange_hist:
-                exchange_hist.write({'point_formula': exchange_formula})
+                exchange_hist.write({
+                    'point_formula': exchange_formula,
+                    'point_formula_html': exchange_formula_html,
+                })
             return
 
         # Luôn tích vào công ty gốc (đi lên hết chuỗi parent_id)
@@ -149,6 +173,7 @@ class StockPicking(models.Model):
                 'state': 'confirmed',
                 'description': f'Tích điểm xếp hạng {sale_order.name} - Phiếu {self.name}',
                 'point_formula': ranking_formula,
+                'point_formula_html': ranking_formula_html,
             })
 
         # 2. Điểm đổi thưởng – chờ nhân viên xác nhận
@@ -160,6 +185,7 @@ class StockPicking(models.Model):
                 'state': 'pending',
                 'description': f'Tích điểm đổi thưởng {sale_order.name} - Phiếu {self.name}',
                 'point_formula': exchange_formula,
+                'point_formula_html': exchange_formula_html,
             })
 
         self.loyalty_points_earned = ranking_points
@@ -263,6 +289,62 @@ class StockPicking(models.Model):
                     discount=item.get('discount_amount') or 0.0,
                 )
         return base
+
+    def _format_loyalty_point_formula_html(
+        self, label, numerator, divisor, multiplier, points,
+        source_label='', multiplier_label='', detail_lines=None,
+    ):
+        """Build an HTML formula snapshot with line details in a table."""
+        self.ensure_one()
+        if divisor <= 0:
+            return f'<p>{escape(label)}: không tính được vì cấu hình mẫu số &lt;= 0.</p>'
+
+        formula = f'{label} = floor({numerator:,.0f} / {divisor:,.0f})'
+        if multiplier != 1:
+            suffix = f' {multiplier_label}' if multiplier_label else ''
+            formula += f' x {multiplier:g}{suffix}'
+        formula += f' = {points:,} điểm'
+
+        parts = [
+            '<div class="o_hlv_loyalty_formula">',
+            f'<p><strong>{escape(formula)}</strong></p>',
+        ]
+        if source_label:
+            parts.append(f'<p>Nguồn tiền quy đổi: {escape(source_label)}.</p>')
+
+        if detail_lines:
+            rows = []
+            for item in detail_lines:
+                rows.append(
+                    '<tr>'
+                    f'<td>{escape(item.get("product") or "")}</td>'
+                    f'<td class="text-end">{item.get("qty") or 0.0:g}</td>'
+                    f'<td class="text-end">{item.get("price_unit") or 0.0:,.0f}</td>'
+                    f'<td class="text-end">{item.get("subtotal") or 0.0:,.0f}</td>'
+                    f'<td>{escape(item.get("source") or "")}</td>'
+                    f'<td class="text-end">{item.get("discount_rate") or 0.0:.2%}</td>'
+                    f'<td class="text-end">{item.get("discount_amount") or 0.0:,.0f}</td>'
+                    '</tr>'
+                )
+            parts.extend([
+                '<div class="table-responsive">',
+                '<table class="table table-sm table-bordered mb-0">',
+                '<thead><tr>'
+                '<th>Dòng hàng</th>'
+                '<th class="text-end">SL giao</th>'
+                '<th class="text-end">Đơn giá</th>'
+                '<th class="text-end">Thành tiền</th>'
+                '<th>Nguồn CK</th>'
+                '<th class="text-end">Tỷ lệ</th>'
+                '<th class="text-end">Tiền quy đổi</th>'
+                '</tr></thead>',
+                '<tbody>',
+                ''.join(rows),
+                '</tbody></table>',
+                '</div>',
+            ])
+        parts.append('</div>')
+        return ''.join(parts)
 
     def _loyalty_return_points(self):
         """Thu hồi điểm khi trả hàng.
