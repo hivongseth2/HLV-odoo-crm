@@ -135,7 +135,7 @@ class HlvLoyaltyRewardRequest(models.Model):
                     or 'New'
                 )
         records = super().create(vals_list)
-        records._send_loyalty_reward_bus_notification('request_created')
+        records.filtered(lambda rec: rec.request_type != 'gift')._send_loyalty_reward_bus_notification('request_created')
         return records
 
     def _get_loyalty_notification_users(self):
@@ -161,10 +161,11 @@ class HlvLoyaltyRewardRequest(models.Model):
                 'message': message,
                 'type': 'info',
                 'sticky': True,
+                'action': rec._get_loyalty_reward_open_action(),
             }
             for user in users:
                 try:
-                    bus._sendone(user.partner_id, 'simple_notification', payload)
+                    bus._sendone(user.partner_id, 'hlv_loyalty_reward_notification', payload)
                 except Exception:
                     _logger.debug(
                         'Failed to send loyalty reward bus notification to user %s',
@@ -200,6 +201,18 @@ class HlvLoyaltyRewardRequest(models.Model):
             )
         return title, message
 
+    def _get_loyalty_reward_open_action(self):
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Yêu cầu đổi thưởng'),
+            'res_model': 'hlv.loyalty.reward.request',
+            'res_id': self.id,
+            'views': [[False, 'form']],
+            'view_mode': 'form',
+            'target': 'current',
+        }
+
     def _post_loyalty_reward_mail_notification(self, users, title, message):
         self.ensure_one()
         partner_ids = users.mapped('partner_id').ids
@@ -229,6 +242,32 @@ class HlvLoyaltyRewardRequest(models.Model):
                 self.id,
                 exc_info=True,
             )
+        self._create_loyalty_reward_activities(users, title, message)
+
+    def _create_loyalty_reward_activities(self, users, title, message):
+        self.ensure_one()
+        todo_type = self.env.ref('mail.mail_activity_data_todo', raise_if_not_found=False)
+        if not todo_type:
+            return
+        for user in users:
+            existing = self.env['mail.activity'].sudo().search([
+                ('res_model', '=', self._name),
+                ('res_id', '=', self.id),
+                ('user_id', '=', user.id),
+                ('activity_type_id', '=', todo_type.id),
+                ('summary', '=', title),
+            ], limit=1)
+            if existing:
+                continue
+            self.env['mail.activity'].sudo().create({
+                'activity_type_id': todo_type.id,
+                'res_model_id': self.env['ir.model']._get_id(self._name),
+                'res_id': self.id,
+                'user_id': user.id,
+                'summary': title,
+                'note': html_escape(message),
+                'date_deadline': fields.Date.context_today(self),
+            })
 
     # ── Business logic ─────────────────────────────────────────────────────
 
