@@ -11,7 +11,7 @@
                         <i class="fa fa-boxes"></i>
                         <t t-if="state.pickingName and state.pickingName.includes('INT') and state.pickingLocationName">
                             <span style="font-size: 0.85em; display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px;">
-                                <t t-esc="state.pickingLocationName"/> <i class="fa fa-long-arrow-alt-right"/> <t t-esc="state.pickingLocationDestName"/>
+                                <t t-esc="state.pickingLocationName"/> <i class="fa fa-arrow-right" style="margin: 0 4px; font-size: 0.85em;"></i> <t t-esc="state.pickingLocationDestName"/>
                             </span>
                         </t>
                         <t t-else="">
