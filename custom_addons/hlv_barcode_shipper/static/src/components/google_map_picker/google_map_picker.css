@@ -1,0 +1,4 @@
+/* Fix Google Maps Places Autocomplete z-index in Odoo Modals */
+.pac-container {
+    z-index: 100000 !important;
+}

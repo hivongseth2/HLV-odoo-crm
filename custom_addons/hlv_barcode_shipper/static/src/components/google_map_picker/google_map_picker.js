@@ -83,6 +83,9 @@ export class GoogleMapPicker extends Component {
                     });
                     
                     autocomplete.addListener("place_changed", () => {
+                        this.placeChangedFired = true;
+                        setTimeout(() => { this.placeChangedFired = false; }, 500);
+                        
                         const place = autocomplete.getPlace();
                         if (!place.geometry || !place.geometry.location) {
                             return; // Fallback to searchAddress when user presses Enter
@@ -109,7 +112,12 @@ export class GoogleMapPicker extends Component {
     onKeydownSearch(ev) {
         if (ev.key === "Enter") {
             ev.preventDefault();
-            this.searchAddress();
+            // Delay to allow place_changed to fire first if user selected from dropdown
+            setTimeout(() => {
+                if (!this.placeChangedFired) {
+                    this.searchAddress();
+                }
+            }, 200);
         }
     }
 
