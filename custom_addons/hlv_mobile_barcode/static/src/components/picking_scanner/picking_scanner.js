@@ -84,18 +84,18 @@ export class PickingScanner extends Component {
             if (!this.state.loading && this.props.lastScanTarget === "product" && this.props.lastScannedProduct) {
                 const moveLineId = Number(this.props.lastScannedMoveLine || 0);
                 const productId = Number(this.props.lastScannedProduct);
-                const element = (
+                const targetElement = (
                     moveLineId
                         ? document.querySelector(`[data-line-id="${moveLineId}"] .item-card`)
                         : null
                 ) || document.querySelector(`[data-product-id="${productId}"] .item-card`);
-                if (element) {
-                    element.classList.remove('flash-highlight');
-                    void element.offsetWidth; // Force CSS reflow to restart animation
-                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    element.classList.add('flash-highlight');
+                if (targetElement) {
+                    targetElement.classList.remove('flash-highlight');
+                    void targetElement.offsetWidth; // Force CSS reflow to restart animation
+                    targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    targetElement.classList.add('flash-highlight');
                     setTimeout(() => {
-                        if (element) element.classList.remove('flash-highlight');
+                        if (targetElement) targetElement.classList.remove('flash-highlight');
                     }, 1500);
                 }
             }
@@ -436,12 +436,11 @@ export class PickingScanner extends Component {
                 this.playSound('success');
                 if (res.print_after_pack && res.package_id) {
                     if (confirm(`Bạn có muốn in nhãn cho kiện hàng ${res.package_name || ''} không?`)) {
-                        this.actionService.doAction({
-                            type: 'ir.actions.report',
-                            report_type: 'qweb-pdf',
-                            report_name: 'stock.report_package_barcode',
-                            report_file: 'stock.report_package_barcode',
-                            context: { active_ids: [res.package_id] },
+                        this.actionService.doAction("hlv_pack_sequence.action_report_package_labels", {
+                            additionalContext: {
+                                active_ids: [this.props.pickingId],
+                                active_model: 'stock.picking',
+                            },
                         });
                     }
                 }
@@ -459,20 +458,16 @@ export class PickingScanner extends Component {
                 this.notification.add(res.error, { type: "danger" });
             } else if (res.success) {
                 if (res.backorder_created) {
-                    this.notification.add(`Xác nhận thành công. Nhấn vào mã đơn dưới đây để xem đơn tách kiện:`, { 
+                    this.notification.add(`Xác nhận thành công! Phiếu tách kiện ${res.backorder_name} đã được tạo cho số lượng còn lại.`, { 
                         type: "info",
                         sticky: true,
                         buttons: [
                             {
                                 name: res.backorder_name,
                                 onClick: () => {
-                                    this.actionService.doAction({
-                                        type: 'ir.actions.act_window',
-                                        res_model: 'stock.picking',
-                                        res_id: res.backorder_id,
-                                        views: [[false, 'form']],
-                                        target: 'current',
-                                    });
+                                    if (this.props.onSelectPicking) {
+                                        this.props.onSelectPicking(res.backorder_id, res.backorder_name);
+                                    }
                                 },
                                 primary: true,
                             }
@@ -600,6 +595,11 @@ export class PickingScanner extends Component {
             });
             if (data.error) {
                 this.notification.add(data.error, { type: "danger" });
+                if (data.package_missing) {
+                    this.closePackageEdit();
+                } else {
+                    await this.loadPicking();
+                }
             } else {
                 this.state.editingPackage = {
                     id: data.package_id,
@@ -638,6 +638,14 @@ export class PickingScanner extends Component {
         this.loadPicking();
     }
 
+    async refreshPackageIfStale(res) {
+        if (!res?.package_stale || !this.state.editingPackage) {
+            return false;
+        }
+        await this.openPackageEdit(this.state.editingPackage);
+        return true;
+    }
+
     pkgAdjustQty(item, delta) {
         const target = this.state.packageEditItems.find(i => i.move_line_id === item.move_line_id);
         if (target) {
@@ -659,6 +667,7 @@ export class PickingScanner extends Component {
             });
             if (res.error) {
                 this.notification.add(res.error, { type: "danger" });
+                await this.refreshPackageIfStale(res);
             } else {
                 this.notification.add(res.message || "Đã bỏ sản phẩm khỏi kiện", { type: "success" });
                 this.playSound('success');
@@ -689,6 +698,7 @@ export class PickingScanner extends Component {
             });
             if (res.error) {
                 this.notification.add(res.error, { type: "danger" });
+                await this.refreshPackageIfStale(res);
             } else {
                 this.notification.add(res.message || "Đã thêm sản phẩm vào kiện", { type: "success" });
                 this.playSound('success');
@@ -721,6 +731,7 @@ export class PickingScanner extends Component {
             });
             if (res.error) {
                 this.notification.add(res.error, { type: "danger" });
+                await this.refreshPackageIfStale(res);
             } else {
                 this.notification.add(res.message || "Đã chuyển sản phẩm", { type: "success" });
                 this.playSound('success');
@@ -752,6 +763,7 @@ export class PickingScanner extends Component {
                 });
                 if (res.error) {
                     this.notification.add(`${item.product_name}: ${res.error}`, { type: "danger" });
+                    await this.refreshPackageIfStale(res);
                     hasError = true;
                     break;
                 }

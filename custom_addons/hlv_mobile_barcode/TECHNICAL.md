@@ -311,6 +311,14 @@ Phiếu Bước 1 (INT) hoàn thành (state = 'done')
 - Khi quét ở Bước 2, backend cập nhật các `stock.move.line` đã được Odoo sinh sẵn, bao gồm cả dòng có `package_id/result_package_id`; không tạo dòng hàng rời mới nếu đã có dòng phù hợp.
 - Vẫn không cho quét thêm sản phẩm mới ngoài các move đã sinh từ phiếu Bước 1.
 
+**Nhận 1 phần (Partial Receipt) trên phiếu Bước 2**:
+- Thủ kho có thể quét ít hơn demand trên phiếu Bước 2 (ví dụ: demand = 5, chỉ quét 1).
+- Khi xác nhận, Odoo tự động tạo **phiếu tách kiện (backorder)** cho số lượng còn lại.
+- Backend tự động kế thừa cho phiếu backorder:
+  - `source_transfer_id`: copy từ phiếu Bước 2 gốc → về cùng phiếu Bước 1. Giúp mobile nhận diện backorder là phiếu Bước 2 và hiển thị "Từ phiếu: ..." trên UI.
+  - Package (`package_id` + `result_package_id`): copy từ move_line_ids phiếu gốc sang backorder nếu sản phẩm nằm trong package.
+- Frontend hiển thị notification với nút mở phiếu backorder trên mobile scanner (qua `onSelectPicking`).
+
 ### 2.4.5. Luồng chuyển kho đa vị trí
 
 ```

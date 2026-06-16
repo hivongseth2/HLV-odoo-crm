@@ -1,6 +1,6 @@
 {
     "name": "HLV Mobile Barcode Scanner",
-    "version": "18.0.1.0.1",
+    "version": "18.0.1.0.0",
     "category": "Inventory",
     "summary": "Mobile-optimized barcode scanning application for warehouse operations",
     "description": """
@@ -18,6 +18,7 @@ Mobile Barcode Scanner
         "stock_barcode",
         "web",
         "hlv_sale_delivery_planning",
+        "hlv_pack_sequence",
         # === OPTION B: DEPENDS ON WAREHOUSE PERMISSION ===
         # "hlv_warehouse_permission",
         # =================================================

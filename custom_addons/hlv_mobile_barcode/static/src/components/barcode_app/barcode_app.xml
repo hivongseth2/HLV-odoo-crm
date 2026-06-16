@@ -131,7 +131,7 @@
                             <div class="card-box" style="text-align: center; padding: 40px 15px; cursor: pointer; border: 2px dashed var(--primary-color); background: rgba(44, 62, 80, 0.02); transition: background-color 0.2s;" t-on-click="openPopupCamera">
                                 <i class="fa fa-camera" style="font-size: 60px; color: var(--primary-color); margin-bottom: 20px;"></i>
                                 <h3 style="color: var(--primary-color); margin-bottom: 8px; font-size: 1.15rem; font-weight: 700;">Quét mã vạch bằng Camera</h3>
-                                <p class="text-muted" style="margin-bottom: 20px; font-size: 0.9rem;">Nhấn vào đây để bật Camera và quét phiếu kho, sản phẩm hoặc vị trí</p>
+                                <p class="text-muted" style="margin-bottom: 20px; font-size: 0.9rem;">Nhấn vào đây để bật Camera và quét phiếu kho, sản phẩm, vị trí hoặc kiện hàng</p>
                                 <div class="btn btn-primary btn-lg" style="border-radius: 30px; font-weight: bold; box-shadow: 0 4px 10px rgba(0,0,0,0.15);">
                                     <i class="fa fa-qrcode" style="font-size: 1.05rem;"></i> Mở máy quét
                                 </div>
@@ -277,6 +277,35 @@
                             <t t-else="">
                                 <i class="fa fa-sign-out-alt"/> Thoát và giữ (Lưu tạm)
                             </t>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- POPUP PARTIAL PACKAGE -->
+            <div class="modal-overlay" t-if="state.showPartialPackagePopup">
+                <div class="modal-content" style="max-width: 400px; width: 90%;">
+                    <div class="modal-header">
+                        <div class="modal-title">
+                            <i class="fa fa-box-open" style="color: var(--warning-color);"></i> Xử lý Kiện hàng
+                        </div>
+                        <button class="modal-close" t-on-click="() => { this.state.showPartialPackagePopup = false; this.state.partialPackageData = null; }">
+                            <i class="fa fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="modal-body" style="padding: 15px;">
+                        <div style="margin-bottom: 15px; color: var(--text-color); font-size: 0.95rem; white-space: pre-line;">
+                            <t t-esc="state.partialPackageData?.reason"/>
+                        </div>
+                        
+                        <button class="btn btn-primary" style="width: 100%; padding: 12px; font-weight: bold; margin-bottom: 10px;"
+                                t-on-click="handlePartialPackageAuto">
+                            <i class="fa fa-magic"/> Tự xác nhận phần cần thiết
+                        </button>
+
+                        <button class="btn btn-secondary" style="width: 100%; padding: 12px; font-weight: bold;"
+                                t-on-click="handlePartialPackageManual">
+                            <i class="fa fa-barcode"/> Tạo dòng mới cần quét lẻ lại từng sản phẩm
                         </button>
                     </div>
                 </div>
