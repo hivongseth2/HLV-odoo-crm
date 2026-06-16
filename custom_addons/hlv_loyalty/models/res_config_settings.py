@@ -13,6 +13,7 @@ class ResConfigSettings(models.TransientModel):
     loyalty_bulk_default_discount = fields.Float(
         string='% chiết khấu mặc định mới',
         digits=(5, 4),
+        config_parameter='hlv_loyalty.bulk_default_discount',
         default=lambda self: self._default_loyalty_bulk_default_discount(),
         help='Nhập dạng thập phân: 0.005 = 0.5%, 0.05 = 5%, 0.1 = 10%.',
     )
@@ -61,6 +62,10 @@ class ResConfigSettings(models.TransientModel):
 
         partners = self.env['res.partner'].sudo().with_context(active_test=False).search([])
         partners.write({'loyalty_default_discount': self.loyalty_bulk_default_discount})
+        self.env['ir.config_parameter'].sudo().set_param(
+            'hlv_loyalty.bulk_default_discount',
+            self.loyalty_bulk_default_discount,
+        )
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
