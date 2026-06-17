@@ -399,11 +399,6 @@ export class BarcodeApp extends Component {
             this.state.scannedLocationId = res.location_id;
             this.state.scannedLocationName = res.location_name;
             this.state.lastScanTarget = "location";
-            if (res.is_putaway) {
-                this.state.pickingLocationDestName = res.location_name;
-            } else {
-                this.state.pickingLocationName = res.location_name;
-            }
             this.notification.add(`Đã chọn vị trí: ${res.location_name}`, { type: "success" });
             
             this.state.lastScannedProduct = null;
@@ -493,11 +488,6 @@ export class BarcodeApp extends Component {
                     this.state.scannedLocationId = res.location_id;
                     this.state.scannedLocationName = res.location_name;
                     this.state.lastScanTarget = "location";
-                    if (res.is_putaway) {
-                        this.state.pickingLocationDestName = res.location_name;
-                    } else {
-                        this.state.pickingLocationName = res.location_name;
-                    }
                     this.notification.add(`Đã chọn vị trí: ${res.location_name}`, { type: "success" });
                     
                     this.state.lastScannedProduct = null;
@@ -1048,10 +1038,8 @@ export class BarcodeApp extends Component {
         this.state.pickingTypeCode = data.picking_type_code;
         this.state.pickingSourceTransferName = data.source_transfer_name;
         this.state.pickingPackerName = data.packer_name || "";
-        if (!this.state.scannedLocationId || this.state.pickingIsPutaway !== data.is_putaway) {
-            this.state.pickingLocationName = data.location_name || "";
-            this.state.pickingLocationDestName = data.location_dest_name || "";
-        }
+        this.state.pickingLocationName = data.location_name || "";
+        this.state.pickingLocationDestName = data.location_dest_name || "";
         if (this.state.preferredMoveLineId) {
             const preferredLine = (data.lines || []).find((line) => line.id === this.state.preferredMoveLineId);
             if (!preferredLine || preferredLine.qty_done >= preferredLine.product_uom_qty) {
