@@ -45,7 +45,7 @@
                 </div>
                 
                 <!-- Location Mode Header (Simplified and Modern) -->
-                <div t-if="state.picking.state !== 'done' and !state.picking.is_putaway and (props.isMultiLocationMode or state.picking.is_pick)" 
+                <div t-if="state.picking.state !== 'done' and !state.picking.is_putaway" 
                      t-attf-class="modern-location-banner #{!props.scannedLocationName ? 'error-state' : ''}"
                      t-ref="locationBannerRef">
                     <t t-if="props.scannedLocationName">
@@ -160,9 +160,9 @@
                                 <span class="picking-location-count"><t t-esc="group.lines.length"/></span>
                             </div>
                             <t t-foreach="group.lines" t-as="line" t-key="line.id || group.key + '_draft_' + line.product_id">
-                            <t t-set="is_active_location" t-value="!state.picking.is_putaway and (state.picking.is_pick or props.isMultiLocationMode) and props.scannedLocationName and line.location_name == props.scannedLocationName"/>
+                            <t t-set="is_active_location" t-value="!state.picking.is_putaway and props.scannedLocationName and line.location_name == props.scannedLocationName"/>
                             <t t-set="is_preferred_line" t-value="state.picking.is_pick and props.preferredMoveLineId and line.id == props.preferredMoveLineId"/>
-                            <t t-set="needs_location_scan" t-value="!state.picking.is_putaway and (state.picking.is_pick or props.isMultiLocationMode)"/>
+                            <t t-set="needs_location_scan" t-value="!state.picking.is_putaway"/>
                             <t t-set="can_edit_qty" t-value="!needs_location_scan or is_active_location"/>
                             <div t-attf-class="product-row-card #{line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0 ? 'scanned' : ''} #{is_active_location ? 'active-location-row' : ''} #{is_preferred_line ? 'preferred-pick-line' : ''} #{!can_edit_qty ? 'locked-location-row' : ''}" t-att-data-product-id="line.product_id" t-att-data-line-id="line.id">
                                 <div t-attf-class="item-card #{line.qty_done >= line.product_uom_qty and line.product_uom_qty > 0 ? 'scanned' : ''}" style="border: none; margin-bottom: 0; display: flex; align-items: stretch; gap: 10px; padding: 10px;" t-on-click="() => this.togglePreferredLine(line)">
