@@ -1740,7 +1740,7 @@ class HLVMobileBarcodeController(http.Controller):
             source_loc = request.env['stock.location'].sudo().browse(ml_src_id)
             candidate_quants = request.env['stock.quant'].sudo().search([
                 ('product_id', '=', product.id),
-                ('location_id', 'child_of', ml_src_id),
+                ('location_id', '=', ml_src_id),
                 ('company_id', '=', picking.company_id.id),
                 ('package_id', '=', False),
             ]).sorted(key=lambda q: (1 if q.package_id else 0, -q.quantity))
@@ -1778,7 +1778,7 @@ class HLVMobileBarcodeController(http.Controller):
             if available_qty <= 0:
                 packaged_quants = request.env['stock.quant'].sudo().search([
                     ('product_id', '=', product.id),
-                    ('location_id', 'child_of', ml_src_id),
+                    ('location_id', '=', ml_src_id),
                     ('company_id', '=', picking.company_id.id),
                     ('package_id', '!=', False),
                     ('quantity', '>', 0),
