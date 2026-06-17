@@ -116,7 +116,7 @@ def _redistribute_pick_reservation_to_location(source_line, dest_location):
 
     quant_domain = [
         ('product_id', '=', product.id),
-        ('location_id', 'child_of', dest_location.id),
+        ('location_id', '=', dest_location.id),
         ('company_id', '=', picking.company_id.id),
         ('package_id', '=', False),
         ('quantity', '>', 0),
@@ -1997,21 +1997,7 @@ class HLVMobileBarcodeController(http.Controller):
             if scan_quant:
                 actual_src_id = scan_quant.location_id.id
             else:
-                direct_quants = request.env['stock.quant'].sudo().search([
-                    ('product_id', '=', product.id),
-                    ('location_id', '=', ml_src_id),
-                    ('quantity', '>', 0),
-                    ('package_id', '=', False)
-                ])
-                if not direct_quants:
-                    child_quants = request.env['stock.quant'].sudo().search([
-                        ('product_id', '=', product.id),
-                        ('location_id', 'child_of', ml_src_id),
-                        ('quantity', '>', 0),
-                        ('package_id', '=', False)
-                    ], order='quantity desc')
-                    if child_quants:
-                        actual_src_id = child_quants[0].location_id.id
+                actual_src_id = ml_src_id
             ml_src_id = actual_src_id
 
         updated_move_line = request.env['stock.move.line'].browse()
@@ -2280,11 +2266,11 @@ class HLVMobileBarcodeController(http.Controller):
             
         if not is_putaway:
             ml_src_id = move_line.location_id.id
-            child_loc_ids = request.env['stock.location'].sudo().search([('id', 'child_of', ml_src_id)]).ids
+            child_loc_ids = [ml_src_id]
             
             quants = request.env['stock.quant'].sudo().search([
                 ('product_id', '=', move.product_id.id),
-                ('location_id', 'child_of', ml_src_id),
+                ('location_id', '=', ml_src_id),
                 ('company_id', '=', move.company_id.id),
                 ('package_id', '=', move_line.package_id.id if move_line.package_id else False)
             ])
@@ -2448,12 +2434,10 @@ class HLVMobileBarcodeController(http.Controller):
             has_saved_data = True
 
             # Tính available qty tại vị trí lấy hàng của move line này
-            child_loc_ids = request.env['stock.location'].sudo().search(
-                [('id', 'child_of', ml.location_id.id)]
-            ).ids
+            child_loc_ids = [ml.location_id.id]
             quants = request.env['stock.quant'].sudo().search([
                 ('product_id', '=', ml.product_id.id),
-                ('location_id', 'child_of', ml.location_id.id),
+                ('location_id', '=', ml.location_id.id),
                 ('company_id', '=', picking.company_id.id),
                 ('package_id', '=', ml.package_id.id if ml.package_id else False),
             ])
@@ -2506,12 +2490,10 @@ class HLVMobileBarcodeController(http.Controller):
         for ml in picking.move_line_ids:
             if ml.qty_scanned <= 0:
                 continue
-            child_loc_ids = request.env['stock.location'].sudo().search(
-                [('id', 'child_of', ml.location_id.id)]
-            ).ids
+            child_loc_ids = [ml.location_id.id]
             quants = request.env['stock.quant'].sudo().search([
                 ('product_id', '=', ml.product_id.id),
-                ('location_id', 'child_of', ml.location_id.id),
+                ('location_id', '=', ml.location_id.id),
                 ('company_id', '=', picking.company_id.id),
                 ('package_id', '=', ml.package_id.id if ml.package_id else False),
             ])
