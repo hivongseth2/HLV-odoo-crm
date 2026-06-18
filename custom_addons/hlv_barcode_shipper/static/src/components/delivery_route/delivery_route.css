@@ -310,7 +310,7 @@ body.hlv-route-dragging {
     top: 0;
     left: 0;
     height: 100%;
-    width: calc(var(--swipe-x, 0) + 44px);
+    width: calc(var(--swipe-x, 0) + 44px + (10px * var(--swipe-progress, 0)));
     background: #d0ebff;
     border-radius: 0;
     pointer-events: none;
