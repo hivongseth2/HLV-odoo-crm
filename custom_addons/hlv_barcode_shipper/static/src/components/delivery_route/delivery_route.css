@@ -312,7 +312,7 @@ body.hlv-route-dragging {
     height: 100%;
     width: calc(var(--swipe-x, 0) + 44px);
     background: #d0ebff;
-    border-radius: 999px;
+    border-radius: 0;
     pointer-events: none;
     z-index: 1;
 }

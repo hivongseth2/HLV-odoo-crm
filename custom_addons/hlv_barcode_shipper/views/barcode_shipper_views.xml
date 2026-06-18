@@ -229,7 +229,7 @@
                             
                             <!-- Nút quay lại tuyến vận chuyển -->
                             <div style="margin-bottom: 15px;">
-                                <a href="/barcode/shipper_route" class="btn btn-outline" style="width: 100%; font-weight: 600; border: 1px solid #1591DC; color: #1591DC; background: #fff; padding: 10px; border-radius: 8px; text-align: center; display: block; text-decoration: none;">
+                                <a href="/barcode/shipper_route" class="btn btn-outline" style="box-sizing: border-box; width: 100%; font-weight: 600; border: 1px solid #1591DC; color: #1591DC; background: #fff; padding: 10px; border-radius: 8px; text-align: center; display: block; text-decoration: none;">
                                     <i class="fa fa-map-marked-alt me-2"></i> Quay lại Lộ Trình Giao Hàng
                                 </a>
                             </div>
