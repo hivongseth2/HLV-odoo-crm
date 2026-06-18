@@ -242,13 +242,21 @@ export class DeliveryRouteApp extends Component {
             }
         }
 
+        const finalDest = (target.lat && target.lng) ? `${target.lat},${target.lng}` : target.address;
         const params = new URLSearchParams({
             api: "1",
-            destination: target.address,
+            destination: finalDest,
             travelmode: "driving",
             dir_action: "navigate",
         });
-        window.location.href = `https://www.google.com/maps/dir/?${params.toString()}`;
+        
+        const url = `https://www.google.com/maps/dir/?${params.toString()}`;
+        const a = document.createElement('a');
+        a.href = url;
+        a.target = '_blank';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
     }
 
     async openAllTurnByTurn() {
@@ -291,8 +299,13 @@ export class DeliveryRouteApp extends Component {
             this.openTurnByTurn(stops[0]);
             return;
         }
-        const destination = stops[stops.length - 1].address;
-        const waypoints = stops.slice(0, -1).map((stop) => stop.address).join("|");
+        const destinationStop = stops[stops.length - 1];
+        const destination = (destinationStop.lat && destinationStop.lng) ? `${destinationStop.lat},${destinationStop.lng}` : destinationStop.address;
+        
+        const waypoints = stops.slice(0, -1).map((stop) => {
+            return (stop.lat && stop.lng) ? `${stop.lat},${stop.lng}` : stop.address;
+        }).join("|");
+
         const params = new URLSearchParams({
             api: "1",
             destination,
@@ -300,7 +313,14 @@ export class DeliveryRouteApp extends Component {
             travelmode: "driving",
             dir_action: "navigate",
         });
-        window.location.href = `https://www.google.com/maps/dir/?${params.toString()}`;
+        
+        const url = `https://www.google.com/maps/dir/?${params.toString()}`;
+        const a = document.createElement('a');
+        a.href = url;
+        a.target = '_blank';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
     }
 
     onFabPointerDown(ev) {
