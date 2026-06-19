@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "MISA CRM Purchase Request to Odoo",
+  "version": "1.0.0",
+  "description": "Read a MISA CRM purchase request page and create an Odoo purchase.request.",
+  "permissions": ["activeTab", "storage"],
+  "host_permissions": [
+    "http://*/misa/crm/purchase-request/import",
+    "https://*/misa/crm/purchase-request/import",
+    "http://localhost:*/*",
+    "http://127.0.0.1:*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://amisapp.misa.vn/crm/*",
+        "https://amisapp.misa.vn/CRM/*",
+        "https://*.misa.vn/CRM/*",
+        "https://*.misa.vn/crm/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
+
