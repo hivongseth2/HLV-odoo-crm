@@ -3,6 +3,7 @@
 import { Component, onWillStart, useState, xml } from "@odoo/owl";
 import { rpc } from "@web/core/network/rpc";
 import { RouteStopList } from "./route_stop_list";
+import { searchPlaceGeocode } from "../../services/google_maps_utils";
 
 export class DeliveryRouteApp extends Component {
     static template = xml`<main class="hlv-delivery-route"
@@ -215,32 +216,96 @@ export class DeliveryRouteApp extends Component {
         window.location.href = this.state.scannerUrl;
     }
 
-    openTurnByTurn(stop = null) {
+    async openTurnByTurn(stop = null) {
         const target = stop || this.currentStop;
         if (!target?.address) {
             return;
         }
+
+        if ((!target.lat || !target.lng) && target.partner_id) {
+            try {
+                this.state.isLoading = true;
+                const config = window.HLV_SHIPPER_ROUTE_CONFIG || {};
+                const geocode = await searchPlaceGeocode(target.address, { apiKey: config.googleMapsApiKey });
+                await rpc("/api/barcode/save_geocode", {
+                    partner_id: target.partner_id,
+                    address: target.address,
+                    lat: geocode.lat,
+                    lng: geocode.lng,
+                });
+                target.lat = geocode.lat;
+                target.lng = geocode.lng;
+            } catch (err) {
+                console.error("Auto-geocode failed:", err);
+            } finally {
+                this.state.isLoading = false;
+            }
+        }
+
+        const finalDest = (target.lat && target.lng) ? `${target.lat},${target.lng}` : target.address;
         const params = new URLSearchParams({
             api: "1",
-            destination: target.address,
+            destination: finalDest,
             travelmode: "driving",
             dir_action: "navigate",
         });
-        window.location.href = `https://www.google.com/maps/dir/?${params.toString()}`;
+        
+        const url = `https://www.google.com/maps/dir/?${params.toString()}`;
+        const a = document.createElement('a');
+        a.href = url;
+        a.target = '_blank';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
     }
 
-    openAllTurnByTurn() {
+    async openAllTurnByTurn() {
         const stops = (this.state.routeStops || []).filter((stop) => stop.address && stop.state !== 'done' && stop.state !== 'cancel');
         if (!stops.length) {
             alert("Không có điểm giao nào cần chỉ đường.");
             return;
         }
+
+        const config = window.HLV_SHIPPER_ROUTE_CONFIG || {};
+        let loadingShown = false;
+
+        for (const stop of stops) {
+            if ((!stop.lat || !stop.lng) && stop.partner_id) {
+                try {
+                    if (!loadingShown) {
+                        this.state.isLoading = true;
+                        loadingShown = true;
+                    }
+                    const geocode = await searchPlaceGeocode(stop.address, { apiKey: config.googleMapsApiKey });
+                    await rpc("/api/barcode/save_geocode", {
+                        partner_id: stop.partner_id,
+                        address: stop.address,
+                        lat: geocode.lat,
+                        lng: geocode.lng,
+                    });
+                    stop.lat = geocode.lat;
+                    stop.lng = geocode.lng;
+                } catch (err) {
+                    console.error("Auto-geocode failed for stop", stop.id, err);
+                }
+            }
+        }
+
+        if (loadingShown) {
+            this.state.isLoading = false;
+        }
+
         if (stops.length === 1) {
             this.openTurnByTurn(stops[0]);
             return;
         }
-        const destination = stops[stops.length - 1].address;
-        const waypoints = stops.slice(0, -1).map((stop) => stop.address).join("|");
+        const destinationStop = stops[stops.length - 1];
+        const destination = (destinationStop.lat && destinationStop.lng) ? `${destinationStop.lat},${destinationStop.lng}` : destinationStop.address;
+        
+        const waypoints = stops.slice(0, -1).map((stop) => {
+            return (stop.lat && stop.lng) ? `${stop.lat},${stop.lng}` : stop.address;
+        }).join("|");
+
         const params = new URLSearchParams({
             api: "1",
             destination,
@@ -248,7 +313,14 @@ export class DeliveryRouteApp extends Component {
             travelmode: "driving",
             dir_action: "navigate",
         });
-        window.location.href = `https://www.google.com/maps/dir/?${params.toString()}`;
+        
+        const url = `https://www.google.com/maps/dir/?${params.toString()}`;
+        const a = document.createElement('a');
+        a.href = url;
+        a.target = '_blank';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
     }
 
     onFabPointerDown(ev) {
