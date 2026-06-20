@@ -21,3 +21,26 @@
 .orderline.bg-info .hlv-source-location-line .hlv-source-location-button {
     background: #ffffff;
 }
+.hlv-source-location-summary {
+    color: #475569;
+    font-size: 0.72rem;
+    line-height: 1.2;
+    margin-top: 0.2rem;
+}
+
+.hlv-source-location-popup-header {
+    align-items: center;
+    display: flex;
+    gap: 0.35rem;
+    margin-bottom: 0.75rem;
+}
+
+.hlv-source-location-table td,
+.hlv-source-location-table th {
+    vertical-align: middle;
+}
+
+.hlv-source-location-table input {
+    max-width: 8rem;
+    margin-left: auto;
+}

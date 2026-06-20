@@ -186,7 +186,6 @@ class PosOrder(models.Model):
         quants = Quant.search(domain)
         return sum(quants.mapped('quantity'))
 
-
 class PosOrderLine(models.Model):
     _inherit = 'pos.order.line'
 
@@ -195,10 +194,16 @@ class PosOrderLine(models.Model):
         string='POS Source Location',
         help='Stock source location selected from the POS interface for this line.',
     )
+    hlv_source_location_allocations = fields.Text(
+        string='POS Source Location Allocations',
+        help='JSON allocation of POS line quantity by source stock location.',
+    )
 
     @api.model
     def _load_pos_data_fields(self, config_id):
         fields_list = super()._load_pos_data_fields(config_id)
         if 'hlv_source_location_id' not in fields_list:
             fields_list.append('hlv_source_location_id')
+        if 'hlv_source_location_allocations' not in fields_list:
+            fields_list.append('hlv_source_location_allocations')
         return fields_list

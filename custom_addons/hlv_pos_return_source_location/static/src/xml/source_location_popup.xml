@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+    <t t-name="hlv_pos_return_source_location.SourceLocationAllocationPopup">
+        <Dialog title="'Chọn vị trí lấy hàng'" size="'lg'">
+            <div class="hlv-source-location-popup">
+                <div class="hlv-source-location-popup-header">
+                    <span>Số lượng cần phân bổ:</span>
+                    <strong><t t-esc="props.lineQty"/></strong>
+                    <span class="ms-3">Đã phân bổ:</span>
+                    <strong t-att-class="Math.abs(totalQty - props.lineQty) &lt;= 0.0001 ? 'text-success' : 'text-danger'">
+                        <t t-esc="totalQty"/>
+                    </strong>
+                </div>
+                <table class="table table-sm hlv-source-location-table">
+                    <thead>
+                        <tr>
+                            <th>Vị trí</th>
+                            <th class="text-end">Tồn khả dụng</th>
+                            <th class="text-end">Số lượng lấy</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <t t-foreach="props.locations" t-as="location" t-key="location.id">
+                            <tr>
+                                <td><t t-esc="location.name"/></td>
+                                <td class="text-end"><t t-esc="location.available_quantity"/></td>
+                                <td class="text-end">
+                                    <input class="form-control form-control-sm text-end"
+                                           type="number"
+                                           min="0"
+                                           step="any"
+                                           t-att-max="location.available_quantity"
+                                           t-att-value="getQty(location.id)"
+                                           t-on-input="(ev) => onQtyInput(location.id, ev)"/>
+                                </td>
+                            </tr>
+                        </t>
+                    </tbody>
+                </table>
+            </div>
+            <t t-set-slot="footer">
+                <div class="d-flex justify-content-between w-100 gap-2">
+                    <button class="btn btn-light" t-on-click="clearAll">Xóa phân bổ</button>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-secondary" t-on-click="props.close">Hủy</button>
+                        <button class="btn btn-primary" t-on-click="save">Lưu phân bổ</button>
+                    </div>
+                </div>
+            </t>
+        </Dialog>
+    </t>
+</templates>
