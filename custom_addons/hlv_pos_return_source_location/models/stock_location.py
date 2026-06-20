@@ -3,7 +3,7 @@ from odoo import models, api
 
 
 class StockLocation(models.Model):
-    _inherit = ['stock.location', 'pos.load.mixin']
+    _inherit = 'stock.location'
 
     @api.model
     def _load_pos_data_domain(self, data):
