@@ -43,6 +43,12 @@
         "views/menu_views.xml",
         "data/loyalty_tier_data.xml",
     ],
+    "assets": {
+        "web.assets_backend": [
+            "hlv_loyalty/static/src/css/loyalty_backend.css",
+            "hlv_loyalty/static/src/js/loyalty_notifications.js",
+        ],
+    },
     "installable": True,
     "application": True,
     "license": "LGPL-3",

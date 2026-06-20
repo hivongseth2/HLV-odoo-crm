@@ -2,6 +2,7 @@
 import base64
 import json
 import logging
+import requests
 from datetime import timedelta
 from odoo import fields as odoo_fields, http
 from odoo.http import request, Response
@@ -243,9 +244,37 @@ class LoyaltyExternalAPI(http.Controller):
                         status=status, content_type='application/json')
 
     @staticmethod
-    def _json_err(msg, status=400):
-        return Response(json.dumps({'error': msg}),
+    def _json_err(msg, status=400, **extra):
+        body = {'error': msg}
+        body.update(extra)
+        return Response(json.dumps(body, default=str),
                         status=status, content_type='application/json')
+
+    @staticmethod
+    def _request_json():
+        raw = request.httprequest.data or b'{}'
+        try:
+            return json.loads(raw.decode('utf-8')) if raw else {}
+        except Exception:
+            return {}
+
+    @staticmethod
+    def _mask_secret(value, keep=6):
+        value = str(value or '')
+        if not value:
+            return ''
+        if len(value) <= keep * 2:
+            return value[:2] + '***'
+        return value[:keep] + '...' + value[-keep:]
+
+    @staticmethod
+    def _normalize_vn_phone(phone):
+        if not phone:
+            return ''
+        digits = ''.join(ch for ch in str(phone).strip() if ch.isdigit())
+        if digits.startswith('84'):
+            digits = '0' + digits[2:]
+        return digits
 
     @staticmethod
     def _guess_image_mimetype(raw_bytes):
@@ -323,14 +352,14 @@ class LoyaltyExternalAPI(http.Controller):
             'points_to_next': (next_tier.min_points - pts) if next_tier else 0,
         }
 
-    @http.route('/api/v1/loyalty/tiers/<int:tier_id>/image', type='http', auth='public', methods=['GET'], csrf=False)
+    @http.route('/api/v1/loyalty/tiers/<int:tier_id>/image', type='http', auth='public', methods=['GET'], csrf=False, cors='*')
     def tier_image(self, tier_id, **kwargs):
         tier = request.env['hlv.loyalty.tier'].sudo().with_context(bin_size=False).browse(tier_id)
         if not tier.exists():
             return Response(status=404, response='Tier not found', content_type='text/plain; charset=utf-8')
         return self._image_response(tier.tier_image)
 
-    @http.route('/api/v1/loyalty/partners/<int:partner_id>/image', type='http', auth='public', methods=['GET'], csrf=False)
+    @http.route('/api/v1/loyalty/partners/<int:partner_id>/image', type='http', auth='public', methods=['GET'], csrf=False, cors='*')
     def partner_image(self, partner_id, **kwargs):
         partner = request.env['res.partner'].sudo().with_context(bin_size=False).browse(partner_id)
         if not partner.exists():
@@ -340,7 +369,7 @@ class LoyaltyExternalAPI(http.Controller):
     # ── Endpoints ────────────────────────────────────────────────────────────
 
     @http.route('/api/v1/loyalty/tiers', type='http',
-                auth='public', methods=['GET'], csrf=False)
+                auth='public', methods=['GET'], csrf=False, cors='*')
     def list_tiers(self, **kwargs):
         """GET /api/v1/loyalty/tiers
         Trả về danh sách hạng thành viên kèm ảnh và quyền lợi.
@@ -349,7 +378,7 @@ class LoyaltyExternalAPI(http.Controller):
         return self._json_ok([self._tier_dict(t) for t in tiers])
 
     @http.route('/api/v1/loyalty/partner/lookup', type='http',
-                auth='public', methods=['GET'], csrf=False)
+                auth='public', methods=['GET'], csrf=False, cors='*')
     def lookup_partner(self, **kwargs):
         """GET /api/v1/loyalty/partner/lookup?phone=0901234567
            GET /api/v1/loyalty/partner/lookup?email=abc@example.com
@@ -395,8 +424,134 @@ class LoyaltyExternalAPI(http.Controller):
             return self._json_err('Không tìm thấy khách hàng', status=404)
         return self._json_ok(results if len(results) > 1 else results[0])
 
+    @http.route('/api/v1/loyalty/zalo/phone', type='http',
+                auth='public', methods=['POST'], csrf=False, cors='*')
+    def resolve_zalo_phone(self, **kwargs):
+        """Exchange Zalo Mini App getPhoneNumber token for the real phone.
+
+        Body: {"token": "...", "access_token": "..."}
+        Zalo requires app secret_key server-side, never from the Mini App.
+        """
+        try:
+            payload = self._request_json()
+            phone_token = (payload.get('token') or payload.get('code') or '').strip()
+            access_token = (payload.get('access_token') or '').strip()
+
+            _logger.info(
+                'Zalo phone exchange input: has_token=%s token=%s has_access_token=%s access_token=%s',
+                bool(phone_token),
+                self._mask_secret(phone_token),
+                bool(access_token),
+                self._mask_secret(access_token),
+            )
+
+            if not phone_token or not access_token:
+                return self._json_err(
+                    'Missing token or access_token',
+                    status=400,
+                    code='missing_token',
+                )
+
+            ICP = request.env['ir.config_parameter'].sudo()
+            secret_key = (
+                ICP.get_param('hlv_loyalty.zalo_secret_key')
+                or ICP.get_param('zalo.secret_key')
+                or ''
+            ).strip()
+            if not secret_key:
+                _logger.error('Zalo phone exchange blocked: missing hlv_loyalty.zalo_secret_key')
+                return self._json_err(
+                    'Missing Zalo secret_key configuration on Odoo',
+                    status=503,
+                    code='missing_secret_key',
+                )
+
+            zalo_res = requests.get(
+                'https://graph.zalo.me/v2.0/me/info',
+                headers={
+                    'access_token': access_token,
+                    'code': phone_token,
+                    'secret_key': secret_key,
+                },
+                timeout=10,
+            )
+            response_text = (zalo_res.text or '')[:2000]
+            _logger.info(
+                'Zalo phone exchange response: status=%s body=%s',
+                zalo_res.status_code,
+                response_text,
+            )
+            zalo_res.raise_for_status()
+            zalo_data = zalo_res.json()
+        except requests.exceptions.RequestException:
+            status_code = getattr(locals().get('zalo_res'), 'status_code', None)
+            body = getattr(locals().get('zalo_res'), 'text', '') or ''
+            _logger.exception(
+                'Zalo phone token exchange request failed: status=%s body=%s',
+                status_code,
+                body[:2000],
+            )
+            return self._json_err(
+                'Cannot exchange Zalo phone token',
+                status=502,
+                code='zalo_request_failed',
+                zalo_status=status_code,
+                zalo_body=body[:1000],
+            )
+        except ValueError:
+            body = getattr(locals().get('zalo_res'), 'text', '') or ''
+            _logger.exception('Zalo phone token exchange returned invalid JSON: body=%s', body[:2000])
+            return self._json_err(
+                'Zalo returned invalid JSON',
+                status=502,
+                code='zalo_invalid_json',
+                zalo_body=body[:1000],
+            )
+        except Exception:
+            _logger.exception('Unexpected error in Zalo phone token exchange')
+            return self._json_err(
+                'Unexpected Zalo phone exchange error',
+                status=500,
+                code='unexpected_error',
+            )
+
+        if zalo_data.get('error') not in (0, '0', None):
+            _logger.warning(
+                'Zalo phone token exchange failed: error=%s message=%s data=%s',
+                zalo_data.get('error'),
+                zalo_data.get('message') or zalo_data.get('error'),
+                zalo_data,
+            )
+            return self._json_err(
+                zalo_data.get('message') or 'Zalo rejected phone token',
+                status=400,
+                code='zalo_rejected_token',
+                zalo_error=zalo_data.get('error'),
+                zalo_data=zalo_data,
+            )
+
+        raw_number = (
+            (zalo_data.get('data') or {}).get('number')
+            or zalo_data.get('number')
+            or ''
+        )
+        phone = self._normalize_vn_phone(raw_number)
+        if not phone:
+            _logger.warning('Zalo phone token exchange returned no phone number: %s', zalo_data)
+            return self._json_err(
+                'Zalo did not return a phone number',
+                status=404,
+                code='zalo_missing_phone',
+                zalo_data=zalo_data,
+            )
+
+        return self._json_ok({
+            'phone': phone,
+            'number': raw_number,
+        })
+
     @http.route('/api/v1/loyalty/partner/<int:partner_id>', type='http',
-                auth='public', methods=['GET'], csrf=False)
+                auth='public', methods=['GET'], csrf=False, cors='*')
     def get_partner(self, partner_id, **kwargs):
         """GET /api/v1/loyalty/partner/<id>
         Lấy thông tin điểm + hạng + voucher đang có.
@@ -437,7 +592,7 @@ class LoyaltyExternalAPI(http.Controller):
         return self._json_ok(summary)
 
     @http.route('/api/v1/loyalty/partner/<int:partner_id>/history', type='http',
-                auth='public', methods=['GET'], csrf=False)
+                auth='public', methods=['GET'], csrf=False, cors='*')
     def get_partner_history(self, partner_id, **kwargs):
         """GET /api/v1/loyalty/partner/<id>/history?limit=20&offset=0"""
         partner = request.env['res.partner'].sudo().browse(partner_id)
@@ -472,7 +627,7 @@ class LoyaltyExternalAPI(http.Controller):
         })
 
     @http.route('/api/v1/loyalty/points/add', type='json',
-                auth='public', methods=['POST'], csrf=False)
+                auth='public', methods=['POST'], csrf=False, cors='*')
     def add_points(self, **kwargs):
         """POST /api/v1/loyalty/points/add
         Cộng/trừ điểm thủ công.
@@ -534,7 +689,7 @@ class LoyaltyExternalAPI(http.Controller):
         }
 
     @http.route('/api/v1/loyalty/vouchers/<int:partner_id>', type='http',
-                auth='public', methods=['GET'], csrf=False)
+                auth='public', methods=['GET'], csrf=False, cors='*')
     def get_partner_vouchers(self, partner_id, **kwargs):
         """GET /api/v1/loyalty/vouchers/<id>?state=active"""
         partner = request.env['res.partner'].sudo().browse(partner_id)
@@ -562,7 +717,7 @@ class LoyaltyExternalAPI(http.Controller):
         } for v in vouchers])
 
     @http.route('/api/v1/loyalty/voucher/validate', type='json',
-                auth='public', methods=['POST'], csrf=False)
+                auth='public', methods=['POST'], csrf=False, cors='*')
     def validate_voucher_external(self, **kwargs):
         """POST /api/v1/loyalty/voucher/validate
         Body: {"code": "VHQ-XXXXX", "partner_id": 42, "order_amount": 500000}
@@ -601,7 +756,7 @@ class LoyaltyExternalAPI(http.Controller):
         }
 
     @http.route('/api/v1/loyalty/program/config', type='http',
-                auth='public', methods=['GET'], csrf=False)
+                auth='public', methods=['GET'], csrf=False, cors='*')
     def get_program_config(self, **kwargs):
         """GET /api/v1/loyalty/program/config
         Trả về cấu hình chương trình: tỷ lệ quy đổi, mô tả điểm.
@@ -619,7 +774,7 @@ class LoyaltyExternalAPI(http.Controller):
         })
 
     @http.route('/api/v1/loyalty/redeem/packages', type='http',
-                auth='public', methods=['GET'], csrf=False)
+                auth='public', methods=['GET'], csrf=False, cors='*')
     def list_redeem_packages(self, **kwargs):
         """GET /api/v1/loyalty/redeem/packages
         Danh sách gói quà có thể đổi (active).
@@ -642,7 +797,7 @@ class LoyaltyExternalAPI(http.Controller):
         } for p in packages])
 
     @http.route('/api/v1/loyalty/redeem/submit', type='json',
-                auth='public', methods=['POST'], csrf=False)
+                auth='public', methods=['POST'], csrf=False, cors='*')
     def submit_redeem(self, **kwargs):
         """POST /api/v1/loyalty/redeem/submit
         Tạo yêu cầu đổi thưởng (quà hoặc tiền mặt).

@@ -3,6 +3,7 @@ import logging
 from datetime import timedelta
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
+from odoo.tools import html_escape
 
 _logger = logging.getLogger(__name__)
 
@@ -134,7 +135,7 @@ class HlvLoyaltyRewardRequest(models.Model):
                     or 'New'
                 )
         records = super().create(vals_list)
-        records._send_loyalty_reward_bus_notification('request_created')
+        records.filtered(lambda rec: rec.request_type != 'gift')._send_loyalty_reward_bus_notification('request_created')
         return records
 
     def _get_loyalty_notification_users(self):
@@ -145,50 +146,128 @@ class HlvLoyaltyRewardRequest(models.Model):
         )
 
     def _send_loyalty_reward_bus_notification(self, event):
-        """Send configured in-app bus notifications for reward events."""
+        """Send configured realtime and persistent notifications for reward events."""
         bus = self.env['bus.bus'].sudo()
         for rec in self:
             users = rec._get_loyalty_notification_users()
             if not users:
                 continue
 
-            if event == 'gift_redeemed':
-                title = _('Khách đã đổi quà Loyalty')
-                package = rec.package_id.display_name if rec.package_id else _('Gói quà')
-                voucher = rec.voucher_id.code if rec.voucher_id else ''
-                message = _(
-                    '%(customer)s đã đổi %(package)s (%(points)s điểm).%(voucher)s',
-                    customer=rec.partner_id.display_name,
-                    package=package,
-                    points=f'{rec.points_required:,}',
-                    voucher=f' Voucher: {voucher}' if voucher else '',
-                )
-            else:
-                type_label = dict(rec._fields['request_type'].selection).get(rec.request_type, rec.request_type)
-                title = _('Yêu cầu đổi thưởng Loyalty mới')
-                message = _(
-                    '%(customer)s gửi %(request_type)s %(points)s điểm. Mã: %(name)s',
-                    customer=rec.partner_id.display_name,
-                    request_type=type_label,
-                    points=f'{rec.points_required:,}',
-                    name=rec.name,
-                )
+            title, message = rec._get_loyalty_reward_notification_content(event)
+            rec._post_loyalty_reward_mail_notification(users, title, message)
 
             payload = {
                 'title': title,
                 'message': message,
                 'type': 'info',
                 'sticky': True,
+                'action': rec._get_loyalty_reward_open_action(),
             }
             for user in users:
                 try:
-                    bus._sendone(user.partner_id, 'simple_notification', payload)
+                    bus._sendone(user.partner_id, 'hlv_loyalty_reward_notification', payload)
                 except Exception:
                     _logger.debug(
                         'Failed to send loyalty reward bus notification to user %s',
                         user.id,
                         exc_info=True,
                     )
+
+    def _get_loyalty_reward_notification_content(self, event):
+        self.ensure_one()
+        if event == 'gift_redeemed':
+            package = self.package_id.display_name if self.package_id else _('Gói quà')
+            voucher = self.voucher_id.code if self.voucher_id else ''
+            title = _('Khách đã đổi quà Loyalty')
+            message = _(
+                '%(customer)s đã đổi %(package)s (%(points)s điểm).%(voucher)s',
+                customer=self.partner_id.display_name,
+                package=package,
+                points=f'{self.points_required:,}',
+                voucher=f' Voucher: {voucher}' if voucher else '',
+            )
+        else:
+            type_label = dict(self._fields['request_type'].selection).get(
+                self.request_type,
+                self.request_type,
+            )
+            title = _('Yêu cầu đổi thưởng Loyalty mới')
+            message = _(
+                '%(customer)s gửi %(request_type)s %(points)s điểm. Mã: %(name)s',
+                customer=self.partner_id.display_name,
+                request_type=type_label,
+                points=f'{self.points_required:,}',
+                name=self.name,
+            )
+        return title, message
+
+    def _get_loyalty_reward_open_action(self):
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Yêu cầu đổi thưởng'),
+            'res_model': 'hlv.loyalty.reward.request',
+            'res_id': self.id,
+            'views': [[False, 'form']],
+            'view_mode': 'form',
+            'target': 'current',
+        }
+
+    def _post_loyalty_reward_mail_notification(self, users, title, message):
+        self.ensure_one()
+        partner_ids = users.mapped('partner_id').ids
+        if not partner_ids:
+            return
+
+        body = (
+            f'<p><strong>{html_escape(title)}</strong></p>'
+            f'<p>{html_escape(message)}</p>'
+            f'<ul>'
+            f'<li>{html_escape(_("Khách hàng"))}: {html_escape(self.partner_id.display_name or "")}</li>'
+            f'<li>{html_escape(_("Số điểm"))}: {self.points_required:,}</li>'
+            f'<li>{html_escape(_("Trạng thái"))}: {html_escape(dict(self._fields["state"].selection).get(self.state, self.state))}</li>'
+            f'</ul>'
+        )
+        try:
+            self.sudo().with_context(mail_post_autofollow=False).message_post(
+                body=body,
+                subject=title,
+                partner_ids=partner_ids,
+                message_type='comment',
+                subtype_xmlid='mail.mt_comment',
+            )
+        except Exception:
+            _logger.debug(
+                'Failed to post loyalty reward mail notification for request %s',
+                self.id,
+                exc_info=True,
+            )
+        self._create_loyalty_reward_activities(users, title, message)
+
+    def _create_loyalty_reward_activities(self, users, title, message):
+        self.ensure_one()
+        todo_type = self.env.ref('mail.mail_activity_data_todo', raise_if_not_found=False)
+        if not todo_type:
+            return
+        for user in users:
+            existing = self.env['mail.activity'].sudo().search([
+                ('res_model', '=', self._name),
+                ('res_id', '=', self.id),
+                ('user_id', '=', user.id),
+                ('activity_type_id', '=', todo_type.id),
+                ('summary', '=', title),
+            ], limit=1)
+            if existing:
+                continue
+            self.env['mail.activity'].sudo().create({
+                'activity_type_id': todo_type.id,
+                'res_model_id': self.env['ir.model']._get_id(self._name),
+                'res_id': self.id,
+                'user_id': user.id,
+                'summary': title,
+                'note': html_escape(message),
+                'date_deadline': fields.Date.context_today(self),
+            })
 
     # ── Business logic ─────────────────────────────────────────────────────
 
