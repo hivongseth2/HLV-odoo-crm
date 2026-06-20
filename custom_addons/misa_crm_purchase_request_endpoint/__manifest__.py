@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 {
-    "name": "MISA CRM Purchase Request Bridge",
+    "name": "MISA CRM Purchase Request Endpoint",
     "version": "18.0.1.0.0",
     "category": "Purchase",
-    "summary": "Import MISA CRM purchase request page data into Odoo purchase.request",
+    "summary": "Endpoint to import MISA CRM purchase request data into Odoo purchase.request",
     "license": "LGPL-3",
     "depends": ["purchase_request", "product", "stock"],
     "data": [

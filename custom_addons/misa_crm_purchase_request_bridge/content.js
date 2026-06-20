@@ -5,6 +5,29 @@
     return (value || "").toString().replace(/\s+/g, " ").trim();
   }
 
+  function readAmisCrmToken() {
+    const raw = localStorage.getItem("AMIS.CRM_token") || "";
+    if (!raw) {
+      return "";
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      if (typeof parsed === "string") {
+        return parsed;
+      }
+      return text(
+        parsed.access_token ||
+        parsed.token ||
+        parsed.Token ||
+        parsed.AccessToken ||
+        parsed.value ||
+        raw
+      );
+    } catch (error) {
+      return text(raw);
+    }
+  }
+
   function controlText(fieldName) {
     const el = document.querySelector(`[data-pld="${fieldName}"]`);
     if (!el) {
@@ -123,7 +146,7 @@
         updates.odooBaseUrl = url;
       }
       if (!settings.apiToken) {
-        const token = window.prompt("Import token");
+        const token = window.prompt("Odoo import token");
         if (!token) {
           showStatus("Thiếu token", true);
           return;
@@ -158,13 +181,21 @@
   }
 
   function onClick() {
-    const payload = { purchase_request: extractPurchaseRequest() };
-    if (!payload.purchase_request.PurchaseRequestNo) {
+    const purchaseRequest = extractPurchaseRequest();
+    const payload = {
+      crm_token: readAmisCrmToken(),
+      purchase_request: purchaseRequest,
+    };
+    if (!purchaseRequest.PurchaseRequestNo) {
       showStatus("Không thấy Số yêu cầu", true);
       return;
     }
-    if (!payload.purchase_request.lines.length) {
+    if (!purchaseRequest.lines.length) {
       showStatus("Không thấy dòng hàng hóa", true);
+      return;
+    }
+    if (!payload.crm_token) {
+      showStatus("Không thấy AMIS.CRM_token", true);
       return;
     }
     ensureSettingsThenImport(payload);
