@@ -1,11 +1,23 @@
-.hlv-source-location-button {
-    min-height: 48px;
+.hlv-source-location-line {
+    margin-top: 0.25rem;
+    list-style: none;
+}
+
+.hlv-source-location-line .hlv-source-location-button {
+    border: 1px solid #0f766e;
+    border-radius: 4px;
+    background: #ecfeff;
+    color: #0f172a;
+    font-size: 0.78rem;
+    font-weight: 600;
     max-width: 100%;
+    padding: 0.2rem 0.45rem;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.control-buttons .hlv-source-location-button {
-    flex: 1 1 auto;
+.orderline.selected .hlv-source-location-line .hlv-source-location-button,
+.orderline.bg-info .hlv-source-location-line .hlv-source-location-button {
+    background: #ffffff;
 }

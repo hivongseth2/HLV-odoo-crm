@@ -14,29 +14,19 @@ patch(ProductScreen.prototype, {
     setup() {
         super.setup();
         this.pos = usePos();
+        this.orm = useService("orm");
         this.dialog = useService("dialog");
         this.notification = useService("notification");
+        this.hlvSourceLocationCache = {};
         useEffect(
             () => {
-                this._hlvRenderSourceLocationButton();
+                this._hlvRenderSourceLocationButtons();
             },
             () => [this.pos.get_order()?.uiState?.selected_orderline_uuid]
         );
     },
 
-    _hlvGetLocations() {
-        const records = this.pos.data?.models?.["stock.location"]?.records ||
-            this.pos.models?.["stock.location"]?.getAll?.() || [];
-        return records
-            .filter((location) => location.usage === "internal")
-            .sort((a, b) => this._hlvGetLocationName(a).localeCompare(this._hlvGetLocationName(b)));
-    },
-
-    _hlvGetLocationName(location) {
-        return location?.complete_name || location?.display_name || location?.name || "";
-    },
-
-    _hlvGetLocationId(value) {
+    _hlvGetRecordId(value) {
         if (!value) {
             return false;
         }
@@ -49,42 +39,72 @@ patch(ProductScreen.prototype, {
         return value;
     },
 
-    _hlvGetCurrentLocation(line) {
-        const locationId = this._hlvGetLocationId(line?.[LOCATION_FIELD]);
+    _hlvGetProductId(line) {
+        return this._hlvGetRecordId(line?.product_id || line?.product || line?.get_product?.());
+    },
+
+    _hlvGetSourceLocationId(line) {
+        return this._hlvGetRecordId(line?.[LOCATION_FIELD]);
+    },
+
+    _hlvGetLineSourceLocationLabel(line) {
+        const locationId = this._hlvGetSourceLocationId(line);
         if (!locationId) {
-            return false;
+            return "Chọn vị trí lấy hàng";
         }
-        return this._hlvGetLocations().find((location) => location.id === locationId) || false;
+        const productId = this._hlvGetProductId(line);
+        const locations = this.hlvSourceLocationCache[productId] || [];
+        const location = locations.find((item) => item.id === locationId);
+        return location ? `Lấy: ${location.name}` : `Lấy vị trí #${locationId}`;
     },
 
-    _hlvGetButtonLabel() {
-        const line = this.pos.get_order()?.get_selected_orderline();
-        const location = this._hlvGetCurrentLocation(line);
-        if (!line) {
-            return "Vị trí lấy hàng";
-        }
-        return location ? `Lấy: ${this._hlvGetLocationName(location)}` : "Vị trí: mặc định";
+    _hlvGetSessionId() {
+        const session = this.pos.pos_session || this.pos.session || {};
+        return session.id || this.pos.pos_session_id || false;
     },
 
-    _hlvRenderSourceLocationButton() {
+    async _hlvLoadProductSourceLocations(line) {
+        const productId = this._hlvGetProductId(line);
+        if (!productId) {
+            return [];
+        }
+        if (!this.hlvSourceLocationCache[productId]) {
+            const configId = this.pos.config?.id || false;
+            const sessionId = this._hlvGetSessionId();
+            this.hlvSourceLocationCache[productId] = await this.orm.call(
+                "pos.session",
+                "get_product_source_locations",
+                [productId, sessionId, configId]
+            ) || [];
+        }
+        return this.hlvSourceLocationCache[productId];
+    },
+
+    _hlvRenderSourceLocationButtons() {
         const render = () => {
-            const container = document.querySelector(".control-buttons") ||
-                document.querySelector(".product-screen .leftpane .pads .subpads") ||
-                document.querySelector(".product-screen .leftpane .pads") ||
-                document.querySelector(".product-screen .leftpane");
-            if (!container) {
-                return;
-            }
-
-            let button = container.querySelector(".hlv-source-location-button");
-            if (!button) {
-                button = document.createElement("button");
-                button.type = "button";
-                button.className = "button btn btn-light hlv-source-location-button";
-                button.addEventListener("click", (ev) => this._hlvOnSourceLocationClick(ev));
-                container.appendChild(button);
-            }
-            button.textContent = this._hlvGetButtonLabel();
+            const order = this.pos.get_order();
+            const lines = order?.get_orderlines?.() || [];
+            const nodes = [...document.querySelectorAll(".product-screen .orderline")];
+            nodes.forEach((node, index) => {
+                const line = lines[index];
+                if (!line) {
+                    return;
+                }
+                const container = node.querySelector(".info-list") || node;
+                let item = node.querySelector(".hlv-source-location-line");
+                if (!item) {
+                    item = document.createElement("li");
+                    item.className = "hlv-source-location-line";
+                    const button = document.createElement("button");
+                    button.type = "button";
+                    button.className = "hlv-source-location-button";
+                    item.appendChild(button);
+                    container.appendChild(item);
+                }
+                const button = item.querySelector("button");
+                button.textContent = this._hlvGetLineSourceLocationLabel(line);
+                button.onclick = (ev) => this._hlvOnSourceLocationClick(ev, line);
+            });
         };
 
         render();
@@ -92,29 +112,22 @@ patch(ProductScreen.prototype, {
         setTimeout(render, 500);
     },
 
-    async _hlvOnSourceLocationClick(ev) {
+    async _hlvOnSourceLocationClick(ev, line) {
         ev.preventDefault();
         ev.stopPropagation();
 
-        const order = this.pos.get_order();
-        const line = order?.get_selected_orderline();
-        if (!line) {
-            this.notification.add("Chọn một dòng sản phẩm trước khi chọn vị trí lấy hàng.", { type: "warning" });
-            return;
-        }
-
-        const locations = this._hlvGetLocations();
+        const locations = await this._hlvLoadProductSourceLocations(line);
         if (!locations.length) {
-            this.notification.add("Không tìm thấy vị trí kho nội bộ cho quầy POS này.", { type: "warning" });
+            this.notification.add("Sản phẩm này chưa có tồn khả dụng ở vị trí kho nào.", { type: "warning" });
             return;
         }
 
-        const currentId = this._hlvGetLocationId(line[LOCATION_FIELD]);
+        const currentId = this._hlvGetSourceLocationId(line);
         const list = [
             { id: "default", label: "Mặc định theo quầy POS", item: false, isSelected: !currentId },
             ...locations.map((location) => ({
                 id: location.id,
-                label: this._hlvGetLocationName(location),
+                label: `${location.name} - còn ${location.available_quantity}`,
                 item: location,
                 isSelected: location.id === currentId,
             })),
@@ -129,12 +142,13 @@ patch(ProductScreen.prototype, {
             return;
         }
 
+        const value = selectedLocation ? selectedLocation.id : false;
         if (typeof line.update === "function") {
-            line.update({ [LOCATION_FIELD]: selectedLocation || false });
+            line.update({ [LOCATION_FIELD]: value });
         } else {
-            line[LOCATION_FIELD] = selectedLocation || false;
-            order?.setDirty?.();
+            line[LOCATION_FIELD] = value;
+            this.pos.get_order()?.setDirty?.();
         }
-        this._hlvRenderSourceLocationButton();
+        this._hlvRenderSourceLocationButtons();
     },
 });
