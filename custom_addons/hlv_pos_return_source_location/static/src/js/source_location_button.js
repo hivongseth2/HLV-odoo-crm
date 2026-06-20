@@ -27,7 +27,23 @@ export class SourceLocationAllocationPopup extends Component {
         for (const item of this.props.initialAllocations || []) {
             allocations[item.location_id] = item.qty;
         }
+        if (!Object.keys(allocations).length && this.props.locations.length) {
+            const preferredLocation = this.props.locations.find(
+                (location) => location.available_quantity >= this.props.lineQty
+            ) || this.props.locations[0];
+            allocations[preferredLocation.id] = this.props.lineQty;
+        }
         this.state = useState({ allocations });
+        this.onQtyInput = (locationId, ev) => {
+            const qty = Math.max(0, parseFloat(ev.target.value || "0") || 0);
+            this.state.allocations[locationId] = qty;
+        };
+        this.clearAll = () => {
+            for (const location of this.props.locations) {
+                this.state.allocations[location.id] = 0;
+            }
+        };
+        this.save = () => this._save();
     }
 
     getQty(locationId) {
@@ -38,18 +54,8 @@ export class SourceLocationAllocationPopup extends Component {
         return Object.values(this.state.allocations).reduce((sum, qty) => sum + (parseFloat(qty) || 0), 0);
     }
 
-    onQtyInput(locationId, ev) {
-        const qty = Math.max(0, parseFloat(ev.target.value || "0") || 0);
-        this.state.allocations[locationId] = qty;
-    }
+    _save() {
 
-    clearAll() {
-        for (const location of this.props.locations) {
-            this.state.allocations[location.id] = 0;
-        }
-    }
-
-    save() {
         const total = this.totalQty;
         if (Math.abs(total - this.props.lineQty) > 0.0001) {
             this.notification.add(`Tổng số lượng phân bổ phải bằng ${this.props.lineQty}. Hiện tại: ${total}.`, { type: "warning" });

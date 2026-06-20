@@ -31,7 +31,7 @@
                                            step="any"
                                            t-att-max="location.available_quantity"
                                            t-att-value="getQty(location.id)"
-                                           t-on-input="(ev) => onQtyInput(location.id, ev)"/>
+                                           t-on-input="onQtyInput.bind(null, location.id)"/>
                                 </td>
                             </tr>
                         </t>
