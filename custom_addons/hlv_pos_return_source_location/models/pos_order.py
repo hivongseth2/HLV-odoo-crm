@@ -185,3 +185,20 @@ class PosOrder(models.Model):
         ]
         quants = Quant.search(domain)
         return sum(quants.mapped('quantity'))
+
+
+class PosOrderLine(models.Model):
+    _inherit = 'pos.order.line'
+
+    hlv_source_location_id = fields.Many2one(
+        'stock.location',
+        string='POS Source Location',
+        help='Stock source location selected from the POS interface for this line.',
+    )
+
+    @api.model
+    def _load_pos_data_fields(self, config_id):
+        fields_list = super()._load_pos_data_fields(config_id)
+        if 'hlv_source_location_id' not in fields_list:
+            fields_list.append('hlv_source_location_id')
+        return fields_list

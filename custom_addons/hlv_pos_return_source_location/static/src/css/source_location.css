@@ -1,0 +1,11 @@
+.hlv-source-location-button {
+    min-height: 48px;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.control-buttons .hlv-source-location-button {
+    flex: 1 1 auto;
+}
