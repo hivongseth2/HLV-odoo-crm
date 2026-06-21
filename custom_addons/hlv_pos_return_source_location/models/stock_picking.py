@@ -20,6 +20,8 @@ class StockPicking(models.Model):
         return location
 
     def _get_hlv_pos_source_allocations(self, line):
+        if line.qty <= 0:
+            return []
         raw = line.hlv_source_location_allocations
         if not raw:
             location = self._get_hlv_pos_source_location(line)
@@ -112,7 +114,7 @@ class StockPicking(models.Model):
 
         self._validate_hlv_pos_source_allocations(stockable_lines)
 
-        allocated_lines = stockable_lines.filtered(lambda line: line.hlv_source_location_allocations)
+        allocated_lines = stockable_lines.filtered(lambda line: line.qty > 0 and line.hlv_source_location_allocations)
         normal_lines = stockable_lines - allocated_lines
         move_vals = []
 

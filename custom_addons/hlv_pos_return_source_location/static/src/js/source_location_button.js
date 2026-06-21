@@ -141,9 +141,13 @@ patch(ProductScreen.prototype, {
         return this._hlvGetRecordId(line?.product_id || line?.product || line?.get_product?.());
     },
 
-    _hlvGetLineQty(line) {
+    _hlvGetSignedLineQty(line) {
         const qty = typeof line?.get_quantity === "function" ? line.get_quantity() : line?.qty;
-        return Math.abs(parseFloat(qty || 0) || 0);
+        return parseFloat(qty || 0) || 0;
+    },
+
+    _hlvGetLineQty(line) {
+        return Math.abs(this._hlvGetSignedLineQty(line));
     },
 
     _hlvGetLineKey(line) {
@@ -151,6 +155,9 @@ patch(ProductScreen.prototype, {
     },
 
     _hlvParseAllocations(line) {
+        if (this._hlvGetSignedLineQty(line) <= 0) {
+            return [];
+        }
         const raw = line?.[ALLOCATION_FIELD];
         if (!raw) {
             const locationId = this._hlvGetRecordId(line?.[LOCATION_FIELD]);
@@ -192,6 +199,9 @@ patch(ProductScreen.prototype, {
     },
 
     _hlvGetLineSourceLocationLabel(line) {
+        if (this._hlvGetSignedLineQty(line) < 0) {
+            return "Hoàn về vị trí gốc";
+        }
         const allocations = this._hlvParseAllocations(line);
         const qty = this._hlvGetLineQty(line);
         const total = allocations.reduce((sum, item) => sum + (parseFloat(item.qty) || 0), 0);
@@ -262,6 +272,9 @@ patch(ProductScreen.prototype, {
     },
 
     async _hlvEnsureDefaultAllocation(line) {
+        if (this._hlvGetSignedLineQty(line) <= 0) {
+            return;
+        }
         const qty = this._hlvGetLineQty(line);
         if (qty <= 0) {
             return;
@@ -351,6 +364,11 @@ patch(ProductScreen.prototype, {
     async _hlvOnSourceLocationClick(ev, line) {
         ev.preventDefault();
         ev.stopPropagation();
+
+        if (this._hlvGetSignedLineQty(line) < 0) {
+            this.notification.add("Dòng hoàn tiền sẽ trả hàng từ khách về đúng vị trí gốc.", { type: "info" });
+            return;
+        }
 
         const locations = this._hlvApplyCartReservations(await this._hlvLoadProductSourceLocations(line), line);
         if (!locations.length) {
