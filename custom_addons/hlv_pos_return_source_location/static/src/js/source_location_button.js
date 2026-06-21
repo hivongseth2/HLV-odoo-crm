@@ -75,16 +75,15 @@ export class SourceLocationAllocationPopup extends Component {
     }
 
     _save() {
-
         const total = this.totalQty;
         if (Math.abs(total - this.props.lineQty) > 0.0001) {
-            this.notification.add(`Tá»•ng sá»‘ lÆ°á»£ng phÃ¢n bá»• pháº£i báº±ng ${this.props.lineQty}. Hiá»‡n táº¡i: ${total}.`, { type: "warning" });
+            this.notification.add(`T\u1ed5ng s\u1ed1 l\u01b0\u1ee3ng ph\u00e2n b\u1ed5 ph\u1ea3i b\u1eb1ng ${this.props.lineQty}. Hi\u1ec7n t\u1ea1i: ${total}.`, { type: "warning" });
             return;
         }
         for (const location of this.props.locations) {
             const qty = parseFloat(this.state.allocations[location.id] || 0) || 0;
             if (qty > location.available_quantity + 0.0001) {
-                this.notification.add(`${location.name} chá»‰ cÃ²n ${location.available_quantity}.`, { type: "warning" });
+                this.notification.add(`${location.name} ch\u1ec9 c\u00f2n ${location.available_quantity}.`, { type: "warning" });
                 return;
             }
         }
@@ -113,7 +112,15 @@ patch(ProductScreen.prototype, {
             () => {
                 this._hlvRenderSourceLocationButtons();
             },
-            () => [this.pos.get_order()?.uiState?.selected_orderline_uuid]
+            () => {
+                const order = this.pos.get_order();
+                const lines = order?.get_orderlines?.() || [];
+                return [
+                    order?.uiState?.selected_orderline_uuid,
+                    lines.length,
+                    ...lines.map((line) => `${this._hlvGetLineKey(line)}:${this._hlvGetLineQty(line)}:${line[ALLOCATION_FIELD] || ""}`),
+                ];
+            }
         );
     },
 
@@ -189,12 +196,12 @@ patch(ProductScreen.prototype, {
         const qty = this._hlvGetLineQty(line);
         const total = allocations.reduce((sum, item) => sum + (parseFloat(item.qty) || 0), 0);
         if (!allocations.length) {
-            return "Chá»n vá»‹ trÃ­ láº¥y hÃ ng";
+            return "Chọn vị trí lấy hàng";
         }
         if (Math.abs(total - qty) > 0.0001) {
-            return `PhÃ¢n bá»• ${total}/${qty}`;
+            return `Phân bổ ${total}/${qty}`;
         }
-        return allocations.length === 1 ? `Láº¥y: ${allocations[0].location_name}` : `${allocations.length} vá»‹ trÃ­ láº¥y hÃ ng`;
+        return allocations.length === 1 ? `Lấy: ${allocations[0].location_name}` : `${allocations.length} vị trí lấy hàng`;
     },
 
     _hlvGetSessionId() {
@@ -255,18 +262,24 @@ patch(ProductScreen.prototype, {
     },
 
     async _hlvEnsureDefaultAllocation(line) {
-        if (this._hlvParseAllocations(line).length || this._hlvGetLineQty(line) <= 0) {
+        const qty = this._hlvGetLineQty(line);
+        if (qty <= 0) {
+            return;
+        }
+        const currentAllocations = this._hlvParseAllocations(line);
+        const currentTotal = currentAllocations.reduce((sum, item) => sum + (parseFloat(item.qty) || 0), 0);
+        if (currentAllocations.length && Math.abs(currentTotal - qty) <= 0.0001) {
             return;
         }
         const productId = this._hlvGetProductId(line);
-        const key = line.uuid || line.id || `${productId}-${this._hlvGetLineQty(line)}`;
+        const key = line.uuid || line.id || `${productId}-${qty}`;
         if (!productId || this.hlvDefaultAllocationPromises[key]) {
             return;
         }
         this.hlvDefaultAllocationPromises[key] = true;
         try {
             const locations = this._hlvApplyCartReservations(await this._hlvLoadProductSourceLocations(line), line);
-            const allocations = this._hlvBuildDefaultAllocations(this._hlvGetLineQty(line), locations);
+            const allocations = this._hlvBuildDefaultAllocations(qty, locations);
             if (allocations.length) {
                 this._hlvSetLineAllocations(line, allocations);
                 this._hlvRenderSourceLocationButtons();
@@ -333,7 +346,7 @@ patch(ProductScreen.prototype, {
 
         const locations = this._hlvApplyCartReservations(await this._hlvLoadProductSourceLocations(line), line);
         if (!locations.length) {
-            this.notification.add("Sáº£n pháº©m nÃ y chÆ°a cÃ³ tá»“n kháº£ dá»¥ng á»Ÿ vá»‹ trÃ­ kho nÃ o.", { type: "warning" });
+            this.notification.add("Sản phẩm này chưa có tồn khả dụng ở vị trí kho nào.", { type: "warning" });
             return;
         }
 
