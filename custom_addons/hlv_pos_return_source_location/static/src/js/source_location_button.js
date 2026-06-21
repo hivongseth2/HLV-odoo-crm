@@ -170,7 +170,7 @@ patch(ProductScreen.prototype, {
             }
         }
         return reserved;
-    }
+    },
 
     _hlvApplyCartReservations(locations, line) {
         const reserved = this._hlvGetReservedSourceQtyByLocation(line);
@@ -178,7 +178,7 @@ patch(ProductScreen.prototype, {
             ...location,
             available_quantity: Math.max(0, (parseFloat(location.available_quantity || 0) || 0) - (reserved[location.id] || 0)),
         }));
-    }
+    },
 
     _hlvGetLineSourceLocationLabel(line) {
         const allocations = this._hlvParseAllocations(line);
@@ -270,7 +270,7 @@ patch(ProductScreen.prototype, {
         } finally {
             delete this.hlvDefaultAllocationPromises[key];
         }
-    }
+    },
 
     _hlvRenderAllocationSummary(item, line) {
         let summary = item.querySelector(".hlv-source-location-summary");
