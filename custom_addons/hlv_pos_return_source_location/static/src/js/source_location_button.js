@@ -78,13 +78,13 @@ export class SourceLocationAllocationPopup extends Component {
 
         const total = this.totalQty;
         if (Math.abs(total - this.props.lineQty) > 0.0001) {
-            this.notification.add(`Tổng số lượng phân bổ phải bằng ${this.props.lineQty}. Hiện tại: ${total}.`, { type: "warning" });
+            this.notification.add(`Tá»•ng sá»‘ lÆ°á»£ng phÃ¢n bá»• pháº£i báº±ng ${this.props.lineQty}. Hiá»‡n táº¡i: ${total}.`, { type: "warning" });
             return;
         }
         for (const location of this.props.locations) {
             const qty = parseFloat(this.state.allocations[location.id] || 0) || 0;
             if (qty > location.available_quantity + 0.0001) {
-                this.notification.add(`${location.name} chỉ còn ${location.available_quantity}.`, { type: "warning" });
+                this.notification.add(`${location.name} chá»‰ cÃ²n ${location.available_quantity}.`, { type: "warning" });
                 return;
             }
         }
@@ -139,6 +139,10 @@ patch(ProductScreen.prototype, {
         return Math.abs(parseFloat(qty || 0) || 0);
     },
 
+    _hlvGetLineKey(line) {
+        return line?.uuid || line?.cid || line?.id || line;
+    },
+
     _hlvParseAllocations(line) {
         const raw = line?.[ALLOCATION_FIELD];
         if (!raw) {
@@ -185,12 +189,12 @@ patch(ProductScreen.prototype, {
         const qty = this._hlvGetLineQty(line);
         const total = allocations.reduce((sum, item) => sum + (parseFloat(item.qty) || 0), 0);
         if (!allocations.length) {
-            return "Chọn vị trí lấy hàng";
+            return "Chá»n vá»‹ trÃ­ láº¥y hÃ ng";
         }
         if (Math.abs(total - qty) > 0.0001) {
-            return `Phân bổ ${total}/${qty}`;
+            return `PhÃ¢n bá»• ${total}/${qty}`;
         }
-        return allocations.length === 1 ? `Lấy: ${allocations[0].location_name}` : `${allocations.length} vị trí lấy hàng`;
+        return allocations.length === 1 ? `Láº¥y: ${allocations[0].location_name}` : `${allocations.length} vá»‹ trÃ­ láº¥y hÃ ng`;
     },
 
     _hlvGetSessionId() {
@@ -329,7 +333,7 @@ patch(ProductScreen.prototype, {
 
         const locations = this._hlvApplyCartReservations(await this._hlvLoadProductSourceLocations(line), line);
         if (!locations.length) {
-            this.notification.add("Sản phẩm này chưa có tồn khả dụng ở vị trí kho nào.", { type: "warning" });
+            this.notification.add("Sáº£n pháº©m nÃ y chÆ°a cÃ³ tá»“n kháº£ dá»¥ng á»Ÿ vá»‹ trÃ­ kho nÃ o.", { type: "warning" });
             return;
         }
 
