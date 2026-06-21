@@ -107,6 +107,8 @@ patch(ProductScreen.prototype, {
         this.dialog = useService("dialog");
         this.notification = useService("notification");
         this.hlvSourceLocationCache = {};
+        this.hlvRefundSourceLocationCache = {};
+        this.hlvRefundSourceLocationPromises = {};
         this.hlvDefaultAllocationPromises = {};
         useEffect(
             () => {
@@ -148,6 +150,10 @@ patch(ProductScreen.prototype, {
 
     _hlvGetLineQty(line) {
         return Math.abs(this._hlvGetSignedLineQty(line));
+    },
+
+    _hlvGetRefundedOrderlineId(line) {
+        return this._hlvGetRecordId(line?.refunded_orderline_id || line?.refunded_orderline || line?.refundedOrderline);
     },
 
     _hlvGetLineKey(line) {
@@ -200,7 +206,14 @@ patch(ProductScreen.prototype, {
 
     _hlvGetLineSourceLocationLabel(line) {
         if (this._hlvGetSignedLineQty(line) < 0) {
-            return "Hoàn về vị trí gốc";
+            const refundLocations = this._hlvGetCachedRefundSourceLocations(line);
+            if (refundLocations.length === 1) {
+                return `Hoàn về: ${refundLocations[0].name}`;
+            }
+            if (refundLocations.length > 1) {
+                return `Hoàn về ${refundLocations.length} vị trí gốc`;
+            }
+            return "Đang xác định vị trí hoàn";
         }
         const allocations = this._hlvParseAllocations(line);
         const qty = this._hlvGetLineQty(line);
@@ -217,6 +230,32 @@ patch(ProductScreen.prototype, {
     _hlvGetSessionId() {
         const session = this.pos.pos_session || this.pos.session || {};
         return session.id || this.pos.pos_session_id || false;
+    },
+
+    _hlvGetCachedRefundSourceLocations(line) {
+        const refundedLineId = this._hlvGetRefundedOrderlineId(line);
+        return refundedLineId ? (this.hlvRefundSourceLocationCache[refundedLineId] || []) : [];
+    },
+
+    async _hlvEnsureRefundSourceLocations(line) {
+        if (this._hlvGetSignedLineQty(line) >= 0) {
+            return;
+        }
+        const refundedLineId = this._hlvGetRefundedOrderlineId(line);
+        if (!refundedLineId || this.hlvRefundSourceLocationCache[refundedLineId] || this.hlvRefundSourceLocationPromises[refundedLineId]) {
+            return;
+        }
+        this.hlvRefundSourceLocationPromises[refundedLineId] = true;
+        try {
+            this.hlvRefundSourceLocationCache[refundedLineId] = await this.orm.call(
+                "pos.session",
+                "get_refund_source_locations",
+                [refundedLineId, this._hlvGetProductId(line)]
+            ) || [];
+            this._hlvRenderSourceLocationButtons();
+        } finally {
+            delete this.hlvRefundSourceLocationPromises[refundedLineId];
+        }
     },
 
     async _hlvLoadProductSourceLocations(line) {
@@ -309,7 +348,12 @@ patch(ProductScreen.prototype, {
             summary.className = "hlv-source-location-summary";
             item.appendChild(summary);
         }
-        const allocations = this._hlvParseAllocations(line);
+        const allocations = this._hlvGetSignedLineQty(line) < 0
+            ? this._hlvGetCachedRefundSourceLocations(line).map((location) => ({
+                location_name: location.name,
+                qty: location.quantity,
+            }))
+            : this._hlvParseAllocations(line);
         summary.innerHTML = "";
         for (const allocation of allocations) {
             const row = document.createElement("div");
@@ -348,6 +392,7 @@ patch(ProductScreen.prototype, {
                     item.appendChild(button);
                     container.appendChild(item);
                 }
+                this._hlvEnsureRefundSourceLocations(line);
                 this._hlvEnsureDefaultAllocation(line);
                 const button = item.querySelector("button");
                 button.textContent = this._hlvGetLineSourceLocationLabel(line);
@@ -366,7 +411,9 @@ patch(ProductScreen.prototype, {
         ev.stopPropagation();
 
         if (this._hlvGetSignedLineQty(line) < 0) {
-            this.notification.add("Dòng hoàn tiền sẽ trả hàng từ khách về đúng vị trí gốc.", { type: "info" });
+            const refundLocations = this._hlvGetCachedRefundSourceLocations(line);
+            const names = refundLocations.length ? refundLocations.map((location) => location.name).join(", ") : "vị trí gốc";
+            this.notification.add(`Dòng hoàn tiền sẽ trả hàng từ khách về: ${names}.`, { type: "info" });
             return;
         }
 

@@ -72,3 +72,29 @@ class PosSession(models.Model):
                 'available_quantity': available,
             })
         return sorted(result, key=lambda item: item['name'])
+
+
+    @api.model
+    def get_refund_source_locations(self, refunded_orderline_id, product_id=None):
+        orig_line = self.env['pos.order.line'].sudo().browse(refunded_orderline_id).exists()
+        if not orig_line:
+            return []
+        product = self.env['product.product'].sudo().browse(product_id).exists() if product_id else orig_line.product_id
+        move_lines = orig_line.order_id.sudo().picking_ids.move_line_ids.filtered(
+            lambda ml: ml.product_id == product and ml.quantity > 0
+        )
+        customer_move_lines = move_lines.filtered(lambda ml: ml.location_dest_id.usage == 'customer')
+        if customer_move_lines:
+            move_lines = customer_move_lines
+        grouped = {}
+        for move_line in move_lines:
+            location = move_line.location_id
+            if not location:
+                continue
+            grouped.setdefault(location.id, {
+                'id': location.id,
+                'name': location.complete_name,
+                'quantity': 0.0,
+            })
+            grouped[location.id]['quantity'] += move_line.quantity
+        return sorted(grouped.values(), key=lambda item: item['name'])
