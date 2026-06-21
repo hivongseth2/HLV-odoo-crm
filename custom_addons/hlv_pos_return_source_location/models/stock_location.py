@@ -12,9 +12,12 @@ class StockLocation(models.Model):
         config_id = config_data and config_data[0].get('id')
         if config_id:
             config = self.env['pos.config'].sudo().browse(config_id).exists()
-            source_location = config.picking_type_id.default_location_src_id if config else False
-            if source_location:
-                domain.append(('id', 'child_of', source_location.id))
+            warehouse = config.picking_type_id.warehouse_id if config and config.picking_type_id else False
+            root_location = warehouse and (warehouse.view_location_id or warehouse.lot_stock_id)
+            if root_location:
+                domain.append(('id', 'child_of', root_location.id))
+            else:
+                domain.append(('id', '=', 0))
         return domain
 
     @api.model

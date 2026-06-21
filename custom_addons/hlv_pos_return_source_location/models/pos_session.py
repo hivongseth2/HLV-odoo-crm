@@ -16,8 +16,6 @@ class PosSession(models.Model):
         warehouse = config.picking_type_id.warehouse_id if config and config.picking_type_id else False
         if warehouse:
             return warehouse.view_location_id or warehouse.lot_stock_id
-        if config and config.picking_type_id:
-            return config.picking_type_id.default_location_src_id
         return self.env['stock.location']
 
     @api.model
@@ -32,14 +30,11 @@ class PosSession(models.Model):
             ('location_id.usage', '=', 'internal'),
             ('quantity', '>', 0),
         ]
-        scoped_domain = list(domain)
-        if root_location:
-            scoped_domain.append(('location_id', 'child_of', root_location.id))
+        if not root_location:
+            return []
 
-        rows = self._hlv_read_product_location_quants(scoped_domain)
-        if not rows and root_location:
-            rows = self._hlv_read_product_location_quants(domain)
-        return rows
+        domain.append(('location_id', 'child_of', root_location.id))
+        return self._hlv_read_product_location_quants(domain)
 
     @api.model
     def _hlv_read_product_location_quants(self, domain):

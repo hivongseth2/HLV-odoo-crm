@@ -70,8 +70,21 @@ class StockPicking(models.Model):
         row = grouped and grouped[0] or {}
         return (row.get('quantity', 0.0) or 0.0) - (row.get('reserved_quantity', 0.0) or 0.0)
 
+    def _get_hlv_pos_warehouse_root_location(self):
+        warehouse = self.picking_type_id.warehouse_id
+        return warehouse and (warehouse.view_location_id or warehouse.lot_stock_id)
+
+    def _is_hlv_location_in_pos_warehouse(self, location, root_location):
+        if not root_location:
+            return False
+        return bool(self.env['stock.location'].sudo().search_count([
+            ('id', '=', location.id),
+            ('id', 'child_of', root_location.id),
+        ]))
+
     def _validate_hlv_pos_source_allocations(self, stockable_lines):
         requested = {}
+        root_location = self._get_hlv_pos_warehouse_root_location()
         for line in stockable_lines.filtered(lambda item: item.qty > 0):
             allocations = self._get_hlv_pos_source_allocations(line)
             if not allocations:
@@ -83,6 +96,13 @@ class StockPicking(models.Model):
                     'POS source locations for %s allocate %.2f but the sold quantity is %.2f.'
                 ) % (line.product_id.display_name, allocated_qty, expected_qty))
             for allocation in allocations:
+                if not self._is_hlv_location_in_pos_warehouse(allocation['location'], root_location):
+                    raise UserError(_(
+                        'Source location %s is outside the POS warehouse %s.'
+                    ) % (
+                        allocation['location'].complete_name,
+                        self.picking_type_id.warehouse_id.display_name or self.picking_type_id.display_name,
+                    ))
                 key = (line.product_id.id, allocation['location'].id)
                 requested.setdefault(key, {
                     'product': line.product_id,
