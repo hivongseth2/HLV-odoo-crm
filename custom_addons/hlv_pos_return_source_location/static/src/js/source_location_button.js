@@ -28,10 +28,9 @@ export class SourceLocationAllocationPopup extends Component {
             allocations[item.location_id] = item.qty;
         }
         if (!Object.keys(allocations).length && this.props.locations.length) {
-            const preferredLocation = this.props.locations.find(
-                (location) => location.available_quantity >= this.props.lineQty
-            ) || this.props.locations[0];
-            allocations[preferredLocation.id] = this.props.lineQty;
+            for (const item of this._buildDefaultAllocations(this.props.lineQty, this.props.locations)) {
+                allocations[item.location_id] = item.qty;
+            }
         }
         this.state = useState({ allocations });
         this.onQtyInput = (locationId, ev) => {
@@ -44,6 +43,27 @@ export class SourceLocationAllocationPopup extends Component {
             }
         };
         this.save = () => this._save();
+    }
+
+    _buildDefaultAllocations(qty, locations) {
+        let remaining = qty;
+        const result = [];
+        for (const location of locations) {
+            if (remaining <= 0) {
+                break;
+            }
+            const available = parseFloat(location.available_quantity || 0) || 0;
+            const takeQty = Math.min(available, remaining);
+            if (takeQty > 0) {
+                result.push({
+                    location_id: location.id,
+                    location_name: location.name,
+                    qty: takeQty,
+                });
+                remaining -= takeQty;
+            }
+        }
+        return result;
     }
 
     getQty(locationId) {
@@ -88,6 +108,7 @@ patch(ProductScreen.prototype, {
         this.dialog = useService("dialog");
         this.notification = useService("notification");
         this.hlvSourceLocationCache = {};
+        this.hlvDefaultAllocationPromises = {};
         useEffect(
             () => {
                 this._hlvRenderSourceLocationButtons();
@@ -134,6 +155,31 @@ patch(ProductScreen.prototype, {
         }
     },
 
+    _hlvGetReservedSourceQtyByLocation(currentLine) {
+        const order = this.pos.get_order();
+        const currentKey = this._hlvGetLineKey(currentLine);
+        const productId = this._hlvGetProductId(currentLine);
+        const reserved = {};
+        for (const line of order?.get_orderlines?.() || []) {
+            if (this._hlvGetLineKey(line) === currentKey || this._hlvGetProductId(line) !== productId) {
+                continue;
+            }
+            for (const allocation of this._hlvParseAllocations(line)) {
+                const locationId = allocation.location_id;
+                reserved[locationId] = (reserved[locationId] || 0) + (parseFloat(allocation.qty) || 0);
+            }
+        }
+        return reserved;
+    }
+
+    _hlvApplyCartReservations(locations, line) {
+        const reserved = this._hlvGetReservedSourceQtyByLocation(line);
+        return locations.map((location) => ({
+            ...location,
+            available_quantity: Math.max(0, (parseFloat(location.available_quantity || 0) || 0) - (reserved[location.id] || 0)),
+        }));
+    }
+
     _hlvGetLineSourceLocationLabel(line) {
         const allocations = this._hlvParseAllocations(line);
         const qty = this._hlvGetLineQty(line);
@@ -169,6 +215,27 @@ patch(ProductScreen.prototype, {
         return this.hlvSourceLocationCache[productId];
     },
 
+    _hlvBuildDefaultAllocations(qty, locations) {
+        let remaining = qty;
+        const result = [];
+        for (const location of locations) {
+            if (remaining <= 0) {
+                break;
+            }
+            const available = parseFloat(location.available_quantity || 0) || 0;
+            const takeQty = Math.min(available, remaining);
+            if (takeQty > 0) {
+                result.push({
+                    location_id: location.id,
+                    location_name: location.name,
+                    qty: takeQty,
+                });
+                remaining -= takeQty;
+            }
+        }
+        return result;
+    }
+
     _hlvSetLineAllocations(line, allocations) {
         const firstLocationId = allocations[0]?.location_id || false;
         const values = {
@@ -182,6 +249,28 @@ patch(ProductScreen.prototype, {
         line[ALLOCATION_FIELD] = values[ALLOCATION_FIELD];
         this.pos.get_order()?.setDirty?.();
     },
+
+    async _hlvEnsureDefaultAllocation(line) {
+        if (this._hlvParseAllocations(line).length || this._hlvGetLineQty(line) <= 0) {
+            return;
+        }
+        const productId = this._hlvGetProductId(line);
+        const key = line.uuid || line.id || `${productId}-${this._hlvGetLineQty(line)}`;
+        if (!productId || this.hlvDefaultAllocationPromises[key]) {
+            return;
+        }
+        this.hlvDefaultAllocationPromises[key] = true;
+        try {
+            const locations = this._hlvApplyCartReservations(await this._hlvLoadProductSourceLocations(line), line);
+            const allocations = this._hlvBuildDefaultAllocations(this._hlvGetLineQty(line), locations);
+            if (allocations.length) {
+                this._hlvSetLineAllocations(line, allocations);
+                this._hlvRenderSourceLocationButtons();
+            }
+        } finally {
+            delete this.hlvDefaultAllocationPromises[key];
+        }
+    }
 
     _hlvRenderAllocationSummary(item, line) {
         let summary = item.querySelector(".hlv-source-location-summary");
@@ -221,6 +310,7 @@ patch(ProductScreen.prototype, {
                     item.appendChild(button);
                     container.appendChild(item);
                 }
+                this._hlvEnsureDefaultAllocation(line);
                 const button = item.querySelector("button");
                 button.textContent = this._hlvGetLineSourceLocationLabel(line);
                 button.onclick = (ev) => this._hlvOnSourceLocationClick(ev, line);
@@ -237,7 +327,7 @@ patch(ProductScreen.prototype, {
         ev.preventDefault();
         ev.stopPropagation();
 
-        const locations = await this._hlvLoadProductSourceLocations(line);
+        const locations = this._hlvApplyCartReservations(await this._hlvLoadProductSourceLocations(line), line);
         if (!locations.length) {
             this.notification.add("Sản phẩm này chưa có tồn khả dụng ở vị trí kho nào.", { type: "warning" });
             return;

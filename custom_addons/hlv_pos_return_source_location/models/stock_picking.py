@@ -3,7 +3,8 @@ import json
 import logging
 from itertools import groupby
 
-from odoo import models
+from odoo import _, models
+from odoo.exceptions import UserError
 from odoo.tools import float_is_zero
 
 _logger = logging.getLogger(__name__)
@@ -55,6 +56,51 @@ class StockPicking(models.Model):
         vals['location_id'] = allocation['location'].id
         return vals
 
+    def _get_hlv_available_qty(self, product, location):
+        grouped = self.env['stock.quant'].sudo().read_group(
+            [
+                ('product_id', '=', product.id),
+                ('location_id', '=', location.id),
+            ],
+            ['quantity:sum', 'reserved_quantity:sum'],
+            [],
+        )
+        row = grouped and grouped[0] or {}
+        return (row.get('quantity', 0.0) or 0.0) - (row.get('reserved_quantity', 0.0) or 0.0)
+
+    def _validate_hlv_pos_source_allocations(self, stockable_lines):
+        requested = {}
+        for line in stockable_lines.filtered(lambda item: item.qty > 0):
+            allocations = self._get_hlv_pos_source_allocations(line)
+            if not allocations:
+                continue
+            allocated_qty = sum(item['qty'] for item in allocations)
+            expected_qty = abs(line.qty)
+            if abs(allocated_qty - expected_qty) > 0.0001:
+                raise UserError(_(
+                    'POS source locations for %s allocate %.2f but the sold quantity is %.2f.'
+                ) % (line.product_id.display_name, allocated_qty, expected_qty))
+            for allocation in allocations:
+                key = (line.product_id.id, allocation['location'].id)
+                requested.setdefault(key, {
+                    'product': line.product_id,
+                    'location': allocation['location'],
+                    'qty': 0.0,
+                })
+                requested[key]['qty'] += allocation['qty']
+
+        for item in requested.values():
+            available = self._get_hlv_available_qty(item['product'], item['location'])
+            if item['qty'] > available + 0.0001:
+                raise UserError(_(
+                    'Not enough stock for %s at %s. Requested %.2f, available %.2f.'
+                ) % (
+                    item['product'].display_name,
+                    item['location'].complete_name,
+                    item['qty'],
+                    available,
+                ))
+
     def _create_move_from_pos_order_lines(self, lines):
         self.ensure_one()
         stockable_lines = lines.filtered(
@@ -63,6 +109,8 @@ class StockPicking(models.Model):
         )
         if not stockable_lines:
             return
+
+        self._validate_hlv_pos_source_allocations(stockable_lines)
 
         allocated_lines = stockable_lines.filtered(lambda line: line.hlv_source_location_allocations)
         normal_lines = stockable_lines - allocated_lines
