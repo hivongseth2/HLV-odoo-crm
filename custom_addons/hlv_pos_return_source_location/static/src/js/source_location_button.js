@@ -234,7 +234,7 @@ patch(ProductScreen.prototype, {
             }
         }
         return result;
-    }
+    },
 
     _hlvSetLineAllocations(line, allocations) {
         const firstLocationId = allocations[0]?.location_id || false;
