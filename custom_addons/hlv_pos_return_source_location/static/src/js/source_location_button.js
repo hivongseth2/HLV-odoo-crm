@@ -107,6 +107,7 @@ patch(ProductScreen.prototype, {
         this.dialog = useService("dialog");
         this.notification = useService("notification");
         this.hlvSourceLocationCache = {};
+        this.hlvSourceLocationCacheTtl = 15000;
         this.hlvRefundSourceLocationCache = {};
         this.hlvRefundSourceLocationPromises = {};
         this.hlvDefaultAllocationPromises = {};
@@ -258,21 +259,28 @@ patch(ProductScreen.prototype, {
         }
     },
 
-    async _hlvLoadProductSourceLocations(line) {
+    async _hlvLoadProductSourceLocations(line, options = {}) {
         const productId = this._hlvGetProductId(line);
         if (!productId) {
             return [];
         }
-        if (!this.hlvSourceLocationCache[productId]) {
-            const configId = this.pos.config?.id || false;
-            const sessionId = this._hlvGetSessionId();
-            this.hlvSourceLocationCache[productId] = await this.orm.call(
-                "pos.session",
-                "get_product_source_locations",
-                [productId, sessionId, configId]
-            ) || [];
+        const cached = this.hlvSourceLocationCache[productId];
+        const now = Date.now();
+        if (!options.forceReload && cached && now - cached.timestamp < this.hlvSourceLocationCacheTtl) {
+            return cached.locations;
         }
-        return this.hlvSourceLocationCache[productId];
+        const configId = this.pos.config?.id || false;
+        const sessionId = this._hlvGetSessionId();
+        const locations = await this.orm.call(
+            "pos.session",
+            "get_product_source_locations",
+            [productId, sessionId, configId]
+        ) || [];
+        this.hlvSourceLocationCache[productId] = {
+            timestamp: now,
+            locations,
+        };
+        return locations;
     },
 
     _hlvBuildDefaultAllocations(qty, locations) {
@@ -330,7 +338,7 @@ patch(ProductScreen.prototype, {
         }
         this.hlvDefaultAllocationPromises[key] = true;
         try {
-            const locations = this._hlvApplyCartReservations(await this._hlvLoadProductSourceLocations(line), line);
+            const locations = this._hlvApplyCartReservations(await this._hlvLoadProductSourceLocations(line, { forceReload: true }), line);
             const allocations = this._hlvBuildDefaultAllocations(qty, locations);
             if (allocations.length) {
                 this._hlvSetLineAllocations(line, allocations);
@@ -417,7 +425,7 @@ patch(ProductScreen.prototype, {
             return;
         }
 
-        const locations = this._hlvApplyCartReservations(await this._hlvLoadProductSourceLocations(line), line);
+        const locations = this._hlvApplyCartReservations(await this._hlvLoadProductSourceLocations(line, { forceReload: true }), line);
         if (!locations.length) {
             this.notification.add("Sản phẩm này chưa có tồn khả dụng ở vị trí kho nào.", { type: "warning" });
             return;
