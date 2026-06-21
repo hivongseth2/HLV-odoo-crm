@@ -301,7 +301,15 @@ patch(ProductScreen.prototype, {
         for (const allocation of allocations) {
             const row = document.createElement("div");
             row.className = "hlv-source-location-summary-row";
-            row.textContent = `${allocation.location_name}: ${allocation.qty}`;
+            row.innerHTML = "";
+            const name = document.createElement("span");
+            name.className = "hlv-source-location-summary-name";
+            name.textContent = allocation.location_name;
+            const qty = document.createElement("span");
+            qty.className = "hlv-source-location-summary-qty";
+            qty.textContent = allocation.qty;
+            row.appendChild(name);
+            row.appendChild(qty);
             summary.appendChild(row);
         }
     },
