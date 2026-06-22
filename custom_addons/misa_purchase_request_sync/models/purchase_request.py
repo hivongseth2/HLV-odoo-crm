@@ -22,6 +22,11 @@ class PurchaseRequest(models.Model):
     _inherit = "purchase.request"
 
     # ------------------------------------------------------------
+    # THÊM CÁC TRƯỜNG TÙY CHỈNH
+    # ------------------------------------------------------------
+    sale_order_id = fields.Many2one('sale.order', string="Đơn bán hàng liên quan")
+
+    # ------------------------------------------------------------
     # NÚT BẤM TRÊN FORM (STUB - TODO)
     # ------------------------------------------------------------
     def action_send_to_misa_crm(self):

@@ -20,6 +20,9 @@
                     groups="purchase_request.group_purchase_request_manager"
                 />
             </xpath>
+            <xpath expr="//field[@name='origin']" position="after">
+                <field name="sale_order_id" readonly="state in ('done', 'rejected')"/>
+            </xpath>
         </field>
     </record>
 </odoo>

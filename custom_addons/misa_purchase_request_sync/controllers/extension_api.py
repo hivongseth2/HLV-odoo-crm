@@ -260,6 +260,14 @@ class MisaExtensionController(http.Controller):
                 payload.get("OwnerIDText")
             )
 
+            # --- Tìm Đơn bán hàng liên quan ---
+            so_name = (payload.get("SaleOrderIDText") or "").strip()
+            sale_order_id = False
+            if so_name:
+                so = env_admin["sale.order"].search([("name", "=", so_name)], limit=1)
+                if so:
+                    sale_order_id = so.id
+
             # --- Tạo PR ---
             pr_vals = {
                 "name": pr_name,
@@ -268,6 +276,7 @@ class MisaExtensionController(http.Controller):
                 "state": "to_approve",
                 "origin": "MISA CRM",
                 "description": payload.get("description") or "",
+                "sale_order_id": sale_order_id,
             }
             pr = pr_model.create(pr_vals)
 
