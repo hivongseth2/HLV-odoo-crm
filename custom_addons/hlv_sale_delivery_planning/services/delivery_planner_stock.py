@@ -50,7 +50,7 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
         _empty = {'total': 0, 'ready': 0, 'partial': 0, 'out_of_stock': 0,
                   'packing_fully': 0, 'packing_partial': 0, 'packing_unpacked': 0, 'packing_waiting': 0}
         if not sales:
-            return sales, [], _empty, {}, {}
+            return sales, [], _empty, {}, {},{}
 
         so_ids = sales.ids
         today_date = OdooDate.context_today(self)
