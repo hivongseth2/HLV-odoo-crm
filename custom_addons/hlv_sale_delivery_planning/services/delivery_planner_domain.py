@@ -38,6 +38,9 @@ class DeliveryPlannerServiceDomain(models.AbstractModel):
         filter_saler_code='', filter_htgh='', filter_delivery_type='all', filter_tag_ids='',
     ):
         """Xây dựng domain tìm kiếm Sale Order dựa trên các bộ lọc."""
+        search_query = (search_query or '').strip()
+        filter_saler_code = (filter_saler_code or '').strip()
+        filter_htgh = (filter_htgh or '').strip()
         domain = [('state', 'in', ['sale', 'done'])]
 
         # Coarse SQL prefilter on native sale.order.delivery_status to slash the
