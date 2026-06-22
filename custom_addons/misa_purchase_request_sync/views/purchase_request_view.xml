@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Thêm nút "Đẩy sang MISA CRM" vào header của form Purchase Request.
+        Nút chỉ hiển thị ở state 'draft' (chưa phê duyệt) vì đó là lúc
+        người dùng cần đẩy ngược về MISA trước khi duyệt.
+    -->
+    <record id="view_purchase_request_form_inherit_misa_sync" model="ir.ui.view">
+        <field name="name">purchase.request.form.inherit.misa.sync</field>
+        <field name="model">purchase.request</field>
+        <field name="inherit_id" ref="purchase_request.view_purchase_request_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header" position="inside">
+                <button
+                    name="action_send_to_misa_crm"
+                    string="Đẩy sang MISA CRM"
+                    type="object"
+                    class="btn-secondary"
+                    invisible="state != 'draft'"
+                    groups="purchase_request.group_purchase_request_manager"
+                />
+            </xpath>
+        </field>
+    </record>
+</odoo>
