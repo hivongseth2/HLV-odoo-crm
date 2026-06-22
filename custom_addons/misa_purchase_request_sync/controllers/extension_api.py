@@ -264,6 +264,8 @@ class MisaExtensionController(http.Controller):
             pr_vals = {
                 "name": pr_name,
                 "requested_by": user_id,
+                "assigned_to": admin_user.id if admin_user else False,
+                "state": "to_approve",
                 "origin": "MISA CRM",
                 "description": payload.get("description") or "",
             }

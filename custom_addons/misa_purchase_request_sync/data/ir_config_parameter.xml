@@ -8,7 +8,7 @@
     <data noupdate="1">
         <record id="misa_extension_token_param" model="ir.config_parameter">
             <field name="key">misa_extension_token</field>
-            <field name="value">secret_token_123</field>
+            <field name="value"></field>
         </record>
     </data>
 </odoo>
