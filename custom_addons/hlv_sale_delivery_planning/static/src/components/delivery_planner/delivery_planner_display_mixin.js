@@ -84,12 +84,30 @@ export class DeliveryPlannerDisplayMixin {
         await this.fetchData();
     }
 
+    _normalizeTextFilters() {
+        this.state.searchQuery = (this.state.searchQuery || "").trim();
+        this.state.filterSalerCode = (this.state.filterSalerCode || "").trim();
+        this.state.filterHtgh = (this.state.filterHtgh || "").trim();
+    }
+
     async onSearchKeyup(ev) {
         if (ev.key === "Enter") {
+            if (this._searchDebounceTimer) {
+                clearTimeout(this._searchDebounceTimer);
+                this._searchDebounceTimer = null;
+            }
+            this._normalizeTextFilters();
             this.state.currentPage = 1;
             this.state.selectedSOIds = new Set();
             await this.fetchData();
         }
+        this._searchDebounceTimer = setTimeout(async () => {
+            this._searchDebounceTimer = null;
+            this._normalizeTextFilters();
+            this.state.currentPage = 1;
+            this.state.selectedSOIds = new Set();
+            await this.fetchData();
+        }, 350);
     }
 
     async onTagFilterChange(ev) {

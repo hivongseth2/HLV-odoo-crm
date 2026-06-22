@@ -298,6 +298,9 @@ export class DeliveryPlannerPreferencesMixin {
     }
 
     async onFilterChange() {
+        if (this._normalizeTextFilters) {
+            this._normalizeTextFilters();
+        }
         this.state.currentPage = 1;
         this.state.kanbanColumnOrder = {};
         this.state.kanbanColPageSize = {};
