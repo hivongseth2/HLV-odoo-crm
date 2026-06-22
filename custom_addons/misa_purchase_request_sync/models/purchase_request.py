@@ -81,13 +81,8 @@ class PurchaseRequest(models.Model):
         if user:
             return (user.id, False)
 
-        # Không tìm thấy → fallback về Admin
         admin = self.env.ref("base.user_root", raise_if_not_found=False) \
             or self.env.ref("base.user_admin", raise_if_not_found=False)
-        message = _(
-            "Không tìm thấy user khớp với OwnerIDText '%(owner)s'. "
-            "Sử dụng Admin để tạo YCMH. Cần tạo user với login='%(login)s' "
-            "trong Odoo để đồng bộ chính xác."
-        ) % {"owner": owner_text, "login": login_candidate}
-        _logger.warning(message)
+        message = _("Người thực hiện: %s") % owner_text
+        _logger.info("MISA Sync PR: Khong thay user, fallback to admin. %s", message)
         return (admin.id if admin else 2, message)
