@@ -17,6 +17,7 @@ Module cung cấp:
         "purchase_request",
         "purchase_stock",
         "mail",
+        "sale",
     ],
     "data": [
         "security/ir.model.access.csv",
