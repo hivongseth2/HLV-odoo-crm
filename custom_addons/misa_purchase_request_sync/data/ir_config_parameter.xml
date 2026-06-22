@@ -5,8 +5,10 @@
         Mặc định = "secret_token_123" (CHỈ dùng cho DEV/STAGING).
         Vào Settings > Technical > System Parameters để đổi giá trị.
     -->
-    <record id="misa_extension_token_param" model="ir.config_parameter">
-        <field name="key">misa_extension_token</field>
-        <field name="value">secret_token_123</field>
-    </record>
+    <data noupdate="1">
+        <record id="misa_extension_token_param" model="ir.config_parameter">
+            <field name="key">misa_extension_token</field>
+            <field name="value">secret_token_123</field>
+        </record>
+    </data>
 </odoo>
