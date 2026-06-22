@@ -190,9 +190,9 @@ class MisaExtensionController(http.Controller):
     # ============================================================
     @http.route(
         "/api/extension/pr/create",
-        type="json",
+        type="http",
         auth="none",
-        methods=["POST"],
+        methods=["POST", "OPTIONS"],
         csrf=False,
         cors="*",
     )
@@ -216,35 +216,41 @@ class MisaExtensionController(http.Controller):
             ]
         }
         """
+        # ---- Helper: Trả về HTTP Response ----
+        def json_response(payload, status=200):
+            return request.make_response(
+                json.dumps(payload), headers=[("Content-Type", "application/json")]
+            )
+
         payload = self._parse_json_body(payload)
 
         # ---- Auth ----
         token = self._extract_token(payload)
         ok, err = self._authenticate(token)
         if not ok:
-            return err
+            return json_response(err, 401)
 
         # ---- Validate ----
         pr_name = (payload.get("PurchaseRequestName") or "").strip()
         if not pr_name:
-            return {
+            return json_response({
                 "ok": False,
                 "error": "missing_purchase_request_name",
                 "message": "Thiếu trường 'PurchaseRequestName'.",
-            }
+            }, 400)
 
         lines_in = payload.get("lines") or []
         if not isinstance(lines_in, list) or not lines_in:
-            return {
+            return json_response({
                 "ok": False,
                 "error": "missing_lines",
                 "message": "Thiếu danh sách 'lines' (ít nhất 1 dòng sản phẩm).",
-            }
+            }, 400)
 
         # ---- Switch sang admin env (an toàn phân quyền) ----
         admin_user = request.env.ref("base.user_admin", raise_if_not_found=False)
         if not admin_user:
-            return {"ok": False, "error": "admin_not_found"}
+            return json_response({"ok": False, "error": "admin_not_found", "message": "Không tìm thấy user admin để sudo."}, 500)
         env_admin = request.env(user=admin_user)
 
         try:
@@ -306,15 +312,15 @@ class MisaExtensionController(http.Controller):
             if owner_message:
                 pr.message_post(body=owner_message)
 
-            return {
+            return json_response({
                 "ok": True,
                 "id": pr.id,
                 "name": pr.name,
                 "state": pr.state,
                 "lines_created": len(pr.line_ids),
                 "owner_warning": owner_message or None,
-            }
+            })
 
         except Exception as e:
             _logger.exception("Extension API /pr/create exception: %s", e)
-            return {"ok": False, "error": "exception", "message": str(e)}
+            return json_response({"ok": False, "error": "exception", "message": str(e)}, 500)
