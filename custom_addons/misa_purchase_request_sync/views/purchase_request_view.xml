@@ -20,8 +20,11 @@
                     groups="purchase_request.group_purchase_request_manager"
                 />
             </xpath>
-            <xpath expr="//field[@name='origin']" position="after">
+            <xpath expr="//field[@name='requested_by']" position="after">
                 <field name="sale_order_id" readonly="state in ('done', 'rejected')"/>
+                <field name="delivery_address" readonly="state in ('done', 'rejected')"/>
+                <field name="create_date" readonly="1"/>
+                <field name="write_date" readonly="1"/>
             </xpath>
         </field>
     </record>

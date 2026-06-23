@@ -172,6 +172,28 @@ class MisaExtensionController(http.Controller):
                 if pr.state
                 else ""
             )
+            # Fetch lines and their quantities
+            lines_data = []
+            for line in pr.line_ids:
+                # purchased_qty is usually standard in OCA purchase_request
+                # qty_received might not be present, so we compute it from related purchase_lines if available
+                qty_received = 0.0
+                if hasattr(line, 'purchase_lines'):
+                    for pl in line.purchase_lines:
+                        if hasattr(pl, 'qty_received'):
+                            qty_received += pl.qty_received
+                elif hasattr(line, 'purchased_qty'):
+                    qty_received = line.purchased_qty # Fallback to purchased_qty if qty_received is not available
+
+                lines_data.append({
+                    "product_code": line.product_id.default_code if line.product_id else "",
+                    "name": line.name,
+                    "qty": line.product_qty,
+                    "qty_received": qty_received,
+                })
+
+            can_revoke = pr.state in ['draft', 'to_approve']
+
             payload = {
                 "ok": True,
                 "exists": True,
@@ -179,11 +201,59 @@ class MisaExtensionController(http.Controller):
                 "name": pr.name,
                 "status": pr.state,
                 "status_label": state_label,
+                "can_revoke": can_revoke,
+                "lines": lines_data,
             }
 
         return request.make_response(
             json.dumps(payload), headers=[("Content-Type", "application/json")]
         )
+
+    # ============================================================
+    # POST /api/extension/pr/revoke
+    # ============================================================
+    @http.route(
+        "/api/extension/pr/revoke",
+        type="http",
+        auth="none",
+        methods=["POST", "OPTIONS"],
+        csrf=False,
+        cors="*",
+    )
+    def api_extension_pr_revoke(self, **payload):
+        """
+        Thu hồi (xóa) YCMH trên Odoo.
+        """
+        def json_response(payload, status=200):
+            return request.make_response(
+                json.dumps(payload), headers=[("Content-Type", "application/json")]
+            )
+
+        payload = self._parse_json_body(payload)
+        token = self._extract_token(payload)
+        ok, err = self._authenticate(token)
+        if not ok:
+            return json_response(err, 401)
+
+        pr_name = (payload.get("PurchaseRequestName") or "").strip()
+        if not pr_name:
+            return json_response({"ok": False, "error": "missing_name", "message": "Thiếu PurchaseRequestName."}, 400)
+
+        admin_user = request.env.ref("base.user_admin", raise_if_not_found=False)
+        env = request.env(user=admin_user) if admin_user else request.env
+
+        pr = env["purchase.request"].sudo().search([("name", "=", pr_name)], limit=1)
+        if not pr:
+            return json_response({"ok": False, "error": "not_found", "message": "Không tìm thấy YCMH."}, 404)
+
+        if pr.state not in ['draft', 'to_approve']:
+            return json_response({"ok": False, "error": "invalid_state", "message": f"Không thể thu hồi YCMH ở trạng thái {pr.state}."}, 400)
+
+        try:
+            pr.unlink()
+            return json_response({"ok": True, "message": "Đã thu hồi YCMH thành công."})
+        except Exception as e:
+            return json_response({"ok": False, "error": "exception", "message": str(e)}, 500)
 
     # ============================================================
     # POST /api/extension/pr/create

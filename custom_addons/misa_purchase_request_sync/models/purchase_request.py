@@ -25,6 +25,7 @@ class PurchaseRequest(models.Model):
     # THÊM CÁC TRƯỜNG TÙY CHỈNH
     # ------------------------------------------------------------
     sale_order_id = fields.Many2one('sale.order', string="Đơn bán hàng liên quan")
+    delivery_address = fields.Char(string="Địa điểm giao")
 
     # ------------------------------------------------------------
     # NÚT BẤM TRÊN FORM (STUB - TODO)
