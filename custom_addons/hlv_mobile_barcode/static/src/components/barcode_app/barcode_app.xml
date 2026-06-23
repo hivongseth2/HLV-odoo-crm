@@ -20,6 +20,11 @@
                                 <span style="color: var(--text-muted);"><t t-esc="(state.pickingIsPutaway and state.scannedLocationName) ? state.scannedLocationName : state.pickingLocationDestName"/></span>
                             </span>
                         </t>
+                        <t t-elif="(state.currentView === 'move' or state.currentView === 'batch_move') and state.prefillLocationName">
+                            <span style="font-size: 0.9em; display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px; font-weight: 700;">
+                                <i class="fa fa-map-marker-alt" style="margin-right: 4px; color: var(--danger-color);"></i> Nguồn: <span style="color: var(--primary-color);"><t t-esc="state.prefillLocationName"/></span> 
+                            </span>
+                        </t>
                         <t t-else="">
                             <i class="fa fa-boxes" style="margin-right: 6px;"></i> Kho <t t-esc="state.warehouseCode || 'HLV'"/>
                         </t>

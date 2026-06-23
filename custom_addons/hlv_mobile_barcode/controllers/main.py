@@ -3193,7 +3193,7 @@ class HLVMobileBarcodeController(http.Controller):
         return {'error': _('Không tìm thấy vị trí lấy hàng hợp lệ.')}
 
     @http.route('/hlv_mobile_barcode/move_location', type='json', auth='user')
-    def move_location(self, product_id, source_barcode, qty, dest_warehouse_id=False, dest_location_id=False):
+    def move_location(self, product_id, source_barcode, qty, dest_warehouse_id=False, dest_location_id=False, source_warehouse_id=False):
         product = request.env['product.product'].sudo().browse(product_id)
         if not product.exists():
             return {'error': _('Không tìm thấy sản phẩm')}
@@ -3216,7 +3216,11 @@ class HLVMobileBarcodeController(http.Controller):
         if not transit_loc:
             return {'error': _('Không tìm thấy kho trung chuyển (Transit Location)')}
             
+        # Determine warehouse using parent_of logic if warehouse_id is missing
         warehouse = source_loc.warehouse_id
+        if not warehouse:
+            warehouse = request.env['stock.warehouse'].sudo().search([('view_location_id', 'parent_of', source_loc.id)], limit=1)
+            
         if warehouse and warehouse.int_type_id and warehouse.in_type_id:
             picking_type_int = warehouse.int_type_id
             picking_type_in = warehouse.in_type_id

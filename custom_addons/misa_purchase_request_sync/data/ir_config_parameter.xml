@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        System Parameter lưu token xác thực cho Browser Extension.
+        Mặc định = "secret_token_123" (CHỈ dùng cho DEV/STAGING).
+        Vào Settings > Technical > System Parameters để đổi giá trị.
+    -->
+    <data noupdate="1">
+        <record id="misa_extension_token_param" model="ir.config_parameter">
+            <field name="key">misa_extension_token</field>
+            <field name="value"></field>
+        </record>
+    </data>
+</odoo>
