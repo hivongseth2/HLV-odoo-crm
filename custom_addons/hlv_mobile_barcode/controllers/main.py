@@ -3357,6 +3357,11 @@ class HLVMobileBarcodeController(http.Controller):
             picking_int.action_confirm()
             
             # --- FORCE EXACT SOURCE LOCATION ---
+            # Xóa các dòng auto-reserve của Odoo để tự tạo thủ công chính xác
+            auto_reserved_lines = picking_int.move_ids.mapped('move_line_ids')
+            if auto_reserved_lines:
+                auto_reserved_lines.sudo().unlink()
+                
             # Thay vì gọi action_assign (có thể lấy nhầm từ vị trí con do logic child_of của Odoo), 
             # ta chủ động tạo move_line_ids từ các quant ĐÚNG TẠI source_loc
             quants = request.env['stock.quant'].sudo().search([
@@ -3544,6 +3549,11 @@ class HLVMobileBarcodeController(http.Controller):
             picking_int.action_confirm()
             
             # --- FORCE EXACT SOURCE LOCATION ---
+            # Xóa các dòng auto-reserve của Odoo để tự tạo thủ công chính xác
+            auto_reserved_lines = picking_int.move_ids.mapped('move_line_ids')
+            if auto_reserved_lines:
+                auto_reserved_lines.sudo().unlink()
+
             for move in picking_int.move_ids:
                 quants = request.env['stock.quant'].sudo().search([
                     ('product_id', '=', move.product_id.id),
