@@ -3201,7 +3201,10 @@ class HLVMobileBarcodeController(http.Controller):
         if not source_barcode:
             return {'error': _('Mã vạch nguồn không hợp lệ')}
         source_barcode = source_barcode.strip()
+        # Tìm vị trí nguồn: ưu tiên barcode, fallback sang name
         source_loc = request.env['stock.location'].sudo().search([('barcode', '=', source_barcode)], limit=1)
+        if not source_loc:
+            source_loc = request.env['stock.location'].sudo().search([('name', '=', source_barcode)], limit=1)
         if not source_loc:
             return {'error': _('Không tìm thấy vị trí nguồn')}
             
@@ -3231,7 +3234,7 @@ class HLVMobileBarcodeController(http.Controller):
         if not picking_type_int or not picking_type_in:
             return {'error': _('Chưa cấu hình Operation Types (INT, IN)')}
 
-        # 1. Create and Validate INT picking (Source -> Transit)
+        # 1. Create and Validate INT picking (Source -> Transit or Dest)
         partner_id = False
         target_location_dest_id = transit_loc.id
         override_dest_loc_id = False
@@ -3260,56 +3263,107 @@ class HLVMobileBarcodeController(http.Controller):
             if actual_warehouse and actual_warehouse.partner_id:
                 partner_id = actual_warehouse.partner_id.id
 
-        picking_vals = {
-            'picking_type_id': picking_type_int.id,
-            'location_id': source_loc.id,
-            'location_dest_id': target_location_dest_id,
-            'partner_id': partner_id,
-        }
-        
-        if override_dest_loc_id:
-            picking_vals['note'] = f"DEST_LOC_OVERRIDE:{override_dest_loc_id}\n"
+        try:
+            picking_vals = {
+                'picking_type_id': picking_type_int.id,
+                'location_id': source_loc.id,
+                'location_dest_id': target_location_dest_id,
+                'partner_id': partner_id,
+            }
             
-        picking_int = request.env['stock.picking'].create(picking_vals)
-        
-        move_int = request.env['stock.move'].create({
-            'name': product.name,
-            'product_id': product.id,
-            'product_uom': product.uom_id.id,
-            'product_uom_qty': qty,
-            'location_id': source_loc.id,
-            'location_dest_id': target_location_dest_id,
-            'picking_id': picking_int.id,
-            'picking_type_id': picking_type_int.id,
-        })
-        
-        picking_int.action_confirm()
-        picking_int.action_assign()
-        
-        for ml in picking_int.move_line_ids:
-            ml.quantity = qty
-            
-        picking_int.button_validate()
-        
-        # Override step 2 destination if requested
-        if override_dest_loc_id:
-            step2_picking = request.env['stock.picking'].sudo().search([('source_transfer_id', '=', picking_int.id)], limit=1)
-            if step2_picking:
-                request.env.cr.execute("""
-                    UPDATE stock_picking SET location_dest_id = %s WHERE id = %s
-                """, (override_dest_loc_id, step2_picking.id))
-                request.env.cr.execute("""
-                    UPDATE stock_move SET location_dest_id = %s WHERE picking_id = %s
-                """, (override_dest_loc_id, step2_picking.id))
-                request.env.cr.execute("""
-                    UPDATE stock_move_line SET location_dest_id = %s WHERE picking_id = %s
-                """, (override_dest_loc_id, step2_picking.id))
-                step2_picking.invalidate_recordset()
+            if override_dest_loc_id:
+                picking_vals['note'] = f"DEST_LOC_OVERRIDE:{override_dest_loc_id}\n"
                 
-        picking_in = request.env['stock.picking'].search([('source_transfer_id', '=', picking_int.id)], limit=1)
-        in_picking_name = picking_in.name if picking_in else False
-        
-        return {'success': True, 'in_picking_name': in_picking_name}
+            picking_int = request.env['stock.picking'].sudo().create(picking_vals)
+            
+            move_int = request.env['stock.move'].sudo().create({
+                'name': product.name,
+                'product_id': product.id,
+                'product_uom': product.uom_id.id,
+                'product_uom_qty': qty,
+                'location_id': source_loc.id,
+                'location_dest_id': target_location_dest_id,
+                'picking_id': picking_int.id,
+                'picking_type_id': picking_type_int.id,
+            })
+            
+            picking_int.action_confirm()
+            picking_int.action_assign()
+            
+            # Kiểm tra có move_line_ids sau action_assign không
+            if not picking_int.move_line_ids:
+                # Không reserve được → tạo move line thủ công
+                request.env['stock.move.line'].sudo().create({
+                    'move_id': move_int.id,
+                    'picking_id': picking_int.id,
+                    'product_id': product.id,
+                    'product_uom_id': product.uom_id.id,
+                    'location_id': source_loc.id,
+                    'location_dest_id': target_location_dest_id,
+                    'quantity': qty,
+                })
+            else:
+                # Gán số lượng cho từng move line theo tỷ lệ reserve
+                total_reserved = sum(ml.quantity for ml in picking_int.move_line_ids)
+                if total_reserved > 0:
+                    for ml in picking_int.move_line_ids:
+                        ml.quantity = (ml.quantity / total_reserved) * qty
+                else:
+                    # Chưa reserve gì → gán toàn bộ qty cho line đầu tiên
+                    first_ml = picking_int.move_line_ids[0]
+                    first_ml.quantity = qty
+            
+            # Gọi button_validate và xử lý kết quả trả về
+            res_validate = picking_int.button_validate()
+            
+            # Xử lý wizard xác nhận (backorder hoặc immediate transfer)
+            if isinstance(res_validate, dict):
+                if res_validate.get('res_model') == 'stock.backorder.confirmation':
+                    # Tạo backorder cho phần chưa chuyển
+                    wizard_context = res_validate.get('context', {})
+                    if 'default_pick_ids' not in wizard_context:
+                        wizard_context['default_pick_ids'] = [(4, picking_int.id)]
+                    backorder_wizard = request.env['stock.backorder.confirmation'].sudo().with_context(wizard_context).create({
+                        'pick_ids': [(4, picking_int.id)]
+                    })
+                    backorder_wizard.process()
+                elif res_validate.get('res_model') == 'stock.immediate.transfer':
+                    # Immediate transfer wizard: xác nhận chuyển ngay
+                    wizard_context = res_validate.get('context', {})
+                    if 'default_pick_ids' not in wizard_context:
+                        wizard_context['default_pick_ids'] = [(4, picking_int.id)]
+                    immediate_wizard = request.env['stock.immediate.transfer'].sudo().with_context(wizard_context).create({
+                        'pick_ids': [(4, picking_int.id)]
+                    })
+                    immediate_wizard.process()
+            
+            # Kiểm tra phiếu đã thực sự chuyển sang trạng thái done
+            picking_int.invalidate_recordset()
+            if picking_int.state != 'done':
+                return {'error': _('Không thể xác nhận phiếu chuyển kho. Trạng thái hiện tại: %s. Vui lòng kiểm tra tồn kho tại vị trí nguồn.', picking_int.state)}
+            
+            # Override step 2 destination if requested
+            if override_dest_loc_id:
+                step2_picking = request.env['stock.picking'].sudo().search([('source_transfer_id', '=', picking_int.id)], limit=1)
+                if step2_picking:
+                    request.env.cr.execute("""
+                        UPDATE stock_picking SET location_dest_id = %s WHERE id = %s
+                    """, (override_dest_loc_id, step2_picking.id))
+                    request.env.cr.execute("""
+                        UPDATE stock_move SET location_dest_id = %s WHERE picking_id = %s
+                    """, (override_dest_loc_id, step2_picking.id))
+                    request.env.cr.execute("""
+                        UPDATE stock_move_line SET location_dest_id = %s WHERE picking_id = %s
+                    """, (override_dest_loc_id, step2_picking.id))
+                    step2_picking.invalidate_recordset()
+                    
+            picking_in = request.env['stock.picking'].sudo().search([('source_transfer_id', '=', picking_int.id)], limit=1)
+            in_picking_name = picking_in.name if picking_in else False
+            
+            return {'success': True, 'in_picking_name': in_picking_name}
+        except Exception as e:
+            _logger.error("move_location error: %s", str(e), exc_info=True)
+            return {'error': str(e)}
 
     @http.route('/hlv_mobile_barcode/move_location_batch', type='json', auth='user')
     def move_location_batch(self, source_barcode, lines, pack=False):
@@ -3319,7 +3373,10 @@ class HLVMobileBarcodeController(http.Controller):
         if not source_barcode:
             return {'error': _('Mã vạch nguồn không hợp lệ')}
         source_barcode = source_barcode.strip()
+        # Tìm vị trí nguồn: ưu tiên barcode, fallback sang name
         source_loc = request.env['stock.location'].sudo().search([('barcode', '=', source_barcode)], limit=1)
+        if not source_loc:
+            source_loc = request.env['stock.location'].sudo().search([('name', '=', source_barcode)], limit=1)
         if not source_loc:
             return {'error': _('Không tìm thấy vị trí nguồn')}
             
@@ -3345,60 +3402,89 @@ class HLVMobileBarcodeController(http.Controller):
         if not picking_type_int or not picking_type_in:
             return {'error': _('Chưa cấu hình Operation Types (INT, IN)')}
 
-        # 1. Create INT picking (Source -> Transit)
-        partner_id = False
-        actual_warehouse = warehouse
-        if not actual_warehouse:
-            actual_warehouse = request.env['stock.warehouse'].sudo().search([('view_location_id', 'parent_of', source_loc.id)], limit=1)
-        if actual_warehouse and actual_warehouse.partner_id:
-            partner_id = actual_warehouse.partner_id.id
+        try:
+            # 1. Create INT picking (Source -> Transit)
+            partner_id = False
+            actual_warehouse = warehouse
+            if not actual_warehouse:
+                actual_warehouse = request.env['stock.warehouse'].sudo().search([('view_location_id', 'parent_of', source_loc.id)], limit=1)
+            if actual_warehouse and actual_warehouse.partner_id:
+                partner_id = actual_warehouse.partner_id.id
 
-        picking_int = request.env['stock.picking'].create({
-            'picking_type_id': picking_type_int.id,
-            'location_id': source_loc.id,
-            'location_dest_id': transit_loc.id,
-            'partner_id': partner_id,
-        })
-        
-        for line in lines:
-            product = request.env['product.product'].browse(line['product_id'])
-            if not product.exists():
-                continue
-            request.env['stock.move'].create({
-                'name': _('Mobile Batch Move OUT: %s', product.display_name),
-                'picking_id': picking_int.id,
-                'product_id': product.id,
-                'product_uom_qty': line['qty'],
-                'product_uom': product.uom_id.id,
+            picking_int = request.env['stock.picking'].sudo().create({
+                'picking_type_id': picking_type_int.id,
                 'location_id': source_loc.id,
                 'location_dest_id': transit_loc.id,
+                'partner_id': partner_id,
             })
-        
-        picking_int.action_confirm()
-        
-        package_name = False
-        if pack:
-            # Set quantity so put_in_pack knows what to pack
-            for move in picking_int.move_ids:
-                move.quantity = move.product_uom_qty
             
-            try:
-                res = picking_int.action_put_in_pack()
-                if isinstance(res, dict) and res.get('res_model') == 'stock.quant.package':
-                    package_id = res.get('res_id')
-                    package = request.env['stock.quant.package'].browse(package_id)
-                    package_name = package.name
-                elif getattr(res, 'id', False):
-                    package_name = res.name
-            except Exception as e:
-                return {'error': _('Lỗi khi đóng gói: %s', str(e))}
+            for line in lines:
+                product = request.env['product.product'].sudo().browse(line['product_id'])
+                if not product.exists():
+                    continue
+                request.env['stock.move'].sudo().create({
+                    'name': _('Mobile Batch Move OUT: %s', product.display_name),
+                    'picking_id': picking_int.id,
+                    'product_id': product.id,
+                    'product_uom_qty': line['qty'],
+                    'product_uom': product.uom_id.id,
+                    'location_id': source_loc.id,
+                    'location_dest_id': transit_loc.id,
+                })
+            
+            picking_int.action_confirm()
+            
+            package_name = False
+            if pack:
+                # Set quantity so put_in_pack knows what to pack
+                for move in picking_int.move_ids:
+                    move.quantity = move.product_uom_qty
                 
-        picking_int.button_validate()
-        
-        picking_in = request.env['stock.picking'].search([('source_transfer_id', '=', picking_int.id)], limit=1)
-        in_picking_name = picking_in.name if picking_in else False
-        
-        return {'success': True, 'in_picking_name': in_picking_name, 'package_name': package_name}
+                try:
+                    res = picking_int.action_put_in_pack()
+                    if isinstance(res, dict) and res.get('res_model') == 'stock.quant.package':
+                        package_id = res.get('res_id')
+                        package = request.env['stock.quant.package'].browse(package_id)
+                        package_name = package.name
+                    elif getattr(res, 'id', False):
+                        package_name = res.name
+                except Exception as e:
+                    return {'error': _('Lỗi khi đóng gói: %s', str(e))}
+            
+            # Gọi button_validate và xử lý kết quả trả về
+            res_validate = picking_int.button_validate()
+            
+            # Xử lý wizard xác nhận (backorder hoặc immediate transfer)
+            if isinstance(res_validate, dict):
+                if res_validate.get('res_model') == 'stock.backorder.confirmation':
+                    wizard_context = res_validate.get('context', {})
+                    if 'default_pick_ids' not in wizard_context:
+                        wizard_context['default_pick_ids'] = [(4, picking_int.id)]
+                    backorder_wizard = request.env['stock.backorder.confirmation'].sudo().with_context(wizard_context).create({
+                        'pick_ids': [(4, picking_int.id)]
+                    })
+                    backorder_wizard.process()
+                elif res_validate.get('res_model') == 'stock.immediate.transfer':
+                    wizard_context = res_validate.get('context', {})
+                    if 'default_pick_ids' not in wizard_context:
+                        wizard_context['default_pick_ids'] = [(4, picking_int.id)]
+                    immediate_wizard = request.env['stock.immediate.transfer'].sudo().with_context(wizard_context).create({
+                        'pick_ids': [(4, picking_int.id)]
+                    })
+                    immediate_wizard.process()
+            
+            # Kiểm tra phiếu đã thực sự chuyển sang trạng thái done
+            picking_int.invalidate_recordset()
+            if picking_int.state != 'done':
+                return {'error': _('Không thể xác nhận phiếu chuyển kho hàng loạt. Trạng thái: %s', picking_int.state)}
+            
+            picking_in = request.env['stock.picking'].sudo().search([('source_transfer_id', '=', picking_int.id)], limit=1)
+            in_picking_name = picking_in.name if picking_in else False
+            
+            return {'success': True, 'in_picking_name': in_picking_name, 'package_name': package_name}
+        except Exception as e:
+            _logger.error("move_location_batch error: %s", str(e), exc_info=True)
+            return {'error': str(e)}
 
     @http.route('/hlv_mobile_barcode/get_package_details', type='json', auth='user')
     def get_package_details(self, picking_id, package_id):
