@@ -21,6 +21,7 @@ def pre_init_hook(env):
         ("hlv_barcode_return_require_detail_scan", "BOOLEAN DEFAULT FALSE"),
         ("hlv_barcode_return_skip_package_scan", "BOOLEAN DEFAULT FALSE"),
         ("hlv_barcode_return_skip_product_scan", "BOOLEAN DEFAULT FALSE"),
+        ("hlv_barcode_google_maps_api_key", "VARCHAR"),
     ]
 
     for column_name, column_def in company_columns:
