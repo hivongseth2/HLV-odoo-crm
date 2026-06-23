@@ -35,6 +35,7 @@ export class LocationMove extends Component {
             destLocationInput: "",
             qty: 0,
             loading: false,
+            inFlight: false,
         });
 
         this.localScanner = null;
@@ -163,6 +164,9 @@ export class LocationMove extends Component {
     }
 
     async doMove() {
+        // Chặn double-click / Enter liên tục ngay từ đầu — inFlight được set đồng bộ,
+        // không phụ thuộc vào OWL re-render.
+        if (this.state.inFlight) return;
         if (!this.state.qty || this.state.qty <= 0) {
             this.notification.add("Số lượng chuyển không hợp lệ", { type: "danger" });
             return;
@@ -175,7 +179,8 @@ export class LocationMove extends Component {
             this.notification.add("Vui lòng quét vị trí đích", { type: "danger" });
             return;
         }
-        
+
+        this.state.inFlight = true;
         this.state.loading = true;
         try {
             const res = await rpc("/hlv_mobile_barcode/move_location", {
@@ -185,7 +190,7 @@ export class LocationMove extends Component {
                 dest_warehouse_id: this.props.destWarehouseId || false,
                 dest_location_id: this.state.destLocationId
             });
-            
+
             if (res.error) {
                 this.notification.add(res.error, { type: "danger" });
             } else {
@@ -199,6 +204,7 @@ export class LocationMove extends Component {
         } catch (e) {
             this.notification.add("Lỗi kết nối máy chủ", { type: "danger" });
         } finally {
+            this.state.inFlight = false;
             this.state.loading = false;
         }
     }
