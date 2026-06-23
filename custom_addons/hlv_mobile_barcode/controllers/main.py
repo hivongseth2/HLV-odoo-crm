@@ -52,9 +52,9 @@ def _is_putaway_picking(picking):
     return pt_type == 'incoming' or (pt_type == 'internal' and 'INT' not in pt_code and 'IN' in pt_code)
 
 def _uses_qty_scanned_progress(picking):
-    if not picking or not picking.exists() or _is_return_picking(picking):
+    if not picking or not picking.exists():
         return False
-    return bool(picking.source_transfer_id) or _is_pick_picking(picking) or _is_putaway_picking(picking)
+    return bool(picking.source_transfer_id) or _is_pick_picking(picking) or _is_putaway_picking(picking) or _is_return_picking(picking)
 
 def _can_edit_packages(picking):
     return bool(
@@ -1417,8 +1417,7 @@ class HLVMobileBarcodeController(http.Controller):
         # Cờ nhận diện phiếu nhập thuần (Incoming Receipt - IN)
         # Dùng cho logic ghi đè location_dest_id khi quét vị trí cụ thể
         is_incoming_receipt = (pt_type == 'incoming') and not is_return_picking and not picking.source_transfer_id
-
-        uses_qty_scanned = is_pick_picking or (is_putaway and not is_return_picking)
+        uses_qty_scanned = _uses_qty_scanned_progress(picking)
         
         # 1. Try to find location first
         location = request.env['stock.location'].sudo().search(['|', ('barcode', '=', barcode), ('name', '=', barcode)], limit=1)
