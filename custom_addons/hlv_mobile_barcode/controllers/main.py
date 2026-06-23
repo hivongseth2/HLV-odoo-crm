@@ -3288,11 +3288,24 @@ class HLVMobileBarcodeController(http.Controller):
             })
             
             picking_int.action_confirm()
-            picking_int.action_assign()
             
-            # Kiểm tra có move_line_ids sau action_assign không
-            if not picking_int.move_line_ids:
-                # Không reserve được → tạo move line thủ công
+            # --- FORCE EXACT SOURCE LOCATION ---
+            # Thay vì gọi action_assign (có thể lấy nhầm từ vị trí con do logic child_of của Odoo), 
+            # ta chủ động tạo move_line_ids từ các quant ĐÚNG TẠI source_loc
+            quants = request.env['stock.quant'].sudo().search([
+                ('product_id', '=', product.id),
+                ('location_id', '=', source_loc.id), # Không dùng child_of
+                ('quantity', '>', 0)
+            ], order='in_date ASC, id ASC')
+            
+            remaining_qty = qty
+            for q in quants:
+                if remaining_qty <= 0:
+                    break
+                take_qty = min(q.quantity, remaining_qty) 
+                if take_qty <= 0:
+                    continue
+                    
                 request.env['stock.move.line'].sudo().create({
                     'move_id': move_int.id,
                     'picking_id': picking_int.id,
@@ -3300,18 +3313,25 @@ class HLVMobileBarcodeController(http.Controller):
                     'product_uom_id': product.uom_id.id,
                     'location_id': source_loc.id,
                     'location_dest_id': target_location_dest_id,
-                    'quantity': qty,
+                    'quantity': take_qty,
+                    'lot_id': q.lot_id.id if q.lot_id else False,
+                    'package_id': q.package_id.id if q.package_id else False,
+                    'owner_id': q.owner_id.id if q.owner_id else False,
                 })
-            else:
-                # Gán số lượng cho từng move line theo tỷ lệ reserve
-                total_reserved = sum(ml.quantity for ml in picking_int.move_line_ids)
-                if total_reserved > 0:
-                    for ml in picking_int.move_line_ids:
-                        ml.quantity = (ml.quantity / total_reserved) * qty
-                else:
-                    # Chưa reserve gì → gán toàn bộ qty cho line đầu tiên
-                    first_ml = picking_int.move_line_ids[0]
-                    first_ml.quantity = qty
+                remaining_qty -= take_qty
+                
+            if remaining_qty > 0:
+                # Nếu thiếu quant (do âm kho hoặc lệch), tạo 1 dòng gộp
+                request.env['stock.move.line'].sudo().create({
+                    'move_id': move_int.id,
+                    'picking_id': picking_int.id,
+                    'product_id': product.id,
+                    'product_uom_id': product.uom_id.id,
+                    'location_id': source_loc.id,
+                    'location_dest_id': target_location_dest_id,
+                    'quantity': remaining_qty,
+                })
+            # -----------------------------------
             
             # Gọi button_validate và xử lý kết quả trả về
             res_validate = picking_int.button_validate()
@@ -3433,6 +3453,48 @@ class HLVMobileBarcodeController(http.Controller):
                 })
             
             picking_int.action_confirm()
+            
+            # --- FORCE EXACT SOURCE LOCATION ---
+            for move in picking_int.move_ids:
+                quants = request.env['stock.quant'].sudo().search([
+                    ('product_id', '=', move.product_id.id),
+                    ('location_id', '=', source_loc.id), # Không dùng child_of
+                    ('quantity', '>', 0)
+                ], order='in_date ASC, id ASC')
+                
+                remaining_qty = move.product_uom_qty
+                for q in quants:
+                    if remaining_qty <= 0:
+                        break
+                    take_qty = min(q.quantity, remaining_qty)
+                    if take_qty <= 0:
+                        continue
+                        
+                    request.env['stock.move.line'].sudo().create({
+                        'move_id': move.id,
+                        'picking_id': picking_int.id,
+                        'product_id': move.product_id.id,
+                        'product_uom_id': move.product_uom.id,
+                        'location_id': source_loc.id,
+                        'location_dest_id': transit_loc.id,
+                        'quantity': take_qty,
+                        'lot_id': q.lot_id.id if q.lot_id else False,
+                        'package_id': q.package_id.id if q.package_id else False,
+                        'owner_id': q.owner_id.id if q.owner_id else False,
+                    })
+                    remaining_qty -= take_qty
+                    
+                if remaining_qty > 0:
+                    request.env['stock.move.line'].sudo().create({
+                        'move_id': move.id,
+                        'picking_id': picking_int.id,
+                        'product_id': move.product_id.id,
+                        'product_uom_id': move.product_uom.id,
+                        'location_id': source_loc.id,
+                        'location_dest_id': transit_loc.id,
+                        'quantity': remaining_qty,
+                    })
+            # -----------------------------------
             
             package_name = False
             if pack:
