@@ -13,6 +13,7 @@ export class LocationMove extends Component {
         sourceQty: { type: Number, optional: true },
         productName: { type: String, optional: true },
         destWarehouseId: { type: [Number, Boolean], optional: true },
+        destLocationId: { type: [Number, Boolean], optional: true },
         onBack: Function,
         onSuccess: { type: Function, optional: true },
         registerScanner: { type: Function, optional: true },
