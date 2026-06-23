@@ -104,6 +104,13 @@ export class LocationMove extends Component {
     }
 
     async handleScannedBarcode(decodedText) {
+        const now = Date.now();
+        if (this.lastScannedBarcode === decodedText && this.lastScannedTime && now - this.lastScannedTime < 500) {
+            return; // Debounce to prevent double events (from both BarcodeScanner and Enter keyup)
+        }
+        this.lastScannedBarcode = decodedText;
+        this.lastScannedTime = now;
+
         if (this.state.productBarcode && decodedText === this.state.productBarcode) {
             if (this.state.qty >= this.props.sourceQty) {
                 this.playSound('error');

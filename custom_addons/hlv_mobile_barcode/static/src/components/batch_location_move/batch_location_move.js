@@ -66,6 +66,13 @@ export class BatchLocationMove extends Component {
     }
 
     async handleScannedBarcode(decodedText) {
+        const now = Date.now();
+        if (this.lastScannedBarcode === decodedText && this.lastScannedTime && now - this.lastScannedTime < 500) {
+            return; // Debounce
+        }
+        this.lastScannedBarcode = decodedText;
+        this.lastScannedTime = now;
+
         // Find if this product barcode is already in the list
         const existingLine = this.state.lines.find(l => l.barcode === decodedText);
         
