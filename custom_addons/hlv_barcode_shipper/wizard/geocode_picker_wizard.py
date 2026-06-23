@@ -3,6 +3,13 @@ from odoo import models, fields, api
 class GeocodePickerWizard(models.TransientModel):
     _name = 'geocode.picker.wizard'
     _description = 'Map Geocode Picker'
+    def _register_hook(self):
+        self.env.cr.execute("""
+            CREATE TABLE IF NOT EXISTS geocode_picker_wizard (
+                id SERIAL PRIMARY KEY
+            )
+        """)
+        return super()._register_hook()
 
     location_id = fields.Many2one('res.partner.delivery.location', required=True)
     address = fields.Char(string='Địa chỉ', readonly=True)

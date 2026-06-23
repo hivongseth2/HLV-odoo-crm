@@ -11,6 +11,13 @@ LOCAL_UTC_OFFSET_HOURS = 7
 class ShopeeMeinvoiceReconcileWizard(models.TransientModel):
     _name = 'shopee.meinvoice.reconcile.wizard'
     _description = 'Đối chiếu đơn Shopee và hóa đơn điện tử'
+    def _register_hook(self):
+        self.env.cr.execute("""
+            CREATE TABLE IF NOT EXISTS shopee_meinvoice_reconcile_wizard (
+                id SERIAL PRIMARY KEY
+            )
+        """)
+        return super()._register_hook()
 
     date_start = fields.Date(
         string='Ngày bắt đầu',
@@ -163,6 +170,13 @@ class ShopeeMeinvoiceReconcileWizardLine(models.TransientModel):
     _name = 'shopee.meinvoice.reconcile.wizard.line'
     _description = 'Dòng đối chiếu đơn Shopee và hóa đơn điện tử'
     _order = 'order_date asc, id asc'
+    def _register_hook(self):
+        self.env.cr.execute("""
+            CREATE TABLE IF NOT EXISTS shopee_meinvoice_reconcile_wizard_line (
+                id SERIAL PRIMARY KEY
+            )
+        """)
+        return super()._register_hook()
 
     wizard_id = fields.Many2one(
         'shopee.meinvoice.reconcile.wizard',

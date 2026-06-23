@@ -3,6 +3,13 @@ from odoo import models, fields
 class ResPartnerDeliveryLocation(models.Model):
     _name = 'res.partner.delivery.location'
     _description = 'Delivery Geocode Cache'
+    def _register_hook(self):
+        self.env.cr.execute("""
+            CREATE TABLE IF NOT EXISTS res_partner_delivery_location (
+                id SERIAL PRIMARY KEY
+            )
+        """)
+        return super()._register_hook()
 
     partner_id = fields.Many2one('res.partner', string='Liên hệ', required=True, ondelete='cascade', index=True)
     address = fields.Char(string='Địa chỉ giao hàng', required=True, index=True)
