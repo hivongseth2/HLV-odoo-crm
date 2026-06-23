@@ -129,11 +129,114 @@ class MeinvoiceInvoice(models.Model):
             _logger.exception('meInvoice: auto-send draft email thất bại (bỏ qua).')
         return records
 
+    def _sync_invoice_data_from_lines(self):
+        """Rebuild meInvoice payload line details from editable invoice lines."""
+        for rec in self.filtered(lambda inv: inv.state == 'draft'):
+            try:
+                invoice_data = json.loads(rec.invoice_data_json or '{}')
+            except Exception:
+                invoice_data = {}
+
+            detail = []
+            tax_groups = {}
+            total_sale_oc = 0.0
+            total_discount_oc = 0.0
+            total_net_oc = 0.0
+            total_vat_oc = 0.0
+
+            lines = rec.line_ids.sorted(lambda line: (line.sort_order or 0, line.id or 0))
+            for idx, line in enumerate(lines, start=1):
+                sort_order = line.sort_order or idx
+                amount_oc = float(line.amount_oc or 0.0)
+                discount_amount_oc = float(line.discount_amount_oc or 0.0)
+                amount_without_vat_oc = float(line.amount_without_vat_oc or 0.0)
+                vat_amount_oc = float(line.vat_amount_oc or 0.0)
+                vat_rate_name = (line.vat_rate_name or '').strip()
+
+                detail.append({
+                    'ItemType': 1,
+                    'SortOrder': sort_order,
+                    'LineNumber': sort_order,
+                    'ItemCode': line.item_code or '',
+                    'ItemName': line.item_name or '',
+                    'UnitName': line.unit_name or '',
+                    'Quantity': float(line.quantity or 0.0),
+                    'UnitPrice': float(line.unit_price or 0.0),
+                    'AmountOC': amount_oc,
+                    'Amount': amount_oc,
+                    'DiscountRate': float(line.discount_rate or 0.0),
+                    'DiscountAmountOC': discount_amount_oc,
+                    'DiscountAmount': discount_amount_oc,
+                    'AmountWithoutVATOC': amount_without_vat_oc,
+                    'AmountWithoutVAT': amount_without_vat_oc,
+                    'VATRateName': vat_rate_name,
+                    'VATAmountOC': vat_amount_oc,
+                    'VATAmount': vat_amount_oc,
+                })
+
+                total_sale_oc += amount_oc
+                total_discount_oc += discount_amount_oc
+                total_net_oc += amount_without_vat_oc
+                total_vat_oc += vat_amount_oc
+                if vat_rate_name:
+                    group = tax_groups.setdefault(
+                        vat_rate_name,
+                        {'AmountWithoutVATOC': 0.0, 'VATAmountOC': 0.0},
+                    )
+                    group['AmountWithoutVATOC'] += amount_without_vat_oc
+                    group['VATAmountOC'] += vat_amount_oc
+
+            total_sale_oc = round(total_sale_oc, 2)
+            total_discount_oc = round(total_discount_oc, 2)
+            total_net_oc = round(total_net_oc, 2)
+            total_vat_oc = round(total_vat_oc, 2)
+            total_amount_oc = round(total_net_oc + total_vat_oc, 2)
+            tax_rate_info = [
+                {
+                    'VATRateName': rate_name,
+                    'AmountWithoutVATOC': round(vals['AmountWithoutVATOC'], 2),
+                    'VATAmountOC': round(vals['VATAmountOC'], 2),
+                }
+                for rate_name, vals in tax_groups.items()
+            ]
+
+            invoice_data.update({
+                'TotalSaleAmountOC': total_sale_oc,
+                'TotalSaleAmount': total_sale_oc,
+                'TotalDiscountAmountOC': total_discount_oc,
+                'TotalDiscountAmount': total_discount_oc,
+                'TotalAmountWithoutVATOC': total_net_oc,
+                'TotalAmountWithoutVAT': total_net_oc,
+                'TotalVATAmountOC': total_vat_oc,
+                'TotalVATAmount': total_vat_oc,
+                'TotalAmountOC': total_amount_oc,
+                'TotalAmount': total_amount_oc,
+                'OriginalInvoiceDetail': detail,
+                'TaxRateInfo': tax_rate_info,
+            })
+            try:
+                invoice_data['TotalAmountInWords'] = rec.sale_order_id._amount_in_words_vi(total_amount_oc)
+            except Exception:
+                pass
+
+            rec.write({
+                'total_sale_oc': total_sale_oc,
+                'total_discount_oc': total_discount_oc,
+                'total_net_oc': total_net_oc,
+                'total_vat_oc': total_vat_oc,
+                'total_amount_oc': total_amount_oc,
+                'total_amount_in_words': invoice_data.get('TotalAmountInWords') or rec.total_amount_in_words,
+                'invoice_data_json': json.dumps(invoice_data, ensure_ascii=False),
+            })
+        return True
+
     def action_publish(self):
         """Gửi hóa đơn lên Cơ quan Thuế qua meInvoice API."""
         self.ensure_one()
         if self.state != 'draft':
             raise UserError('Chỉ hóa đơn ở trạng thái Nháp mới có thể phát hành.')
+
+        self._sync_invoice_data_from_lines()
 
         try:
             invoice_data = json.loads(self.invoice_data_json or '{}')
@@ -241,6 +344,7 @@ class MeinvoiceInvoice(models.Model):
         self.ensure_one()
         if self.state != 'draft':
             raise UserError('Chỉ hóa đơn ở trạng thái Nháp mới có thể xem trước.')
+        self._sync_invoice_data_from_lines()
         if not self.invoice_data_json:
             raise UserError('Chưa có dữ liệu hóa đơn. Vui lòng xóa và tạo lại từ đơn hàng.')
 
@@ -900,3 +1004,27 @@ class MeinvoiceInvoiceLine(models.Model):
     amount_without_vat_oc = fields.Float(string='Tiền trước thuế', digits=(16, 0))
     vat_rate_name = fields.Char(string='Thuế suất')
     vat_amount_oc = fields.Float(string='Tiền thuế', digits=(16, 0))
+
+    def _sync_parent_invoice_data(self, invoices):
+        if self.env.context.get('skip_meinvoice_line_json_sync'):
+            return True
+        invoices.filtered(lambda inv: inv.state == 'draft')._sync_invoice_data_from_lines()
+        return True
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        records = super().create(vals_list)
+        records._sync_parent_invoice_data(records.mapped('invoice_id'))
+        return records
+
+    def write(self, vals):
+        invoices = self.mapped('invoice_id')
+        result = super().write(vals)
+        self._sync_parent_invoice_data(invoices | self.mapped('invoice_id'))
+        return result
+
+    def unlink(self):
+        invoices = self.mapped('invoice_id')
+        result = super().unlink()
+        self._sync_parent_invoice_data(invoices)
+        return result
