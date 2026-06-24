@@ -28,15 +28,23 @@
                     <field name="sync_data_planned" />
                 </group>
 
-                <separator string="Tùy chọn hàng loạt (Áp dụng cho tất cả dòng)" />
-                <group>
-                    <group>
-                        <field name="toggle_keep_description" widget="boolean_toggle"/>
-                    </group>
-                    <group>
-                        <field name="toggle_keep_estimated_cost" widget="boolean_toggle"/>
-                    </group>
-                </group>
+                <separator string="Tùy chọn hàng loạt" />
+                <div class="row mb-3">
+                    <div class="col-6 d-flex align-items-center">
+                        <field name="toggle_keep_description" widget="boolean_toggle" class="me-2"/>
+                        <label for="toggle_keep_description"/>
+                        <button name="action_apply_keep_description" type="object"
+                                string="Áp dụng" class="btn btn-sm btn-secondary ms-2"
+                                icon="fa-check"/>
+                    </div>
+                    <div class="col-6 d-flex align-items-center">
+                        <field name="toggle_keep_estimated_cost" widget="boolean_toggle" class="me-2"/>
+                        <label for="toggle_keep_estimated_cost"/>
+                        <button name="action_apply_keep_estimated_cost" type="object"
+                                string="Áp dụng" class="btn btn-sm btn-secondary ms-2"
+                                icon="fa-check"/>
+                    </div>
+                </div>
             </xpath>
         </field>
     </record>

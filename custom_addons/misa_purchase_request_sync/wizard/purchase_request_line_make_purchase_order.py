@@ -1,5 +1,6 @@
 from odoo import api, fields, models
 
+
 class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
     _inherit = "purchase.request.line.make.purchase.order"
 
@@ -21,37 +22,30 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
         res['keep_estimated_cost'] = True
         return res
 
-    @api.onchange('toggle_keep_description')
-    def _onchange_toggle_keep_description(self):
-        if self.item_ids:
-            new_items = []
-            for item in self.item_ids:
-                vals = {
-                    'line_id': item.line_id.id,
-                    'name': item.name,
-                    'product_qty': item.product_qty,
-                    'product_uom_id': item.product_uom_id.id,
-                    'keep_description': self.toggle_keep_description,
-                    'keep_estimated_cost': item.keep_estimated_cost,
-                }
-                new_items.append((0, 0, vals))
-            self.item_ids = [(5, 0, 0)] + new_items
+    def action_apply_keep_description(self):
+        """Server action: Áp dụng toggle Giữ Mô tả cho tất cả dòng."""
+        self.ensure_one()
+        self.item_ids.write({'keep_description': self.toggle_keep_description})
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': self._name,
+            'res_id': self.id,
+            'view_mode': 'form',
+            'target': 'new',
+        }
 
-    @api.onchange('toggle_keep_estimated_cost')
-    def _onchange_toggle_keep_estimated_cost(self):
-        if self.item_ids:
-            new_items = []
-            for item in self.item_ids:
-                vals = {
-                    'line_id': item.line_id.id,
-                    'name': item.name,
-                    'product_qty': item.product_qty,
-                    'product_uom_id': item.product_uom_id.id,
-                    'keep_description': item.keep_description,
-                    'keep_estimated_cost': self.toggle_keep_estimated_cost,
-                }
-                new_items.append((0, 0, vals))
-            self.item_ids = [(5, 0, 0)] + new_items
+    def action_apply_keep_estimated_cost(self):
+        """Server action: Áp dụng toggle Giữ Giá cho tất cả dòng."""
+        self.ensure_one()
+        self.item_ids.write({'keep_estimated_cost': self.toggle_keep_estimated_cost})
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': self._name,
+            'res_id': self.id,
+            'view_mode': 'form',
+            'target': 'new',
+        }
+
 
 class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
     _inherit = "purchase.request.line.make.purchase.order.item"
