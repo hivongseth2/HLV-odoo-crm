@@ -26,6 +26,33 @@
                 <field name="create_date" readonly="1"/>
                 <field name="write_date" readonly="1"/>
             </xpath>
+            <xpath expr="//field[@name='line_ids']/list/field[@name='estimated_cost']" position="after">
+                <field name="history_po_line_id" optional="hide"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Thêm field history_po_line_id vào form view của PR line -->
+    <record id="view_purchase_request_line_form_inherit_misa" model="ir.ui.view">
+        <field name="name">purchase.request.line.form.inherit.misa</field>
+        <field name="model">purchase.request.line</field>
+        <field name="inherit_id" ref="purchase_request.purchase_request_line_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='estimated_cost']" position="after">
+                <field name="history_po_line_id" readonly="is_editable == False"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Thêm field history_po_line_id vào detail view của PR line -->
+    <record id="view_purchase_request_line_details_inherit_misa" model="ir.ui.view">
+        <field name="name">purchase.request.line.details.inherit.misa</field>
+        <field name="model">purchase.request.line</field>
+        <field name="inherit_id" ref="purchase_request.view_purchase_request_line_details"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='estimated_cost']" position="after">
+                <field name="history_po_line_id" readonly="is_editable == False"/>
+            </xpath>
         </field>
     </record>
 </odoo>

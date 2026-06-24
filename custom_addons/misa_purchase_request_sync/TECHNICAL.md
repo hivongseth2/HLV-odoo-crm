@@ -23,7 +23,8 @@ misa_purchase_request_sync/
 │   └── ir_config_parameter.xml ← Khởi tạo token xác thực
 ├── models/                   ← Tầng Model (Kế thừa và mở rộng database)
 │   ├── __init__.py
-│   └── purchase_request.py   ← Mở rộng model `purchase.request` của OCA
+│   ├── purchase_request.py   ← Mở rộng model `purchase.request` của OCA
+│   └── purchase_request_line.py ← Mở rộng model `purchase.request.line` của OCA
 ├── views/                    ← Tầng Giao diện UI Odoo
 │   └── purchase_request_view.xml ← Kế thừa form view, thêm field mới
 ├── __init__.py
@@ -50,7 +51,21 @@ Module không tự tạo model YCMH mới mà kế thừa trực tiếp từ mod
 - Hiển thị `sale_order_id` và `delivery_address` ngay dưới trường Người yêu cầu (`requested_by`). Cả 2 trường sẽ bị khóa (readonly) nếu YCMH đã ở trạng thái `done` hoặc `rejected`.
 - Lôi thêm `create_date` (Ngày tạo) và `write_date` (Ngày sửa) - đây là 2 trường mặc định của Odoo - ra giao diện form để người dùng tiện theo dõi lịch sử.
 
-### 3.2. Thông số hệ thống (`ir.config_parameter`)
+### 3.2. Kế thừa `purchase.request.line` (OCA)
+Kế thừa để hỗ trợ điền tự động và cho phép chọn giá trị tham khảo từ lịch sử mua hàng.
+
+**Các trường (Fields) được bổ sung thêm:**
+- **`history_po_line_id`** (`Many2one` liên kết tới `purchase.order.line`):
+  - **Công dụng:** Cho phép người dùng chọn một dòng từ lịch sử các đơn mua hàng (PO) đã mua trước đó cho cùng sản phẩm (`product_id`) để lấy giá cũ làm chi phí ước tính.
+  - **Logic (`onchange`):**
+    - `onchange("product_id")`: Tự động tìm giá mua ưu tiên từ Nhà cung cấp (`product.supplierinfo`), nếu không có thì lấy giá vốn chuẩn (`standard_price`), gán vào `estimated_cost`.
+    - `onchange("history_po_line_id")`: Lấy `price_unit` của dòng PO lịch sử đã chọn gán vào `estimated_cost`.
+
+**Cập nhật trên Form View Odoo:**
+- Hiển thị `history_po_line_id` trong danh sách (tree view) của `line_ids` (nằm cạnh `estimated_cost`).
+- Hiển thị trong form chi tiết của `purchase.request.line`.
+
+### 3.3. Thông số hệ thống (`ir.config_parameter`)
 - **Key:** `misa_extension_token`
 - **Công dụng:** Chứa mã token dùng để xác thực các request đẩy từ Chrome Extension sang. 
 - **Đặc điểm:** 

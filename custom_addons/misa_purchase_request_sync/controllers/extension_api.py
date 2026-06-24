@@ -380,12 +380,20 @@ class MisaExtensionController(http.Controller):
                 if not uom and product:
                     uom = product.uom_id
 
+                estimated_cost = 0.0
+                if product:
+                    supplier_info = env_admin['product.supplierinfo'].search([
+                        ('product_tmpl_id', '=', product.product_tmpl_id.id)
+                    ], limit=1, order='sequence, min_qty descending, price')
+                    estimated_cost = supplier_info.price if supplier_info else product.standard_price
+
                 line_vals = {
                     "request_id": pr.id,
                     "name": line.get("name") or (product.display_name if product else ""),
                     "product_id": product.id if product else False,
                     "product_qty": float(line.get("qty") or 0.0),
                     "product_uom_id": uom.id if uom else False,
+                    "estimated_cost": estimated_cost,
                 }
                 line_model.create(line_vals)
 
