@@ -21,32 +21,40 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
         res['keep_estimated_cost'] = True
         return res
 
+    @api.onchange('toggle_keep_description')
+    def _onchange_toggle_keep_description(self):
+        if self.item_ids:
+            new_items = []
+            for item in self.item_ids:
+                vals = {
+                    'line_id': item.line_id.id,
+                    'name': item.name,
+                    'product_qty': item.product_qty,
+                    'product_uom_id': item.product_uom_id.id,
+                    'keep_description': self.toggle_keep_description,
+                    'keep_estimated_cost': item.keep_estimated_cost,
+                }
+                new_items.append((0, 0, vals))
+            self.item_ids = [(5, 0, 0)] + new_items
+
+    @api.onchange('toggle_keep_estimated_cost')
+    def _onchange_toggle_keep_estimated_cost(self):
+        if self.item_ids:
+            new_items = []
+            for item in self.item_ids:
+                vals = {
+                    'line_id': item.line_id.id,
+                    'name': item.name,
+                    'product_qty': item.product_qty,
+                    'product_uom_id': item.product_uom_id.id,
+                    'keep_description': item.keep_description,
+                    'keep_estimated_cost': self.toggle_keep_estimated_cost,
+                }
+                new_items.append((0, 0, vals))
+            self.item_ids = [(5, 0, 0)] + new_items
+
 class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
     _inherit = "purchase.request.line.make.purchase.order.item"
 
-    keep_description = fields.Boolean(
-        compute="_compute_keep_description",
-        store=True,
-        readonly=False,
-    )
-    keep_estimated_cost = fields.Boolean(
-        compute="_compute_keep_estimated_cost",
-        store=True,
-        readonly=False,
-    )
-
-    @api.depends('wiz_id.toggle_keep_description')
-    def _compute_keep_description(self):
-        for item in self:
-            if item.wiz_id:
-                item.keep_description = item.wiz_id.toggle_keep_description
-            else:
-                item.keep_description = True
-
-    @api.depends('wiz_id.toggle_keep_estimated_cost')
-    def _compute_keep_estimated_cost(self):
-        for item in self:
-            if item.wiz_id:
-                item.keep_estimated_cost = item.wiz_id.toggle_keep_estimated_cost
-            else:
-                item.keep_estimated_cost = True
+    keep_description = fields.Boolean(default=True)
+    keep_estimated_cost = fields.Boolean(default=True)
