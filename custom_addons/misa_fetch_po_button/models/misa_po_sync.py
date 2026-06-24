@@ -326,7 +326,7 @@ class MisaPOSync(models.TransientModel):
         return vals
 
     def _update_received_po_from_misa(self, po_rec, lines, planned_naive_utc, crm_headers, odoo_utils):
-        """Update PO da co receipt done bang reconcile SKU + qty, khong pop theo thu tu."""
+        """Update PO da co receipt done bang reconcile SKU + qty, ko pop theo thu tu."""
         line_model = self.env["purchase.order.line"].sudo()
         existing_lines = po_rec.order_line.filtered(lambda line: not getattr(line, "display_type", False))
 
