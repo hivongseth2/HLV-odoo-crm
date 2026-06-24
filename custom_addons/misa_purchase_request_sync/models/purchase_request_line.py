@@ -23,7 +23,15 @@ class PurchaseRequestLine(models.Model):
             if supplier_info:
                 self.estimated_cost = supplier_info.price
             else:
-                self.estimated_cost = self.product_id.standard_price
+                last_po_line = self.env['purchase.order.line'].search([
+                    ('product_id', '=', self.product_id.id),
+                    ('state', 'in', ['purchase', 'done'])
+                ], limit=1, order='create_date desc')
+                
+                if last_po_line:
+                    self.estimated_cost = last_po_line.price_unit
+                else:
+                    self.estimated_cost = self.product_id.standard_price
         return res
 
     @api.onchange("history_po_line_id")
