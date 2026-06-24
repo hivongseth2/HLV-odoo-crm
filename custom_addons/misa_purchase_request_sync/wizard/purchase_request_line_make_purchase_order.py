@@ -8,30 +8,45 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
     toggle_keep_description = fields.Boolean(
         string="Giữ Mô tả (Tất cả)",
         default=True,
-        help="Bật để tất cả các dòng bên dưới đều lấy mô tả từ Yêu cầu mua hàng"
     )
     toggle_keep_estimated_cost = fields.Boolean(
         string="Giữ Giá (Tất cả)",
         default=True,
-        help="Bật để tất cả các dòng bên dưới đều lấy giá dự trù làm giá mua"
     )
 
     @api.model
     def _prepare_item(self, line):
         res = super(PurchaseRequestLineMakePurchaseOrder, self)._prepare_item(line)
-        # Mặc định bật 2 cờ này khi mở popup tạo mới
         res['keep_description'] = True
         res['keep_estimated_cost'] = True
         return res
 
-    @api.onchange('toggle_keep_description')
-    def _onchange_toggle_keep_description(self):
-        if self.item_ids:
-            commands = [(1, item.id, {'keep_description': self.toggle_keep_description}) for item in self.item_ids]
-            self.item_ids = commands
+class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
+    _inherit = "purchase.request.line.make.purchase.order.item"
 
-    @api.onchange('toggle_keep_estimated_cost')
-    def _onchange_toggle_keep_estimated_cost(self):
-        if self.item_ids:
-            commands = [(1, item.id, {'keep_estimated_cost': self.toggle_keep_estimated_cost}) for item in self.item_ids]
-            self.item_ids = commands
+    keep_description = fields.Boolean(
+        compute="_compute_keep_description",
+        store=True,
+        readonly=False,
+    )
+    keep_estimated_cost = fields.Boolean(
+        compute="_compute_keep_estimated_cost",
+        store=True,
+        readonly=False,
+    )
+
+    @api.depends('wiz_id.toggle_keep_description')
+    def _compute_keep_description(self):
+        for item in self:
+            if item.wiz_id:
+                item.keep_description = item.wiz_id.toggle_keep_description
+            else:
+                item.keep_description = True
+
+    @api.depends('wiz_id.toggle_keep_estimated_cost')
+    def _compute_keep_estimated_cost(self):
+        for item in self:
+            if item.wiz_id:
+                item.keep_estimated_cost = item.wiz_id.toggle_keep_estimated_cost
+            else:
+                item.keep_estimated_cost = True
