@@ -47,6 +47,9 @@ def _is_putaway_picking(picking):
     if _is_return_picking(picking):
         return picking.location_dest_id.usage == 'internal'
 
+    if picking.source_transfer_id:
+        return True
+
     pt_type = picking.picking_type_id.code
     pt_code = (picking.picking_type_id.sequence_code or '').upper()
     return pt_type == 'incoming' or (pt_type == 'internal' and 'INT' not in pt_code and 'IN' in pt_code)
