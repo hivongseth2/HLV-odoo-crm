@@ -44,15 +44,48 @@
         </field>
     </record>
 
-    <!-- Thêm field history_po_line_id vào detail view của PR line -->
+    <!-- Thêm field history_po_line_id vào detail view của PR line và cải thiện giao diện -->
     <record id="view_purchase_request_line_details_inherit_misa" model="ir.ui.view">
         <field name="name">purchase.request.line.details.inherit.misa</field>
         <field name="model">purchase.request.line</field>
         <field name="inherit_id" ref="purchase_request.view_purchase_request_line_details"/>
         <field name="arch" type="xml">
-            <xpath expr="//field[@name='estimated_cost']" position="after">
-                <field name="history_po_line_id" readonly="is_editable == False"/>
+            <xpath expr="//group[@name='main']/group" position="replace">
+                <div class="oe_title" colspan="2" style="width: 100%; margin-bottom: 20px;">
+                    <label for="product_id" class="oe_edit_only" string="Sản phẩm"/>
+                    <h1>
+                        <field name="product_id" readonly="is_editable == False" options="{'no_create': True}"/>
+                    </h1>
+                    <label for="name" class="oe_edit_only" string="Mô tả"/>
+                    <h3>
+                        <field name="name" readonly="is_editable == False"/>
+                    </h3>
+                </div>
+                <group name="left_col">
+                    <label for="product_qty" />
+                    <div class="o_row">
+                        <field name="product_qty" class="oe_inline" readonly="is_editable == False" />
+                        <field name="product_uom_id" groups="uom.group_uom" class="oe_inline" readonly="is_editable == False" />
+                    </div>
+                    <field name="date_required" readonly="is_editable == False" />
+                    <field name="analytic_distribution" widget="analytic_distribution" groups="analytic.group_analytic_accounting" options="{'product_field': 'product_id', 'business_domain': 'purchase_order'}" readonly="is_editable == False" />
+                </group>
+                <group name="right_col">
+                    <field name="estimated_cost" widget="monetary" readonly="is_editable == False" />
+                    <field name="history_po_line_id" readonly="is_editable == False" options="{'no_create': True}"/>
+                    <field name="cancelled" widget="boolean" />
+                    
+                    <!-- Hidden fields required by original logic -->
+                    <field name="is_editable" invisible="1" />
+                    <field name="currency_id" invisible="1" />
+                    <field name="product_uom_category_id" invisible="1" />
+                </group>
             </xpath>
+            
+            <xpath expr="//group[@name='specifications']" position="attributes">
+                <attribute name="string">Thông số kỹ thuật</attribute>
+            </xpath>
+            <xpath expr="//group[@name='specifications']/separator" position="replace"/>
         </field>
     </record>
 </odoo>
