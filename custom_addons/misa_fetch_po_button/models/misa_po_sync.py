@@ -255,6 +255,99 @@ class MisaPOSync(models.TransientModel):
 
         return qty_base, price_base, False
 
+    def _prepare_misa_po_line_vals(self, line, po_rec, planned_naive_utc, crm_headers, odoo_utils):
+        code = line.get("inventory_item_code", "unknown_code").strip()
+        name = line.get("description", "unknown product").strip()
+        qty = float(line.get("quantity", 1))
+        price = float(line.get("unit_price", 0))
+        unit_name = line.get("unit_name", "Cái").strip()
+
+        tax_ids = self._tax_ids_from_misa_line(line)
+
+        product = odoo_utils._get_or_create_product(
+            code=code,
+            name=name,
+            unit_name=unit_name,
+            cost=price,
+            purchase_ok=True,
+            sale_ok=True
+        )
+
+        qty_base, price_base, _ = self._convert_qty_price_to_default_uom(
+            product, unit_name, qty, price, code, crm_headers
+        )
+
+        return {
+            "order_id": po_rec.id,
+            "name": name,
+            "product_id": product.id,
+            "product_qty": qty_base,
+            "product_uom": product.uom_id.id,
+            "price_unit": price_base,
+            "taxes_id": [(6, 0, tax_ids)],
+            "date_planned": planned_naive_utc or fields.Datetime.now(),
+        }
+
+    def _update_received_po_from_misa(self, po_rec, lines, planned_naive_utc, crm_headers, odoo_utils):
+        """Update PO da co receipt done ma khong cancel/unlink cac dong da nhan."""
+        line_model = self.env["purchase.order.line"].sudo()
+        lines_by_code = {}
+        for po_line in po_rec.order_line:
+            code = (po_line.product_id.default_code or "").strip().upper()
+            if code:
+                lines_by_code.setdefault(code, []).append(po_line)
+
+        updated_count = 0
+        created_count = 0
+        skipped_qty_count = 0
+
+        for misa_line in lines:
+            vals = self._prepare_misa_po_line_vals(
+                misa_line, po_rec, planned_naive_utc, crm_headers, odoo_utils
+            )
+            product = self.env["product.product"].browse(vals["product_id"])
+            code = (product.default_code or "").strip().upper()
+            po_line = code and lines_by_code.get(code) and lines_by_code[code].pop(0)
+
+            if po_line:
+                write_vals = {
+                    "name": vals["name"],
+                    "price_unit": vals["price_unit"],
+                    "taxes_id": vals["taxes_id"],
+                    "date_planned": vals["date_planned"],
+                }
+                if vals["product_qty"] >= po_line.qty_received:
+                    write_vals["product_qty"] = vals["product_qty"]
+                else:
+                    skipped_qty_count += 1
+                    _logger.warning(
+                        "Skip quantity update for PO %s line %s: MISA qty %s < received qty %s",
+                        po_rec.name,
+                        po_line.display_name,
+                        vals["product_qty"],
+                        po_line.qty_received,
+                    )
+                po_line.sudo().write(write_vals)
+                updated_count += 1
+            else:
+                line_model.create(vals)
+                created_count += 1
+
+        extra_received = sum(
+            1
+            for remaining_lines in lines_by_code.values()
+            for po_line in remaining_lines
+            if po_line.qty_received
+        )
+        if extra_received:
+            _logger.warning(
+                "PO %s has %s received lines not present in MISA; kept them unchanged.",
+                po_rec.name,
+                extra_received,
+            )
+
+        return updated_count, created_count, skipped_qty_count
+
     def _get_or_create_vn_vat(self, rate, use='purchase'):
         """Lấy hoặc tạo thuế VAT"""
         Tax = self.env['account.tax'].with_company(self.env.company)
@@ -646,105 +739,83 @@ class MisaPOSync(models.TransientModel):
 
         picking_type = warehouse.in_type_id
 
-        # CẬP NHẬT hoặc TẠO MỚI
+        po_header_vals = {
+            'partner_id': partner.id,
+            'origin': memo,
+            'picking_type_id': picking_type.id,
+            'date_planned': planned_naive_utc or fields.Datetime.now(),
+            'partner_ref': refno,
+            'x_studio_misa_date': misa_date,
+            'x_studio_delivery_term': custom_field2 or False,
+            "x_studio_iu_kin_thanh_ton": custom_field1 or False,
+            'x_studio_ddgh': receive_address or False,
+            'x_studio_misa_purchase_status': misa_purchase_status or False,
+        }
+        lines_already_synced = False
+
+        # Update or create PO
         if odoo_po:
-            _logger.info("🔄 Đồng bộ lại PO %s từ MISA", refno)
-            
-            need_reconfirm = False
-            if odoo_po.state not in ('draft', 'sent', 'cancel'):
-                _logger.info("⚠️ PO %s đang ở trạng thái %s → Cancel trước khi cập nhật", refno, odoo_po.state)
-                odoo_po.button_cancel()
-                need_reconfirm = True
-            
-            for picking in odoo_po.picking_ids:
-                if picking.state not in ('done', 'cancel'):
-                    picking.action_cancel()
-            
-            if odoo_po.state == 'cancel':
-                odoo_po.button_draft()
-            
-            odoo_po.order_line.unlink()
-            
-            odoo_po.write({
-                'partner_id': partner.id,
-                'origin': memo,
-                'picking_type_id': picking_type.id,
-                'date_planned': planned_naive_utc or fields.Datetime.now(),
-                'partner_ref': refno,
-                'x_studio_misa_date': misa_date,
-                'x_studio_delivery_term': custom_field2 or False,
-                "x_studio_iu_kin_thanh_ton": custom_field1 or False,
-                'x_studio_ddgh': receive_address or False,
-                'x_studio_misa_purchase_status': misa_purchase_status or False,
-                
-                
-                
-            })
-            
-            po_rec = odoo_po
-            total_lines = len(lines)
-            message = f'🔄 Đã đồng bộ: {refno} ({total_lines} dòng)'
-            title = '🔄 Cập nhật thành công'
+            _logger.info("Dong bo lai PO %s tu MISA", refno)
+            has_done_receipt = any(picking.state == 'done' for picking in odoo_po.picking_ids)
+
+            if has_done_receipt:
+                _logger.info(
+                    "PO %s has done receipts; update header/lines in place without cancel/unlink.",
+                    refno,
+                )
+                odoo_po.write(po_header_vals)
+                po_rec = odoo_po
+                updated_count, created_count, skipped_qty_count = self._update_received_po_from_misa(
+                    po_rec, lines, planned_naive_utc, crm_headers, odoo_utils
+                )
+                lines_already_synced = True
+                total_lines = len(lines)
+                message = (
+                    'Da cap nhat an toan: %s (%s dong MISA, update %s, tao moi %s, bo qua qty %s)'
+                    % (refno, total_lines, updated_count, created_count, skipped_qty_count)
+                )
+                title = 'Cap nhat thanh cong'
+            else:
+                need_reconfirm = False
+                if odoo_po.state not in ('draft', 'sent', 'cancel'):
+                    _logger.info("PO %s dang o trang thai %s -> cancel truoc khi cap nhat", refno, odoo_po.state)
+                    odoo_po.button_cancel()
+                    need_reconfirm = True
+
+                for picking in odoo_po.picking_ids:
+                    if picking.state not in ('done', 'cancel'):
+                        picking.action_cancel()
+
+                if odoo_po.state == 'cancel':
+                    odoo_po.button_draft()
+
+                odoo_po.order_line.unlink()
+                odoo_po.write(po_header_vals)
+
+                po_rec = odoo_po
+                total_lines = len(lines)
+                message = f'Da dong bo: {refno} ({total_lines} dong)'
+                title = 'Cap nhat thanh cong'
         else:
-            _logger.info("✅ Tạo mới PO %s từ MISA", refno)
-            po_vals = {
-                "partner_id": partner.id,
-                "origin": memo,
-                "picking_type_id": picking_type.id,
-                "name": refno,
-                "date_planned": planned_naive_utc or fields.Datetime.now(),
-                "partner_ref": refno,
-                "x_studio_misa_date": misa_date,
-                "x_studio_delivery_term": custom_field2 or False,
-                "x_studio_iu_kin_thanh_ton": custom_field1 or False,
-                'x_studio_ddgh': receive_address or False,
-                'x_studio_misa_purchase_status': misa_purchase_status or False,
-            }
+            _logger.info("Tao moi PO %s tu MISA", refno)
+            po_vals = dict(po_header_vals, name=refno)
             # Skip Zalo notification during creation (because no lines yet)
             po_rec = self.env["purchase.order"].with_context(skip_zalo_po_create=True).create(po_vals)
             total_lines = len(lines)
-            message = f'✅ Đã tạo: {refno} ({total_lines} dòng)'
-            title = '✅ Tạo mới thành công'
-
-        for line in lines:
-            code = line.get("inventory_item_code", "unknown_code").strip()
-            name = line.get("description", "unknown product").strip()
-            qty = float(line.get("quantity", 1))
-            price = float(line.get("unit_price", 0))
-            unit_name = line.get("unit_name", "Cái").strip()
-            
-            tax_ids = self._tax_ids_from_misa_line(line)
-
-            product = odoo_utils._get_or_create_product(
-                code=code,
-                name=name,
-                unit_name=unit_name,
-                cost=price,
-                purchase_ok=True,
-                sale_ok=True
-            )
-
-            qty_base, price_base, _ = self._convert_qty_price_to_default_uom(
-                product, unit_name, qty, price, code, crm_headers
-            )
-            
-            pol_vals = {
-                "order_id": po_rec.id,
-                "name": name,
-                "product_id": product.id,
-                "product_qty": qty_base,
-                "product_uom": product.uom_id.id,
-                "price_unit": price_base,
-                "taxes_id": [(6, 0, tax_ids)],
-                "date_planned": planned_naive_utc or fields.Datetime.now(),
-            }
-            
-            self.env["purchase.order.line"].create(pol_vals)
-
+            message = f'Da tao: {refno} ({total_lines} dong)'
+            title = 'Tao moi thanh cong'
+        if not lines_already_synced:
+            for line in lines:
+                pol_vals = self._prepare_misa_po_line_vals(
+                    line, po_rec, planned_naive_utc, crm_headers, odoo_utils
+                )
+                self.env["purchase.order.line"].create(pol_vals)
         if po_rec.state == 'draft':
             po_rec.button_confirm()
 
         for picking in po_rec.picking_ids:
+            if lines_already_synced and picking.state == 'done':
+                continue
             if planned_naive_utc:
                 picking.scheduled_date = planned_naive_utc
             if picking.picking_type_id.id != picking_type.id:
@@ -753,7 +824,6 @@ class MisaPOSync(models.TransientModel):
                 picking.location_dest_id = location.id
                 for move in picking.move_ids_without_package:
                     move.location_dest_id = location.id
-
         # Trigger Zalo Notification manually after lines are added (for new POs)
         # Check if it was a new creation (not update) - based on logic above, update uses write()
         if not odoo_po and hasattr(po_rec, '_send_zalo_new_po_notification'):
