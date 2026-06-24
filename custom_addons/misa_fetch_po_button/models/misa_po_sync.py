@@ -446,13 +446,12 @@ class MisaPOSync(models.TransientModel):
             if po_line:
                 matched_line_ids.add(po_line.id)
                 if vals["product_qty"] <= 0 and not po_line.qty_received:
-                    try:
+                    if po_rec.state in ("draft", "sent", "cancel"):
                         po_line.sudo().unlink()
-                    except Exception:
+                    else:
                         po_line.sudo().write({"product_qty": 0})
                     removed_count += 1
                     continue
-
                 write_vals = {
                     "name": vals["name"],
                     "price_unit": vals["price_unit"],
@@ -488,28 +487,19 @@ class MisaPOSync(models.TransientModel):
                 extra_received += 1
                 continue
             try:
-                po_line.sudo().unlink()
+                if po_rec.state in ("draft", "sent", "cancel"):
+                    po_line.sudo().unlink()
+                else:
+                    po_line.sudo().write({"product_qty": 0})
                 removed_count += 1
             except Exception as e:
-                try:
-                    po_line.sudo().write({"product_qty": 0})
-                    removed_count += 1
-                    _logger.warning(
-                        "Could not remove PO %s line %s not present in MISA, set quantity to 0 instead: %s",
-                        po_rec.name,
-                        po_line.display_name,
-                        e,
-                    )
-                except Exception as e2:
-                    skipped_qty_count += 1
-                    _logger.warning(
-                        "Could not remove or zero PO %s line %s not present in MISA: %s / %s",
-                        po_rec.name,
-                        po_line.display_name,
-                        e,
-                        e2,
-                    )
-
+                skipped_qty_count += 1
+                _logger.warning(
+                    "Could not remove or zero PO %s line %s not present in MISA: %s",
+                    po_rec.name,
+                    po_line.display_name,
+                    e,
+                )
         if extra_received:
             _logger.warning(
                 "PO %s has %s received lines not present in MISA; kept them unchanged.",
