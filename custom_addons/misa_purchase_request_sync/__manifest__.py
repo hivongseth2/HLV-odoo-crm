@@ -23,6 +23,7 @@ Module cung cấp:
         "security/ir.model.access.csv",
         "data/ir_config_parameter.xml",
         "views/purchase_request_view.xml",
+        "views/wizard_views.xml",
     ],
     "license": "LGPL-3",
     "installable": True,

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_purchase_request_line_make_purchase_order_inherit_misa" model="ir.ui.view">
+        <field name="name">purchase.request.line.make.purchase.order.inherit.misa</field>
+        <field name="model">purchase.request.line.make.purchase.order</field>
+        <field name="inherit_id" ref="purchase_request.view_purchase_request_line_make_purchase_order"/>
+        <field name="arch" type="xml">
+            <!-- Xóa các thành phần layout cũ -->
+            <xpath expr="//separator[@string='RFQ hiện có để cập nhật:']" position="replace" />
+            <xpath expr="//group[field[@name='purchase_order_id']]" position="replace" />
+            <xpath expr="//separator[@string='Chi tiết Đơn mua hàng mới:']" position="replace" />
+            
+            <!-- Thay thế group chứa supplier_id thành layout mới hoàn chỉnh -->
+            <xpath expr="//group[field[@name='supplier_id']]" position="replace">
+                <group>
+                    <field name="supplier_id" string="Nhà cung cấp (Bắt buộc)"/>
+                </group>
+
+                <div class="alert alert-info" role="alert" style="margin-top: 10px; margin-bottom: 10px;">
+                    <i class="fa fa-info-circle me-1"/> <strong>Cập nhật vào RFQ đã có hoặc Tạo mới?</strong>
+                    <br/>
+                    - Chọn một <strong>RFQ có sẵn</strong> bên dưới để gộp/bổ sung các sản phẩm này vào đó.<br/>
+                    - <strong>Để trống</strong> nếu bạn muốn hệ thống tự động <strong>tạo RFQ mới</strong>.
+                </div>
+                
+                <group>
+                    <field name="purchase_order_id" domain="[('partner_id', '=', supplier_id)]" options="{'no_create': True}" placeholder="Để trống để tạo Đơn mua hàng mới..."/>
+                    <field name="sync_data_planned" />
+                </group>
+
+                <separator string="Tùy chọn hàng loạt (Áp dụng cho tất cả dòng)" />
+                <group>
+                    <group>
+                        <field name="toggle_keep_description" widget="boolean_toggle"/>
+                    </group>
+                    <group>
+                        <field name="toggle_keep_estimated_cost" widget="boolean_toggle"/>
+                    </group>
+                </group>
+            </xpath>
+        </field>
+    </record>
+</odoo>
