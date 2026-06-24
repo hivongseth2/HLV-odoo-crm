@@ -336,6 +336,7 @@ class MisaPOSync(models.TransientModel):
 
         updated_count = 0
         created_count = 0
+        removed_count = 0
         skipped_qty_count = 0
 
         for misa_line in lines:
@@ -347,6 +348,10 @@ class MisaPOSync(models.TransientModel):
             po_line = code and lines_by_code.get(code) and lines_by_code[code].pop(0)
 
             if po_line:
+                if vals["product_qty"] <= 0 and not po_line.qty_received:
+                    po_line.sudo().unlink()
+                    removed_count += 1
+                    continue
                 write_vals = {
                     "name": vals["name"],
                     "price_unit": vals["price_unit"],
@@ -369,15 +374,27 @@ class MisaPOSync(models.TransientModel):
                 po_line.sudo().write(write_vals)
                 updated_count += 1
             else:
+                if vals["product_qty"] <= 0:
+                    continue
                 line_model.create(vals)
                 created_count += 1
-
-        extra_received = sum(
-            1
-            for remaining_lines in lines_by_code.values()
-            for po_line in remaining_lines
-            if po_line.qty_received
-        )
+        extra_received = 0
+        for remaining_lines in lines_by_code.values():
+            for po_line in remaining_lines:
+                if po_line.qty_received:
+                    extra_received += 1
+                    continue
+                try:
+                    po_line.sudo().unlink()
+                    removed_count += 1
+                except Exception as e:
+                    skipped_qty_count += 1
+                    _logger.warning(
+                        "Could not remove PO %s line %s not present in MISA: %s",
+                        po_rec.name,
+                        po_line.display_name,
+                        e,
+                    )
         if extra_received:
             _logger.warning(
                 "PO %s has %s received lines not present in MISA; kept them unchanged.",
@@ -385,7 +402,7 @@ class MisaPOSync(models.TransientModel):
                 extra_received,
             )
 
-        return updated_count, created_count, skipped_qty_count
+        return updated_count, created_count, removed_count, skipped_qty_count
 
     def _get_or_create_vn_vat(self, rate, use='purchase'):
         """Lấy hoặc tạo thuế VAT"""
@@ -804,14 +821,14 @@ class MisaPOSync(models.TransientModel):
                 )
                 odoo_po.write(po_header_vals)
                 po_rec = odoo_po
-                updated_count, created_count, skipped_qty_count = self._update_received_po_from_misa(
+                updated_count, created_count, removed_count, skipped_qty_count = self._update_received_po_from_misa(
                     po_rec, lines, planned_naive_utc, crm_headers, odoo_utils
                 )
                 lines_already_synced = True
                 total_lines = len(lines)
                 message = (
-                    'Da cap nhat an toan: %s (%s dong MISA, update %s, tao moi %s, bo qua qty %s)'
-                    % (refno, total_lines, updated_count, created_count, skipped_qty_count)
+                    'Da cap nhat an toan: %s (%s dong MISA, update %s, tao moi %s, xoa %s, bo qua %s)'
+                    % (refno, total_lines, updated_count, created_count, removed_count, skipped_qty_count)
                 )
                 title = 'Cap nhat thanh cong'
             else:
