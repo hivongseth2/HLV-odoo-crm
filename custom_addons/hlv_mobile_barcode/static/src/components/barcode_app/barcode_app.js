@@ -492,6 +492,7 @@ export class BarcodeApp extends Component {
                     
                     this.state.lastScannedProduct = null;
                     this.state.lastScannedMoveLine = null;
+                    this.state.preferredMoveLineId = null;
                     this.state.pickingRefreshTick += 1;
                 } else {
                     this.playSound('success');

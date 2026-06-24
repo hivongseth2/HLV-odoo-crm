@@ -308,10 +308,10 @@ export class PickingScanner extends Component {
     }
 
     togglePreferredLine(line) {
-        if (!this.state.picking?.is_pick || this.state.picking.state === 'done' || !line.id) {
+        if (this.state.picking?.state === 'done' || !line.id) {
             return;
         }
-        if (line.product_uom_qty > 0 && line.qty_done >= line.product_uom_qty) {
+        if (this.state.picking?.is_pick && line.product_uom_qty > 0 && line.qty_done >= line.product_uom_qty) {
             return;
         }
         const lineId = Number(line.id);

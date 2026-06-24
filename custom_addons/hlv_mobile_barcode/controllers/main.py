@@ -1423,20 +1423,31 @@ class HLVMobileBarcodeController(http.Controller):
         location = request.env['stock.location'].sudo().search(['|', ('barcode', '=', barcode), ('name', '=', barcode)], limit=1)
         if location:
             res = {'type': 'location', 'location_id': location.id, 'location_name': location.display_name, 'is_putaway': is_putaway}
-            if is_putaway and last_move_line_id:
+            if is_putaway and (preferred_move_line_id or last_move_line_id):
+                target_ml_id = False
+                is_explicit_selection = False
                 try:
-                    last_move_line_id = int(last_move_line_id)
+                    if preferred_move_line_id:
+                        target_ml_id = int(preferred_move_line_id)
+                        is_explicit_selection = True
+                    elif last_move_line_id:
+                        target_ml_id = int(last_move_line_id)
                 except (TypeError, ValueError):
-                    last_move_line_id = False
-                updated_ml = request.env['stock.move.line'].browse(last_move_line_id)
+                    target_ml_id = False
+                    
+                updated_ml = request.env['stock.move.line'].browse(target_ml_id)
                 if (
                     updated_ml.exists()
                     and updated_ml.picking_id == picking
                     and updated_ml.state not in ['done', 'cancel']
                 ):
+                    # Nếu là chọn thủ công (tap vào dòng), luôn cho phép đổi location.
+                    # Nếu là tự động (từ last_move_line_id):
                     # Không kéo theo sản phẩm khi quét vị trí đối với phiếu nhập IN
-                    # Điều này cho phép thủ kho tách 1 sản phẩm ra nhiều vị trí khác nhau
-                    if not is_incoming_receipt:
+                    # Tuy nhiên, nếu sản phẩm đang ở vị trí đích mặc định của phiếu (chưa gán kệ cụ thể), ta gán nó vào kệ vừa quét
+                    allow_update = is_explicit_selection or (not is_incoming_receipt and updated_ml.location_dest_id.id == picking.location_dest_id.id)
+                    
+                    if allow_update:
                         updated_ml.location_dest_id = location.id
                         res['updated_product_id'] = updated_ml.product_id.id
                         res['updated_move_line_id'] = updated_ml.id
