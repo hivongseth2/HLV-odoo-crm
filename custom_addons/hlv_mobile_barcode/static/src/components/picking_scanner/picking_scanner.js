@@ -480,6 +480,16 @@ export class PickingScanner extends Component {
                 if (this.props.onClearScanState) {
                     this.props.onClearScanState();
                 }
+                
+                // Update linked_picking_id from validate response before calling onValidated
+                if (res.linked_picking_id) {
+                    if (!this.state.picking) {
+                        this.state.picking = {};
+                    }
+                    this.state.picking.linked_picking_id = res.linked_picking_id;
+                    this.state.picking.linked_picking_name = res.linked_picking_name;
+                }
+
                 if (this.props.onValidated) {
                     if (this.state.picking?.is_pick || !this.state.picking?.linked_picking_id) {
                         this.props.onValidated();

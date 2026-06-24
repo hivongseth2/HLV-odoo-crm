@@ -1423,7 +1423,7 @@ class HLVMobileBarcodeController(http.Controller):
         location = request.env['stock.location'].sudo().search(['|', ('barcode', '=', barcode), ('name', '=', barcode)], limit=1)
         if location:
             res = {'type': 'location', 'location_id': location.id, 'location_name': location.display_name, 'is_putaway': is_putaway}
-            if is_putaway and last_move_line_id and not is_multi_location and not picking.source_transfer_id:
+            if is_putaway and last_move_line_id:
                 try:
                     last_move_line_id = int(last_move_line_id)
                 except (TypeError, ValueError):
@@ -1734,7 +1734,50 @@ class HLVMobileBarcodeController(http.Controller):
             if not product_entries:
                 return {'error': _('Sản phẩm "%s" đã được quét đủ số lượng của phiếu Bước 2.', product.display_name)}
 
-            target_entry = product_entries[0]
+            target_entry = None
+            if destination_location_id:
+                matching_entries = [e for e in product_entries if e['target_line'].location_dest_id.id == destination_location_id]
+                if matching_entries:
+                    target_entry = matching_entries[0]
+                    
+            if not target_entry:
+                target_entry = product_entries[0]
+                target_line = target_entry['target_line']
+                
+                if destination_location_id and target_line.location_dest_id.id != destination_location_id:
+                    if target_line.qty_scanned == 0:
+                        target_line.location_dest_id = destination_location_id
+                    else:
+                        demand_field = 'quantity_product_uom' if hasattr(target_line, 'quantity_product_uom') and target_line.quantity_product_uom else 'quantity'
+                        current_demand = getattr(target_line, demand_field)
+                        if current_demand >= 1:
+                            setattr(target_line, demand_field, current_demand - 1)
+                            
+                        new_line_vals = {
+                            'move_id': target_line.move_id.id,
+                            'picking_id': picking.id,
+                            'product_id': product.id,
+                            'product_uom_id': target_line.product_uom_id.id,
+                            'location_id': target_line.location_id.id,
+                            'location_dest_id': destination_location_id,
+                            'lot_id': target_line.lot_id.id or False,
+                            'owner_id': target_line.owner_id.id or False,
+                            'package_id': target_line.package_id.id or False,
+                            'qty_scanned': 1.0,
+                            'quantity': 1.0,
+                        }
+                        if demand_field == 'quantity_product_uom':
+                            new_line_vals['quantity_product_uom'] = 1.0
+                            
+                        new_line = request.env['stock.move.line'].sudo().with_context(skip_qty_validation=True).create(new_line_vals)
+                        return {
+                            'success': True,
+                            'type': 'product',
+                            'product_id': product.id,
+                            'product_name': product.display_name,
+                            'move_line_id': new_line.id,
+                        }
+            
             target_line = target_entry['target_line']
             target_line.qty_scanned = min(target_entry['demand'], target_line.qty_scanned + 1)
             return {
@@ -3114,21 +3157,23 @@ class HLVMobileBarcodeController(http.Controller):
                     ))
             
             # Override destination location for Step 2 if requested
-            if dest_loc_id:
-                step2_picking = request.env['stock.picking'].sudo().search([('source_transfer_id', '=', picking.id)], limit=1)
-                if step2_picking:
-                    request.env.cr.execute("""
-                        UPDATE stock_picking SET location_dest_id = %s WHERE id = %s
-                    """, (dest_loc_id, step2_picking.id))
-                    request.env.cr.execute("""
-                        UPDATE stock_move SET location_dest_id = %s WHERE picking_id = %s
-                    """, (dest_loc_id, step2_picking.id))
-                    request.env.cr.execute("""
-                        UPDATE stock_move_line SET location_dest_id = %s WHERE picking_id = %s
-                    """, (dest_loc_id, step2_picking.id))
-                    step2_picking.invalidate_recordset()
+            step2_picking = request.env['stock.picking'].sudo().search([('source_transfer_id', '=', picking.id)], limit=1)
+            if dest_loc_id and step2_picking:
+                request.env.cr.execute("""
+                    UPDATE stock_picking SET location_dest_id = %s WHERE id = %s
+                """, (dest_loc_id, step2_picking.id))
+                request.env.cr.execute("""
+                    UPDATE stock_move SET location_dest_id = %s WHERE picking_id = %s
+                """, (dest_loc_id, step2_picking.id))
+                request.env.cr.execute("""
+                    UPDATE stock_move_line SET location_dest_id = %s WHERE picking_id = %s
+                """, (dest_loc_id, step2_picking.id))
+                step2_picking.invalidate_recordset()
                     
             result = {'success': True}
+            if step2_picking:
+                result['linked_picking_id'] = step2_picking.id
+                result['linked_picking_name'] = step2_picking.name
             result.update(backorder_info)
             savepoint.__exit__(None, None, None)
             savepoint = None
