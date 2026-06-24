@@ -308,10 +308,10 @@ export class PickingScanner extends Component {
     }
 
     togglePreferredLine(line) {
-        if (!this.state.picking?.is_pick || this.state.picking.state === 'done' || !line.id) {
+        if (this.state.picking?.state === 'done' || !line.id) {
             return;
         }
-        if (line.product_uom_qty > 0 && line.qty_done >= line.product_uom_qty) {
+        if (this.state.picking?.is_pick && line.product_uom_qty > 0 && line.qty_done >= line.product_uom_qty) {
             return;
         }
         const lineId = Number(line.id);
@@ -480,6 +480,16 @@ export class PickingScanner extends Component {
                 if (this.props.onClearScanState) {
                     this.props.onClearScanState();
                 }
+                
+                // Update linked_picking_id from validate response before calling onValidated
+                if (res.linked_picking_id) {
+                    if (!this.state.picking) {
+                        this.state.picking = {};
+                    }
+                    this.state.picking.linked_picking_id = res.linked_picking_id;
+                    this.state.picking.linked_picking_name = res.linked_picking_name;
+                }
+
                 if (this.props.onValidated) {
                     if (this.state.picking?.is_pick || !this.state.picking?.linked_picking_id) {
                         this.props.onValidated();

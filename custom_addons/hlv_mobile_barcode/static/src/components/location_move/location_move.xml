@@ -47,10 +47,10 @@
             
             <!-- Fixed Footer -->
             <div class="subview-footer">
-                <button class="btn btn-outline btn-lg" style="flex: 1;" t-on-click="props.onBack" t-att-disabled="state.loading">
+                <button class="btn btn-outline btn-lg" style="flex: 1;" t-on-click="props.onBack" t-att-disabled="state.inFlight || state.loading">
                     <i class="fa fa-times"/> Hủy
                 </button>
-                <button class="btn btn-primary btn-lg" style="flex: 1;" t-on-click="doMove" t-att-disabled="state.loading">
+                <button class="btn btn-primary btn-lg" style="flex: 1;" t-on-click="doMove" t-att-disabled="state.inFlight || state.loading">
                     <t t-if="!state.loading"><i class="fa fa-check"/> Xác nhận chuyển</t>
                     <t t-else=""><i class="fa fa-spin fa-spinner"/> Đang xử lý</t>
                 </button>

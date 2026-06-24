@@ -47,14 +47,17 @@ def _is_putaway_picking(picking):
     if _is_return_picking(picking):
         return picking.location_dest_id.usage == 'internal'
 
+    if picking.source_transfer_id:
+        return True
+
     pt_type = picking.picking_type_id.code
     pt_code = (picking.picking_type_id.sequence_code or '').upper()
     return pt_type == 'incoming' or (pt_type == 'internal' and 'INT' not in pt_code and 'IN' in pt_code)
 
 def _uses_qty_scanned_progress(picking):
-    if not picking or not picking.exists() or _is_return_picking(picking):
+    if not picking or not picking.exists():
         return False
-    return bool(picking.source_transfer_id) or _is_pick_picking(picking) or _is_putaway_picking(picking)
+    return bool(picking.source_transfer_id) or _is_pick_picking(picking) or _is_putaway_picking(picking) or _is_return_picking(picking)
 
 def _can_edit_packages(picking):
     return bool(
@@ -782,6 +785,58 @@ def _pick_assignment_error(picking):
         return {'error': str(error)}
     return False
 
+# Bảo vệ idempotency cho move_location / move_location_batch: tránh tạo phiếu INT
+# trùng nhau khi 2 RPC gần nhau (double-click, retry, hay 2 client).
+MOBILE_DYN_MOVE_WINDOW_SECONDS = 10
+MOBILE_DYN_MOVE_MARKER = 'HLV_MOBILE_DYN_MOVE'
+
+
+def _find_recent_mobile_dyn_move_picking(source_loc, dest_loc, marker_value):
+    """Trả về picking INT gần đây của cùng user khớp marker (idempotency)."""
+    from datetime import datetime, timedelta
+    window_start = datetime.now() - timedelta(seconds=MOBILE_DYN_MOVE_WINDOW_SECONDS)
+    note_token = '{}:{}'.format(MOBILE_DYN_MOVE_MARKER, marker_value)
+    candidates = request.env['stock.picking'].sudo().search([
+        ('picking_type_id.code', '=', 'internal'),
+        ('create_date', '>=', window_start),
+        ('create_uid', '=', request.env.user.id),
+        ('location_id', '=', source_loc.id),
+        '|',
+        ('location_dest_id', '=', dest_loc.id if dest_loc else False),
+        ('note', 'like', note_token),
+    ], order='id desc', limit=20)
+    # Lọc chính xác theo marker trong note để tránh match nhầm picking khác.
+    for picking in candidates:
+        if note_token in (picking.note or ''):
+            return picking
+    return request.env['stock.picking'].browse()
+
+
+def _build_mobile_dyn_move_marker(product, dest_loc, qty, extra=''):
+    base = '{p}:{l}:{q}:{e}'.format(
+        p=product.id,
+        l=dest_loc.id if dest_loc else 0,
+        q=qty,
+        e=extra,
+    )
+    return base
+
+
+def _lock_source_quants(product, source_loc):
+    """Khóa row quants nguồn để chống 2 request đồng thời tranh quant."""
+    request.env.cr.execute(
+        """
+            SELECT id
+              FROM stock_quant
+             WHERE product_id = %s
+               AND location_id = %s
+               AND quantity > 0
+             ORDER BY id
+             FOR UPDATE
+        """,
+        (product.id, source_loc.id),
+    )
+
 class HLVMobileBarcodeController(http.Controller):
 
     @http.route('/hlv_mobile_barcode/smart_scan', type='json', auth='user')
@@ -890,6 +945,8 @@ class HLVMobileBarcodeController(http.Controller):
         is_putaway = False
         if is_return_picking:
             is_putaway = picking.location_dest_id.usage == 'internal'
+        elif picking.source_transfer_id:
+            is_putaway = True
         elif pt_type == 'incoming' or (pt_type == 'internal' and 'INT' not in pt_code and 'IN' in pt_code) or picking.location_id.usage == 'transit':
             is_putaway = True
 
@@ -1352,6 +1409,8 @@ class HLVMobileBarcodeController(http.Controller):
         is_pick_picking = _is_pick_picking(picking) and not is_return_picking
         if is_return_picking:
             is_putaway = picking.location_dest_id.usage == 'internal'
+        elif picking.source_transfer_id:
+            is_putaway = True
         elif pt_type == 'incoming' or (pt_type == 'internal' and 'INT' not in pt_code and 'IN' in pt_code) or picking.location_id.usage == 'transit':
             is_putaway = True
         else:
@@ -1359,33 +1418,43 @@ class HLVMobileBarcodeController(http.Controller):
 
         if location_mode == 'dest':
             is_putaway = True
-        elif location_mode == 'source' and (is_multi_location or is_pick_picking):
+        elif location_mode == 'source' and (is_multi_location or is_pick_picking) and not picking.source_transfer_id:
             is_putaway = False
 
         # Cờ nhận diện phiếu nhập thuần (Incoming Receipt - IN)
         # Dùng cho logic ghi đè location_dest_id khi quét vị trí cụ thể
         is_incoming_receipt = (pt_type == 'incoming') and not is_return_picking and not picking.source_transfer_id
-
-        uses_qty_scanned = is_pick_picking or (is_putaway and not is_return_picking)
+        uses_qty_scanned = _uses_qty_scanned_progress(picking)
         
         # 1. Try to find location first
         location = request.env['stock.location'].sudo().search(['|', ('barcode', '=', barcode), ('name', '=', barcode)], limit=1)
         if location:
             res = {'type': 'location', 'location_id': location.id, 'location_name': location.display_name, 'is_putaway': is_putaway}
-            if is_putaway and last_move_line_id and not is_multi_location and not picking.source_transfer_id:
+            if is_putaway and (preferred_move_line_id or last_move_line_id):
+                target_ml_id = False
+                is_explicit_selection = False
                 try:
-                    last_move_line_id = int(last_move_line_id)
+                    if preferred_move_line_id:
+                        target_ml_id = int(preferred_move_line_id)
+                        is_explicit_selection = True
+                    elif last_move_line_id:
+                        target_ml_id = int(last_move_line_id)
                 except (TypeError, ValueError):
-                    last_move_line_id = False
-                updated_ml = request.env['stock.move.line'].browse(last_move_line_id)
+                    target_ml_id = False
+                    
+                updated_ml = request.env['stock.move.line'].browse(target_ml_id)
                 if (
                     updated_ml.exists()
                     and updated_ml.picking_id == picking
                     and updated_ml.state not in ['done', 'cancel']
                 ):
+                    # Nếu là chọn thủ công (tap vào dòng), luôn cho phép đổi location.
+                    # Nếu là tự động (từ last_move_line_id):
                     # Không kéo theo sản phẩm khi quét vị trí đối với phiếu nhập IN
-                    # Điều này cho phép thủ kho tách 1 sản phẩm ra nhiều vị trí khác nhau
-                    if not is_incoming_receipt:
+                    # Tuy nhiên, nếu sản phẩm đang ở vị trí đích mặc định của phiếu (chưa gán kệ cụ thể), ta gán nó vào kệ vừa quét
+                    allow_update = is_explicit_selection or (not is_incoming_receipt and updated_ml.location_dest_id.id == picking.location_dest_id.id)
+                    
+                    if allow_update:
                         updated_ml.location_dest_id = location.id
                         res['updated_product_id'] = updated_ml.product_id.id
                         res['updated_move_line_id'] = updated_ml.id
@@ -1425,6 +1494,8 @@ class HLVMobileBarcodeController(http.Controller):
                 processed_lines = []
                 for entry in package_entries:
                     target_line = entry['target_line']
+                    if destination_location_id and target_line.location_dest_id.id != destination_location_id:
+                        target_line.location_dest_id = destination_location_id
                     target_line.qty_scanned = entry['demand']
                     processed_lines.append(f"{entry['demand']} x {target_line.product_id.display_name}")
 
@@ -1444,6 +1515,8 @@ class HLVMobileBarcodeController(http.Controller):
                 updated_move_line = request.env['stock.move.line'].browse()
                 updated_product = request.env['product.product'].browse()
                 for ml in move_lines:
+                    if is_putaway and destination_location_id and ml.location_dest_id.id != destination_location_id:
+                        ml.location_dest_id = destination_location_id
                     line_demand = ml.move_id.product_uom_qty or ml.quantity or ml.quantity_product_uom
                     if ml.package_id == package and not ml.result_package_id and not is_pick_picking:
                         ml.result_package_id = package.id
@@ -1683,7 +1756,56 @@ class HLVMobileBarcodeController(http.Controller):
             if not product_entries:
                 return {'error': _('Sản phẩm "%s" đã được quét đủ số lượng của phiếu Bước 2.', product.display_name)}
 
-            target_entry = product_entries[0]
+            target_entry = None
+            if destination_location_id:
+                matching_entries = [e for e in product_entries if e['target_line'].location_dest_id.id == destination_location_id]
+                if matching_entries:
+                    target_entry = matching_entries[0]
+                    
+            if not target_entry:
+                target_entry = product_entries[0]
+                target_line = target_entry['target_line']
+                
+                if destination_location_id and target_line.location_dest_id.id != destination_location_id:
+                    if target_line.qty_scanned == 0:
+                        target_line.location_dest_id = destination_location_id
+                    else:
+                        demand_field = 'quantity_product_uom' if hasattr(target_line, 'quantity_product_uom') and target_line.quantity_product_uom else 'quantity'
+                        current_demand = getattr(target_line, demand_field)
+                        scanned = target_line.qty_scanned
+                        remaining = current_demand - scanned
+                        
+                        if remaining >= 1:
+                            write_vals = {'quantity': scanned}
+                            if hasattr(target_line, 'quantity_product_uom'):
+                                write_vals['quantity_product_uom'] = scanned
+                            target_line.with_context(skip_qty_validation=True).write(write_vals)
+                            
+                        new_line_vals = {
+                            'move_id': target_line.move_id.id,
+                            'picking_id': picking.id,
+                            'product_id': product.id,
+                            'product_uom_id': target_line.product_uom_id.id,
+                            'location_id': target_line.location_id.id,
+                            'location_dest_id': destination_location_id,
+                            'lot_id': target_line.lot_id.id or False,
+                            'owner_id': target_line.owner_id.id or False,
+                            'package_id': target_line.package_id.id or False,
+                            'qty_scanned': 1.0,
+                            'quantity': remaining if remaining >= 1 else 1.0,
+                        }
+                        if hasattr(target_line, 'quantity_product_uom'):
+                            new_line_vals['quantity_product_uom'] = remaining if remaining >= 1 else 1.0
+                            
+                        new_line = request.env['stock.move.line'].sudo().with_context(skip_qty_validation=True).create(new_line_vals)
+                        return {
+                            'success': True,
+                            'type': 'product',
+                            'product_id': product.id,
+                            'product_name': product.display_name,
+                            'move_line_id': new_line.id,
+                        }
+            
             target_line = target_entry['target_line']
             target_line.qty_scanned = min(target_entry['demand'], target_line.qty_scanned + 1)
             return {
@@ -3063,21 +3185,23 @@ class HLVMobileBarcodeController(http.Controller):
                     ))
             
             # Override destination location for Step 2 if requested
-            if dest_loc_id:
-                step2_picking = request.env['stock.picking'].sudo().search([('source_transfer_id', '=', picking.id)], limit=1)
-                if step2_picking:
-                    request.env.cr.execute("""
-                        UPDATE stock_picking SET location_dest_id = %s WHERE id = %s
-                    """, (dest_loc_id, step2_picking.id))
-                    request.env.cr.execute("""
-                        UPDATE stock_move SET location_dest_id = %s WHERE picking_id = %s
-                    """, (dest_loc_id, step2_picking.id))
-                    request.env.cr.execute("""
-                        UPDATE stock_move_line SET location_dest_id = %s WHERE picking_id = %s
-                    """, (dest_loc_id, step2_picking.id))
-                    step2_picking.invalidate_recordset()
+            step2_picking = request.env['stock.picking'].sudo().search([('source_transfer_id', '=', picking.id)], limit=1)
+            if dest_loc_id and step2_picking:
+                request.env.cr.execute("""
+                    UPDATE stock_picking SET location_dest_id = %s WHERE id = %s
+                """, (dest_loc_id, step2_picking.id))
+                request.env.cr.execute("""
+                    UPDATE stock_move SET location_dest_id = %s WHERE picking_id = %s
+                """, (dest_loc_id, step2_picking.id))
+                request.env.cr.execute("""
+                    UPDATE stock_move_line SET location_dest_id = %s WHERE picking_id = %s
+                """, (dest_loc_id, step2_picking.id))
+                step2_picking.invalidate_recordset()
                     
             result = {'success': True}
+            if step2_picking:
+                result['linked_picking_id'] = step2_picking.id
+                result['linked_picking_name'] = step2_picking.name
             result.update(backorder_info)
             savepoint.__exit__(None, None, None)
             savepoint = None
@@ -3194,6 +3318,7 @@ class HLVMobileBarcodeController(http.Controller):
 
     @http.route('/hlv_mobile_barcode/move_location', type='json', auth='user')
     def move_location(self, product_id, source_barcode, qty, dest_warehouse_id=False, dest_location_id=False, source_warehouse_id=False):
+        qty = float(qty)
         product = request.env['product.product'].sudo().browse(product_id)
         if not product.exists():
             return {'error': _('Không tìm thấy sản phẩm')}
@@ -3207,6 +3332,9 @@ class HLVMobileBarcodeController(http.Controller):
             source_loc = request.env['stock.location'].sudo().search([('name', '=', source_barcode)], limit=1)
         if not source_loc:
             return {'error': _('Không tìm thấy vị trí nguồn')}
+            
+        # === 3a. Khóa row trên quants nguồn (chống 2 request đồng thời tranh quant) ===
+        _lock_source_quants(product, source_loc)
             
         company_id = request.env.company.id
         
@@ -3264,15 +3392,26 @@ class HLVMobileBarcodeController(http.Controller):
                 partner_id = actual_warehouse.partner_id.id
 
         try:
+            # === 3b. Idempotency check ===
+            marker_value = _build_mobile_dyn_move_marker(product, request.env['stock.location'].browse(target_location_dest_id), qty)
+            existing = _find_recent_mobile_dyn_move_picking(source_loc, request.env['stock.location'].browse(target_location_dest_id), marker_value)
+            if existing:
+                in_picking_name = False
+                step2_picking = request.env['stock.picking'].sudo().search([('source_transfer_id', '=', existing.id)], limit=1)
+                if step2_picking:
+                    in_picking_name = step2_picking.name
+                return {'success': True, 'in_picking_name': in_picking_name, 'duplicate_blocked': True}
+
             picking_vals = {
                 'picking_type_id': picking_type_int.id,
                 'location_id': source_loc.id,
                 'location_dest_id': target_location_dest_id,
                 'partner_id': partner_id,
+                'note': '{}:{}\n'.format(MOBILE_DYN_MOVE_MARKER, marker_value),
             }
             
             if override_dest_loc_id:
-                picking_vals['note'] = f"DEST_LOC_OVERRIDE:{override_dest_loc_id}\n"
+                picking_vals['note'] += f"DEST_LOC_OVERRIDE:{override_dest_loc_id}\n"
                 
             picking_int = request.env['stock.picking'].sudo().create(picking_vals)
             
@@ -3288,11 +3427,29 @@ class HLVMobileBarcodeController(http.Controller):
             })
             
             picking_int.action_confirm()
-            picking_int.action_assign()
             
-            # Kiểm tra có move_line_ids sau action_assign không
-            if not picking_int.move_line_ids:
-                # Không reserve được → tạo move line thủ công
+            # --- FORCE EXACT SOURCE LOCATION ---
+            # Xóa các dòng auto-reserve của Odoo để tự tạo thủ công chính xác
+            auto_reserved_lines = picking_int.move_ids.mapped('move_line_ids')
+            if auto_reserved_lines:
+                auto_reserved_lines.sudo().unlink()
+                
+            # Thay vì gọi action_assign (có thể lấy nhầm từ vị trí con do logic child_of của Odoo), 
+            # ta chủ động tạo move_line_ids từ các quant ĐÚNG TẠI source_loc
+            quants = request.env['stock.quant'].sudo().search([
+                ('product_id', '=', product.id),
+                ('location_id', '=', source_loc.id), # Không dùng child_of
+                ('quantity', '>', 0)
+            ], order='in_date ASC, id ASC')
+            
+            remaining_qty = qty
+            for q in quants:
+                if remaining_qty <= 0:
+                    break
+                take_qty = min(q.quantity, remaining_qty) 
+                if take_qty <= 0:
+                    continue
+                    
                 request.env['stock.move.line'].sudo().create({
                     'move_id': move_int.id,
                     'picking_id': picking_int.id,
@@ -3300,18 +3457,25 @@ class HLVMobileBarcodeController(http.Controller):
                     'product_uom_id': product.uom_id.id,
                     'location_id': source_loc.id,
                     'location_dest_id': target_location_dest_id,
-                    'quantity': qty,
+                    'quantity': take_qty,
+                    'lot_id': q.lot_id.id if q.lot_id else False,
+                    'package_id': q.package_id.id if q.package_id else False,
+                    'owner_id': q.owner_id.id if q.owner_id else False,
                 })
-            else:
-                # Gán số lượng cho từng move line theo tỷ lệ reserve
-                total_reserved = sum(ml.quantity for ml in picking_int.move_line_ids)
-                if total_reserved > 0:
-                    for ml in picking_int.move_line_ids:
-                        ml.quantity = (ml.quantity / total_reserved) * qty
-                else:
-                    # Chưa reserve gì → gán toàn bộ qty cho line đầu tiên
-                    first_ml = picking_int.move_line_ids[0]
-                    first_ml.quantity = qty
+                remaining_qty -= take_qty
+                
+            if remaining_qty > 0:
+                # Nếu thiếu quant (do âm kho hoặc lệch), tạo 1 dòng gộp
+                request.env['stock.move.line'].sudo().create({
+                    'move_id': move_int.id,
+                    'picking_id': picking_int.id,
+                    'product_id': product.id,
+                    'product_uom_id': product.uom_id.id,
+                    'location_id': source_loc.id,
+                    'location_dest_id': target_location_dest_id,
+                    'quantity': remaining_qty,
+                })
+            # -----------------------------------
             
             # Gọi button_validate và xử lý kết quả trả về
             res_validate = picking_int.button_validate()
@@ -3380,6 +3544,16 @@ class HLVMobileBarcodeController(http.Controller):
         if not source_loc:
             return {'error': _('Không tìm thấy vị trí nguồn')}
             
+        # === 3a. Khóa row trên quants nguồn ===
+        product_ids = tuple(line['product_id'] for line in lines)
+        if product_ids:
+            request.env.cr.execute(
+                "SELECT id FROM stock_quant "
+                "WHERE product_id IN %s AND location_id = %s AND quantity > 0 "
+                "ORDER BY id FOR UPDATE",
+                (product_ids, source_loc.id),
+            )
+            
         company_id = request.env.company.id
         
         # Get Transit Location
@@ -3403,6 +3577,17 @@ class HLVMobileBarcodeController(http.Controller):
             return {'error': _('Chưa cấu hình Operation Types (INT, IN)')}
 
         try:
+            # === 3b. Idempotency check ===
+            lines_str = ','.join([f"{l['product_id']}-{l['qty']}" for l in sorted(lines, key=lambda x: x['product_id'])])
+            marker_value = _build_mobile_dyn_move_marker(request.env['product.product'], transit_loc, 0, extra=lines_str)
+            existing = _find_recent_mobile_dyn_move_picking(source_loc, transit_loc, marker_value)
+            if existing:
+                in_picking_name = False
+                step2_picking = request.env['stock.picking'].sudo().search([('source_transfer_id', '=', existing.id)], limit=1)
+                if step2_picking:
+                    in_picking_name = step2_picking.name
+                return {'success': True, 'in_picking_name': in_picking_name, 'duplicate_blocked': True}
+
             # 1. Create INT picking (Source -> Transit)
             partner_id = False
             actual_warehouse = warehouse
@@ -3416,6 +3601,7 @@ class HLVMobileBarcodeController(http.Controller):
                 'location_id': source_loc.id,
                 'location_dest_id': transit_loc.id,
                 'partner_id': partner_id,
+                'note': '{}:{}\n'.format(MOBILE_DYN_MOVE_MARKER, marker_value),
             })
             
             for line in lines:
@@ -3433,6 +3619,53 @@ class HLVMobileBarcodeController(http.Controller):
                 })
             
             picking_int.action_confirm()
+            
+            # --- FORCE EXACT SOURCE LOCATION ---
+            # Xóa các dòng auto-reserve của Odoo để tự tạo thủ công chính xác
+            auto_reserved_lines = picking_int.move_ids.mapped('move_line_ids')
+            if auto_reserved_lines:
+                auto_reserved_lines.sudo().unlink()
+
+            for move in picking_int.move_ids:
+                quants = request.env['stock.quant'].sudo().search([
+                    ('product_id', '=', move.product_id.id),
+                    ('location_id', '=', source_loc.id), # Không dùng child_of
+                    ('quantity', '>', 0)
+                ], order='in_date ASC, id ASC')
+                
+                remaining_qty = move.product_uom_qty
+                for q in quants:
+                    if remaining_qty <= 0:
+                        break
+                    take_qty = min(q.quantity, remaining_qty)
+                    if take_qty <= 0:
+                        continue
+                        
+                    request.env['stock.move.line'].sudo().create({
+                        'move_id': move.id,
+                        'picking_id': picking_int.id,
+                        'product_id': move.product_id.id,
+                        'product_uom_id': move.product_uom.id,
+                        'location_id': source_loc.id,
+                        'location_dest_id': transit_loc.id,
+                        'quantity': take_qty,
+                        'lot_id': q.lot_id.id if q.lot_id else False,
+                        'package_id': q.package_id.id if q.package_id else False,
+                        'owner_id': q.owner_id.id if q.owner_id else False,
+                    })
+                    remaining_qty -= take_qty
+                    
+                if remaining_qty > 0:
+                    request.env['stock.move.line'].sudo().create({
+                        'move_id': move.id,
+                        'picking_id': picking_int.id,
+                        'product_id': move.product_id.id,
+                        'product_uom_id': move.product_uom.id,
+                        'location_id': source_loc.id,
+                        'location_dest_id': transit_loc.id,
+                        'quantity': remaining_qty,
+                    })
+            # -----------------------------------
             
             package_name = False
             if pack:
