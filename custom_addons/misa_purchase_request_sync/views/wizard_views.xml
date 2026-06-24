@@ -6,9 +6,9 @@
         <field name="inherit_id" ref="purchase_request.view_purchase_request_line_make_purchase_order"/>
         <field name="arch" type="xml">
             <!-- Xóa các thành phần layout cũ -->
-            <xpath expr="//separator[@string='RFQ hiện có để cập nhật:']" position="replace" />
+            <xpath expr="//separator[1]" position="replace" />
             <xpath expr="//group[field[@name='purchase_order_id']]" position="replace" />
-            <xpath expr="//separator[@string='Chi tiết Đơn mua hàng mới:']" position="replace" />
+            <xpath expr="//separator[1]" position="replace" />
             
             <!-- Thay thế group chứa supplier_id thành layout mới hoàn chỉnh -->
             <xpath expr="//group[field[@name='supplier_id']]" position="replace">
