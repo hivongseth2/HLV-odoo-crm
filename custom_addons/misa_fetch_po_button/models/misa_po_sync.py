@@ -426,9 +426,25 @@ class MisaPOSync(models.TransientModel):
                 line for line in candidates
                 if _same_qty(line.product_qty, vals["product_qty"])
             ]
-            match_pool = signature_candidates or qty_price_candidates or same_qty_candidates
+            received_price_candidates = [
+                line for line in candidates
+                if line.qty_received
+                and _same_money(line.price_unit, vals["price_unit"])
+                and vals["product_qty"] >= line.qty_received
+            ]
+            match_pool = signature_candidates or qty_price_candidates or same_qty_candidates or received_price_candidates
             if match_pool:
                 po_line = sorted(match_pool, key=lambda line: _line_score(line, vals))[0]
+                if received_price_candidates and po_line in received_price_candidates and not (signature_candidates or qty_price_candidates or same_qty_candidates):
+                    _logger.warning(
+                        "PO %s fallback matched received line by SKU+price for %s: Odoo qty %s received %s -> MISA qty %s price %s",
+                        po_rec.name,
+                        code,
+                        po_line.product_qty,
+                        po_line.qty_received,
+                        vals["product_qty"],
+                        vals["price_unit"],
+                    )
             else:
                 reusable_candidates = [line for line in candidates if not line.qty_received]
                 po_line = sorted(reusable_candidates, key=lambda line: _line_score(line, vals))[0] if reusable_candidates else False
