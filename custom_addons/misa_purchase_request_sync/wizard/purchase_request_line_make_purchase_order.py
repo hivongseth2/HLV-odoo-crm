@@ -3,13 +3,15 @@ from odoo import api, fields, models
 class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
     _inherit = "purchase.request.line.make.purchase.order"
 
+    supplier_id = fields.Many2one(required=False)
+
     toggle_keep_description = fields.Boolean(
-        string="Giữ Mô tả cho tất cả",
+        string="Giữ Mô tả (Tất cả)",
         default=True,
         help="Bật để tất cả các dòng bên dưới đều lấy mô tả từ Yêu cầu mua hàng"
     )
     toggle_keep_estimated_cost = fields.Boolean(
-        string="Giữ Giá dự trù cho tất cả",
+        string="Giữ Giá (Tất cả)",
         default=True,
         help="Bật để tất cả các dòng bên dưới đều lấy giá dự trù làm giá mua"
     )

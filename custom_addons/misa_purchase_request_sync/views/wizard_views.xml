@@ -13,7 +13,7 @@
             <!-- Thay thế group chứa supplier_id thành layout mới hoàn chỉnh -->
             <xpath expr="//group[field[@name='supplier_id']]" position="replace">
                 <group>
-                    <field name="supplier_id" string="Nhà cung cấp (Bắt buộc)"/>
+                    <field name="supplier_id" string="Nhà cung cấp" domain="[('parent_id', '=', False), ('active', '=', True)]" options="{'no_create': True}"/>
                 </group>
 
                 <div class="alert alert-info" role="alert" style="margin-top: 10px; margin-bottom: 10px;">
