@@ -1761,8 +1761,14 @@ class HLVMobileBarcodeController(http.Controller):
                     else:
                         demand_field = 'quantity_product_uom' if hasattr(target_line, 'quantity_product_uom') and target_line.quantity_product_uom else 'quantity'
                         current_demand = getattr(target_line, demand_field)
-                        if current_demand >= 1:
-                            setattr(target_line, demand_field, current_demand - 1)
+                        scanned = target_line.qty_scanned
+                        remaining = current_demand - scanned
+                        
+                        if remaining >= 1:
+                            write_vals = {demand_field: scanned}
+                            if demand_field == 'quantity' and hasattr(target_line, 'quantity_product_uom'):
+                                write_vals['quantity_product_uom'] = scanned
+                            target_line.with_context(skip_qty_validation=True).write(write_vals)
                             
                         new_line_vals = {
                             'move_id': target_line.move_id.id,
@@ -1775,10 +1781,10 @@ class HLVMobileBarcodeController(http.Controller):
                             'owner_id': target_line.owner_id.id or False,
                             'package_id': target_line.package_id.id or False,
                             'qty_scanned': 1.0,
-                            'quantity': 1.0,
+                            'quantity': remaining if remaining >= 1 else 1.0,
                         }
                         if demand_field == 'quantity_product_uom':
-                            new_line_vals['quantity_product_uom'] = 1.0
+                            new_line_vals['quantity_product_uom'] = remaining if remaining >= 1 else 1.0
                             
                         new_line = request.env['stock.move.line'].sudo().with_context(skip_qty_validation=True).create(new_line_vals)
                         return {
