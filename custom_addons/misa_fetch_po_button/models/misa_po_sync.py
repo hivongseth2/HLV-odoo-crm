@@ -326,32 +326,87 @@ class MisaPOSync(models.TransientModel):
         return vals
 
     def _update_received_po_from_misa(self, po_rec, lines, planned_naive_utc, crm_headers, odoo_utils):
-        """Update PO da co receipt done ma khong cancel/unlink cac dong da nhan."""
+        """Update PO da co receipt done bang reconcile SKU + qty, khong pop theo thu tu."""
         line_model = self.env["purchase.order.line"].sudo()
+        existing_lines = po_rec.order_line.filtered(lambda line: not getattr(line, "display_type", False))
+
         lines_by_code = {}
-        for po_line in po_rec.order_line:
+        for po_line in existing_lines:
             code = (po_line.product_id.default_code or "").strip().upper()
             if code:
                 lines_by_code.setdefault(code, []).append(po_line)
 
-        updated_count = 0
-        created_count = 0
-        removed_count = 0
-        skipped_qty_count = 0
-
+        prepared_lines = []
         for misa_line in lines:
             vals = self._prepare_misa_po_line_vals(
                 misa_line, po_rec, planned_naive_utc, crm_headers, odoo_utils
             )
             product = self.env["product.product"].browse(vals["product_id"])
-            code = (product.default_code or "").strip().upper()
-            po_line = code and lines_by_code.get(code) and lines_by_code[code].pop(0)
+            prepared_lines.append({
+                "vals": vals,
+                "code": (product.default_code or "").strip().upper(),
+            })
+
+        # Stable order: received lines first, then exact existing quantities can be consumed deterministically.
+        for code, po_lines in list(lines_by_code.items()):
+            lines_by_code[code] = sorted(
+                po_lines,
+                key=lambda line: (
+                    0 if line.qty_received else 1,
+                    -float(line.qty_received or 0.0),
+                    float(line.product_qty or 0.0),
+                    line.id,
+                ),
+            )
+
+        updated_count = 0
+        created_count = 0
+        removed_count = 0
+        skipped_qty_count = 0
+        matched_line_ids = set()
+
+        def _same_qty(a, b):
+            return abs(float(a or 0.0) - float(b or 0.0)) < 0.00001
+
+        for item in prepared_lines:
+            vals = item["vals"]
+            code = item["code"]
+            candidates = [
+                line for line in lines_by_code.get(code, [])
+                if line.id not in matched_line_ids
+            ]
+
+            same_qty_candidates = [
+                line for line in candidates
+                if _same_qty(line.product_qty, vals["product_qty"])
+            ]
+            if same_qty_candidates:
+                po_line = sorted(
+                    same_qty_candidates,
+                    key=lambda line: (0 if line.qty_received else 1, -float(line.qty_received or 0.0), line.id),
+                )[0]
+            else:
+                reusable_candidates = [line for line in candidates if not line.qty_received]
+                po_line = reusable_candidates[0] if reusable_candidates else False
+                if po_line:
+                    _logger.warning(
+                        "PO %s fallback repurpose unreceived line for SKU %s: Odoo qty %s -> MISA qty %s",
+                        po_rec.name,
+                        code,
+                        po_line.product_qty,
+                        vals["product_qty"],
+                    )
 
             if po_line:
+                matched_line_ids.add(po_line.id)
                 if vals["product_qty"] <= 0 and not po_line.qty_received:
-                    po_line.sudo().unlink()
+                    try:
+                        po_line.sudo().unlink()
+                    except Exception:
+                        po_line.sudo().write({"product_qty": 0})
                     removed_count += 1
                     continue
+
                 write_vals = {
                     "name": vals["name"],
                     "price_unit": vals["price_unit"],
@@ -378,23 +433,37 @@ class MisaPOSync(models.TransientModel):
                     continue
                 line_model.create(vals)
                 created_count += 1
+
         extra_received = 0
-        for remaining_lines in lines_by_code.values():
-            for po_line in remaining_lines:
-                if po_line.qty_received:
-                    extra_received += 1
-                    continue
+        for po_line in existing_lines:
+            if po_line.id in matched_line_ids:
+                continue
+            if po_line.qty_received:
+                extra_received += 1
+                continue
+            try:
+                po_line.sudo().unlink()
+                removed_count += 1
+            except Exception as e:
                 try:
-                    po_line.sudo().unlink()
+                    po_line.sudo().write({"product_qty": 0})
                     removed_count += 1
-                except Exception as e:
-                    skipped_qty_count += 1
                     _logger.warning(
-                        "Could not remove PO %s line %s not present in MISA: %s",
+                        "Could not remove PO %s line %s not present in MISA, set quantity to 0 instead: %s",
                         po_rec.name,
                         po_line.display_name,
                         e,
                     )
+                except Exception as e2:
+                    skipped_qty_count += 1
+                    _logger.warning(
+                        "Could not remove or zero PO %s line %s not present in MISA: %s / %s",
+                        po_rec.name,
+                        po_line.display_name,
+                        e,
+                        e2,
+                    )
+
         if extra_received:
             _logger.warning(
                 "PO %s has %s received lines not present in MISA; kept them unchanged.",
