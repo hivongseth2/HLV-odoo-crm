@@ -27,11 +27,11 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
     @api.onchange('toggle_keep_description')
     def _onchange_toggle_keep_description(self):
         if self.item_ids:
-            for item in self.item_ids:
-                item.keep_description = self.toggle_keep_description
+            commands = [(1, item.id, {'keep_description': self.toggle_keep_description}) for item in self.item_ids]
+            self.item_ids = commands
 
     @api.onchange('toggle_keep_estimated_cost')
     def _onchange_toggle_keep_estimated_cost(self):
         if self.item_ids:
-            for item in self.item_ids:
-                item.keep_estimated_cost = self.toggle_keep_estimated_cost
+            commands = [(1, item.id, {'keep_estimated_cost': self.toggle_keep_estimated_cost}) for item in self.item_ids]
+            self.item_ids = commands
