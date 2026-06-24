@@ -1515,7 +1515,7 @@ class HLVMobileBarcodeController(http.Controller):
                 updated_move_line = request.env['stock.move.line'].browse()
                 updated_product = request.env['product.product'].browse()
                 for ml in move_lines:
-                    if destination_location_id and ml.location_dest_id.id != destination_location_id:
+                    if is_putaway and destination_location_id and ml.location_dest_id.id != destination_location_id:
                         ml.location_dest_id = destination_location_id
                     line_demand = ml.move_id.product_uom_qty or ml.quantity or ml.quantity_product_uom
                     if ml.package_id == package and not ml.result_package_id and not is_pick_picking:
