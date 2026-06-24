@@ -255,12 +255,33 @@ class MisaPOSync(models.TransientModel):
 
         return qty_base, price_base, False
 
+    def _misa_float(self, value, default=0.0):
+        try:
+            return float(value or default)
+        except Exception:
+            return default
+
+    def _first_misa_float(self, line, keys):
+        for key in keys:
+            value = line.get(key)
+            if value not in (None, '', 'null'):
+                return self._misa_float(value)
+        return 0.0
+
     def _prepare_misa_po_line_vals(self, line, po_rec, planned_naive_utc, crm_headers, odoo_utils):
         code = line.get("inventory_item_code", "unknown_code").strip()
         name = line.get("description", "unknown product").strip()
-        qty = float(line.get("quantity", 1))
-        price = float(line.get("unit_price", 0))
+        qty = self._misa_float(line.get("quantity"), 1.0)
+        price = self._first_misa_float(line, ("unit_price", "main_unit_price", "unit_price_oc"))
         unit_name = line.get("unit_name", "Cái").strip()
+
+        discount_rate = self._first_misa_float(line, ("discount_rate", "discount_rate_voucher"))
+        discount_amount = self._first_misa_float(line, ("discount_amount", "discount_amount_oc"))
+        line_amount = self._first_misa_float(line, ("amount", "amount_oc", "total_amount", "total_amount_oc"))
+        if not discount_rate and discount_amount and qty and price:
+            discount_rate = (discount_amount / (qty * price)) * 100.0
+        if not discount_rate and line_amount and qty and price and abs(line_amount - qty * price) > 0.01:
+            discount_rate = max(0.0, (1.0 - (line_amount / (qty * price))) * 100.0)
 
         tax_ids = self._tax_ids_from_misa_line(line)
 
@@ -277,7 +298,7 @@ class MisaPOSync(models.TransientModel):
             product, unit_name, qty, price, code, crm_headers
         )
 
-        return {
+        vals = {
             "order_id": po_rec.id,
             "name": name,
             "product_id": product.id,
@@ -287,6 +308,22 @@ class MisaPOSync(models.TransientModel):
             "taxes_id": [(6, 0, tax_ids)],
             "date_planned": planned_naive_utc or fields.Datetime.now(),
         }
+        if "discount" in self.env["purchase.order.line"]._fields:
+            vals["discount"] = discount_rate
+        elif discount_rate:
+            vals["price_unit"] = price_base * (1.0 - discount_rate / 100.0)
+
+        _logger.info(
+            "MISA PO line %s: qty=%s unit_price=%s amount=%s discount_rate=%s -> Odoo qty=%s price_unit=%s",
+            code,
+            qty,
+            price,
+            line_amount,
+            discount_rate,
+            vals["product_qty"],
+            vals["price_unit"],
+        )
+        return vals
 
     def _update_received_po_from_misa(self, po_rec, lines, planned_naive_utc, crm_headers, odoo_utils):
         """Update PO da co receipt done ma khong cancel/unlink cac dong da nhan."""
@@ -316,6 +353,8 @@ class MisaPOSync(models.TransientModel):
                     "taxes_id": vals["taxes_id"],
                     "date_planned": vals["date_planned"],
                 }
+                if "discount" in vals:
+                    write_vals["discount"] = vals["discount"]
                 if vals["product_qty"] >= po_line.qty_received:
                     write_vals["product_qty"] = vals["product_qty"]
                 else:
