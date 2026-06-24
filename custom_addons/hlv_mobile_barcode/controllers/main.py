@@ -945,6 +945,8 @@ class HLVMobileBarcodeController(http.Controller):
         is_putaway = False
         if is_return_picking:
             is_putaway = picking.location_dest_id.usage == 'internal'
+        elif picking.source_transfer_id:
+            is_putaway = True
         elif pt_type == 'incoming' or (pt_type == 'internal' and 'INT' not in pt_code and 'IN' in pt_code) or picking.location_id.usage == 'transit':
             is_putaway = True
 
@@ -1407,6 +1409,8 @@ class HLVMobileBarcodeController(http.Controller):
         is_pick_picking = _is_pick_picking(picking) and not is_return_picking
         if is_return_picking:
             is_putaway = picking.location_dest_id.usage == 'internal'
+        elif picking.source_transfer_id:
+            is_putaway = True
         elif pt_type == 'incoming' or (pt_type == 'internal' and 'INT' not in pt_code and 'IN' in pt_code) or picking.location_id.usage == 'transit':
             is_putaway = True
         else:
@@ -1414,7 +1418,7 @@ class HLVMobileBarcodeController(http.Controller):
 
         if location_mode == 'dest':
             is_putaway = True
-        elif location_mode == 'source' and (is_multi_location or is_pick_picking):
+        elif location_mode == 'source' and (is_multi_location or is_pick_picking) and not picking.source_transfer_id:
             is_putaway = False
 
         # Cờ nhận diện phiếu nhập thuần (Incoming Receipt - IN)
