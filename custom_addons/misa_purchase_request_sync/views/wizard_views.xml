@@ -13,7 +13,9 @@
             <!-- Thay thế group chứa supplier_id thành layout mới hoàn chỉnh -->
             <xpath expr="//group[field[@name='supplier_id']]" position="replace">
                 <group>
-                    <field name="supplier_id" string="Nhà cung cấp" domain="[('parent_id', '=', False), ('active', '=', True)]" options="{'no_create': True}"/>
+                    <field name="supplier_id" string="Nhà cung cấp"
+                           domain="[('parent_id', '=', False), ('active', '=', True)]"
+                           options="{'no_create': True}"/>
                 </group>
 
                 <div class="alert alert-info" role="alert" style="margin-top: 10px; margin-bottom: 10px;">
@@ -24,25 +26,51 @@
                 </div>
                 
                 <group>
-                    <field name="purchase_order_id" domain="[('partner_id', '=', supplier_id)]" options="{'no_create': True}" placeholder="Để trống để tạo Đơn mua hàng mới..."/>
+                    <field name="purchase_order_id"
+                           domain="[('partner_id', '=', supplier_id)]"
+                           options="{'no_create': True}"
+                           placeholder="Để trống để tạo Đơn mua hàng mới..."/>
                     <field name="sync_data_planned" />
                 </group>
 
+                <!-- Ẩn field gốc để lưu state -->
+                <field name="toggle_keep_description" invisible="1"/>
+                <field name="toggle_keep_estimated_cost" invisible="1"/>
+
                 <separator string="Tùy chọn hàng loạt" />
-                <div class="row mb-3">
-                    <div class="col-6 d-flex align-items-center">
-                        <field name="toggle_keep_description" widget="boolean_toggle" class="me-2"/>
-                        <label for="toggle_keep_description"/>
-                        <button name="action_apply_keep_description" type="object"
-                                string="Áp dụng" class="btn btn-sm btn-secondary ms-2"
-                                icon="fa-check"/>
+                <div style="display: flex; gap: 40px; margin-bottom: 12px; padding-left: 8px;">
+                    <!-- Toggle Giữ Mô tả -->
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <button name="action_toggle_description_on" type="object"
+                                invisible="toggle_keep_description"
+                                class="btn btn-link p-0 border-0"
+                                title="Bấm để BẬT giữ mô tả cho tất cả dòng">
+                            <i class="fa fa-toggle-off fa-2x text-muted"/>
+                        </button>
+                        <button name="action_toggle_description_off" type="object"
+                                invisible="not toggle_keep_description"
+                                class="btn btn-link p-0 border-0"
+                                title="Bấm để TẮT giữ mô tả cho tất cả dòng">
+                            <i class="fa fa-toggle-on fa-2x text-success"/>
+                        </button>
+                        <span class="fw-bold">Giữ Mô tả (Tất cả)</span>
                     </div>
-                    <div class="col-6 d-flex align-items-center">
-                        <field name="toggle_keep_estimated_cost" widget="boolean_toggle" class="me-2"/>
-                        <label for="toggle_keep_estimated_cost"/>
-                        <button name="action_apply_keep_estimated_cost" type="object"
-                                string="Áp dụng" class="btn btn-sm btn-secondary ms-2"
-                                icon="fa-check"/>
+
+                    <!-- Toggle Giữ Giá -->
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <button name="action_toggle_cost_on" type="object"
+                                invisible="toggle_keep_estimated_cost"
+                                class="btn btn-link p-0 border-0"
+                                title="Bấm để BẬT giữ giá cho tất cả dòng">
+                            <i class="fa fa-toggle-off fa-2x text-muted"/>
+                        </button>
+                        <button name="action_toggle_cost_off" type="object"
+                                invisible="not toggle_keep_estimated_cost"
+                                class="btn btn-link p-0 border-0"
+                                title="Bấm để TẮT giữ giá cho tất cả dòng">
+                            <i class="fa fa-toggle-on fa-2x text-success"/>
+                        </button>
+                        <span class="fw-bold">Giữ Giá (Tất cả)</span>
                     </div>
                 </div>
             </xpath>

@@ -22,10 +22,8 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
         res['keep_estimated_cost'] = True
         return res
 
-    def action_apply_keep_description(self):
-        """Server action: Áp dụng toggle Giữ Mô tả cho tất cả dòng."""
-        self.ensure_one()
-        self.item_ids.write({'keep_description': self.toggle_keep_description})
+    def _reload_wizard(self):
+        """Trả về action mở lại wizard hiện tại (đã lưu) để refresh giao diện."""
         return {
             'type': 'ir.actions.act_window',
             'res_model': self._name,
@@ -34,17 +32,35 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
             'target': 'new',
         }
 
-    def action_apply_keep_estimated_cost(self):
-        """Server action: Áp dụng toggle Giữ Giá cho tất cả dòng."""
+    # ── Toggle Giữ Mô tả ──────────────────────────────────────────
+    def action_toggle_description_on(self):
+        """Bật Giữ Mô tả cho TẤT CẢ dòng."""
         self.ensure_one()
-        self.item_ids.write({'keep_estimated_cost': self.toggle_keep_estimated_cost})
-        return {
-            'type': 'ir.actions.act_window',
-            'res_model': self._name,
-            'res_id': self.id,
-            'view_mode': 'form',
-            'target': 'new',
-        }
+        self.toggle_keep_description = True
+        self.item_ids.write({'keep_description': True})
+        return self._reload_wizard()
+
+    def action_toggle_description_off(self):
+        """Tắt Giữ Mô tả cho TẤT CẢ dòng."""
+        self.ensure_one()
+        self.toggle_keep_description = False
+        self.item_ids.write({'keep_description': False})
+        return self._reload_wizard()
+
+    # ── Toggle Giữ Giá ────────────────────────────────────────────
+    def action_toggle_cost_on(self):
+        """Bật Giữ Giá cho TẤT CẢ dòng."""
+        self.ensure_one()
+        self.toggle_keep_estimated_cost = True
+        self.item_ids.write({'keep_estimated_cost': True})
+        return self._reload_wizard()
+
+    def action_toggle_cost_off(self):
+        """Tắt Giữ Giá cho TẤT CẢ dòng."""
+        self.ensure_one()
+        self.toggle_keep_estimated_cost = False
+        self.item_ids.write({'keep_estimated_cost': False})
+        return self._reload_wizard()
 
 
 class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
