@@ -142,9 +142,10 @@ class PurchaseOrderAmisSync(models.Model):
             org_refid = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'misa_purchase_order|%d' % self.id))
             self.sudo().write({'misa_purchase_order_org_refid': org_refid})
 
-        account_object_id = (getattr(partner, 'misa_account_object_id', '') or '').strip()
-        account_object_code = (partner.ref or partner.name or '').strip()
-        account_object_name = (partner.display_name or partner.name or '').strip()
+        account_object = self._resolve_misa_account_object(config, partner)
+        account_object_id = account_object.get('account_object_id') or ''
+        account_object_code = account_object.get('account_object_code') or ''
+        account_object_name = account_object.get('account_object_name') or ''
 
         detail = []
         total_sale_amount = 0.0
@@ -263,6 +264,68 @@ class PurchaseOrderAmisSync(models.Model):
         if taxes:
             return float(taxes[0].amount or 0.0)
         return 0.0
+
+    def _resolve_misa_account_object(self, config, partner):
+        if not partner:
+            raise UserError('Don mua hang "%s" thieu nha cung cap.' % self.name)
+
+        existing_id = (getattr(partner, 'misa_account_object_id', '') or '').strip()
+        if existing_id:
+            found = self._find_misa_account_object_by_id(config, existing_id)
+            if found:
+                return self._normalize_misa_account_object(found, partner)
+            partner.sudo().write({'misa_account_object_id': False})
+
+        partner_ref = (partner.ref or '').strip()
+        partner_name = (partner.name or partner.display_name or '').strip()
+        partner_ref_upper = partner_ref.upper()
+        partner_name_upper = partner_name.upper()
+
+        for item in config._get_all_dictionary(1):
+            code = (item.get('account_object_code') or '').strip()
+            name = (item.get('account_object_name') or '').strip()
+            code_upper = code.upper()
+            name_upper = name.upper()
+            if partner_ref_upper and partner_ref_upper == code_upper:
+                return self._normalize_misa_account_object(item, partner)
+            if partner_name_upper and partner_name_upper == name_upper:
+                return self._normalize_misa_account_object(item, partner)
+
+        for item in config._get_all_dictionary(1):
+            code = (item.get('account_object_code') or '').strip()
+            name = (item.get('account_object_name') or '').strip()
+            haystack = '%s %s' % (code.upper(), name.upper())
+            if partner_name_upper and partner_name_upper in haystack:
+                return self._normalize_misa_account_object(item, partner)
+
+        raise UserError(
+            'Nha cung cap "%s" chua co trong danh muc Doi tuong MISA '
+            '(data_type=1), hoac ma NCC tren Odoo khong khop MISA. '
+            'Vui long dong bo/tao nha cung cap tren MISA hoac dien Ma NCC (Internal Reference) dung voi account_object_code.'
+            % (partner.display_name or partner.name)
+        )
+
+    def _find_misa_account_object_by_id(self, config, account_object_id):
+        account_object_id = (account_object_id or '').strip().lower()
+        if not account_object_id:
+            return None
+        for item in config._get_all_dictionary(1):
+            if (item.get('account_object_id') or '').strip().lower() == account_object_id:
+                return item
+        return None
+
+    def _normalize_misa_account_object(self, item, partner):
+        misa_id = (item.get('account_object_id') or '').strip()
+        code = (item.get('account_object_code') or partner.ref or partner.name or '').strip()
+        name = (item.get('account_object_name') or partner.display_name or partner.name or '').strip()
+        if misa_id and getattr(partner, 'misa_account_object_id', False) != misa_id:
+            partner.sudo().write({'misa_account_object_id': misa_id})
+            _logger.info('Auto-mapped PO vendor %s to MISA account_object_id=%s', partner.display_name, misa_id)
+        return {
+            'account_object_id': misa_id,
+            'account_object_code': code,
+            'account_object_name': name,
+        }
 
     def _misa_purchase_datetime(self, value):
         if not value:
