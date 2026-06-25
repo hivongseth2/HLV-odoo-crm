@@ -20,14 +20,14 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
     )
     supplier_id = fields.Many2one(
         comodel_name="res.partner",
-        string="Nhà cung cấp",
-        required=True,
+        string="Nhà cung cấp chung",
         context={
             "res_partner_search_mode": "supplier",
             "hlv_prioritize_company": True,
             "hlv_product_ids": "hlv_product_ids",
         },
         domain=[("type", "!=", "delivery")],
+        help="Nếu chọn, sẽ được áp dụng cho tất cả các dòng bên dưới.",
     )
     item_ids = fields.One2many(
         comodel_name="purchase.request.line.make.purchase.order.item",
@@ -62,6 +62,7 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
             "product_qty": line.pending_qty_to_receive,
             "product_uom_id": line.product_uom_id.id,
             "estimated_cost": line.estimated_cost,
+            "supplier_id": line.supplier_id.id,
         }
 
     @api.model
@@ -115,7 +116,8 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
         self._check_valid_request_line(request_line_ids)
         self.check_group(request_lines)
         for line in request_lines:
-            items.append([0, 0, self._prepare_item(line)])
+            if line.pending_qty_to_receive > 0:
+                items.append([0, 0, self._prepare_item(line)])
         return items
 
     @api.model
@@ -135,19 +137,18 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
         res["item_ids"] = self.get_items(request_line_ids)
         request_lines = self.env["purchase.request.line"].browse(request_line_ids)
         supplier_ids = request_lines.mapped("supplier_id").ids
-        if len(supplier_ids) == 1:
+        if len(supplier_ids) == 1 and supplier_ids[0]:
             res["supplier_id"] = supplier_ids[0]
         return res
 
     @api.model
-    def _prepare_purchase_order(self, picking_type, group_id, company, origin):
-        if not self.supplier_id:
+    def _prepare_purchase_order(self, picking_type, group_id, company, origin, supplier):
+        if not supplier:
             raise UserError(_("Nhập một nhà cung cấp."))
-        supplier = self.supplier_id
         data = {
             "origin": origin,
-            "partner_id": self.supplier_id.id,
-            "payment_term_id": self.supplier_id.property_supplier_payment_term_id.id,
+            "partner_id": supplier.id,
+            "payment_term_id": supplier.property_supplier_payment_term_id.id,
             "fiscal_position_id": supplier.property_account_position_id
             and supplier.property_account_position_id.id
             or False,
@@ -203,9 +204,10 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
     @api.model
     def _get_purchase_line_name(self, order, line):
         """Fetch the product name as per supplier settings"""
+        supplier = line.supplier_id or order.partner_id
         product_lang = line.product_id.with_context(
-            lang=get_lang(self.env, self.supplier_id.lang).code,
-            partner_id=self.supplier_id.id,
+            lang=get_lang(self.env, supplier.lang).code,
+            partner_id=supplier.id,
             company_id=order.company_id.id,
         )
         name = product_lang.display_name
@@ -245,21 +247,40 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
         res = []
         purchase_obj = self.env["purchase.order"]
         po_line_obj = self.env["purchase.order.line"]
-        purchase = False
+
+        # If header supplier is set, override all item suppliers
+        if self.supplier_id:
+            for item in self.item_ids:
+                item.supplier_id = self.supplier_id
+
+        # Group items by supplier to create multiple POs if needed
+        items_by_supplier = {}
         for item in self.item_ids:
-            line = item.line_id
-            if item.product_qty <= 0.0:
-                raise UserError(_("Nhập một số lượng dương."))
-            if self.purchase_order_id:
+            if not item.supplier_id:
+                raise UserError(_("Vui lòng chọn nhà cung cấp cho sản phẩm %s.") % item.product_id.display_name)
+            if item.supplier_id not in items_by_supplier:
+                items_by_supplier[item.supplier_id] = []
+            items_by_supplier[item.supplier_id].append(item)
+
+        for supplier, items in items_by_supplier.items():
+            purchase = False
+            # Only use the header purchase_order_id if the partner matches
+            if self.purchase_order_id and self.purchase_order_id.partner_id == supplier:
                 purchase = self.purchase_order_id
-            if not purchase:
-                po_data = self._prepare_purchase_order(
-                    line.request_id.picking_type_id,
-                    line.request_id.group_id,
-                    line.company_id,
-                    line.origin,
-                )
-                purchase = purchase_obj.create(po_data)
+            
+            for item in items:
+                line = item.line_id
+                if item.product_qty <= 0.0:
+                    raise UserError(_("Nhập một số lượng dương."))
+                if not purchase:
+                    po_data = self._prepare_purchase_order(
+                        line.request_id.picking_type_id,
+                        line.request_id.group_id,
+                        line.company_id,
+                        line.origin,
+                        supplier,
+                    )
+                    purchase = purchase_obj.create(po_data)
 
             # Look for any other PO line in the selected PO with same
             # product and UoM to sum quantities instead of creating a new
@@ -304,10 +325,11 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
                 all_qty = min(po_line_product_uom_qty, wizard_product_uom_qty)
                 self.create_allocation(po_line, line, all_qty, alloc_uom)
             self._post_process_po_line(item, po_line, new_pr_line)
-            res.append(purchase.id)
+            if purchase.id not in res:
+                res.append(purchase.id)
 
-        purchase_requests = self.item_ids.mapped("request_id")
-        purchase_requests.sudo().button_done()
+        # purchase_requests = self.item_ids.mapped("request_id")
+        # purchase_requests.sudo().button_done()
         return {
             "domain": [("id", "in", res)],
             "name": _("Yêu cầu báo giá"),
@@ -371,6 +393,11 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
         related="line_id.product_id",
         readonly=False,
     )
+    supplier_id = fields.Many2one(
+        comodel_name="res.partner",
+        string="Nhà cung cấp",
+        required=True,
+    )
     name = fields.Char(string="Mô tả", required=True)
     product_qty = fields.Float(
         string="Số lượng cần mua", digits="Product Unit of Measure"
@@ -397,20 +424,21 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
         ),
     )
 
-    @api.onchange("product_id")
+    @api.onchange("product_id", "supplier_id")
     def onchange_product_id(self):
         if self.product_id:
             if not self.keep_description:
                 name = self.product_id.name
             code = self.product_id.code
-            sup_info_id = self.env["product.supplierinfo"].search(
-                [
-                    "|",
-                    ("product_id", "=", self.product_id.id),
-                    ("product_tmpl_id", "=", self.product_id.product_tmpl_id.id),
-                    ("partner_id", "=", self.wiz_id.supplier_id.id),
-                ]
-            )
+            supplier = self.supplier_id or self.wiz_id.supplier_id
+            domain = [
+                "|",
+                ("product_id", "=", self.product_id.id),
+                ("product_tmpl_id", "=", self.product_id.product_tmpl_id.id),
+            ]
+            if supplier:
+                domain.append(("partner_id", "=", supplier.id))
+            sup_info_id = self.env["product.supplierinfo"].search(domain)
             if sup_info_id:
                 p_code = sup_info_id[0].product_code
                 p_name = sup_info_id[0].product_name
