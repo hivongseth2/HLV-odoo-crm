@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import json
 import logging
 import uuid
 
@@ -137,12 +138,13 @@ class PurchaseOrderAmisSync(models.Model):
         if not lines:
             raise UserError('Don mua hang "%s" khong co dong hang hoa de sync MISA.' % self.name)
 
+        missing_dictionary_items = []
         org_refid = (self.misa_purchase_order_org_refid or '').strip()
         if not org_refid:
             org_refid = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'misa_purchase_order|%d' % self.id))
             self.sudo().write({'misa_purchase_order_org_refid': org_refid})
 
-        account_object = self._resolve_misa_account_object(config, partner)
+        account_object = self._ensure_misa_account_object(config, partner, missing_dictionary_items)
         account_object_id = account_object.get('account_object_id') or ''
         account_object_code = account_object.get('account_object_code') or ''
         account_object_name = account_object.get('account_object_name') or ''
@@ -170,20 +172,30 @@ class PurchaseOrderAmisSync(models.Model):
             total_vat_amount += tax_amount
             total_amount += total_line
 
-            inventory_item_id = (getattr(product, 'misa_inventory_item_id', '') or '').strip()
-            unit_id = (getattr(line.product_uom, 'misa_unit_id', '') or '').strip()
+            unit = self._ensure_misa_unit(config, line.product_uom, missing_dictionary_items)
+            inventory_item = self._ensure_misa_inventory_item(
+                config, product, line.product_uom, unit, unit_price, missing_dictionary_items
+            )
+            inventory_item_id = inventory_item.get('inventory_item_id') or ''
+            inventory_item_code = inventory_item.get('inventory_item_code') or (product.default_code or str(product.id))
+            inventory_item_name = inventory_item.get('inventory_item_name') or product.display_name
+            unit_id = unit.get('unit_id') or ''
+            unit_name = unit.get('unit_name') or line.product_uom.name
             ref_detail_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'misa_purchase_order_detail|%d|%d' % (self.id, line.id)))
 
-            line_payload = {
+            detail.append({
                 'ref_detail_id': ref_detail_id,
                 'refid': org_refid,
                 'sort_order': idx,
                 'is_description': False,
-                'inventory_item_code': product.default_code or str(product.id),
-                'inventory_item_name': product.display_name,
-                'description': line.name or product.display_name,
-                'unit_name': line.product_uom.name,
-                'main_unit_name': line.product_uom.name,
+                'inventory_item_id': inventory_item_id,
+                'inventory_item_code': inventory_item_code,
+                'inventory_item_name': inventory_item_name,
+                'description': line.name or inventory_item_name,
+                'unit_id': unit_id,
+                'main_unit_id': unit_id,
+                'unit_name': unit_name,
+                'main_unit_name': unit_name,
                 'main_convert_rate': 1.0,
                 'quantity': qty,
                 'main_quantity': qty,
@@ -206,13 +218,7 @@ class PurchaseOrderAmisSync(models.Model):
                 'is_follow_serial_number': False,
                 'is_description_import': False,
                 'state': 0,
-            }
-            if inventory_item_id:
-                line_payload['inventory_item_id'] = inventory_item_id
-            if unit_id:
-                line_payload['unit_id'] = unit_id
-                line_payload['main_unit_id'] = unit_id
-            detail.append(line_payload)
+            })
 
         refdate = self._misa_purchase_datetime(self.date_order or fields.Datetime.now())
         branch_id = (config.misa_branch_id or '').strip() or ZERO_UUID
@@ -244,6 +250,7 @@ class PurchaseOrderAmisSync(models.Model):
             'discount_type': 0,
             'discount_rate_voucher': 0.0,
             'refno': self.name,
+            'account_object_id': account_object_id,
             'account_object_name': account_object_name,
             'account_object_address': partner.contact_address_complete or '',
             'account_object_tax_code': partner.vat or '',
@@ -255,8 +262,8 @@ class PurchaseOrderAmisSync(models.Model):
             'state': 0,
             'detail': detail,
         }
-        if account_object_id:
-            voucher['account_object_id'] = account_object_id
+
+        self._push_missing_misa_dictionary(config, missing_dictionary_items)
         return voucher
 
     def _misa_purchase_line_vat_rate(self, line):
@@ -265,10 +272,14 @@ class PurchaseOrderAmisSync(models.Model):
             return float(taxes[0].amount or 0.0)
         return 0.0
 
-    def _resolve_misa_account_object(self, config, partner):
-        if not partner:
-            raise UserError('Don mua hang "%s" thieu nha cung cap.' % self.name)
+    def _push_missing_misa_dictionary(self, config, dictionary_items):
+        if not dictionary_items:
+            return
+        config.push_dictionary(dictionary_items)
+        config.clear_dictionary_cache([1, 2, 4])
+        _logger.info('Created %d MISA dictionary items before PO %s sync.', len(dictionary_items), self.name)
 
+    def _ensure_misa_account_object(self, config, partner, dictionary_items):
         existing_id = (getattr(partner, 'misa_account_object_id', '') or '').strip()
         if existing_id:
             found = self._find_misa_account_object_by_id(config, existing_id)
@@ -276,34 +287,188 @@ class PurchaseOrderAmisSync(models.Model):
                 return self._normalize_misa_account_object(found, partner)
             partner.sudo().write({'misa_account_object_id': False})
 
-        partner_ref = (partner.ref or '').strip()
-        partner_name = (partner.name or partner.display_name or '').strip()
+        found = self._find_misa_account_object_by_code_or_name(config, partner.ref, partner.name or partner.display_name)
+        if found:
+            return self._normalize_misa_account_object(found, partner)
+
+        misa_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'misa_account_object|%d' % partner.id))
+        code = self._misa_required_code(partner.ref or '', fallback_prefix='NCC', fallback_id=partner.id)
+        name = (partner.display_name or partner.name or code).strip()
+        item = {
+            'dictionary_type': 1,
+            'account_object_id': misa_id,
+            'account_object_code': code,
+            'account_object_name': name,
+            'account_object_address': partner.contact_address_complete or '',
+            'company_tax_code': partner.vat or '',
+            'tel': partner.phone or partner.mobile or '',
+            'mobile': partner.mobile or partner.phone or '',
+            'email_address': partner.email or '',
+            'is_vendor': True,
+            'is_customer': False,
+            'inactive': False,
+            'state': 1,
+        }
+        dictionary_items.append(item)
+        partner.sudo().write({'misa_account_object_id': misa_id})
+        _logger.info('Prepared MISA vendor dictionary item for %s (%s)', name, code)
+        return {
+            'account_object_id': misa_id,
+            'account_object_code': code,
+            'account_object_name': name,
+        }
+
+    def _ensure_misa_unit(self, config, uom, dictionary_items):
+        existing_id = (getattr(uom, 'misa_unit_id', '') or '').strip() if uom else ''
+        name = (uom.name or '').strip() if uom else ''
+        if existing_id:
+            pending = self._find_pending_dictionary_item(dictionary_items, 'unit_id', existing_id)
+            if pending:
+                return {'unit_id': existing_id, 'unit_name': pending.get('unit_name') or name}
+            found = self._find_misa_unit_by_id(config, existing_id)
+            if found:
+                return {'unit_id': existing_id, 'unit_name': found.get('unit_name') or name}
+            if uom:
+                uom.sudo().write({'misa_unit_id': False})
+
+        for item in config._get_all_dictionary(4):
+            if name and (item.get('unit_name') or '').strip().casefold() == name.casefold():
+                unit_id = (item.get('unit_id') or '').strip()
+                unit_name = (item.get('unit_name') or name).strip()
+                if unit_id:
+                    uom.sudo().write({'misa_unit_id': unit_id})
+                    return {'unit_id': unit_id, 'unit_name': unit_name}
+
+        unit_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'misa_unit|%s' % name.casefold()))
+        item = {
+            'dictionary_type': 6,
+            'unit_id': unit_id,
+            'unit_name': name,
+            'inactive': False,
+            'state': 1,
+        }
+        dictionary_items.append(item)
+        if uom:
+            uom.sudo().write({'misa_unit_id': unit_id})
+        _logger.info('Prepared MISA unit dictionary item for %s', name)
+        return {'unit_id': unit_id, 'unit_name': name}
+
+    def _ensure_misa_inventory_item(self, config, product, uom, unit, unit_price, dictionary_items):
+        existing_id = (getattr(product, 'misa_inventory_item_id', '') or '').strip()
+        code = self._misa_required_code(product.default_code or '', fallback_prefix='VT', fallback_id=product.id)
+        name = (product.display_name or product.name or code).strip()
+        if existing_id:
+            pending = self._find_pending_dictionary_item(dictionary_items, 'inventory_item_id', existing_id)
+            if pending:
+                return {
+                    'inventory_item_id': existing_id,
+                    'inventory_item_code': pending.get('inventory_item_code') or code,
+                    'inventory_item_name': pending.get('inventory_item_name') or name,
+                }
+            found = self._find_misa_inventory_item_by_id(config, existing_id)
+            if found:
+                return {
+                    'inventory_item_id': existing_id,
+                    'inventory_item_code': found.get('inventory_item_code') or product.default_code or code,
+                    'inventory_item_name': found.get('inventory_item_name') or name,
+                }
+            product.sudo().write({'misa_inventory_item_id': False})
+
+        for item in config._get_all_dictionary(2):
+            if (item.get('inventory_item_code') or '').strip() == code:
+                item_id = (item.get('inventory_item_id') or '').strip()
+                unit_id = (item.get('unit_id') or '').strip()
+                if item_id:
+                    product.sudo().write({'misa_inventory_item_id': item_id})
+                if unit_id and uom and not (getattr(uom, 'misa_unit_id', '') or '').strip():
+                    uom.sudo().write({'misa_unit_id': unit_id})
+                return {
+                    'inventory_item_id': item_id,
+                    'inventory_item_code': item.get('inventory_item_code') or code,
+                    'inventory_item_name': item.get('inventory_item_name') or name,
+                }
+
+        item_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'misa_inventory_item|%d' % product.id))
+        unit_id = unit.get('unit_id') or ''
+        unit_name = unit.get('unit_name') or (uom.name if uom else '')
+        item = {
+            'dictionary_type': 3,
+            'inventory_item_id': item_id,
+            'inventory_item_code': code,
+            'inventory_item_name': name,
+            'inventory_item_type': 0,
+            'unit_id': unit_id,
+            'unit_name': unit_name,
+            'main_unit_id': unit_id,
+            'main_unit_name': unit_name,
+            'unit_list': json.dumps([{
+                'unit_id': unit_id,
+                'unit_name': unit_name,
+                'convert_rate': 1.0,
+                'is_main_unit': True,
+            }], ensure_ascii=False),
+            'sale_price1': float(unit_price or 0.0),
+            'purchase_price': float(unit_price or 0.0),
+            'stock_id': (config.misa_stock_id or '').strip(),
+            'stock_code': 'HLV',
+            'inactive': False,
+            'state': 1,
+        }
+        dictionary_items.append(item)
+        product.sudo().write({'misa_inventory_item_id': item_id})
+        _logger.info('Prepared MISA inventory dictionary item for %s (%s)', name, code)
+        return {
+            'inventory_item_id': item_id,
+            'inventory_item_code': code,
+            'inventory_item_name': name,
+        }
+
+    def _find_pending_dictionary_item(self, dictionary_items, id_field, id_value):
+        id_value = (id_value or '').strip().lower()
+        if not id_value:
+            return None
+        for item in dictionary_items:
+            if (item.get(id_field) or '').strip().lower() == id_value:
+                return item
+        return None
+
+    def _find_misa_unit_by_id(self, config, unit_id):
+        unit_id = (unit_id or '').strip().lower()
+        if not unit_id:
+            return None
+        for item in config._get_all_dictionary(4):
+            if (item.get('unit_id') or '').strip().lower() == unit_id:
+                return item
+        return None
+
+    def _find_misa_inventory_item_by_id(self, config, inventory_item_id):
+        inventory_item_id = (inventory_item_id or '').strip().lower()
+        if not inventory_item_id:
+            return None
+        for item in config._get_all_dictionary(2):
+            if (item.get('inventory_item_id') or '').strip().lower() == inventory_item_id:
+                return item
+        return None
+
+    def _find_misa_account_object_by_code_or_name(self, config, partner_ref, partner_name):
+        partner_ref = (partner_ref or '').strip()
+        partner_name = (partner_name or '').strip()
         partner_ref_upper = partner_ref.upper()
         partner_name_upper = partner_name.upper()
-
         for item in config._get_all_dictionary(1):
             code = (item.get('account_object_code') or '').strip()
             name = (item.get('account_object_name') or '').strip()
-            code_upper = code.upper()
-            name_upper = name.upper()
-            if partner_ref_upper and partner_ref_upper == code_upper:
-                return self._normalize_misa_account_object(item, partner)
-            if partner_name_upper and partner_name_upper == name_upper:
-                return self._normalize_misa_account_object(item, partner)
-
+            if partner_ref_upper and partner_ref_upper == code.upper():
+                return item
+            if partner_name_upper and partner_name_upper == name.upper():
+                return item
         for item in config._get_all_dictionary(1):
             code = (item.get('account_object_code') or '').strip()
             name = (item.get('account_object_name') or '').strip()
             haystack = '%s %s' % (code.upper(), name.upper())
             if partner_name_upper and partner_name_upper in haystack:
-                return self._normalize_misa_account_object(item, partner)
-
-        raise UserError(
-            'Nha cung cap "%s" chua co trong danh muc Doi tuong MISA '
-            '(data_type=1), hoac ma NCC tren Odoo khong khop MISA. '
-            'Vui long dong bo/tao nha cung cap tren MISA hoac dien Ma NCC (Internal Reference) dung voi account_object_code.'
-            % (partner.display_name or partner.name)
-        )
+                return item
+        return None
 
     def _find_misa_account_object_by_id(self, config, account_object_id):
         account_object_id = (account_object_id or '').strip().lower()
@@ -326,6 +491,12 @@ class PurchaseOrderAmisSync(models.Model):
             'account_object_code': code,
             'account_object_name': name,
         }
+
+    def _misa_required_code(self, value, fallback_prefix, fallback_id):
+        value = (value or '').strip()
+        if value:
+            return value
+        return '%s%05d' % (fallback_prefix, int(fallback_id or 0))
 
     def _misa_purchase_datetime(self, value):
         if not value:

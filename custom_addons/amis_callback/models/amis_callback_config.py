@@ -667,6 +667,18 @@ class AmisCallbackConfig(models.Model):
         }
         return self._post_actopen('/apir/sync/actopen/save_dictionary', payload, include_token=True)
 
+    def clear_dictionary_cache(self, data_types=None):
+        self.ensure_one()
+        data_types = data_types or []
+        db_name = self.env.cr.dbname
+        for data_type in data_types:
+            _DICT_CACHE.pop((db_name, int(data_type)), None)
+        cr = self.env.cr
+        tx_cache = getattr(cr, '_amis_dict_cache', None)
+        if tx_cache is not None:
+            for data_type in data_types:
+                tx_cache.pop(int(data_type), None)
+
     def _get_all_dictionary(self, data_type):
         """Tải toàn bộ 1 loại danh mục MISA và cache trong memory cho transaction này.
 
