@@ -338,17 +338,34 @@ class MisaExtensionController(http.Controller):
                 if so:
                     sale_order_id = so.id
 
-            # --- Tạo PR ---
-            pr_vals = {
-                "name": pr_name,
-                "requested_by": user_id,
-                "assigned_to": admin_user.id if admin_user else False,
-                "state": "to_approve",
-                "origin": "MISA CRM",
-                "description": payload.get("description") or "",
-                "sale_order_id": sale_order_id,
-            }
-            pr = pr_model.create(pr_vals)
+            # --- Kiểm tra PR đã tồn tại ---
+            pr = pr_model.search([("name", "=", pr_name)], limit=1)
+            if pr:
+                if pr.state not in ['draft', 'to_approve']:
+                    return json_response({
+                        "ok": False, 
+                        "error": "invalid_state", 
+                        "message": f"YCMH {pr_name} đã tồn tại và ở trạng thái {pr.state}, không thể cập nhật."
+                    }, 400)
+                # Xóa lines cũ để tạo lại
+                pr.line_ids.unlink()
+                pr.write({
+                    "requested_by": user_id,
+                    "description": payload.get("description") or "",
+                    "sale_order_id": sale_order_id,
+                })
+            else:
+                # --- Tạo PR ---
+                pr_vals = {
+                    "name": pr_name,
+                    "requested_by": user_id,
+                    "assigned_to": admin_user.id if admin_user else False,
+                    "state": "to_approve",
+                    "origin": "MISA CRM",
+                    "description": payload.get("description") or "",
+                    "sale_order_id": sale_order_id,
+                }
+                pr = pr_model.create(pr_vals)
 
             # --- Tạo lines ---
             line_model = env_admin["purchase.request.line"]
