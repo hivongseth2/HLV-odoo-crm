@@ -250,6 +250,8 @@ class MisaExtensionController(http.Controller):
             return json_response({"ok": False, "error": "invalid_state", "message": f"Không thể thu hồi YCMH ở trạng thái {pr.state}."}, 400)
 
         try:
+            if pr.state != 'draft':
+                pr.button_draft()
             pr.unlink()
             return json_response({"ok": True, "message": "Đã thu hồi YCMH thành công."})
         except Exception as e:
