@@ -18,7 +18,7 @@ class PurchaseRequestLine(models.Model):
             # Ưu tiên lấy giá từ Nhà cung cấp, nếu không có thì lấy giá chuẩn (Cost)
             supplier_info = self.env['product.supplierinfo'].search([
                 ('product_tmpl_id', '=', self.product_id.product_tmpl_id.id)
-            ], limit=1, order='sequence, min_qty descending, price')
+            ], limit=1, order='sequence, min_qty desc, price')
             
             if supplier_info:
                 self.estimated_cost = supplier_info.price

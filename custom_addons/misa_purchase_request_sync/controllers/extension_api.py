@@ -384,7 +384,7 @@ class MisaExtensionController(http.Controller):
                 if product:
                     supplier_info = env_admin['product.supplierinfo'].search([
                         ('product_tmpl_id', '=', product.product_tmpl_id.id)
-                    ], limit=1, order='sequence, min_qty descending, price')
+                    ], limit=1, order='sequence, min_qty desc, price')
                     if supplier_info:
                         estimated_cost = supplier_info.price
                     else:
