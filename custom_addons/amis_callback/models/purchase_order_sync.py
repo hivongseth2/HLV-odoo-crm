@@ -148,6 +148,16 @@ class PurchaseOrderAmisSync(models.Model):
         account_object_id = account_object.get('account_object_id') or ''
         account_object_code = account_object.get('account_object_code') or ''
         account_object_name = account_object.get('account_object_name') or ''
+        refdate = self._misa_purchase_datetime(self.date_order or fields.Datetime.now())
+        receive_date = self._misa_purchase_datetime(self.date_planned or self.date_order or fields.Datetime.now())
+        branch_id = (config.misa_branch_id or '').strip() or ZERO_UUID
+        now_ms = int(fields.Datetime.now().timestamp() * 1000)
+        delivery_term = self._misa_field_value('x_studio_delivery_term')
+        payment_term_text = self._misa_payment_term_text()
+        receive_address = self._misa_receive_address()
+        purchase_status = self._misa_field_value('x_studio_misa_purchase_status') or 'Chua thuc hien'
+        employee_name = self.user_id.name if self.user_id else ''
+        stock_code = self._misa_purchase_stock_code()
 
         detail = []
         total_sale_amount = 0.0
@@ -213,16 +223,16 @@ class PurchaseOrderAmisSync(models.Model):
                 'vat_amount_oc': tax_amount,
                 'vat_amount': tax_amount,
                 'exchange_rate_operator': '*',
+                'stock_code': 'HLV',
+                'stock_name': 'HLV',
                 'inventory_item_type': 0,
                 'is_allow_duplicate_serial_number': False,
                 'is_follow_serial_number': False,
                 'is_description_import': False,
+                'custom_field5': stock_code,
                 'state': 0,
             })
 
-        refdate = self._misa_purchase_datetime(self.date_order or fields.Datetime.now())
-        branch_id = (config.misa_branch_id or '').strip() or ZERO_UUID
-        now_ms = int(fields.Datetime.now().timestamp() * 1000)
 
         voucher = {
             'voucher_type': 21,
@@ -238,6 +248,7 @@ class PurchaseOrderAmisSync(models.Model):
             'status': 0,
             'reforder': now_ms,
             'refdate': refdate,
+            'receive_date': receive_date,
             'exchange_rate': float(getattr(self, 'currency_rate', 1.0) or 1.0),
             'total_sale_amount_oc': total_sale_amount,
             'total_sale_amount': total_sale_amount,
@@ -255,6 +266,13 @@ class PurchaseOrderAmisSync(models.Model):
             'account_object_address': partner.contact_address_complete or '',
             'account_object_tax_code': partner.vat or '',
             'account_object_code': account_object_code,
+            'employee_name': employee_name,
+            'purchase_employee_name': employee_name,
+            'custom_field1': payment_term_text,
+            'custom_field2': delivery_term,
+            'custom_field5': stock_code,
+            'custom_field10': purchase_status,
+            'receive_address': receive_address,
             'journal_memo': getattr(self, 'notes', False) or self.origin or ('Don mua hang %s' % self.name),
             'currency_id': self.currency_id.name or 'VND',
             'reftype': 301,
@@ -266,6 +284,73 @@ class PurchaseOrderAmisSync(models.Model):
         self._push_missing_misa_dictionary(config, missing_dictionary_items)
         return voucher
 
+    def _misa_field_value(self, field_name):
+        if field_name not in self._fields:
+            return ''
+        value = self[field_name]
+        if not value:
+            return ''
+        if hasattr(value, 'display_name'):
+            return value.display_name or value.name or ''
+        return str(value).strip()
+
+    def _misa_payment_term_text(self):
+        value = self._misa_field_value('x_studio_iu_kin_thanh_ton')
+        if value:
+            return value
+        if 'payment_term_id' in self._fields and self.payment_term_id:
+            return self.payment_term_id.name or ''
+        return ''
+
+    def _misa_receive_address(self):
+        value = self._misa_field_value('x_studio_ddgh')
+        if value:
+            return value
+        dest = self.picking_type_id.default_location_dest_id if self.picking_type_id else False
+        if dest:
+            return dest.complete_name or dest.display_name or dest.name or ''
+        return self.company_id.partner_id.contact_address_complete or ''
+
+    def _misa_purchase_stock_code(self):
+        explicit = self._misa_field_value('x_studio_misa_purchase_stock_code')
+        if explicit:
+            return self._normalize_misa_stock_code(explicit)
+        receive_address = self._misa_receive_address()
+        normalized_address = self._normalize_misa_stock_code(receive_address)
+        if 'BENCAM' in normalized_address:
+            return 'BENCAM'
+        if 'BEN CAM' in receive_address.upper() or 'BẾN CAM' in receive_address.upper():
+            return 'BENCAM'
+        dest = self.picking_type_id.default_location_dest_id if self.picking_type_id else False
+        complete = (dest.complete_name or dest.display_name or dest.name or '') if dest else ''
+        normalized_dest = self._normalize_misa_stock_code(complete)
+        if 'KBC' in normalized_dest or 'BENCAM' in normalized_dest:
+            return 'BENCAM'
+        warehouse = self.picking_type_id.warehouse_id if self.picking_type_id else False
+        if warehouse and warehouse.code:
+            return self._normalize_misa_stock_code(warehouse.code)
+        return 'HLV'
+
+    def _normalize_misa_stock_code(self, value):
+        value = (value or '').strip().upper()
+        replacements = {
+            ' ': '',
+            '-': '',
+            '_': '',
+            'Ế': 'E',
+            'É': 'E',
+            'È': 'E',
+            'Ê': 'E',
+            'Ắ': 'A',
+            'Á': 'A',
+            'À': 'A',
+            'Â': 'A',
+            'Ã': 'A',
+            'Đ': 'D',
+        }
+        for src, dst in replacements.items():
+            value = value.replace(src, dst)
+        return value
     def _misa_purchase_line_vat_rate(self, line):
         taxes = line.taxes_id.filtered(lambda t: t.amount_type == 'percent')
         if taxes:
