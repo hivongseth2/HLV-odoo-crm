@@ -392,6 +392,17 @@ class MisaExtensionController(http.Controller):
                             [("name", "=ilike", pname)], limit=1
                         )
 
+                # Fallback 2: Gọi API MISA để tạo sản phẩm nếu chưa có
+                if not product and pcode and "odoo.utils" in env_admin:
+                    odoo_utils = env_admin["odoo.utils"]
+                    try:
+                        OdooUtilsClass = type(odoo_utils)
+                        if hasattr(OdooUtilsClass, "_get_token_api_crm"):
+                            token = OdooUtilsClass._get_token_api_crm()
+                            product = odoo_utils.get_misa_product(token, pcode)
+                    except Exception as e:
+                        _logger.error("Lỗi khi fetch sản phẩm từ MISA: %s", str(e))
+
                 uom = False
                 uom_name = (line.get("uom") or "").strip()
                 if uom_name:
