@@ -26,7 +26,7 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
             "hlv_prioritize_company": True,
             "hlv_product_ids": "hlv_product_ids",
         },
-        domain=[("type", "!=", "delivery")],
+        domain=[("type", "!=", "delivery"), ("is_company", "=", True), ("active", "=", True)],
         help="Nếu chọn, sẽ được áp dụng cho tất cả các dòng bên dưới.",
     )
     item_ids = fields.One2many(
@@ -396,6 +396,12 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
     supplier_id = fields.Many2one(
         comodel_name="res.partner",
         string="Nhà cung cấp",
+        context={
+            "res_partner_search_mode": "supplier",
+            "hlv_prioritize_company": True,
+            "default_is_company": True,
+        },
+        domain=[("is_company", "=", True), ("active", "=", True)],
         required=True,
     )
     name = fields.Char(string="Mô tả", required=True)
