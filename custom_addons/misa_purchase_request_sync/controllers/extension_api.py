@@ -354,6 +354,7 @@ class MisaExtensionController(http.Controller):
                 pr.write({
                     "requested_by": user_id,
                     "description": payload.get("description") or "",
+                    "delivery_address": payload.get("DeliveryAddress") or "",
                     "sale_order_id": sale_order_id,
                 })
             else:
@@ -365,6 +366,7 @@ class MisaExtensionController(http.Controller):
                     "state": "to_approve",
                     "origin": "MISA CRM",
                     "description": payload.get("description") or "",
+                    "delivery_address": payload.get("DeliveryAddress") or "",
                     "sale_order_id": sale_order_id,
                 }
                 pr = pr_model.create(pr_vals)
