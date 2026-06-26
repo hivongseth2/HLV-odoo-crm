@@ -487,6 +487,18 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
 .mention-toast button:hover{color:#334155}
 @keyframes mentionToastIn{from{opacity:0;transform:translateX(16px)}to{opacity:1;transform:translateX(0)}}
 #mention-listener-status{position:fixed;right:18px;top:16px;z-index:3100;background:rgba(15,23,42,.92);color:#fff;border:1px solid rgba(255,255,255,.12);border-radius:20px;padding:5px 10px;font-size:.68rem;font-weight:700;box-shadow:0 8px 24px rgba(15,23,42,.18)}
+#mention-noti-button{position:fixed;right:18px;top:48px;z-index:3100;background:#fff;color:#0f172a;border:1px solid #e2e8f0;border-radius:20px;padding:5px 10px;font-size:.72rem;font-weight:800;box-shadow:0 8px 24px rgba(15,23,42,.14);cursor:pointer}
+#mention-noti-button.has-unread{background:#4f46e5;color:#fff;border-color:#4f46e5}
+#mention-noti-panel{position:fixed;right:18px;top:82px;z-index:3150;width:min(390px,calc(100vw - 32px));max-height:420px;overflow-y:auto;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 18px 40px rgba(15,23,42,.22);display:none}
+#mention-noti-panel.open{display:block}
+.mention-noti-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border-bottom:1px solid #e2e8f0;font-size:.78rem;font-weight:800;color:#0f172a}
+.mention-noti-actions button{border:0;background:transparent;color:#64748b;font-size:.72rem;font-weight:700;padding:2px 4px}
+.mention-noti-item{padding:10px 12px;border-bottom:1px solid #f1f5f9;cursor:pointer;font-size:.8rem}
+.mention-noti-item:hover{background:#f8fafc}
+.mention-noti-item.unread{background:#eef2ff}
+.mention-noti-item-title{font-weight:800;color:#0f172a;margin-bottom:3px}
+.mention-noti-item-body{color:#475569;line-height:1.4;word-break:break-word}
+.mention-noti-empty{padding:18px 12px;text-align:center;color:#94a3b8;font-size:.8rem}
 #mention-listener-status .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#f59e0b;margin-right:6px}
 #mention-listener-status.live .dot{background:#22c55e}
 .mention-suggest{position:absolute;left:0;right:0;bottom:calc(100% + 4px);z-index:3200;background:#fff;border:1px solid #c7d2fe;border-radius:6px;box-shadow:0 12px 30px rgba(15,23,42,.16);max-height:220px;overflow-y:auto;display:none}
@@ -501,6 +513,17 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
 <div id="loading" class="loading-overlay d-none"><div class="spinner-border text-primary"></div></div>
 <div id="mention-toast-stack" aria-live="polite"></div>
 <div id="mention-listener-status"><span class="dot"></span><span id="mention-listener-label">Bus: connecting</span></div>
+<button id="mention-noti-button" type="button" title="Thong bao tag"><i class="fa fa-bell me-1"></i><span id="mention-noti-count">0</span></button>
+<div id="mention-noti-panel" aria-live="polite">
+  <div class="mention-noti-head">
+    <span>Thong bao tag</span>
+    <span class="mention-noti-actions">
+      <button id="mention-noti-read-all" type="button">Da doc het</button>
+      <button id="mention-noti-clear" type="button">Xoa</button>
+    </span>
+  </div>
+  <div id="mention-noti-list"></div>
+</div>
 <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-3" style="border-radius:0!important">
 <div class="container-fluid">
   <a class="navbar-brand fw-bold" href="/sale_plan">&#128666; Tình trạng đơn hàng</a>
@@ -725,7 +748,7 @@ function normalizeMentionAlias(v){return String(v||'').trim().toLowerCase().repl
 function getCurrentMentionAlias(){return normalizeMentionAlias(_sessionMentionAlias||localStorage.getItem('hlv_msg_author')||'');}
 function eventMatchesCurrentAlias(ev){var alias=getCurrentMentionAlias();if(!alias)return false;var mentions=(ev&&ev.mentions)||[];return mentions.some(function(m){return normalizeMentionAlias(m)===alias;});}
 function setMentionListenerStatus(label,live){var el=$('mention-listener-status'),txt=$('mention-listener-label');if(!el||!txt)return;var alias=getCurrentMentionAlias();txt.textContent=label+(alias?' @'+alias:' (chưa chọn alias)');el.classList.toggle('live',!!live&&!!alias);}
-function loadCurrentMentionAlias(){fetch('/api/sale_plan/current_alias',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{}})}).then(function(r){return r.json();}).then(function(j){var d=j.result||{};_sessionMentionAlias=d.status==='success'?(d.alias||''):'';setMentionListenerStatus('Bus: listening',true);}).catch(function(){_sessionMentionAlias='';setMentionListenerStatus('Bus: listening',true);});}
+function loadCurrentMentionAlias(){fetch('/api/sale_plan/current_alias',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{}})}).then(function(r){return r.json();}).then(function(j){var d=j.result||{};_sessionMentionAlias=d.status==='success'?(d.alias||''):'';setMentionListenerStatus('Bus: listening',true);loadMentionNotiItems();}).catch(function(){_sessionMentionAlias='';setMentionListenerStatus('Bus: listening',true);loadMentionNotiItems();});}
 function loadMentionAliases(){fetch('/api/sale_plan/mention_aliases',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{}})}).then(function(r){return r.json();}).then(function(j){var d=j.result||{};_mentionAliases=d.status==='success'?(d.aliases||[]):[];}).catch(function(){_mentionAliases=[];});}
 function currentMentionQuery(input){var pos=input.selectionStart||0;var before=input.value.slice(0,pos);var m=/(^|\s)@([A-Za-z0-9_.-]*)$/.exec(before);if(!m)return null;return {start:pos-m[2].length-1,term:(m[2]||'').toLowerCase(),pos:pos};}
 function renderMentionSuggest(input){var box=$('mention-suggest');if(!box)return;var q=currentMentionQuery(input);if(!q){box.classList.remove('open');box.innerHTML='';return;}var items=_mentionAliases.filter(function(a){return !q.term||a.alias.toLowerCase().indexOf(q.term)===0||a.user_name.toLowerCase().indexOf(q.term)>=0;}).slice(0,8);if(!items.length){box.classList.remove('open');box.innerHTML='';return;}_mentionActiveIndex=Math.min(Math.max(_mentionActiveIndex,0),items.length-1);box.innerHTML=items.map(function(a,i){return '<div class="mention-suggest-item '+(i===_mentionActiveIndex?'active':'')+'" data-alias="'+esc(a.alias)+'"><span><strong>@'+esc(a.alias)+'</strong></span><small>'+esc(a.user_name||'')+'</small></div>';}).join('');box.classList.add('open');}
@@ -734,8 +757,17 @@ function bindMentionInput(input){if(!input)return;input.addEventListener('input'
 
 var _mentionLastId=0;
 var _mentionSeen={};
-function handleMentionEvent(ev){if(!ev||!ev.id||_mentionSeen[ev.id]||!eventMatchesCurrentAlias(ev))return;_mentionSeen[ev.id]=true;_mentionLastId=Math.max(_mentionLastId,parseInt(ev.id,10)||0);showMentionToast(ev);}
-function showMentionToast(ev){var stack=$('mention-toast-stack');if(!stack)return;var node=document.createElement('div');node.className='mention-toast';node.innerHTML='<div class="mention-toast-title"><span><i class="fa fa-at me-1"></i>'+esc(ev.so_name||'Sale order')+'</span><button type="button" aria-label="Close">&times;</button></div>'+'<div class="mention-toast-body"><strong>'+esc(ev.author_name||'Nguoi gui')+'</strong>: '+esc(ev.preview||ev.body||'Tin nhan moi')+'</div>'+(ev.mentions&&ev.mentions.length?'<div class="mention-toast-tags">@'+ev.mentions.map(esc).join(' @')+'</div>':'');node.addEventListener('click',function(e){if(e.target.closest('button')){node.remove();return;}if(ev.so_id){openDrawer(parseInt(ev.so_id,10));}});stack.prepend(node);while(stack.children.length>5){stack.lastElementChild.remove();}setTimeout(function(){if(node.parentNode){node.style.opacity='0';node.style.transform='translateX(16px)';setTimeout(function(){node.remove();},250);}},9000);}
+
+var _mentionNotiItems=[];
+function mentionNotiStorageKey(){return 'hlv_sale_plan_mentions_'+(getCurrentMentionAlias()||'anonymous');}
+function loadMentionNotiItems(){try{_mentionNotiItems=JSON.parse(localStorage.getItem(mentionNotiStorageKey())||'[]')||[];}catch(e){_mentionNotiItems=[];}renderMentionNotiPanel();}
+function saveMentionNotiItems(){try{localStorage.setItem(mentionNotiStorageKey(),JSON.stringify(_mentionNotiItems.slice(0,80)));}catch(e){}}
+function addMentionNotification(ev){if(!ev||!ev.id)return;var id=String(ev.id);var existing=_mentionNotiItems.find(function(x){return String(x.id)===id;});if(existing){existing.unread=true;return;}var item={id:id,so_id:ev.so_id,so_name:ev.so_name||'',author_name:ev.author_name||'',preview:ev.preview||ev.body||'',mentions:ev.mentions||[],unread:true,ts:Date.now()};_mentionNotiItems.unshift(item);_mentionNotiItems=_mentionNotiItems.slice(0,80);saveMentionNotiItems();renderMentionNotiPanel();}
+function renderMentionNotiPanel(){var btn=$('mention-noti-button'),cnt=$('mention-noti-count'),list=$('mention-noti-list');if(!btn||!cnt||!list)return;var unread=_mentionNotiItems.filter(function(x){return x.unread;}).length;cnt.textContent=unread;btn.classList.toggle('has-unread',unread>0);if(!_mentionNotiItems.length){list.innerHTML='<div class="mention-noti-empty">Chua co thong bao</div>';return;}list.innerHTML=_mentionNotiItems.map(function(item){return '<div class="mention-noti-item '+(item.unread?'unread':'')+'" data-id="'+esc(item.id)+'" data-so-id="'+esc(item.so_id)+'" data-so-name="'+esc(item.so_name)+'"><div class="mention-noti-item-title">@ '+esc(item.so_name||'Sale order')+'</div><div class="mention-noti-item-body"><strong>'+esc(item.author_name||'')+'</strong>: '+esc(item.preview||'')+'</div></div>';}).join('');}
+function markMentionNotificationRead(id){var item=_mentionNotiItems.find(function(x){return String(x.id)===String(id);});if(item)item.unread=false;saveMentionNotiItems();renderMentionNotiPanel();}
+function openOrderFromNotification(soId,soName){soId=parseInt(soId,10)||0;var local=S.orders.find(function(o){return o.id===soId;});if(local){openDrawer(soId);return;}showLoading();fetch('/api/sale_plan/data',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{search:soName||'',warehouse_id:'all',delivery_status:'all',stock_status:'all',packing_status:'all',date_from:'',date_to:'',po_date_from:'',po_date_to:'',done_date_from:'',done_date_to:'',po_status:'all',saler_code:'',htgh:'',delivery_type:'all',tag_ids:'',show_completed:true,limit:20,offset:0}})}).then(function(r){return r.json();}).then(function(j){hideLoading();var d=j.result&&j.result.data;var order=d&&d.orders&&(d.orders.find(function(o){return o.id===soId;})||d.orders[0]);if(order){var exists=S.orders.find(function(o){return o.id===order.id;});if(!exists)S.orders.unshift(order);openDrawer(order.id);}}).catch(function(){hideLoading();});}
+function handleMentionEvent(ev){if(!ev||!ev.id||_mentionSeen[ev.id]||!eventMatchesCurrentAlias(ev))return;_mentionSeen[ev.id]=true;_mentionLastId=Math.max(_mentionLastId,parseInt(ev.id,10)||0);addMentionNotification(ev);showMentionToast(ev);}
+function showMentionToast(ev){var stack=$('mention-toast-stack');if(!stack)return;var node=document.createElement('div');node.className='mention-toast';node.innerHTML='<div class="mention-toast-title"><span><i class="fa fa-at me-1"></i>'+esc(ev.so_name||'Sale order')+'</span><button type="button" aria-label="Close">&times;</button></div>'+'<div class="mention-toast-body"><strong>'+esc(ev.author_name||'Nguoi gui')+'</strong>: '+esc(ev.preview||ev.body||'Tin nhan moi')+'</div>'+(ev.mentions&&ev.mentions.length?'<div class="mention-toast-tags">@'+ev.mentions.map(esc).join(' @')+'</div>':'');node.addEventListener('click',function(e){if(e.target.closest('button')){node.remove();return;}markMentionNotificationRead(ev.id);if(ev.so_id){openOrderFromNotification(ev.so_id,ev.so_name);}});stack.prepend(node);while(stack.children.length>5){stack.lastElementChild.remove();}setTimeout(function(){if(node.parentNode){node.style.opacity='0';node.style.transform='translateX(16px)';setTimeout(function(){node.remove();},250);}},9000);}
 function pollMentionEvents(){fetch('/api/sale_plan/mention_notifications',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{after_id:_mentionLastId,current_alias:getCurrentMentionAlias()}})}).then(function(r){return r.json();}).then(function(j){var d=j.result||{};if(d.status!=='success')return;(d.events||[]).forEach(handleMentionEvent);}).catch(function(){});}
 function startSalePlanBusListener(){setMentionListenerStatus('Bus: listening',true);var busLast=0;function loop(){fetch('/longpolling/poll',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({channels:['sale_plan_public_channel'],last:busLast})}).then(function(r){return r.ok?r.json():null;}).then(function(data){var notifications=(data&&data.result&&data.result.notifications)||data&&data.notifications||[];notifications.forEach(function(n){busLast=Math.max(busLast,n.id||busLast);var payload=n.payload||n.message||n[2]||{};var typ=n.type||n[1];if(typ==='sale_plan_mention'||payload.type==='sale_plan_mention')handleMentionEvent(payload);});setTimeout(loop,250);}).catch(function(){setMentionListenerStatus('Bus: retrying',false);setTimeout(function(){setMentionListenerStatus('Bus: listening',true);loop();},15000);});}loop();setInterval(pollMentionEvents,15000);}
 
@@ -1497,6 +1529,32 @@ document.addEventListener('click',function(e){
   if(!mentionBox&&!mentionInput){var ms=$('mention-suggest');if(ms)ms.classList.remove('open');}
   var mentionItem=e.target.closest('.mention-suggest-item');
   if(mentionItem){e.preventDefault();e.stopPropagation();applyMentionAlias($('dr-msg-input'),mentionItem.dataset.alias);return;}
+  var notiBtn=e.target.closest('#mention-noti-button');
+  if(notiBtn){
+    e.preventDefault();e.stopPropagation();
+    var panel=$('mention-noti-panel');
+    if(panel)panel.classList.toggle('open');
+    return;
+  }
+  var notiReadAll=e.target.closest('#mention-noti-read-all');
+  if(notiReadAll){
+    e.preventDefault();e.stopPropagation();
+    _mentionNotiItems.forEach(function(x){x.unread=false;});
+    saveMentionNotiItems();renderMentionNotiPanel();return;
+  }
+  var notiClear=e.target.closest('#mention-noti-clear');
+  if(notiClear){
+    e.preventDefault();e.stopPropagation();
+    _mentionNotiItems=[];saveMentionNotiItems();renderMentionNotiPanel();return;
+  }
+  var notiItem=e.target.closest('.mention-noti-item');
+  if(notiItem){
+    e.preventDefault();e.stopPropagation();
+    markMentionNotificationRead(notiItem.dataset.id);
+    var notiPanel=$('mention-noti-panel');if(notiPanel)notiPanel.classList.remove('open');
+    openOrderFromNotification(notiItem.dataset.soId,notiItem.dataset.soName);return;
+  }
+  if(!e.target.closest('#mention-noti-panel')){var np=$('mention-noti-panel');if(np)np.classList.remove('open');}
   var chipX=e.target.closest('.chip-x');
   if(chipX){
     e.preventDefault();e.stopPropagation();
