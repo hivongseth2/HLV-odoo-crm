@@ -184,12 +184,15 @@ class MisaExtensionController(http.Controller):
                             qty_received += pl.qty_received
                 elif hasattr(line, 'purchased_qty'):
                     qty_received = line.purchased_qty # Fallback to purchased_qty if qty_received is not available
+                    
+                purchase_state = line.purchase_state if hasattr(line, 'purchase_state') else False
 
                 lines_data.append({
                     "product_code": line.product_id.default_code if line.product_id else "",
                     "name": line.name,
                     "qty": line.product_qty,
                     "qty_received": qty_received,
+                    "purchase_state": purchase_state,
                 })
 
             can_revoke = pr.state in ['draft', 'to_approve']

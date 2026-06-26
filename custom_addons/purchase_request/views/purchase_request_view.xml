@@ -141,6 +141,7 @@
                         </group>
                         <group>
                             <field name="date_start" readonly="is_editable == False" />
+                            <field name="date_required" />
                             <field
                                 name="picking_type_id"
                                 readonly="is_editable == False"
