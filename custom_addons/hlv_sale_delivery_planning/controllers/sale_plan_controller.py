@@ -720,10 +720,12 @@ function getTagIds(){var e=$('f-tag');if(!e)return'';return Array.from(e.selecte
 
 var _mentionAliases=[];
 var _mentionActiveIndex=-1;
+var _sessionMentionAlias='';
 function normalizeMentionAlias(v){return String(v||'').trim().toLowerCase().replace(/^@+/,'').replace(/\s+/g,'');}
-function getCurrentMentionAlias(){return normalizeMentionAlias(localStorage.getItem('hlv_msg_author')||'');}
+function getCurrentMentionAlias(){return normalizeMentionAlias(_sessionMentionAlias||localStorage.getItem('hlv_msg_author')||'');}
 function eventMatchesCurrentAlias(ev){var alias=getCurrentMentionAlias();if(!alias)return false;var mentions=(ev&&ev.mentions)||[];return mentions.some(function(m){return normalizeMentionAlias(m)===alias;});}
 function setMentionListenerStatus(label,live){var el=$('mention-listener-status'),txt=$('mention-listener-label');if(!el||!txt)return;var alias=getCurrentMentionAlias();txt.textContent=label+(alias?' @'+alias:' (chưa chọn alias)');el.classList.toggle('live',!!live&&!!alias);}
+function loadCurrentMentionAlias(){fetch('/api/sale_plan/current_alias',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{}})}).then(function(r){return r.json();}).then(function(j){var d=j.result||{};_sessionMentionAlias=d.status==='success'?(d.alias||''):'';setMentionListenerStatus('Bus: listening',true);}).catch(function(){_sessionMentionAlias='';setMentionListenerStatus('Bus: listening',true);});}
 function loadMentionAliases(){fetch('/api/sale_plan/mention_aliases',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{}})}).then(function(r){return r.json();}).then(function(j){var d=j.result||{};_mentionAliases=d.status==='success'?(d.aliases||[]):[];}).catch(function(){_mentionAliases=[];});}
 function currentMentionQuery(input){var pos=input.selectionStart||0;var before=input.value.slice(0,pos);var m=/(^|\s)@([A-Za-z0-9_.-]*)$/.exec(before);if(!m)return null;return {start:pos-m[2].length-1,term:(m[2]||'').toLowerCase(),pos:pos};}
 function renderMentionSuggest(input){var box=$('mention-suggest');if(!box)return;var q=currentMentionQuery(input);if(!q){box.classList.remove('open');box.innerHTML='';return;}var items=_mentionAliases.filter(function(a){return !q.term||a.alias.toLowerCase().indexOf(q.term)===0||a.user_name.toLowerCase().indexOf(q.term)>=0;}).slice(0,8);if(!items.length){box.classList.remove('open');box.innerHTML='';return;}_mentionActiveIndex=Math.min(Math.max(_mentionActiveIndex,0),items.length-1);box.innerHTML=items.map(function(a,i){return '<div class="mention-suggest-item '+(i===_mentionActiveIndex?'active':'')+'" data-alias="'+esc(a.alias)+'"><span><strong>@'+esc(a.alias)+'</strong></span><small>'+esc(a.user_name||'')+'</small></div>';}).join('');box.classList.add('open');}
@@ -1419,7 +1421,7 @@ function openDrawer(id){
   $('dr-msg-refresh').addEventListener('click',function(e){e.stopPropagation();loadMessages();});
   $('dr-msg-attach').addEventListener('click',function(e){e.preventDefault();e.stopPropagation();$('dr-msg-files-input').click();});
   $('dr-msg-files-input').addEventListener('change',onPublicFilesSelected);
-  $('dr-msg-author').addEventListener('input',function(){localStorage.setItem('hlv_msg_author',this.value||'');setMentionListenerStatus('Bus: listening',true);});
+  $('dr-msg-author').addEventListener('input',function(){localStorage.setItem('hlv_msg_author',this.value||'');if(!_sessionMentionAlias)setMentionListenerStatus('Bus: listening',true);});
   setMentionListenerStatus('Bus: listening',true);
   bindMentionInput($('dr-msg-input'));
   $('dr-msg-send').addEventListener('click',function(){sendPublicMessage();});
@@ -1703,6 +1705,7 @@ function startPolling(){
 }
 
 loadMentionAliases();
+loadCurrentMentionAlias();
 startSalePlanBusListener();
 
 // Pause polling when tab is hidden to save resources
@@ -1912,6 +1915,16 @@ class SalePlanPublicController(http.Controller):
         except Exception as e:
             _logger.exception('check_changes error')
             return {'status': 'error', 'message': str(e)}
+
+    @http.route('/api/sale_plan/current_alias', type='json', auth='public', methods=['POST'])
+    def api_sale_plan_current_alias(self, **kwargs):
+        if not request.session.get(SESSION_KEY_OK):
+            return {'status': 'error', 'message': 'Unauthorized'}
+        user = request.env.user
+        if not user or user._is_public() or 'x_sale_plan_mention_names' not in user._fields:
+            return {'status': 'success', 'alias': '', 'user_name': ''}
+        aliases = [a.strip().lstrip('@') for a in re.split(r'[,;\s]+', user.x_sale_plan_mention_names or '') if a.strip()]
+        return {'status': 'success', 'alias': aliases[0] if aliases else '', 'user_name': user.name or ''}
 
     @http.route('/api/sale_plan/mention_aliases', type='json', auth='public', methods=['POST'])
     def api_sale_plan_mention_aliases(self, **kwargs):
