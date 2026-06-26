@@ -555,7 +555,7 @@
                         </button>
                         <div class="position-relative flex-grow-1">
                             <textarea class="form-control form-control-sm hlv-drawer-message-input" rows="1"
-                                      placeholder="Nhập tin nhắn..."
+                                      placeholder="Nhập tin nhắn...."
                                       t-att-value="state.drawerMessageText"
                                       t-on-input="(ev) => this.onDrawerMessageInput(ev)"
                                       t-on-keydown="(ev) => this.onMessageKeydown(ev)"
