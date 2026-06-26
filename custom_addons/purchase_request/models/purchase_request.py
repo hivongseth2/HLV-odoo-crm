@@ -201,7 +201,7 @@ class PurchaseRequest(models.Model):
     def _compute_move_count(self):
         for rec in self:
             rec.move_count = len(
-                rec.mapped("line_ids.purchase_request_allocation_ids.stock_move_id")
+                rec.mapped("line_ids.purchase_request_allocation_ids.stock_move_id.picking_id")
             )
 
     def action_view_stock_picking(self):
