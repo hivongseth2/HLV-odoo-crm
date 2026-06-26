@@ -24,6 +24,12 @@
                             BẢNG ĐIỀU PHỐI GIAO HÀNG
                         </h2>
                         <div class="d-flex align-items-center gap-2">
+                            <span t-att-class="state.busListening ? 'hlv-bus-status live' : 'hlv-bus-status'">
+                                <span class="hlv-bus-dot"></span>
+                                <t t-if="state.busListening">Bus: listening</t>
+                                <t t-elif="state.busServiceAvailable">Bus: connecting</t>
+                                <t t-else="">Bus: unavailable</t>
+                            </span>
                             <!-- Toggle dạng xem: Kanban / Card / Bảng -->
                             <div class="btn-group btn-group-sm" role="group" aria-label="View mode">
                                 <button class="btn"

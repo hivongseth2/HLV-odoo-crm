@@ -10,7 +10,10 @@ export class DeliveryPlannerDrawerMessagesMixin {
         this.state.drawerMessages = [];
         this.state.drawerMessageText = '';
         this.state.drawerMessageFiles = [];
+        this.state.drawerMentionSuggestions = [];
+        this.state.drawerMentionActiveIndex = 0;
         this.loadDrawerMessages(so.id);
+        this.loadDrawerMentionAliases();
     }
 
     async loadDrawerMessages(orderId) {
