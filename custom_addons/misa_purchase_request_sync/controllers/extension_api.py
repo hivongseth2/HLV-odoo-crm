@@ -343,6 +343,36 @@ class MisaExtensionController(http.Controller):
                 if so:
                     sale_order_id = so.id
 
+            raw_data = payload.get("rawData", {})
+            date_start = False
+            create_date = False
+            date_required = False
+            
+            from dateutil import parser
+            import pytz
+            
+            if raw_data.get("RequestDate"):
+                try:
+                    dt = parser.parse(raw_data["RequestDate"])
+                    date_start = dt.strftime("%Y-%m-%d")
+                except Exception:
+                    pass
+                    
+            if raw_data.get("CreatedDate"):
+                try:
+                    dt = parser.parse(raw_data["CreatedDate"])
+                    dt_utc = dt.astimezone(pytz.utc)
+                    create_date = dt_utc.strftime("%Y-%m-%d %H:%M:%S")
+                except Exception:
+                    pass
+                    
+            if raw_data.get("DesiredDeliveryDeadline"):
+                try:
+                    dt = parser.parse(raw_data["DesiredDeliveryDeadline"])
+                    date_required = dt.strftime("%Y-%m-%d")
+                except Exception:
+                    pass
+
             # --- Kiểm tra PR đã tồn tại ---
             pr = pr_model.search([("name", "=", pr_name)], limit=1)
             if pr:
@@ -354,12 +384,21 @@ class MisaExtensionController(http.Controller):
                     }, 400)
                 # Xóa lines cũ để tạo lại
                 pr.line_ids.unlink()
-                pr.write({
+                
+                write_vals = {
                     "requested_by": user_id,
                     "description": payload.get("description") or "",
                     "delivery_address": payload.get("DeliveryAddress") or "",
                     "sale_order_id": sale_order_id,
-                })
+                }
+                if date_start:
+                    write_vals["date_start"] = date_start
+                    
+                pr.write(write_vals)
+                
+                # Cập nhật create_date bằng SQL vì ORM chặn write() lên create_date
+                if create_date:
+                    env_admin.cr.execute("UPDATE purchase_request SET create_date=%s WHERE id=%s", (create_date, pr.id))
             else:
                 # --- Tạo PR ---
                 pr_vals = {
@@ -372,6 +411,11 @@ class MisaExtensionController(http.Controller):
                     "delivery_address": payload.get("DeliveryAddress") or "",
                     "sale_order_id": sale_order_id,
                 }
+                if date_start:
+                    pr_vals["date_start"] = date_start
+                if create_date:
+                    pr_vals["create_date"] = create_date
+                    
                 pr = pr_model.create(pr_vals)
 
             # --- Tạo lines ---
@@ -454,6 +498,9 @@ class MisaExtensionController(http.Controller):
                     "product_uom_id": uom.id if uom else False,
                     "estimated_cost": estimated_cost,
                 }
+                if date_required:
+                    line_vals["date_required"] = date_required
+                    
                 line_model.create(line_vals)
 
             # --- Post Chatter nếu là Admin fallback ---
