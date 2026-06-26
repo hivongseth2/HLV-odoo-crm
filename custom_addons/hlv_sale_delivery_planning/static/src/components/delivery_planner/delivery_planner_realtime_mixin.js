@@ -188,13 +188,13 @@ export class DeliveryPlannerRealtimeMixin {
             so.has_unread_message = true;
         }
         this.notification.add(
-            `Don hang ${payload.so_name}: ${rawBody}...`,
+            `Đơn hàng ${payload.so_name}: ${rawBody}...`,
             {
                 type: "info",
-                title: `Co tin nhan moi tu ${payload.author_name || 'Khach hang'}`,
+                title: `Có tin nhắn mới ${payload.author_name || ''}`,
                 buttons: [
                     {
-                        name: "Xem don hang",
+                        name: "Xem chi tiết",
                         onClick: () => this.openDrawerFromMessageList(payload.so_id),
                         primary: true,
                     }

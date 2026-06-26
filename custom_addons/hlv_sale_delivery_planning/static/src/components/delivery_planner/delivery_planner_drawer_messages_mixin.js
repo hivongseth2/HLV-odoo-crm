@@ -82,7 +82,7 @@ export class DeliveryPlannerDrawerMessagesMixin {
         if (!input) return null;
         const pos = input.selectionStart || 0;
         const before = String(input.value || '').slice(0, pos);
-        const match = /(^|\s)@([A-Za-z0-9_.-]*)$/.exec(before);
+        const match = /(^|\s)@([^\s@,;:!?()\[\]{}<>]*)$/.exec(before);
         if (!match) return null;
         return { start: pos - match[2].length - 1, term: this._normalizeMentionAlias(match[2]), pos };
     }

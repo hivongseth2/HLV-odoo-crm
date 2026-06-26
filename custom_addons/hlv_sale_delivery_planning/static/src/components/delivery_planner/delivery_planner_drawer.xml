@@ -614,7 +614,7 @@
                                             <i class="fa fa-truck me-1"></i><t t-esc="msg.origin"/>
                                         </span>
                                     </div>
-                                    <div t-if="msg.body" class="text-muted" style="word-break:break-word;line-height:1.5;"
+                                    <div t-if="msg.body" class="text-muted hlv-drawer-message-body" style="word-break:break-word;line-height:1.5;"
                                          t-out="msg.body"/>
                                     <div t-if="msg.attachments and msg.attachments.length" class="d-flex flex-wrap gap-1 mt-1">
                                         <t t-foreach="msg.attachments" t-as="att" t-key="att.id">
