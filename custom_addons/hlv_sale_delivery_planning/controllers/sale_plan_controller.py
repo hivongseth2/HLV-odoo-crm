@@ -326,6 +326,17 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
 .mention-noti-item-title{font-weight:800;color:#0f172a;margin-bottom:3px}
 .mention-noti-item-body{color:#475569;line-height:1.4;word-break:break-word}
 .mention-noti-empty{padding:18px 12px;text-align:center;color:#94a3b8;font-size:.8rem}
+
+.mention-noti-tabs{display:flex;gap:6px;flex-wrap:wrap;padding:8px 10px;border-bottom:1px solid #e2e8f0;background:#f8fafc}
+.mention-noti-alias-tab{border:1px solid #cbd5e1;background:#fff;color:#334155;border-radius:999px;padding:3px 8px;font-size:.7rem;font-weight:800;cursor:pointer}
+.mention-noti-alias-tab.active{background:#4f46e5;border-color:#4f46e5;color:#fff}
+.mention-noti-alias-tab .count{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;border-radius:8px;background:#ef4444;color:#fff;font-size:.62rem;margin-left:4px;padding:0 4px}
+.public-mention-suggest{position:absolute;left:0;right:0;bottom:calc(100% + 4px);z-index:3200;background:#fff;border:1px solid #c7d2fe;border-radius:6px;box-shadow:0 12px 30px rgba(15,23,42,.16);max-height:220px;overflow-y:auto;display:none}
+.public-mention-suggest.open{display:block}
+.public-mention-suggest-item{padding:8px 10px;font-size:.8rem;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.public-mention-suggest-item:hover,.public-mention-suggest-item.active{background:#eef2ff}
+.public-mention-suggest-item strong{color:#4f46e5}
+.public-mention-suggest-item small{color:#64748b;font-size:.68rem}
 /* Report button */
 .btn-report{font-size:.68rem;padding:2px 8px;border:1px solid #fecaca;color:#dc2626;background:#fef2f2;border-radius:4px;cursor:pointer;transition:.15s;line-height:1.4;font-weight:500}
 .btn-report:hover{background:#fee2e2;border-color:#dc2626}
@@ -752,6 +763,9 @@ var _sessionMentionAliases=[];
 var _mentionLastId=0;
 var _mentionSeen={};
 var _mentionNotiItems=[];
+var _mentionAliases=[];
+var _mentionActiveIndex=0;
+var _mentionActiveAlias='all';
 function normalizeMentionAlias(v){return String(v||'').trim().toLowerCase().replace(/^@+/,'');}
 function getCurrentMentionAlias(){return normalizeMentionAlias(_sessionMentionAlias||'');}
 function getCurrentMentionAliases(){return (_sessionMentionAliases||[]).map(normalizeMentionAlias).filter(Boolean);}
@@ -761,12 +775,18 @@ function loadCurrentMentionAlias(){return fetch('/api/sale_plan/current_alias',{
 function loadMentionNotiItems(){try{_mentionNotiItems=JSON.parse(localStorage.getItem(mentionNotiStorageKey())||'[]')||[];}catch(e){_mentionNotiItems=[];}renderMentionNotiPanel();}
 function saveMentionNotiItems(){try{localStorage.setItem(mentionNotiStorageKey(),JSON.stringify(_mentionNotiItems.slice(0,80)));}catch(e){}}
 function addMentionNotification(ev){if(!ev||!ev.id)return;var id=String(ev.id);var existing=_mentionNotiItems.find(function(x){return String(x.id)===id;});if(existing){existing.unread=true;existing.ts=Date.now();saveMentionNotiItems();renderMentionNotiPanel();return;}var item={id:id,so_id:ev.so_id,so_name:ev.so_name||'',author_name:ev.author_name||'',preview:ev.preview||ev.body||'',mentions:ev.mentions||[],unread:true,ts:Date.now()};_mentionNotiItems.unshift(item);_mentionNotiItems=_mentionNotiItems.slice(0,80);saveMentionNotiItems();renderMentionNotiPanel();}
-function renderMentionNotiPanel(){var btn=$('mention-noti-button'),cnt=$('mention-noti-count'),list=$('mention-noti-list');if(!btn||!cnt||!list)return;var unread=_mentionNotiItems.filter(function(x){return x.unread;}).length;cnt.textContent=String(unread||0);btn.classList.toggle('has-unread',unread>0);if(!_mentionNotiItems.length){list.innerHTML='<div class="mention-noti-empty">Chua co thong bao</div>';return;}list.innerHTML=_mentionNotiItems.map(function(item){return '<div class="mention-noti-item '+(item.unread?'unread':'')+'" data-id="'+esc(item.id)+'" data-so-id="'+esc(item.so_id)+'" data-so-name="'+esc(item.so_name)+'"><div class="mention-noti-item-title">@ '+esc(item.so_name||'Sale order')+'</div><div class="mention-noti-item-body"><strong>'+esc(item.author_name||'')+'</strong>: '+esc(item.preview||'')+'</div></div>';}).join('');}
+function mentionItemHasAlias(item,alias){return (item.mentions||[]).map(normalizeMentionAlias).indexOf(normalizeMentionAlias(alias))!==-1;}
+function mentionUnreadCountForAlias(alias){return _mentionNotiItems.filter(function(x){return x.unread&&(alias==='all'||mentionItemHasAlias(x,alias));}).length;}
+function renderMentionNotiPanel(){var btn=$('mention-noti-button'),cnt=$('mention-noti-count'),list=$('mention-noti-list');if(!btn||!cnt||!list)return;var aliases=getCurrentMentionAliases();if(_mentionActiveAlias!=='all'&&aliases.indexOf(_mentionActiveAlias)===-1)_mentionActiveAlias='all';var unread=mentionUnreadCountForAlias('all');cnt.textContent=String(unread||0);btn.classList.toggle('has-unread',unread>0);var tabs='<div class="mention-noti-tabs"><button type="button" class="mention-noti-alias-tab '+(_mentionActiveAlias==='all'?'active':'')+'" data-alias="all">Tat ca'+(unread?'<span class="count">'+unread+'</span>':'')+'</button>'+aliases.map(function(alias){var c=mentionUnreadCountForAlias(alias);return '<button type="button" class="mention-noti-alias-tab '+(_mentionActiveAlias===alias?'active':'')+'" data-alias="'+esc(alias)+'">@'+esc(alias)+(c?'<span class="count">'+c+'</span>':'')+'</button>';}).join('')+'</div>';var items=_mentionNotiItems.filter(function(item){return _mentionActiveAlias==='all'||mentionItemHasAlias(item,_mentionActiveAlias);});if(!items.length){list.innerHTML=tabs+'<div class="mention-noti-empty">Chua co thong bao</div>';return;}list.innerHTML=tabs+items.map(function(item){var tags=(item.mentions||[]).map(function(a){return '<span class="badge bg-light text-primary border me-1">@'+esc(a)+'</span>';}).join('');return '<div class="mention-noti-item '+(item.unread?'unread':'')+'" data-id="'+esc(item.id)+'" data-so-id="'+esc(item.so_id)+'" data-so-name="'+esc(item.so_name)+'"><div class="mention-noti-item-title">'+esc(item.so_name||'Sale order')+'</div><div class="mention-noti-item-body"><strong>'+esc(item.author_name||'')+'</strong>: '+esc(item.preview||'')+'</div><div class="mt-1">'+tags+'</div></div>';}).join('');}
 function markMentionNotificationRead(id){var item=_mentionNotiItems.find(function(x){return String(x.id)===String(id);});if(item)item.unread=false;saveMentionNotiItems();renderMentionNotiPanel();}
 function openOrderFromNotification(soId,soName){soId=parseInt(soId,10)||0;var local=S.orders.find(function(o){return o.id===soId;});if(local){openDrawer(soId);return;}showLoading();fetch('/api/sale_plan/data',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{search:soName||'',warehouse_id:'all',delivery_status:'all',stock_status:'all',packing_status:'all',date_from:'',date_to:'',po_date_from:'',po_date_to:'',done_date_from:'',done_date_to:'',po_status:'all',saler_code:'',htgh:'',delivery_type:'all',tag_ids:'',show_completed:true,limit:20,offset:0}})}).then(function(r){return r.json();}).then(function(j){hideLoading();var d=j.result&&j.result.data;var order=d&&d.orders&&(d.orders.find(function(o){return o.id===soId;})||d.orders[0]);if(order){var exists=S.orders.find(function(o){return o.id===order.id;});if(!exists)S.orders.unshift(order);openDrawer(order.id);}}).catch(function(){hideLoading();});}
 function handleMentionEvent(ev){if(!ev||!ev.id||_mentionSeen[ev.id]||!eventMatchesCurrentAlias(ev))return;_mentionSeen[ev.id]=true;_mentionLastId=Math.max(_mentionLastId,parseInt(ev.id,10)||0);addMentionNotification(ev);}
 function pollMentionEvents(){fetch('/api/sale_plan/mention_notifications',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{after_id:_mentionLastId,current_aliases:getCurrentMentionAliases()}})}).then(function(r){return r.json();}).then(function(j){var d=j.result||{};if(d.status!=='success')return;(d.events||[]).forEach(handleMentionEvent);}).catch(function(){});}
-function startSalePlanMentionListener(){loadCurrentMentionAlias().then(function(){if(!getCurrentMentionAliases().length)return;var busLast=0;function loop(){fetch('/longpolling/poll',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({channels:['sale_plan_public_channel'],last:busLast})}).then(function(r){return r.ok?r.json():null;}).then(function(data){var notifications=(data&&data.result&&data.result.notifications)||data&&data.notifications||[];notifications.forEach(function(n){busLast=Math.max(busLast,n.id||busLast);var payload=n.payload||n.message||n[2]||{};var typ=n.type||n[1];if(typ==='sale_plan_mention'||payload.type==='sale_plan_mention')handleMentionEvent(payload);});setTimeout(loop,250);}).catch(function(){setTimeout(loop,15000);});}loop();pollMentionEvents();setInterval(pollMentionEvents,15000);});}
+function loadPublicMentionAliases(){return fetch('/api/sale_plan/mention_aliases',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{}})}).then(function(r){return r.json();}).then(function(j){var d=j.result||{};_mentionAliases=d.status==='success'?(d.aliases||[]):[];}).catch(function(){_mentionAliases=[];});}
+function currentPublicMentionQuery(input){var pos=input.selectionStart||0;var before=input.value.slice(0,pos);var m=/(^|\s)@([A-Za-z0-9_.-]*)$/.exec(before);if(!m)return null;return {start:pos-m[2].length-1,term:normalizeMentionAlias(m[2]),pos:pos};}
+function renderPublicMentionSuggest(input){var box=$('dr-mention-suggest');if(!box)return;var q=currentPublicMentionQuery(input);if(!q){box.classList.remove('open');box.innerHTML='';return;}var items=_mentionAliases.filter(function(a){return !q.term||normalizeMentionAlias(a.alias).indexOf(q.term)===0||normalizeMentionAlias(a.user_name).indexOf(q.term)>=0;}).slice(0,8);if(!items.length){box.classList.remove('open');box.innerHTML='';return;}_mentionActiveIndex=Math.min(Math.max(_mentionActiveIndex,0),items.length-1);box.innerHTML=items.map(function(a,i){return '<div class="public-mention-suggest-item '+(i===_mentionActiveIndex?'active':'')+'" data-alias="'+esc(a.alias)+'"><strong>@'+esc(a.alias)+'</strong><small>'+esc(a.user_name||'')+'</small></div>';}).join('');box.classList.add('open');}
+function applyPublicMentionAlias(input,alias){var q=currentPublicMentionQuery(input);if(!q)return;input.value=input.value.slice(0,q.start)+'@'+alias+' '+input.value.slice(q.pos);var pos=q.start+alias.length+2;input.focus();input.setSelectionRange(pos,pos);var box=$('dr-mention-suggest');if(box)box.classList.remove('open');}
+function startSalePlanMentionListener(){loadPublicMentionAliases();loadCurrentMentionAlias().then(function(){if(!getCurrentMentionAliases().length)return;var busLast=0;function loop(){fetch('/longpolling/poll',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({channels:['sale_plan_public_channel'],last:busLast})}).then(function(r){return r.ok?r.json():null;}).then(function(data){var notifications=(data&&data.result&&data.result.notifications)||data&&data.notifications||[];notifications.forEach(function(n){busLast=Math.max(busLast,n.id||busLast);var payload=n.payload||n.message||n[2]||{};var typ=n.type||n[1];if(typ==='sale_plan_mention'||payload.type==='sale_plan_mention')handleMentionEvent(payload);});setTimeout(loop,250);}).catch(function(){setTimeout(loop,15000);});}loop();pollMentionEvents();setInterval(pollMentionEvents,15000);});}
 var TAG_BG=['#adb5bd','#dc3545','#fd7e14','#ffc107','#20c997','#6610f2','#d63384','#0d6efd','#6f42c1','#e91e63','#198754','#0dcaf0'];
 var TAG_FG=[0,0,0,1,1,0,0,0,0,0,0,1]; // 1=dark text
 function tagBadge(tag){var c=tag[2]||0;var bg=TAG_BG[c]||TAG_BG[0];var fg=TAG_FG[c]?'#000':'#fff';return'<span class="badge me-1" style="background-color:'+bg+';color:'+fg+'">'+esc(tag[1])+'</span>';}
@@ -1429,7 +1449,7 @@ function openDrawer(id){
     +'<div class="d-flex gap-2 mb-2"><input id="dr-msg-author" class="form-control form-control-sm" placeholder="Tên của bạn..." style="max-width:160px" value="'+esc(localStorage.getItem('hlv_msg_author')||'')+'"/>'
     +'<input id="dr-msg-files-input" type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,application/pdf,image/*,video/*" style="display:none"/>'
     +'<button id="dr-msg-attach" class="btn btn-sm btn-outline-secondary px-2" title="Đính kèm PDF, Word, Excel, ảnh, video"><i class="fa fa-paperclip"></i></button>'
-    +'<input id="dr-msg-input" class="form-control form-control-sm" placeholder="Nhập tin nhắn..."/>'
+    +'<div class="position-relative flex-grow-1"><input id="dr-msg-input" class="form-control form-control-sm" placeholder="Nhập tin nhắn..."/><div id="dr-mention-suggest" class="public-mention-suggest"></div></div>'
     +'<button id="dr-msg-send" class="btn btn-sm btn-primary px-3"><i class="fa fa-paper-plane"></i></button></div>'
     +'<div id="dr-msg-files" class="msg-compose-files"></div>'
     +'</div>'
@@ -1450,7 +1470,8 @@ function openDrawer(id){
   $('dr-msg-attach').addEventListener('click',function(e){e.preventDefault();e.stopPropagation();$('dr-msg-files-input').click();});
   $('dr-msg-files-input').addEventListener('change',onPublicFilesSelected);
   $('dr-msg-send').addEventListener('click',function(){sendPublicMessage();});
-  $('dr-msg-input').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();sendPublicMessage();}});
+  $('dr-msg-input').addEventListener('input',function(){_mentionActiveIndex=0;renderPublicMentionSuggest(this);});
+  $('dr-msg-input').addEventListener('keydown',function(e){var box=$('dr-mention-suggest');if(box&&box.classList.contains('open')){var items=Array.from(box.querySelectorAll('.public-mention-suggest-item'));if(items.length){if(e.key==='ArrowDown'){e.preventDefault();_mentionActiveIndex=(_mentionActiveIndex+1)%items.length;renderPublicMentionSuggest(this);return;}if(e.key==='ArrowUp'){e.preventDefault();_mentionActiveIndex=(_mentionActiveIndex-1+items.length)%items.length;renderPublicMentionSuggest(this);return;}if(e.key==='Tab'||e.key==='Enter'){e.preventDefault();applyPublicMentionAlias(this,items[_mentionActiveIndex].dataset.alias);return;}}}if(e.key==='Enter'){e.preventDefault();sendPublicMessage();}});
   $('dr-msg-input').addEventListener('paste',function(e){
     var items=e.clipboardData&&e.clipboardData.items;
     if(!items)return;
@@ -1519,12 +1540,17 @@ function updFilters(){
 document.addEventListener('click',function(e){
   var notiBtn=e.target.closest('#mention-noti-button');
   if(notiBtn){e.preventDefault();e.stopPropagation();var panel=$('mention-noti-panel');if(panel)panel.classList.toggle('open');return;}
+  var notiAlias=e.target.closest('.mention-noti-alias-tab');
+  if(notiAlias){e.preventDefault();e.stopPropagation();_mentionActiveAlias=normalizeMentionAlias(notiAlias.dataset.alias||'all')||'all';renderMentionNotiPanel();return;}
   var notiReadAll=e.target.closest('#mention-noti-read-all');
-  if(notiReadAll){e.preventDefault();e.stopPropagation();_mentionNotiItems.forEach(function(x){x.unread=false;});saveMentionNotiItems();renderMentionNotiPanel();return;}
+  if(notiReadAll){e.preventDefault();e.stopPropagation();_mentionNotiItems.forEach(function(x){if(_mentionActiveAlias==='all'||mentionItemHasAlias(x,_mentionActiveAlias))x.unread=false;});saveMentionNotiItems();renderMentionNotiPanel();return;}
   var notiClear=e.target.closest('#mention-noti-clear');
-  if(notiClear){e.preventDefault();e.stopPropagation();_mentionNotiItems=[];saveMentionNotiItems();renderMentionNotiPanel();return;}
+  if(notiClear){e.preventDefault();e.stopPropagation();_mentionNotiItems=_mentionNotiItems.filter(function(x){return !(_mentionActiveAlias==='all'||mentionItemHasAlias(x,_mentionActiveAlias));});saveMentionNotiItems();renderMentionNotiPanel();return;}
   var notiItem=e.target.closest('.mention-noti-item');
   if(notiItem){e.preventDefault();e.stopPropagation();markMentionNotificationRead(notiItem.dataset.id);var notiPanel=$('mention-noti-panel');if(notiPanel)notiPanel.classList.remove('open');openOrderFromNotification(notiItem.dataset.soId,notiItem.dataset.soName);return;}
+  var publicMentionItem=e.target.closest('.public-mention-suggest-item');
+  if(publicMentionItem){e.preventDefault();e.stopPropagation();applyPublicMentionAlias($('dr-msg-input'),publicMentionItem.dataset.alias);return;}
+  if(!e.target.closest('#dr-mention-suggest')){var ps=$('dr-mention-suggest');if(ps)ps.classList.remove('open');}
   if(!e.target.closest('#mention-noti-panel')){var np=$('mention-noti-panel');if(np)np.classList.remove('open');}
   var chipX=e.target.closest('.chip-x');
   if(chipX){
@@ -2137,6 +2163,12 @@ class SalePlanPublicController(http.Controller):
                     bus._sendone(partner, 'new_portal_message', payload)
             except Exception as e:
                 _logger.warning(f"Delivery Planner Bus send error: {e}")
+
+            if body:
+                try:
+                    _push_public_mention_event(request.env, so, body, author_name or 'Khach hang')
+                except Exception:
+                    _logger.exception('sale_plan public mention event error')
 
             return {'status': 'success'}
         except Exception as e:

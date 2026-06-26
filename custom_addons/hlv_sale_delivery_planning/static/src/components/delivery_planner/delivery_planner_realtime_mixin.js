@@ -172,22 +172,20 @@ export class DeliveryPlannerRealtimeMixin {
         if (so) {
             so.has_unread_message = true;
         }
-        if (!existing || existing._isRead) {
-            this.notification.add(
-                `Đơn hàng ${payload.so_name}: ${rawBody}...`,
-                {
-                    type: "info",
-                    title: `Khách hàng ${payload.author_name} vừa nhắn tin`,
-                    buttons: [
-                        {
-                            name: "Xem đơn hàng",
-                            onClick: () => this.openDrawerFromMessageList(payload.so_id),
-                            primary: true,
-                        }
-                    ]
-                }
-            );
-        }
+        this.notification.add(
+            `Don hang ${payload.so_name}: ${rawBody}...`,
+            {
+                type: "info",
+                title: `Co tin nhan moi tu ${payload.author_name || 'Khach hang'}`,
+                buttons: [
+                    {
+                        name: "Xem don hang",
+                        onClick: () => this.openDrawerFromMessageList(payload.so_id),
+                        primary: true,
+                    }
+                ]
+            }
+        );
     }
 
     // --- Real-time data refresh via bus ---
