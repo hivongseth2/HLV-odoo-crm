@@ -149,7 +149,22 @@ export class DeliveryPlannerRealtimeMixin {
     }
 
     async onNewPortalMessage(payload) {
-        // payload: {so_id, so_name, author_name, body}
+        // payload: {so_id, so_name, author_name, body, message_id}
+        if (!payload) return;
+        if (!this._seenPortalMessageKeys) {
+            this._seenPortalMessageKeys = new Map();
+        }
+        const now = Date.now();
+        for (const [key, ts] of this._seenPortalMessageKeys.entries()) {
+            if (now - ts > 30000) this._seenPortalMessageKeys.delete(key);
+        }
+        const messageKey = payload.message_id
+            ? `mail:${payload.message_id}`
+            : `fallback:${payload.so_id || ''}:${payload.author_name || ''}:${payload.body || ''}`;
+        if (this._seenPortalMessageKeys.has(messageKey)) {
+            return;
+        }
+        this._seenPortalMessageKeys.set(messageKey, now);
 
         // Cập nhật danh sách drawer realtime: có tin mới thì đưa lên đầu và bật trạng thái chưa đọc.
         const existing = this.state.globalUnreadOrders.find(o => (o.sale_order_id && o.sale_order_id[0] === payload.so_id) || o.id === payload.so_id);
