@@ -1,3 +1,4 @@
+import logging
 import os
 
 from odoo import models, api
@@ -69,6 +70,9 @@ def _format_message_body_with_mentions(text):
         last = match.end()
     parts.append(Markup.escape(text[last:]))
     return Markup('').join(parts)
+
+
+_logger = logging.getLogger(__name__)
 
 
 class DeliveryPlannerServiceMessages(models.AbstractModel):
@@ -193,7 +197,7 @@ class DeliveryPlannerServiceMessages(models.AbstractModel):
                 from ..controllers.sale_plan_controller import _push_public_mention_event
                 _push_public_mention_event(self.env, so, body, self.env.user.name or '')
             except Exception:
-                pass
+                _logger.exception('delivery planner public mention event error')
         return True
 
     @api.model
