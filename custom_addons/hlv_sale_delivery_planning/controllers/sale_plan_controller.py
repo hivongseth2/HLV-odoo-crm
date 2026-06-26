@@ -720,7 +720,10 @@ function getTagIds(){var e=$('f-tag');if(!e)return'';return Array.from(e.selecte
 
 var _mentionAliases=[];
 var _mentionActiveIndex=-1;
-function setMentionListenerStatus(label,live){var el=$('mention-listener-status'),txt=$('mention-listener-label');if(!el||!txt)return;txt.textContent=label;el.classList.toggle('live',!!live);}
+function normalizeMentionAlias(v){return String(v||'').trim().toLowerCase().replace(/^@+/,'').replace(/\s+/g,'');}
+function getCurrentMentionAlias(){return normalizeMentionAlias(localStorage.getItem('hlv_msg_author')||'');}
+function eventMatchesCurrentAlias(ev){var alias=getCurrentMentionAlias();if(!alias)return false;var mentions=(ev&&ev.mentions)||[];return mentions.some(function(m){return normalizeMentionAlias(m)===alias;});}
+function setMentionListenerStatus(label,live){var el=$('mention-listener-status'),txt=$('mention-listener-label');if(!el||!txt)return;var alias=getCurrentMentionAlias();txt.textContent=label+(alias?' @'+alias:' (chưa chọn alias)');el.classList.toggle('live',!!live&&!!alias);}
 function loadMentionAliases(){fetch('/api/sale_plan/mention_aliases',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{}})}).then(function(r){return r.json();}).then(function(j){var d=j.result||{};_mentionAliases=d.status==='success'?(d.aliases||[]):[];}).catch(function(){_mentionAliases=[];});}
 function currentMentionQuery(input){var pos=input.selectionStart||0;var before=input.value.slice(0,pos);var m=/(^|\s)@([A-Za-z0-9_.-]*)$/.exec(before);if(!m)return null;return {start:pos-m[2].length-1,term:(m[2]||'').toLowerCase(),pos:pos};}
 function renderMentionSuggest(input){var box=$('mention-suggest');if(!box)return;var q=currentMentionQuery(input);if(!q){box.classList.remove('open');box.innerHTML='';return;}var items=_mentionAliases.filter(function(a){return !q.term||a.alias.toLowerCase().indexOf(q.term)===0||a.user_name.toLowerCase().indexOf(q.term)>=0;}).slice(0,8);if(!items.length){box.classList.remove('open');box.innerHTML='';return;}_mentionActiveIndex=Math.min(Math.max(_mentionActiveIndex,0),items.length-1);box.innerHTML=items.map(function(a,i){return '<div class="mention-suggest-item '+(i===_mentionActiveIndex?'active':'')+'" data-alias="'+esc(a.alias)+'"><span><strong>@'+esc(a.alias)+'</strong></span><small>'+esc(a.user_name||'')+'</small></div>';}).join('');box.classList.add('open');}
@@ -729,9 +732,9 @@ function bindMentionInput(input){if(!input)return;input.addEventListener('input'
 
 var _mentionLastId=0;
 var _mentionSeen={};
-function handleMentionEvent(ev){if(!ev||!ev.id||_mentionSeen[ev.id])return;_mentionSeen[ev.id]=true;_mentionLastId=Math.max(_mentionLastId,parseInt(ev.id,10)||0);showMentionToast(ev);}
+function handleMentionEvent(ev){if(!ev||!ev.id||_mentionSeen[ev.id]||!eventMatchesCurrentAlias(ev))return;_mentionSeen[ev.id]=true;_mentionLastId=Math.max(_mentionLastId,parseInt(ev.id,10)||0);showMentionToast(ev);}
 function showMentionToast(ev){var stack=$('mention-toast-stack');if(!stack)return;var node=document.createElement('div');node.className='mention-toast';node.innerHTML='<div class="mention-toast-title"><span><i class="fa fa-at me-1"></i>'+esc(ev.so_name||'Sale order')+'</span><button type="button" aria-label="Close">&times;</button></div>'+'<div class="mention-toast-body"><strong>'+esc(ev.author_name||'Nguoi gui')+'</strong>: '+esc(ev.preview||ev.body||'Tin nhan moi')+'</div>'+(ev.mentions&&ev.mentions.length?'<div class="mention-toast-tags">@'+ev.mentions.map(esc).join(' @')+'</div>':'');node.addEventListener('click',function(e){if(e.target.closest('button')){node.remove();return;}if(ev.so_id){openDrawer(parseInt(ev.so_id,10));}});stack.prepend(node);while(stack.children.length>5){stack.lastElementChild.remove();}setTimeout(function(){if(node.parentNode){node.style.opacity='0';node.style.transform='translateX(16px)';setTimeout(function(){node.remove();},250);}},9000);}
-function pollMentionEvents(){fetch('/api/sale_plan/mention_notifications',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{after_id:_mentionLastId}})}).then(function(r){return r.json();}).then(function(j){var d=j.result||{};if(d.status!=='success')return;(d.events||[]).forEach(handleMentionEvent);}).catch(function(){});}
+function pollMentionEvents(){fetch('/api/sale_plan/mention_notifications',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{after_id:_mentionLastId,current_alias:getCurrentMentionAlias()}})}).then(function(r){return r.json();}).then(function(j){var d=j.result||{};if(d.status!=='success')return;(d.events||[]).forEach(handleMentionEvent);}).catch(function(){});}
 function startSalePlanBusListener(){setMentionListenerStatus('Bus: listening',true);var busLast=0;function loop(){fetch('/longpolling/poll',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({channels:['sale_plan_public_channel'],last:busLast})}).then(function(r){return r.ok?r.json():null;}).then(function(data){var notifications=(data&&data.result&&data.result.notifications)||data&&data.notifications||[];notifications.forEach(function(n){busLast=Math.max(busLast,n.id||busLast);var payload=n.payload||n.message||n[2]||{};var typ=n.type||n[1];if(typ==='sale_plan_mention'||payload.type==='sale_plan_mention')handleMentionEvent(payload);});setTimeout(loop,250);}).catch(function(){setMentionListenerStatus('Bus: retrying',false);setTimeout(function(){setMentionListenerStatus('Bus: listening',true);loop();},15000);});}loop();setInterval(pollMentionEvents,15000);}
 
 var TAG_BG=['#adb5bd','#dc3545','#fd7e14','#ffc107','#20c997','#6610f2','#d63384','#0d6efd','#6f42c1','#e91e63','#198754','#0dcaf0'];
@@ -1416,6 +1419,8 @@ function openDrawer(id){
   $('dr-msg-refresh').addEventListener('click',function(e){e.stopPropagation();loadMessages();});
   $('dr-msg-attach').addEventListener('click',function(e){e.preventDefault();e.stopPropagation();$('dr-msg-files-input').click();});
   $('dr-msg-files-input').addEventListener('change',onPublicFilesSelected);
+  $('dr-msg-author').addEventListener('input',function(){localStorage.setItem('hlv_msg_author',this.value||'');setMentionListenerStatus('Bus: listening',true);});
+  setMentionListenerStatus('Bus: listening',true);
   bindMentionInput($('dr-msg-input'));
   $('dr-msg-send').addEventListener('click',function(){sendPublicMessage();});
   $('dr-msg-input').addEventListener('keydown',function(e){var ms=$('mention-suggest');if(ms&&ms.classList.contains('open'))return;if(e.key==='Enter'){e.preventDefault();sendPublicMessage();}});
@@ -1932,6 +1937,26 @@ class SalePlanPublicController(http.Controller):
                 aliases.append({'alias': alias, 'user_id': user.id, 'user_name': user.name or ''})
         return {'status': 'success', 'aliases': aliases}
 
+    @http.route('/api/sale_plan/mention_notifications', type='json', auth='public', methods=['POST'])
+    def api_sale_plan_mention_notifications(self, after_id=0, current_alias='', **kwargs):
+        if not request.session.get(SESSION_KEY_OK):
+            return {'status': 'error', 'message': 'Unauthorized'}
+        try:
+            after_id = int(after_id or 0)
+        except (TypeError, ValueError):
+            after_id = 0
+        alias = (current_alias or '').strip().lower().lstrip('@').replace(' ', '')
+        if not alias:
+            return {'status': 'success', 'events': []}
+        events = []
+        for event in _PUBLIC_MENTION_EVENTS:
+            if int(event.get('id') or 0) <= after_id:
+                continue
+            mentions = [str(m or '').strip().lower().lstrip('@').replace(' ', '') for m in (event.get('mentions') or [])]
+            if alias in mentions:
+                events.append(event)
+        return {'status': 'success', 'events': events[-30:]}
+
     @http.route('/api/sale_plan/report_order', type='json', auth='public', methods=['POST'])
     def api_report_order(self, order_id=None, reason='', **kwargs):
         if not request.session.get(SESSION_KEY_OK):
@@ -2094,7 +2119,6 @@ class SalePlanPublicController(http.Controller):
               author_name=author_name or 'Khách hàng',
               preview=preview,
               message_type='customer',
-              target_user_ids=mentioned_users.ids if mentioned_users else None,
             )
             # Kích hoạt trạng thái nháy đỏ Notification FB 
             if hasattr(so, 'x_plan_unread_message'):
