@@ -283,48 +283,48 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
                     purchase = purchase_obj.create(po_data)
 
             # Look for any other PO line in the selected PO with same
-            # product and UoM to sum quantities instead of creating a new
-            # po line
-            domain = self._get_order_line_search_domain(purchase, item)
-            available_po_lines = po_line_obj.search(domain)
-            new_pr_line = True
-            # If Unit of Measure is not set, update from wizard.
-            if not line.product_uom_id:
-                line.product_uom_id = item.product_uom_id
-            # Allocation UoM has to be the same as PR line UoM
-            alloc_uom = line.product_uom_id
-            wizard_uom = item.product_uom_id
-            if (
-                available_po_lines
-                and not item.keep_description
-                and not item.keep_estimated_cost
-            ):
-                new_pr_line = False
-                po_line = available_po_lines[0]
-                po_line.purchase_request_lines = [(4, line.id)]
-                po_line.move_dest_ids |= line.move_dest_ids
-                po_line_product_uom_qty = po_line.product_uom._compute_quantity(
-                    po_line.product_uom_qty, alloc_uom
-                )
-                wizard_product_uom_qty = wizard_uom._compute_quantity(
-                    item.product_qty, alloc_uom
-                )
-                all_qty = min(po_line_product_uom_qty, wizard_product_uom_qty)
-                self.create_allocation(po_line, line, all_qty, alloc_uom)
-            else:
-                po_line_data = self._prepare_purchase_order_line(purchase, item)
-                if item.keep_description:
-                    po_line_data["name"] = item.name
-                po_line = po_line_obj.create(po_line_data)
-                po_line_product_uom_qty = po_line.product_uom._compute_quantity(
-                    po_line.product_uom_qty, alloc_uom
-                )
-                wizard_product_uom_qty = wizard_uom._compute_quantity(
-                    item.product_qty, alloc_uom
-                )
-                all_qty = min(po_line_product_uom_qty, wizard_product_uom_qty)
-                self.create_allocation(po_line, line, all_qty, alloc_uom)
-            self._post_process_po_line(item, po_line, new_pr_line)
+                # product and UoM to sum quantities instead of creating a new
+                # po line
+                domain = self._get_order_line_search_domain(purchase, item)
+                available_po_lines = po_line_obj.search(domain)
+                new_pr_line = True
+                # If Unit of Measure is not set, update from wizard.
+                if not line.product_uom_id:
+                    line.product_uom_id = item.product_uom_id
+                # Allocation UoM has to be the same as PR line UoM
+                alloc_uom = line.product_uom_id
+                wizard_uom = item.product_uom_id
+                if (
+                    available_po_lines
+                    and not item.keep_description
+                    and not item.keep_estimated_cost
+                ):
+                    new_pr_line = False
+                    po_line = available_po_lines[0]
+                    po_line.purchase_request_lines = [(4, line.id)]
+                    po_line.move_dest_ids |= line.move_dest_ids
+                    po_line_product_uom_qty = po_line.product_uom._compute_quantity(
+                        po_line.product_uom_qty, alloc_uom
+                    )
+                    wizard_product_uom_qty = wizard_uom._compute_quantity(
+                        item.product_qty, alloc_uom
+                    )
+                    all_qty = min(po_line_product_uom_qty, wizard_product_uom_qty)
+                    self.create_allocation(po_line, line, all_qty, alloc_uom)
+                else:
+                    po_line_data = self._prepare_purchase_order_line(purchase, item)
+                    if item.keep_description:
+                        po_line_data["name"] = item.name
+                    po_line = po_line_obj.create(po_line_data)
+                    po_line_product_uom_qty = po_line.product_uom._compute_quantity(
+                        po_line.product_uom_qty, alloc_uom
+                    )
+                    wizard_product_uom_qty = wizard_uom._compute_quantity(
+                        item.product_qty, alloc_uom
+                    )
+                    all_qty = min(po_line_product_uom_qty, wizard_product_uom_qty)
+                    self.create_allocation(po_line, line, all_qty, alloc_uom)
+                self._post_process_po_line(item, po_line, new_pr_line)
             if purchase.id not in res:
                 res.append(purchase.id)
 
