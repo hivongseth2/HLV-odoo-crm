@@ -100,6 +100,10 @@ export class DeliveryPlannerDisplayMixin {
             this.state.currentPage = 1;
             this.state.selectedSOIds = new Set();
             await this.fetchData();
+            return;
+        }
+        if (this._searchDebounceTimer) {
+            clearTimeout(this._searchDebounceTimer);
         }
         this._searchDebounceTimer = setTimeout(async () => {
             this._searchDebounceTimer = null;

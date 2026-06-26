@@ -18,15 +18,7 @@ _SKIP_MSG_RE = re.compile(
     r'|Sales Order created'
     r'|Quotation created'
     r'|has been created from'
-    r'|Đơn hàng được tạo'
-    r'|🖨️'
-    r'|👤'
-    r'|Nhu cầu ban đầu đã được'
-    r'|Đồng bộ MISA thành công'
-    r'|The initial demand has'
-    r'|The ordered quantity has been updated'
-    r'|extra line with'
-    r'|Đơn hàng tách kiện',
+    r'|Đơn hàng được tạo',
     re.IGNORECASE
 )
 
@@ -41,65 +33,46 @@ _ALLOWED_CHAT_ATTACHMENT_MIMES = {
 _ALLOWED_CHAT_ATTACHMENT_EXTS = {'.doc', '.docx', '.pdf', '.xls', '.xlsx', '.csv'}
 _MAX_CHAT_ATTACHMENT_BYTES = 20 * 1024 * 1024
 
-_MENTION_RE = re.compile(r'@\s*([A-Za-z0-9_.-]+)', re.UNICODE)
+
+_MENTION_RE = re.compile(r'@([A-Za-z0-9_.-]+)')
 
 
-def _extract_mention_tokens(text):
-    tokens = []
-    seen = set()
-    for token in _MENTION_RE.findall(text or ''):
-        clean = (token or '').strip().lower()
-        if clean and clean not in seen:
-            seen.add(clean)
-            tokens.append(clean)
-    return tokens
+def _normalize_mention_alias(value):
+    return (value or '').strip().lower().lstrip('@')
+
+
+def _split_mention_aliases(value):
+    aliases = []
+    for part in re.split(r'[,;\s]+', value or ''):
+        alias = _normalize_mention_alias(part)
+        if alias and alias not in aliases:
+            aliases.append(alias)
+    return aliases
+
+
+def _extract_mention_aliases(text):
+    aliases = []
+    for match in _MENTION_RE.finditer(text or ''):
+        alias = _normalize_mention_alias(match.group(1))
+        if alias and alias not in aliases:
+            aliases.append(alias)
+    return aliases
 
 
 def _format_message_body_with_mentions(text):
-    chunks = []
-    pos = 0
-    for match in _MENTION_RE.finditer(text or ''):
-        chunks.append(Markup.escape((text or '')[pos:match.start()]))
-        token = match.group(1) or ''
-        chunks.append(Markup('<strong class="sale-plan-mention">@%s</strong>') % Markup.escape(token))
-        pos = match.end()
-    chunks.append(Markup.escape((text or '')[pos:]))
-    return Markup('').join(chunks)
-
-
-def _normalize_preview_text(text, limit=140):
-    plain = re.sub(r'<[^>]+>', ' ', text or '')
-    plain = re.sub(r'\s+', ' ', plain).strip()
-    if not plain:
-        return ''
-    return plain[:limit] + ('...' if len(plain) > limit else '')
+    text = text or ''
+    parts = []
+    last = 0
+    for match in _MENTION_RE.finditer(text):
+        parts.append(Markup.escape(text[last:match.start()]))
+        parts.append(Markup('<strong class="sale-plan-mention">@%s</strong>') % Markup.escape(match.group(1)))
+        last = match.end()
+    parts.append(Markup.escape(text[last:]))
+    return Markup('').join(parts)
 
 
 class DeliveryPlannerServiceMessages(models.AbstractModel):
     _inherit = 'hlv.delivery.planner.service'
-
-
-    @api.model
-    def get_sale_plan_mention_aliases(self):
-        Users = self.env['res.users'].sudo()
-        if 'x_sale_plan_mention_names' not in Users._fields:
-            return []
-        aliases = []
-        seen = set()
-        users = Users.search([
-            ('share', '=', False),
-            ('active', '=', True),
-            ('x_sale_plan_mention_names', '!=', False),
-        ], order='name')
-        for user in users:
-            for raw in re.split(r'[,;\s]+', user.x_sale_plan_mention_names or ''):
-                alias = (raw or '').strip().lstrip('@')
-                key = alias.lower()
-                if not key or key in seen:
-                    continue
-                seen.add(key)
-                aliases.append({'alias': alias, 'user_id': user.id, 'user_name': user.name or ''})
-        return aliases
 
     @api.model
     def get_order_messages(self, order_id):
@@ -150,6 +123,27 @@ class DeliveryPlannerServiceMessages(models.AbstractModel):
         return result
 
     @api.model
+    def get_sale_plan_mention_aliases(self):
+        users = self.env['res.users'].sudo().search([
+            ('active', '=', True),
+            ('x_sale_plan_mention_names', '!=', False),
+        ])
+        rows = []
+        seen = set()
+        for user in users:
+            for alias in _split_mention_aliases(user.x_sale_plan_mention_names):
+                if alias in seen:
+                    continue
+                seen.add(alias)
+                rows.append({
+                    'alias': alias,
+                    'user_id': user.id,
+                    'user_name': user.name or '',
+                })
+        rows.sort(key=lambda row: row['alias'])
+        return rows
+
+    @api.model
     def post_order_message(self, order_id, body='', attachments=None):
         so = self.env['sale.order'].browse(int(order_id))
         if not so.exists():
@@ -187,33 +181,17 @@ class DeliveryPlannerServiceMessages(models.AbstractModel):
         if not body and not attachment_ids:
             return False
 
-        safe_body = Markup('<p>%s</p>') % _format_message_body_with_mentions(body) if body else Markup('<p><i>Tep dinh kem</i></p>')
-        posted_msg = so.message_post(
+        safe_body = Markup('<p>%s</p>') % _format_message_body_with_mentions(body) if body else Markup('<p><i>Tệp đính kèm</i></p>')
+        so.message_post(
             body=safe_body,
             message_type='comment',
             subtype_xmlid='mail.mt_note',
             attachment_ids=attachment_ids,
         )
-
-        mention_tokens = _extract_mention_tokens(body)
-        if mention_tokens:
-            preview = _normalize_preview_text(body or 'Tep dinh kem')
-            payload = {
-                'so_id': so.id,
-                'so_name': so.name,
-                'author_name': self.env.user.name or 'Odoo',
-                'body': body,
-                'preview': preview,
-                'mentions': mention_tokens,
-                'message_id': posted_msg.id if posted_msg else False,
-            }
+        if body:
             try:
                 from ..controllers.sale_plan_controller import _push_public_mention_event
-                payload = _push_public_mention_event(payload)
-            except Exception:
-                pass
-            try:
-                self.env['bus.bus'].sudo()._sendone('sale_plan_public_channel', 'sale_plan_mention', payload)
+                _push_public_mention_event(self.env, so, body, self.env.user.name or '')
             except Exception:
                 pass
         return True

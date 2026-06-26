@@ -1,5 +1,4 @@
 from odoo import models
-from odoo.osv import expression
 import pytz
 from datetime import datetime, timedelta
 
@@ -77,15 +76,12 @@ class DeliveryPlannerServiceDomain(models.AbstractModel):
             domain += [('warehouse_id', '=', int(filter_warehouse_id))]
 
         if search_query:
-            search_domain = [
-                ('name', 'ilike', search_query),
-                ('partner_id.name', 'ilike', search_query),
-                ('order_line.product_id.name', 'ilike', search_query),
-                ('order_line.product_id.default_code', 'ilike', search_query),
-            ]
-            if 'x_studio_tham_chiu_shopee' in self.env['sale.order']._fields:
-                search_domain.append(('x_studio_tham_chiu_shopee', 'ilike', search_query))
-            domain = expression.AND([domain, expression.OR([[cond] for cond in search_domain])])
+            domain += ['|', '|', '|', '|',
+                       ('name', 'ilike', search_query),
+                       ('partner_id.name', 'ilike', search_query),
+                       ('x_studio_tham_chiu_shopee', 'ilike', search_query),
+                       ('order_line.product_id.name', 'ilike', search_query),
+                       ('order_line.product_id.default_code', 'ilike', search_query)]
 
         if filter_date_from:
             domain += ['|',

@@ -554,20 +554,21 @@
                             <i class="fa fa-paperclip"></i>
                         </button>
                         <div class="position-relative flex-grow-1">
-                            <textarea id="drawer-message-textarea" class="form-control form-control-sm" rows="1"
-                                      placeholder="Nh?p tin nh?n... (Ctrl+V ?? d?n ?nh)"
+                            <textarea class="form-control form-control-sm hlv-drawer-message-input" rows="1"
+                                      placeholder="Nháº­p tin nháº¯n... (Ctrl+V Ä‘á»ƒ dÃ¡n áº£nh)"
                                       t-att-value="state.drawerMessageText"
                                       t-on-input="(ev) => this.onDrawerMessageInput(ev)"
                                       t-on-keydown="(ev) => this.onMessageKeydown(ev)"
                                       t-on-paste="(ev) => this.onDrawerMessagePaste(ev)"
                                       style="resize:none;min-height:36px;"/>
                             <div t-if="state.drawerMentionSuggestions.length" class="hlv-mention-suggest">
-                                <t t-foreach="state.drawerMentionSuggestions" t-as="item" t-key="item.alias">
-                                    <div t-att-class="'hlv-mention-suggest-item ' + (item_index === state.drawerMentionActiveIndex ? 'active' : '')"
-                                         t-on-mousedown="(ev) => { ev.preventDefault(); this.selectDrawerMentionAlias(item.alias); }">
-                                        <span><strong>@<t t-esc="item.alias"/></strong></span>
-                                        <small><t t-esc="item.user_name"/></small>
-                                    </div>
+                                <t t-foreach="state.drawerMentionSuggestions" t-as="mention" t-key="mention.alias">
+                                    <button type="button"
+                                            t-att-class="'hlv-mention-suggest-item ' + (state.drawerMentionActiveIndex === mention_index ? 'active' : '')"
+                                            t-on-click.stop="() => this.selectDrawerMentionAlias(mention.alias)">
+                                        <strong>@<t t-esc="mention.alias"/></strong>
+                                        <span t-if="mention.user_name"><t t-esc="mention.user_name"/></span>
+                                    </button>
                                 </t>
                             </div>
                         </div>

@@ -10,24 +10,7 @@ export class DeliveryPlannerDrawerMessagesMixin {
         this.state.drawerMessages = [];
         this.state.drawerMessageText = '';
         this.state.drawerMessageFiles = [];
-        this.state.drawerMentionSuggestions = [];
-        this.loadDrawerMentionAliases();
         this.loadDrawerMessages(so.id);
-    }
-
-    async loadDrawerMentionAliases() {
-        if (this.state.drawerMentionAliases && this.state.drawerMentionAliases.length) {
-            return;
-        }
-        try {
-            const aliases = await this.orm.call(
-                'hlv.delivery.planner.service', 'get_sale_plan_mention_aliases', []
-            );
-            this.state.drawerMentionAliases = aliases || [];
-        } catch (e) {
-            console.warn('loadDrawerMentionAliases failed', e);
-            this.state.drawerMentionAliases = [];
-        }
     }
 
     async loadDrawerMessages(orderId) {
@@ -76,22 +59,34 @@ export class DeliveryPlannerDrawerMessagesMixin {
         }
     }
 
-    onDrawerMessageInput(ev) {
-        this.state.drawerMessageText = ev.target.value;
-        this.updateDrawerMentionSuggestions(ev.target);
+    async loadDrawerMentionAliases() {
+        try {
+            const result = await this.orm.call(
+                'hlv.delivery.planner.service', 'get_sale_plan_mention_aliases', []
+            );
+            this.state.drawerMentionAliases = result || [];
+        } catch (e) {
+            console.error('loadDrawerMentionAliases error', e);
+            this.state.drawerMentionAliases = [];
+        }
     }
 
     _normalizeMentionAlias(value) {
-        return String(value || '').trim().toLowerCase().replace(/^@+/, '').replace(/\s+/g, '');
+        return String(value || '').trim().toLowerCase().replace(/^@+/, '');
     }
 
     _currentMentionQuery(input) {
-        const value = input ? input.value || '' : this.state.drawerMessageText || '';
-        const pos = input && typeof input.selectionStart === 'number' ? input.selectionStart : value.length;
-        const before = value.slice(0, pos);
+        if (!input) return null;
+        const pos = input.selectionStart || 0;
+        const before = String(input.value || '').slice(0, pos);
         const match = /(^|\s)@([A-Za-z0-9_.-]*)$/.exec(before);
         if (!match) return null;
-        return { start: pos - match[2].length - 1, term: (match[2] || '').toLowerCase(), pos };
+        return { start: pos - match[2].length - 1, term: this._normalizeMentionAlias(match[2]), pos };
+    }
+
+    onDrawerMessageInput(ev) {
+        this.state.drawerMessageText = ev.target.value;
+        this.updateDrawerMentionSuggestions(ev.target);
     }
 
     updateDrawerMentionSuggestions(input) {
@@ -101,30 +96,30 @@ export class DeliveryPlannerDrawerMessagesMixin {
             this.state.drawerMentionActiveIndex = 0;
             return;
         }
-        const aliases = this.state.drawerMentionAliases || [];
-        const items = aliases.filter((item) => {
-            const alias = String(item.alias || '').toLowerCase();
-            const user = String(item.user_name || '').toLowerCase();
-            return !query.term || alias.startsWith(query.term) || user.includes(query.term);
+        const items = (this.state.drawerMentionAliases || []).filter((item) => {
+            const alias = this._normalizeMentionAlias(item.alias);
+            const name = this._normalizeMentionAlias(item.user_name);
+            return !query.term || alias.startsWith(query.term) || name.includes(query.term);
         }).slice(0, 8);
         this.state.drawerMentionSuggestions = items;
         this.state.drawerMentionActiveIndex = Math.min(this.state.drawerMentionActiveIndex || 0, Math.max(items.length - 1, 0));
     }
 
     selectDrawerMentionAlias(alias) {
-        const input = document.getElementById('drawer-message-textarea');
+        const input = document.querySelector('.hlv-drawer-message-input');
         const query = this._currentMentionQuery(input);
-        if (!query || !alias) return;
-        const value = input ? input.value || '' : this.state.drawerMessageText || '';
-        const next = `${value.slice(0, query.start)}@${alias} ${value.slice(query.pos)}`;
+        if (!query) return;
+        const value = String(this.state.drawerMessageText || '');
+        const next = value.slice(0, query.start) + '@' + alias + ' ' + value.slice(query.pos);
+        const nextPos = query.start + alias.length + 2;
         this.state.drawerMessageText = next;
         this.state.drawerMentionSuggestions = [];
+        this.state.drawerMentionActiveIndex = 0;
         setTimeout(() => {
-            const nextInput = document.getElementById('drawer-message-textarea');
+            const nextInput = document.querySelector('.hlv-drawer-message-input');
             if (nextInput) {
-                const caret = query.start + alias.length + 2;
                 nextInput.focus();
-                nextInput.setSelectionRange(caret, caret);
+                nextInput.setSelectionRange(nextPos, nextPos);
             }
         }, 0);
     }

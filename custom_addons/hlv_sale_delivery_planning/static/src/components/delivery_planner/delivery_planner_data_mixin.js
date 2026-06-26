@@ -257,7 +257,7 @@ export class DeliveryPlannerDataMixin {
             // Auto-load all remaining orders in background — no spinner, no confirm.
             // Ensures không xót đơn khi tổng số đơn > initial batch size.
             const remaining = (this.state.totalCount || 0) - this.state.saleOrders.length;
-            if (remaining > 0 && remaining <= 50) {
+            if (remaining > 0) {
                 this._autoLoadAllRemaining(); // intentionally NOT awaited
             }
         } catch (error) {
