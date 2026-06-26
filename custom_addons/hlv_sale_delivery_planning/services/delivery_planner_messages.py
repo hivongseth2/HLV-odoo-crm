@@ -34,6 +34,43 @@ _ALLOWED_CHAT_ATTACHMENT_EXTS = {'.doc', '.docx', '.pdf', '.xls', '.xlsx', '.csv
 _MAX_CHAT_ATTACHMENT_BYTES = 20 * 1024 * 1024
 
 
+_MENTION_RE = re.compile(r'@([A-Za-z0-9_.-]+)')
+
+
+def _normalize_mention_alias(value):
+    return (value or '').strip().lower().lstrip('@')
+
+
+def _split_mention_aliases(value):
+    aliases = []
+    for part in re.split(r'[,;\s]+', value or ''):
+        alias = _normalize_mention_alias(part)
+        if alias and alias not in aliases:
+            aliases.append(alias)
+    return aliases
+
+
+def _extract_mention_aliases(text):
+    aliases = []
+    for match in _MENTION_RE.finditer(text or ''):
+        alias = _normalize_mention_alias(match.group(1))
+        if alias and alias not in aliases:
+            aliases.append(alias)
+    return aliases
+
+
+def _format_message_body_with_mentions(text):
+    text = text or ''
+    parts = []
+    last = 0
+    for match in _MENTION_RE.finditer(text):
+        parts.append(Markup.escape(text[last:match.start()]))
+        parts.append(Markup('<strong class="sale-plan-mention">@%s</strong>') % Markup.escape(match.group(1)))
+        last = match.end()
+    parts.append(Markup.escape(text[last:]))
+    return Markup('').join(parts)
+
+
 class DeliveryPlannerServiceMessages(models.AbstractModel):
     _inherit = 'hlv.delivery.planner.service'
 
@@ -86,6 +123,27 @@ class DeliveryPlannerServiceMessages(models.AbstractModel):
         return result
 
     @api.model
+    def get_sale_plan_mention_aliases(self):
+        users = self.env['res.users'].sudo().search([
+            ('active', '=', True),
+            ('x_sale_plan_mention_names', '!=', False),
+        ])
+        rows = []
+        seen = set()
+        for user in users:
+            for alias in _split_mention_aliases(user.x_sale_plan_mention_names):
+                if alias in seen:
+                    continue
+                seen.add(alias)
+                rows.append({
+                    'alias': alias,
+                    'user_id': user.id,
+                    'user_name': user.name or '',
+                })
+        rows.sort(key=lambda row: row['alias'])
+        return rows
+
+    @api.model
     def post_order_message(self, order_id, body='', attachments=None):
         so = self.env['sale.order'].browse(int(order_id))
         if not so.exists():
@@ -123,13 +181,19 @@ class DeliveryPlannerServiceMessages(models.AbstractModel):
         if not body and not attachment_ids:
             return False
 
-        safe_body = Markup('<p>%s</p>') % Markup.escape(body) if body else Markup('<p><i>Tệp đính kèm</i></p>')
+        safe_body = Markup('<p>%s</p>') % _format_message_body_with_mentions(body) if body else Markup('<p><i>Tệp đính kèm</i></p>')
         so.message_post(
             body=safe_body,
             message_type='comment',
             subtype_xmlid='mail.mt_note',
             attachment_ids=attachment_ids,
         )
+        if body:
+            try:
+                from ..controllers.sale_plan_controller import _push_public_mention_event
+                _push_public_mention_event(self.env, so, body, self.env.user.name or '')
+            except Exception:
+                pass
         return True
 
     @api.model

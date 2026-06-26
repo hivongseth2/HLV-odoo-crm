@@ -553,13 +553,25 @@
                                 t-on-click="() => this.triggerDrawerFilePicker()">
                             <i class="fa fa-paperclip"></i>
                         </button>
-                        <textarea class="form-control form-control-sm" rows="1"
-                                  placeholder="Nhập tin nhắn... (Ctrl+V để dán ảnh)"
-                                  t-att-value="state.drawerMessageText"
-                                  t-on-input="(ev) => { this.state.drawerMessageText = ev.target.value; }"
-                                  t-on-keydown="(ev) => this.onMessageKeydown(ev)"
-                                  t-on-paste="(ev) => this.onDrawerMessagePaste(ev)"
-                                  style="resize:none;min-height:36px;"/>
+                        <div class="position-relative flex-grow-1">
+                            <textarea class="form-control form-control-sm hlv-drawer-message-input" rows="1"
+                                      placeholder="Nháº­p tin nháº¯n... (Ctrl+V Ä‘á»ƒ dÃ¡n áº£nh)"
+                                      t-att-value="state.drawerMessageText"
+                                      t-on-input="(ev) => this.onDrawerMessageInput(ev)"
+                                      t-on-keydown="(ev) => this.onMessageKeydown(ev)"
+                                      t-on-paste="(ev) => this.onDrawerMessagePaste(ev)"
+                                      style="resize:none;min-height:36px;"/>
+                            <div t-if="state.drawerMentionSuggestions.length" class="hlv-mention-suggest">
+                                <t t-foreach="state.drawerMentionSuggestions" t-as="mention" t-key="mention.alias">
+                                    <button type="button"
+                                            t-att-class="'hlv-mention-suggest-item ' + (state.drawerMentionActiveIndex === mention_index ? 'active' : '')"
+                                            t-on-click.stop="() => this.selectDrawerMentionAlias(mention.alias)">
+                                        <strong>@<t t-esc="mention.alias"/></strong>
+                                        <span t-if="mention.user_name"><t t-esc="mention.user_name"/></span>
+                                    </button>
+                                </t>
+                            </div>
+                        </div>
                         <button class="btn btn-sm btn-primary px-3"
                                 t-on-click="() => this.sendDrawerMessage()"
                                 t-att-disabled="state.drawerMessageSending || ((!state.drawerMessageText || !state.drawerMessageText.trim()) &amp;&amp; !state.drawerMessageFiles.length)">

@@ -199,6 +199,9 @@ export class DeliveryPlannerDashboard extends Component {
             drawerMessageText: '',
             drawerMessageFiles: [],
             drawerMessageSending: false,
+            drawerMentionAliases: [],
+            drawerMentionSuggestions: [],
+            drawerMentionActiveIndex: 0,
         });
 
         this.notification = useService("notification");

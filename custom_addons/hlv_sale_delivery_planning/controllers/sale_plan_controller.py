@@ -79,6 +79,90 @@ def _normalize_preview_text(text, limit=140):
   return plain[:limit] + ('...' if len(plain) > limit else '')
 
 
+_PUBLIC_MENTION_EVENTS = []
+_PUBLIC_MENTION_SEQ = 0
+_MENTION_RE = re.compile(r'@([A-Za-z0-9_.-]+)')
+
+
+def _normalize_mention_alias(value):
+  return (value or '').strip().lower().lstrip('@')
+
+
+def _split_mention_aliases(value):
+  aliases = []
+  for part in re.split(r'[,;\s]+', value or ''):
+    alias = _normalize_mention_alias(part)
+    if alias and alias not in aliases:
+      aliases.append(alias)
+  return aliases
+
+
+def _extract_mention_aliases(text):
+  aliases = []
+  for match in _MENTION_RE.finditer(text or ''):
+    alias = _normalize_mention_alias(match.group(1))
+    if alias and alias not in aliases:
+      aliases.append(alias)
+  return aliases
+
+
+def _get_sale_plan_alias_rows(env):
+  users = env['res.users'].sudo().search([
+    ('active', '=', True),
+    ('x_sale_plan_mention_names', '!=', False),
+  ])
+  rows = []
+  seen = set()
+  for user in users:
+    for alias in _split_mention_aliases(user.x_sale_plan_mention_names):
+      if alias in seen:
+        continue
+      seen.add(alias)
+      rows.append({'alias': alias, 'user_id': user.id, 'user_name': user.name or ''})
+  rows.sort(key=lambda row: row['alias'])
+  return rows
+
+
+def _get_user_sale_plan_aliases(user):
+  try:
+    if not user or user._is_public():
+      return []
+  except Exception:
+    return []
+  return _split_mention_aliases(getattr(user, 'x_sale_plan_mention_names', '') or '')
+
+
+def _push_public_mention_event(env, so, body, author_name=''):
+  global _PUBLIC_MENTION_SEQ
+  mentioned = set(_extract_mention_aliases(body))
+  if not mentioned:
+    return None
+  valid_aliases = {row['alias'] for row in _get_sale_plan_alias_rows(env)}
+  matched = sorted(mentioned.intersection(valid_aliases))
+  if not matched:
+    return None
+  _PUBLIC_MENTION_SEQ += 1
+  payload = {
+    'id': _PUBLIC_MENTION_SEQ,
+    'type': 'sale_plan_mention',
+    'so_id': so.id,
+    'so_name': so.name or '',
+    'author_name': author_name or '',
+    'body': body or '',
+    'preview': _normalize_preview_text(body or ''),
+    'mentions': matched,
+    'ts': int(time.time()),
+  }
+  _PUBLIC_MENTION_EVENTS.append(payload)
+  del _PUBLIC_MENTION_EVENTS[:-200]
+  try:
+    env['bus.bus'].sudo()._sendone('sale_plan_public_channel', 'sale_plan_mention', payload)
+  except Exception:
+    _logger.exception('sale_plan public mention bus send error')
+  return payload
+
+
+
 _H = [
     ("Content-Type", "text/html; charset=utf-8"),
     # Chống browser/proxy cache nguyên trang HTML chứa inline JS.
@@ -226,6 +310,22 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
 /* Load more */
 #btn-load-more{font-weight:600;padding:5px 32px}
 @media(max-width:1024px){#drawer{width:100%!important;right:-105%!important}} @media(max-width:768px){.kanban-col{min-width:100%}}
+
+.sale-plan-mention{color:#4f46e5;font-weight:800}
+.mention-noti-wrap{position:relative;display:flex;align-items:center}
+#mention-noti-button{border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.08);color:#fff;border-radius:4px;padding:5px 10px;font-size:.78rem;font-weight:700;line-height:1;display:inline-flex;align-items:center;gap:6px}
+#mention-noti-button.has-unread{background:#4f46e5;border-color:#818cf8;color:#fff}
+#mention-noti-count{min-width:18px;height:18px;border-radius:9px;background:#ef4444;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:.68rem;font-weight:800;padding:0 5px}
+#mention-noti-panel{position:absolute;right:0;top:calc(100% + 8px);z-index:3150;width:min(390px,calc(100vw - 32px));max-height:420px;overflow-y:auto;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 18px 40px rgba(15,23,42,.22);display:none;color:#0f172a}
+#mention-noti-panel.open{display:block}
+.mention-noti-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border-bottom:1px solid #e2e8f0;font-size:.78rem;font-weight:800;color:#0f172a}
+.mention-noti-actions button{border:0;background:transparent;color:#64748b;font-size:.72rem;font-weight:700;padding:2px 4px}
+.mention-noti-item{padding:10px 12px;border-bottom:1px solid #f1f5f9;cursor:pointer;font-size:.8rem;text-align:left}
+.mention-noti-item:hover{background:#f8fafc}
+.mention-noti-item.unread{background:#eef2ff}
+.mention-noti-item-title{font-weight:800;color:#0f172a;margin-bottom:3px}
+.mention-noti-item-body{color:#475569;line-height:1.4;word-break:break-word}
+.mention-noti-empty{padding:18px 12px;text-align:center;color:#94a3b8;font-size:.8rem}
 /* Report button */
 .btn-report{font-size:.68rem;padding:2px 8px;border:1px solid #fecaca;color:#dc2626;background:#fef2f2;border-radius:4px;cursor:pointer;transition:.15s;line-height:1.4;font-weight:500}
 .btn-report:hover{background:#fee2e2;border-color:#dc2626}
@@ -433,6 +533,13 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
       <li class="nav-item"><a class="nav-link" href="/search_order">Chứng từ mua</a></li>
       <li class="nav-item"><a class="nav-link active" href="/sale_plan">Tình trạng đơn</a></li>
       <li class="nav-item"><a class="nav-link" href="/search_invoice">Hóa đơn MISA</a></li>
+      <li class="nav-item ms-lg-2 mention-noti-wrap">
+        <button id="mention-noti-button" type="button" title="Thong bao tag"><i class="fa fa-bell"></i><span id="mention-noti-count">0</span></button>
+        <div id="mention-noti-panel" aria-live="polite">
+          <div class="mention-noti-head"><span>Thong bao tag</span><span class="mention-noti-actions"><button id="mention-noti-read-all" type="button">Da doc het</button><button id="mention-noti-clear" type="button">Xoa</button></span></div>
+          <div id="mention-noti-list"></div>
+        </div>
+      </li>
     </ul>
   </div>
 </div></nav>
@@ -484,7 +591,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
     </div>
   </div>
   <div class="row g-3 mb-3">
-    <div class="col-md-3"><label class="form-label small fw-semibold text-muted mb-1">Tìm Kiếm</label><input id="f-q" class="form-control form-control-sm" placeholder="SO / Khách hàng..."/></div>
+    <div class="col-md-3"><label class="form-label small fw-semibold text-muted mb-1">Tìm Kiếm</label><input id="f-q" class="form-control form-control-sm" placeholder="SO / Khách hàng / Tham chiếu Shopee..."/></div>
     <div class="col-md-2"><label class="form-label small fw-semibold text-muted mb-1">Kho Cung Cấp</label><select id="f-wh" class="form-select form-select-sm"><option value="all">Tất cả</option></select></div>
     <div class="col-md-2"><label class="form-label small fw-semibold text-muted mb-1">Tiến Độ Giao</label>
       <select id="f-del" class="form-select form-select-sm">
@@ -639,6 +746,27 @@ function gv(id){var e=$(id);return e?e.value:'';}
 function showLoading(){var l=$('loading');if(l)l.classList.remove('d-none');}
 function hideLoading(){var l=$('loading');if(l)l.classList.add('d-none');}
 function getTagIds(){var e=$('f-tag');if(!e)return'';return Array.from(e.selectedOptions).map(function(o){return o.value;}).filter(Boolean).join(',');}
+
+var _sessionMentionAlias='';
+var _sessionMentionAliases=[];
+var _mentionLastId=0;
+var _mentionSeen={};
+var _mentionNotiItems=[];
+function normalizeMentionAlias(v){return String(v||'').trim().toLowerCase().replace(/^@+/,'');}
+function getCurrentMentionAlias(){return normalizeMentionAlias(_sessionMentionAlias||'');}
+function getCurrentMentionAliases(){return (_sessionMentionAliases||[]).map(normalizeMentionAlias).filter(Boolean);}
+function mentionNotiStorageKey(){var aliases=getCurrentMentionAliases();return 'hlv_sale_plan_mentions_'+(aliases.length?aliases.join('_'):'anonymous');}
+function eventMatchesCurrentAlias(ev){var aliases=getCurrentMentionAliases();if(!aliases.length)return false;var mentions=(ev&&ev.mentions)||[];return mentions.some(function(m){return aliases.indexOf(normalizeMentionAlias(m))!==-1;});}
+function loadCurrentMentionAlias(){return fetch('/api/sale_plan/current_alias',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{}})}).then(function(r){return r.json();}).then(function(j){var d=j.result||{};_sessionMentionAliases=d.status==='success'?(d.aliases||[]):[];_sessionMentionAlias=_sessionMentionAliases[0]||'';loadMentionNotiItems();}).catch(function(){_sessionMentionAlias='';_sessionMentionAliases=[];loadMentionNotiItems();});}
+function loadMentionNotiItems(){try{_mentionNotiItems=JSON.parse(localStorage.getItem(mentionNotiStorageKey())||'[]')||[];}catch(e){_mentionNotiItems=[];}renderMentionNotiPanel();}
+function saveMentionNotiItems(){try{localStorage.setItem(mentionNotiStorageKey(),JSON.stringify(_mentionNotiItems.slice(0,80)));}catch(e){}}
+function addMentionNotification(ev){if(!ev||!ev.id)return;var id=String(ev.id);var existing=_mentionNotiItems.find(function(x){return String(x.id)===id;});if(existing){existing.unread=true;existing.ts=Date.now();saveMentionNotiItems();renderMentionNotiPanel();return;}var item={id:id,so_id:ev.so_id,so_name:ev.so_name||'',author_name:ev.author_name||'',preview:ev.preview||ev.body||'',mentions:ev.mentions||[],unread:true,ts:Date.now()};_mentionNotiItems.unshift(item);_mentionNotiItems=_mentionNotiItems.slice(0,80);saveMentionNotiItems();renderMentionNotiPanel();}
+function renderMentionNotiPanel(){var btn=$('mention-noti-button'),cnt=$('mention-noti-count'),list=$('mention-noti-list');if(!btn||!cnt||!list)return;var unread=_mentionNotiItems.filter(function(x){return x.unread;}).length;cnt.textContent=String(unread||0);btn.classList.toggle('has-unread',unread>0);if(!_mentionNotiItems.length){list.innerHTML='<div class="mention-noti-empty">Chua co thong bao</div>';return;}list.innerHTML=_mentionNotiItems.map(function(item){return '<div class="mention-noti-item '+(item.unread?'unread':'')+'" data-id="'+esc(item.id)+'" data-so-id="'+esc(item.so_id)+'" data-so-name="'+esc(item.so_name)+'"><div class="mention-noti-item-title">@ '+esc(item.so_name||'Sale order')+'</div><div class="mention-noti-item-body"><strong>'+esc(item.author_name||'')+'</strong>: '+esc(item.preview||'')+'</div></div>';}).join('');}
+function markMentionNotificationRead(id){var item=_mentionNotiItems.find(function(x){return String(x.id)===String(id);});if(item)item.unread=false;saveMentionNotiItems();renderMentionNotiPanel();}
+function openOrderFromNotification(soId,soName){soId=parseInt(soId,10)||0;var local=S.orders.find(function(o){return o.id===soId;});if(local){openDrawer(soId);return;}showLoading();fetch('/api/sale_plan/data',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{search:soName||'',warehouse_id:'all',delivery_status:'all',stock_status:'all',packing_status:'all',date_from:'',date_to:'',po_date_from:'',po_date_to:'',done_date_from:'',done_date_to:'',po_status:'all',saler_code:'',htgh:'',delivery_type:'all',tag_ids:'',show_completed:true,limit:20,offset:0}})}).then(function(r){return r.json();}).then(function(j){hideLoading();var d=j.result&&j.result.data;var order=d&&d.orders&&(d.orders.find(function(o){return o.id===soId;})||d.orders[0]);if(order){var exists=S.orders.find(function(o){return o.id===order.id;});if(!exists)S.orders.unshift(order);openDrawer(order.id);}}).catch(function(){hideLoading();});}
+function handleMentionEvent(ev){if(!ev||!ev.id||_mentionSeen[ev.id]||!eventMatchesCurrentAlias(ev))return;_mentionSeen[ev.id]=true;_mentionLastId=Math.max(_mentionLastId,parseInt(ev.id,10)||0);addMentionNotification(ev);}
+function pollMentionEvents(){fetch('/api/sale_plan/mention_notifications',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{after_id:_mentionLastId,current_aliases:getCurrentMentionAliases()}})}).then(function(r){return r.json();}).then(function(j){var d=j.result||{};if(d.status!=='success')return;(d.events||[]).forEach(handleMentionEvent);}).catch(function(){});}
+function startSalePlanMentionListener(){loadCurrentMentionAlias().then(function(){if(!getCurrentMentionAliases().length)return;var busLast=0;function loop(){fetch('/longpolling/poll',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({channels:['sale_plan_public_channel'],last:busLast})}).then(function(r){return r.ok?r.json():null;}).then(function(data){var notifications=(data&&data.result&&data.result.notifications)||data&&data.notifications||[];notifications.forEach(function(n){busLast=Math.max(busLast,n.id||busLast);var payload=n.payload||n.message||n[2]||{};var typ=n.type||n[1];if(typ==='sale_plan_mention'||payload.type==='sale_plan_mention')handleMentionEvent(payload);});setTimeout(loop,250);}).catch(function(){setTimeout(loop,15000);});}loop();pollMentionEvents();setInterval(pollMentionEvents,15000);});}
 var TAG_BG=['#adb5bd','#dc3545','#fd7e14','#ffc107','#20c997','#6610f2','#d63384','#0d6efd','#6f42c1','#e91e63','#198754','#0dcaf0'];
 var TAG_FG=[0,0,0,1,1,0,0,0,0,0,0,1]; // 1=dark text
 function tagBadge(tag){var c=tag[2]||0;var bg=TAG_BG[c]||TAG_BG[0];var fg=TAG_FG[c]?'#000':'#fff';return'<span class="badge me-1" style="background-color:'+bg+';color:'+fg+'">'+esc(tag[1])+'</span>';}
@@ -1389,6 +1517,15 @@ function updFilters(){
 }
 
 document.addEventListener('click',function(e){
+  var notiBtn=e.target.closest('#mention-noti-button');
+  if(notiBtn){e.preventDefault();e.stopPropagation();var panel=$('mention-noti-panel');if(panel)panel.classList.toggle('open');return;}
+  var notiReadAll=e.target.closest('#mention-noti-read-all');
+  if(notiReadAll){e.preventDefault();e.stopPropagation();_mentionNotiItems.forEach(function(x){x.unread=false;});saveMentionNotiItems();renderMentionNotiPanel();return;}
+  var notiClear=e.target.closest('#mention-noti-clear');
+  if(notiClear){e.preventDefault();e.stopPropagation();_mentionNotiItems=[];saveMentionNotiItems();renderMentionNotiPanel();return;}
+  var notiItem=e.target.closest('.mention-noti-item');
+  if(notiItem){e.preventDefault();e.stopPropagation();markMentionNotificationRead(notiItem.dataset.id);var notiPanel=$('mention-noti-panel');if(notiPanel)notiPanel.classList.remove('open');openOrderFromNotification(notiItem.dataset.soId,notiItem.dataset.soName);return;}
+  if(!e.target.closest('#mention-noti-panel')){var np=$('mention-noti-panel');if(np)np.classList.remove('open');}
   var chipX=e.target.closest('.chip-x');
   if(chipX){
     e.preventDefault();e.stopPropagation();
@@ -1707,6 +1844,7 @@ if(_cachedData){
   updKPI();render();updLoadMore();updFilters();
   hideLoading();
 }
+startSalePlanMentionListener();
 load(false);
 });
 })();
@@ -2004,6 +2142,37 @@ class SalePlanPublicController(http.Controller):
         except Exception as e:
             _logger.exception('send_message error')
             return {'status': 'error', 'message': str(e)}
+
+    @http.route('/api/sale_plan/current_alias', type='json', auth='public', methods=['POST'])
+    def api_sale_plan_current_alias(self, **kwargs):
+        aliases = _get_user_sale_plan_aliases(request.env.user)
+        return {'status': 'success', 'alias': aliases[0] if aliases else '', 'aliases': aliases}
+
+    @http.route('/api/sale_plan/mention_aliases', type='json', auth='public', methods=['POST'])
+    def api_sale_plan_mention_aliases(self, **kwargs):
+        return {'status': 'success', 'aliases': _get_sale_plan_alias_rows(request.env)}
+
+    @http.route('/api/sale_plan/mention_notifications', type='json', auth='public', methods=['POST'])
+    def api_sale_plan_mention_notifications(self, after_id=0, current_alias='', current_aliases=None, **kwargs):
+        aliases = []
+        if isinstance(current_aliases, (list, tuple)):
+            aliases = [_normalize_mention_alias(alias) for alias in current_aliases if _normalize_mention_alias(alias)]
+        if not aliases:
+            alias = _normalize_mention_alias(current_alias)
+            aliases = [alias] if alias else _get_user_sale_plan_aliases(request.env.user)
+        aliases = list(dict.fromkeys([alias for alias in aliases if alias]))
+        if not aliases:
+            return {'status': 'success', 'events': []}
+        try:
+            after_id = int(after_id or 0)
+        except Exception:
+            after_id = 0
+        alias_set = set(aliases)
+        events = [
+            ev for ev in _PUBLIC_MENTION_EVENTS
+            if int(ev.get('id') or 0) > after_id and alias_set.intersection(ev.get('mentions', []))
+        ]
+        return {'status': 'success', 'events': events[-80:]}
 
     @http.route('/api/sale_plan/attachment/<int:att_id>', type='http', auth='public', methods=['GET'], csrf=False)
     def api_sale_plan_attachment(self, att_id, **kwargs):

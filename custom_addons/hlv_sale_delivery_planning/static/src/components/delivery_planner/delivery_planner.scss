@@ -388,3 +388,43 @@ body.o_web_client {
     width: 100%;
     overflow: hidden;
 }
+
+.hlv-mention-suggest {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: calc(100% + 4px);
+    z-index: 2200;
+    max-height: 220px;
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid #c7d2fe;
+    border-radius: 6px;
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.16);
+}
+.hlv-mention-suggest-item {
+    width: 100%;
+    border: 0;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 10px;
+    font-size: 0.8rem;
+    text-align: left;
+    cursor: pointer;
+}
+.hlv-mention-suggest-item:hover,
+.hlv-mention-suggest-item.active {
+    background: #eef2ff;
+}
+.hlv-mention-suggest-item strong,
+.sale-plan-mention {
+    color: #4f46e5;
+    font-weight: 800;
+}
+.hlv-mention-suggest-item span {
+    color: #64748b;
+    font-size: 0.72rem;
+}
