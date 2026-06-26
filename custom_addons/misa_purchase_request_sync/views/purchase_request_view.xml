@@ -20,6 +20,9 @@
                     groups="purchase_request.group_purchase_request_manager"
                 />
             </xpath>
+            <xpath expr="//button[@name='button_done']" position="attributes">
+                <attribute name="invisible">state not in ('approved', 'in_progress')</attribute>
+            </xpath>
             <xpath expr="//field[@name='requested_by']" position="after">
                 <field name="sale_order_id" readonly="state in ('done', 'rejected')"/>
                 <field name="delivery_address" readonly="state in ('done', 'rejected')"/>
