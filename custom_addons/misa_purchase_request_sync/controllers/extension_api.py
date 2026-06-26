@@ -295,6 +295,9 @@ class MisaExtensionController(http.Controller):
             )
 
         payload = self._parse_json_body(payload)
+        import logging
+        _logger = logging.getLogger(__name__)
+        _logger.info("MISA PR Create Payload: %s", payload)
 
         # ---- Auth ----
         token = self._extract_token(payload)
