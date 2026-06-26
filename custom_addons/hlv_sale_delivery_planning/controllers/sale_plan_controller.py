@@ -79,7 +79,6 @@ def _normalize_preview_text(text, limit=140):
   return plain[:limit] + ('...' if len(plain) > limit else '')
 
 
-_PUBLIC_MENTION_EVENTS = []
 _PUBLIC_MENTION_SEQ = 0
 _MENTION_RE = re.compile(r'@([A-Za-z0-9_.-]+)')
 
@@ -153,8 +152,6 @@ def _push_public_mention_event(env, so, body, author_name=''):
     'mentions': matched,
     'ts': int(time.time()),
   }
-  _PUBLIC_MENTION_EVENTS.append(payload)
-  del _PUBLIC_MENTION_EVENTS[:-200]
   try:
     env['bus.bus'].sudo()._sendone('sale_plan_public_channel', 'sale_plan_mention', payload)
   except Exception:
@@ -534,6 +531,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
 </style>
 </head><body>
 <div id="loading" class="loading-overlay d-none"><div class="spinner-border text-primary"></div></div>
+<iframe id="sale-plan-bus-frame" src="/sale_plan/bus_frame" style="display:none;width:0;height:0;border:0" aria-hidden="true"></iframe>
 <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-3" style="border-radius:0!important">
 <div class="container-fluid">
   <a class="navbar-brand fw-bold" href="/sale_plan">&#128666; Tình trạng đơn hàng</a>
@@ -781,12 +779,12 @@ function renderMentionNotiPanel(){var btn=$('mention-noti-button'),cnt=$('mentio
 function markMentionNotificationRead(id){var item=_mentionNotiItems.find(function(x){return String(x.id)===String(id);});if(item)item.unread=false;saveMentionNotiItems();renderMentionNotiPanel();}
 function openOrderFromNotification(soId,soName){soId=parseInt(soId,10)||0;var local=S.orders.find(function(o){return o.id===soId;});if(local){openDrawer(soId);return;}showLoading();fetch('/api/sale_plan/data',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{search:soName||'',warehouse_id:'all',delivery_status:'all',stock_status:'all',packing_status:'all',date_from:'',date_to:'',po_date_from:'',po_date_to:'',done_date_from:'',done_date_to:'',po_status:'all',saler_code:'',htgh:'',delivery_type:'all',tag_ids:'',show_completed:true,limit:20,offset:0}})}).then(function(r){return r.json();}).then(function(j){hideLoading();var d=j.result&&j.result.data;var order=d&&d.orders&&(d.orders.find(function(o){return o.id===soId;})||d.orders[0]);if(order){var exists=S.orders.find(function(o){return o.id===order.id;});if(!exists)S.orders.unshift(order);openDrawer(order.id);}}).catch(function(){hideLoading();});}
 function handleMentionEvent(ev){if(!ev||!ev.id||_mentionSeen[ev.id]||!eventMatchesCurrentAlias(ev))return;_mentionSeen[ev.id]=true;_mentionLastId=Math.max(_mentionLastId,parseInt(ev.id,10)||0);addMentionNotification(ev);}
-function pollMentionEvents(){fetch('/api/sale_plan/mention_notifications',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{after_id:_mentionLastId,current_aliases:getCurrentMentionAliases()}})}).then(function(r){return r.json();}).then(function(j){var d=j.result||{};if(d.status!=='success')return;(d.events||[]).forEach(handleMentionEvent);}).catch(function(){});}
 function loadPublicMentionAliases(){return fetch('/api/sale_plan/mention_aliases',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{}})}).then(function(r){return r.json();}).then(function(j){var d=j.result||{};_mentionAliases=d.status==='success'?(d.aliases||[]):[];}).catch(function(){_mentionAliases=[];});}
 function currentPublicMentionQuery(input){var pos=input.selectionStart||0;var before=input.value.slice(0,pos);var m=/(^|\s)@([A-Za-z0-9_.-]*)$/.exec(before);if(!m)return null;return {start:pos-m[2].length-1,term:normalizeMentionAlias(m[2]),pos:pos};}
 function renderPublicMentionSuggest(input){var box=$('dr-mention-suggest');if(!box)return;var q=currentPublicMentionQuery(input);if(!q){box.classList.remove('open');box.innerHTML='';return;}var items=_mentionAliases.filter(function(a){return !q.term||normalizeMentionAlias(a.alias).indexOf(q.term)===0||normalizeMentionAlias(a.user_name).indexOf(q.term)>=0;}).slice(0,8);if(!items.length){box.classList.remove('open');box.innerHTML='';return;}_mentionActiveIndex=Math.min(Math.max(_mentionActiveIndex,0),items.length-1);box.innerHTML=items.map(function(a,i){return '<div class="public-mention-suggest-item '+(i===_mentionActiveIndex?'active':'')+'" data-alias="'+esc(a.alias)+'"><strong>@'+esc(a.alias)+'</strong><small>'+esc(a.user_name||'')+'</small></div>';}).join('');box.classList.add('open');}
 function applyPublicMentionAlias(input,alias){var q=currentPublicMentionQuery(input);if(!q)return;input.value=input.value.slice(0,q.start)+'@'+alias+' '+input.value.slice(q.pos);var pos=q.start+alias.length+2;input.focus();input.setSelectionRange(pos,pos);var box=$('dr-mention-suggest');if(box)box.classList.remove('open');}
 function startSalePlanMentionListener(){loadPublicMentionAliases();loadCurrentMentionAlias();}
+window.HLVSalePlanMentionBus={onEvent:function(payload){handleMentionEvent(payload);},onStatus:function(status){}};
 var TAG_BG=['#adb5bd','#dc3545','#fd7e14','#ffc107','#20c997','#6610f2','#d63384','#0d6efd','#6f42c1','#e91e63','#198754','#0dcaf0'];
 var TAG_FG=[0,0,0,1,1,0,0,0,0,0,0,1]; // 1=dark text
 function tagBadge(tag){var c=tag[2]||0;var bg=TAG_BG[c]||TAG_BG[0];var fg=TAG_FG[c]?'#000':'#fff';return'<span class="badge me-1" style="background-color:'+bg+';color:'+fg+'">'+esc(tag[1])+'</span>';}
@@ -1539,7 +1537,7 @@ function updFilters(){
 
 document.addEventListener('click',function(e){
   var notiBtn=e.target.closest('#mention-noti-button');
-  if(notiBtn){e.preventDefault();e.stopPropagation();if(getCurrentMentionAliases().length)pollMentionEvents();var panel=$('mention-noti-panel');if(panel)panel.classList.toggle('open');return;}
+  if(notiBtn){e.preventDefault();e.stopPropagation();var panel=$('mention-noti-panel');if(panel)panel.classList.toggle('open');return;}
   var notiAlias=e.target.closest('.mention-noti-alias-tab');
   if(notiAlias){e.preventDefault();e.stopPropagation();_mentionActiveAlias=normalizeMentionAlias(notiAlias.dataset.alias||'all')||'all';renderMentionNotiPanel();return;}
   var notiReadAll=e.target.closest('#mention-noti-read-all');
@@ -1880,6 +1878,10 @@ load(false);
 
 class SalePlanPublicController(http.Controller):
 
+    @http.route('/sale_plan/bus_frame', type='http', auth='public', methods=['GET'], csrf=False)
+    def sale_plan_bus_frame(self, **kwargs):
+        return request.render('hlv_sale_delivery_planning.sale_plan_bus_frame', {})
+
     @http.route('/sale_plan', type='http', auth='public', methods=['GET', 'POST'])
     def sale_plan_page(self, **kwargs):
         ip = request.httprequest.remote_addr
@@ -2185,27 +2187,6 @@ class SalePlanPublicController(http.Controller):
     def api_sale_plan_mention_aliases(self, **kwargs):
         return {'status': 'success', 'aliases': _get_sale_plan_alias_rows(request.env)}
 
-    @http.route('/api/sale_plan/mention_notifications', type='json', auth='public', methods=['POST'])
-    def api_sale_plan_mention_notifications(self, after_id=0, current_alias='', current_aliases=None, **kwargs):
-        aliases = []
-        if isinstance(current_aliases, (list, tuple)):
-            aliases = [_normalize_mention_alias(alias) for alias in current_aliases if _normalize_mention_alias(alias)]
-        if not aliases:
-            alias = _normalize_mention_alias(current_alias)
-            aliases = [alias] if alias else _get_user_sale_plan_aliases(request.env.user)
-        aliases = list(dict.fromkeys([alias for alias in aliases if alias]))
-        if not aliases:
-            return {'status': 'success', 'events': []}
-        try:
-            after_id = int(after_id or 0)
-        except Exception:
-            after_id = 0
-        alias_set = set(aliases)
-        events = [
-            ev for ev in _PUBLIC_MENTION_EVENTS
-            if int(ev.get('id') or 0) > after_id and alias_set.intersection(ev.get('mentions', []))
-        ]
-        return {'status': 'success', 'events': events[-80:]}
 
     @http.route('/api/sale_plan/attachment/<int:att_id>', type='http', auth='public', methods=['GET'], csrf=False)
     def api_sale_plan_attachment(self, att_id, **kwargs):
