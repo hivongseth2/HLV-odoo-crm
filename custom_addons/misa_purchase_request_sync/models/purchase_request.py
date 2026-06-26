@@ -26,6 +26,26 @@ class PurchaseRequest(models.Model):
     # ------------------------------------------------------------
     sale_order_id = fields.Many2one('sale.order', string="Đơn bán hàng liên quan")
     delivery_address = fields.Char(string="Địa điểm giao")
+    picking_type_id = fields.Many2one(
+        default=lambda self: self._default_picking_type(),
+    )
+
+    @api.model
+    def _default_picking_type(self):
+        type_obj = self.env["stock.picking.type"]
+        company_id = self.env.context.get("company_id") or self.env.company.id
+        
+        # Cố gắng tìm Kho Bến Cam trước
+        ben_cam = type_obj.search([
+            ("code", "=", "incoming"),
+            ("warehouse_id.company_id", "=", company_id),
+            ("warehouse_id.name", "ilike", "Bến Cam")
+        ], limit=1)
+        
+        if ben_cam:
+            return ben_cam
+            
+        return super(PurchaseRequest, self)._default_picking_type()
 
     # ------------------------------------------------------------
     # NÚT BẤM TRÊN FORM (STUB - TODO)
