@@ -20,10 +20,34 @@ _SKIP_MSG_RE = re.compile(
     r'|Sales Order created'
     r'|Quotation created'
     r'|has been created from'
-    r'|Đơn hàng được tạo',
+    r'|Đơn hàng được tạo'
+    r'|Đơn hàng tách kiện'
+    r'|Assign người đóng gói'
+    r'|Đổi người đóng gói'
+    r'|In phiếu lấy hàng'
+    r'|Nhu cầu ban đầu đã được cập nhật'
+    r'|Nhu cầu ban đầu đã được'
+    r'|The initial demand has'
+    r'|The ordered quantity has been updated'
+    r'|extra line with'
+    r'|Đồng bộ MISA thành công'
+    r'|Đã đồng bộ SO lines'
+    r'|Odoo sẽ tự tạo picking'
+    r'|🖨️'
+    r'|👤'
+    r'|🔄'
+    r'|Lá»‡nh chuyá»ƒn hÃ ng Ä‘Æ°á»£c táº¡o'
+    r'|lá»‡nh chuyá»ƒn hÃ ng Ä‘Ã£ Ä‘Æ°á»£c táº¡o ra tá»«'
+    r'|Äá»“ng bá»™ \(xoÃ¡ .{0,5} táº¡o láº¡i\) thÃ nh cÃ´ng'
+    r'|ÄÆ¡n hÃ ng Ä‘Æ°á»£c táº¡o'
+    r'|ÄÆ¡n hÃ ng tÃ¡ch kiá»‡n'
+    r'|Nhu cáº§u ban Ä‘áº§u Ä‘Ã£ Ä‘Æ°á»£c'
+    r'|Äá»“ng bá»™ MISA thÃ nh cÃ´ng'
+    r'|ðŸ–¨ï¸'
+    r'|ðŸ‘¤'
+    r'|ðŸ”„',
     re.IGNORECASE
 )
-
 _logger = logging.getLogger(__name__)
 
 SESSION_KEY_OK = "inv_pw_ok"
