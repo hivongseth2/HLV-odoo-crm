@@ -18,14 +18,14 @@ _SKIP_MSG_RE = re.compile(
     r'|Sales Order created'
     r'|Quotation created'
     r'|has been created from'
-    r'|Đơn hàng được tạo',
-    r'|🖨️',
-    r'|👤',
-    r'|Nhu cầu ban đầu đã được',
-    r'|Đồng bộ MISA thành công',
-    r'|The initial demand has',
-    r'|The ordered quantity has been updated',
-    r'|extra line with',
+    r'|Đơn hàng được tạo'
+    r'|🖨️'
+    r'|👤'
+    r'|Nhu cầu ban đầu đã được'
+    r'|Đồng bộ MISA thành công'
+    r'|The initial demand has'
+    r'|The ordered quantity has been updated'
+    r'|extra line with'
     r'|Đơn hàng tách kiện',
     re.IGNORECASE
 )
