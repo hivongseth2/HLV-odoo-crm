@@ -202,11 +202,14 @@ export class DeliveryPlannerDashboard extends Component {
             drawerMentionAliases: [],
             drawerMentionSuggestions: [],
             drawerMentionActiveIndex: 0,
+            busListening: false,
+            busServiceAvailable: false,
         });
 
         this.notification = useService("notification");
         try {
             this.busService = useService("bus_service");
+            this.state.busServiceAvailable = true;
         } catch (e) {
             console.warn("bus_service not available");
         }
@@ -232,6 +235,7 @@ export class DeliveryPlannerDashboard extends Component {
                 this.busService.subscribe("delivery_planner_data_changed", this._onBusDataChanged);
                 this.busService.subscribe("new_portal_message", this._onBusNewPortalMessage);
                 this.busService.subscribe("delivery_planner_pref_changed", this._onBusPrefChanged);
+                this.state.busListening = true;
             }
 
             // Load per-user preferences (archived SOs + default filters) BEFORE
@@ -281,6 +285,7 @@ export class DeliveryPlannerDashboard extends Component {
                     this.busService.unsubscribe("delivery_planner_pref_changed", this._onBusPrefChanged);
                 }
                 this.busService.deleteChannel("delivery_planner_channel");
+                this.state.busListening = false;
             }
             if (this.messagePollingInterval) {
                 clearInterval(this.messagePollingInterval);
