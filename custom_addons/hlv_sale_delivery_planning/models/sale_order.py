@@ -86,7 +86,7 @@ class SaleOrder(models.Model):
 
     def write(self, vals):
         res = super().write(vals)
-        if vals and _NOTIFY_FIELDS.intersection(vals.keys()):
+        if vals and _NOTIFY_FIELDS.intersection(vals.keys()) and not self.env.context.get('skip_delivery_planner_data_bus'):
             self._notify_delivery_planner_changed()
         return res
 

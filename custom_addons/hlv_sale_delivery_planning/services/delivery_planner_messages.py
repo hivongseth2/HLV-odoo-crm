@@ -1,3 +1,4 @@
+import logging
 import os
 
 from odoo import models, api
@@ -34,7 +35,7 @@ _ALLOWED_CHAT_ATTACHMENT_EXTS = {'.doc', '.docx', '.pdf', '.xls', '.xlsx', '.csv
 _MAX_CHAT_ATTACHMENT_BYTES = 20 * 1024 * 1024
 
 
-_MENTION_RE = re.compile(r'@([A-Za-z0-9_.-]+)')
+_MENTION_RE = re.compile(r'@([^\s@,;:!?()\[\]{}<>]+)')
 
 
 def _normalize_mention_alias(value):
@@ -43,32 +44,61 @@ def _normalize_mention_alias(value):
 
 def _split_mention_aliases(value):
     aliases = []
-    for part in re.split(r'[,;\s]+', value or ''):
+    for part in (value or '').split(','):
         alias = _normalize_mention_alias(part)
         if alias and alias not in aliases:
             aliases.append(alias)
     return aliases
 
 
-def _extract_mention_aliases(text):
-    aliases = []
-    for match in _MENTION_RE.finditer(text or ''):
-        alias = _normalize_mention_alias(match.group(1))
-        if alias and alias not in aliases:
-            aliases.append(alias)
-    return aliases
-
-
-def _format_message_body_with_mentions(text):
+def _extract_configured_mentions(text, valid_aliases):
     text = text or ''
+    valid_aliases = sorted({_normalize_mention_alias(a) for a in valid_aliases if _normalize_mention_alias(a)}, key=len, reverse=True)
+    found = []
+    used_spans = []
+    lowered = text.lower()
+    for alias in valid_aliases:
+      pattern = re.compile(r'(^|\s)@' + re.escape(alias) + r'(?=$|[\s,;:!?()\[\]{}<>])', re.IGNORECASE)
+      for match in pattern.finditer(lowered):
+        start = match.start() + len(match.group(1))
+        end = match.end()
+        if any(not (end <= a or start >= b) for a, b in used_spans):
+          continue
+        used_spans.append((start, end))
+        if alias not in found:
+          found.append(alias)
+    return found
+
+
+
+def _format_message_body_with_mentions(text, valid_aliases=None):
+    text = text or ''
+    ranges = []
+    if valid_aliases:
+      aliases = sorted({_normalize_mention_alias(a) for a in valid_aliases if _normalize_mention_alias(a)}, key=len, reverse=True)
+      lowered = text.lower()
+      for alias in aliases:
+        pattern = re.compile(r'(^|\s)@' + re.escape(alias) + r'(?=$|[\s,;:!?()\[\]{}<>])', re.IGNORECASE)
+        for match in pattern.finditer(lowered):
+          start = match.start() + len(match.group(1))
+          end = match.end()
+          if any(not (end <= a or start >= b) for a, b in ranges):
+            continue
+          ranges.append((start, end))
+    else:
+      ranges = [(m.start(), m.end()) for m in _MENTION_RE.finditer(text)]
+    ranges.sort()
     parts = []
     last = 0
-    for match in _MENTION_RE.finditer(text):
-        parts.append(Markup.escape(text[last:match.start()]))
-        parts.append(Markup('<strong class="sale-plan-mention">@%s</strong>') % Markup.escape(match.group(1)))
-        last = match.end()
+    for start, end in ranges:
+      parts.append(Markup.escape(text[last:start]))
+      parts.append(Markup('<strong class="sale-plan-mention">%s</strong>') % Markup.escape(text[start:end]))
+      last = end
     parts.append(Markup.escape(text[last:]))
     return Markup('').join(parts)
+
+
+_logger = logging.getLogger(__name__)
 
 
 class DeliveryPlannerServiceMessages(models.AbstractModel):
@@ -181,7 +211,8 @@ class DeliveryPlannerServiceMessages(models.AbstractModel):
         if not body and not attachment_ids:
             return False
 
-        safe_body = Markup('<p>%s</p>') % _format_message_body_with_mentions(body) if body else Markup('<p><i>Tệp đính kèm</i></p>')
+        mention_aliases = [row['alias'] for row in self.get_sale_plan_mention_aliases()]
+        safe_body = Markup('<p>%s</p>') % _format_message_body_with_mentions(body, mention_aliases) if body else Markup('<p><i>Tệp đính kèm</i></p>')
         so.message_post(
             body=safe_body,
             message_type='comment',
@@ -193,7 +224,7 @@ class DeliveryPlannerServiceMessages(models.AbstractModel):
                 from ..controllers.sale_plan_controller import _push_public_mention_event
                 _push_public_mention_event(self.env, so, body, self.env.user.name or '')
             except Exception:
-                pass
+                _logger.exception('delivery planner public mention event error')
         return True
 
     @api.model

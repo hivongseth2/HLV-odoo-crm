@@ -424,6 +424,15 @@ body.o_web_client {
     color: #4f46e5;
     font-weight: 800;
 }
+
+.hlv-drawer-message-body .sale-plan-mention {
+    display: inline-block;
+    padding: 0 4px;
+    border-radius: 4px;
+    background: #eef2ff;
+    color: #3730a3;
+    font-weight: 800;
+}
 .hlv-mention-suggest-item span {
     color: #64748b;
     font-size: 0.72rem;
