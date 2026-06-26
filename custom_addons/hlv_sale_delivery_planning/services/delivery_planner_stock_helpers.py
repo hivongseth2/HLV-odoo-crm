@@ -221,7 +221,6 @@ class DeliveryPlannerServiceStockHelpers(models.AbstractModel):
                                 loc_to_owh[loc.id] = wh.id
 
                 if loc_to_owh:
-                    other_on_hand = {}
                     # ONE quant query
                     q_rows = self.env['stock.quant'].sudo().read_group(
                         domain=[
@@ -240,31 +239,11 @@ class DeliveryPlannerServiceStockHelpers(models.AbstractModel):
                         loc_id = loc_raw[0] if isinstance(loc_raw, (list, tuple)) else loc_raw
                         wh_id = loc_to_owh.get(loc_id)
                         if wh_id:
-                            qty = row.get('quantity') or 0.0
                             free = max(
-                                qty - (row.get('reserved_quantity') or 0.0), 0.0
+                                (row.get('quantity') or 0.0) - (row.get('reserved_quantity') or 0.0), 0.0
                             )
                             key = (pid, wh_id)
-                            other_on_hand[key] = other_on_hand.get(key, 0.0) + max(qty, 0.0)
                             other_avail[key] = other_avail.get(key, 0.0) + free
-
-                    int_moves = self.env['stock.move'].sudo().search_read([
-                        ('product_id', 'in', needed_prod_ids),
-                        ('state', 'in', ('assigned', 'partially_available')),
-                        ('picking_id.picking_type_code', '=', 'internal'),
-                        ('picking_id.state', 'not in', ('done', 'cancel')),
-                        ('sale_line_id', '=', False),
-                        ('location_id', 'in', list(loc_to_owh.keys())),
-                    ], ['product_id', 'location_id', 'quantity'])
-                    for mv in int_moves:
-                        pid = mv['product_id'][0]
-                        wh_id = loc_to_owh.get(mv['location_id'][0])
-                        if wh_id:
-                            key = (pid, wh_id)
-                            other_avail[key] = min(
-                                other_avail.get(key, 0.0) + (mv.get('quantity') or 0.0),
-                                other_on_hand.get(key, 0.0),
-                            )
 
 
         # Bước 4: Build kết quả per SO
