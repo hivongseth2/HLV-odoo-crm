@@ -78,6 +78,49 @@ def _normalize_preview_text(text, limit=140):
     return ''
   return plain[:limit] + ('...' if len(plain) > limit else '')
 
+_MENTION_RE = re.compile(r'@\s*([A-Za-z0-9_.-]+)', re.UNICODE)
+_PUBLIC_MENTION_EVENTS = []
+_PUBLIC_MENTION_SEQ = 0
+
+
+def _extract_mention_tokens(text):
+  tokens = []
+  seen = set()
+  for token in _MENTION_RE.findall(text or ''):
+    clean = (token or '').strip().lower()
+    if clean and clean not in seen:
+      seen.add(clean)
+      tokens.append(clean)
+  return tokens
+
+
+def _configured_mention_users(env, tokens):
+  if not tokens:
+    return env['res.users'].sudo().browse()
+  Users = env['res.users'].sudo()
+  if 'x_sale_plan_mention_names' not in Users._fields:
+    return Users.browse()
+  token_set = set(tokens)
+  users = Users.search([('share', '=', False), ('active', '=', True), ('x_sale_plan_mention_names', '!=', False)])
+  matched = Users.browse()
+  for user in users:
+    raw_names = re.split(r'[,;\s]+', user.x_sale_plan_mention_names or '')
+    aliases = {(name or '').strip().lower().lstrip('@') for name in raw_names if (name or '').strip()}
+    if aliases & token_set:
+      matched |= user
+  return matched
+
+
+def _push_public_mention_event(payload):
+  global _PUBLIC_MENTION_SEQ
+  _PUBLIC_MENTION_SEQ += 1
+  event = dict(payload or {})
+  event['id'] = _PUBLIC_MENTION_SEQ
+  event['ts'] = time.time()
+  _PUBLIC_MENTION_EVENTS.append(event)
+  del _PUBLIC_MENTION_EVENTS[:-100]
+  return event
+
 
 _H = [
     ("Content-Type", "text/html; charset=utf-8"),
@@ -420,9 +463,20 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
 .btn-light:hover{background:rgba(241,245,249,.95)!important;border-color:#cbd5e1!important}
 /* Load-more pill */
 #btn-load-more{border-radius:20px!important;padding:5px 18px;font-size:.78rem}
+
+/* Mention notification stack */
+#mention-toast-stack{position:fixed;right:18px;top:72px;z-index:3100;width:min(360px,calc(100vw - 32px));display:flex;flex-direction:column;gap:10px;pointer-events:none}
+.mention-toast{pointer-events:auto;background:#fff;border:1px solid #e2e8f0;border-left:4px solid #4f46e5;border-radius:6px;box-shadow:0 10px 30px rgba(15,23,42,.16);padding:12px 13px;animation:mentionToastIn .18s ease-out;color:#0f172a}
+.mention-toast-title{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:.8rem;font-weight:700;margin-bottom:4px}
+.mention-toast-body{font-size:.78rem;color:#475569;line-height:1.45;word-break:break-word}
+.mention-toast-tags{font-size:.68rem;color:#4f46e5;font-weight:700;margin-top:5px}
+.mention-toast button{border:0;background:transparent;color:#94a3b8;padding:0;line-height:1;font-size:1rem}
+.mention-toast button:hover{color:#334155}
+@keyframes mentionToastIn{from{opacity:0;transform:translateX(16px)}to{opacity:1;transform:translateX(0)}}
 </style>
 </head><body>
 <div id="loading" class="loading-overlay d-none"><div class="spinner-border text-primary"></div></div>
+<div id="mention-toast-stack" aria-live="polite"></div>
 <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-3" style="border-radius:0!important">
 <div class="container-fluid">
   <a class="navbar-brand fw-bold" href="/sale_plan">&#128666; Tình trạng đơn hàng</a>
@@ -639,6 +693,14 @@ function gv(id){var e=$(id);return e?e.value:'';}
 function showLoading(){var l=$('loading');if(l)l.classList.remove('d-none');}
 function hideLoading(){var l=$('loading');if(l)l.classList.add('d-none');}
 function getTagIds(){var e=$('f-tag');if(!e)return'';return Array.from(e.selectedOptions).map(function(o){return o.value;}).filter(Boolean).join(',');}
+
+var _mentionLastId=0;
+var _mentionSeen={};
+function handleMentionEvent(ev){if(!ev||!ev.id||_mentionSeen[ev.id])return;_mentionSeen[ev.id]=true;_mentionLastId=Math.max(_mentionLastId,parseInt(ev.id,10)||0);showMentionToast(ev);}
+function showMentionToast(ev){var stack=$('mention-toast-stack');if(!stack)return;var node=document.createElement('div');node.className='mention-toast';node.innerHTML='<div class="mention-toast-title"><span><i class="fa fa-at me-1"></i>'+esc(ev.so_name||'Sale order')+'</span><button type="button" aria-label="Close">&times;</button></div>'+'<div class="mention-toast-body"><strong>'+esc(ev.author_name||'Nguoi gui')+'</strong>: '+esc(ev.preview||ev.body||'Tin nhan moi')+'</div>'+(ev.mentions&&ev.mentions.length?'<div class="mention-toast-tags">@'+ev.mentions.map(esc).join(' @')+'</div>':'');node.addEventListener('click',function(e){if(e.target.closest('button')){node.remove();return;}if(ev.so_id){openDrawer(parseInt(ev.so_id,10));}});stack.prepend(node);while(stack.children.length>5){stack.lastElementChild.remove();}setTimeout(function(){if(node.parentNode){node.style.opacity='0';node.style.transform='translateX(16px)';setTimeout(function(){node.remove();},250);}},9000);}
+function pollMentionEvents(){fetch('/api/sale_plan/mention_notifications',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{after_id:_mentionLastId}})}).then(function(r){return r.json();}).then(function(j){var d=j.result||{};if(d.status!=='success')return;(d.events||[]).forEach(handleMentionEvent);}).catch(function(){});}
+function startSalePlanBusListener(){var busLast=0;function loop(){fetch('/longpolling/poll',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({channels:['sale_plan_public_channel'],last:busLast})}).then(function(r){return r.ok?r.json():null;}).then(function(data){var notifications=(data&&data.result&&data.result.notifications)||data&&data.notifications||[];notifications.forEach(function(n){busLast=Math.max(busLast,n.id||busLast);var payload=n.payload||n.message||n[2]||{};var typ=n.type||n[1];if(typ==='sale_plan_mention'||payload.type==='sale_plan_mention')handleMentionEvent(payload);});setTimeout(loop,250);}).catch(function(){setTimeout(loop,15000);});}loop();setInterval(pollMentionEvents,15000);}
+
 var TAG_BG=['#adb5bd','#dc3545','#fd7e14','#ffc107','#20c997','#6610f2','#d63384','#0d6efd','#6f42c1','#e91e63','#198754','#0dcaf0'];
 var TAG_FG=[0,0,0,1,1,0,0,0,0,0,0,1]; // 1=dark text
 function tagBadge(tag){var c=tag[2]||0;var bg=TAG_BG[c]||TAG_BG[0];var fg=TAG_FG[c]?'#000':'#fff';return'<span class="badge me-1" style="background-color:'+bg+';color:'+fg+'">'+esc(tag[1])+'</span>';}
@@ -1596,6 +1658,8 @@ function startPolling(){
   _pollTimer=setInterval(pollChanges,_pollInterval);
 }
 
+startSalePlanBusListener();
+
 // Pause polling when tab is hidden to save resources
 document.addEventListener('visibilitychange',function(){
   if(document.hidden){_pollPaused=true;}
@@ -1899,6 +1963,8 @@ class SalePlanPublicController(http.Controller):
             if not so.exists():
                 return {'status': 'error', 'message': 'Order not found'}
             author_name = (author_name or '').strip()
+            mention_tokens = _extract_mention_tokens(body)
+            mentioned_users = _configured_mention_users(request.env, mention_tokens)
 
             attachment_ids = []
             skipped_attachments = []
@@ -1964,6 +2030,7 @@ class SalePlanPublicController(http.Controller):
               author_name=author_name or 'Khách hàng',
               preview=preview,
               message_type='customer',
+              target_user_ids=mentioned_users.ids if mentioned_users else None,
             )
             # Kích hoạt trạng thái nháy đỏ Notification FB 
             if hasattr(so, 'x_plan_unread_message'):
@@ -1976,18 +2043,25 @@ class SalePlanPublicController(http.Controller):
                 'so_name': so.name,
                 'author_name': author_name or 'Khách hàng',
                 'body': body,
+                'mentions': mention_tokens,
               }
               bus = request.env['bus.bus'].sudo()
 
               # Primary: channel notification for dashboard subscribers.
               # Odoo on this server expects _sendone(channel, type, message).
               bus._sendone('delivery_planner_channel', 'new_portal_message', payload)
+              if mention_tokens and mentioned_users:
+                public_payload = dict(payload)
+                public_payload['preview'] = preview
+                public_event = _push_public_mention_event(public_payload)
+                bus._sendone('sale_plan_public_channel', 'sale_plan_mention', public_event)
 
-              # Fallback: push directly to all internal users (share=False).
-              internal_partners = request.env['res.users'].sudo().search([
+              # Fallback: push directly to targeted mention users; non-mention messages keep old all-user behavior.
+              target_users = mentioned_users if mentioned_users else request.env['res.users'].sudo().search([
                 ('share', '=', False),
                 ('active', '=', True),
-              ]).mapped('partner_id')
+              ])
+              internal_partners = target_users.mapped('partner_id')
               if internal_partners:
                 try:
                   bus._sendmany([

@@ -44,7 +44,7 @@ class DeliveryPlannerMessage(models.Model):
         return users.ids
 
     @api.model
-    def upsert_for_sale_order(self, sale_order, author_name='', preview='', message_type='customer'):
+    def upsert_for_sale_order(self, sale_order, author_name='', preview='', message_type='customer', target_user_ids=None):
         order = sale_order if getattr(sale_order, '_name', False) == 'sale.order' else self.env['sale.order'].browse(int(sale_order))
         if not order.exists():
             return self
@@ -57,7 +57,8 @@ class DeliveryPlannerMessage(models.Model):
             'is_read': False,
             'message_type': message_type or 'customer',
         }
-        user_ids = self._internal_user_ids()
+        user_ids = [int(uid) for uid in (target_user_ids or []) if uid] if target_user_ids else self._internal_user_ids()
+        user_ids = list(dict.fromkeys(user_ids))
         if not user_ids:
             return self
 
