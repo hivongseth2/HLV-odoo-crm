@@ -405,8 +405,22 @@ class MisaExtensionController(http.Controller):
 
                 uom = False
                 uom_name = (line.get("uom") or "").strip()
-                if uom_name:
-                    uom = uom_model.search([("name", "=ilike", uom_name)], limit=1)
+                
+                # Ưu tiên sử dụng UoM của sản phẩm nếu trùng tên (tránh lỗi khác Category)
+                if product and uom_name:
+                    if uom_name.lower() == product.uom_id.name.lower():
+                        uom = product.uom_id
+                    elif product.uom_po_id and uom_name.lower() == product.uom_po_id.name.lower():
+                        uom = product.uom_po_id
+                        
+                if not uom and uom_name:
+                    # Nếu có product, thử tìm UoM cùng tên và cùng Category với product trước
+                    if product:
+                        uom = uom_model.search([("name", "=ilike", uom_name), ("category_id", "=", product.uom_id.category_id.id)], limit=1)
+                    # Nếu vẫn không thấy, tìm tự do
+                    if not uom:
+                        uom = uom_model.search([("name", "=ilike", uom_name)], limit=1)
+                        
                 if not uom and product:
                     uom = product.uom_id
 
