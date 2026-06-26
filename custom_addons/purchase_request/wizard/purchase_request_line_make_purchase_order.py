@@ -52,6 +52,12 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
         for rec in self:
             rec.hlv_product_ids = rec.item_ids.mapped("product_id")
 
+    @api.onchange("supplier_id")
+    def _onchange_supplier_id(self):
+        if self.supplier_id:
+            for item in self.item_ids:
+                item.supplier_id = self.supplier_id
+
     @api.model
     def _prepare_item(self, line):
         return {
