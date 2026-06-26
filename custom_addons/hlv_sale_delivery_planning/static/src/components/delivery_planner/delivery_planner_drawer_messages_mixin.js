@@ -82,7 +82,7 @@ export class DeliveryPlannerDrawerMessagesMixin {
         if (!input) return null;
         const pos = input.selectionStart || 0;
         const before = String(input.value || '').slice(0, pos);
-        const match = /(^|\s)@([^\s@,;:!?()\[\]{}<>]*)$/.exec(before);
+        const match = /(^|\s)@([^@,;:!?()\[\]{}<>]*)$/.exec(before);
         if (!match) return null;
         return { start: pos - match[2].length - 1, term: this._normalizeMentionAlias(match[2]), pos };
     }
@@ -101,9 +101,10 @@ export class DeliveryPlannerDrawerMessagesMixin {
         }
         const items = (this.state.drawerMentionAliases || []).filter((item) => {
             const alias = this._normalizeMentionAlias(item.alias);
+            const displayAlias = this._normalizeMentionAlias(item.display_alias);
             const name = this._normalizeMentionAlias(item.user_name);
-            return !query.term || alias.startsWith(query.term) || name.includes(query.term);
-        }).slice(0, 8);
+            return !query.term || alias.startsWith(query.term) || displayAlias.startsWith(query.term) || name.includes(query.term);
+        }).slice(0, 30);
         this.state.drawerMentionSuggestions = items;
         this.state.drawerMentionActiveIndex = Math.min(this.state.drawerMentionActiveIndex || 0, Math.max(items.length - 1, 0));
     }
@@ -143,7 +144,7 @@ export class DeliveryPlannerDrawerMessagesMixin {
             if (ev.key === 'Enter' || ev.key === 'Tab') {
                 ev.preventDefault();
                 const item = suggestions[this.state.drawerMentionActiveIndex || 0];
-                if (item) this.selectDrawerMentionAlias(item.alias);
+                if (item) this.selectDrawerMentionAlias(item.display_alias || item.alias);
                 return;
             }
         }

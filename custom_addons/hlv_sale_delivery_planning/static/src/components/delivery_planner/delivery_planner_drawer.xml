@@ -565,8 +565,8 @@
                                 <t t-foreach="state.drawerMentionSuggestions" t-as="mention" t-key="mention.alias">
                                     <button type="button"
                                             t-att-class="'hlv-mention-suggest-item ' + (state.drawerMentionActiveIndex === mention_index ? 'active' : '')"
-                                            t-on-click.stop="() => this.selectDrawerMentionAlias(mention.alias)">
-                                        <strong>@<t t-esc="mention.alias"/></strong>
+                                            t-on-click.stop="() => this.selectDrawerMentionAlias(mention.display_alias || mention.alias)">
+                                        <strong>@<t t-esc="mention.display_alias || mention.alias"/></strong>
                                         <span t-if="mention.user_name"><t t-esc="mention.user_name"/></span>
                                     </button>
                                 </t>
