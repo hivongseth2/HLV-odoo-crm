@@ -187,6 +187,7 @@ export class DeliveryPlannerRealtimeMixin {
         if (so) {
             so.has_unread_message = true;
         }
+        this._playMessageSound();
         this.notification.add(
             `Đơn hàng ${payload.so_name}: ${rawBody}...`,
             {
@@ -201,6 +202,29 @@ export class DeliveryPlannerRealtimeMixin {
                 ]
             }
         );
+    }
+
+    _playMessageSound() {
+        try {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContext) return;
+            const ctx = this._messageAudioCtx || (this._messageAudioCtx = new AudioContext());
+            if (ctx.state === "suspended") ctx.resume();
+            const now = ctx.currentTime;
+            [660, 880].forEach((freq, i) => {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = "sine";
+                osc.frequency.value = freq;
+                gain.gain.setValueAtTime(0.0001, now + i * 0.1);
+                gain.gain.exponentialRampToValueAtTime(0.055, now + i * 0.1 + 0.02);
+                gain.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.1 + 0.12);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start(now + i * 0.1);
+                osc.stop(now + i * 0.1 + 0.14);
+            });
+        } catch (e) {}
     }
 
     // --- Real-time data refresh via bus ---

@@ -161,12 +161,15 @@ class DeliveryPlannerServiceMessages(models.AbstractModel):
         rows = []
         seen = set()
         for user in users:
-            for alias in _split_mention_aliases(user.x_sale_plan_mention_names):
-                if alias in seen:
+            for part in (user.x_sale_plan_mention_names or '').split(','):
+                display_alias = (part or '').strip().lstrip('@')
+                alias = _normalize_mention_alias(display_alias)
+                if not alias or alias in seen:
                     continue
                 seen.add(alias)
                 rows.append({
                     'alias': alias,
+                    'display_alias': display_alias,
                     'user_id': user.id,
                     'user_name': user.name or '',
                 })
