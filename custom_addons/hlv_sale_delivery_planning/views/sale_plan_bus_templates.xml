@@ -4,6 +4,10 @@
         <t t-call="web.layout">
             <t t-set="head">
                 <meta name="viewport" content="width=device-width,initial-scale=1"/>
+                <script type="text/javascript">
+                    window.odoo = window.odoo || {};
+                    odoo.__session_info__ = <t t-out="session_info_json"/>;
+                </script>
                 <t t-call-assets="web.assets_backend" t-js="true" t-css="false"/>
                 <t t-call-assets="hlv_sale_delivery_planning.assets_sale_plan_bus" t-js="true" t-css="false"/>
             </t>

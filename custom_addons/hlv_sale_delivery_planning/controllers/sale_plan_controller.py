@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import json
 import logging
 import os
 import re
@@ -1880,7 +1881,10 @@ class SalePlanPublicController(http.Controller):
 
     @http.route('/sale_plan/bus_frame', type='http', auth='public', methods=['GET'], csrf=False)
     def sale_plan_bus_frame(self, **kwargs):
-        return request.render('hlv_sale_delivery_planning.sale_plan_bus_frame', {})
+        session_info = request.env['ir.http'].session_info()
+        return request.render('hlv_sale_delivery_planning.sale_plan_bus_frame', {
+            'session_info_json': Markup(json.dumps(session_info)),
+        })
 
     @http.route('/sale_plan', type='http', auth='public', methods=['GET', 'POST'])
     def sale_plan_page(self, **kwargs):
