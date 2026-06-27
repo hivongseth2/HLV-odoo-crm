@@ -684,11 +684,17 @@ class MisaExtensionController(http.Controller):
                 amis_lines = []
                 while True:
                     detail_payload = {
+                        "columns": [2157, 1355, 2161, 4670, 1127, 5683, 5274, 3870, 3895, 5279, 308, 5364, 5350, 3404, 2358],
+                        "sort": "[{\"property\":4555,\"desc\":false,\"data_type\":4,\"operand\":1}]",
                         "filter": [{"property": 3993, "operator": 7, "operand": 1, "value": refid, "data_type": 10}],
-                        "loadMode": 2, "pageIndex": detail_page_index, "pageSize": 50, "useSp": False, "view": 92
+                        "pageIndex": detail_page_index,
+                        "pageSize": 50,
+                        "useSp": False,
+                        "view": 92,
+                        "summaryColumns": [3488, 3870, 3895, 3896, 308, 5350],
+                        "loadMode": 2
                     }
                     try:
-                        # Dùng pu_order/get_paging_detail vì user confirm có trả về quantity_receipt
                         detail_res = requests.post("https://actapp.misa.vn/g1/api/pu/v1/pu_order/get_paging_detail", headers=headers, json=detail_payload, timeout=30)
                         if detail_res.status_code != 200:
                             break
@@ -720,10 +726,10 @@ class MisaExtensionController(http.Controller):
                 for code, o_qty in odoo_prod_qty.items():
                     a_qty = amis_prod_qty.get(code, 0.0)
                     if abs(o_qty - a_qty) > 0.01:
-                        line_diffs.append(f"Mã '{code}': Odoo {o_qty} != AMIS {a_qty}")
+                        line_diffs.append(f"Mã '{code}': Odoo {o_qty} != AMIS {a_qty} (Debug: lines={len(amis_lines)})")
                 for code, a_qty in amis_prod_qty.items():
                     if code not in odoo_prod_qty:
-                        line_diffs.append(f"Mã '{code}': Odoo thiếu (AMIS có {a_qty})")
+                        line_diffs.append(f"Mã '{code}': Odoo thiếu (AMIS có {a_qty}) (Debug: lines={len(amis_lines)})")
                         
                 amt_diff = ""
                 if abs(odoo_total - amis_total) >= 1.0:
