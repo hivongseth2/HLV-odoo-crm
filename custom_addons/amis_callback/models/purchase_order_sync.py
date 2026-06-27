@@ -273,7 +273,8 @@ class PurchaseOrderAmisSync(models.Model):
             'custom_field5': stock_code,
             'custom_field10': purchase_status,
             'receive_address': receive_address,
-            'journal_memo': getattr(self, 'notes', False) or self.origin or ('Don mua hang %s' % self.name),
+            'journal_memo': self.origin or '',
+            'description': self.origin or '',
             'currency_id': self.currency_id.name or 'VND',
             'reftype': 301,
             'auto_refno': False,
@@ -351,6 +352,7 @@ class PurchaseOrderAmisSync(models.Model):
         for src, dst in replacements.items():
             value = value.replace(src, dst)
         return value
+
     def _misa_purchase_line_vat_rate(self, line):
         taxes = line.taxes_id.filtered(lambda t: t.amount_type == 'percent')
         if taxes:
@@ -361,16 +363,16 @@ class PurchaseOrderAmisSync(models.Model):
         if not dictionary_items:
             return
         config.push_dictionary(dictionary_items)
-        config.clear_dictionary_cache([1, 2, 4])
         _logger.info('Created %d MISA dictionary items before PO %s sync.', len(dictionary_items), self.name)
 
     def _ensure_misa_account_object(self, config, partner, dictionary_items):
         existing_id = (getattr(partner, 'misa_account_object_id', '') or '').strip()
         if existing_id:
-            found = self._find_misa_account_object_by_id(config, existing_id)
-            if found:
-                return self._normalize_misa_account_object(found, partner)
-            partner.sudo().write({'misa_account_object_id': False})
+            return {
+                'account_object_id': existing_id,
+                'account_object_code': partner.ref or partner.name or '',
+                'account_object_name': partner.display_name or partner.name or '',
+            }
 
         found = self._find_misa_account_object_by_code_or_name(config, partner.ref, partner.name or partner.display_name)
         if found:
@@ -407,14 +409,7 @@ class PurchaseOrderAmisSync(models.Model):
         existing_id = (getattr(uom, 'misa_unit_id', '') or '').strip() if uom else ''
         name = (uom.name or '').strip() if uom else ''
         if existing_id:
-            pending = self._find_pending_dictionary_item(dictionary_items, 'unit_id', existing_id)
-            if pending:
-                return {'unit_id': existing_id, 'unit_name': pending.get('unit_name') or name}
-            found = self._find_misa_unit_by_id(config, existing_id)
-            if found:
-                return {'unit_id': existing_id, 'unit_name': found.get('unit_name') or name}
-            if uom:
-                uom.sudo().write({'misa_unit_id': False})
+            return {'unit_id': existing_id, 'unit_name': name}
 
         for item in config._get_all_dictionary(4):
             if name and (item.get('unit_name') or '').strip().casefold() == name.casefold():
@@ -443,21 +438,11 @@ class PurchaseOrderAmisSync(models.Model):
         code = self._misa_required_code(product.default_code or '', fallback_prefix='VT', fallback_id=product.id)
         name = (product.display_name or product.name or code).strip()
         if existing_id:
-            pending = self._find_pending_dictionary_item(dictionary_items, 'inventory_item_id', existing_id)
-            if pending:
-                return {
-                    'inventory_item_id': existing_id,
-                    'inventory_item_code': pending.get('inventory_item_code') or code,
-                    'inventory_item_name': pending.get('inventory_item_name') or name,
-                }
-            found = self._find_misa_inventory_item_by_id(config, existing_id)
-            if found:
-                return {
-                    'inventory_item_id': existing_id,
-                    'inventory_item_code': found.get('inventory_item_code') or product.default_code or code,
-                    'inventory_item_name': found.get('inventory_item_name') or name,
-                }
-            product.sudo().write({'misa_inventory_item_id': False})
+            return {
+                'inventory_item_id': existing_id,
+                'inventory_item_code': product.default_code or code,
+                'inventory_item_name': name,
+            }
 
         for item in config._get_all_dictionary(2):
             if (item.get('inventory_item_code') or '').strip() == code:

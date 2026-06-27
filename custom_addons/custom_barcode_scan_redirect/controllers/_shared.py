@@ -128,7 +128,7 @@ def _bg_upload_to_drive(dbname, picking_id, filepath, mimetype):
             warehouse_code = picking.location_id.warehouse_id.code or 'DEFAULT'
 
             # Mapping warehouse code -> folder name
-            mapping_str = ICP.get_param('gdrive.warehouse_folder_mapping') or 'TSN:KHO_HCM,KBC:KHO_BENCAM'
+            mapping_str = ICP.get_param('gdrive.warehouse_folder_mapping') or 'TSN:KHO_HCM,KBC:KHO_BENCAM,TSNSR:TSN_SHOWROOM'
             warehouse_mapping = {}
             for item in mapping_str.split(','):
                 if ':' in item:

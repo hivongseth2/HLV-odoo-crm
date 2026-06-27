@@ -53,7 +53,7 @@ csec        = _get('gdrive.oauth_client_secret')
 redir       = _get('gdrive.oauth_redirect_uri')
 scopes_line = _get('gdrive.oauth_scopes') or 'https://www.googleapis.com/auth/drive.file'
 anyone_link = _get('gdrive.anyone_link').lower() == 'true'
-mapping_str = _get('gdrive.warehouse_folder_mapping') or 'TSN:KHO_HCM,KBC:KHO_BENCAM'
+mapping_str = _get('gdrive.warehouse_folder_mapping') or 'TSN:KHO_HCM,KBC:KHO_BENCAM,TSNSR:TSN_SHOWROOM'
 
 section("0. KIỂM TRA TIỀN ĐỀ")
 

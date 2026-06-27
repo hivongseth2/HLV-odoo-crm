@@ -61,7 +61,7 @@ class PickingExportWizard(models.TransientModel):
             "HCM": "HCM",
             "KHD": "HIỀN ĐỨC",
             "HIENDUC": "HIỀN ĐỨC",
-            "TSNSR": "HCM",
+            "TSNSR": "TSN SHOWROOM",
             "HCM_SHOWROOM": "HCM",
             "DNA": "ĐÀ NẴNG",
             "DANANG": "ĐÀ NẴNG",
