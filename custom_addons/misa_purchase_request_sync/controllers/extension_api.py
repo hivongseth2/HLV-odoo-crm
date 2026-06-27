@@ -652,7 +652,7 @@ class MisaExtensionController(http.Controller):
                     code = (oline.product_id.default_code or "").strip().lower()
                     if not code:
                         code = "unknown_code"
-                    qty = oline.product_qty
+                    qty = oline.qty_received
                     odoo_prod_qty[code] = odoo_prod_qty.get(code, 0.0) + qty
                     
                 odoo_data_list.append({
@@ -690,10 +690,11 @@ class MisaExtensionController(http.Controller):
                     }
                     try:
                         # Gọi thẳng requests để không bị lỗi env/cursor
-                        detail_res = requests.post("https://actapp.misa.vn/g1/api/pu/v1/pu_voucher/get_paging_detail", headers=headers, json=detail_payload, timeout=30)
+                        detail_res = requests.post("https://actapp.misa.vn/g1/api/pu/v1/pu_order/get_paging_detail", headers=headers, json=detail_payload, timeout=30)
                         if detail_res.status_code != 200:
                             break
                         det_json = detail_res.json()
+
                     except Exception:
                         break
                         
@@ -712,7 +713,7 @@ class MisaExtensionController(http.Controller):
                 amis_prod_qty = {}
                 for aline in amis_lines:
                     code = aline.get("inventory_item_code", "unknown_code").strip().lower()
-                    qty = float(aline.get("quantity", 0))
+                    qty = float(aline.get("quantity_receipt", 0))
                     amis_prod_qty[code] = amis_prod_qty.get(code, 0.0) + qty
                     
                 odoo_prod_qty = po_data["prod_qty"]
