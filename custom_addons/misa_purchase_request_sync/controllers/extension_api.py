@@ -684,17 +684,15 @@ class MisaExtensionController(http.Controller):
                 amis_lines = []
                 while True:
                     detail_payload = {
-                        "columns": [2157, 1355, 2161, 4670, 1127,5683, 5274, 3870, 3895, 5279, 308, 5364, 5350, 3404, 2358],
                         "filter": [{"property": 3993, "operator": 7, "operand": 1, "value": refid, "data_type": 10}],
-                        "loadMode": 2, "pageIndex": detail_page_index, "pageSize": 50, "useSp": False, "view": 92, "summaryColumns": []
+                        "loadMode": 2, "pageIndex": detail_page_index, "pageSize": 50, "useSp": False, "view": 92
                     }
                     try:
-                        # Gọi thẳng requests để không bị lỗi env/cursor
+                        # Dùng pu_order/get_paging_detail vì user confirm có trả về quantity_receipt
                         detail_res = requests.post("https://actapp.misa.vn/g1/api/pu/v1/pu_order/get_paging_detail", headers=headers, json=detail_payload, timeout=30)
                         if detail_res.status_code != 200:
                             break
                         det_json = detail_res.json()
-
                     except Exception:
                         break
                         
