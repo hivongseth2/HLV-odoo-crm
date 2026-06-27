@@ -614,7 +614,14 @@ class MisaExtensionController(http.Controller):
             response = misa_utils._fetch_with_retry("https://actapp.misa.vn/g1/api/pu/v1/pu_list/paging_filter_v2", headers, amis_payload)
             amis_pos = []
             if response.status_code == 200:
-                amis_pos = response.json().get("Data", {}).get("PageData", [])
+                resp_json = response.json()
+                data_obj = resp_json.get("Data")
+                if isinstance(data_obj, str):
+                    import json as json_lib
+                    try: data_obj = json_lib.loads(data_obj)
+                    except: data_obj = {}
+                if not data_obj: data_obj = {}
+                amis_pos = data_obj.get("PageData", [])
             else:
                 return json_response({"ok": False, "error": "misa_api_error", "message": "Lỗi gọi API AMIS Kế toán"}, 500)
             
@@ -630,10 +637,10 @@ class MisaExtensionController(http.Controller):
                         "refid": apo.get("refid")
                     }
                     
-            # Fetch Odoo POs - tất cả PO trong khoảng thời gian
+            # Fetch Odoo POs - filter UTC time
             odoo_pos = env_admin['purchase.order'].search([
-                ('date_order', '>=', date_from_local.strftime('%Y-%m-%d 00:00:00')),
-                ('date_order', '<=', date_to_local.strftime('%Y-%m-%d 23:59:59'))
+                ('date_order', '>=', date_from_utc.strftime('%Y-%m-%d %H:%M:%S')),
+                ('date_order', '<=', date_to_utc.strftime('%Y-%m-%d %H:%M:%S'))
             ])
             
             odoo_dict = {}
@@ -676,7 +683,16 @@ class MisaExtensionController(http.Controller):
                         detail_res = misa_utils._fetch_with_retry("https://actapp.misa.vn/g1/api/pu/v1/pu_voucher/get_paging_detail", headers, detail_payload)
                         if detail_res.status_code != 200:
                             break
-                        page_lines = detail_res.json().get("Data", {}).get("PageData", [])
+                        
+                        det_json = detail_res.json()
+                        d_obj = det_json.get("Data")
+                        if isinstance(d_obj, str):
+                            import json as json_lib
+                            try: d_obj = json_lib.loads(d_obj)
+                            except: d_obj = {}
+                        if not d_obj: d_obj = {}
+                        page_lines = d_obj.get("PageData", [])
+                        
                         if not page_lines:
                             break
                         amis_lines.extend(page_lines)
