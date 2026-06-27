@@ -30,6 +30,12 @@
                                 <t t-elif="state.busServiceAvailable">Bus: connecting</t>
                                 <t t-else="">Bus: unavailable</t>
                             </span>
+                            <button type="button"
+                                    t-att-class="state.desktopNotificationPermission === 'granted' ? 'hlv-browser-noti-btn enabled' : (state.desktopNotificationPermission === 'denied' ? 'hlv-browser-noti-btn blocked' : 'hlv-browser-noti-btn')"
+                                    t-att-title="state.desktopNotificationPermission === 'granted' ? 'Thông báo trình duyệt đã bật' : (state.desktopNotificationPermission === 'denied' ? 'Thông báo trình duyệt đang bị chặn' : 'Bật thông báo trình duyệt')"
+                                    t-on-click="() => this.requestDesktopNotifications()">
+                                <i class="fa fa-bell-o" title="Thông báo trình duyệt"></i>
+                            </button>
                             <!-- Toggle dạng xem: Kanban / Card / Bảng -->
                             <div class="btn-group btn-group-sm" role="group" aria-label="View mode">
                                 <button class="btn"
