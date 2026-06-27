@@ -179,11 +179,14 @@ class StockPickingAmisSync(models.Model):
             return
 
         if (config.sync_purchase_order_enabled
-                and not purchase_order.misa_purchase_order_synced
-                and not purchase_order._is_misa_imported_purchase_order()):
+                and not purchase_order._is_misa_imported_purchase_order()
+                and (not purchase_order.misa_purchase_order_synced
+                     or not purchase_order.misa_purchase_order_refid)):
+            if purchase_order.misa_purchase_order_synced and not purchase_order.misa_purchase_order_refid:
+                purchase_order.sudo().write({'misa_purchase_order_synced': False})
             purchase_order._enqueue_misa_purchase_order(raise_on_skip=False)
             raise UserError(
-                'Don mua hang %s chua sync MISA; da enqueue don mua, phieu nhap se retry sau.'
+                'Don mua hang %s chua co refid MISA thuc te; da enqueue don mua, phieu nhap se retry sau callback.'
                 % purchase_order.name
             )
 
@@ -662,7 +665,7 @@ class StockPickingAmisSync(models.Model):
         # Kho MISA hien tai co dinh theo cau hinh kho HLV.
         misa_warehouse_code = 'HLV'
 
-        pu_order_refid = (purchase_order.misa_purchase_order_org_refid or '').strip()
+        pu_order_refid = (purchase_order.misa_purchase_order_refid or purchase_order.misa_purchase_order_org_refid or '').strip()
         if not pu_order_refid:
             raise UserError('Don mua hang %s chua co org_refid MISA de lien ket phieu nhap.' % purchase_order.name)
 
@@ -687,10 +690,13 @@ class StockPickingAmisSync(models.Model):
             vat_amount = amount * vat_rate / 100.0
             total_amount += amount
             total_vat_amount += vat_amount
-            pu_order_ref_detail_id = str(uuid.uuid5(
-                uuid.NAMESPACE_DNS,
-                'misa_purchase_order_detail|%d|%d' % (purchase_order.id, purchase_line.id)
-            ))
+            pu_order_ref_detail_id = (purchase_line.misa_purchase_order_ref_detail_id or '').strip()
+            if not pu_order_ref_detail_id:
+                pu_order_ref_detail_id = str(uuid.uuid5(
+                    uuid.NAMESPACE_DNS,
+                    'misa_purchase_order_detail|%d|%d' % (purchase_order.id, purchase_line.id)
+                ))
+                purchase_line.sudo().write({'misa_purchase_order_ref_detail_id': pu_order_ref_detail_id})
 
             unit = purchase_order._ensure_misa_unit(config, move.product_uom, dictionary_items)
             inventory_item = purchase_order._ensure_misa_inventory_item(
@@ -731,6 +737,9 @@ class StockPickingAmisSync(models.Model):
                 'un_resonable_cost': False,
                 'is_promotion': False,
                 'quantity': qty_done,
+                'unit_price': price_unit,
+                'main_unit_price': price_unit,
+                'unit_price_after_tax': price_unit * (1.0 + vat_rate / 100.0),
                 'unit_price_finance': price_unit,
                 'amount_finance': amount,
                 'amount': amount,
@@ -739,6 +748,11 @@ class StockPickingAmisSync(models.Model):
                 'vat_amount': vat_amount,
                 'vat_amount_oc': vat_amount,
                 'amount_after_tax': amount + vat_amount,
+                'inward_amount': amount,
+                'inward_amount_oc': amount,
+                'discount_rate': 0.0,
+                'discount_amount': 0.0,
+                'discount_amount_oc': 0.0,
                 'unit_price_management': price_unit,
                 'amount_management': amount,
                 'main_unit_price_finance': price_unit,
@@ -804,6 +818,10 @@ class StockPickingAmisSync(models.Model):
             'total_sale_amount_oc': total_amount,
             'total_vat_amount': total_vat_amount,
             'total_vat_amount_oc': total_vat_amount,
+            'total_discount_amount': 0.0,
+            'total_discount_amount_oc': 0.0,
+            'total_inward_amount': total_amount,
+            'total_inward_amount_oc': total_amount,
             'total_amount': total_payment_amount,
             'total_amount_oc': total_payment_amount,
             'total_amount_finance': total_payment_amount,

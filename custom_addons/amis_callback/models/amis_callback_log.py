@@ -192,15 +192,78 @@ class AmisCallbackLogLine(models.Model):
                 continue
             success = bool(line.success)
             voucher_type = int(line.voucher_type or 0)
+            item = line._misa_callback_item()
+            voucher_data = line._misa_callback_voucher_data(item)
+            actual_refid = (
+                voucher_data.get('refid') or item.get('refid') or item.get('misa_refid') or org_refid
+            )
             if voucher_type == 21:
                 po = self.env['purchase.order'].sudo().search([
                     ('misa_purchase_order_org_refid', '=', org_refid),
                 ], limit=1)
                 if po:
-                    po.write({'misa_purchase_order_synced': success})
+                    vals = {'misa_purchase_order_synced': success}
+                    if success and actual_refid:
+                        vals['misa_purchase_order_refid'] = actual_refid
+                    po.write(vals)
+                    if success:
+                        line._apply_purchase_order_detail_ids(po, voucher_data)
             elif voucher_type in (7, 18):
                 picking = self.env['stock.picking'].sudo().search([
                     ('misa_inward_org_refid', '=', org_refid),
                 ], limit=1)
                 if picking:
                     picking.write({'misa_inward_synced': success})
+
+    def _misa_callback_item(self):
+        self.ensure_one()
+        if not self.raw_json:
+            return {}
+        try:
+            item = json.loads(self.raw_json)
+        except Exception:
+            return {}
+        return item if isinstance(item, dict) else {}
+
+    def _misa_callback_voucher_data(self, item):
+        data = item.get('data') if isinstance(item, dict) else None
+        if isinstance(data, str):
+            try:
+                parsed = json.loads(data)
+            except Exception:
+                return {}
+            return parsed if isinstance(parsed, dict) else {}
+        return data if isinstance(data, dict) else {}
+
+    def _apply_purchase_order_detail_ids(self, po, voucher_data):
+        details = voucher_data.get('detail') or []
+        if not isinstance(details, list):
+            return
+        lines_by_sort = {
+            index: line
+            for index, line in enumerate(po.order_line.filtered(lambda l: not getattr(l, 'display_type', False)), start=1)
+        }
+        lines_by_code = {}
+        for po_line in lines_by_sort.values():
+            code = (po_line.product_id.default_code or '').strip()
+            if code:
+                lines_by_code.setdefault(code, []).append(po_line)
+        for detail in details:
+            if not isinstance(detail, dict):
+                continue
+            ref_detail_id = (detail.get('ref_detail_id') or '').strip()
+            if not ref_detail_id:
+                continue
+            po_line = self.env['purchase.order.line']
+            current = (detail.get('org_ref_detail_id') or '').strip()
+            if current:
+                po_line = po.order_line.filtered(lambda l: l.misa_purchase_order_ref_detail_id == current)[:1]
+            if not po_line:
+                sort_order = int(detail.get('sort_order') or 0)
+                po_line = lines_by_sort.get(sort_order) or self.env['purchase.order.line']
+            if not po_line:
+                code = (detail.get('inventory_item_code') or '').strip()
+                candidates = lines_by_code.get(code) or []
+                po_line = candidates[0] if candidates else self.env['purchase.order.line']
+            if po_line:
+                po_line.sudo().write({'misa_purchase_order_ref_detail_id': ref_detail_id})

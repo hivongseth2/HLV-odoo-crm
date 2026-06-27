@@ -25,6 +25,11 @@ class PurchaseOrderAmisSync(models.Model):
         copy=False,
         help='org_refid dung khi push Don mua hang len MISA.',
     )
+    misa_purchase_order_refid = fields.Char(
+        string='MISA refid Don mua hang',
+        copy=False,
+        help='refid thuc te cua Don mua hang sau khi MISA xu ly callback.',
+    )
 
     def button_confirm(self):
         res = super().button_confirm()
@@ -56,6 +61,7 @@ class PurchaseOrderAmisSync(models.Model):
             order.sudo().write({
                 'misa_purchase_order_synced': False,
                 'misa_purchase_order_org_refid': False,
+                'misa_purchase_order_refid': False,
             })
         return True
 
@@ -124,7 +130,6 @@ class PurchaseOrderAmisSync(models.Model):
         voucher_payload = self._prepare_misa_purchase_order_payload(config)
         config.push_purchase_order(voucher_payload, dictionary_items=[])
         self.sudo().write({
-            'misa_purchase_order_synced': True,
             'misa_purchase_order_org_refid': voucher_payload.get('org_refid') or '',
         })
 
@@ -191,7 +196,10 @@ class PurchaseOrderAmisSync(models.Model):
             inventory_item_name = inventory_item.get('inventory_item_name') or product.display_name
             unit_id = unit.get('unit_id') or ''
             unit_name = unit.get('unit_name') or line.product_uom.name
-            ref_detail_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'misa_purchase_order_detail|%d|%d' % (self.id, line.id)))
+            ref_detail_id = (line.misa_purchase_order_ref_detail_id or '').strip()
+            if not ref_detail_id:
+                ref_detail_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'misa_purchase_order_detail|%d|%d' % (self.id, line.id)))
+                line.sudo().write({'misa_purchase_order_ref_detail_id': ref_detail_id})
 
             detail.append({
                 'ref_detail_id': ref_detail_id,
@@ -575,3 +583,12 @@ class PurchaseOrderAmisSync(models.Model):
             value = fields.Datetime.from_string(value)
         localized = fields.Datetime.context_timestamp(self, value)
         return localized.isoformat()
+
+class PurchaseOrderLineAmisSync(models.Model):
+    _inherit = 'purchase.order.line'
+
+    misa_purchase_order_ref_detail_id = fields.Char(
+        string='MISA ref_detail_id Don mua hang',
+        copy=False,
+        help='ref_detail_id thuc te cua dong Don mua hang tren MISA, dung de link phieu mua/nhap kho.',
+    )
