@@ -243,7 +243,12 @@ export class DeliveryPlannerRealtimeMixin {
     async requestDesktopNotifications() {
         if (!this._browserNotificationsSupported()) {
             this.state.desktopNotificationPermission = "unsupported";
-            this.notification.add("Trình duyệt không hỗ trợ Web Push hoặc trang chưa chạy HTTPS.", { type: "warning" });
+            this.notification.add("Trình duyệt không hỗ trợ Web Push hoặc trang chưa chạy HTTPS. Chrome, Edge và Opera bản chính thức đều hỗ trợ.", { type: "warning" });
+            return;
+        }
+        if (Notification.permission === "denied") {
+            this.state.desktopNotificationPermission = "denied";
+            this.notification.add("Notification đang bị chặn. Bấm icon ổ khóa bên trái URL -> Site settings -> Notifications -> Allow, rồi reload trang.", { type: "warning" });
             return;
         }
         try {
@@ -261,7 +266,7 @@ export class DeliveryPlannerRealtimeMixin {
             const permission = Notification.permission === "granted" ? "granted" : await Notification.requestPermission();
             this.state.desktopNotificationPermission = permission;
             if (permission !== "granted") {
-                this.notification.add("Chưa bật thông báo trình duyệt", { type: "warning" });
+                this.notification.add(permission === "denied" ? "Notification đang bị chặn. Bật lại trong site settings của trình duyệt." : "Chưa bật thông báo trình duyệt", { type: "warning" });
                 return;
             }
             let sub;
