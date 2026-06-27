@@ -644,9 +644,28 @@ class MisaExtensionController(http.Controller):
             diff = []
             odoo_only = []
 
-            def _reconcile_po(po):
-                po_name = po.name
-                po_origin = po.origin or ""
+            # Trích xuất dữ liệu từ Odoo ra dạng dict (chỉ chạy trên main thread để tránh lỗi cursor)
+            odoo_data_list = []
+            for po in odoo_pos:
+                odoo_prod_qty = {}
+                for oline in po.order_line:
+                    code = (oline.product_id.default_code or "").strip().lower()
+                    if not code:
+                        code = "unknown_code"
+                    qty = oline.qty_received
+                    odoo_prod_qty[code] = odoo_prod_qty.get(code, 0.0) + qty
+                    
+                odoo_data_list.append({
+                    "name": po.name,
+                    "origin": po.origin or "",
+                    "amount_total": po.amount_total,
+                    "prod_qty": odoo_prod_qty
+                })
+
+            import requests
+            def _reconcile_po_data(po_data):
+                po_name = po_data["name"]
+                po_origin = po_data["origin"]
                 
                 # Tìm trên AMIS
                 amis_po = amis_dict.get(po_name)
@@ -658,7 +677,7 @@ class MisaExtensionController(http.Controller):
                     
                 refid = amis_po.get("refid")
                 amis_total = float(amis_po.get("total_amount") or 0.0)
-                odoo_total = po.amount_total
+                odoo_total = po_data["amount_total"]
                 
                 # Lấy chi tiết dòng của AMIS PO
                 detail_page_index = 1
@@ -669,10 +688,16 @@ class MisaExtensionController(http.Controller):
                         "filter": [{"property": 3993, "operator": 7, "operand": 1, "value": refid, "data_type": 10}],
                         "loadMode": 2, "pageIndex": detail_page_index, "pageSize": 50, "useSp": False, "view": 92, "summaryColumns": []
                     }
-                    detail_res = misa_utils._fetch_with_retry("https://actapp.misa.vn/g1/api/pu/v1/pu_voucher/get_paging_detail", headers, detail_payload)
-                    if detail_res.status_code != 200:
+                    try:
+                        # Gọi thẳng requests để không bị lỗi env/cursor
+                        detail_res = requests.post("https://actapp.misa.vn/g1/api/pu/v1/pu_order/get_paging_detail", headers=headers, json=detail_payload, timeout=30)
+                        if detail_res.status_code != 200:
+                            break
+                        det_json = detail_res.json()
+
+                    except Exception:
                         break
-                    det_json = detail_res.json()
+                        
                     d_obj = det_json.get("Data")
                     if isinstance(d_obj, str):
                         import json as json_lib
@@ -688,16 +713,10 @@ class MisaExtensionController(http.Controller):
                 amis_prod_qty = {}
                 for aline in amis_lines:
                     code = aline.get("inventory_item_code", "unknown_code").strip().lower()
-                    qty = float(aline.get("quantity", 0))
+                    qty = float(aline.get("quantity_receipt", 0))
                     amis_prod_qty[code] = amis_prod_qty.get(code, 0.0) + qty
                     
-                odoo_prod_qty = {}
-                for oline in po.order_line:
-                    code = (oline.product_id.default_code or "").strip().lower()
-                    if not code:
-                        code = "unknown_code"
-                    qty = oline.product_qty
-                    odoo_prod_qty[code] = odoo_prod_qty.get(code, 0.0) + qty
+                odoo_prod_qty = po_data["prod_qty"]
                     
                 line_diffs = []
                 for code, o_qty in odoo_prod_qty.items():
@@ -722,7 +741,7 @@ class MisaExtensionController(http.Controller):
 
             # Thực thi đa luồng (max 4 luồng để tránh quá tải)
             with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-                results = list(executor.map(_reconcile_po, odoo_pos))
+                results = list(executor.map(_reconcile_po_data, odoo_data_list))
                 
             for res in results:
                 if res["status"] == "matched":
