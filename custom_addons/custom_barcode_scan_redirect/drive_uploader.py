@@ -141,7 +141,7 @@ class DriveManager:
             
             # Mapping warehouse code -> folder name (dễ đọc)
             # Format: TSN:KHO_HCM,KBC:KHO_BENCAM
-            mapping_str = self._get_param('gdrive.warehouse_folder_mapping', 'TSN:KHO_HCM,KBC:KHO_BENCAM')
+            mapping_str = self._get_param('gdrive.warehouse_folder_mapping', 'TSN:KHO_HCM,KBC:KHO_BENCAM,TSNSR:TSN_SHOWROOM')
             warehouse_mapping = {}
             for item in mapping_str.split(','):
                 if ':' in item:
