@@ -199,7 +199,6 @@ class StockPickingAmisSync(models.Model):
         config.push_inward_voucher(voucher_payload, dictionary_items=[])
 
         self.sudo().write({
-            'misa_inward_synced': True,
             'misa_inward_org_refid': org_refid or '',
         })
 

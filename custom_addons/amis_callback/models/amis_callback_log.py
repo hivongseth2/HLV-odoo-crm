@@ -179,3 +179,28 @@ class AmisCallbackLogLine(models.Model):
     error_call_back_message = fields.Text(string='Thong diep callback loi')
     voucher_type = fields.Integer(string='Loai chung tu')
     raw_json = fields.Text(string='JSON goc')
+    @api.model
+    def create(self, vals):
+        record = super().create(vals)
+        record._apply_sync_result()
+        return record
+
+    def _apply_sync_result(self):
+        for line in self:
+            org_refid = (line.org_refid or '').strip()
+            if not org_refid:
+                continue
+            success = bool(line.success)
+            voucher_type = int(line.voucher_type or 0)
+            if voucher_type == 21:
+                po = self.env['purchase.order'].sudo().search([
+                    ('misa_purchase_order_org_refid', '=', org_refid),
+                ], limit=1)
+                if po:
+                    po.write({'misa_purchase_order_synced': success})
+            elif voucher_type in (7, 18):
+                picking = self.env['stock.picking'].sudo().search([
+                    ('misa_inward_org_refid', '=', org_refid),
+                ], limit=1)
+                if picking:
+                    picking.write({'misa_inward_synced': success})
