@@ -218,6 +218,24 @@ export class DeliveryPlannerRealtimeMixin {
         return output;
     }
 
+    async _subscribeWebPush(publicKey, forceReset = false) {
+        const appKey = this._urlBase64ToUint8Array(publicKey);
+        if (appKey.length !== 65) {
+            throw new Error(`invalid_vapid_public_key_${appKey.length}`);
+        }
+        const reg = await navigator.serviceWorker.register('/sale_plan_webpush_sw.js', { scope: '/' });
+        await navigator.serviceWorker.ready;
+        let sub = await reg.pushManager.getSubscription();
+        if (sub && forceReset) {
+            await sub.unsubscribe();
+            sub = null;
+        }
+        return sub || await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: appKey,
+        });
+    }
+
     _syncDesktopNotificationPermission() {
         this.state.desktopNotificationPermission = this._browserNotificationsSupported() ? Notification.permission : "unsupported";
     }
@@ -246,13 +264,12 @@ export class DeliveryPlannerRealtimeMixin {
                 this.notification.add("Chưa bật thông báo trình duyệt", { type: "warning" });
                 return;
             }
-            const reg = await navigator.serviceWorker.register('/sale_plan_webpush_sw.js', { scope: '/' });
-            let sub = await reg.pushManager.getSubscription();
-            if (!sub) {
-                sub = await reg.pushManager.subscribe({
-                    userVisibleOnly: true,
-                    applicationServerKey: this._urlBase64ToUint8Array(config.public_key),
-                });
+            let sub;
+            try {
+                sub = await this._subscribeWebPush(config.public_key, false);
+            } catch (firstErr) {
+                console.warn('web push first subscribe failed, retrying clean', firstErr);
+                sub = await this._subscribeWebPush(config.public_key, true);
             }
             await fetch('/api/sale_plan/webpush_subscribe', {
                 method: 'POST',
@@ -266,7 +283,10 @@ export class DeliveryPlannerRealtimeMixin {
             this.notification.add("Đã bật Web Push", { type: "success" });
         } catch (e) {
             console.warn('web push subscribe failed', e);
-            this.notification.add("Không bật được Web Push", { type: "warning" });
+            const message = e && e.name === "AbortError"
+                ? "Khong ket noi duoc push service cua trinh duyet. Thu Chrome/Edge khac, tat VPN/proxy/adblock, hoac kiem tra quyen notification cua site."
+                : `Khong bat duoc Web Push${e && e.message ? `: ${e.message}` : ""}`;
+            this.notification.add(message, { type: "warning" });
         }
     }
 
