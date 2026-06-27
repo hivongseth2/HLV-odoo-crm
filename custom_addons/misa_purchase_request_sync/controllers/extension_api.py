@@ -536,13 +536,7 @@ class MisaExtensionController(http.Controller):
     )
     def api_extension_po_reconcile(self, **kwargs):
         """
-        Đối chiếu Đơn mua hàng (PO) giữa Odoo và AMIS Kế toán.
-        Body JSON:
-        {
-            "token": "...",
-            "date_from": "YYYY-MM-DD",
-            "date_to": "YYYY-MM-DD"
-        }
+        Đối chiếu Đơn mua hàng (PO) dựa trên các Đơn ĐÃ NHẬP KHO trên Odoo.
         """
         if request.httprequest.method == "OPTIONS":
             return request.make_response("", headers=[("Access-Control-Allow-Origin", "*"), ("Access-Control-Allow-Headers", "*")])
@@ -570,182 +564,181 @@ class MisaExtensionController(http.Controller):
             return json_response({"ok": False, "error": "missing_date", "message": "Missing date_from or date_to"}, 400)
 
         try:
-            from datetime import datetime, timedelta
+            from datetime import datetime
+            import concurrent.futures
             
             env_admin = request.env(su=True)
-            
-            # Fetch AMIS POs
             misa_utils = env_admin['misa.api.utils']
             misa_config = env_admin['misa.config']
             access_token = misa_utils._get_misa_token()
             headers = misa_config.get_default_headers(access_token)
             
-            date_from_local = datetime.strptime(date_from_str, "%Y-%m-%d")
-            date_to_local = datetime.strptime(date_to_str, "%Y-%m-%d")
-            date_from_utc = datetime.combine(date_from_local, datetime.min.time()) - timedelta(hours=7)
-            date_to_utc = datetime.combine(date_to_local, datetime.max.time()) - timedelta(hours=7)
+            date_from_utc = datetime.strptime(date_from_str, "%Y-%m-%d").strftime('%Y-%m-%d 00:00:00')
+            date_to_utc = datetime.strptime(date_to_str, "%Y-%m-%d").strftime('%Y-%m-%d 23:59:59')
+            
+            # Lấy các phiếu nhập kho đã hoàn thành
+            pickings = env_admin['stock.picking'].search([
+                ('date_done', '>=', date_from_utc),
+                ('date_done', '<=', date_to_utc),
+                ('state', '=', 'done'),
+                ('picking_type_id.code', '=', 'incoming'),
+                ('purchase_id', '!=', False)
+            ])
+            
+            # Lấy các Đơn mua hàng liên quan
+            odoo_pos = pickings.mapped('purchase_id')
+            
+            if not odoo_pos:
+                return json_response({
+                    "ok": True,
+                    "data": {
+                        "matched": [], "diff": [], "odoo_only": [], "total_odoo": 0
+                    }
+                })
+                
+            from datetime import timedelta
+            min_order_date = min(odoo_pos.mapped('date_order'))
+            max_order_date = max(odoo_pos.mapped('date_order'))
+            
+            # Fetch AMIS POs created around Odoo PO creation dates
+            misa_date_from_utc = min_order_date - timedelta(days=5)
+            misa_date_to_utc = max_order_date + timedelta(days=2)
             
             amis_payload = {
                 "filter": [
                     {
                         "property": 3972,
-                        "value": date_from_utc.isoformat() + "Z",
+                        "value": misa_date_from_utc.isoformat() + "Z",
                         "operator": 10,
                         "operand": 1,
                         "data_type": 3
                     },
                     {
                         "property": 3972,
-                        "value": date_to_utc.isoformat() + "Z",
+                        "value": misa_date_to_utc.isoformat() + "Z",
                         "operator": 12,
                         "operand": 1,
                         "data_type": 3
                     }
                 ],
-                "loadMode": 2,
-                "pageIndex": 1,
-                "pageSize": 1000, 
-                "sort": "[{\"property\":3972,\"desc\":true,\"data_type\":3,\"operand\":1},{\"property\":4008,\"desc\":true,\"data_type\":1,\"operand\":1}]",
-                "summaryColumns": [5039, 5104, 247],
-                "useSp": False,
-                "view": 2
+                "loadMode": 2, "pageIndex": 1, "pageSize": 1000, 
+                "useSp": False, "view": 2, "summaryColumns": []
             }
             
             response = misa_utils._fetch_with_retry("https://actapp.misa.vn/g1/api/pu/v1/pu_list/paging_filter_v2", headers, amis_payload)
-            amis_pos = []
-            if response.status_code == 200:
-                amis_pos = response.json().get("Data", {}).get("PageData", [])
-            else:
-                return json_response({"ok": False, "error": "misa_api_error", "message": "Lỗi gọi API AMIS Kế toán"}, 500)
-            
             amis_dict = {}
-            for apo in amis_pos:
-                refno = apo.get("refno")
-                if refno:
-                    # AMIS total amount
-                    total_amount = float(apo.get("total_amount") or 0.0)
-                    amis_dict[refno] = {
-                        "total_amount": total_amount,
-                        "refno": refno,
-                        "refid": apo.get("refid")
-                    }
-                    
-            # Fetch Odoo POs - tất cả PO trong khoảng thời gian
-            odoo_pos = env_admin['purchase.order'].search([
-                ('date_order', '>=', date_from_local.strftime('%Y-%m-%d 00:00:00')),
-                ('date_order', '<=', date_to_local.strftime('%Y-%m-%d 23:59:59'))
-            ])
+            if response.status_code == 200:
+                resp_json = response.json()
+                data_obj = resp_json.get("Data")
+                if isinstance(data_obj, str):
+                    import json as json_lib
+                    try: data_obj = json_lib.loads(data_obj)
+                    except: data_obj = {}
+                if not data_obj: data_obj = {}
+                for apo in data_obj.get("PageData", []):
+                    refno = apo.get("refno")
+                    if refno:
+                        amis_dict[refno] = apo
             
-            odoo_dict = {}
-            for po in odoo_pos:
-                key = po.name
-                if key not in amis_dict and po.origin and po.origin in amis_dict:
-                    key = po.origin
-                odoo_dict[key] = {
-                    "po": po,
-                    "total_amount": po.amount_total,
-                    "po_name": po.name
-                }
-                
             matched = []
             diff = []
-            amis_only = []
             odoo_only = []
-            
-            # Compare
-            for key, odata in odoo_dict.items():
-                if key in amis_dict:
-                    adata = amis_dict[key]
-                    po_odoo = odata["po"]
+
+            def _reconcile_po(po):
+                po_name = po.name
+                po_origin = po.origin or ""
+                
+                # Tìm trên AMIS
+                amis_po = amis_dict.get(po_name)
+                if not amis_po and po_origin:
+                    amis_po = amis_dict.get(po_origin)
                     
-                    # Fetch AMIS PO Details for line comparison
-                    detail_page_index = 1
-                    amis_lines = []
-                    while True:
-                        detail_payload = {
-                            "columns": [2157, 1355, 2161, 4670, 1127,5683, 5274, 3870, 3895, 5279, 308, 5364, 5350, 3404, 2358],
-                            "filter": [{"property": 3993, "operator": 7, "operand": 1, "value": adata["refid"], "data_type": 10}],
-                            "loadMode": 2,
-                            "pageIndex": detail_page_index,
-                            "pageSize": 50,
-                            "sort": "[{\"property\":4555,\"desc\":false,\"data_type\":4,\"operand\":1}]",
-                            "summaryColumns": [3488, 3870, 3895, 3896, 308, 5350],
-                            "useSp": False,
-                            "view": 92
-                        }
-                        detail_res = misa_utils._fetch_with_retry("https://actapp.misa.vn/g1/api/pu/v1/pu_voucher/get_paging_detail", headers, detail_payload)
-                        if detail_res.status_code != 200:
-                            break
-                        page_lines = detail_res.json().get("Data", {}).get("PageData", [])
-                        if not page_lines:
-                            break
-                        amis_lines.extend(page_lines)
-                        detail_page_index += 1
+                if not amis_po:
+                    return {"status": "odoo_only", "po_name": po_name}
+                    
+                refid = amis_po.get("refid")
+                amis_total = float(amis_po.get("total_amount") or 0.0)
+                odoo_total = po.amount_total
+                
+                # Lấy chi tiết dòng của AMIS PO
+                detail_page_index = 1
+                amis_lines = []
+                while True:
+                    detail_payload = {
+                        "columns": [2157, 1355, 2161, 4670, 1127,5683, 5274, 3870, 3895, 5279, 308, 5364, 5350, 3404, 2358],
+                        "filter": [{"property": 3993, "operator": 7, "operand": 1, "value": refid, "data_type": 10}],
+                        "loadMode": 2, "pageIndex": detail_page_index, "pageSize": 50, "useSp": False, "view": 92, "summaryColumns": []
+                    }
+                    detail_res = misa_utils._fetch_with_retry("https://actapp.misa.vn/g1/api/pu/v1/pu_voucher/get_paging_detail", headers, detail_payload)
+                    if detail_res.status_code != 200:
+                        break
+                    det_json = detail_res.json()
+                    d_obj = det_json.get("Data")
+                    if isinstance(d_obj, str):
+                        import json as json_lib
+                        try: d_obj = json_lib.loads(d_obj)
+                        except: d_obj = {}
+                    if not d_obj: d_obj = {}
+                    page_lines = d_obj.get("PageData", [])
+                    if not page_lines:
+                        break
+                    amis_lines.extend(page_lines)
+                    detail_page_index += 1
+                    
+                amis_prod_qty = {}
+                for aline in amis_lines:
+                    code = aline.get("inventory_item_code", "unknown_code").strip().lower()
+                    qty = float(aline.get("quantity", 0))
+                    amis_prod_qty[code] = amis_prod_qty.get(code, 0.0) + qty
+                    
+                odoo_prod_qty = {}
+                for oline in po.order_line:
+                    code = (oline.product_id.default_code or "").strip().lower()
+                    if not code:
+                        code = "unknown_code"
+                    qty = oline.product_qty
+                    odoo_prod_qty[code] = odoo_prod_qty.get(code, 0.0) + qty
+                    
+                line_diffs = []
+                for code, o_qty in odoo_prod_qty.items():
+                    a_qty = amis_prod_qty.get(code, 0.0)
+                    if abs(o_qty - a_qty) > 0.01:
+                        line_diffs.append(f"Mã '{code}': Odoo {o_qty} != AMIS {a_qty}")
+                for code, a_qty in amis_prod_qty.items():
+                    if code not in odoo_prod_qty:
+                        line_diffs.append(f"Mã '{code}': Odoo thiếu (AMIS có {a_qty})")
                         
-                    # Aggregate AMIS lines
-                    amis_prod_qty = {}
-                    for aline in amis_lines:
-                        code = aline.get("inventory_item_code", "unknown_code").strip().lower()
-                        qty = float(aline.get("quantity", 0))
-                        amis_prod_qty[code] = amis_prod_qty.get(code, 0.0) + qty
-                        
-                    # Aggregate Odoo lines
-                    odoo_prod_qty = {}
-                    for oline in po_odoo.order_line:
-                        code = (oline.product_id.default_code or "").strip().lower()
-                        if not code:
-                            code = "unknown_code"
-                        qty = oline.product_qty
-                        odoo_prod_qty[code] = odoo_prod_qty.get(code, 0.0) + qty
-                        
-                    # Compare lines
-                    line_diffs = []
-                    for code, o_qty in odoo_prod_qty.items():
-                        a_qty = amis_prod_qty.get(code, 0.0)
-                        if abs(o_qty - a_qty) > 0.01:
-                            line_diffs.append(f"Mã '{code}': Odoo {o_qty} != AMIS {a_qty}")
-                    for code, a_qty in amis_prod_qty.items():
-                        if code not in odoo_prod_qty:
-                            line_diffs.append(f"Mã '{code}': Odoo thiếu (AMIS có {a_qty})")
-                            
-                    # Check total amount
-                    amt_diff = ""
-                    if abs(odata["total_amount"] - adata["total_amount"]) >= 1.0:
-                        amt_diff = f"Tổng tiền: Odoo={odata['total_amount']:,.0f} != AMIS={adata['total_amount']:,.0f}"
-                        
-                    if not line_diffs and not amt_diff:
-                        matched.append(key)
-                    else:
-                        reasons = []
-                        if amt_diff: reasons.append(amt_diff)
-                        reasons.extend(line_diffs)
-                        diff.append({
-                            "po_name": odata["po_name"],
-                            "reason": " | ".join(reasons)
-                        })
+                amt_diff = ""
+                if abs(odoo_total - amis_total) >= 1.0:
+                    amt_diff = f"Tổng tiền: Odoo={odoo_total:,.0f} != AMIS={amis_total:,.0f}"
+                    
+                if not line_diffs and not amt_diff:
+                    return {"status": "matched", "po_name": po_name}
                 else:
-                    odoo_only.append(odata["po_name"])
-                    
-            for key, adata in amis_dict.items():
-                if key not in odoo_dict:
-                    # Fallback check again
-                    found = False
-                    for okey, odata in odoo_dict.items():
-                        if odata["po"].origin == key:
-                            found = True
-                            break
-                    if not found:
-                        amis_only.append(key)
-                        
+                    reasons = []
+                    if amt_diff: reasons.append(amt_diff)
+                    reasons.extend(line_diffs)
+                    return {"status": "diff", "po_name": po_name, "reason": " | ".join(reasons)}
+
+            # Thực thi đa luồng (max 4 luồng để tránh quá tải)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+                results = list(executor.map(_reconcile_po, odoo_pos))
+                
+            for res in results:
+                if res["status"] == "matched":
+                    matched.append(res["po_name"])
+                elif res["status"] == "diff":
+                    diff.append({"po_name": res["po_name"], "reason": res["reason"]})
+                else:
+                    odoo_only.append(res["po_name"])
+
             return json_response({
                 "ok": True,
                 "data": {
                     "matched": matched,
                     "diff": diff,
-                    "amis_only": amis_only,
                     "odoo_only": odoo_only,
-                    "total_amis": len(amis_dict),
-                    "total_odoo": len(odoo_dict)
+                    "total_odoo": len(odoo_pos)
                 }
             })
 
