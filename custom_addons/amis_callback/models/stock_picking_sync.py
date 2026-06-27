@@ -185,7 +185,7 @@ class StockPickingAmisSync(models.Model):
             config.push_dictionary(dictionary_items)
             config.clear_dictionary_cache([1, 2, 4])
             _logger.info(
-                'Created %d MISA dictionary items before inward picking %s sync.',
+                'Created %d MISA dictionary items before inward picking %s sync...',
                 len(dictionary_items), self.name,
             )
         config.push_inward_voucher(voucher_payload, dictionary_items=[])
