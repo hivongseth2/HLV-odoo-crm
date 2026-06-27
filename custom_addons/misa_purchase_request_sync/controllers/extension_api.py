@@ -588,6 +588,58 @@ class MisaExtensionController(http.Controller):
             # Lấy các Đơn mua hàng liên quan
             odoo_pos = pickings.mapped('purchase_id')
             
+            if not odoo_pos:
+                return json_response({
+                    "ok": True,
+                    "data": {
+                        "matched": [], "diff": [], "odoo_only": [], "total_odoo": 0
+                    }
+                })
+                
+            from datetime import timedelta
+            min_order_date = min(odoo_pos.mapped('date_order'))
+            max_order_date = max(odoo_pos.mapped('date_order'))
+            
+            # Fetch AMIS POs created around Odoo PO creation dates
+            misa_date_from_utc = min_order_date - timedelta(days=5)
+            misa_date_to_utc = max_order_date + timedelta(days=2)
+            
+            amis_payload = {
+                "filter": [
+                    {
+                        "property": 3972,
+                        "value": misa_date_from_utc.isoformat() + "Z",
+                        "operator": 10,
+                        "operand": 1,
+                        "data_type": 3
+                    },
+                    {
+                        "property": 3972,
+                        "value": misa_date_to_utc.isoformat() + "Z",
+                        "operator": 12,
+                        "operand": 1,
+                        "data_type": 3
+                    }
+                ],
+                "loadMode": 2, "pageIndex": 1, "pageSize": 1000, 
+                "useSp": False, "view": 2, "summaryColumns": []
+            }
+            
+            response = misa_utils._fetch_with_retry("https://actapp.misa.vn/g1/api/pu/v1/pu_list/paging_filter_v2", headers, amis_payload)
+            amis_dict = {}
+            if response.status_code == 200:
+                resp_json = response.json()
+                data_obj = resp_json.get("Data")
+                if isinstance(data_obj, str):
+                    import json as json_lib
+                    try: data_obj = json_lib.loads(data_obj)
+                    except: data_obj = {}
+                if not data_obj: data_obj = {}
+                for apo in data_obj.get("PageData", []):
+                    refno = apo.get("refno")
+                    if refno:
+                        amis_dict[refno] = apo
+            
             matched = []
             diff = []
             odoo_only = []
@@ -597,30 +649,9 @@ class MisaExtensionController(http.Controller):
                 po_origin = po.origin or ""
                 
                 # Tìm trên AMIS
-                amis_po = None
-                
-                # Hàm helper tìm kiếm trên AMIS theo refno
-                def _search_amis_po(search_ref):
-                    payload = {
-                        "filter": [{"property": 4005, "operator": 1, "operand": 1, "value": search_ref, "data_type": 1}],
-                        "loadMode": 2, "pageIndex": 1, "pageSize": 10, "useSp": False, "view": 2, "summaryColumns": []
-                    }
-                    res = misa_utils._fetch_with_retry("https://actapp.misa.vn/g1/api/pu/v1/pu_list/paging_filter_v2", headers, payload)
-                    if res.status_code == 200:
-                        d = res.json().get("Data")
-                        if isinstance(d, str):
-                            import json as json_lib
-                            try: d = json_lib.loads(d)
-                            except: d = {}
-                        if not d: d = {}
-                        items = d.get("PageData", [])
-                        if items:
-                            return items[0]
-                    return None
-                    
-                amis_po = _search_amis_po(po_name)
+                amis_po = amis_dict.get(po_name)
                 if not amis_po and po_origin:
-                    amis_po = _search_amis_po(po_origin)
+                    amis_po = amis_dict.get(po_origin)
                     
                 if not amis_po:
                     return {"status": "odoo_only", "po_name": po_name}
