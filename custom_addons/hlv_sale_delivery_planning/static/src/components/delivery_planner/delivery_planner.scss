@@ -465,3 +465,25 @@ body.o_web_client {
 .hlv-bus-status.live .hlv-bus-dot {
     background: #22c55e;
 }
+
+.hlv-browser-noti-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    background: #fff;
+    color: #64748b;
+}
+.hlv-browser-noti-btn.enabled {
+    color: #166534;
+    border-color: #bbf7d0;
+    background: #f0fdf4;
+}
+.hlv-browser-noti-btn.blocked {
+    color: #991b1b;
+    border-color: #fecaca;
+    background: #fef2f2;
+}

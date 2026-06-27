@@ -188,6 +188,7 @@ export class DeliveryPlannerRealtimeMixin {
             so.has_unread_message = true;
         }
         this._playMessageSound();
+        this._showDesktopMessageNotification(payload, rawBody);
         this.notification.add(
             `Đơn hàng ${payload.so_name}: ${rawBody}...`,
             {
@@ -202,6 +203,55 @@ export class DeliveryPlannerRealtimeMixin {
                 ]
             }
         );
+    }
+
+    _browserNotificationsSupported() {
+        return typeof window !== "undefined" && "Notification" in window && window.isSecureContext;
+    }
+
+    _syncDesktopNotificationPermission() {
+        this.state.desktopNotificationPermission = this._browserNotificationsSupported() ? Notification.permission : "unsupported";
+    }
+
+    async requestDesktopNotifications() {
+        if (!this._browserNotificationsSupported()) {
+            this.state.desktopNotificationPermission = "unsupported";
+            this.notification.add("Trình duyệt không hỗ trợ thông báo ngoài web hoặc trang chưa chạy HTTPS.", { type: "warning" });
+            return;
+        }
+        if (Notification.permission === "granted" || Notification.permission === "denied") {
+            this._syncDesktopNotificationPermission();
+            if (Notification.permission === "denied") {
+                this.notification.add("Thông báo trình duyệt đang bị chặn. Cần bật lại trong cài đặt site của trình duyệt.", { type: "warning" });
+            }
+            return;
+        }
+        const permission = await Notification.requestPermission();
+        this.state.desktopNotificationPermission = permission;
+        this.notification.add(
+            permission === "granted" ? "Đã bật thông báo trình duyệt" : "Chưa bật thông báo trình duyệt",
+            { type: permission === "granted" ? "success" : "warning" }
+        );
+    }
+
+    _showDesktopMessageNotification(payload, rawBody) {
+        try {
+            if (!this._browserNotificationsSupported() || Notification.permission !== "granted" || !payload) return;
+            const title = `Có tin nhắn mới ${payload.author_name || ""}`;
+            const body = `Đơn hàng ${payload.so_name || ""}: ${rawBody || ""}`;
+            const noti = new Notification(title, {
+                body,
+                icon: "/web/static/img/favicon.ico",
+                tag: `delivery-planner-message-${payload.message_id || payload.so_id || Date.now()}`,
+                renotify: true,
+            });
+            noti.onclick = () => {
+                window.focus();
+                this.openDrawerFromMessageList(payload.so_id);
+                noti.close();
+            };
+            setTimeout(() => noti.close(), 9000);
+        } catch (e) {}
     }
 
     _playMessageSound() {
