@@ -1,3 +1,4 @@
+import logging
 import os
 
 from odoo import models, api
@@ -18,10 +19,34 @@ _SKIP_MSG_RE = re.compile(
     r'|Sales Order created'
     r'|Quotation created'
     r'|has been created from'
-    r'|Đơn hàng được tạo',
+    r'|Đơn hàng được tạo'
+    r'|Đơn hàng tách kiện'
+    r'|Assign người đóng gói'
+    r'|Đổi người đóng gói'
+    r'|In phiếu lấy hàng'
+    r'|Nhu cầu ban đầu đã được cập nhật'
+    r'|Nhu cầu ban đầu đã được'
+    r'|The initial demand has'
+    r'|The ordered quantity has been updated'
+    r'|extra line with'
+    r'|Đồng bộ MISA thành công'
+    r'|Đã đồng bộ SO lines'
+    r'|Odoo sẽ tự tạo picking'
+    r'|🖨️'
+    r'|👤'
+    r'|🔄'
+    r'|Lá»‡nh chuyá»ƒn hÃ ng Ä‘Æ°á»£c táº¡o'
+    r'|lá»‡nh chuyá»ƒn hÃ ng Ä‘Ã£ Ä‘Æ°á»£c táº¡o ra tá»«'
+    r'|Äá»“ng bá»™ \(xoÃ¡ .{0,5} táº¡o láº¡i\) thÃ nh cÃ´ng'
+    r'|ÄÆ¡n hÃ ng Ä‘Æ°á»£c táº¡o'
+    r'|ÄÆ¡n hÃ ng tÃ¡ch kiá»‡n'
+    r'|Nhu cáº§u ban Ä‘áº§u Ä‘Ã£ Ä‘Æ°á»£c'
+    r'|Äá»“ng bá»™ MISA thÃ nh cÃ´ng'
+    r'|ðŸ–¨ï¸'
+    r'|ðŸ‘¤'
+    r'|ðŸ”„',
     re.IGNORECASE
 )
-
 _ALLOWED_CHAT_ATTACHMENT_MIMES = {
     'application/msword',
     'application/pdf',
@@ -32,6 +57,72 @@ _ALLOWED_CHAT_ATTACHMENT_MIMES = {
 }
 _ALLOWED_CHAT_ATTACHMENT_EXTS = {'.doc', '.docx', '.pdf', '.xls', '.xlsx', '.csv'}
 _MAX_CHAT_ATTACHMENT_BYTES = 20 * 1024 * 1024
+
+
+_MENTION_RE = re.compile(r'@([^\s@,;:!?()\[\]{}<>]+)')
+
+
+def _normalize_mention_alias(value):
+    return (value or '').strip().lower().lstrip('@')
+
+
+def _split_mention_aliases(value):
+    aliases = []
+    for part in (value or '').split(','):
+        alias = _normalize_mention_alias(part)
+        if alias and alias not in aliases:
+            aliases.append(alias)
+    return aliases
+
+
+def _extract_configured_mentions(text, valid_aliases):
+    text = text or ''
+    valid_aliases = sorted({_normalize_mention_alias(a) for a in valid_aliases if _normalize_mention_alias(a)}, key=len, reverse=True)
+    found = []
+    used_spans = []
+    lowered = text.lower()
+    for alias in valid_aliases:
+      pattern = re.compile(r'(^|\s)@' + re.escape(alias) + r'(?=$|[\s,;:!?()\[\]{}<>])', re.IGNORECASE)
+      for match in pattern.finditer(lowered):
+        start = match.start() + len(match.group(1))
+        end = match.end()
+        if any(not (end <= a or start >= b) for a, b in used_spans):
+          continue
+        used_spans.append((start, end))
+        if alias not in found:
+          found.append(alias)
+    return found
+
+
+
+def _format_message_body_with_mentions(text, valid_aliases=None):
+    text = text or ''
+    ranges = []
+    if valid_aliases:
+      aliases = sorted({_normalize_mention_alias(a) for a in valid_aliases if _normalize_mention_alias(a)}, key=len, reverse=True)
+      lowered = text.lower()
+      for alias in aliases:
+        pattern = re.compile(r'(^|\s)@' + re.escape(alias) + r'(?=$|[\s,;:!?()\[\]{}<>])', re.IGNORECASE)
+        for match in pattern.finditer(lowered):
+          start = match.start() + len(match.group(1))
+          end = match.end()
+          if any(not (end <= a or start >= b) for a, b in ranges):
+            continue
+          ranges.append((start, end))
+    else:
+      ranges = [(m.start(), m.end()) for m in _MENTION_RE.finditer(text)]
+    ranges.sort()
+    parts = []
+    last = 0
+    for start, end in ranges:
+      parts.append(Markup.escape(text[last:start]))
+      parts.append(Markup('<strong class="sale-plan-mention">%s</strong>') % Markup.escape(text[start:end]))
+      last = end
+    parts.append(Markup.escape(text[last:]))
+    return Markup('').join(parts)
+
+
+_logger = logging.getLogger(__name__)
 
 
 class DeliveryPlannerServiceMessages(models.AbstractModel):
@@ -86,6 +177,30 @@ class DeliveryPlannerServiceMessages(models.AbstractModel):
         return result
 
     @api.model
+    def get_sale_plan_mention_aliases(self):
+        users = self.env['res.users'].sudo().search([
+            ('active', '=', True),
+            ('x_sale_plan_mention_names', '!=', False),
+        ])
+        rows = []
+        seen = set()
+        for user in users:
+            for part in (user.x_sale_plan_mention_names or '').split(','):
+                display_alias = (part or '').strip().lstrip('@')
+                alias = _normalize_mention_alias(display_alias)
+                if not alias or alias in seen:
+                    continue
+                seen.add(alias)
+                rows.append({
+                    'alias': alias,
+                    'display_alias': display_alias,
+                    'user_id': user.id,
+                    'user_name': user.name or '',
+                })
+        rows.sort(key=lambda row: row['alias'])
+        return rows
+
+    @api.model
     def post_order_message(self, order_id, body='', attachments=None):
         so = self.env['sale.order'].browse(int(order_id))
         if not so.exists():
@@ -123,13 +238,20 @@ class DeliveryPlannerServiceMessages(models.AbstractModel):
         if not body and not attachment_ids:
             return False
 
-        safe_body = Markup('<p>%s</p>') % Markup.escape(body) if body else Markup('<p><i>Tệp đính kèm</i></p>')
+        mention_aliases = [row['alias'] for row in self.get_sale_plan_mention_aliases()]
+        safe_body = Markup('<p>%s</p>') % _format_message_body_with_mentions(body, mention_aliases) if body else Markup('<p><i>Tệp đính kèm</i></p>')
         so.message_post(
             body=safe_body,
             message_type='comment',
             subtype_xmlid='mail.mt_note',
             attachment_ids=attachment_ids,
         )
+        if body:
+            try:
+                from ..controllers.sale_plan_controller import _push_public_mention_event
+                _push_public_mention_event(self.env, so, body, self.env.user.name or '')
+            except Exception:
+                _logger.exception('delivery planner public mention event error')
         return True
 
     @api.model

@@ -144,7 +144,7 @@
                         <i class="fa fa-search text-primary" title="Tìm kiếm"></i>
                     </span>
                     <input type="text" class="form-control px-2 border-1 fw-bold"
-                           placeholder="Tìm tên/mã Khách, SO, Sản phẩm..."
+                           placeholder="Tìm tên/mã Khách, SO, Sản phẩm, Tham chiếu Shopee..."
                            t-model="state.searchQuery"
                            t-on-keyup="onSearchKeyup"/>
                 </div>

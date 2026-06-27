@@ -14,8 +14,12 @@
         'views/res_users_views.xml',
         'views/delivery_planner_views.xml',
         'views/picking_packer_wizard_views.xml',
+        'views/sale_plan_bus_templates.xml',
     ],
     'assets': {
+        'hlv_sale_delivery_planning.assets_sale_plan_bus': [
+            'hlv_sale_delivery_planning/static/src/sale_plan_bus/sale_plan_bus_frame.js',
+        ],
         'web.assets_backend': [
             'hlv_sale_delivery_planning/static/src/components/delivery_planner/delivery_planner.scss',
             # Sub-templates (phải đăng ký trước main template)

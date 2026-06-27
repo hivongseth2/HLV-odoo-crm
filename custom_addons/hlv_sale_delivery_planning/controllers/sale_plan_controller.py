@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import json
 import logging
 import os
 import re
@@ -6,7 +7,7 @@ import time
 import pytz
 from collections import defaultdict
 from markupsafe import Markup
-from odoo import http
+from odoo import http, fields
 from odoo.http import request
 from .picking_export_helper import build_picking_summary_xlsx
 
@@ -19,10 +20,34 @@ _SKIP_MSG_RE = re.compile(
     r'|Sales Order created'
     r'|Quotation created'
     r'|has been created from'
-    r'|Đơn hàng được tạo',
+    r'|Đơn hàng được tạo'
+    r'|Đơn hàng tách kiện'
+    r'|Assign người đóng gói'
+    r'|Đổi người đóng gói'
+    r'|In phiếu lấy hàng'
+    r'|Nhu cầu ban đầu đã được cập nhật'
+    r'|Nhu cầu ban đầu đã được'
+    r'|The initial demand has'
+    r'|The ordered quantity has been updated'
+    r'|extra line with'
+    r'|Đồng bộ MISA thành công'
+    r'|Đã đồng bộ SO lines'
+    r'|Odoo sẽ tự tạo picking'
+    r'|🖨️'
+    r'|👤'
+    r'|🔄'
+    r'|Lá»‡nh chuyá»ƒn hÃ ng Ä‘Æ°á»£c táº¡o'
+    r'|lá»‡nh chuyá»ƒn hÃ ng Ä‘Ã£ Ä‘Æ°á»£c táº¡o ra tá»«'
+    r'|Äá»“ng bá»™ \(xoÃ¡ .{0,5} táº¡o láº¡i\) thÃ nh cÃ´ng'
+    r'|ÄÆ¡n hÃ ng Ä‘Æ°á»£c táº¡o'
+    r'|ÄÆ¡n hÃ ng tÃ¡ch kiá»‡n'
+    r'|Nhu cáº§u ban Ä‘áº§u Ä‘Ã£ Ä‘Æ°á»£c'
+    r'|Äá»“ng bá»™ MISA thÃ nh cÃ´ng'
+    r'|ðŸ–¨ï¸'
+    r'|ðŸ‘¤'
+    r'|ðŸ”„',
     re.IGNORECASE
 )
-
 _logger = logging.getLogger(__name__)
 
 SESSION_KEY_OK = "inv_pw_ok"
@@ -77,6 +102,144 @@ def _normalize_preview_text(text, limit=140):
   if not plain:
     return ''
   return plain[:limit] + ('...' if len(plain) > limit else '')
+
+
+_PUBLIC_MENTION_SEQ = 0
+_MENTION_RE = re.compile(r'@([^\s@,;:!?()\[\]{}<>]+)')
+
+
+def _normalize_mention_alias(value):
+  return (value or '').strip().lower().lstrip('@')
+
+
+def _split_mention_aliases(value):
+  aliases = []
+  for part in (value or '').split(','):
+    alias = _normalize_mention_alias(part)
+    if alias and alias not in aliases:
+      aliases.append(alias)
+  return aliases
+
+
+def _extract_configured_mentions(text, valid_aliases):
+  text = text or ''
+  valid_aliases = sorted({_normalize_mention_alias(a) for a in valid_aliases if _normalize_mention_alias(a)}, key=len, reverse=True)
+  found = []
+  used_spans = []
+  lowered = text.lower()
+  for alias in valid_aliases:
+    pattern = re.compile(r'(^|\s)@' + re.escape(alias) + r'(?=$|[\s,;:!?()\[\]{}<>])', re.IGNORECASE)
+    for match in pattern.finditer(lowered):
+      start = match.start() + len(match.group(1))
+      end = match.end()
+      if any(not (end <= a or start >= b) for a, b in used_spans):
+        continue
+      used_spans.append((start, end))
+      if alias not in found:
+        found.append(alias)
+  return found
+
+
+def _format_message_body_with_mentions(text, valid_aliases=None):
+  text = text or ''
+  ranges = []
+  if valid_aliases:
+    aliases = sorted({_normalize_mention_alias(a) for a in valid_aliases if _normalize_mention_alias(a)}, key=len, reverse=True)
+    lowered = text.lower()
+    for alias in aliases:
+      pattern = re.compile(r'(^|\s)@' + re.escape(alias) + r'(?=$|[\s,;:!?()\[\]{}<>])', re.IGNORECASE)
+      for match in pattern.finditer(lowered):
+        start = match.start() + len(match.group(1))
+        end = match.end()
+        if any(not (end <= a or start >= b) for a, b in ranges):
+          continue
+        ranges.append((start, end))
+  else:
+    ranges = [(m.start(), m.end()) for m in _MENTION_RE.finditer(text)]
+  ranges.sort()
+  parts = []
+  last = 0
+  for start, end in ranges:
+    parts.append(Markup.escape(text[last:start]))
+    parts.append(Markup('<strong class="sale-plan-mention">%s</strong>') % Markup.escape(text[start:end]))
+    last = end
+  parts.append(Markup.escape(text[last:]))
+  return Markup('').join(parts)
+
+def _get_sale_plan_alias_rows(env):
+  users = env['res.users'].sudo().search([
+    ('active', '=', True),
+    ('x_sale_plan_mention_names', '!=', False),
+  ])
+  rows = []
+  seen = set()
+  for user in users:
+    for part in (user.x_sale_plan_mention_names or '').split(','):
+      display_alias = (part or '').strip().lstrip('@')
+      alias = _normalize_mention_alias(display_alias)
+      if not alias or alias in seen:
+        continue
+      seen.add(alias)
+      rows.append({
+        'alias': alias,
+        'display_alias': display_alias,
+        'user_id': user.id,
+        'user_name': user.name or '',
+      })
+  rows.sort(key=lambda row: row['alias'])
+  return rows
+
+
+def _get_user_sale_plan_aliases(user):
+  try:
+    if not user or user._is_public():
+      return []
+  except Exception:
+    return []
+  return _split_mention_aliases(getattr(user, 'x_sale_plan_mention_names', '') or '')
+
+
+def _push_public_mention_event(env, so, body, author_name=''):
+  global _PUBLIC_MENTION_SEQ
+  valid_aliases = {row['alias'] for row in _get_sale_plan_alias_rows(env)}
+  matched = _extract_configured_mentions(body, valid_aliases)
+  if not matched:
+    return None
+  _PUBLIC_MENTION_SEQ += 1
+  notif_model = env['hlv.sale.plan.mention.notification'].sudo()
+  records = notif_model.browse()
+  preview = _normalize_preview_text(body or '')
+  mentions_csv = ','.join(matched)
+  for alias in matched:
+    records |= notif_model.create({
+      'alias': alias,
+      'sale_order_id': so.id,
+      'so_name': so.name or '',
+      'author_name': author_name or '',
+      'body': body or '',
+      'preview': preview,
+      'mentions': mentions_csv,
+      'is_read': False,
+    })
+  payload = {
+    'id': _PUBLIC_MENTION_SEQ,
+    'type': 'sale_plan_mention',
+    'notification_ids': records.ids,
+    'notification_id_by_alias': {rec.alias: rec.id for rec in records},
+    'so_id': so.id,
+    'so_name': so.name or '',
+    'author_name': author_name or '',
+    'body': body or '',
+    'preview': preview,
+    'mentions': matched,
+    'ts': int(time.time()),
+  }
+  try:
+    env['bus.bus'].sudo()._sendone('sale_plan_public_channel', 'sale_plan_mention', payload)
+  except Exception:
+    _logger.exception('sale_plan public mention bus send error')
+  return payload
+
 
 
 _H = [
@@ -226,6 +389,39 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
 /* Load more */
 #btn-load-more{font-weight:600;padding:5px 32px}
 @media(max-width:1024px){#drawer{width:100%!important;right:-105%!important}} @media(max-width:768px){.kanban-col{min-width:100%}}
+
+.sale-plan-mention{color:#4f46e5;font-weight:800}
+.mention-noti-wrap{position:relative;display:flex;align-items:center}
+#mention-noti-button{border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.08);color:#fff;border-radius:4px;padding:5px 10px;font-size:.78rem;font-weight:700;line-height:1;display:inline-flex;align-items:center;gap:6px}
+#mention-noti-button.has-unread{background:#4f46e5;border-color:#818cf8;color:#fff}
+#mention-noti-count{min-width:18px;height:18px;border-radius:9px;background:#ef4444;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:.68rem;font-weight:800;padding:0 5px}
+#mention-noti-panel{position:absolute;right:0;top:calc(100% + 8px);z-index:3150;width:min(390px,calc(100vw - 32px));max-height:420px;overflow-y:auto;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 18px 40px rgba(15,23,42,.22);display:none;color:#0f172a}
+#mention-noti-panel.open{display:block}
+.mention-noti-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border-bottom:1px solid #e2e8f0;font-size:.78rem;font-weight:800;color:#0f172a}
+.mention-noti-actions button{border:0;background:transparent;color:#64748b;font-size:.72rem;font-weight:700;padding:2px 4px}
+.mention-noti-item{padding:10px 12px;border-bottom:1px solid #f1f5f9;cursor:pointer;font-size:.8rem;text-align:left}
+.mention-noti-item:hover{background:#f8fafc}
+.mention-noti-item.unread{background:#eef2ff}
+.mention-noti-item-title{font-weight:800;color:#0f172a;margin-bottom:3px}
+.mention-noti-item-body{color:#475569;line-height:1.4;word-break:break-word}
+.mention-noti-empty{padding:18px 12px;text-align:center;color:#94a3b8;font-size:.8rem}
+
+.mention-noti-tabs{display:flex;gap:6px;flex-wrap:wrap;padding:8px 10px;border-bottom:1px solid #e2e8f0;background:#f8fafc}
+.mention-noti-alias-tab{border:1px solid #cbd5e1;background:#fff;color:#334155;border-radius:999px;padding:3px 8px;font-size:.7rem;font-weight:800;cursor:pointer}
+.mention-noti-alias-tab.active{background:#4f46e5;border-color:#4f46e5;color:#fff}
+.mention-noti-alias-tab .count{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;border-radius:8px;background:#ef4444;color:#fff;font-size:.62rem;margin-left:4px;padding:0 4px}
+.public-mention-suggest{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:3200;background:#fff;border:1px solid #c7d2fe;border-radius:6px;box-shadow:0 12px 30px rgba(15,23,42,.16);max-height:360px;overflow-y:auto;display:none}
+.public-mention-suggest.open{display:block}
+.public-mention-suggest-item{padding:8px 10px;font-size:.8rem;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.public-mention-suggest-item:hover,.public-mention-suggest-item.active{background:#eef2ff}
+.public-mention-suggest-item strong{color:#4f46e5}
+.public-mention-suggest-item small{color:#64748b;font-size:.68rem}
+.mention-toast-stack{position:fixed;right:16px;top:72px;z-index:3400;display:flex;flex-direction:column;gap:8px;width:min(360px,calc(100vw - 32px));pointer-events:none}
+.mention-toast{pointer-events:auto;background:#fff;border-left:4px solid #4f46e5;border-radius:8px;box-shadow:0 14px 36px rgba(15,23,42,.22);padding:10px 12px;color:#0f172a;cursor:pointer;animation:mentionToastIn .16s ease-out}
+.mention-toast-title{font-weight:800;font-size:.82rem;margin-bottom:3px}
+.mention-toast-body{font-size:.78rem;color:#475569;line-height:1.35;word-break:break-word}
+.mention-toast-close{float:right;border:0;background:transparent;color:#94a3b8;font-size:1rem;line-height:1;padding:0 0 4px 8px}
+@keyframes mentionToastIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
 /* Report button */
 .btn-report{font-size:.68rem;padding:2px 8px;border:1px solid #fecaca;color:#dc2626;background:#fef2f2;border-radius:4px;cursor:pointer;transition:.15s;line-height:1.4;font-weight:500}
 .btn-report:hover{background:#fee2e2;border-color:#dc2626}
@@ -423,6 +619,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
 </style>
 </head><body>
 <div id="loading" class="loading-overlay d-none"><div class="spinner-border text-primary"></div></div>
+<iframe id="sale-plan-bus-frame" src="/sale_plan/bus_frame" style="display:none;width:0;height:0;border:0" aria-hidden="true"></iframe>
 <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-3" style="border-radius:0!important">
 <div class="container-fluid">
   <a class="navbar-brand fw-bold" href="/sale_plan">&#128666; Tình trạng đơn hàng</a>
@@ -433,6 +630,13 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
       <li class="nav-item"><a class="nav-link" href="/search_order">Chứng từ mua</a></li>
       <li class="nav-item"><a class="nav-link active" href="/sale_plan">Tình trạng đơn</a></li>
       <li class="nav-item"><a class="nav-link" href="/search_invoice">Hóa đơn MISA</a></li>
+      <li class="nav-item ms-lg-2 mention-noti-wrap">
+        <button id="mention-noti-button" type="button" title="Thông báo"><i class="fa fa-bell"></i><span id="mention-noti-count">0</span></button>
+        <div id="mention-noti-panel" aria-live="polite">
+          <div class="mention-noti-head"><span>Thông báo</span><span class="mention-noti-actions"><button id="mention-noti-read-all" type="button">Đã đọc hết</button><button id="mention-noti-clear" type="button">Xóa</button></span></div>
+          <div id="mention-noti-list"></div>
+        </div>
+      </li>
     </ul>
   </div>
 </div></nav>
@@ -484,7 +688,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
     </div>
   </div>
   <div class="row g-3 mb-3">
-    <div class="col-md-3"><label class="form-label small fw-semibold text-muted mb-1">Tìm Kiếm</label><input id="f-q" class="form-control form-control-sm" placeholder="SO / Khách hàng..."/></div>
+    <div class="col-md-3"><label class="form-label small fw-semibold text-muted mb-1">Tìm Kiếm</label><input id="f-q" class="form-control form-control-sm" placeholder="SO / Khách hàng / Tham chiếu Shopee..."/></div>
     <div class="col-md-2"><label class="form-label small fw-semibold text-muted mb-1">Kho Cung Cấp</label><select id="f-wh" class="form-select form-select-sm"><option value="all">Tất cả</option></select></div>
     <div class="col-md-2"><label class="form-label small fw-semibold text-muted mb-1">Tiến Độ Giao</label>
       <select id="f-del" class="form-select form-select-sm">
@@ -592,6 +796,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
 </table></div></div>
 </div>
 <!-- Drawer overlay -->
+<div id="mention-toast-stack" class="mention-toast-stack" aria-live="polite"></div>
 <div id="drawer-overlay"></div>
 <div id="drawer">
   <div class="p-3 border-bottom d-flex justify-content-between align-items-center bg-primary text-white">
@@ -639,6 +844,37 @@ function gv(id){var e=$(id);return e?e.value:'';}
 function showLoading(){var l=$('loading');if(l)l.classList.remove('d-none');}
 function hideLoading(){var l=$('loading');if(l)l.classList.add('d-none');}
 function getTagIds(){var e=$('f-tag');if(!e)return'';return Array.from(e.selectedOptions).map(function(o){return o.value;}).filter(Boolean).join(',');}
+
+var _sessionMentionAlias='';
+var _sessionMentionAliases=[];
+var _mentionLastId=0;
+var _mentionSeen={};
+var _mentionNotiItems=[];
+var _mentionAliases=[];
+var _mentionActiveIndex=0;
+var _mentionActiveAlias='all';
+function normalizeMentionAlias(v){return String(v||'').trim().toLowerCase().replace(/^@+/,'');}
+function getCurrentMentionAlias(){return normalizeMentionAlias(_sessionMentionAlias||'');}
+function getCurrentMentionAliases(){return (_sessionMentionAliases||[]).map(normalizeMentionAlias).filter(Boolean);}
+function aliasDisplay(alias){alias=normalizeMentionAlias(alias);var row=(_mentionAliases||[]).find(function(a){return normalizeMentionAlias(a.alias)===alias;});return (row&&(row.display_alias||row.alias))||alias;}
+function eventMatchesCurrentAlias(ev){var aliases=getCurrentMentionAliases();if(!aliases.length)return false;var mentions=(ev&&ev.mentions)||[];return mentions.some(function(m){return aliases.indexOf(normalizeMentionAlias(m))!==-1;});}
+function loadCurrentMentionAlias(){return fetch('/api/sale_plan/current_alias',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{}})}).then(function(r){return r.json();}).then(function(j){var d=j.result||{};_sessionMentionAliases=d.status==='success'?(d.aliases||[]):[];_sessionMentionAlias=_sessionMentionAliases[0]||'';}).catch(function(){_sessionMentionAlias='';_sessionMentionAliases=[];});}
+function loadMentionNotiItems(){return fetch('/api/sale_plan/mention_notifications',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{}})}).then(function(r){return r.json();}).then(function(j){var d=j.result||{};_mentionNotiItems=d.status==='success'?(d.events||[]):[];_mentionSeen={};_mentionNotiItems.forEach(function(item){var id=String(item.notification_id||item.id||'');if(id)_mentionSeen[id]=true;});renderMentionNotiPanel();}).catch(function(){_mentionNotiItems=[];renderMentionNotiPanel();});}
+function addMentionNotification(ev){if(!ev||!ev.id)return;var id=String(ev.notification_id||ev.id);var existing=_mentionNotiItems.find(function(x){return String(x.id)===id;});if(existing){existing.so_id=ev.so_id;existing.so_name=ev.so_name||existing.so_name||'';existing.author_name=ev.author_name||existing.author_name||'';existing.preview=ev.preview||ev.body||existing.preview||'';existing.mentions=ev.mentions||existing.mentions||[];existing.alias=ev.alias||existing.alias||'';existing.unread=ev.unread!==undefined?ev.unread:existing.unread;renderMentionNotiPanel();return;}var item={id:id,notification_id:ev.notification_id||ev.id,so_id:ev.so_id,so_name:ev.so_name||'',author_name:ev.author_name||'',preview:ev.preview||ev.body||'',mentions:ev.mentions||[],alias:ev.alias||'',unread:ev.unread!==undefined?ev.unread:true,ts:ev.ts||Date.now()};_mentionNotiItems.unshift(item);_mentionNotiItems=_mentionNotiItems.slice(0,100);renderMentionNotiPanel();}
+function mentionItemHasAlias(item,alias){alias=normalizeMentionAlias(alias);var itemAlias=normalizeMentionAlias(item&&item.alias);if(itemAlias)return itemAlias===alias;return ((item&&item.mentions)||[]).map(normalizeMentionAlias).indexOf(alias)!==-1;}
+function mentionUnreadCountForAlias(alias){return _mentionNotiItems.filter(function(x){return x.unread&&(alias==='all'||mentionItemHasAlias(x,alias));}).length;}
+function renderMentionNotiPanel(){var btn=$('mention-noti-button'),cnt=$('mention-noti-count'),list=$('mention-noti-list');if(!btn||!cnt||!list)return;var aliases=getCurrentMentionAliases();if(_mentionActiveAlias!=='all'&&aliases.indexOf(_mentionActiveAlias)===-1)_mentionActiveAlias='all';var unread=mentionUnreadCountForAlias('all');cnt.textContent=String(unread||0);btn.classList.toggle('has-unread',unread>0);var tabs='<div class="mention-noti-tabs"><button type="button" class="mention-noti-alias-tab '+(_mentionActiveAlias==='all'?'active':'')+'" data-alias="all">Tất cả'+(unread?'<span class="count">'+unread+'</span>':'')+'</button>'+aliases.map(function(alias){var c=mentionUnreadCountForAlias(alias);return '<button type="button" class="mention-noti-alias-tab '+(_mentionActiveAlias===alias?'active':'')+'" data-alias="'+esc(alias)+'">@'+esc(aliasDisplay(alias))+(c?'<span class="count">'+c+'</span>':'')+'</button>';}).join('')+'</div>';var items=_mentionNotiItems.filter(function(item){return _mentionActiveAlias==='all'||mentionItemHasAlias(item,_mentionActiveAlias);});if(!items.length){list.innerHTML=tabs+'<div class="mention-noti-empty">Chua co thong bao</div>';return;}list.innerHTML=tabs+items.map(function(item){var tags=(item.mentions||[]).map(function(a){return '<span class="badge bg-light text-primary border me-1">@'+esc(aliasDisplay(a))+'</span>';}).join('');return '<div class="mention-noti-item '+(item.unread?'unread':'')+'" data-id="'+esc(item.id)+'" data-so-id="'+esc(item.so_id)+'" data-so-name="'+esc(item.so_name)+'"><div class="mention-noti-item-title">'+esc(item.so_name||'Sale order')+'</div><div class="mention-noti-item-body"><strong>'+esc(item.author_name||'')+'</strong>: '+esc(item.preview||'')+'</div><div class="mt-1">'+tags+'</div></div>';}).join('');}
+function markMentionNotificationRead(id){var item=_mentionNotiItems.find(function(x){return String(x.id)===String(id);});if(item)item.unread=false;renderMentionNotiPanel();fetch('/api/sale_plan/mention_notifications/read',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{notification_ids:[id]}})}).then(function(r){return r.json();}).then(function(j){var d=j.result||{};if(d.status==='success')_mentionNotiItems=d.events||_mentionNotiItems;renderMentionNotiPanel();}).catch(function(){});}
+function openOrderFromNotification(soId,soName){soId=parseInt(soId,10)||0;var local=S.orders.find(function(o){return o.id===soId;});if(local){openDrawer(soId);return;}showLoading();fetch('/api/sale_plan/data',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{search:soName||'',warehouse_id:'all',delivery_status:'all',stock_status:'all',packing_status:'all',date_from:'',date_to:'',po_date_from:'',po_date_to:'',done_date_from:'',done_date_to:'',po_status:'all',saler_code:'',htgh:'',delivery_type:'all',tag_ids:'',show_completed:true,limit:20,offset:0}})}).then(function(r){return r.json();}).then(function(j){hideLoading();var d=j.result&&j.result.data;var order=d&&d.orders&&(d.orders.find(function(o){return o.id===soId;})||d.orders[0]);if(order){var exists=S.orders.find(function(o){return o.id===order.id;});if(!exists)S.orders.unshift(order);openDrawer(order.id);}}).catch(function(){hideLoading();});}
+function playMentionSound(){try{var Ctx=window.AudioContext||window.webkitAudioContext;if(!Ctx)return;var ctx=window._salePlanMentionAudioCtx||(window._salePlanMentionAudioCtx=new Ctx());if(ctx.state==='suspended')ctx.resume();var now=ctx.currentTime;[660,880].forEach(function(freq,i){var osc=ctx.createOscillator();var gain=ctx.createGain();osc.type='sine';osc.frequency.value=freq;gain.gain.setValueAtTime(0.0001,now+i*0.1);gain.gain.exponentialRampToValueAtTime(0.055,now+i*0.1+0.02);gain.gain.exponentialRampToValueAtTime(0.0001,now+i*0.1+0.12);osc.connect(gain);gain.connect(ctx.destination);osc.start(now+i*0.1);osc.stop(now+i*0.1+0.14);});}catch(e){}}
+function showMentionToast(ev){var stack=$('mention-toast-stack');if(!stack||!ev)return;var toast=document.createElement('div');toast.className='mention-toast';toast.innerHTML='<button type="button" class="mention-toast-close" aria-label="Đóng">&times;</button><div class="mention-toast-title">Có tin nhắn mới '+(ev.author_name?('từ '+esc(ev.author_name)):'')+'</div><div class="mention-toast-body"><strong>'+esc(ev.so_name||'Sale order')+'</strong>: '+esc(ev.preview||ev.body||'')+'</div>';toast.addEventListener('click',function(e){if(e.target.closest('.mention-toast-close')){toast.remove();return;}openOrderFromNotification(ev.so_id,ev.so_name);toast.remove();});stack.prepend(toast);while(stack.children.length>4)stack.lastElementChild.remove();setTimeout(function(){toast.remove();},7000);}
+function handleMentionEvent(ev){if(!ev||!ev.id||!eventMatchesCurrentAlias(ev))return;var aliases=getCurrentMentionAliases();var idMap=ev.notification_id_by_alias||{};var matched=(ev.mentions||[]).map(normalizeMentionAlias).filter(function(alias){return aliases.indexOf(alias)!==-1;});var added=false;matched.forEach(function(alias){var notificationId=idMap[alias]||ev.notification_id||ev.id;var seenKey=String(notificationId);if(_mentionSeen[seenKey])return;_mentionSeen[seenKey]=true;added=true;addMentionNotification(Object.assign({},ev,{id:notificationId,notification_id:notificationId,alias:alias,unread:true}));});if(added){showMentionToast(ev);playMentionSound();}_mentionLastId=Math.max(_mentionLastId,parseInt(ev.id,10)||0);}
+function loadPublicMentionAliases(){return fetch('/api/sale_plan/mention_aliases',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{}})}).then(function(r){return r.json();}).then(function(j){var d=j.result||{};_mentionAliases=d.status==='success'?(d.aliases||[]):[];renderMentionNotiPanel();}).catch(function(){_mentionAliases=[];});}
+function currentPublicMentionQuery(input){var pos=input.selectionStart||0;var before=input.value.slice(0,pos);var m=/(^|\s)@([^@,;:!?()\[\]{}<>]*)$/.exec(before);if(!m)return null;return {start:pos-m[2].length-1,term:normalizeMentionAlias(m[2]),pos:pos};}
+function renderPublicMentionSuggest(input){var box=$('dr-mention-suggest');if(!box)return;var q=currentPublicMentionQuery(input);if(!q){box.classList.remove('open');box.innerHTML='';return;}var items=_mentionAliases.filter(function(a){return !q.term||normalizeMentionAlias(a.alias).indexOf(q.term)===0||normalizeMentionAlias(a.display_alias).indexOf(q.term)===0||normalizeMentionAlias(a.user_name).indexOf(q.term)>=0;}).slice(0,30);if(!items.length){box.classList.remove('open');box.innerHTML='';return;}_mentionActiveIndex=Math.min(Math.max(_mentionActiveIndex,0),items.length-1);box.innerHTML=items.map(function(a,i){var label=a.display_alias||a.alias;return '<div class="public-mention-suggest-item '+(i===_mentionActiveIndex?'active':'')+'" data-alias="'+esc(label)+'"><strong>@'+esc(label)+'</strong><small>'+esc(a.user_name||'')+'</small></div>';}).join('');box.classList.add('open');}
+function applyPublicMentionAlias(input,alias){var q=currentPublicMentionQuery(input);if(!q)return;input.value=input.value.slice(0,q.start)+'@'+alias+' '+input.value.slice(q.pos);var pos=q.start+alias.length+2;input.focus();input.setSelectionRange(pos,pos);var box=$('dr-mention-suggest');if(box)box.classList.remove('open');}
+function startSalePlanMentionListener(){Promise.all([loadPublicMentionAliases(),loadCurrentMentionAlias()]).then(function(){loadMentionNotiItems();});}
+window.HLVSalePlanMentionBus={onEvent:function(payload){handleMentionEvent(payload);},onStatus:function(status){}};
 var TAG_BG=['#adb5bd','#dc3545','#fd7e14','#ffc107','#20c997','#6610f2','#d63384','#0d6efd','#6f42c1','#e91e63','#198754','#0dcaf0'];
 var TAG_FG=[0,0,0,1,1,0,0,0,0,0,0,1]; // 1=dark text
 function tagBadge(tag){var c=tag[2]||0;var bg=TAG_BG[c]||TAG_BG[0];var fg=TAG_FG[c]?'#000':'#fff';return'<span class="badge me-1" style="background-color:'+bg+';color:'+fg+'">'+esc(tag[1])+'</span>';}
@@ -1301,7 +1537,7 @@ function openDrawer(id){
     +'<div class="d-flex gap-2 mb-2"><input id="dr-msg-author" class="form-control form-control-sm" placeholder="Tên của bạn..." style="max-width:160px" value="'+esc(localStorage.getItem('hlv_msg_author')||'')+'"/>'
     +'<input id="dr-msg-files-input" type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,application/pdf,image/*,video/*" style="display:none"/>'
     +'<button id="dr-msg-attach" class="btn btn-sm btn-outline-secondary px-2" title="Đính kèm PDF, Word, Excel, ảnh, video"><i class="fa fa-paperclip"></i></button>'
-    +'<input id="dr-msg-input" class="form-control form-control-sm" placeholder="Nhập tin nhắn..."/>'
+    +'<div class="position-relative flex-grow-1"><input id="dr-msg-input" class="form-control form-control-sm" placeholder="Nhập tin nhắn..."/><div id="dr-mention-suggest" class="public-mention-suggest"></div></div>'
     +'<button id="dr-msg-send" class="btn btn-sm btn-primary px-3"><i class="fa fa-paper-plane"></i></button></div>'
     +'<div id="dr-msg-files" class="msg-compose-files"></div>'
     +'</div>'
@@ -1322,7 +1558,8 @@ function openDrawer(id){
   $('dr-msg-attach').addEventListener('click',function(e){e.preventDefault();e.stopPropagation();$('dr-msg-files-input').click();});
   $('dr-msg-files-input').addEventListener('change',onPublicFilesSelected);
   $('dr-msg-send').addEventListener('click',function(){sendPublicMessage();});
-  $('dr-msg-input').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();sendPublicMessage();}});
+  $('dr-msg-input').addEventListener('input',function(){_mentionActiveIndex=0;renderPublicMentionSuggest(this);});
+  $('dr-msg-input').addEventListener('keydown',function(e){var box=$('dr-mention-suggest');if(box&&box.classList.contains('open')){var items=Array.from(box.querySelectorAll('.public-mention-suggest-item'));if(items.length){if(e.key==='ArrowDown'){e.preventDefault();_mentionActiveIndex=(_mentionActiveIndex+1)%items.length;renderPublicMentionSuggest(this);return;}if(e.key==='ArrowUp'){e.preventDefault();_mentionActiveIndex=(_mentionActiveIndex-1+items.length)%items.length;renderPublicMentionSuggest(this);return;}if(e.key==='Tab'||e.key==='Enter'){e.preventDefault();applyPublicMentionAlias(this,items[_mentionActiveIndex].dataset.alias);return;}}}if(e.key==='Enter'){e.preventDefault();sendPublicMessage();}});
   $('dr-msg-input').addEventListener('paste',function(e){
     var items=e.clipboardData&&e.clipboardData.items;
     if(!items)return;
@@ -1389,6 +1626,20 @@ function updFilters(){
 }
 
 document.addEventListener('click',function(e){
+  var notiBtn=e.target.closest('#mention-noti-button');
+  if(notiBtn){e.preventDefault();e.stopPropagation();var panel=$('mention-noti-panel');if(panel)panel.classList.toggle('open');return;}
+  var notiAlias=e.target.closest('.mention-noti-alias-tab');
+  if(notiAlias){e.preventDefault();e.stopPropagation();_mentionActiveAlias=normalizeMentionAlias(notiAlias.dataset.alias||'all')||'all';renderMentionNotiPanel();return;}
+  var notiReadAll=e.target.closest('#mention-noti-read-all');
+  if(notiReadAll){e.preventDefault();e.stopPropagation();_mentionNotiItems.forEach(function(x){if(_mentionActiveAlias==='all'||mentionItemHasAlias(x,_mentionActiveAlias))x.unread=false;});renderMentionNotiPanel();fetch('/api/sale_plan/mention_notifications/read',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{alias:_mentionActiveAlias,all_aliases:_mentionActiveAlias==='all'}})}).then(function(r){return r.json();}).then(function(j){var d=j.result||{};if(d.status==='success')_mentionNotiItems=d.events||_mentionNotiItems;renderMentionNotiPanel();}).catch(function(){});return;}
+  var notiClear=e.target.closest('#mention-noti-clear');
+  if(notiClear){e.preventDefault();e.stopPropagation();_mentionNotiItems=_mentionNotiItems.filter(function(x){return !(_mentionActiveAlias==='all'||mentionItemHasAlias(x,_mentionActiveAlias));});renderMentionNotiPanel();fetch('/api/sale_plan/mention_notifications/clear',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{alias:_mentionActiveAlias,all_aliases:_mentionActiveAlias==='all'}})}).then(function(r){return r.json();}).then(function(j){var d=j.result||{};if(d.status==='success')_mentionNotiItems=d.events||[];renderMentionNotiPanel();}).catch(function(){});return;}
+  var notiItem=e.target.closest('.mention-noti-item');
+  if(notiItem){e.preventDefault();e.stopPropagation();markMentionNotificationRead(notiItem.dataset.id);var notiPanel=$('mention-noti-panel');if(notiPanel)notiPanel.classList.remove('open');openOrderFromNotification(notiItem.dataset.soId,notiItem.dataset.soName);return;}
+  var publicMentionItem=e.target.closest('.public-mention-suggest-item');
+  if(publicMentionItem){e.preventDefault();e.stopPropagation();applyPublicMentionAlias($('dr-msg-input'),publicMentionItem.dataset.alias);return;}
+  if(!e.target.closest('#dr-mention-suggest')){var ps=$('dr-mention-suggest');if(ps)ps.classList.remove('open');}
+  if(!e.target.closest('#mention-noti-panel')){var np=$('mention-noti-panel');if(np)np.classList.remove('open');}
   var chipX=e.target.closest('.chip-x');
   if(chipX){
     e.preventDefault();e.stopPropagation();
@@ -1707,6 +1958,7 @@ if(_cachedData){
   updKPI();render();updLoadMore();updFilters();
   hideLoading();
 }
+startSalePlanMentionListener();
 load(false);
 });
 })();
@@ -1715,6 +1967,13 @@ load(false);
 
 
 class SalePlanPublicController(http.Controller):
+
+    @http.route('/sale_plan/bus_frame', type='http', auth='public', methods=['GET'], csrf=False)
+    def sale_plan_bus_frame(self, **kwargs):
+        session_info = request.env['ir.http'].session_info()
+        return request.render('hlv_sale_delivery_planning.sale_plan_bus_frame', {
+            'session_info_json': Markup(json.dumps(session_info)),
+        })
 
     @http.route('/sale_plan', type='http', auth='public', methods=['GET', 'POST'])
     def sale_plan_page(self, **kwargs):
@@ -1936,11 +2195,13 @@ class SalePlanPublicController(http.Controller):
                 return {'status': 'error', 'message': 'Empty message'}
 
             if body:
+                mention_aliases = [row['alias'] for row in _get_sale_plan_alias_rows(request.env)]
+                formatted_body = _format_message_body_with_mentions(body, mention_aliases)
                 if author_name:
                     safe_body = Markup('<p><strong>[%s]</strong> %s</p>') % (
-                        Markup.escape(author_name), Markup.escape(body))
+                        Markup.escape(author_name), formatted_body)
                 else:
-                    safe_body = Markup('<p>%s</p>') % Markup.escape(body)
+                    safe_body = Markup('<p>%s</p>') % formatted_body
             elif author_name:
                 safe_body = Markup('<p><strong>[%s]</strong> gửi tệp đính kèm</p>') % Markup.escape(author_name)
             else:
@@ -1967,7 +2228,7 @@ class SalePlanPublicController(http.Controller):
             )
             # Kích hoạt trạng thái nháy đỏ Notification FB 
             if hasattr(so, 'x_plan_unread_message'):
-                so.sudo().write({'x_plan_unread_message': True})
+                so.sudo().with_context(skip_delivery_planner_data_bus=True).write({'x_plan_unread_message': True})
             
             # Send real-time bus notification to the delivery planner dashboard
             try:
@@ -1976,6 +2237,7 @@ class SalePlanPublicController(http.Controller):
                 'so_name': so.name,
                 'author_name': author_name or 'Khách hàng',
                 'body': body,
+                'message_id': posted_msg.id if posted_msg else False,
               }
               bus = request.env['bus.bus'].sudo()
 
@@ -2000,10 +2262,84 @@ class SalePlanPublicController(http.Controller):
             except Exception as e:
                 _logger.warning(f"Delivery Planner Bus send error: {e}")
 
+            if body:
+                try:
+                    _push_public_mention_event(request.env, so, body, author_name or 'Khach hang')
+                except Exception:
+                    _logger.exception('sale_plan public mention event error')
+
             return {'status': 'success'}
         except Exception as e:
             _logger.exception('send_message error')
             return {'status': 'error', 'message': str(e)}
+
+    @http.route('/api/sale_plan/current_alias', type='json', auth='public', methods=['POST'])
+    def api_sale_plan_current_alias(self, **kwargs):
+        aliases = _get_user_sale_plan_aliases(request.env.user)
+        return {'status': 'success', 'alias': aliases[0] if aliases else '', 'aliases': aliases}
+
+    @http.route('/api/sale_plan/mention_aliases', type='json', auth='public', methods=['POST'])
+    def api_sale_plan_mention_aliases(self, **kwargs):
+        return {'status': 'success', 'aliases': _get_sale_plan_alias_rows(request.env)}
+
+    def _sale_plan_mention_notif_payloads(self, aliases):
+        aliases = [a for a in aliases if a]
+        if not aliases:
+            return []
+        records = request.env['hlv.sale.plan.mention.notification'].sudo().search([
+            ('alias', 'in', aliases),
+        ], order='create_date desc, id desc', limit=100)
+        return [{
+            'id': rec.id,
+            'notification_id': rec.id,
+            'so_id': rec.sale_order_id.id,
+            'so_name': rec.so_name or (rec.sale_order_id.name if rec.sale_order_id else ''),
+            'author_name': rec.author_name or '',
+            'body': rec.body or '',
+            'preview': rec.preview or '',
+            'mentions': _split_mention_aliases(rec.mentions or rec.alias),
+            'alias': rec.alias,
+            'unread': not rec.is_read,
+            'ts': int(fields.Datetime.to_datetime(rec.create_date).timestamp()) if rec.create_date else 0,
+        } for rec in records]
+
+    @http.route('/api/sale_plan/mention_notifications', type='json', auth='public', methods=['POST'])
+    def api_sale_plan_mention_notifications(self, **kwargs):
+        aliases = _get_user_sale_plan_aliases(request.env.user)
+        return {'status': 'success', 'events': self._sale_plan_mention_notif_payloads(aliases)}
+
+    @http.route('/api/sale_plan/mention_notifications/read', type='json', auth='public', methods=['POST'])
+    def api_sale_plan_mention_notifications_read(self, notification_ids=None, alias='', all_aliases=False, **kwargs):
+        aliases = _get_user_sale_plan_aliases(request.env.user)
+        domain = [('alias', 'in', aliases)]
+        if notification_ids:
+            try:
+                ids = [int(x) for x in notification_ids]
+            except Exception:
+                ids = []
+            domain.append(('id', 'in', ids))
+        elif alias and not all_aliases:
+            alias = _normalize_mention_alias(alias)
+            if alias in aliases:
+                domain.append(('alias', '=', alias))
+            else:
+                return {'status': 'success'}
+        request.env['hlv.sale.plan.mention.notification'].sudo().search(domain).write({'is_read': True})
+        return {'status': 'success', 'events': self._sale_plan_mention_notif_payloads(aliases)}
+
+    @http.route('/api/sale_plan/mention_notifications/clear', type='json', auth='public', methods=['POST'])
+    def api_sale_plan_mention_notifications_clear(self, alias='', all_aliases=False, **kwargs):
+        aliases = _get_user_sale_plan_aliases(request.env.user)
+        domain = [('alias', 'in', aliases)]
+        if alias and not all_aliases:
+            alias = _normalize_mention_alias(alias)
+            if alias in aliases:
+                domain.append(('alias', '=', alias))
+            else:
+                return {'status': 'success'}
+        request.env['hlv.sale.plan.mention.notification'].sudo().search(domain).unlink()
+        return {'status': 'success', 'events': self._sale_plan_mention_notif_payloads(aliases)}
+
 
     @http.route('/api/sale_plan/attachment/<int:att_id>', type='http', auth='public', methods=['GET'], csrf=False)
     def api_sale_plan_attachment(self, att_id, **kwargs):

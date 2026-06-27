@@ -149,7 +149,22 @@ export class DeliveryPlannerRealtimeMixin {
     }
 
     async onNewPortalMessage(payload) {
-        // payload: {so_id, so_name, author_name, body}
+        // payload: {so_id, so_name, author_name, body, message_id}
+        if (!payload) return;
+        if (!this._seenPortalMessageKeys) {
+            this._seenPortalMessageKeys = new Map();
+        }
+        const now = Date.now();
+        for (const [key, ts] of this._seenPortalMessageKeys.entries()) {
+            if (now - ts > 30000) this._seenPortalMessageKeys.delete(key);
+        }
+        const messageKey = payload.message_id
+            ? `mail:${payload.message_id}`
+            : `fallback:${payload.so_id || ''}:${payload.author_name || ''}:${payload.body || ''}`;
+        if (this._seenPortalMessageKeys.has(messageKey)) {
+            return;
+        }
+        this._seenPortalMessageKeys.set(messageKey, now);
 
         // Cập nhật danh sách drawer realtime: có tin mới thì đưa lên đầu và bật trạng thái chưa đọc.
         const existing = this.state.globalUnreadOrders.find(o => (o.sale_order_id && o.sale_order_id[0] === payload.so_id) || o.id === payload.so_id);
@@ -172,22 +187,44 @@ export class DeliveryPlannerRealtimeMixin {
         if (so) {
             so.has_unread_message = true;
         }
-        if (!existing || existing._isRead) {
-            this.notification.add(
-                `Đơn hàng ${payload.so_name}: ${rawBody}...`,
-                {
-                    type: "info",
-                    title: `Khách hàng ${payload.author_name} vừa nhắn tin`,
-                    buttons: [
-                        {
-                            name: "Xem đơn hàng",
-                            onClick: () => this.openDrawerFromMessageList(payload.so_id),
-                            primary: true,
-                        }
-                    ]
-                }
-            );
-        }
+        this._playMessageSound();
+        this.notification.add(
+            `Đơn hàng ${payload.so_name}: ${rawBody}...`,
+            {
+                type: "info",
+                title: `Có tin nhắn mới ${payload.author_name || ''}`,
+                buttons: [
+                    {
+                        name: "Xem chi tiết",
+                        onClick: () => this.openDrawerFromMessageList(payload.so_id),
+                        primary: true,
+                    }
+                ]
+            }
+        );
+    }
+
+    _playMessageSound() {
+        try {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContext) return;
+            const ctx = this._messageAudioCtx || (this._messageAudioCtx = new AudioContext());
+            if (ctx.state === "suspended") ctx.resume();
+            const now = ctx.currentTime;
+            [660, 880].forEach((freq, i) => {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = "sine";
+                osc.frequency.value = freq;
+                gain.gain.setValueAtTime(0.0001, now + i * 0.1);
+                gain.gain.exponentialRampToValueAtTime(0.055, now + i * 0.1 + 0.02);
+                gain.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.1 + 0.12);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start(now + i * 0.1);
+                osc.stop(now + i * 0.1 + 0.14);
+            });
+        } catch (e) {}
     }
 
     // --- Real-time data refresh via bus ---

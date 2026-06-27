@@ -10,7 +10,10 @@ export class DeliveryPlannerDrawerMessagesMixin {
         this.state.drawerMessages = [];
         this.state.drawerMessageText = '';
         this.state.drawerMessageFiles = [];
+        this.state.drawerMentionSuggestions = [];
+        this.state.drawerMentionActiveIndex = 0;
         this.loadDrawerMessages(so.id);
+        this.loadDrawerMentionAliases();
     }
 
     async loadDrawerMessages(orderId) {
@@ -50,6 +53,7 @@ export class DeliveryPlannerDrawerMessagesMixin {
             );
             this.state.drawerMessageText = '';
             this.state.drawerMessageFiles = [];
+            this.state.drawerMentionSuggestions = [];
             await this.loadDrawerMessages(this.state.selectedOrder.id);
         } catch (e) {
             console.error('sendDrawerMessage error', e);
@@ -58,7 +62,92 @@ export class DeliveryPlannerDrawerMessagesMixin {
         }
     }
 
+    async loadDrawerMentionAliases() {
+        try {
+            const result = await this.orm.call(
+                'hlv.delivery.planner.service', 'get_sale_plan_mention_aliases', []
+            );
+            this.state.drawerMentionAliases = result || [];
+        } catch (e) {
+            console.error('loadDrawerMentionAliases error', e);
+            this.state.drawerMentionAliases = [];
+        }
+    }
+
+    _normalizeMentionAlias(value) {
+        return String(value || '').trim().toLowerCase().replace(/^@+/, '');
+    }
+
+    _currentMentionQuery(input) {
+        if (!input) return null;
+        const pos = input.selectionStart || 0;
+        const before = String(input.value || '').slice(0, pos);
+        const match = /(^|\s)@([^@,;:!?()\[\]{}<>]*)$/.exec(before);
+        if (!match) return null;
+        return { start: pos - match[2].length - 1, term: this._normalizeMentionAlias(match[2]), pos };
+    }
+
+    onDrawerMessageInput(ev) {
+        this.state.drawerMessageText = ev.target.value;
+        this.updateDrawerMentionSuggestions(ev.target);
+    }
+
+    updateDrawerMentionSuggestions(input) {
+        const query = this._currentMentionQuery(input);
+        if (!query) {
+            this.state.drawerMentionSuggestions = [];
+            this.state.drawerMentionActiveIndex = 0;
+            return;
+        }
+        const items = (this.state.drawerMentionAliases || []).filter((item) => {
+            const alias = this._normalizeMentionAlias(item.alias);
+            const displayAlias = this._normalizeMentionAlias(item.display_alias);
+            const name = this._normalizeMentionAlias(item.user_name);
+            return !query.term || alias.startsWith(query.term) || displayAlias.startsWith(query.term) || name.includes(query.term);
+        }).slice(0, 30);
+        this.state.drawerMentionSuggestions = items;
+        this.state.drawerMentionActiveIndex = Math.min(this.state.drawerMentionActiveIndex || 0, Math.max(items.length - 1, 0));
+    }
+
+    selectDrawerMentionAlias(alias) {
+        const input = document.querySelector('.hlv-drawer-message-input');
+        const query = this._currentMentionQuery(input);
+        if (!query) return;
+        const value = String(this.state.drawerMessageText || '');
+        const next = value.slice(0, query.start) + '@' + alias + ' ' + value.slice(query.pos);
+        const nextPos = query.start + alias.length + 2;
+        this.state.drawerMessageText = next;
+        this.state.drawerMentionSuggestions = [];
+        this.state.drawerMentionActiveIndex = 0;
+        setTimeout(() => {
+            const nextInput = document.querySelector('.hlv-drawer-message-input');
+            if (nextInput) {
+                nextInput.focus();
+                nextInput.setSelectionRange(nextPos, nextPos);
+            }
+        }, 0);
+    }
+
     onMessageKeydown(ev) {
+        const suggestions = this.state.drawerMentionSuggestions || [];
+        if (suggestions.length) {
+            if (ev.key === 'ArrowDown') {
+                ev.preventDefault();
+                this.state.drawerMentionActiveIndex = ((this.state.drawerMentionActiveIndex || 0) + 1) % suggestions.length;
+                return;
+            }
+            if (ev.key === 'ArrowUp') {
+                ev.preventDefault();
+                this.state.drawerMentionActiveIndex = ((this.state.drawerMentionActiveIndex || 0) - 1 + suggestions.length) % suggestions.length;
+                return;
+            }
+            if (ev.key === 'Enter' || ev.key === 'Tab') {
+                ev.preventDefault();
+                const item = suggestions[this.state.drawerMentionActiveIndex || 0];
+                if (item) this.selectDrawerMentionAlias(item.display_alias || item.alias);
+                return;
+            }
+        }
         if (ev.key === 'Enter' && !ev.shiftKey) {
             ev.preventDefault();
             this.sendDrawerMessage();
