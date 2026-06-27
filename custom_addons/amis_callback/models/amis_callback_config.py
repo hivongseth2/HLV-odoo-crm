@@ -802,7 +802,7 @@ class AmisCallbackConfig(models.Model):
             skip += take
         return False
 
-    def push_inward_voucher(self, voucher_payload, dictionary_items=None):
+    def push_inward_voucher(self, voucher_payload, dictionary_items=None, reference_items=None):
         self.ensure_one()
         payload = {
             'app_id': self.app_id,
@@ -810,6 +810,8 @@ class AmisCallbackConfig(models.Model):
             'voucher': [voucher_payload],
             'dictionary': dictionary_items or [],
         }
+        if reference_items:
+            payload['reference'] = reference_items
         return self._post_actopen('/apir/sync/actopen/save', payload, include_token=True)
 
     def push_purchase_order(self, voucher_payload, dictionary_items=None):

@@ -190,7 +190,7 @@ class StockPickingAmisSync(models.Model):
                 % purchase_order.name
             )
 
-        voucher_payload, dictionary_items = self._prepare_misa_inward_payload(config, purchase_order)
+        voucher_payload, dictionary_items, reference_items = self._prepare_misa_inward_payload(config, purchase_order)
         org_refid = voucher_payload.get('org_refid')
 
         if dictionary_items:
@@ -199,7 +199,7 @@ class StockPickingAmisSync(models.Model):
                 'Created %d MISA dictionary items before inward picking %s sync...',
                 len(dictionary_items), self.name,
             )
-        config.push_inward_voucher(voucher_payload, dictionary_items=[])
+        config.push_inward_voucher(voucher_payload, dictionary_items=[], reference_items=reference_items)
 
         self.sudo().write({
             'misa_inward_org_refid': org_refid or '',
@@ -788,6 +788,9 @@ class StockPickingAmisSync(models.Model):
             })
 
         total_payment_amount = total_amount + total_vat_amount
+        reference_items = self._prepare_misa_inward_references(
+            purchase_order, refid, self.name, pu_order_refid
+        )
 
         voucher = {
             'voucher_type': 18,
@@ -841,7 +844,24 @@ class StockPickingAmisSync(models.Model):
             'state': 0,
             'detail': detail,
         }
-        return voucher, dictionary_items
+        return voucher, dictionary_items, reference_items
+
+    def _prepare_misa_inward_references(self, purchase_order, inward_refid, inward_refno, purchase_order_refid):
+        purchase_org_refid = (purchase_order.misa_purchase_order_org_refid or '').strip()
+        refer_refid = purchase_org_refid or (purchase_order_refid or '').strip()
+        if not refer_refid:
+            return []
+        return [{
+            'org_refid': inward_refid,
+            'org_refno': inward_refno,
+            'org_reftype': 302,
+            'org_reftype_name': 'Mua hang trong nuoc nhap kho chua thanh toan',
+            'org_refer_refid': refer_refid,
+            'org_refer_refno': purchase_order.name,
+            'org_refer_reftype': 301,
+            'org_refer_reftype_name': 'Don mua hang',
+            'sort_order': 1,
+        }]
 
     def _misa_lookup_account_object_by_id(self, config, account_object_id):
         """Tìm item account_object trong MISA dictionary theo ID (UUID).
