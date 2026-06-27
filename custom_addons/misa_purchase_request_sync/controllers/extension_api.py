@@ -684,17 +684,21 @@ class MisaExtensionController(http.Controller):
                 amis_lines = []
                 while True:
                     detail_payload = {
-                        "columns": [2157, 1355, 2161, 4670, 1127,5683, 5274, 3870, 3895, 5279, 308, 5364, 5350, 3404, 2358],
+                        "columns": [2157, 1355, 2161, 4670, 1127, 5683, 5274, 3870, 3895, 5279, 308, 5364, 5350, 3404, 2358],
+                        "sort": "[{\"property\":4555,\"desc\":false,\"data_type\":4,\"operand\":1}]",
                         "filter": [{"property": 3993, "operator": 7, "operand": 1, "value": refid, "data_type": 10}],
-                        "loadMode": 2, "pageIndex": detail_page_index, "pageSize": 50, "useSp": False, "view": 92, "summaryColumns": []
+                        "pageIndex": detail_page_index,
+                        "pageSize": 50,
+                        "useSp": False,
+                        "view": 92,
+                        "summaryColumns": [3488, 3870, 3895, 3896, 308, 5350],
+                        "loadMode": 2
                     }
                     try:
-                        # Gọi thẳng requests để không bị lỗi env/cursor
                         detail_res = requests.post("https://actapp.misa.vn/g1/api/pu/v1/pu_order/get_paging_detail", headers=headers, json=detail_payload, timeout=30)
                         if detail_res.status_code != 200:
                             break
                         det_json = detail_res.json()
-
                     except Exception:
                         break
                         
@@ -710,22 +714,38 @@ class MisaExtensionController(http.Controller):
                     amis_lines.extend(page_lines)
                     detail_page_index += 1
                     
+                odoo_prod_qty = {}
+                case_map = {}
+                for oline in po_data["prod_qty"]:
+                    orig_code = oline
+                    code = orig_code.lower()
+                    if not orig_code or orig_code == "unknown_code":
+                        code = "unknown_code"
+                        orig_code = "Unknown Code"
+                    qty = po_data["prod_qty"][oline]
+                    odoo_prod_qty[code] = odoo_prod_qty.get(code, 0.0) + qty
+                    if code not in case_map:
+                        case_map[code] = orig_code
+                    
                 amis_prod_qty = {}
                 for aline in amis_lines:
-                    code = aline.get("inventory_item_code", "unknown_code").strip().lower()
+                    orig_code = aline.get("inventory_item_code", "unknown_code").strip()
+                    code = orig_code.lower()
                     qty = float(aline.get("quantity_receipt", 0))
                     amis_prod_qty[code] = amis_prod_qty.get(code, 0.0) + qty
-                    
-                odoo_prod_qty = po_data["prod_qty"]
+                    if code not in case_map:
+                        case_map[code] = orig_code
                     
                 line_diffs = []
                 for code, o_qty in odoo_prod_qty.items():
                     a_qty = amis_prod_qty.get(code, 0.0)
                     if abs(o_qty - a_qty) > 0.01:
-                        line_diffs.append(f"Mã '{code}': Odoo {o_qty} != AMIS {a_qty}")
+                        display_code = case_map.get(code, code)
+                        line_diffs.append(f"Mã '{display_code}': Odoo {o_qty} != AMIS {a_qty}")
                 for code, a_qty in amis_prod_qty.items():
                     if code not in odoo_prod_qty:
-                        line_diffs.append(f"Mã '{code}': Odoo thiếu (AMIS có {a_qty})")
+                        display_code = case_map.get(code, code)
+                        line_diffs.append(f"Mã '{display_code}': Odoo thiếu (AMIS có {a_qty})")
                         
                 amt_diff = ""
                 if abs(odoo_total - amis_total) >= 1.0:
