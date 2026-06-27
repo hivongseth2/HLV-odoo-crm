@@ -178,12 +178,20 @@ class StockPickingAmisSync(models.Model):
         if not config.ensure_sync_ready():
             return
 
+        if (config.sync_purchase_order_enabled
+                and not purchase_order.misa_purchase_order_synced
+                and not purchase_order._is_misa_imported_purchase_order()):
+            purchase_order._enqueue_misa_purchase_order(raise_on_skip=False)
+            raise UserError(
+                'Don mua hang %s chua sync MISA; da enqueue don mua, phieu nhap se retry sau.'
+                % purchase_order.name
+            )
+
         voucher_payload, dictionary_items = self._prepare_misa_inward_payload(config, purchase_order)
         org_refid = voucher_payload.get('org_refid')
 
         if dictionary_items:
             config.push_dictionary(dictionary_items)
-            config.clear_dictionary_cache([1, 2, 4])
             _logger.info(
                 'Created %d MISA dictionary items before inward picking %s sync...',
                 len(dictionary_items), self.name,
@@ -655,19 +663,35 @@ class StockPickingAmisSync(models.Model):
         # Kho MISA hien tai co dinh theo cau hinh kho HLV.
         misa_warehouse_code = 'HLV'
 
+        pu_order_refid = (purchase_order.misa_purchase_order_org_refid or '').strip()
+        if not pu_order_refid:
+            raise UserError('Don mua hang %s chua co org_refid MISA de lien ket phieu nhap.' % purchase_order.name)
+
         moves = self.move_ids_without_package.filtered(lambda m: m.quantity > 0)
         if not moves:
             raise UserError('Phieu nhap "%s" khong co dong da nhap de sync MISA.' % self.name)
 
         detail = []
         total_amount = 0.0
+        total_vat_amount = 0.0
 
         for idx, move in enumerate(moves, start=1):
             product = move.product_id
+            purchase_line = move.purchase_line_id
+            if not purchase_line:
+                raise UserError('Dong nhap kho %s khong lien ket voi dong don mua hang.' % move.display_name)
             qty_done = float(move.quantity or 0.0)
-            price_unit = float(move.purchase_line_id.price_unit if move.purchase_line_id else 0.0)
+            price_unit = float(purchase_line.price_unit or 0.0)
             amount = qty_done * price_unit
+            taxes = purchase_line.taxes_id.filtered(lambda t: t.amount_type == 'percent')
+            vat_rate = float(taxes[0].amount or 0.0) if taxes else 0.0
+            vat_amount = amount * vat_rate / 100.0
             total_amount += amount
+            total_vat_amount += vat_amount
+            pu_order_ref_detail_id = str(uuid.uuid5(
+                uuid.NAMESPACE_DNS,
+                'misa_purchase_order_detail|%d|%d' % (purchase_order.id, purchase_line.id)
+            ))
 
             unit = purchase_order._ensure_misa_unit(config, move.product_uom, dictionary_items)
             inventory_item = purchase_order._ensure_misa_inventory_item(
@@ -710,6 +734,12 @@ class StockPickingAmisSync(models.Model):
                 'quantity': qty_done,
                 'unit_price_finance': price_unit,
                 'amount_finance': amount,
+                'amount': amount,
+                'amount_oc': amount,
+                'vat_rate': vat_rate,
+                'vat_amount': vat_amount,
+                'vat_amount_oc': vat_amount,
+                'amount_after_tax': amount + vat_amount,
                 'unit_price_management': price_unit,
                 'amount_management': amount,
                 'main_unit_price_finance': price_unit,
@@ -738,21 +768,26 @@ class StockPickingAmisSync(models.Model):
                 'is_description_import': False,
                 'is_promotion_import': False,
                 'un_resonable_cost_import': False,
+                'pu_order_refid': pu_order_refid,
+                'pu_order_ref_detail_id': pu_order_ref_detail_id,
+                'pu_order_refno': purchase_order.name,
                 'state': 0,
             })
 
+        total_payment_amount = total_amount + total_vat_amount
+
         voucher = {
-            'voucher_type': 7,
+            'voucher_type': 18,
             'is_get_new_id': True,
             'org_refid': refid,
             'is_allow_group': False,
             'org_refno': self.name,
-            'org_reftype': 2014,
-            'org_reftype_name': 'Phieu nhap kho',
+            'org_reftype': 302,
+            'org_reftype_name': 'Mua hang trong nuoc nhap kho chua thanh toan',
             'refid': refid,
             'act_voucher_type': 0,
-            'reftype': 2014,
-            'reftype_name': 'Nhap kho',
+            'reftype': 302,
+            'reftype_name': 'Mua hang trong nuoc nhap kho chua thanh toan',
             'branch_id': branch_id,
             'account_object_id': account_object_id,
             'display_on_book': 0,
@@ -766,9 +801,14 @@ class StockPickingAmisSync(models.Model):
             'is_posted_inventory_book_management': False,
             'is_return_with_inward': False,
             'is_created_sa_return_last_year': False,
-            'total_amount': total_amount,
-            'total_amount_finance': total_amount,
-            'total_amount_management': total_amount,
+            'total_sale_amount': total_amount,
+            'total_sale_amount_oc': total_amount,
+            'total_vat_amount': total_vat_amount,
+            'total_vat_amount_oc': total_vat_amount,
+            'total_amount': total_payment_amount,
+            'total_amount_oc': total_payment_amount,
+            'total_amount_finance': total_payment_amount,
+            'total_amount_management': total_payment_amount,
             'exchange_rate': 1.0,
             'refno_finance': '',
             'refno_management': '',
@@ -777,6 +817,8 @@ class StockPickingAmisSync(models.Model):
             'journal_memo': 'Nhap kho tu don mua %s (Odoo: %s)' % (purchase_order.name, self.name),
             'currency_id': (purchase_order.currency_id.name or 'VND'),
             'account_object_code': account_object_code,
+            'paid_status': 0,
+            'is_paid': False,
             'is_executed': False,
             'is_adjust_value': False,
             'state': 0,
