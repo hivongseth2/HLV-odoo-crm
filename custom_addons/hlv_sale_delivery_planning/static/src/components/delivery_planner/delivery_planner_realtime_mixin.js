@@ -206,7 +206,16 @@ export class DeliveryPlannerRealtimeMixin {
     }
 
     _browserNotificationsSupported() {
-        return typeof window !== "undefined" && "Notification" in window && window.isSecureContext;
+        return typeof window !== "undefined" && "Notification" in window && "serviceWorker" in navigator && "PushManager" in window && window.isSecureContext;
+    }
+
+    _urlBase64ToUint8Array(base64String) {
+        const padding = "=".repeat((4 - base64String.length % 4) % 4);
+        const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+        const rawData = window.atob(base64);
+        const output = new Uint8Array(rawData.length);
+        for (let i = 0; i < rawData.length; ++i) output[i] = rawData.charCodeAt(i);
+        return output;
     }
 
     _syncDesktopNotificationPermission() {
@@ -216,22 +225,49 @@ export class DeliveryPlannerRealtimeMixin {
     async requestDesktopNotifications() {
         if (!this._browserNotificationsSupported()) {
             this.state.desktopNotificationPermission = "unsupported";
-            this.notification.add("Trình duyệt không hỗ trợ thông báo ngoài web hoặc trang chưa chạy HTTPS.", { type: "warning" });
+            this.notification.add("Trình duyệt không hỗ trợ Web Push hoặc trang chưa chạy HTTPS.", { type: "warning" });
             return;
         }
-        if (Notification.permission === "granted" || Notification.permission === "denied") {
-            this._syncDesktopNotificationPermission();
-            if (Notification.permission === "denied") {
-                this.notification.add("Thông báo trình duyệt đang bị chặn. Cần bật lại trong cài đặt site của trình duyệt.", { type: "warning" });
+        try {
+            const configResp = await fetch('/api/sale_plan/webpush_config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ jsonrpc: '2.0', method: 'call', params: {} }),
+            });
+            const configJson = await configResp.json();
+            const config = configJson.result || {};
+            if (!config.enabled || !config.public_key) {
+                this.notification.add("Web Push chưa cấu hình được VAPID key.", { type: "warning" });
+                return;
             }
-            return;
+            const permission = Notification.permission === "granted" ? "granted" : await Notification.requestPermission();
+            this.state.desktopNotificationPermission = permission;
+            if (permission !== "granted") {
+                this.notification.add("Chưa bật thông báo trình duyệt", { type: "warning" });
+                return;
+            }
+            const reg = await navigator.serviceWorker.register('/sale_plan_webpush_sw.js', { scope: '/' });
+            let sub = await reg.pushManager.getSubscription();
+            if (!sub) {
+                sub = await reg.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: this._urlBase64ToUint8Array(config.public_key),
+                });
+            }
+            await fetch('/api/sale_plan/webpush_subscribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    jsonrpc: '2.0',
+                    method: 'call',
+                    params: { subscription: sub.toJSON(), backend_messages: true },
+                }),
+            });
+            this.notification.add("Đã bật Web Push", { type: "success" });
+        } catch (e) {
+            console.warn('web push subscribe failed', e);
+            this.notification.add("Không bật được Web Push", { type: "warning" });
         }
-        const permission = await Notification.requestPermission();
-        this.state.desktopNotificationPermission = permission;
-        this.notification.add(
-            permission === "granted" ? "Đã bật thông báo trình duyệt" : "Chưa bật thông báo trình duyệt",
-            { type: permission === "granted" ? "success" : "warning" }
-        );
     }
 
     _showDesktopMessageNotification(payload, rawBody) {

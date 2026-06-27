@@ -9,3 +9,4 @@ from . import delivery_planner_user_pref
 from . import delivery_planner_snapshot
 from . import picking_packer_wizard
 from . import sale_plan_mention_notification
+from . import sale_plan_web_push_subscription

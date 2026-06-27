@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import base64
 import json
 import logging
 import os
@@ -56,6 +57,117 @@ PW_PARAM_KEY = "website_public_inventory_18.search_password"
 _FAIL_LOG = defaultdict(list)
 _RL_MAX = 5
 _RL_WINDOW = 600
+
+WEBPUSH_PUBLIC_PARAM = 'hlv_sale_delivery_planning.webpush_vapid_public_key'
+WEBPUSH_PRIVATE_PARAM = 'hlv_sale_delivery_planning.webpush_vapid_private_key'
+WEBPUSH_SUBJECT_PARAM = 'hlv_sale_delivery_planning.webpush_vapid_subject'
+
+
+def _webpush_b64url(data):
+  return base64.urlsafe_b64encode(data).rstrip(b'=').decode('ascii')
+
+
+def _get_or_create_webpush_vapid(env):
+  ICP = env['ir.config_parameter'].sudo()
+  public_key = ICP.get_param(WEBPUSH_PUBLIC_PARAM, '') or ''
+  private_key = ICP.get_param(WEBPUSH_PRIVATE_PARAM, '') or ''
+  if public_key and private_key:
+    return public_key, private_key
+  try:
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+  except Exception:
+    _logger.warning('Web Push disabled: cryptography is not installed')
+    return '', ''
+  key = ec.generate_private_key(ec.SECP256R1())
+  public_key = _webpush_b64url(key.public_key().public_bytes(
+    serialization.Encoding.X962,
+    serialization.PublicFormat.UncompressedPoint,
+  ))
+  private_key = key.private_bytes(
+    serialization.Encoding.PEM,
+    serialization.PrivateFormat.PKCS8,
+    serialization.NoEncryption(),
+  ).decode('ascii')
+  ICP.set_param(WEBPUSH_PUBLIC_PARAM, public_key)
+  ICP.set_param(WEBPUSH_PRIVATE_PARAM, private_key)
+  ICP.set_param(WEBPUSH_SUBJECT_PARAM, ICP.get_param(WEBPUSH_SUBJECT_PARAM, '') or 'mailto:admin@example.com')
+  return public_key, private_key
+
+
+def _send_sale_plan_webpush(env, subscriptions, payload):
+  subscriptions = subscriptions.sudo().filtered(lambda s: s.active and s.subscription_json)
+  if not subscriptions:
+    return 0
+  public_key, private_key = _get_or_create_webpush_vapid(env)
+  if not public_key or not private_key:
+    return 0
+  try:
+    from pywebpush import WebPushException, webpush
+  except Exception:
+    _logger.warning('Web Push disabled: pywebpush is not installed')
+    return 0
+  subject = env['ir.config_parameter'].sudo().get_param(WEBPUSH_SUBJECT_PARAM, '') or 'mailto:admin@example.com'
+  data = json.dumps(payload, ensure_ascii=False)
+  sent = 0
+  seen_endpoints = set()
+  for sub in subscriptions:
+    endpoint_key = sub.endpoint_hash or sub.endpoint or str(sub.id)
+    if endpoint_key in seen_endpoints:
+      continue
+    seen_endpoints.add(endpoint_key)
+    try:
+      webpush(
+        subscription_info=json.loads(sub.subscription_json or '{}'),
+        data=data,
+        vapid_private_key=private_key,
+        vapid_claims={'sub': subject},
+      )
+      sent += 1
+    except WebPushException as exc:
+      status = getattr(getattr(exc, 'response', None), 'status_code', None)
+      if status in (404, 410):
+        sub.sudo().write({'active': False})
+      else:
+        _logger.warning('Sale Plan Web Push send failed: %s', exc)
+    except Exception:
+      _logger.exception('Sale Plan Web Push send error')
+  return sent
+
+
+def _push_public_mention_webpush(env, aliases, payload):
+  aliases = [_normalize_mention_alias(a) for a in aliases if _normalize_mention_alias(a)]
+  if not aliases:
+    return 0
+  subs = env['hlv.sale.plan.web.push.subscription'].sudo().search([
+    ('active', '=', True),
+    ('alias', 'in', aliases),
+  ])
+  return _send_sale_plan_webpush(env, subs, {
+    'type': 'sale_plan_mention',
+    'title': 'Có tin nhắn mới ' + (payload.get('author_name') or ''),
+    'body': '%s: %s' % (payload.get('so_name') or 'Sale order', payload.get('preview') or ''),
+    'url': '/sale_plan',
+    'so_id': payload.get('so_id'),
+    'so_name': payload.get('so_name'),
+    'tag': 'sale-plan-mention-%s' % (payload.get('id') or int(time.time())),
+  })
+
+
+def _push_backend_message_webpush(env, payload):
+  subs = env['hlv.sale.plan.web.push.subscription'].sudo().search([
+    ('active', '=', True),
+    ('backend_messages', '=', True),
+  ])
+  return _send_sale_plan_webpush(env, subs, {
+    'type': 'new_portal_message',
+    'title': 'Có tin nhắn mới ' + (payload.get('author_name') or ''),
+    'body': 'Đơn hàng %s: %s' % (payload.get('so_name') or '', _normalize_preview_text(payload.get('body') or '', 100)),
+    'url': '/web',
+    'so_id': payload.get('so_id'),
+    'so_name': payload.get('so_name'),
+    'tag': 'delivery-planner-message-%s' % (payload.get('message_id') or payload.get('so_id') or int(time.time())),
+  })
 
 _ALLOWED_CHAT_ATTACHMENT_MIMES = {
   'application/msword',
@@ -238,6 +350,10 @@ def _push_public_mention_event(env, so, body, author_name=''):
     env['bus.bus'].sudo()._sendone('sale_plan_public_channel', 'sale_plan_mention', payload)
   except Exception:
     _logger.exception('sale_plan public mention bus send error')
+  try:
+    _push_public_mention_webpush(env, matched, payload)
+  except Exception:
+    _logger.exception('sale_plan public mention webpush send error')
   return payload
 
 
@@ -633,7 +749,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
       <li class="nav-item"><a class="nav-link active" href="/sale_plan">Tình trạng đơn</a></li>
       <li class="nav-item"><a class="nav-link" href="/search_invoice">Hóa đơn MISA</a></li>
       <li class="nav-item ms-lg-2 mention-noti-wrap">
-        <button id="mention-browser-noti-button" type="button" title="Bật thông báo trình duyệt"><i class="fa fa-bell-o"></i></button>
+        <button id="mention-browser-noti-button" type="button" title="Bật thông báo trình duyệt"><i class="fa fa-bell"></i></button>
         <button id="mention-noti-button" type="button" title="Thông báo"><i class="fa fa-bell"></i><span id="mention-noti-count">0</span></button>
         <div id="mention-noti-panel" aria-live="polite">
           <div class="mention-noti-head"><span>Thông báo</span><span class="mention-noti-actions"><button id="mention-noti-read-all" type="button">Đã đọc hết</button><button id="mention-noti-clear" type="button">Xóa</button></span></div>
@@ -870,9 +986,11 @@ function renderMentionNotiPanel(){var btn=$('mention-noti-button'),cnt=$('mentio
 function markMentionNotificationRead(id){var item=_mentionNotiItems.find(function(x){return String(x.id)===String(id);});if(item)item.unread=false;renderMentionNotiPanel();fetch('/api/sale_plan/mention_notifications/read',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{notification_ids:[id]}})}).then(function(r){return r.json();}).then(function(j){var d=j.result||{};if(d.status==='success')_mentionNotiItems=d.events||_mentionNotiItems;renderMentionNotiPanel();}).catch(function(){});}
 function openOrderFromNotification(soId,soName){soId=parseInt(soId,10)||0;var local=S.orders.find(function(o){return o.id===soId;});if(local){openDrawer(soId);return;}showLoading();fetch('/api/sale_plan/data',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{search:soName||'',warehouse_id:'all',delivery_status:'all',stock_status:'all',packing_status:'all',date_from:'',date_to:'',po_date_from:'',po_date_to:'',done_date_from:'',done_date_to:'',po_status:'all',saler_code:'',htgh:'',delivery_type:'all',tag_ids:'',show_completed:true,limit:20,offset:0}})}).then(function(r){return r.json();}).then(function(j){hideLoading();var d=j.result&&j.result.data;var order=d&&d.orders&&(d.orders.find(function(o){return o.id===soId;})||d.orders[0]);if(order){var exists=S.orders.find(function(o){return o.id===order.id;});if(!exists)S.orders.unshift(order);openDrawer(order.id);}}).catch(function(){hideLoading();});}
 function playMentionSound(){try{var Ctx=window.AudioContext||window.webkitAudioContext;if(!Ctx)return;var ctx=window._salePlanMentionAudioCtx||(window._salePlanMentionAudioCtx=new Ctx());if(ctx.state==='suspended')ctx.resume();var now=ctx.currentTime;[660,880].forEach(function(freq,i){var osc=ctx.createOscillator();var gain=ctx.createGain();osc.type='sine';osc.frequency.value=freq;gain.gain.setValueAtTime(0.0001,now+i*0.1);gain.gain.exponentialRampToValueAtTime(0.055,now+i*0.1+0.02);gain.gain.exponentialRampToValueAtTime(0.0001,now+i*0.1+0.12);osc.connect(gain);gain.connect(ctx.destination);osc.start(now+i*0.1);osc.stop(now+i*0.1+0.14);});}catch(e){}}
-function browserNotificationsSupported(){return 'Notification' in window&&window.isSecureContext;}
-function updateBrowserNotiButton(){var btn=$('mention-browser-noti-button');if(!btn)return;if(!browserNotificationsSupported()){btn.classList.add('blocked');btn.title='Trình duyệt không hỗ trợ thông báo';btn.disabled=true;return;}btn.classList.toggle('enabled',Notification.permission==='granted');btn.classList.toggle('blocked',Notification.permission==='denied');btn.title=Notification.permission==='granted'?'Thông báo trình duyệt đã bật':(Notification.permission==='denied'?'Thông báo trình duyệt đang bị chặn':'Bật thông báo trình duyệt');}
-function requestBrowserNotifications(){if(!browserNotificationsSupported()){updateBrowserNotiButton();return Promise.resolve('unsupported');}if(Notification.permission==='granted'||Notification.permission==='denied'){updateBrowserNotiButton();return Promise.resolve(Notification.permission);}return Notification.requestPermission().then(function(p){updateBrowserNotiButton();return p;});}
+function browserNotificationsSupported(){return 'Notification' in window&&'serviceWorker' in navigator&&'PushManager' in window&&window.isSecureContext;}
+function updateBrowserNotiButton(){var btn=$('mention-browser-noti-button');if(!btn)return;if(!browserNotificationsSupported()){btn.classList.add('blocked');btn.title='Trình duyệt không hỗ trợ Web Push hoặc trang chưa chạy HTTPS';btn.disabled=true;return;}btn.classList.toggle('enabled',Notification.permission==='granted');btn.classList.toggle('blocked',Notification.permission==='denied');btn.title=Notification.permission==='granted'?'Web Push đã bật':(Notification.permission==='denied'?'Thông báo trình duyệt đang bị chặn':'Bật Web Push');}
+function urlBase64ToUint8Array(base64String){var padding='='.repeat((4-base64String.length%4)%4);var base64=(base64String+padding).replace(/-/g,'+').replace(/_/g,'/');var raw=window.atob(base64);var out=new Uint8Array(raw.length);for(var i=0;i<raw.length;i++)out[i]=raw.charCodeAt(i);return out;}
+function requestBrowserNotifications(){if(!browserNotificationsSupported()){updateBrowserNotiButton();return Promise.resolve('unsupported');}return fetch('/api/sale_plan/webpush_config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{}})}).then(function(r){return r.json();}).then(function(j){var cfg=j.result||{};if(!cfg.enabled||!cfg.public_key)throw new Error('webpush_not_configured');var permissionPromise=Notification.permission==='granted'?Promise.resolve('granted'):Notification.requestPermission();return permissionPromise.then(function(p){if(p!=='granted')throw new Error('permission_'+p);return navigator.serviceWorker.register('/sale_plan_webpush_sw.js',{scope:'/'});}).then(function(reg){return reg.pushManager.getSubscription().then(function(sub){return sub||reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlBase64ToUint8Array(cfg.public_key)});});}).then(function(sub){return fetch('/api/sale_plan/webpush_subscribe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{subscription:sub.toJSON(),backend_messages:false}})});}).then(function(){updateBrowserNotiButton();return 'granted';});}).catch(function(e){console.warn('sale plan webpush subscribe failed',e);updateBrowserNotiButton();return 'error';});}
+if('serviceWorker' in navigator){navigator.serviceWorker.addEventListener('message',function(e){var d=e.data||{};if(d.type==='sale_plan_push_open')openOrderFromNotification(d.so_id,d.so_name);});}
 function showMentionDesktopNotification(ev){try{if(!browserNotificationsSupported()||Notification.permission!=='granted'||!ev)return;var title='Có tin nhắn mới '+(ev.author_name?('từ '+ev.author_name):'');var body=(ev.so_name||'Sale order')+': '+(ev.preview||ev.body||'');var n=new Notification(title,{body:body,icon:'/web/static/img/favicon.ico',tag:'sale-plan-mention-'+(ev.notification_id||ev.id||ev.so_id||Date.now()),renotify:true});n.onclick=function(){window.focus();openOrderFromNotification(ev.so_id,ev.so_name);n.close();};setTimeout(function(){n.close();},9000);}catch(e){}}
 function showMentionToast(ev){var stack=$('mention-toast-stack');if(!stack||!ev)return;var toast=document.createElement('div');toast.className='mention-toast';toast.innerHTML='<button type="button" class="mention-toast-close" aria-label="Đóng">&times;</button><div class="mention-toast-title">Có tin nhắn mới '+(ev.author_name?('từ '+esc(ev.author_name)):'')+'</div><div class="mention-toast-body"><strong>'+esc(ev.so_name||'Sale order')+'</strong>: '+esc(ev.preview||ev.body||'')+'</div>';toast.addEventListener('click',function(e){if(e.target.closest('.mention-toast-close')){toast.remove();return;}openOrderFromNotification(ev.so_id,ev.so_name);toast.remove();});stack.prepend(toast);while(stack.children.length>4)stack.lastElementChild.remove();setTimeout(function(){toast.remove();},7000);}
 function handleMentionEvent(ev){if(!ev||!ev.id||!eventMatchesCurrentAlias(ev))return;var aliases=getCurrentMentionAliases();var idMap=ev.notification_id_by_alias||{};var matched=(ev.mentions||[]).map(normalizeMentionAlias).filter(function(alias){return aliases.indexOf(alias)!==-1;});var added=false;matched.forEach(function(alias){var notificationId=idMap[alias]||ev.notification_id||ev.id;var seenKey=String(notificationId);if(_mentionSeen[seenKey])return;_mentionSeen[seenKey]=true;added=true;addMentionNotification(Object.assign({},ev,{id:notificationId,notification_id:notificationId,alias:alias,unread:true}));});if(added){showMentionToast(ev);showMentionDesktopNotification(ev);playMentionSound();}_mentionLastId=Math.max(_mentionLastId,parseInt(ev.id,10)||0);}
@@ -1984,6 +2102,78 @@ class SalePlanPublicController(http.Controller):
             'session_info_json': Markup(json.dumps(session_info)),
         })
 
+    @http.route('/sale_plan_webpush_sw.js', type='http', auth='public', methods=['GET'], csrf=False)
+    def sale_plan_webpush_sw(self, **kwargs):
+        js = """
+self.addEventListener('push', function(event) {
+  var data = {};
+  try { data = event.data ? event.data.json() : {}; } catch (e) { data = {}; }
+  var title = data.title || 'Sale Plan';
+  var options = {
+    body: data.body || '',
+    icon: '/web/static/img/favicon.ico',
+    badge: '/web/static/img/favicon.ico',
+    tag: data.tag || ('sale-plan-' + Date.now()),
+    renotify: true,
+    data: data
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+self.addEventListener('notificationclick', function(event) {
+  event.notification.close();
+  var data = event.notification.data || {};
+  var url = data.url || '/sale_plan';
+  event.waitUntil(clients.matchAll({type: 'window', includeUncontrolled: true}).then(function(clientList) {
+    for (var i = 0; i < clientList.length; i++) {
+      var client = clientList[i];
+      if (client.url.indexOf(self.location.origin) === 0 && 'focus' in client) {
+        client.focus();
+        try { client.postMessage({type: 'sale_plan_push_open', so_id: data.so_id, so_name: data.so_name}); } catch (e) {}
+        return;
+      }
+    }
+    if (clients.openWindow) return clients.openWindow(url);
+  }));
+});
+"""
+        return request.make_response(js, headers=[
+            ('Content-Type', 'application/javascript; charset=utf-8'),
+            ('Service-Worker-Allowed', '/'),
+            ('Cache-Control', 'no-store'),
+        ])
+
+    @http.route('/api/sale_plan/webpush_config', type='json', auth='public', methods=['POST'])
+    def api_sale_plan_webpush_config(self, **kwargs):
+        public_key, private_key = _get_or_create_webpush_vapid(request.env)
+        try:
+            import pywebpush  # noqa: F401
+            sender_ready = True
+        except Exception:
+            sender_ready = False
+        return {
+            'status': 'success',
+            'public_key': public_key,
+            'enabled': bool(public_key and private_key),
+            'sender_ready': sender_ready,
+        }
+
+    @http.route('/api/sale_plan/webpush_subscribe', type='json', auth='public', methods=['POST'], csrf=False)
+    def api_sale_plan_webpush_subscribe(self, subscription=None, backend_messages=False, **kwargs):
+        if not subscription or not isinstance(subscription, dict):
+            return {'status': 'error', 'message': 'missing_subscription'}
+        aliases = _get_user_sale_plan_aliases(request.env.user)
+        if backend_messages:
+            aliases = aliases or ['']
+        elif not aliases:
+            return {'status': 'error', 'message': 'missing_alias'}
+        records = request.env['hlv.sale.plan.web.push.subscription'].sudo().upsert_subscription(
+            request.env.user,
+            subscription,
+            aliases=aliases,
+            backend_messages=bool(backend_messages),
+        )
+        return {'status': 'success', 'count': len(records), 'aliases': aliases}
+
     @http.route('/sale_plan', type='http', auth='public', methods=['GET', 'POST'])
     def sale_plan_page(self, **kwargs):
         ip = request.httprequest.remote_addr
@@ -2268,6 +2458,10 @@ class SalePlanPublicController(http.Controller):
                 except Exception:
                   for partner in internal_partners:
                     bus._sendone(partner, 'new_portal_message', payload)
+              try:
+                _push_backend_message_webpush(request.env, payload)
+              except Exception:
+                _logger.exception('Delivery Planner Web Push send error')
             except Exception as e:
                 _logger.warning(f"Delivery Planner Bus send error: {e}")
 
