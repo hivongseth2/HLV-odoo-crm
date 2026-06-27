@@ -181,8 +181,13 @@ class StockPickingAmisSync(models.Model):
         voucher_payload, dictionary_items = self._prepare_misa_inward_payload(config, purchase_order)
         org_refid = voucher_payload.get('org_refid')
 
-        # Nghiep vu hien tai uu tien map theo ma (code), tranh dung cac GUID tu sinh de khong lech du lieu MISA.
-        # Neu danh muc da co san ben MISA, khong can goi save_dictionary.
+        if dictionary_items:
+            config.push_dictionary(dictionary_items)
+            config.clear_dictionary_cache([1, 2, 4])
+            _logger.info(
+                'Created %d MISA dictionary items before inward picking %s sync...',
+                len(dictionary_items), self.name,
+            )
         config.push_inward_voucher(voucher_payload, dictionary_items=[])
 
         self.sudo().write({
@@ -624,79 +629,69 @@ class StockPickingAmisSync(models.Model):
     def _prepare_misa_inward_payload(self, config, purchase_order):
         self.ensure_one()
         partner = self.partner_id or purchase_order.partner_id
+        if not partner:
+            raise UserError('Phieu nhap "%s" thieu nha cung cap.' % self.name)
 
         refid = (self.misa_inward_org_refid or '').strip()
         if not refid:
-            raise UserError('Thiếu MISA org_refid phiếu nhập. Vui lòng điền trường "MISA org_refid phiếu nhập" trên phiếu nhập trước khi đồng bộ.')
+            refid = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'misa_inward|%d' % self.id))
+            self.sudo().write({'misa_inward_org_refid': refid})
 
         branch_id = (config.misa_branch_id or '').strip()
         stock_id = (config.misa_stock_id or '').strip()
-
-        # Auto-lookup account_object_id nếu chưa có trên partner
-        account_object_id = (partner.misa_account_object_id or '').strip() if partner else ''
-        if not account_object_id and partner:
-            account_object_id = self._misa_lookup_account_object(config, partner)
-
-        missing_header = []
         if not branch_id:
-            missing_header.append('MISA Branch ID (cấu hình)')
+            raise UserError('Thieu MISA Branch ID trong cau hinh.')
         if not stock_id:
-            missing_header.append('MISA Stock ID (cấu hình)')
-        if not account_object_id:
-            missing_header.append('MISA Account Object ID (nhà cung cấp: %s)' % (partner.name if partner else '?'))
-        if missing_header:
-            raise UserError('Thiếu mapping ID MISA ở phần đầu chứng từ: %s' % ', '.join(missing_header))
+            raise UserError('Thieu MISA Stock ID trong cau hinh.')
 
-        # Kho MISA co dinh: HLV
+        dictionary_items = []
+        account_object = purchase_order._ensure_misa_account_object(config, partner, dictionary_items)
+        account_object_id = account_object.get('account_object_id') or ''
+        account_object_code = account_object.get('account_object_code') or partner.ref or partner.name or ''
+        account_object_name = account_object.get('account_object_name') or partner.display_name or partner.name or ''
+        if not account_object_id:
+            raise UserError('Khong tao/tim duoc MISA Account Object cho nha cung cap: %s' % partner.display_name)
+
+        # Kho MISA hien tai co dinh theo cau hinh kho HLV.
         misa_warehouse_code = 'HLV'
+
+        moves = self.move_ids_without_package.filtered(lambda m: m.quantity > 0)
+        if not moves:
+            raise UserError('Phieu nhap "%s" khong co dong da nhap de sync MISA.' % self.name)
 
         detail = []
         total_amount = 0.0
 
-        for idx, move in enumerate(self.move_ids_without_package.filtered(lambda m: m.quantity > 0), start=1):
+        for idx, move in enumerate(moves, start=1):
             product = move.product_id
-            qty_done = float(move.quantity)
+            qty_done = float(move.quantity or 0.0)
             price_unit = float(move.purchase_line_id.price_unit if move.purchase_line_id else 0.0)
             amount = qty_done * price_unit
             total_amount += amount
 
-            inventory_item_id = (product.misa_inventory_item_id or '').strip()
-            unit_id = (move.product_uom.misa_unit_id or '').strip()
-
-            # Auto-lookup nếu thiếu
-            if not inventory_item_id and product.default_code:
-                inventory_item_id, fetched_unit_id = self._misa_lookup_inventory_item(
-                    config, product, move.product_uom
-                )
-                if not unit_id and fetched_unit_id:
-                    unit_id = fetched_unit_id
+            unit = purchase_order._ensure_misa_unit(config, move.product_uom, dictionary_items)
+            inventory_item = purchase_order._ensure_misa_inventory_item(
+                config, product, move.product_uom, unit, price_unit, dictionary_items
+            )
+            inventory_item_id = inventory_item.get('inventory_item_id') or ''
+            inventory_item_code = inventory_item.get('inventory_item_code') or product.default_code or str(product.id)
+            inventory_item_name = inventory_item.get('inventory_item_name') or product.display_name
+            unit_id = unit.get('unit_id') or ''
+            unit_name = unit.get('unit_name') or move.product_uom.name
+            if not inventory_item_id:
+                raise UserError('Khong tao/tim duoc MISA Inventory Item cho san pham: %s' % product.display_name)
             if not unit_id:
-                unit_id = self._misa_lookup_unit(config, move.product_uom)
+                raise UserError('Khong tao/tim duoc MISA Unit cho don vi tinh: %s' % move.product_uom.name)
 
             ref_detail_id = (move.misa_ref_detail_id or '').strip()
             if not ref_detail_id:
-                # Sinh ref_detail_id dạng stable UUID từ picking+move để idempotent
                 ref_detail_id = str(uuid.uuid5(
                     uuid.NAMESPACE_DNS,
-                    'ref_detail|%s|%d' % (self.name, move.id)
+                    'misa_inward_detail|%d|%d' % (self.id, move.id)
                 ))
                 move.sudo().write({'misa_ref_detail_id': ref_detail_id})
 
-            missing_line = []
-            if not inventory_item_id:
-                missing_line.append('MISA Inventory Item ID (product: %s)' % (product.default_code or product.name))
-            if not unit_id:
-                missing_line.append('MISA Unit ID (uom: %s)' % move.product_uom.name)
-            if missing_line:
-                raise UserError(
-                    'Thiếu mapping ID MISA ở dòng hàng %s (%s): %s' % (
-                        move.display_name,
-                        product.display_name,
-                        ', '.join(missing_line),
-                    )
-                )
-
-            # Tai khoan co dinh theo yeu cau: Kho 1561, Cong no 331
+            # Tai khoan co dinh theo yeu cau: Kho 1561, Cong no 331.
             debit_account = '1561'
             credit_account = '331'
 
@@ -723,18 +718,18 @@ class StockPickingAmisSync(models.Model):
                 'main_quantity': qty_done,
                 'amount_finance_oc': amount,
                 'amount_management_oc': amount,
-                'description': product.display_name,
+                'description': move.name or inventory_item_name,
                 'debit_account': debit_account,
                 'credit_account': credit_account,
                 'exchange_rate_operator': '*',
-                'account_object_name': partner.display_name if partner else '',
-                'account_object_code': partner.ref or (partner.name if partner else ''),
-                'inventory_item_code': product.default_code or str(product.id),
+                'account_object_name': account_object_name,
+                'account_object_code': account_object_code,
+                'inventory_item_code': inventory_item_code,
                 'inventory_item_type': 0,
-                'unit_name': move.product_uom.name,
+                'unit_name': unit_name,
                 'stock_code': misa_warehouse_code,
-                'main_unit_name': move.product_uom.name,
-                'inventory_item_name': product.display_name,
+                'main_unit_name': unit_name,
+                'inventory_item_name': inventory_item_name,
                 'stock_name': misa_warehouse_code,
                 'account_name': debit_account,
                 'is_follow_serial_number': False,
@@ -777,19 +772,17 @@ class StockPickingAmisSync(models.Model):
             'exchange_rate': 1.0,
             'refno_finance': '',
             'refno_management': '',
-            'account_object_name': partner.display_name if partner else '',
-            'account_object_address': partner.contact_address_complete if partner else '',
+            'account_object_name': account_object_name,
+            'account_object_address': partner.contact_address_complete or '',
             'journal_memo': 'Nhap kho tu don mua %s (Odoo: %s)' % (purchase_order.name, self.name),
             'currency_id': (purchase_order.currency_id.name or 'VND'),
-            'account_object_code': partner.ref or (partner.name if partner else ''),
+            'account_object_code': account_object_code,
             'is_executed': False,
             'is_adjust_value': False,
             'state': 0,
             'detail': detail,
         }
-        return voucher, []
-
-    # ── Auto-lookup helpers ────────────────────────────────────────────────────
+        return voucher, dictionary_items
 
     def _misa_lookup_account_object_by_id(self, config, account_object_id):
         """Tìm item account_object trong MISA dictionary theo ID (UUID).
