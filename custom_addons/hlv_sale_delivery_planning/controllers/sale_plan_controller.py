@@ -2768,7 +2768,7 @@ self.addEventListener('notificationclick', function(event) {
                 )
 
             # Truy vấn phiếu xuất kho (OUT) đã hoàn thành của các đơn hàng này.
-            # Nếu người dùng chọn "Hoàn thành từ/đến", filter thêm trực tiếp
+            # Nếu người dùng chọn "Hoàn thành từ/đến", filter thêm trực tiếp.
             # trên date_done của picking (input là giờ VN UTC+7 → chuyển sang UTC).
             Picking = request.env['stock.picking'].sudo()
             picking_domain = [
