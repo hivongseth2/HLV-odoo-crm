@@ -26,3 +26,4 @@ requests
 pgvector
 beautifulsoup4
 anthropic
+pywebpush
