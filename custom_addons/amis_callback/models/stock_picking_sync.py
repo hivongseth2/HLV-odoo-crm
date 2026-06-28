@@ -204,6 +204,9 @@ class StockPickingAmisSync(models.Model):
         self.sudo().write({
             'misa_inward_org_refid': org_refid or '',
         })
+        if config.sync_purchase_order_enabled and not purchase_order._is_misa_imported_purchase_order():
+            purchase_order.sudo().write({'misa_purchase_order_synced': False})
+            purchase_order._enqueue_misa_purchase_order(raise_on_skip=False)
 
     def _get_related_purchase_order(self):
         self.ensure_one()

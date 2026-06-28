@@ -160,7 +160,7 @@ class PurchaseOrderAmisSync(models.Model):
         delivery_term = self._misa_field_value('x_studio_delivery_term')
         payment_term_text = self._misa_payment_term_text()
         receive_address = self._misa_receive_address()
-        purchase_status = self._misa_field_value('x_studio_misa_purchase_status') or 'Chua thuc hien'
+        purchase_status = 'Chưa thực hiện'
         employee_name = self.user_id.name if self.user_id else ''
         stock_code = self._misa_purchase_stock_code()
 
@@ -181,6 +181,7 @@ class PurchaseOrderAmisSync(models.Model):
             gross_amount = qty * unit_price
             discount_amount = max(gross_amount - amount, 0.0)
             vat_rate = self._misa_purchase_line_vat_rate(line)
+            quantity_receipt = self._misa_purchase_line_received_quantity(line)
 
             total_sale_amount += amount
             total_discount_amount += discount_amount
@@ -217,7 +218,8 @@ class PurchaseOrderAmisSync(models.Model):
                 'main_convert_rate': 1.0,
                 'quantity': qty,
                 'main_quantity': qty,
-                'quantity_receipt': 0.0,
+                'quantity_receipt': quantity_receipt,
+                'main_quantity_receipt': quantity_receipt,
                 'quantity_receipt_last_year': 0.0,
                 'unit_price': unit_price,
                 'main_unit_price': unit_price,
@@ -254,6 +256,9 @@ class PurchaseOrderAmisSync(models.Model):
             'refid': org_refid,
             'branch_id': branch_id,
             'status': 0,
+            'order_status': 0,
+            'purchase_order_status': 0,
+            'status_name': purchase_status,
             'reforder': now_ms,
             'refdate': refdate,
             'receive_date': receive_date,
@@ -360,6 +365,17 @@ class PurchaseOrderAmisSync(models.Model):
         for src, dst in replacements.items():
             value = value.replace(src, dst)
         return value
+
+    def _misa_purchase_line_received_quantity(self, line):
+        qty_received = float(getattr(line, 'qty_received', 0.0) or 0.0)
+        if qty_received:
+            return qty_received
+        moves = line.move_ids.filtered(
+            lambda m: m.state == 'done'
+            and m.picking_id
+            and m.picking_id.picking_type_code == 'incoming'
+        )
+        return sum(float(move.product_uom._compute_quantity(move.quantity, line.product_uom) or 0.0) for move in moves)
 
     def _misa_purchase_line_vat_rate(self, line):
         taxes = line.taxes_id.filtered(lambda t: t.amount_type == 'percent')
