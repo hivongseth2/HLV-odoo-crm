@@ -188,6 +188,7 @@ export class DeliveryPlannerRealtimeMixin {
             so.has_unread_message = true;
         }
         this._playMessageSound();
+        this._showDesktopMessageNotification(payload, rawBody);
         this.notification.add(
             `Đơn hàng ${payload.so_name}: ${rawBody}...`,
             {
@@ -202,6 +203,116 @@ export class DeliveryPlannerRealtimeMixin {
                 ]
             }
         );
+    }
+
+    _browserNotificationsSupported() {
+        return typeof window !== "undefined" && "Notification" in window && "serviceWorker" in navigator && "PushManager" in window && window.isSecureContext;
+    }
+
+    _urlBase64ToUint8Array(base64String) {
+        const padding = "=".repeat((4 - base64String.length % 4) % 4);
+        const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+        const rawData = window.atob(base64);
+        const output = new Uint8Array(rawData.length);
+        for (let i = 0; i < rawData.length; ++i) output[i] = rawData.charCodeAt(i);
+        return output;
+    }
+
+    async _subscribeWebPush(publicKey, forceReset = false) {
+        const appKey = this._urlBase64ToUint8Array(publicKey);
+        if (appKey.length !== 65) {
+            throw new Error(`invalid_vapid_public_key_${appKey.length}`);
+        }
+        const reg = await navigator.serviceWorker.register('/sale_plan_webpush_sw.js', { scope: '/' });
+        await navigator.serviceWorker.ready;
+        let sub = await reg.pushManager.getSubscription();
+        if (sub && forceReset) {
+            await sub.unsubscribe();
+            sub = null;
+        }
+        return sub || await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: appKey,
+        });
+    }
+
+    _syncDesktopNotificationPermission() {
+        this.state.desktopNotificationPermission = this._browserNotificationsSupported() ? Notification.permission : "unsupported";
+    }
+
+    async requestDesktopNotifications() {
+        if (!this._browserNotificationsSupported()) {
+            this.state.desktopNotificationPermission = "unsupported";
+            this.notification.add("Trình duyệt không hỗ trợ Web Push hoặc trang chưa chạy HTTPS. Chrome, Edge và Opera bản chính thức đều hỗ trợ.", { type: "warning" });
+            return;
+        }
+        if (Notification.permission === "denied") {
+            this.state.desktopNotificationPermission = "denied";
+            this.notification.add("Notification đang bị chặn. Bấm icon ổ khóa bên trái URL -> Site settings -> Notifications -> Allow, rồi reload trang.", { type: "warning" });
+            return;
+        }
+        try {
+            const configResp = await fetch('/api/sale_plan/webpush_config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ jsonrpc: '2.0', method: 'call', params: {} }),
+            });
+            const configJson = await configResp.json();
+            const config = configJson.result || {};
+            if (!config.enabled || !config.public_key) {
+                this.notification.add("Web Push chưa cấu hình được VAPID key.", { type: "warning" });
+                return;
+            }
+            const permission = Notification.permission === "granted" ? "granted" : await Notification.requestPermission();
+            this.state.desktopNotificationPermission = permission;
+            if (permission !== "granted") {
+                this.notification.add(permission === "denied" ? "Notification đang bị chặn. Bật lại trong site settings của trình duyệt." : "Chưa bật thông báo trình duyệt", { type: "warning" });
+                return;
+            }
+            let sub;
+            try {
+                sub = await this._subscribeWebPush(config.public_key, false);
+            } catch (firstErr) {
+                console.warn('web push first subscribe failed, retrying clean', firstErr);
+                sub = await this._subscribeWebPush(config.public_key, true);
+            }
+            await fetch('/api/sale_plan/webpush_subscribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    jsonrpc: '2.0',
+                    method: 'call',
+                    params: { subscription: sub.toJSON(), backend_messages: true },
+                }),
+            });
+            this.notification.add("Đã bật Web Push", { type: "success" });
+        } catch (e) {
+            console.warn('web push subscribe failed', e);
+            const message = e && e.name === "AbortError"
+                ? "Khong ket noi duoc push service cua trinh duyet. Thu Chrome/Edge khac, tat VPN/proxy/adblock, hoac kiem tra quyen notification cua site."
+                : `Khong bat duoc Web Push${e && e.message ? `: ${e.message}` : ""}`;
+            this.notification.add(message, { type: "warning" });
+        }
+    }
+
+    _showDesktopMessageNotification(payload, rawBody) {
+        try {
+            if (!this._browserNotificationsSupported() || Notification.permission !== "granted" || !payload) return;
+            const title = `Có tin nhắn mới ${payload.author_name || ""}`;
+            const body = `Đơn hàng ${payload.so_name || ""}: ${rawBody || ""}`;
+            const noti = new Notification(title, {
+                body,
+                icon: "/web/static/img/favicon.ico",
+                tag: `delivery-planner-message-${payload.message_id || payload.so_id || Date.now()}`,
+                renotify: true,
+            });
+            noti.onclick = () => {
+                window.focus();
+                this.openDrawerFromMessageList(payload.so_id);
+                noti.close();
+            };
+            setTimeout(() => noti.close(), 9000);
+        } catch (e) {}
     }
 
     _playMessageSound() {

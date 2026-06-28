@@ -204,6 +204,7 @@ export class DeliveryPlannerDashboard extends Component {
             drawerMentionActiveIndex: 0,
             busListening: false,
             busServiceAvailable: false,
+            desktopNotificationPermission: (typeof window !== 'undefined' && 'Notification' in window) ? Notification.permission : 'unsupported',
         });
 
         this.notification = useService("notification");
