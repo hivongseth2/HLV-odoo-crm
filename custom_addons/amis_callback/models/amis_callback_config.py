@@ -1323,159 +1323,266 @@ class AmisCallbackConfig(models.Model):
             )
 
 
+    def cron_sync_catalog_from_misa(self):
+        config = self.sudo().search([], limit=1)
+        if not config:
+            _logger.info('MISA catalog cron skipped: no AMIS callback config.')
+            return True
+        try:
+            config.ensure_sync_ready()
+        except Exception as exc:
+            _logger.warning('MISA catalog cron skipped: %s', exc)
+            return True
+        try:
+            summary = config._sync_catalog_from_misa_to_odoo(unmapped_only=False, create_missing=True)
+            _logger.info('MISA catalog cron completed: %s', summary.get('message'))
+        except Exception:
+            _logger.exception('MISA catalog cron failed')
+        return True
+
     def action_sync_catalog_to_odoo(self):
-        """Đồng bộ danh mục hàng hóa (type=2) và đơn vị tính (type=4) từ MISA
-        → ghi misa_inventory_item_id lên product.template / misa_unit_id lên uom.uom.
-        Chạy thủ công một lần, không gọi trong cron/sync phiếu.
-        """
         self.ensure_one()
         self.ensure_sync_ready()
-
-        # ---- Pre-load toàn bộ product + uom vào dict 1 lần (tránh N DB query) ----
-        product_env = self.env['product.product'].sudo()
-        uom_env = self.env['uom.uom'].sudo()
-
-        # {default_code: [product_ids]}
-        all_products = product_env.search([('default_code', '!=', False)])
-        code_to_products = {}
-        for p in all_products:
-            code = (p.default_code or '').strip()
-            if code:
-                code_to_products.setdefault(code, []).append(p)
-
-        # {uom_name: [uom_ids]}
-        all_uoms = uom_env.search([])
-        name_to_uoms = {}
-        for u in all_uoms:
-            name = (u.name or '').strip()
-            if name:
-                name_to_uoms.setdefault(name, []).append(u)
-
-        # ---- 1. Lấy toàn bộ hàng hóa (data_type=2) — 1 lần fetch, cached ----
-        inv_items = self._get_all_dictionary(2)
-        item_updated = 0
-        for item in inv_items:
-            code = (item.get('inventory_item_code') or '').strip()
-            item_id = (item.get('inventory_item_id') or '').strip()
-            if not code or not item_id:
-                continue
-            for p in code_to_products.get(code, []):
-                if p.misa_inventory_item_id != item_id:
-                    p.write({'misa_inventory_item_id': item_id})
-                    item_updated += 1
-
-        # ---- 2. Lấy toàn bộ đơn vị tính (data_type=4) — 1 lần fetch, cached ----
-        unit_items = self._get_all_dictionary(4)
-        unit_updated = 0
-        for item in unit_items:
-            name = (item.get('unit_name') or '').strip()
-            unit_id = (item.get('unit_id') or '').strip()
-            if not name or not unit_id:
-                continue
-            for u in name_to_uoms.get(name, []):
-                if u.misa_unit_id != unit_id:
-                    u.write({'misa_unit_id': unit_id})
-                    unit_updated += 1
-
-        # Xóa module cache để lần sau fetch mới
-        db = self.env.cr.dbname
-        _DICT_CACHE.pop((db, 2), None)
-        _DICT_CACHE.pop((db, 4), None)
-
-        msg = (
-            f'Đồng bộ danh mục hoàn tất!\n'
-            f'• Hàng hóa: đã cập nhật {item_updated} sản phẩm '
-            f'(trên tổng {len(inv_items)} mục MISA).\n'
-            f'• Đơn vị tính: đã cập nhật {unit_updated} UoM '
-            f'(trên tổng {len(unit_items)} mục MISA).'
-        )
-        _logger.info('MISA catalog sync: %s', msg)
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': 'Đồng bộ danh mục MISA',
-                'message': msg,
-                'type': 'success',
-                'sticky': True,
-            },
-        }
+        summary = self._sync_catalog_from_misa_to_odoo(unmapped_only=False, create_missing=True)
+        return self._catalog_sync_notification('Đồng bộ danh mục MISA', summary.get('message'))
 
     def action_sync_catalog_unmapped_only(self):
-        """Chỉ đồng bộ sản phẩm/UoM chưa có MISA ID (bỏ qua những cái đã map).
-        Nhanh hơn full sync vì chỉ write những record thực sự thiếu.
-        """
         self.ensure_one()
         self.ensure_sync_ready()
+        summary = self._sync_catalog_from_misa_to_odoo(unmapped_only=True, create_missing=True)
+        return self._catalog_sync_notification('Đồng bộ danh mục mới', summary.get('message'))
 
-        product_env = self.env['product.product'].sudo()
-        uom_env = self.env['uom.uom'].sudo()
-
-        # Chỉ load sản phẩm chưa có mapping
-        unmapped_products = product_env.search([
-            ('default_code', '!=', False),
-            ('misa_inventory_item_id', 'in', [False, '']),
-        ])
-        code_to_products = {}
-        for p in unmapped_products:
-            code = (p.default_code or '').strip()
-            if code:
-                code_to_products.setdefault(code, []).append(p)
-
-        # Chỉ load UoM chưa có mapping
-        unmapped_uoms = uom_env.search([('misa_unit_id', 'in', [False, ''])])
-        name_to_uoms = {}
-        for u in unmapped_uoms:
-            name = (u.name or '').strip()
-            if name:
-                name_to_uoms.setdefault(name, []).append(u)
-
-        item_updated = 0
-        unit_updated = 0
-
-        if code_to_products:
-            inv_items = self._get_all_dictionary(2)
-            for item in inv_items:
-                code = (item.get('inventory_item_code') or '').strip()
-                item_id = (item.get('inventory_item_id') or '').strip()
-                if not code or not item_id:
-                    continue
-                for p in code_to_products.get(code, []):
-                    p.write({'misa_inventory_item_id': item_id})
-                    item_updated += 1
-
-        if name_to_uoms:
-            unit_items = self._get_all_dictionary(4)
-            for item in unit_items:
-                name = (item.get('unit_name') or '').strip()
-                unit_id = (item.get('unit_id') or '').strip()
-                if not name or not unit_id:
-                    continue
-                for u in name_to_uoms.get(name, []):
-                    u.write({'misa_unit_id': unit_id})
-                    unit_updated += 1
-
-        # Xóa cache sau khi dùng
-        db = self.env.cr.dbname
-        _DICT_CACHE.pop((db, 2), None)
-        _DICT_CACHE.pop((db, 4), None)
-
-        msg = (
-            f'Đồng bộ sản phẩm chưa map hoàn tất!\n'
-            f'• Hàng hóa: đã map {item_updated}/{len(unmapped_products)} sản phẩm chưa có ID.\n'
-            f'• Đơn vị tính: đã map {unit_updated}/{len(unmapped_uoms)} UoM chưa có ID.'
-        )
-        _logger.info('MISA catalog sync (unmapped only): %s', msg)
+    def _catalog_sync_notification(self, title, message):
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
-                'title': 'Đồng bộ sản phẩm mới',
-                'message': msg,
+                'title': title,
+                'message': message,
                 'type': 'success',
                 'sticky': True,
             },
         }
+
+    def _sync_catalog_from_misa_to_odoo(self, unmapped_only=False, create_missing=True):
+        self.ensure_one()
+        unit_summary = self._sync_misa_units_to_odoo(unmapped_only=unmapped_only)
+        product_summary = self._sync_misa_products_to_odoo(
+            unmapped_only=unmapped_only,
+            create_missing=create_missing,
+        )
+        vendor_summary = self._sync_misa_vendors_to_odoo(
+            unmapped_only=unmapped_only,
+            create_missing=create_missing,
+        )
+        self.clear_dictionary_cache([1, 2, 4])
+        msg = (
+            'Đồng bộ danh mục MISA hoàn tất!\n'
+            '• Hàng hóa: map/cập nhật %(updated_product)s, tạo mới %(created_product)s '
+            '(trên %(total_product)s mục MISA).\n'
+            '• Đơn vị tính: map/cập nhật %(updated_unit)s (trên %(total_unit)s mục MISA).\n'
+            '• Nhà cung cấp: map/cập nhật %(updated_vendor)s, tạo mới %(created_vendor)s '
+            '(trên %(total_vendor)s mục MISA).'
+        ) % {
+            'updated_product': product_summary['updated'],
+            'created_product': product_summary['created'],
+            'total_product': product_summary['total'],
+            'updated_unit': unit_summary['updated'],
+            'total_unit': unit_summary['total'],
+            'updated_vendor': vendor_summary['updated'],
+            'created_vendor': vendor_summary['created'],
+            'total_vendor': vendor_summary['total'],
+        }
+        return {
+            'message': msg,
+            'units': unit_summary,
+            'products': product_summary,
+            'vendors': vendor_summary,
+        }
+
+    def _sync_misa_units_to_odoo(self, unmapped_only=False):
+        Uom = self.env['uom.uom'].sudo().with_context(active_test=False)
+        domain = [('misa_unit_id', 'in', [False, ''])] if unmapped_only else []
+        uoms = Uom.search(domain)
+        name_to_uoms = {}
+        for uom in uoms:
+            name = (uom.name or '').strip()
+            if name:
+                name_to_uoms.setdefault(name.casefold(), []).append(uom)
+
+        unit_items = self._get_all_dictionary(4)
+        updated = 0
+        for item in unit_items:
+            unit_name = (item.get('unit_name') or '').strip()
+            unit_id = (item.get('unit_id') or '').strip()
+            if not unit_name or not unit_id:
+                continue
+            for uom in name_to_uoms.get(unit_name.casefold(), []):
+                vals = {}
+                if (uom.misa_unit_id or '').strip() != unit_id:
+                    vals['misa_unit_id'] = unit_id
+                if vals:
+                    uom.write(vals)
+                    updated += 1
+        return {'total': len(unit_items), 'updated': updated}
+
+    def _sync_misa_products_to_odoo(self, unmapped_only=False, create_missing=True):
+        Product = self.env['product.product'].sudo().with_context(active_test=False)
+        Uom = self.env['uom.uom'].sudo().with_context(active_test=False)
+        products = Product.search([])
+        products_by_misa_id = {}
+        products_by_code = {}
+        for product in products:
+            misa_id = (product.misa_inventory_item_id or '').strip()
+            code = (product.default_code or '').strip()
+            if misa_id:
+                products_by_misa_id.setdefault(misa_id.lower(), product)
+            if code:
+                products_by_code.setdefault(code, product)
+
+        uoms_by_misa_id = {}
+        for uom in Uom.search([('misa_unit_id', '!=', False)]):
+            unit_id = (uom.misa_unit_id or '').strip()
+            if unit_id:
+                uoms_by_misa_id.setdefault(unit_id.lower(), uom)
+
+        inv_items = self._get_all_dictionary(2)
+        updated = 0
+        created = 0
+        for item in inv_items:
+            item_id = (item.get('inventory_item_id') or '').strip()
+            code = (item.get('inventory_item_code') or '').strip()
+            name = (item.get('inventory_item_name') or '').strip()
+            if not item_id or not code or not name:
+                continue
+            product = products_by_misa_id.get(item_id.lower()) or products_by_code.get(code)
+            vals = self._misa_product_vals(item, uoms_by_misa_id)
+            if product:
+                if unmapped_only and (product.misa_inventory_item_id or '').strip():
+                    continue
+                write_vals = {
+                    key: value for key, value in vals.items()
+                    if not self._record_value_matches(product, key, value)
+                }
+                if write_vals:
+                    product.write(write_vals)
+                    updated += 1
+                continue
+            if not create_missing:
+                continue
+            product = Product.create(vals)
+            products_by_misa_id[item_id.lower()] = product
+            products_by_code[code] = product
+            created += 1
+        return {'total': len(inv_items), 'updated': updated, 'created': created}
+
+    def _misa_product_vals(self, item, uoms_by_misa_id):
+        Product = self.env['product.product']
+        vals = {
+            'name': (item.get('inventory_item_name') or '').strip(),
+            'default_code': (item.get('inventory_item_code') or '').strip(),
+            'misa_inventory_item_id': (item.get('inventory_item_id') or '').strip(),
+        }
+        if 'purchase_ok' in Product._fields:
+            vals['purchase_ok'] = True
+        if 'sale_ok' in Product._fields:
+            vals['sale_ok'] = True
+        if 'active' in Product._fields:
+            vals['active'] = not bool(item.get('inactive'))
+        unit_id = (item.get('unit_id') or item.get('main_unit_id') or '').strip().lower()
+        uom = uoms_by_misa_id.get(unit_id)
+        if uom and 'uom_id' in Product._fields:
+            vals['uom_id'] = uom.id
+        if uom and 'uom_po_id' in Product._fields:
+            vals['uom_po_id'] = uom.id
+        return vals
+
+    def _sync_misa_vendors_to_odoo(self, unmapped_only=False, create_missing=True):
+        Partner = self.env['res.partner'].sudo().with_context(
+            active_test=False,
+            skip_misa_partner_sync=True,
+        )
+        partners = Partner.search([('parent_id', '=', False)])
+        partners_by_misa_id = {}
+        partners_by_ref = {}
+        partners_by_name = {}
+        for partner in partners:
+            misa_id = (partner.misa_account_object_id or '').strip()
+            ref = (partner.ref or '').strip()
+            name = (partner.name or '').strip()
+            if misa_id:
+                partners_by_misa_id.setdefault(misa_id.lower(), partner)
+            if ref:
+                partners_by_ref.setdefault(ref.upper(), partner)
+            if name:
+                partners_by_name.setdefault(name.upper(), partner)
+
+        account_items = self._get_all_dictionary(1)
+        vendor_items = [item for item in account_items if item.get('is_vendor')]
+        updated = 0
+        created = 0
+        for item in vendor_items:
+            misa_id = (item.get('account_object_id') or '').strip()
+            code = (item.get('account_object_code') or '').strip()
+            name = (item.get('account_object_name') or '').strip()
+            if not misa_id or not name:
+                continue
+            partner = (
+                partners_by_misa_id.get(misa_id.lower())
+                or (code and partners_by_ref.get(code.upper()))
+                or partners_by_name.get(name.upper())
+            )
+            vals = self._misa_vendor_vals(item)
+            if partner:
+                if unmapped_only and (partner.misa_account_object_id or '').strip():
+                    continue
+                write_vals = {
+                    key: value for key, value in vals.items()
+                    if not self._record_value_matches(partner, key, value)
+                }
+                if write_vals:
+                    partner.write(write_vals)
+                    updated += 1
+                continue
+            if not create_missing:
+                continue
+            partner = Partner.create(vals)
+            partners_by_misa_id[misa_id.lower()] = partner
+            if code:
+                partners_by_ref[code.upper()] = partner
+            partners_by_name[name.upper()] = partner
+            created += 1
+        return {'total': len(vendor_items), 'updated': updated, 'created': created}
+
+    def _misa_vendor_vals(self, item):
+        Partner = self.env['res.partner']
+        vals = {
+            'name': (item.get('account_object_name') or '').strip(),
+            'misa_account_object_id': (item.get('account_object_id') or '').strip(),
+            'ref': (item.get('account_object_code') or '').strip() or False,
+            'is_company': True,
+            'supplier_rank': 1,
+        }
+        field_map = {
+            'vat': item.get('company_tax_code'),
+            'phone': item.get('tel') or item.get('phone'),
+            'mobile': item.get('mobile'),
+            'email': item.get('email_address') or item.get('email'),
+            'street': item.get('account_object_address') or item.get('address'),
+        }
+        for field_name, value in field_map.items():
+            if field_name in Partner._fields:
+                vals[field_name] = (value or '').strip() or False
+        if 'active' in Partner._fields:
+            vals['active'] = not bool(item.get('inactive'))
+        return vals
+
+    def _record_value_matches(self, record, field_name, value):
+        field = record._fields.get(field_name)
+        current = record[field_name]
+        if field and field.type == 'many2one':
+            return (current.id or False) == (value or False)
+        return current == value
 
     def action_fetch_invoice_templates(self):
         """Lấy danh sách mẫu hóa đơn điện tử từ MISA và hiển thị dạng bảng."""
