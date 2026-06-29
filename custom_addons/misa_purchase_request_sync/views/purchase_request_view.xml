@@ -34,6 +34,16 @@
             </xpath>
             <xpath expr="//field[@name='line_ids']/list/field[@name='estimated_cost']" position="after">
                 <field name="history_po_line_id" optional="hide"/>
+                <field name="misa_supplier_id" optional="show"/>
+                <field name="misa_stock_total" optional="hide"/>
+                <field name="misa_stock_selected" optional="show"/>
+                <field name="misa_stock_undelivered" optional="show"/>
+                <field name="misa_price_before_tax" optional="hide"/>
+                <field name="misa_tax_amount" optional="hide"/>
+                <field name="misa_discount_rate" optional="hide" widget="percentage"/>
+                <field name="misa_discount_amount" optional="hide"/>
+                <field name="misa_price_after_tax" optional="hide"/>
+                <field name="misa_amount" optional="show" sum="Tổng tiền"/>
             </xpath>
         </field>
     </record>
