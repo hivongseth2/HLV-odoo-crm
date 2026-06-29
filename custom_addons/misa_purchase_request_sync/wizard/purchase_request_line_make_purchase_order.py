@@ -19,22 +19,23 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
     def default_get(self, fields_list):
         res = super(PurchaseRequestLineMakePurchaseOrder, self).default_get(fields_list)
         
-        # Nếu chưa có supplier_id, thử lấy misa_supplier_id từ các dòng đang chọn
-        if not res.get('supplier_id'):
-            active_model = self.env.context.get('active_model')
-            active_ids = self.env.context.get('active_ids', [])
+        # Ưu tiên tuyệt đối lấy misa_supplier_id từ các dòng đang chọn,
+        # đè lên luôn giá trị mặc định (nếu có) do Odoo tự sinh ra từ sản phẩm
+        active_model = self.env.context.get('active_model')
+        active_ids = self.env.context.get('active_ids', [])
+        
+        lines = self.env['purchase.request.line']
+        if active_model == 'purchase.request.line':
+            lines = self.env['purchase.request.line'].browse(active_ids).exists()
+        elif active_model == 'purchase.request':
+            prs = self.env['purchase.request'].browse(active_ids).exists()
+            lines = prs.mapped('line_ids')
             
-            lines = self.env['purchase.request.line']
-            if active_model == 'purchase.request.line':
-                lines = self.env['purchase.request.line'].browse(active_ids).exists()
-            elif active_model == 'purchase.request':
-                prs = self.env['purchase.request'].browse(active_ids).exists()
-                lines = prs.mapped('line_ids')
+        for line in lines:
+            if hasattr(line, 'misa_supplier_id') and line.misa_supplier_id:
+                res['supplier_id'] = line.misa_supplier_id.id
+                break
                 
-            for line in lines:
-                if hasattr(line, 'misa_supplier_id') and line.misa_supplier_id:
-                    res['supplier_id'] = line.misa_supplier_id.id
-                    break
         return res
 
     @api.model
