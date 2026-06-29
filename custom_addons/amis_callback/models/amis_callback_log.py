@@ -257,7 +257,10 @@ class AmisCallbackLogLine(models.Model):
             po_line = self.env['purchase.order.line']
             current = (detail.get('org_ref_detail_id') or '').strip()
             if current:
-                po_line = po.order_line.filtered(lambda l: l.misa_purchase_order_ref_detail_id == current)[:1]
+                po_line = po.order_line.filtered(
+                    lambda l: l.misa_purchase_order_org_ref_detail_id == current
+                    or l.misa_purchase_order_ref_detail_id == current
+                )[:1]
             if not po_line:
                 sort_order = int(detail.get('sort_order') or 0)
                 po_line = lines_by_sort.get(sort_order) or self.env['purchase.order.line']
@@ -266,4 +269,14 @@ class AmisCallbackLogLine(models.Model):
                 candidates = lines_by_code.get(code) or []
                 po_line = candidates[0] if candidates else self.env['purchase.order.line']
             if po_line:
-                po_line.sudo().write({'misa_purchase_order_ref_detail_id': ref_detail_id})
+                vals = {
+                    'misa_purchase_order_ref_detail_id': ref_detail_id,
+                    'misa_purchase_order_ref_detail_synced': True,
+                }
+                if current:
+                    vals['misa_purchase_order_org_ref_detail_id'] = current
+                elif not po_line.misa_purchase_order_org_ref_detail_id:
+                    vals['misa_purchase_order_org_ref_detail_id'] = (
+                        po._misa_purchase_order_line_org_ref_detail_id(po_line)
+                    )
+                po_line.sudo().write(vals)

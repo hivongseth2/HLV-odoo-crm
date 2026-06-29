@@ -178,20 +178,39 @@ class StockPickingAmisSync(models.Model):
         if not config.ensure_sync_ready():
             return
 
-        if (config.sync_purchase_order_enabled
-                and not purchase_order._is_misa_imported_purchase_order()
-                and (not purchase_order.misa_purchase_order_synced
-                     or not purchase_order.misa_purchase_order_refid)):
-            if purchase_order.misa_purchase_order_synced and not purchase_order.misa_purchase_order_refid:
-                purchase_order.sudo().write({'misa_purchase_order_synced': False})
-            purchase_order._enqueue_misa_purchase_order(raise_on_skip=False)
+        if config.sync_purchase_order_enabled and not purchase_order._is_misa_imported_purchase_order():
+            purchase_lines = self.move_ids_without_package.mapped('purchase_line_id')
+            purchase_order._misa_refresh_purchase_order_refs_from_logs()
+            missing_detail_lines = purchase_order._misa_purchase_order_lines_missing_ref_detail(purchase_lines)
+            if not purchase_order.misa_purchase_order_refid or missing_detail_lines:
+                purchase_order._enqueue_misa_purchase_order(raise_on_skip=False, force=True)
+                missing_names = ', '.join(missing_detail_lines.mapped('product_id.display_name'))
+                reason = 'refid don mua' if not purchase_order.misa_purchase_order_refid else 'ref_detail_id dong: %s' % missing_names
+                raise UserError(
+                    'Don mua hang %s chua co %s MISA thuc te; da enqueue don mua, phieu nhap se retry sau callback.'
+                    % (purchase_order.name, reason)
+                )
+
+        if not purchase_order.misa_purchase_order_refid:
             raise UserError(
-                'Don mua hang %s chua co refid MISA thuc te; da enqueue don mua, phieu nhap se retry sau callback.'
+                'Don mua hang %s chua co refid MISA thuc te de lien ket phieu nhap.'
                 % purchase_order.name
             )
 
         voucher_payload, dictionary_items, reference_items = self._prepare_misa_inward_payload(config, purchase_order)
         org_refid = voucher_payload.get('org_refid')
+        _logger.info(
+            'Push MISA inward %s: po=%s, detail_links=%s',
+            self.name,
+            purchase_order.name,
+            ', '.join(
+                '%s:%s' % (
+                    detail.get('inventory_item_code') or detail.get('inventory_item_name') or '',
+                    detail.get('pu_order_ref_detail_id') or '',
+                )
+                for detail in voucher_payload.get('detail') or []
+            ),
+        )
 
         if dictionary_items:
             config.push_dictionary(dictionary_items)
@@ -204,9 +223,6 @@ class StockPickingAmisSync(models.Model):
         self.sudo().write({
             'misa_inward_org_refid': org_refid or '',
         })
-        if config.sync_purchase_order_enabled and not purchase_order._is_misa_imported_purchase_order():
-            purchase_order.sudo().write({'misa_purchase_order_synced': False})
-            purchase_order._enqueue_misa_purchase_order(raise_on_skip=False)
 
     def _get_related_purchase_order(self):
         self.ensure_one()
@@ -693,13 +709,12 @@ class StockPickingAmisSync(models.Model):
             vat_amount = amount * vat_rate / 100.0
             total_amount += amount
             total_vat_amount += vat_amount
-            pu_order_ref_detail_id = (purchase_line.misa_purchase_order_ref_detail_id or '').strip()
+            pu_order_ref_detail_id = purchase_order._misa_purchase_order_line_ref_detail_id(purchase_line)
             if not pu_order_ref_detail_id:
-                pu_order_ref_detail_id = str(uuid.uuid5(
-                    uuid.NAMESPACE_DNS,
-                    'misa_purchase_order_detail|%d|%d' % (purchase_order.id, purchase_line.id)
-                ))
-                purchase_line.sudo().write({'misa_purchase_order_ref_detail_id': pu_order_ref_detail_id})
+                raise UserError(
+                    'Dong don mua %s/%s chua co ref_detail_id MISA thuc te de lien ket phieu nhap.'
+                    % (purchase_order.name, purchase_line.product_id.display_name)
+                )
 
             unit = purchase_order._ensure_misa_unit(config, move.product_uom, dictionary_items)
             inventory_item = purchase_order._ensure_misa_inventory_item(

@@ -63,6 +63,11 @@ class PurchaseOrderAmisSync(models.Model):
                 'misa_purchase_order_org_refid': False,
                 'misa_purchase_order_refid': False,
             })
+            order.order_line.sudo().write({
+                'misa_purchase_order_org_ref_detail_id': False,
+                'misa_purchase_order_ref_detail_id': False,
+                'misa_purchase_order_ref_detail_synced': False,
+            })
         return True
 
     def _maybe_enqueue_misa_purchase_order(self):
@@ -207,10 +212,10 @@ class PurchaseOrderAmisSync(models.Model):
             inventory_item_name = inventory_item.get('inventory_item_name') or product.display_name
             unit_id = unit.get('unit_id') or ''
             unit_name = unit.get('unit_name') or line.product_uom.name
-            ref_detail_id = (line.misa_purchase_order_ref_detail_id or '').strip()
+            ref_detail_id = (line.misa_purchase_order_org_ref_detail_id or '').strip()
             if not ref_detail_id:
-                ref_detail_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'misa_purchase_order_detail|%d|%d' % (self.id, line.id)))
-                line.sudo().write({'misa_purchase_order_ref_detail_id': ref_detail_id})
+                ref_detail_id = self._misa_purchase_order_line_org_ref_detail_id(line)
+                line.sudo().write({'misa_purchase_order_org_ref_detail_id': ref_detail_id})
 
             detail.append({
                 'ref_detail_id': ref_detail_id,
@@ -395,6 +400,43 @@ class PurchaseOrderAmisSync(models.Model):
             3: 'Hoàn thành',
             4: 'Hủy bỏ',
         }.get(int(status_code or 1), 'Chưa thực hiện')
+
+    def _misa_purchase_order_line_org_ref_detail_id(self, line):
+        return str(uuid.uuid5(
+            uuid.NAMESPACE_DNS,
+            'misa_purchase_order_detail|%d|%d' % (self.id, line.id)
+        ))
+
+    def _misa_purchase_order_line_ref_detail_id(self, line):
+        ref_detail_id = (line.misa_purchase_order_ref_detail_id or '').strip()
+        if ref_detail_id and line.misa_purchase_order_ref_detail_synced:
+            return ref_detail_id
+        return ''
+
+    def _misa_purchase_order_lines_missing_ref_detail(self, lines):
+        return lines.filtered(lambda line: not self._misa_purchase_order_line_ref_detail_id(line))
+
+    def _misa_refresh_purchase_order_refs_from_logs(self):
+        self.ensure_one()
+        org_refid = (self.misa_purchase_order_org_refid or '').strip()
+        if not org_refid:
+            return
+        log_lines = self.env['amis.callback.log.line'].sudo().search([
+            ('voucher_type', '=', 21),
+            ('org_refid', '=', org_refid),
+            ('success', '=', True),
+        ], order='create_date asc, id asc')
+        for log_line in log_lines:
+            item = log_line._misa_callback_item()
+            voucher_data = log_line._misa_callback_voucher_data(item)
+            actual_refid = (
+                voucher_data.get('refid') or item.get('refid') or item.get('misa_refid') or org_refid
+            )
+            vals = {'misa_purchase_order_synced': True}
+            if actual_refid:
+                vals['misa_purchase_order_refid'] = actual_refid
+            self.sudo().write(vals)
+            log_line._apply_purchase_order_detail_ids(self, voucher_data)
 
     def _misa_purchase_line_received_quantity(self, line):
         qty_received = float(getattr(line, 'qty_received', 0.0) or 0.0)
@@ -633,8 +675,18 @@ class PurchaseOrderAmisSync(models.Model):
 class PurchaseOrderLineAmisSync(models.Model):
     _inherit = 'purchase.order.line'
 
+    misa_purchase_order_org_ref_detail_id = fields.Char(
+        string='MISA org_ref_detail_id Don mua hang',
+        copy=False,
+        help='org_ref_detail_id gui khi tao dong Don mua hang tren MISA.',
+    )
     misa_purchase_order_ref_detail_id = fields.Char(
         string='MISA ref_detail_id Don mua hang',
         copy=False,
         help='ref_detail_id thuc te cua dong Don mua hang tren MISA, dung de link phieu mua/nhap kho.',
+    )
+    misa_purchase_order_ref_detail_synced = fields.Boolean(
+        string='Da nhan ref_detail_id MISA Don mua hang',
+        copy=False,
+        help='Da xac nhan ref_detail_id dong Don mua hang tu callback MISA.',
     )
