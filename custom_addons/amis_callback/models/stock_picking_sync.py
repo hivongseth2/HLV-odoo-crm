@@ -184,10 +184,15 @@ class StockPickingAmisSync(models.Model):
         if config.sync_purchase_order_enabled and not purchase_order._is_misa_imported_purchase_order():
             missing_detail_lines = purchase_order._misa_purchase_order_lines_missing_ref_detail(purchase_lines)
             purchase_order_refid = purchase_order._misa_purchase_order_link_refid()
-            if not purchase_order_refid or missing_detail_lines:
+            if not purchase_order.misa_purchase_order_synced or not purchase_order_refid or missing_detail_lines:
                 purchase_order._enqueue_misa_purchase_order(raise_on_skip=False, force=True)
                 missing_names = ', '.join(missing_detail_lines.mapped('product_id.display_name'))
-                reason = 'refid/org_refid don mua' if not purchase_order_refid else 'ref_detail_id dong: %s' % missing_names
+                if not purchase_order.misa_purchase_order_synced:
+                    reason = 'callback thanh cong don mua'
+                elif not purchase_order_refid:
+                    reason = 'refid/org_refid don mua'
+                else:
+                    reason = 'ref_detail_id dong: %s' % missing_names
                 raise UserError(
                     'Don mua hang %s chua co %s MISA thuc te; da enqueue don mua, phieu nhap se retry sau callback.'
                     % (purchase_order.name, reason)

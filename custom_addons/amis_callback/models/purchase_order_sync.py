@@ -411,7 +411,11 @@ class PurchaseOrderAmisSync(models.Model):
         ref_detail_id = (line.misa_purchase_order_ref_detail_id or '').strip()
         if ref_detail_id and line.misa_purchase_order_ref_detail_synced:
             return ref_detail_id
-        return ''
+        org_ref_detail_id = (line.misa_purchase_order_org_ref_detail_id or '').strip()
+        if not org_ref_detail_id:
+            org_ref_detail_id = self._misa_purchase_order_line_org_ref_detail_id(line)
+            line.sudo().write({'misa_purchase_order_org_ref_detail_id': org_ref_detail_id})
+        return org_ref_detail_id
 
     def _misa_purchase_order_link_refid(self):
         self.ensure_one()
@@ -429,7 +433,6 @@ class PurchaseOrderAmisSync(models.Model):
         if not org_refid:
             return
         log_lines = self.env['amis.callback.log.line'].sudo().search([
-            ('voucher_type', '=', 21),
             ('org_refid', '=', org_refid),
             ('success', '=', True),
         ], order='create_date asc, id asc')

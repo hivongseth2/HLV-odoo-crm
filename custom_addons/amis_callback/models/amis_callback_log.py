@@ -197,18 +197,17 @@ class AmisCallbackLogLine(models.Model):
             actual_refid = (
                 voucher_data.get('refid') or item.get('refid') or item.get('misa_refid') or org_refid
             )
-            if voucher_type == 21:
-                po = self.env['purchase.order'].sudo().search([
-                    ('misa_purchase_order_org_refid', '=', org_refid),
-                ], limit=1)
-                if po:
-                    vals = {'misa_purchase_order_synced': success}
-                    if success and actual_refid:
-                        vals['misa_purchase_order_refid'] = actual_refid
-                    po.write(vals)
-                    if success:
-                        line._apply_purchase_order_detail_ids(po, voucher_data)
-            elif voucher_type in (7, 18):
+            po = self.env['purchase.order'].sudo().search([
+                ('misa_purchase_order_org_refid', '=', org_refid),
+            ], limit=1)
+            if po:
+                vals = {'misa_purchase_order_synced': success}
+                if success and actual_refid:
+                    vals['misa_purchase_order_refid'] = actual_refid
+                po.write(vals)
+                if success:
+                    line._apply_purchase_order_detail_ids(po, voucher_data)
+            elif voucher_type in (0, 7, 18):
                 picking = self.env['stock.picking'].sudo().search([
                     ('misa_inward_org_refid', '=', org_refid),
                 ], limit=1)
