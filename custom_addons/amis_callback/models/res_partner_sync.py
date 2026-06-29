@@ -124,7 +124,10 @@ class ResPartnerAmisSync(models.Model):
         code = (self.ref or '').strip()
         if code:
             return code[:50]
+        tax_code = (self.vat or '').strip()
+        if tax_code:
+            return tax_code[:50]
         registry = (getattr(self, 'company_registry', '') or '').strip()
         if registry:
             return registry[:50]
-        return ('NCC%s' % self.id)[:50]
+        return ('NCC%05d' % int(self.id or 0))[:50]
