@@ -16,6 +16,21 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
     )
 
     @api.model
+    def default_get(self, fields_list):
+        res = super(PurchaseRequestLineMakePurchaseOrder, self).default_get(fields_list)
+        
+        # Nếu chưa có supplier_id, thử lấy misa_supplier_id từ các dòng đang chọn
+        if not res.get('supplier_id'):
+            active_ids = self.env.context.get('active_ids', [])
+            if active_ids:
+                lines = self.env['purchase.request.line'].browse(active_ids)
+                for line in lines:
+                    if hasattr(line, 'misa_supplier_id') and line.misa_supplier_id:
+                        res['supplier_id'] = line.misa_supplier_id.id
+                        break
+        return res
+
+    @api.model
     def _prepare_item(self, line):
         res = super(PurchaseRequestLineMakePurchaseOrder, self)._prepare_item(line)
         res['keep_description'] = True
