@@ -299,8 +299,7 @@ class MisaExtensionController(http.Controller):
 
         suppliers = env['res.partner'].sudo().search_read(
             domain,
-            ['id', 'name', 'ref'],
-            limit=100
+            ['id', 'name', 'ref']
         )
         
         # 2. Lấy thông tin tồn kho
