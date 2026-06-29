@@ -812,7 +812,16 @@ class AmisCallbackConfig(models.Model):
         }
         if reference_items:
             payload['reference'] = reference_items
-        return self._post_actopen('/apir/sync/actopen/save', payload, include_token=True)
+        _logger.info(
+            'AMIS save inward payload:\n%s',
+            json.dumps(payload, ensure_ascii=False, default=str, indent=2),
+        )
+        result = self._post_actopen('/apir/sync/actopen/save', payload, include_token=True)
+        _logger.info(
+            'AMIS save inward response: %s',
+            json.dumps(result, ensure_ascii=False, default=str),
+        )
+        return result
 
     def push_purchase_order(self, voucher_payload, dictionary_items=None):
         """Push pu_order (Don mua hang, voucher_type=21) len MISA."""
@@ -823,7 +832,16 @@ class AmisCallbackConfig(models.Model):
             'voucher': [voucher_payload],
             'dictionary': dictionary_items or [],
         }
-        return self._post_actopen('/apir/sync/actopen/save', payload, include_token=True)
+        _logger.info(
+            'AMIS save purchase order payload:\n%s',
+            json.dumps(payload, ensure_ascii=False, default=str, indent=2),
+        )
+        result = self._post_actopen('/apir/sync/actopen/save', payload, include_token=True)
+        _logger.info(
+            'AMIS save purchase order response: %s',
+            json.dumps(result, ensure_ascii=False, default=str),
+        )
+        return result
 
     def push_outgoing_voucher(self, voucher_payload, dictionary_items=None):
         """Dua phieu xuat kho sang MISA.

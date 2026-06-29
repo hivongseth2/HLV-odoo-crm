@@ -814,7 +814,10 @@ class StockPickingAmisSync(models.Model):
 
         voucher = {
             'voucher_type': 18,
-            'is_get_new_id': True,
+            # Keep the voucher/detail IDs we send. MISA can create different
+            # internal IDs when this is true; reference UI still works through
+            # org_refid, but purchase-order received qty depends on detail links.
+            'is_get_new_id': False,
             'org_refid': refid,
             'is_allow_group': False,
             'org_refno': self.name,
