@@ -539,21 +539,6 @@ class MisaExtensionController(http.Controller):
                     estimated_cost = misa_price_before_tax
                 elif misa_price_after_tax > 0:
                     estimated_cost = misa_price_after_tax
-                elif product:
-                    supplier_info = env_admin['product.supplierinfo'].search([
-                        ('product_tmpl_id', '=', product.product_tmpl_id.id)
-                    ], limit=1, order='sequence, min_qty desc, price')
-                    if supplier_info:
-                        estimated_cost = supplier_info.price
-                    else:
-                        last_po_line = env_admin['purchase.order.line'].search([
-                            ('product_id', '=', product.id),
-                            ('state', 'in', ['purchase', 'done'])
-                        ], limit=1, order='create_date desc')
-                        if last_po_line:
-                            estimated_cost = last_po_line.price_unit
-                        else:
-                            estimated_cost = product.standard_price
 
                 line_vals = {
                     "request_id": pr.id,
