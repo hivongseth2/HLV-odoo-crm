@@ -17,6 +17,7 @@ class PurchaseRequestLine(models.Model):
     misa_price_after_tax = fields.Float(string="Đơn giá sau thuế (MISA)")
     misa_amount = fields.Float(string="Thành tiền (MISA)")
     misa_tax_amount = fields.Float(string="Thuế (MISA)")
+    misa_tax_rate = fields.Float(string="% Thuế (MISA)")
     misa_discount_rate = fields.Float(string="TL chiết khấu (MISA)")
     misa_discount_amount = fields.Float(string="Tiền chiết khấu (MISA)")
     misa_stock_total = fields.Float(string="Tổng SL tồn kho (MISA)")
