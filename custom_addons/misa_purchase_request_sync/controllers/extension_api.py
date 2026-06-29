@@ -261,26 +261,25 @@ class MisaExtensionController(http.Controller):
             return json_response({"ok": False, "error": "exception", "message": str(e)}, 500)
 
     # ============================================================
-    # GET /api/extension/suppliers
+    # POST /api/extension/suppliers_and_stock
     # ============================================================
     @http.route(
-        "/api/extension/suppliers",
+        "/api/extension/suppliers_and_stock",
         type="http",
         auth="none",
-        methods=["GET", "OPTIONS"],
+        methods=["GET", "POST", "OPTIONS"],
         csrf=False,
         cors="*",
     )
-    def api_extension_suppliers(self, **kwargs):
+    def api_extension_suppliers_and_stock(self, **kwargs):
         """
-        Lấy danh sách Nhà cung cấp để hiển thị trong Extension
+        Lấy danh sách Nhà cung cấp và Tồn kho sản phẩm để hiển thị trong Extension
         """
         if request.httprequest.method == "OPTIONS":
-            return request.make_response("", headers=[("Access-Control-Allow-Origin", "*"), ("Access-Control-Allow-Headers", "*")])
+            return request.make_response("", headers=[("Access-Control-Allow-Origin", "*"), ("Access-Control-Allow-Headers", "*"), ("Access-Control-Allow-Methods", "GET, POST, OPTIONS")])
 
-        token = _clean_token(kwargs.get("token")) or _clean_token(
-            request.httprequest.headers.get("X-MISA-Token")
-        )
+        payload = self._parse_json_body(kwargs)
+        token = self._extract_token(payload)
         ok, err = self._authenticate(token)
         if not ok:
             return request.make_response(
@@ -290,9 +289,10 @@ class MisaExtensionController(http.Controller):
         admin_user = request.env.ref("base.user_admin", raise_if_not_found=False)
         env = request.env(user=admin_user) if admin_user else request.env
 
+        # 1. Lấy danh sách NCC
         domain = [('supplier_rank', '>', 0)]
-        if kwargs.get('q'):
-            q = kwargs['q']
+        q = payload.get('q') or kwargs.get('q')
+        if q:
             domain.append('|')
             domain.append(('name', 'ilike', q))
             domain.append(('ref', 'ilike', q))
@@ -303,8 +303,16 @@ class MisaExtensionController(http.Controller):
             limit=100
         )
         
+        # 2. Lấy thông tin tồn kho
+        stock_info = {}
+        product_codes = payload.get('product_codes') or []
+        if product_codes:
+            products = env['product.product'].sudo().search([('default_code', 'in', product_codes)])
+            for p in products:
+                stock_info[p.default_code] = p.qty_available
+
         return request.make_response(
-            json.dumps({"ok": True, "data": suppliers}),
+            json.dumps({"ok": True, "data": {"suppliers": suppliers, "stock": stock_info}}),
             headers=[("Content-Type", "application/json")]
         )
 
