@@ -261,7 +261,10 @@ class PurchaseOrderAmisSync(models.Model):
 
         voucher = {
             'voucher_type': 21,
-            'is_get_new_id': True,
+            # MISA callback only returns org_refid, not the real refid/ref_detail_id
+            # generated for pu_order lines. Keep our IDs as the accounting IDs so
+            # later PUVoucher lines can link back and accumulate received qty.
+            'is_get_new_id': False,
             'org_refid': org_refid,
             'is_allow_group': False,
             'org_refno': self.name,
