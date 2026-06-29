@@ -178,22 +178,24 @@ class StockPickingAmisSync(models.Model):
         if not config.ensure_sync_ready():
             return
 
+        purchase_order._misa_refresh_purchase_order_refs_from_logs()
+        purchase_lines = self.move_ids_without_package.mapped('purchase_line_id')
+        purchase_order_refid = purchase_order._misa_purchase_order_link_refid()
         if config.sync_purchase_order_enabled and not purchase_order._is_misa_imported_purchase_order():
-            purchase_lines = self.move_ids_without_package.mapped('purchase_line_id')
-            purchase_order._misa_refresh_purchase_order_refs_from_logs()
             missing_detail_lines = purchase_order._misa_purchase_order_lines_missing_ref_detail(purchase_lines)
-            if not purchase_order.misa_purchase_order_refid or missing_detail_lines:
+            purchase_order_refid = purchase_order._misa_purchase_order_link_refid()
+            if not purchase_order_refid or missing_detail_lines:
                 purchase_order._enqueue_misa_purchase_order(raise_on_skip=False, force=True)
                 missing_names = ', '.join(missing_detail_lines.mapped('product_id.display_name'))
-                reason = 'refid don mua' if not purchase_order.misa_purchase_order_refid else 'ref_detail_id dong: %s' % missing_names
+                reason = 'refid/org_refid don mua' if not purchase_order_refid else 'ref_detail_id dong: %s' % missing_names
                 raise UserError(
                     'Don mua hang %s chua co %s MISA thuc te; da enqueue don mua, phieu nhap se retry sau callback.'
                     % (purchase_order.name, reason)
                 )
 
-        if not purchase_order.misa_purchase_order_refid:
+        if not purchase_order_refid:
             raise UserError(
-                'Don mua hang %s chua co refid MISA thuc te de lien ket phieu nhap.'
+                'Don mua hang %s chua co refid/org_refid MISA de lien ket phieu nhap.'
                 % purchase_order.name
             )
 
@@ -684,7 +686,7 @@ class StockPickingAmisSync(models.Model):
         # Kho MISA hien tai co dinh theo cau hinh kho HLV.
         misa_warehouse_code = 'HLV'
 
-        pu_order_refid = (purchase_order.misa_purchase_order_refid or purchase_order.misa_purchase_order_org_refid or '').strip()
+        pu_order_refid = purchase_order._misa_purchase_order_link_refid()
         if not pu_order_refid:
             raise UserError('Don mua hang %s chua co org_refid MISA de lien ket phieu nhap.' % purchase_order.name)
 

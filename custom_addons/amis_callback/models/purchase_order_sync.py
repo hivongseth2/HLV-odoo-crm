@@ -413,6 +413,13 @@ class PurchaseOrderAmisSync(models.Model):
             return ref_detail_id
         return ''
 
+    def _misa_purchase_order_link_refid(self):
+        self.ensure_one()
+        return (
+            (self.misa_purchase_order_refid or '').strip()
+            or (self.misa_purchase_order_org_refid or '').strip()
+        )
+
     def _misa_purchase_order_lines_missing_ref_detail(self, lines):
         return lines.filtered(lambda line: not self._misa_purchase_order_line_ref_detail_id(line))
 
