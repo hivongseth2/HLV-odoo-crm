@@ -187,12 +187,33 @@ class MisaExtensionController(http.Controller):
                     
                 purchase_state = line.purchase_state if hasattr(line, 'purchase_state') else False
 
+                # Prepare supplier name if available
+                misa_supplier_id = None
+                misa_supplier_name = ""
+                if hasattr(line, 'misa_supplier_id') and line.misa_supplier_id:
+                    misa_supplier_id = line.misa_supplier_id.id
+                    ref = line.misa_supplier_id.ref
+                    misa_supplier_name = (f"[{ref}] " if ref else "") + line.misa_supplier_id.name
+
                 lines_data.append({
                     "product_code": line.product_id.default_code if line.product_id else "",
                     "name": line.name,
                     "qty": line.product_qty,
                     "qty_received": qty_received,
                     "purchase_state": purchase_state,
+                    # --- MISA Extension Custom Fields ---
+                    "misa_supplier_id": misa_supplier_id,
+                    "misa_supplier_name": misa_supplier_name,
+                    "misa_price_before_tax": line.misa_price_before_tax if hasattr(line, 'misa_price_before_tax') else 0.0,
+                    "misa_price_after_tax": line.misa_price_after_tax if hasattr(line, 'misa_price_after_tax') else 0.0,
+                    "misa_amount": line.misa_amount if hasattr(line, 'misa_amount') else 0.0,
+                    "misa_tax_rate": line.misa_tax_rate if hasattr(line, 'misa_tax_rate') else 0.0,
+                    "misa_tax_amount": line.misa_tax_amount if hasattr(line, 'misa_tax_amount') else 0.0,
+                    "misa_discount_rate": line.misa_discount_rate if hasattr(line, 'misa_discount_rate') else 0.0,
+                    "misa_discount_amount": line.misa_discount_amount if hasattr(line, 'misa_discount_amount') else 0.0,
+                    "misa_stock_total": line.misa_stock_total if hasattr(line, 'misa_stock_total') else 0.0,
+                    "misa_stock_selected": line.misa_stock_selected if hasattr(line, 'misa_stock_selected') else 0.0,
+                    "misa_stock_undelivered": line.misa_stock_undelivered if hasattr(line, 'misa_stock_undelivered') else 0.0,
                 })
 
             can_revoke = pr.state in ['draft', 'to_approve']
