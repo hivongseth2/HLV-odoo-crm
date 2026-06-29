@@ -1328,29 +1328,44 @@ class AmisCallbackConfig(models.Model):
         if not config:
             _logger.info('MISA catalog cron skipped: no AMIS callback config.')
             return True
-        try:
-            config.ensure_sync_ready()
-        except Exception as exc:
-            _logger.warning('MISA catalog cron skipped: %s', exc)
-            return True
-        try:
-            summary = config._sync_catalog_from_misa_to_odoo(unmapped_only=False, create_missing=True)
-            _logger.info('MISA catalog cron completed: %s', summary.get('message'))
-        except Exception:
-            _logger.exception('MISA catalog cron failed')
+        job = self.env['amis.catalog.sync.job'].sudo().enqueue_from_misa(
+            config,
+            trigger='cron',
+            unmapped_only=False,
+            create_missing=True,
+        )
+        _logger.info('MISA catalog cron enqueued job %s', job.id)
         return True
 
     def action_sync_catalog_to_odoo(self):
         self.ensure_one()
-        self.ensure_sync_ready()
-        summary = self._sync_catalog_from_misa_to_odoo(unmapped_only=False, create_missing=True)
-        return self._catalog_sync_notification('Đồng bộ danh mục MISA', summary.get('message'))
+        job = self.env['amis.catalog.sync.job'].sudo().enqueue_from_misa(
+            self,
+            trigger='manual',
+            unmapped_only=False,
+            create_missing=True,
+        )
+        return self._open_catalog_sync_job(job)
 
     def action_sync_catalog_unmapped_only(self):
         self.ensure_one()
-        self.ensure_sync_ready()
-        summary = self._sync_catalog_from_misa_to_odoo(unmapped_only=True, create_missing=True)
-        return self._catalog_sync_notification('Đồng bộ danh mục mới', summary.get('message'))
+        job = self.env['amis.catalog.sync.job'].sudo().enqueue_from_misa(
+            self,
+            trigger='manual',
+            unmapped_only=True,
+            create_missing=True,
+        )
+        return self._open_catalog_sync_job(job)
+
+    def _open_catalog_sync_job(self, job):
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Hang doi dong bo danh muc MISA',
+            'res_model': 'amis.catalog.sync.job',
+            'view_mode': 'form',
+            'res_id': job.id,
+            'target': 'current',
+        }
 
     def _catalog_sync_notification(self, title, message):
         return {
@@ -1364,18 +1379,27 @@ class AmisCallbackConfig(models.Model):
             },
         }
 
-    def _sync_catalog_from_misa_to_odoo(self, unmapped_only=False, create_missing=True):
+    def _sync_catalog_from_misa_to_odoo(self, unmapped_only=False, create_missing=True, job=None):
         self.ensure_one()
-        unit_summary = self._sync_misa_units_to_odoo(unmapped_only=unmapped_only)
+        unit_summary = self._sync_misa_units_to_odoo(unmapped_only=unmapped_only, job=job)
         product_summary = self._sync_misa_products_to_odoo(
             unmapped_only=unmapped_only,
             create_missing=create_missing,
+            job=job,
         )
         vendor_summary = self._sync_misa_vendors_to_odoo(
             unmapped_only=unmapped_only,
             create_missing=create_missing,
+            job=job,
         )
         self.clear_dictionary_cache([1, 2, 4])
+        totals = {
+            'total': unit_summary['total'] + product_summary['total'] + vendor_summary['total'],
+            'updated': unit_summary['updated'] + product_summary['updated'] + vendor_summary['updated'],
+            'created': unit_summary.get('created', 0) + product_summary['created'] + vendor_summary['created'],
+            'skipped': unit_summary.get('skipped', 0) + product_summary.get('skipped', 0) + vendor_summary.get('skipped', 0),
+            'error': unit_summary.get('error', 0) + product_summary.get('error', 0) + vendor_summary.get('error', 0),
+        }
         msg = (
             'Đồng bộ danh mục MISA hoàn tất!\n'
             '• Hàng hóa: map/cập nhật %(updated_product)s, tạo mới %(created_product)s '
@@ -1398,9 +1422,10 @@ class AmisCallbackConfig(models.Model):
             'units': unit_summary,
             'products': product_summary,
             'vendors': vendor_summary,
+            'totals': totals,
         }
 
-    def _sync_misa_units_to_odoo(self, unmapped_only=False):
+    def _sync_misa_units_to_odoo(self, unmapped_only=False, job=None):
         Uom = self.env['uom.uom'].sudo().with_context(active_test=False)
         domain = [('misa_unit_id', 'in', [False, ''])] if unmapped_only else []
         uoms = Uom.search(domain)
@@ -1412,21 +1437,28 @@ class AmisCallbackConfig(models.Model):
 
         unit_items = self._get_all_dictionary(4)
         updated = 0
+        skipped = 0
         for item in unit_items:
             unit_name = (item.get('unit_name') or '').strip()
             unit_id = (item.get('unit_id') or '').strip()
             if not unit_name or not unit_id:
+                skipped += 1
                 continue
             for uom in name_to_uoms.get(unit_name.casefold(), []):
                 vals = {}
                 if (uom.misa_unit_id or '').strip() != unit_id:
                     vals['misa_unit_id'] = unit_id
                 if vals:
+                    change_summary = self._catalog_change_summary(uom, vals)
                     uom.write(vals)
+                    self._catalog_log_change(
+                        job, 'unit', 'map', 'uom.uom', uom.id,
+                        unit_id, unit_name, unit_name, change_summary,
+                    )
                     updated += 1
-        return {'total': len(unit_items), 'updated': updated}
+        return {'total': len(unit_items), 'updated': updated, 'created': 0, 'skipped': skipped, 'error': 0}
 
-    def _sync_misa_products_to_odoo(self, unmapped_only=False, create_missing=True):
+    def _sync_misa_products_to_odoo(self, unmapped_only=False, create_missing=True, job=None):
         Product = self.env['product.product'].sudo().with_context(active_test=False)
         Uom = self.env['uom.uom'].sudo().with_context(active_test=False)
         products = Product.search([])
@@ -1449,11 +1481,13 @@ class AmisCallbackConfig(models.Model):
         inv_items = self._get_all_dictionary(2)
         updated = 0
         created = 0
+        skipped = 0
         for item in inv_items:
             item_id = (item.get('inventory_item_id') or '').strip()
             code = (item.get('inventory_item_code') or '').strip()
             name = (item.get('inventory_item_name') or '').strip()
             if not item_id or not code or not name:
+                skipped += 1
                 continue
             product = products_by_misa_id.get(item_id.lower()) or products_by_code.get(code)
             vals = self._misa_product_vals(item, uoms_by_misa_id)
@@ -1465,16 +1499,27 @@ class AmisCallbackConfig(models.Model):
                     if not self._record_value_matches(product, key, value)
                 }
                 if write_vals:
+                    operation = 'map' if not (product.misa_inventory_item_id or '').strip() and 'misa_inventory_item_id' in write_vals else 'update'
+                    change_summary = self._catalog_change_summary(product, write_vals)
                     product.write(write_vals)
+                    self._catalog_log_change(
+                        job, 'product', operation, 'product.product', product.id,
+                        item_id, code, name, change_summary,
+                    )
                     updated += 1
                 continue
             if not create_missing:
+                skipped += 1
                 continue
             product = Product.create(vals)
             products_by_misa_id[item_id.lower()] = product
             products_by_code[code] = product
+            self._catalog_log_change(
+                job, 'product', 'create', 'product.product', product.id,
+                item_id, code, name, 'created from MISA dictionary',
+            )
             created += 1
-        return {'total': len(inv_items), 'updated': updated, 'created': created}
+        return {'total': len(inv_items), 'updated': updated, 'created': created, 'skipped': skipped, 'error': 0}
 
     def _misa_product_vals(self, item, uoms_by_misa_id):
         Product = self.env['product.product']
@@ -1497,7 +1542,7 @@ class AmisCallbackConfig(models.Model):
             vals['uom_po_id'] = uom.id
         return vals
 
-    def _sync_misa_vendors_to_odoo(self, unmapped_only=False, create_missing=True):
+    def _sync_misa_vendors_to_odoo(self, unmapped_only=False, create_missing=True, job=None):
         Partner = self.env['res.partner'].sudo().with_context(
             active_test=False,
             skip_misa_partner_sync=True,
@@ -1521,11 +1566,13 @@ class AmisCallbackConfig(models.Model):
         vendor_items = [item for item in account_items if item.get('is_vendor')]
         updated = 0
         created = 0
+        skipped = 0
         for item in vendor_items:
             misa_id = (item.get('account_object_id') or '').strip()
             code = (item.get('account_object_code') or '').strip()
             name = (item.get('account_object_name') or '').strip()
             if not misa_id or not name:
+                skipped += 1
                 continue
             partner = (
                 partners_by_misa_id.get(misa_id.lower())
@@ -1541,18 +1588,29 @@ class AmisCallbackConfig(models.Model):
                     if not self._record_value_matches(partner, key, value)
                 }
                 if write_vals:
+                    operation = 'map' if not (partner.misa_account_object_id or '').strip() and 'misa_account_object_id' in write_vals else 'update'
+                    change_summary = self._catalog_change_summary(partner, write_vals)
                     partner.write(write_vals)
+                    self._catalog_log_change(
+                        job, 'vendor', operation, 'res.partner', partner.id,
+                        misa_id, code, name, change_summary,
+                    )
                     updated += 1
                 continue
             if not create_missing:
+                skipped += 1
                 continue
             partner = Partner.create(vals)
             partners_by_misa_id[misa_id.lower()] = partner
             if code:
                 partners_by_ref[code.upper()] = partner
             partners_by_name[name.upper()] = partner
+            self._catalog_log_change(
+                job, 'vendor', 'create', 'res.partner', partner.id,
+                misa_id, code, name, 'created from MISA dictionary',
+            )
             created += 1
-        return {'total': len(vendor_items), 'updated': updated, 'created': created}
+        return {'total': len(vendor_items), 'updated': updated, 'created': created, 'skipped': skipped, 'error': 0}
 
     def _misa_vendor_vals(self, item):
         Partner = self.env['res.partner']
@@ -1583,6 +1641,35 @@ class AmisCallbackConfig(models.Model):
         if field and field.type == 'many2one':
             return (current.id or False) == (value or False)
         return current == value
+
+    def _catalog_change_summary(self, record, vals):
+        parts = []
+        for field_name, new_value in vals.items():
+            old_value = record[field_name]
+            field = record._fields.get(field_name)
+            if field and field.type == 'many2one':
+                old_display = old_value.display_name if old_value else ''
+                new_record = self.env[field.comodel_name].browse(new_value) if new_value else self.env[field.comodel_name]
+                new_display = new_record.display_name if new_record else ''
+            else:
+                old_display = old_value
+                new_display = new_value
+            parts.append('%s: %s -> %s' % (field_name, old_display or '', new_display or ''))
+        return '; '.join(parts)
+
+    def _catalog_log_change(self, job, data_type, operation, odoo_model, res_id, misa_id, code, name, change_summary):
+        if not job:
+            return
+        job.sudo().add_change_line(
+            data_type=data_type,
+            operation=operation,
+            odoo_model=odoo_model,
+            res_id=res_id,
+            misa_id=misa_id,
+            code=code,
+            name=name,
+            change_summary=change_summary,
+        )
 
     def action_fetch_invoice_templates(self):
         """Lấy danh sách mẫu hóa đơn điện tử từ MISA và hiển thị dạng bảng."""
