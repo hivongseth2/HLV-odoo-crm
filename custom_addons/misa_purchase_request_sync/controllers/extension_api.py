@@ -575,6 +575,31 @@ class MisaExtensionController(http.Controller):
             # --- Post Chatter nếu là Admin fallback ---
             if owner_message:
                 pr.message_post(body=owner_message)
+                
+            # --- Post thông tin Nhà cung cấp mới vào Chatter ---
+            new_suppliers = payload.get("new_suppliers") or []
+            if new_suppliers:
+                from markupsafe import Markup
+                msg_body = "<p><b>[MISA Extension] Thêm Nhà cung cấp mới:</b></p><ul>"
+                for ns in new_suppliers:
+                    ns_name = ns.get("name", "")
+                    ns_address = ns.get("address", "")
+                    ns_phone = ns.get("phone", "")
+                    ns_vat = ns.get("vat", "")
+                    ns_note = ns.get("note", "")
+                    
+                    msg_body += f"<li><b>Tên NCC:</b> {ns_name}"
+                    if ns_address:
+                        msg_body += f"<br/><b>Địa chỉ:</b> {ns_address}"
+                    if ns_phone:
+                        msg_body += f"<br/><b>SĐT:</b> {ns_phone}"
+                    if ns_vat:
+                        msg_body += f"<br/><b>Mã số thuế:</b> {ns_vat}"
+                    if ns_note:
+                        msg_body += f"<br/><b>Ghi chú:</b> {ns_note}"
+                    msg_body += "</li><br/>"
+                msg_body += "</ul>"
+                pr.message_post(body=Markup(msg_body))
 
             return json_response({
                 "ok": True,
