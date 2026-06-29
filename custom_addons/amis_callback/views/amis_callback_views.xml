@@ -549,6 +549,110 @@
         <field name="context">{'search_default_pending': 1}</field>
     </record>
 
+    <record id="view_amis_catalog_sync_job_list" model="ir.ui.view">
+        <field name="name">amis.catalog.sync.job.list</field>
+        <field name="model">amis.catalog.sync.job</field>
+        <field name="arch" type="xml">
+            <list string="Hàng đợi đồng bộ danh mục MISA" default_order="create_date desc"
+                  decoration-danger="status == 'error'"
+                  decoration-success="status == 'done'"
+                  decoration-warning="status == 'running'">
+                <field name="name" optional="hide"/>
+                <field name="create_date" string="Tạo lúc"/>
+                <field name="direction"/>
+                <field name="scope"/>
+                <field name="partner_id" optional="show"/>
+                <field name="trigger"/>
+                <field name="status"/>
+                <field name="total_count"/>
+                <field name="created_count"/>
+                <field name="updated_count"/>
+                <field name="skipped_count"/>
+                <field name="error_count"/>
+                <field name="retry_count"/>
+                <field name="processed_at"/>
+                <field name="error_msg" optional="show"/>
+                <button name="action_retry" type="object" string="Thử lại"
+                        invisible="status not in ('error',)" icon="fa-refresh"/>
+                <button name="action_run_now" type="object" string="Chạy ngay"
+                        invisible="status not in ('pending','error')" icon="fa-play"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_amis_catalog_sync_job_form" model="ir.ui.view">
+        <field name="name">amis.catalog.sync.job.form</field>
+        <field name="model">amis.catalog.sync.job</field>
+        <field name="arch" type="xml">
+            <form string="Hàng đợi đồng bộ danh mục MISA">
+                <header>
+                    <button name="action_run_now" type="object" string="Chạy ngay"
+                            invisible="status not in ('pending','error')" class="btn-primary"/>
+                    <button name="action_retry" type="object" string="Thử lại"
+                            invisible="status not in ('error',)" class="btn-secondary"/>
+                    <field name="status" widget="statusbar" statusbar_visible="pending,running,done,error"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="name" readonly="1"/>
+                            <field name="direction"/>
+                            <field name="scope"/>
+                            <field name="partner_id"/>
+                            <field name="trigger"/>
+                            <field name="config_id"/>
+                        </group>
+                        <group>
+                            <field name="unmapped_only"/>
+                            <field name="create_missing"/>
+                            <field name="retry_count"/>
+                            <field name="started_at"/>
+                            <field name="processed_at"/>
+                        </group>
+                    </group>
+                    <group>
+                        <group string="Kết quả">
+                            <field name="total_count"/>
+                            <field name="created_count"/>
+                            <field name="updated_count"/>
+                            <field name="skipped_count"/>
+                            <field name="error_count"/>
+                        </group>
+                        <group string="Lỗi" invisible="not error_msg">
+                            <field name="error_msg" nolabel="1"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Thay đổi">
+                            <field name="line_ids" readonly="1">
+                                <list string="Chi tiết thay đổi" create="false" edit="false" delete="false">
+                                    <field name="data_type"/>
+                                    <field name="operation"/>
+                                    <field name="odoo_model"/>
+                                    <field name="res_id"/>
+                                    <field name="misa_id"/>
+                                    <field name="code"/>
+                                    <field name="name"/>
+                                    <field name="change_summary"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Tóm tắt">
+                            <field name="summary" nolabel="1" readonly="1"/>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_amis_catalog_sync_job" model="ir.actions.act_window">
+        <field name="name">Hàng đợi danh mục MISA</field>
+        <field name="res_model">amis.catalog.sync.job</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_pending': 1}</field>
+    </record>
+
     <!-- Danh sách hóa đơn meInvoice đã phát hành -->
     <record id="view_sale_order_meinvoice_list" model="ir.ui.view">
         <field name="name">sale.order.meinvoice.list</field>
@@ -583,6 +687,8 @@
     <menuitem id="menu_amis_callback_logs" name="Nhật ký callback" parent="menu_amis_callback_root" action="action_amis_callback_log" sequence="10"
               groups="amis_callback.group_meinvoice_manager"/>
     <menuitem id="menu_amis_sync_jobs" name="Hàng đợi đồng bộ MISA" parent="menu_amis_callback_root" action="action_amis_sync_job" sequence="15"
+              groups="amis_callback.group_meinvoice_manager"/>
+    <menuitem id="menu_amis_catalog_sync_jobs" name="Hàng đợi danh mục MISA" parent="menu_amis_callback_root" action="action_amis_catalog_sync_job" sequence="16"
               groups="amis_callback.group_meinvoice_manager"/>
     <menuitem id="menu_meinvoice_invoices" name="Hóa đơn điện tử" parent="menu_amis_callback_root" action="action_meinvoice_invoice" sequence="18"
               groups="amis_callback.group_meinvoice_user"/>

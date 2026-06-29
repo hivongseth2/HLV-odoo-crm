@@ -53,17 +53,17 @@ class ResPartnerAmisSync(models.Model):
             return
 
         config = self.env['amis.callback.config'].sudo().ensure_singleton()
-        try:
-            config.ensure_sync_ready()
-        except Exception as exc:
-            _logger.info('Skip MISA vendor sync after partner save: %s', exc)
+        if not config:
+            _logger.info('Skip MISA vendor sync after partner save: no AMIS callback config.')
             return
 
         for vendor in vendors:
-            try:
-                vendor.with_context(skip_misa_partner_sync=True)._push_misa_vendor_dictionary(config)
-            except Exception:
-                _logger.exception('MISA vendor sync failed for partner %s', vendor.display_name)
+            job = self.env['amis.catalog.sync.job'].sudo().enqueue_vendor_to_misa(
+                config,
+                vendor,
+                trigger='partner_save',
+            )
+            _logger.info('Enqueued MISA vendor sync job %s for partner %s', job.id, vendor.display_name)
 
     def _misa_should_sync_vendor(self):
         self.ensure_one()
@@ -74,8 +74,10 @@ class ResPartnerAmisSync(models.Model):
             return False
         return int(partner.supplier_rank or 0) > 0
 
-    def _push_misa_vendor_dictionary(self, config):
+    def _push_misa_vendor_dictionary(self, config, job=None):
         self.ensure_one()
+        had_misa_id = bool((self.misa_account_object_id or '').strip())
+        operation = 'update' if had_misa_id else 'create'
         item = self._misa_vendor_dictionary_item()
         config.push_dictionary([item])
         config.clear_dictionary_cache([1])
@@ -84,11 +86,23 @@ class ResPartnerAmisSync(models.Model):
             self.with_context(skip_misa_partner_sync=True).sudo().write({
                 'misa_account_object_id': misa_id,
             })
+        if job:
+            job.sudo().add_change_line(
+                data_type='vendor',
+                operation=operation,
+                odoo_model='res.partner',
+                res_id=self.id,
+                misa_id=misa_id,
+                code=item.get('account_object_code') or '',
+                name=item.get('account_object_name') or '',
+                change_summary='pushed to MISA: account_object_code, account_object_name, tax, phone, email, address',
+            )
         _logger.info(
             'Synced Odoo vendor %s to MISA account_object %s',
             self.display_name,
             item.get('account_object_code') or misa_id,
         )
+        return operation
 
     def _misa_vendor_dictionary_item(self):
         self.ensure_one()
