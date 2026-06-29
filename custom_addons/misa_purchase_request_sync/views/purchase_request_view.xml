@@ -88,6 +88,25 @@
                 </group>
             </xpath>
             
+            <xpath expr="//group[@name='main']" position="after">
+                <group string="Thông tin từ MISA (Sale nhập)">
+                    <group>
+                        <field name="misa_supplier_id" readonly="is_editable == False" options="{'no_create': True}"/>
+                        <field name="misa_price_before_tax" readonly="is_editable == False" widget="monetary" options="{'currency_field': 'currency_id'}"/>
+                        <field name="misa_tax_amount" readonly="is_editable == False" widget="monetary" options="{'currency_field': 'currency_id'}"/>
+                        <field name="misa_price_after_tax" readonly="is_editable == False" widget="monetary" options="{'currency_field': 'currency_id'}"/>
+                        <field name="misa_amount" readonly="is_editable == False" widget="monetary" options="{'currency_field': 'currency_id'}"/>
+                    </group>
+                    <group>
+                        <field name="misa_discount_rate" readonly="is_editable == False" widget="percentage"/>
+                        <field name="misa_discount_amount" readonly="is_editable == False" widget="monetary" options="{'currency_field': 'currency_id'}"/>
+                        <field name="misa_stock_total" readonly="is_editable == False"/>
+                        <field name="misa_stock_selected" readonly="is_editable == False"/>
+                        <field name="misa_stock_undelivered" readonly="is_editable == False"/>
+                    </group>
+                </group>
+            </xpath>
+            
             <xpath expr="//group[@name='specifications']" position="attributes">
                 <attribute name="string">Thông số kỹ thuật</attribute>
             </xpath>
