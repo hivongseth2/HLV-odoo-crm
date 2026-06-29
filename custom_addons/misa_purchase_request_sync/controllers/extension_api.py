@@ -533,12 +533,9 @@ class MisaExtensionController(http.Controller):
 
                 misa_price_before_tax = float(line.get("misa_price_before_tax") or 0.0)
                 misa_price_after_tax = float(line.get("misa_price_after_tax") or 0.0)
+                misa_amount = float(line.get("misa_amount") or 0.0)
 
                 estimated_cost = 0.0
-                if misa_price_before_tax > 0:
-                    estimated_cost = misa_price_before_tax
-                elif misa_price_after_tax > 0:
-                    estimated_cost = misa_price_after_tax
 
                 line_vals = {
                     "request_id": pr.id,
