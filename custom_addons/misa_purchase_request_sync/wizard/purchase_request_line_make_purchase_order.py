@@ -21,13 +21,20 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
         
         # Nếu chưa có supplier_id, thử lấy misa_supplier_id từ các dòng đang chọn
         if not res.get('supplier_id'):
+            active_model = self.env.context.get('active_model')
             active_ids = self.env.context.get('active_ids', [])
-            if active_ids:
-                lines = self.env['purchase.request.line'].browse(active_ids)
-                for line in lines:
-                    if hasattr(line, 'misa_supplier_id') and line.misa_supplier_id:
-                        res['supplier_id'] = line.misa_supplier_id.id
-                        break
+            
+            lines = self.env['purchase.request.line']
+            if active_model == 'purchase.request.line':
+                lines = self.env['purchase.request.line'].browse(active_ids).exists()
+            elif active_model == 'purchase.request':
+                prs = self.env['purchase.request'].browse(active_ids).exists()
+                lines = prs.mapped('line_ids')
+                
+            for line in lines:
+                if hasattr(line, 'misa_supplier_id') and line.misa_supplier_id:
+                    res['supplier_id'] = line.misa_supplier_id.id
+                    break
         return res
 
     @api.model
