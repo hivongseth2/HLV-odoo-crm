@@ -261,6 +261,62 @@ class MisaExtensionController(http.Controller):
             return json_response({"ok": False, "error": "exception", "message": str(e)}, 500)
 
     # ============================================================
+    # POST /api/extension/suppliers_and_stock
+    # ============================================================
+    @http.route(
+        "/api/extension/suppliers_and_stock",
+        type="http",
+        auth="none",
+        methods=["GET", "POST", "OPTIONS"],
+        csrf=False,
+        cors="*",
+    )
+    def api_extension_suppliers_and_stock(self, **kwargs):
+        """
+        Lấy danh sách Nhà cung cấp và Tồn kho sản phẩm để hiển thị trong Extension
+        """
+        if request.httprequest.method == "OPTIONS":
+            return request.make_response("", headers=[("Access-Control-Allow-Origin", "*"), ("Access-Control-Allow-Headers", "*"), ("Access-Control-Allow-Methods", "GET, POST, OPTIONS")])
+
+        payload = self._parse_json_body(kwargs)
+        token = self._extract_token(payload)
+        ok, err = self._authenticate(token)
+        if not ok:
+            return request.make_response(
+                json.dumps(err), headers=[("Content-Type", "application/json")]
+            )
+
+        admin_user = request.env.ref("base.user_admin", raise_if_not_found=False)
+        env = request.env(user=admin_user) if admin_user else request.env
+
+        # 1. Lấy danh sách NCC
+        domain = [('supplier_rank', '>', 0)]
+        q = payload.get('q') or kwargs.get('q')
+        if q:
+            domain.append('|')
+            domain.append(('name', 'ilike', q))
+            domain.append(('ref', 'ilike', q))
+
+        suppliers = env['res.partner'].sudo().search_read(
+            domain,
+            ['id', 'name', 'ref'],
+            limit=100
+        )
+        
+        # 2. Lấy thông tin tồn kho
+        stock_info = {}
+        product_codes = payload.get('product_codes') or []
+        if product_codes:
+            products = env['product.product'].sudo().search([('default_code', 'in', product_codes)])
+            for p in products:
+                stock_info[p.default_code] = p.qty_available
+
+        return request.make_response(
+            json.dumps({"ok": True, "data": {"suppliers": suppliers, "stock": stock_info}}),
+            headers=[("Content-Type", "application/json")]
+        )
+
+    # ============================================================
     # POST /api/extension/pr/create
     # ============================================================
     @http.route(
@@ -500,6 +556,16 @@ class MisaExtensionController(http.Controller):
                     "product_qty": float(line.get("qty") or 0.0),
                     "product_uom_id": uom.id if uom else False,
                     "estimated_cost": estimated_cost,
+                    "misa_supplier_id": int(line.get("misa_supplier_id")) if line.get("misa_supplier_id") else False,
+                    "misa_price_before_tax": float(line.get("misa_price_before_tax") or 0.0),
+                    "misa_price_after_tax": float(line.get("misa_price_after_tax") or 0.0),
+                    "misa_amount": float(line.get("misa_amount") or 0.0),
+                    "misa_tax_amount": float(line.get("misa_tax_amount") or 0.0),
+                    "misa_discount_rate": float(line.get("misa_discount_rate") or 0.0),
+                    "misa_discount_amount": float(line.get("misa_discount_amount") or 0.0),
+                    "misa_stock_total": float(line.get("misa_stock_total") or 0.0),
+                    "misa_stock_selected": float(line.get("misa_stock_selected") or 0.0),
+                    "misa_stock_undelivered": float(line.get("misa_stock_undelivered") or 0.0),
                 }
                 if date_required:
                     line_vals["date_required"] = date_required

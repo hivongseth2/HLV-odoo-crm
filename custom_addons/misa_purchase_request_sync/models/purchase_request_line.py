@@ -11,6 +11,18 @@ class PurchaseRequestLine(models.Model):
         help="Chọn một dòng từ lịch sử mua hàng để lấy giá cho chi phí ước tính."
     )
 
+    # --- Các trường lấy từ MISA CRM (Sale tự điền) ---
+    misa_supplier_id = fields.Many2one('res.partner', string="Mã/Tên NCC (MISA)")
+    misa_price_before_tax = fields.Float(string="Đơn giá trước thuế (MISA)")
+    misa_price_after_tax = fields.Float(string="Đơn giá sau thuế (MISA)")
+    misa_amount = fields.Float(string="Thành tiền (MISA)")
+    misa_tax_amount = fields.Float(string="Thuế (MISA)")
+    misa_discount_rate = fields.Float(string="TL chiết khấu (MISA)")
+    misa_discount_amount = fields.Float(string="Tiền chiết khấu (MISA)")
+    misa_stock_total = fields.Float(string="Tổng SL tồn kho (MISA)")
+    misa_stock_selected = fields.Float(string="SL tồn kho đã chọn (MISA)")
+    misa_stock_undelivered = fields.Float(string="SL tồn kho chưa giao (MISA)")
+
     @api.onchange("product_id")
     def onchange_product_id(self):
         res = super(PurchaseRequestLine, self).onchange_product_id()
