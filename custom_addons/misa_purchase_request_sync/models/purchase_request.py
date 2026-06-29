@@ -112,3 +112,12 @@ class PurchaseRequest(models.Model):
         message = _("Người thực hiện: %s") % owner_text
         _logger.info("MISA Sync PR: Khong thay user, fallback to admin. %s", message)
         return (admin.id if admin else 2, message)
+
+    @api.depends('line_ids', 'line_ids.estimated_cost', 'line_ids.misa_amount')
+    def _compute_estimated_cost(self):
+        for rec in self:
+            total = 0.0
+            for line in rec.line_ids:
+                total += line.misa_amount if line.misa_amount else line.estimated_cost
+            rec.estimated_cost = total
+
