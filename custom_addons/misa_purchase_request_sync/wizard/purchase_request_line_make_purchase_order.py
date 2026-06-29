@@ -68,3 +68,12 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
 
     keep_description = fields.Boolean(default=True)
     keep_estimated_cost = fields.Boolean(default=True)
+
+    def _post_process_po_line(self, item, po_line, new_pr_line):
+        super()._post_process_po_line(item, po_line, new_pr_line)
+        # Nu kA-ch hot gi_ giA (keep_estimated_cost), Odoo t chia estimated_cost.
+        # Nhng ta A set estimated_cost = 0, nAn chAng ta cn ghi A li bng giA MISA
+        if item.keep_estimated_cost and item.line_id:
+            if hasattr(item.line_id, 'misa_price_before_tax') and item.line_id.misa_price_before_tax:
+                po_line.price_unit = item.line_id.misa_price_before_tax
+                po_line._compute_amount()
