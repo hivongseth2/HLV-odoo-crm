@@ -531,8 +531,15 @@ class MisaExtensionController(http.Controller):
                 if not uom and product:
                     uom = product.uom_id
 
+                misa_price_before_tax = float(line.get("misa_price_before_tax") or 0.0)
+                misa_price_after_tax = float(line.get("misa_price_after_tax") or 0.0)
+
                 estimated_cost = 0.0
-                if product:
+                if misa_price_before_tax > 0:
+                    estimated_cost = misa_price_before_tax
+                elif misa_price_after_tax > 0:
+                    estimated_cost = misa_price_after_tax
+                elif product:
                     supplier_info = env_admin['product.supplierinfo'].search([
                         ('product_tmpl_id', '=', product.product_tmpl_id.id)
                     ], limit=1, order='sequence, min_qty desc, price')
