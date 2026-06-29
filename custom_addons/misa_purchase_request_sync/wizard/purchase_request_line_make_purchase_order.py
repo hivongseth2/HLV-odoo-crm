@@ -68,6 +68,11 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
 
     keep_description = fields.Boolean(default=True)
     keep_estimated_cost = fields.Boolean(default=True)
+    misa_price_before_tax = fields.Float(
+        related='line_id.misa_price_before_tax', 
+        string="Đơn giá MISA", 
+        readonly=True
+    )
 
     def _post_process_po_line(self, item, po_line, new_pr_line):
         super()._post_process_po_line(item, po_line, new_pr_line)
