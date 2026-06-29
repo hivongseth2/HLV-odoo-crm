@@ -477,18 +477,26 @@ class PurchaseOrderAmisSync(models.Model):
     def _ensure_misa_account_object(self, config, partner, dictionary_items):
         existing_id = (getattr(partner, 'misa_account_object_id', '') or '').strip()
         if existing_id:
+            found = self._find_misa_account_object_by_id(config, existing_id)
+            if found:
+                return self._normalize_misa_account_object(found, partner)
             return {
                 'account_object_id': existing_id,
-                'account_object_code': partner.ref or partner.name or '',
+                'account_object_code': self._misa_partner_code(partner),
                 'account_object_name': partner.display_name or partner.name or '',
             }
 
-        found = self._find_misa_account_object_by_code_or_name(config, partner.ref, partner.name or partner.display_name)
+        partner_code = self._misa_partner_code(partner)
+        found = self._find_misa_account_object_by_code_or_name(
+            config,
+            partner_code,
+            partner.name or partner.display_name,
+        )
         if found:
             return self._normalize_misa_account_object(found, partner)
 
         misa_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'misa_account_object|%d' % partner.id))
-        code = self._misa_required_code(partner.ref or '', fallback_prefix='NCC', fallback_id=partner.id)
+        code = partner_code
         name = (partner.display_name or partner.name or code).strip()
         item = {
             'dictionary_type': 1,
@@ -660,7 +668,7 @@ class PurchaseOrderAmisSync(models.Model):
 
     def _normalize_misa_account_object(self, item, partner):
         misa_id = (item.get('account_object_id') or '').strip()
-        code = (item.get('account_object_code') or partner.ref or partner.name or '').strip()
+        code = (item.get('account_object_code') or self._misa_partner_code(partner)).strip()
         name = (item.get('account_object_name') or partner.display_name or partner.name or '').strip()
         if misa_id and getattr(partner, 'misa_account_object_id', False) != misa_id:
             partner.sudo().write({'misa_account_object_id': misa_id})
@@ -670,6 +678,19 @@ class PurchaseOrderAmisSync(models.Model):
             'account_object_code': code,
             'account_object_name': name,
         }
+
+    def _misa_partner_code(self, partner):
+        partner.ensure_one()
+        code = (partner.ref or '').strip()
+        if code:
+            return code[:50]
+        tax_code = (partner.vat or '').strip()
+        if tax_code:
+            return tax_code[:50]
+        registry = (getattr(partner, 'company_registry', '') or '').strip()
+        if registry:
+            return registry[:50]
+        return self._misa_required_code('', fallback_prefix='NCC', fallback_id=partner.id)[:50]
 
     def _misa_required_code(self, value, fallback_prefix, fallback_id):
         value = (value or '').strip()

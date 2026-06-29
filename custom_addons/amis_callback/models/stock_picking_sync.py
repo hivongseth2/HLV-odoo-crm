@@ -684,7 +684,7 @@ class StockPickingAmisSync(models.Model):
         dictionary_items = []
         account_object = purchase_order._ensure_misa_account_object(config, partner, dictionary_items)
         account_object_id = account_object.get('account_object_id') or ''
-        account_object_code = account_object.get('account_object_code') or partner.ref or partner.name or ''
+        account_object_code = account_object.get('account_object_code') or purchase_order._misa_partner_code(partner)
         account_object_name = account_object.get('account_object_name') or partner.display_name or partner.name or ''
         if not account_object_id:
             raise UserError('Khong tao/tim duoc MISA Account Object cho nha cung cap: %s' % partner.display_name)
