@@ -16,6 +16,15 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
     )
 
     @api.model
+    def default_get(self, fields_list):
+        res = super(PurchaseRequestLineMakePurchaseOrder, self).default_get(fields_list)
+        # Xóa trường supplier_id (Nhà cung cấp chung) để không tự động chọn,
+        # tránh việc Odoo (hoặc module OCA) tự động gán tên NCC chung và ghi đè lên các dòng bên dưới.
+        if 'supplier_id' in res:
+            res['supplier_id'] = False
+        return res
+
+    @api.model
     def _prepare_item(self, line):
         res = super(PurchaseRequestLineMakePurchaseOrder, self)._prepare_item(line)
         res['keep_description'] = True
