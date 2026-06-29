@@ -207,12 +207,16 @@ class StockPickingAmisSync(models.Model):
         voucher_payload, dictionary_items, reference_items = self._prepare_misa_inward_payload(config, purchase_order)
         org_refid = voucher_payload.get('org_refid')
         _logger.info(
-            'Push MISA inward %s: po=%s, detail_links=%s',
+            'Push MISA inward %s: org_refid=%s, po=%s, po_refid=%s, detail_links=%s',
             self.name,
+            org_refid,
             purchase_order.name,
+            voucher_payload.get('detail') and voucher_payload['detail'][0].get('pu_order_refid') or '',
             ', '.join(
-                '%s:%s' % (
+                '%s qty=%s inward_detail=%s po_detail=%s' % (
                     detail.get('inventory_item_code') or detail.get('inventory_item_name') or '',
+                    detail.get('quantity') or 0.0,
+                    detail.get('ref_detail_id') or '',
                     detail.get('pu_order_ref_detail_id') or '',
                 )
                 for detail in voucher_payload.get('detail') or []
