@@ -398,10 +398,7 @@ class StockPickingAmisSync(models.Model):
             unit_id = (move.product_uom.misa_unit_id or '').strip()
             # Không gọi get_dictionary lúc sync (tránh 429). MISA match theo inventory_item_code nếu id trống.
 
-            ref_detail_id = (move.misa_ref_detail_id or '').strip()
-            if not ref_detail_id:
-                ref_detail_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'sa_v_detail|%d|%d' % (self.id, move.id)))
-                move.sudo().write({'misa_ref_detail_id': ref_detail_id})
+            ref_detail_id = self._misa_move_ref_detail_id(move, 'sa_v_detail')
 
             detail.append({
                 'ref_detail_id': ref_detail_id,
@@ -737,13 +734,7 @@ class StockPickingAmisSync(models.Model):
             if not unit_id:
                 raise UserError('Khong tao/tim duoc MISA Unit cho don vi tinh: %s' % move.product_uom.name)
 
-            ref_detail_id = (move.misa_ref_detail_id or '').strip()
-            if not ref_detail_id:
-                ref_detail_id = str(uuid.uuid5(
-                    uuid.NAMESPACE_DNS,
-                    'misa_inward_detail|%d|%d' % (self.id, move.id)
-                ))
-                move.sudo().write({'misa_ref_detail_id': ref_detail_id})
+            ref_detail_id = self._misa_move_ref_detail_id(move, 'misa_inward_detail')
 
             # Tai khoan co dinh theo yeu cau: Kho 1561, Cong no 331.
             debit_account = '1561'
@@ -888,6 +879,15 @@ class StockPickingAmisSync(models.Model):
             'sort_order': 1,
         }]
 
+    def _misa_move_ref_detail_id(self, move, prefix):
+        ref_detail_id = str(uuid.uuid5(
+            uuid.NAMESPACE_DNS,
+            '%s|%d|%d' % (prefix, self.id, move.id)
+        ))
+        if (move.misa_ref_detail_id or '').strip() != ref_detail_id:
+            move.sudo().write({'misa_ref_detail_id': ref_detail_id})
+        return ref_detail_id
+
     def _misa_lookup_account_object_by_id(self, config, account_object_id):
         """Tìm item account_object trong MISA dictionary theo ID (UUID).
         Trả về dict item hoặc None. Dùng cached list (không call API thêm)."""
@@ -989,5 +989,6 @@ class StockMoveAmisMapping(models.Model):
 
     misa_ref_detail_id = fields.Char(
         string='MISA Ref Detail ID',
+        copy=False,
         help='ID thật của dòng chi tiết chứng từ trên MISA.',
     )
