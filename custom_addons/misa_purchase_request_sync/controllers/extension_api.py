@@ -290,7 +290,7 @@ class MisaExtensionController(http.Controller):
         env = request.env(user=admin_user) if admin_user else request.env
 
         # 1. Lấy danh sách NCC
-        domain = [('supplier_rank', '>', 0)]
+        domain = [('parent_id', '=', False)]
         q = payload.get('q') or kwargs.get('q')
         if q:
             domain.append('|')
@@ -560,6 +560,7 @@ class MisaExtensionController(http.Controller):
                     "misa_price_before_tax": float(line.get("misa_price_before_tax") or 0.0),
                     "misa_price_after_tax": float(line.get("misa_price_after_tax") or 0.0),
                     "misa_amount": float(line.get("misa_amount") or 0.0),
+                    "misa_tax_rate": float(line.get("misa_tax_rate") or 0.0),
                     "misa_tax_amount": float(line.get("misa_tax_amount") or 0.0),
                     "misa_discount_rate": float(line.get("misa_discount_rate") or 0.0),
                     "misa_discount_amount": float(line.get("misa_discount_amount") or 0.0),
