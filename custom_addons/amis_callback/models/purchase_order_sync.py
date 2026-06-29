@@ -44,7 +44,7 @@ class PurchaseOrderAmisSync(models.Model):
 
     def action_sync_misa_purchase_order(self):
         for order in self:
-            order._enqueue_misa_purchase_order(raise_on_skip=True)
+            order._enqueue_misa_purchase_order(raise_on_skip=True, force=True)
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
@@ -82,13 +82,13 @@ class PurchaseOrderAmisSync(models.Model):
                 return True
         return False
 
-    def _enqueue_misa_purchase_order(self, raise_on_skip=False):
+    def _enqueue_misa_purchase_order(self, raise_on_skip=False, force=False):
         self.ensure_one()
         if self.state not in ('purchase', 'done'):
             if raise_on_skip:
                 raise UserError('Don mua hang "%s" phai o trang thai Da xac nhan hoac Hoan thanh.' % self.name)
             return
-        if self.misa_purchase_order_synced:
+        if self.misa_purchase_order_synced and not force:
             if raise_on_skip:
                 raise UserError('Don mua hang "%s" da duoc sync len MISA roi.' % self.name)
             return
@@ -123,11 +123,20 @@ class PurchaseOrderAmisSync(models.Model):
             return
         config.ensure_sync_ready()
 
-        if self.misa_purchase_order_synced:
-            _logger.info('Skip MISA PO %s: already synced.', self.name)
-            return
-
         voucher_payload = self._prepare_misa_purchase_order_payload(config)
+        _logger.info(
+            'Push MISA PO %s: status=%s, received=%s',
+            self.name,
+            voucher_payload.get('status'),
+            ', '.join(
+                '%s:%s/%s' % (
+                    detail.get('inventory_item_code') or detail.get('inventory_item_name') or '',
+                    detail.get('quantity_receipt') or 0.0,
+                    detail.get('quantity') or 0.0,
+                )
+                for detail in voucher_payload.get('detail') or []
+            ),
+        )
         config.push_purchase_order(voucher_payload, dictionary_items=[])
         self.sudo().write({
             'misa_purchase_order_org_refid': voucher_payload.get('org_refid') or '',
@@ -160,7 +169,8 @@ class PurchaseOrderAmisSync(models.Model):
         delivery_term = self._misa_field_value('x_studio_delivery_term')
         payment_term_text = self._misa_payment_term_text()
         receive_address = self._misa_receive_address()
-        purchase_status = 'Chưa thực hiện'
+        purchase_status_code = self._misa_purchase_status_code(lines)
+        purchase_status = self._misa_purchase_status_name(purchase_status_code)
         employee_name = self.user_id.name if self.user_id else ''
         stock_code = self._misa_purchase_stock_code()
 
@@ -255,9 +265,9 @@ class PurchaseOrderAmisSync(models.Model):
             'act_voucher_type': 0,
             'refid': org_refid,
             'branch_id': branch_id,
-            'status': 0,
-            'order_status': 0,
-            'purchase_order_status': 0,
+            'status': purchase_status_code,
+            'order_status': purchase_status_code,
+            'purchase_order_status': purchase_status_code,
             'status_name': purchase_status,
             'reforder': now_ms,
             'refdate': refdate,
@@ -365,6 +375,26 @@ class PurchaseOrderAmisSync(models.Model):
         for src, dst in replacements.items():
             value = value.replace(src, dst)
         return value
+
+    def _misa_purchase_status_code(self, lines):
+        total_qty = 0.0
+        total_received = 0.0
+        for line in lines:
+            total_qty += float(line.product_qty or 0.0)
+            total_received += self._misa_purchase_line_received_quantity(line)
+        if total_qty and total_received >= total_qty:
+            return 3
+        if total_received > 0:
+            return 2
+        return 1
+
+    def _misa_purchase_status_name(self, status_code):
+        return {
+            1: 'Chưa thực hiện',
+            2: 'Đang thực hiện',
+            3: 'Hoàn thành',
+            4: 'Hủy bỏ',
+        }.get(int(status_code or 1), 'Chưa thực hiện')
 
     def _misa_purchase_line_received_quantity(self, line):
         qty_received = float(getattr(line, 'qty_received', 0.0) or 0.0)
