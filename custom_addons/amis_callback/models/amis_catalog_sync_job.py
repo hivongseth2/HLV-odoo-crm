@@ -40,6 +40,10 @@ class AmisCatalogSyncJob(models.Model):
     ], string='Trang thai', default='pending', index=True)
     unmapped_only = fields.Boolean(string='Chi dong bo chua map')
     create_missing = fields.Boolean(string='Tao moi tren Odoo', default=True)
+    product_skip = fields.Integer(string='Vi tri batch hang hoa MISA', default=0)
+    batch_size = fields.Integer(string='So item moi batch', default=100)
+    unit_sync_done = fields.Boolean(string='Da xu ly don vi tinh')
+    vendor_sync_done = fields.Boolean(string='Da xu ly nha cung cap')
     retry_count = fields.Integer(string='So lan thu', default=0)
     started_at = fields.Datetime(string='Bat dau luc')
     processed_at = fields.Datetime(string='Xu ly luc')
@@ -142,14 +146,15 @@ class AmisCatalogSyncJob(models.Model):
                     job=self,
                 )
                 totals = summary.get('totals') or {}
+                complete = bool(summary.get('complete', True))
                 self.write({
-                    'status': 'done',
+                    'status': 'done' if complete else 'pending',
                     'summary': summary.get('message') or '',
-                    'total_count': int(totals.get('total') or 0),
-                    'created_count': int(totals.get('created') or 0),
-                    'updated_count': int(totals.get('updated') or 0),
-                    'skipped_count': int(totals.get('skipped') or 0),
-                    'error_count': int(totals.get('error') or 0),
+                    'total_count': self.total_count + int(totals.get('total') or 0),
+                    'created_count': self.created_count + int(totals.get('created') or 0),
+                    'updated_count': self.updated_count + int(totals.get('updated') or 0),
+                    'skipped_count': self.skipped_count + int(totals.get('skipped') or 0),
+                    'error_count': self.error_count + int(totals.get('error') or 0),
                     'processed_at': fields.Datetime.now(),
                     'error_msg': False,
                 })
@@ -186,6 +191,14 @@ class AmisCatalogSyncJob(models.Model):
                 'retry_count': 0,
                 'error_msg': False,
                 'processed_at': False,
+                'product_skip': 0,
+                'unit_sync_done': False,
+                'vendor_sync_done': False,
+                'total_count': 0,
+                'created_count': 0,
+                'updated_count': 0,
+                'skipped_count': 0,
+                'error_count': 0,
             })
         return True
 

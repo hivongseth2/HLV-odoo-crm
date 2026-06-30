@@ -1381,17 +1381,30 @@ class AmisCallbackConfig(models.Model):
 
     def _sync_catalog_from_misa_to_odoo(self, unmapped_only=False, create_missing=True, job=None):
         self.ensure_one()
-        unit_summary = self._sync_misa_units_to_odoo(unmapped_only=unmapped_only, job=job)
+        if job and job.unit_sync_done:
+            unit_summary = {'total': 0, 'updated': 0, 'created': 0, 'skipped': 0, 'error': 0}
+        else:
+            unit_summary = self._sync_misa_units_to_odoo(unmapped_only=unmapped_only, job=job)
+            if job:
+                job.sudo().write({'unit_sync_done': True})
         product_summary = self._sync_misa_products_to_odoo(
             unmapped_only=unmapped_only,
-            create_missing=create_missing,
+            create_missing=False,
             job=job,
         )
-        vendor_summary = self._sync_misa_vendors_to_odoo(
-            unmapped_only=unmapped_only,
-            create_missing=create_missing,
-            job=job,
-        )
+        product_has_more = bool(product_summary.get('has_more'))
+        if product_has_more:
+            vendor_summary = {'total': 0, 'updated': 0, 'created': 0, 'skipped': 0, 'error': 0}
+        elif job and job.vendor_sync_done:
+            vendor_summary = {'total': 0, 'updated': 0, 'created': 0, 'skipped': 0, 'error': 0}
+        else:
+            vendor_summary = self._sync_misa_vendors_to_odoo(
+                unmapped_only=unmapped_only,
+                create_missing=create_missing,
+                job=job,
+            )
+            if job:
+                job.sudo().write({'vendor_sync_done': True})
         self.clear_dictionary_cache([1, 2, 4])
         totals = {
             'total': unit_summary['total'] + product_summary['total'] + vendor_summary['total'],
@@ -1423,6 +1436,7 @@ class AmisCallbackConfig(models.Model):
             'products': product_summary,
             'vendors': vendor_summary,
             'totals': totals,
+            'complete': not product_has_more,
         }
 
     def _sync_misa_units_to_odoo(self, unmapped_only=False, job=None):
@@ -1481,16 +1495,24 @@ class AmisCallbackConfig(models.Model):
     def _sync_misa_products_to_odoo(self, unmapped_only=False, create_missing=True, job=None):
         Product = self.env['product.product'].sudo().with_context(active_test=False)
         Uom = self.env['uom.uom'].sudo().with_context(active_test=False)
-        products = Product.search([])
-        products_by_misa_id = {}
+        batch_skip = int(job.product_skip or 0) if job else 0
+        batch_take = int(job.batch_size or 100) if job else 100
+        if batch_take <= 0:
+            batch_take = 100
+
+        result = self.get_dictionary(data_type=2, skip=batch_skip, take=batch_take)
+        inv_items = result.get('items') or []
+        codes = {
+            (item.get('inventory_item_code') or '').strip()
+            for item in inv_items
+            if (item.get('inventory_item_code') or '').strip()
+        }
         products_by_code = {}
-        for product in products:
-            misa_id = (product.misa_inventory_item_id or '').strip()
-            code = (product.default_code or '').strip()
-            if misa_id:
-                products_by_misa_id.setdefault(misa_id.lower(), product)
-            if code:
-                products_by_code.setdefault(code, product)
+        if codes:
+            for product in Product.search([('default_code', 'in', list(codes))]):
+                code = (product.default_code or '').strip()
+                if code:
+                    products_by_code.setdefault(code, product)
 
         uoms_by_misa_id = {}
         for uom in Uom.search([('misa_unit_id', '!=', False)]):
@@ -1498,7 +1520,6 @@ class AmisCallbackConfig(models.Model):
             if unit_id:
                 uoms_by_misa_id.setdefault(unit_id.lower(), []).append(uom)
 
-        inv_items = self._get_all_dictionary(2)
         updated = 0
         created = 0
         skipped = 0
@@ -1510,21 +1531,29 @@ class AmisCallbackConfig(models.Model):
             if not item_id or not code or not name:
                 skipped += 1
                 continue
-            product = products_by_misa_id.get(item_id.lower()) or products_by_code.get(code)
-            vals = self._misa_product_vals(item, uoms_by_misa_id, product=product)
+            product = products_by_code.get(code)
+            if not product:
+                skipped += 1
+                continue
             if product:
                 if unmapped_only and (product.misa_inventory_item_id or '').strip():
                     continue
-                write_vals = {
-                    key: value for key, value in vals.items()
-                    if not self._record_value_matches(product, key, value)
-                }
-                write_vals, uom_skipped = self._filter_catalog_product_uom_write_vals(
-                    product, write_vals, item, job
-                )
-                skipped += uom_skipped
+                if self._log_catalog_product_uom_exception(product, item, uoms_by_misa_id, job=job):
+                    skipped += 1
+                existing_misa_id = (product.misa_inventory_item_id or '').strip()
+                if existing_misa_id and existing_misa_id.lower() != item_id.lower():
+                    skipped += 1
+                    summary = 'skipped MISA ID update: existing=%s, misa=%s' % (existing_misa_id, item_id)
+                    _logger.warning('MISA catalog product mapping conflict for %s (%s): %s', product.display_name, code, summary)
+                    self._catalog_log_change(
+                        job, 'product', 'skip', 'product.product', product.id,
+                        item_id, code, name, summary,
+                    )
+                    continue
+                write_vals = {}
+                if not existing_misa_id:
+                    write_vals['misa_inventory_item_id'] = item_id
                 if write_vals:
-                    operation = 'map' if not (product.misa_inventory_item_id or '').strip() and 'misa_inventory_item_id' in write_vals else 'update'
                     change_summary = self._catalog_change_summary(product, write_vals)
                     try:
                         with self.env.cr.savepoint():
@@ -1541,34 +1570,55 @@ class AmisCallbackConfig(models.Model):
                         )
                         continue
                     self._catalog_log_change(
-                        job, 'product', operation, 'product.product', product.id,
+                        job, 'product', 'map', 'product.product', product.id,
                         item_id, code, name, change_summary,
                     )
                     updated += 1
                 continue
-            if not create_missing:
-                skipped += 1
-                continue
-            vals = self._misa_product_vals(item, uoms_by_misa_id)
-            try:
-                with self.env.cr.savepoint():
-                    product = Product.create(vals)
-            except Exception as exc:
-                error += 1
-                _logger.warning('MISA catalog product create skipped for %s (%s): %s', name, code, exc)
-                self._catalog_log_change(
-                    job, 'product', 'error', 'product.product', 0,
-                    item_id, code, name, 'create skipped: %s' % exc,
-                )
-                continue
-            products_by_misa_id[item_id.lower()] = product
-            products_by_code[code] = product
-            self._catalog_log_change(
-                job, 'product', 'create', 'product.product', product.id,
-                item_id, code, name, 'created from MISA dictionary',
-            )
-            created += 1
-        return {'total': len(inv_items), 'updated': updated, 'created': created, 'skipped': skipped, 'error': error}
+        next_skip = batch_skip + len(inv_items)
+        has_more = len(inv_items) >= min(batch_take, 100)
+        if job:
+            job.sudo().write({'product_skip': next_skip})
+        return {
+            'total': len(inv_items),
+            'updated': updated,
+            'created': created,
+            'skipped': skipped,
+            'error': error,
+            'skip': batch_skip,
+            'next_skip': next_skip,
+            'has_more': has_more,
+        }
+
+    def _log_catalog_product_uom_exception(self, product, item, uoms_by_misa_id, job=None):
+        unit_id = (item.get('unit_id') or item.get('main_unit_id') or '').strip().lower()
+        if not unit_id:
+            return False
+        code = (item.get('inventory_item_code') or '').strip()
+        name = (item.get('inventory_item_name') or '').strip()
+        item_id = (item.get('inventory_item_id') or '').strip()
+        candidates = uoms_by_misa_id.get(unit_id) or []
+        current_uoms = (product.uom_id | product.uom_po_id).filtered(lambda uom: uom)
+        if candidates and any(uom in current_uoms for uom in candidates):
+            return False
+        misa_uom_text = ', '.join(
+            '%s [%s]' % (uom.display_name, uom.category_id.display_name if uom.category_id else '')
+            for uom in candidates
+        ) or unit_id
+        odoo_uom_text = ', '.join(
+            '%s [%s]' % (uom.display_name, uom.category_id.display_name if uom.category_id else '')
+            for uom in current_uoms
+        )
+        summary = 'UoM needs manual check: Odoo=%s; MISA=%s. Product UoM was not updated.' % (
+            odoo_uom_text,
+            misa_uom_text,
+        )
+        _logger.warning('MISA catalog product UoM exception for %s (%s): %s', product.display_name, code, summary)
+        self._catalog_log_change(
+            job, 'product', 'skip', 'product.product', product.id,
+            item_id, code, name, summary,
+        )
+        return True
 
     def _misa_product_vals(self, item, uoms_by_misa_id, product=None):
         Product = self.env['product.product']

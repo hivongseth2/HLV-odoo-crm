@@ -565,6 +565,8 @@
                 <field name="trigger"/>
                 <field name="status"/>
                 <field name="total_count"/>
+                <field name="product_skip" optional="show"/>
+                <field name="batch_size" optional="hide"/>
                 <field name="created_count"/>
                 <field name="updated_count"/>
                 <field name="skipped_count"/>
@@ -605,6 +607,10 @@
                         <group>
                             <field name="unmapped_only"/>
                             <field name="create_missing"/>
+                            <field name="product_skip"/>
+                            <field name="batch_size"/>
+                            <field name="unit_sync_done"/>
+                            <field name="vendor_sync_done"/>
                             <field name="retry_count"/>
                             <field name="started_at"/>
                             <field name="processed_at"/>
