@@ -700,55 +700,92 @@ class MisaExtensionController(http.Controller):
             amis_dict = {}
             # Lấy list tuple (name, date_order)
             po_infos = [(po.name, po.date_order) for po in odoo_pos]
-            
-            def fetch_amis_po(po_name, po_date):
+
+            def _search_po_in_misa_by_code(po_name):
+                """
+                Tìm kiếm Đơn mua hàng (PO) trong MISA AMIS theo mã đơn.
+                Sử dụng customFilter với property=4008 (refno) để tìm chính xác,
+                không phụ thuộc vào khoảng thời gian (dùng date range rộng để tránh timeout).
+                """
                 try:
-                    from datetime import timedelta
-                    # Broad date range to avoid MISA API timeouts from global scans
-                    date_from = po_date - timedelta(days=365)
-                    date_to = po_date + timedelta(days=365)
+                    from datetime import datetime, timezone
                     
+                    custom_filter = [{
+                        "property": 4008,
+                        "value": po_name,
+                        "operator": 1,
+                        "operand": 1,
+                        "childrens": [
+                            {"property": 57, "value": po_name, "operator": 1, "operand": 2, "data_type": 1},
+                            {"property": 2656, "value": po_name, "operator": 1, "operand": 2, "data_type": 1},
+                            {"property": 4030, "value": po_name, "operator": 1, "operand": 2}
+                        ],
+                        "data_type": 1
+                    }]
+
                     amis_payload = {
-                        "SearchValue": po_name,
+                        "sort": "[{\"property\":3972,\"desc\":true,\"data_type\":3,\"operand\":1},{\"property\":4008,\"desc\":true,\"data_type\":1,\"operand\":1}]",
                         "filter": [
                             {
                                 "property": 3972,
-                                "value": date_from.isoformat() + "Z",
+                                "value": "2024-01-01T00:00:00.00Z",
                                 "operator": 10,
                                 "operand": 1,
                                 "data_type": 3
                             },
                             {
                                 "property": 3972,
-                                "value": date_to.isoformat() + "Z",
+                                "value": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
                                 "operator": 12,
                                 "operand": 1,
                                 "data_type": 3
                             }
                         ],
-                        "loadMode": 2, "pageIndex": 1, "pageSize": 10, 
-                        "useSp": False, "view": 2, "summaryColumns": []
+                        "customFilter": custom_filter,
+                        "pageIndex": 1,
+                        "pageSize": 20,
+                        "useSp": False,
+                        "view": 2,
+                        "summaryColumns": [5039, 5104, 247],
+                        "loadMode": 2
                     }
-                    response = misa_utils._fetch_with_retry("https://actapp.misa.vn/g1/api/pu/v1/pu_list/paging_filter_v2", headers, amis_payload)
+
+                    response = misa_utils._fetch_with_retry(
+                        "https://actapp.misa.vn/g2/api/pu/v1/pu_order/paging_filter_v2",
+                        headers, amis_payload
+                    )
+
                     if response.status_code == 200:
                         resp_json = response.json()
                         data_obj = resp_json.get("Data")
                         if isinstance(data_obj, str):
                             import json as json_lib
-                            try: data_obj = json_lib.loads(data_obj)
-                            except: data_obj = {}
-                        if not data_obj: data_obj = {}
-                        for apo in data_obj.get("PageData", []):
-                            refno = apo.get("refno")
-                            # MISA might return partial matches in SearchValue, check exact match
-                            if refno == po_name:
-                                return po_name, apo
+                            try:
+                                data_obj = json_lib.loads(data_obj)
+                            except:
+                                data_obj = {}
+                        if not data_obj:
+                            data_obj = {}
+                        page_data = data_obj.get("PageData", [])
+                        if page_data:
+                            # Ưu tiên tìm bản ghi có refno khớp chính xác
+                            for apo in page_data:
+                                refno = apo.get("refno")
+                                if refno == po_name:
+                                    _logger.info("✅ Tìm thấy PO %s trong MISA (refid: %s)", po_name, apo.get("refid"))
+                                    return po_name, apo
+                            # Nếu không có refno khớp chính xác, trả về bản ghi đầu tiên
+                            if page_data:
+                                _logger.warning("⚠️ Không tìm thấy refno khớp chính xác cho %s, dùng kết quả đầu tiên", po_name)
+                                return po_name, page_data[0]
+
+                    _logger.warning("⚠️ Không tìm thấy PO %s trong MISA", po_name)
                 except Exception as e:
-                    _logger.warning("fetch_amis_po exception for %s: %s", po_name, e)
+                    _logger.warning("_search_po_in_misa_by_code exception for %s: %s", po_name, e)
                 return po_name, None
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-                futures = {executor.submit(fetch_amis_po, info[0], info[1]): info[0] for info in po_infos}
+                futures = {executor.submit(_search_po_in_misa_by_code, info[0]): info[0] for info in po_infos}
                 for future in concurrent.futures.as_completed(futures):
                     try:
                         po_name, apo = future.result()
