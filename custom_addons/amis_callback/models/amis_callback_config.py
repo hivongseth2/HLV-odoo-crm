@@ -1441,10 +1441,14 @@ class AmisCallbackConfig(models.Model):
 
     def _sync_misa_units_to_odoo(self, unmapped_only=False, job=None):
         Uom = self.env['uom.uom'].sudo().with_context(active_test=False)
-        domain = [('misa_unit_id', 'in', [False, ''])] if unmapped_only else []
+        domain = [('category_id.name', '=', 'Unit')]
+        if unmapped_only:
+            domain.append(('misa_unit_id', 'in', [False, '']))
         uoms = Uom.search(domain)
         name_to_uoms = {}
         for uom in uoms:
+            if not self._is_misa_catalog_unit_category(uom.category_id):
+                continue
             name = (uom.name or '').strip()
             if name:
                 name_to_uoms.setdefault(name.casefold(), []).append(uom)
@@ -1516,6 +1520,8 @@ class AmisCallbackConfig(models.Model):
 
         uoms_by_misa_id = {}
         for uom in Uom.search([('misa_unit_id', '!=', False)]):
+            if not self._is_misa_catalog_unit_category(uom.category_id):
+                continue
             unit_id = (uom.misa_unit_id or '').strip()
             if unit_id:
                 uoms_by_misa_id.setdefault(unit_id.lower(), []).append(uom)
@@ -1619,6 +1625,10 @@ class AmisCallbackConfig(models.Model):
             item_id, code, name, summary,
         )
         return True
+
+    def _is_misa_catalog_unit_category(self, category):
+        name = (category.name or '').strip().casefold() if category else ''
+        return name == 'unit'
 
     def _misa_product_vals(self, item, uoms_by_misa_id, product=None):
         Product = self.env['product.product']
