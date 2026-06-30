@@ -496,10 +496,14 @@ class PurchaseOrderAmisSync(models.Model):
             return self._normalize_misa_account_object(found, partner)
 
         misa_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'misa_account_object|%d' % partner.id))
+        branch_id = (config.misa_branch_id or '').strip()
+        if not branch_id:
+            raise UserError('Chua cau hinh MISA Branch ID de dong bo nha cung cap.')
         code = partner_code
         name = (partner.display_name or partner.name or code).strip()
         item = {
             'dictionary_type': 1,
+            'branch_id': branch_id,
             'account_object_id': misa_id,
             'account_object_code': code,
             'account_object_name': name,

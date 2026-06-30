@@ -3,6 +3,7 @@ import logging
 import uuid
 
 from odoo import api, models
+from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
 
@@ -76,9 +77,12 @@ class ResPartnerAmisSync(models.Model):
 
     def _push_misa_vendor_dictionary(self, config, job=None):
         self.ensure_one()
+        branch_id = (config.misa_branch_id or '').strip()
+        if not branch_id:
+            raise UserError('Chua cau hinh MISA Branch ID de dong bo nha cung cap.')
         had_misa_id = bool((self.misa_account_object_id or '').strip())
         operation = 'update' if had_misa_id else 'create'
-        item = self._misa_vendor_dictionary_item()
+        item = self._misa_vendor_dictionary_item(branch_id=branch_id)
         config.push_dictionary([item])
         config.clear_dictionary_cache([1])
         misa_id = item.get('account_object_id') or ''
@@ -104,7 +108,7 @@ class ResPartnerAmisSync(models.Model):
         )
         return operation
 
-    def _misa_vendor_dictionary_item(self):
+    def _misa_vendor_dictionary_item(self, branch_id=None):
         self.ensure_one()
         misa_id = (self.misa_account_object_id or '').strip()
         if not misa_id:
@@ -117,6 +121,7 @@ class ResPartnerAmisSync(models.Model):
         mobile = self.mobile or self.phone or ''
         return {
             'dictionary_type': 1,
+            'branch_id': branch_id or '',
             'account_object_id': misa_id,
             'account_object_code': code,
             'account_object_name': name,
