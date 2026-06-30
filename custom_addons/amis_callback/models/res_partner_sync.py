@@ -119,22 +119,43 @@ class ResPartnerAmisSync(models.Model):
         address = self.contact_address_complete or ''
         phone = self.phone or self.mobile or ''
         mobile = self.mobile or self.phone or ''
+        account_object_type = 0 if self.is_company or self.company_type == 'company' else 1
         return {
             'dictionary_type': 1,
             'branch_id': branch_id or '',
             'account_object_id': misa_id,
+            'account_object_type': account_object_type,
             'account_object_code': code,
             'account_object_name': name,
             'account_object_address': address,
             'address': address,
+            'country': self.country_id.name or '',
             'company_tax_code': self.vat or '',
+            'due_time': 0,
             'tel': phone,
             'mobile': mobile,
             'email_address': self.email or '',
             'is_vendor': True,
             'is_customer': bool(self.customer_rank),
             'is_employee': False,
+            'is_same_address': False,
+            'pay_account': '331',
+            'receive_account': '131',
             'inactive': not bool(self.active),
+            'agreement_salary': 0.0,
+            'salary_coefficient': 0.0,
+            'insurance_salary': 0.0,
+            'maximize_debt_amount': 0.0,
+            'receiptable_debt_amount': 0.0,
+            'closing_amount': 0.0,
+            'reftype': 0,
+            'reftype_category': 0,
+            'is_convert': False,
+            'is_group': False,
+            'is_remind_debt': True,
+            'excel_row_index': 0,
+            'is_valid': False,
+            'auto_refno': False,
             'state': 1,
         }
 
