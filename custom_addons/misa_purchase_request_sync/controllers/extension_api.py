@@ -187,12 +187,33 @@ class MisaExtensionController(http.Controller):
                     
                 purchase_state = line.purchase_state if hasattr(line, 'purchase_state') else False
 
+                # Prepare supplier name if available
+                misa_supplier_id = None
+                misa_supplier_name = ""
+                if hasattr(line, 'misa_supplier_id') and line.misa_supplier_id:
+                    misa_supplier_id = line.misa_supplier_id.id
+                    ref = line.misa_supplier_id.ref
+                    misa_supplier_name = (f"[{ref}] " if ref else "") + line.misa_supplier_id.name
+
                 lines_data.append({
                     "product_code": line.product_id.default_code if line.product_id else "",
                     "name": line.name,
                     "qty": line.product_qty,
                     "qty_received": qty_received,
                     "purchase_state": purchase_state,
+                    # --- MISA Extension Custom Fields ---
+                    "misa_supplier_id": misa_supplier_id,
+                    "misa_supplier_name": misa_supplier_name,
+                    "misa_price_before_tax": line.misa_price_before_tax if hasattr(line, 'misa_price_before_tax') else 0.0,
+                    "misa_price_after_tax": line.misa_price_after_tax if hasattr(line, 'misa_price_after_tax') else 0.0,
+                    "misa_amount": line.misa_amount if hasattr(line, 'misa_amount') else 0.0,
+                    "misa_tax_rate": line.misa_tax_rate if hasattr(line, 'misa_tax_rate') else 0.0,
+                    "misa_tax_amount": line.misa_tax_amount if hasattr(line, 'misa_tax_amount') else 0.0,
+                    "misa_discount_rate": line.misa_discount_rate if hasattr(line, 'misa_discount_rate') else 0.0,
+                    "misa_discount_amount": line.misa_discount_amount if hasattr(line, 'misa_discount_amount') else 0.0,
+                    "misa_stock_total": line.misa_stock_total if hasattr(line, 'misa_stock_total') else 0.0,
+                    "misa_stock_selected": line.misa_stock_selected if hasattr(line, 'misa_stock_selected') else 0.0,
+                    "misa_stock_undelivered": line.misa_stock_undelivered if hasattr(line, 'misa_stock_undelivered') else 0.0,
                 })
 
             can_revoke = pr.state in ['draft', 'to_approve']
@@ -676,49 +697,43 @@ class MisaExtensionController(http.Controller):
                     }
                 })
                 
-            from datetime import timedelta
-            min_order_date = min(odoo_pos.mapped('date_order'))
-            max_order_date = max(odoo_pos.mapped('date_order'))
-            
-            # Fetch AMIS POs created around Odoo PO creation dates
-            misa_date_from_utc = min_order_date - timedelta(days=5)
-            misa_date_to_utc = max_order_date + timedelta(days=2)
-            
-            amis_payload = {
-                "filter": [
-                    {
-                        "property": 3972,
-                        "value": misa_date_from_utc.isoformat() + "Z",
-                        "operator": 10,
-                        "operand": 1,
-                        "data_type": 3
-                    },
-                    {
-                        "property": 3972,
-                        "value": misa_date_to_utc.isoformat() + "Z",
-                        "operator": 12,
-                        "operand": 1,
-                        "data_type": 3
-                    }
-                ],
-                "loadMode": 2, "pageIndex": 1, "pageSize": 1000, 
-                "useSp": False, "view": 2, "summaryColumns": []
-            }
-            
-            response = misa_utils._fetch_with_retry("https://actapp.misa.vn/g1/api/pu/v1/pu_list/paging_filter_v2", headers, amis_payload)
             amis_dict = {}
-            if response.status_code == 200:
-                resp_json = response.json()
-                data_obj = resp_json.get("Data")
-                if isinstance(data_obj, str):
-                    import json as json_lib
-                    try: data_obj = json_lib.loads(data_obj)
-                    except: data_obj = {}
-                if not data_obj: data_obj = {}
-                for apo in data_obj.get("PageData", []):
-                    refno = apo.get("refno")
-                    if refno:
-                        amis_dict[refno] = apo
+            po_names = odoo_pos.mapped('name')
+            
+            def fetch_amis_po(po_name):
+                try:
+                    amis_payload = {
+                        "SearchValue": po_name,
+                        "loadMode": 2, "pageIndex": 1, "pageSize": 10, 
+                        "useSp": False, "view": 2, "summaryColumns": []
+                    }
+                    response = misa_utils._fetch_with_retry("https://actapp.misa.vn/g1/api/pu/v1/pu_list/paging_filter_v2", headers, amis_payload)
+                    if response.status_code == 200:
+                        resp_json = response.json()
+                        data_obj = resp_json.get("Data")
+                        if isinstance(data_obj, str):
+                            import json as json_lib
+                            try: data_obj = json_lib.loads(data_obj)
+                            except: data_obj = {}
+                        if not data_obj: data_obj = {}
+                        for apo in data_obj.get("PageData", []):
+                            refno = apo.get("refno")
+                            # MISA might return partial matches in SearchValue, check exact match
+                            if refno == po_name:
+                                return po_name, apo
+                except Exception as e:
+                    _logger.warning("fetch_amis_po exception for %s: %s", po_name, e)
+                return po_name, None
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+                futures = {executor.submit(fetch_amis_po, name): name for name in po_names}
+                for future in concurrent.futures.as_completed(futures):
+                    try:
+                        po_name, apo = future.result()
+                        if apo:
+                            amis_dict[po_name] = apo
+                    except Exception as e:
+                        _logger.warning("Future exception: %s", e)
             
             matched = []
             diff = []
@@ -729,11 +744,19 @@ class MisaExtensionController(http.Controller):
             for po in odoo_pos:
                 odoo_prod_qty = {}
                 for oline in po.order_line:
-                    code = (oline.product_id.default_code or "").strip().lower()
+                    orig_code = (oline.product_id.default_code or "").strip()
+                    prod_name = (oline.product_id.name or "").strip()
+                    code = orig_code.lower()
                     if not code:
                         code = "unknown_code"
+                        orig_code = "Unknown"
                     qty = oline.qty_received
-                    odoo_prod_qty[code] = odoo_prod_qty.get(code, 0.0) + qty
+                    
+                    if code not in odoo_prod_qty:
+                        display = f"[{orig_code}] {prod_name}" if orig_code != "Unknown" else "Unknown Code"
+                        display = display.replace("'", "`")
+                        odoo_prod_qty[code] = {"qty": 0.0, "display": display}
+                    odoo_prod_qty[code]["qty"] += qty
                     
                 odoo_data_list.append({
                     "name": po.name,
@@ -796,25 +819,23 @@ class MisaExtensionController(http.Controller):
                     
                 odoo_prod_qty = {}
                 case_map = {}
-                for oline in po_data["prod_qty"]:
-                    orig_code = oline
-                    code = orig_code.lower()
-                    if not orig_code or orig_code == "unknown_code":
-                        code = "unknown_code"
-                        orig_code = "Unknown Code"
-                    qty = po_data["prod_qty"][oline]
-                    odoo_prod_qty[code] = odoo_prod_qty.get(code, 0.0) + qty
-                    if code not in case_map:
-                        case_map[code] = orig_code
+                for code, data in po_data["prod_qty"].items():
+                    qty = data["qty"]
+                    display = data["display"]
+                    odoo_prod_qty[code] = qty
+                    case_map[code] = display
                     
                 amis_prod_qty = {}
                 for aline in amis_lines:
                     orig_code = aline.get("inventory_item_code", "unknown_code").strip()
+                    prod_name = aline.get("inventory_item_name", "").strip()
                     code = orig_code.lower()
                     qty = float(aline.get("quantity_receipt", 0))
                     amis_prod_qty[code] = amis_prod_qty.get(code, 0.0) + qty
                     if code not in case_map:
-                        case_map[code] = orig_code
+                        display = f"[{orig_code}] {prod_name}" if orig_code != "unknown_code" else "Unknown Code"
+                        display = display.replace("'", "`")
+                        case_map[code] = display
                     
                 line_diffs = []
                 for code, o_qty in odoo_prod_qty.items():

@@ -74,6 +74,11 @@
                     </div>
                 </div>
             </xpath>
+
+            <!-- Thêm cột Đơn giá MISA vào danh sách sản phẩm -->
+            <xpath expr="//field[@name='item_ids']/list/field[@name='estimated_cost']" position="after">
+                <field name="misa_price_before_tax" optional="show" />
+            </xpath>
         </field>
     </record>
 </odoo>

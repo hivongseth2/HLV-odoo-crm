@@ -16,10 +16,21 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
     )
 
     @api.model
+    def default_get(self, fields_list):
+        res = super(PurchaseRequestLineMakePurchaseOrder, self).default_get(fields_list)
+        # Xóa trường supplier_id (Nhà cung cấp chung) để không tự động chọn,
+        # tránh việc Odoo (hoặc module OCA) tự động gán tên NCC chung và ghi đè lên các dòng bên dưới.
+        if 'supplier_id' in res:
+            res['supplier_id'] = False
+        return res
+
+    @api.model
     def _prepare_item(self, line):
         res = super(PurchaseRequestLineMakePurchaseOrder, self)._prepare_item(line)
         res['keep_description'] = True
         res['keep_estimated_cost'] = True
+        if hasattr(line, 'misa_supplier_id') and line.misa_supplier_id:
+            res['supplier_id'] = line.misa_supplier_id.id
         return res
 
     def _reload_wizard(self):
@@ -68,6 +79,11 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
 
     keep_description = fields.Boolean(default=True)
     keep_estimated_cost = fields.Boolean(default=True)
+    misa_price_before_tax = fields.Float(
+        related='line_id.misa_price_before_tax', 
+        string="Đơn giá MISA", 
+        readonly=True
+    )
 
     def _post_process_po_line(self, item, po_line, new_pr_line):
         super()._post_process_po_line(item, po_line, new_pr_line)
