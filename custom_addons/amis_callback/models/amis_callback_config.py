@@ -68,6 +68,11 @@ class AmisCallbackConfig(models.Model):
         default=False,
         help='Bật để tự động đẩy phiếu nhập kho (incoming) có nguồn từ đơn mua hàng lên MISA.',
     )
+    sync_purchase_order_enabled = fields.Boolean(
+        string='Đồng bộ đơn mua hàng',
+        default=False,
+        help='Bật để tự động đẩy purchase.order đã xác nhận lên MISA dưới dạng Đơn mua hàng (pu_order).',
+    )
     sync_outgoing_so_enabled = fields.Boolean(
         string='Đồng bộ phiếu xuất kho từ SO',
         default=False,
@@ -662,6 +667,18 @@ class AmisCallbackConfig(models.Model):
         }
         return self._post_actopen('/apir/sync/actopen/save_dictionary', payload, include_token=True)
 
+    def clear_dictionary_cache(self, data_types=None):
+        self.ensure_one()
+        data_types = data_types or []
+        db_name = self.env.cr.dbname
+        for data_type in data_types:
+            _DICT_CACHE.pop((db_name, int(data_type)), None)
+        cr = self.env.cr
+        tx_cache = getattr(cr, '_amis_dict_cache', None)
+        if tx_cache is not None:
+            for data_type in data_types:
+                tx_cache.pop(int(data_type), None)
+
     def _get_all_dictionary(self, data_type):
         """Tải toàn bộ 1 loại danh mục MISA và cache trong memory cho transaction này.
 
@@ -785,7 +802,7 @@ class AmisCallbackConfig(models.Model):
             skip += take
         return False
 
-    def push_inward_voucher(self, voucher_payload, dictionary_items=None):
+    def push_inward_voucher(self, voucher_payload, dictionary_items=None, reference_items=None):
         self.ensure_one()
         payload = {
             'app_id': self.app_id,
@@ -793,7 +810,38 @@ class AmisCallbackConfig(models.Model):
             'voucher': [voucher_payload],
             'dictionary': dictionary_items or [],
         }
-        return self._post_actopen('/apir/sync/actopen/save', payload, include_token=True)
+        if reference_items:
+            payload['reference'] = reference_items
+        _logger.info(
+            'AMIS save inward payload:\n%s',
+            json.dumps(payload, ensure_ascii=False, default=str, indent=2),
+        )
+        result = self._post_actopen('/apir/sync/actopen/save', payload, include_token=True)
+        _logger.info(
+            'AMIS save inward response: %s',
+            json.dumps(result, ensure_ascii=False, default=str),
+        )
+        return result
+
+    def push_purchase_order(self, voucher_payload, dictionary_items=None):
+        """Push pu_order (Don mua hang, voucher_type=21) len MISA."""
+        self.ensure_one()
+        payload = {
+            'app_id': self.app_id,
+            'org_company_code': self.org_company_code,
+            'voucher': [voucher_payload],
+            'dictionary': dictionary_items or [],
+        }
+        _logger.info(
+            'AMIS save purchase order payload:\n%s',
+            json.dumps(payload, ensure_ascii=False, default=str, indent=2),
+        )
+        result = self._post_actopen('/apir/sync/actopen/save', payload, include_token=True)
+        _logger.info(
+            'AMIS save purchase order response: %s',
+            json.dumps(result, ensure_ascii=False, default=str),
+        )
+        return result
 
     def push_outgoing_voucher(self, voucher_payload, dictionary_items=None):
         """Dua phieu xuat kho sang MISA.
@@ -1321,159 +1369,653 @@ class AmisCallbackConfig(models.Model):
             )
 
 
-    def action_sync_catalog_to_odoo(self):
-        """Đồng bộ danh mục hàng hóa (type=2) và đơn vị tính (type=4) từ MISA
-        → ghi misa_inventory_item_id lên product.template / misa_unit_id lên uom.uom.
-        Chạy thủ công một lần, không gọi trong cron/sync phiếu.
-        """
-        self.ensure_one()
-        self.ensure_sync_ready()
-
-        # ---- Pre-load toàn bộ product + uom vào dict 1 lần (tránh N DB query) ----
-        product_env = self.env['product.product'].sudo()
-        uom_env = self.env['uom.uom'].sudo()
-
-        # {default_code: [product_ids]}
-        all_products = product_env.search([('default_code', '!=', False)])
-        code_to_products = {}
-        for p in all_products:
-            code = (p.default_code or '').strip()
-            if code:
-                code_to_products.setdefault(code, []).append(p)
-
-        # {uom_name: [uom_ids]}
-        all_uoms = uom_env.search([])
-        name_to_uoms = {}
-        for u in all_uoms:
-            name = (u.name or '').strip()
-            if name:
-                name_to_uoms.setdefault(name, []).append(u)
-
-        # ---- 1. Lấy toàn bộ hàng hóa (data_type=2) — 1 lần fetch, cached ----
-        inv_items = self._get_all_dictionary(2)
-        item_updated = 0
-        for item in inv_items:
-            code = (item.get('inventory_item_code') or '').strip()
-            item_id = (item.get('inventory_item_id') or '').strip()
-            if not code or not item_id:
-                continue
-            for p in code_to_products.get(code, []):
-                if p.misa_inventory_item_id != item_id:
-                    p.write({'misa_inventory_item_id': item_id})
-                    item_updated += 1
-
-        # ---- 2. Lấy toàn bộ đơn vị tính (data_type=4) — 1 lần fetch, cached ----
-        unit_items = self._get_all_dictionary(4)
-        unit_updated = 0
-        for item in unit_items:
-            name = (item.get('unit_name') or '').strip()
-            unit_id = (item.get('unit_id') or '').strip()
-            if not name or not unit_id:
-                continue
-            for u in name_to_uoms.get(name, []):
-                if u.misa_unit_id != unit_id:
-                    u.write({'misa_unit_id': unit_id})
-                    unit_updated += 1
-
-        # Xóa module cache để lần sau fetch mới
-        db = self.env.cr.dbname
-        _DICT_CACHE.pop((db, 2), None)
-        _DICT_CACHE.pop((db, 4), None)
-
-        msg = (
-            f'Đồng bộ danh mục hoàn tất!\n'
-            f'• Hàng hóa: đã cập nhật {item_updated} sản phẩm '
-            f'(trên tổng {len(inv_items)} mục MISA).\n'
-            f'• Đơn vị tính: đã cập nhật {unit_updated} UoM '
-            f'(trên tổng {len(unit_items)} mục MISA).'
+    def cron_sync_catalog_from_misa(self):
+        config = self.sudo().search([], limit=1)
+        if not config:
+            _logger.info('MISA catalog cron skipped: no AMIS callback config.')
+            return True
+        product_job = self.env['amis.catalog.sync.job'].sudo().enqueue_from_misa(
+            config,
+            trigger='cron',
+            unmapped_only=False,
+            create_missing=True,
+            scope='product',
         )
-        _logger.info('MISA catalog sync: %s', msg)
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': 'Đồng bộ danh mục MISA',
-                'message': msg,
-                'type': 'success',
-                'sticky': True,
-            },
-        }
+        vendor_job = self.env['amis.catalog.sync.job'].sudo().enqueue_from_misa(
+            config,
+            trigger='cron',
+            unmapped_only=False,
+            create_missing=False,
+            scope='vendor',
+        )
+        _logger.info('MISA catalog cron enqueued product job %s and vendor job %s', product_job.id, vendor_job.id)
+        return True
+
+    def action_sync_catalog_to_odoo(self):
+        self.ensure_one()
+        job = self.env['amis.catalog.sync.job'].sudo().enqueue_from_misa(
+            self,
+            trigger='manual',
+            unmapped_only=False,
+            create_missing=True,
+        )
+        return self._open_catalog_sync_job(job)
+
+    def action_sync_product_catalog_to_odoo(self):
+        self.ensure_one()
+        job = self.env['amis.catalog.sync.job'].sudo().enqueue_from_misa(
+            self,
+            trigger='manual',
+            unmapped_only=False,
+            create_missing=False,
+            scope='product',
+        )
+        return self._open_catalog_sync_job(job)
+
+    def action_sync_vendor_catalog_to_odoo(self):
+        self.ensure_one()
+        job = self.env['amis.catalog.sync.job'].sudo().enqueue_from_misa(
+            self,
+            trigger='manual',
+            unmapped_only=False,
+            create_missing=False,
+            scope='vendor',
+        )
+        return self._open_catalog_sync_job(job)
 
     def action_sync_catalog_unmapped_only(self):
-        """Chỉ đồng bộ sản phẩm/UoM chưa có MISA ID (bỏ qua những cái đã map).
-        Nhanh hơn full sync vì chỉ write những record thực sự thiếu.
-        """
         self.ensure_one()
-        self.ensure_sync_ready()
-
-        product_env = self.env['product.product'].sudo()
-        uom_env = self.env['uom.uom'].sudo()
-
-        # Chỉ load sản phẩm chưa có mapping
-        unmapped_products = product_env.search([
-            ('default_code', '!=', False),
-            ('misa_inventory_item_id', 'in', [False, '']),
-        ])
-        code_to_products = {}
-        for p in unmapped_products:
-            code = (p.default_code or '').strip()
-            if code:
-                code_to_products.setdefault(code, []).append(p)
-
-        # Chỉ load UoM chưa có mapping
-        unmapped_uoms = uom_env.search([('misa_unit_id', 'in', [False, ''])])
-        name_to_uoms = {}
-        for u in unmapped_uoms:
-            name = (u.name or '').strip()
-            if name:
-                name_to_uoms.setdefault(name, []).append(u)
-
-        item_updated = 0
-        unit_updated = 0
-
-        if code_to_products:
-            inv_items = self._get_all_dictionary(2)
-            for item in inv_items:
-                code = (item.get('inventory_item_code') or '').strip()
-                item_id = (item.get('inventory_item_id') or '').strip()
-                if not code or not item_id:
-                    continue
-                for p in code_to_products.get(code, []):
-                    p.write({'misa_inventory_item_id': item_id})
-                    item_updated += 1
-
-        if name_to_uoms:
-            unit_items = self._get_all_dictionary(4)
-            for item in unit_items:
-                name = (item.get('unit_name') or '').strip()
-                unit_id = (item.get('unit_id') or '').strip()
-                if not name or not unit_id:
-                    continue
-                for u in name_to_uoms.get(name, []):
-                    u.write({'misa_unit_id': unit_id})
-                    unit_updated += 1
-
-        # Xóa cache sau khi dùng
-        db = self.env.cr.dbname
-        _DICT_CACHE.pop((db, 2), None)
-        _DICT_CACHE.pop((db, 4), None)
-
-        msg = (
-            f'Đồng bộ sản phẩm chưa map hoàn tất!\n'
-            f'• Hàng hóa: đã map {item_updated}/{len(unmapped_products)} sản phẩm chưa có ID.\n'
-            f'• Đơn vị tính: đã map {unit_updated}/{len(unmapped_uoms)} UoM chưa có ID.'
+        job = self.env['amis.catalog.sync.job'].sudo().enqueue_from_misa(
+            self,
+            trigger='manual',
+            unmapped_only=True,
+            create_missing=True,
         )
-        _logger.info('MISA catalog sync (unmapped only): %s', msg)
+        return self._open_catalog_sync_job(job)
+
+    def _open_catalog_sync_job(self, job):
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Hàng đợi đồng bộ danh mục MISA',
+            'res_model': 'amis.catalog.sync.job',
+            'view_mode': 'form',
+            'res_id': job.id,
+            'target': 'current',
+        }
+
+    def _catalog_sync_notification(self, title, message):
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
-                'title': 'Đồng bộ sản phẩm mới',
-                'message': msg,
+                'title': title,
+                'message': message,
                 'type': 'success',
                 'sticky': True,
             },
         }
+
+    def _sync_catalog_from_misa_to_odoo(self, unmapped_only=False, create_missing=True, job=None):
+        self.ensure_one()
+        product_result = self._sync_product_catalog_from_misa_to_odoo(
+            unmapped_only=unmapped_only,
+            job=job,
+        )
+        product_has_more = not bool(product_result.get('complete', True))
+        vendor_complete = True
+        if product_has_more:
+            vendor_summary = {'total': 0, 'updated': 0, 'created': 0, 'skipped': 0, 'error': 0}
+        else:
+            vendor_result = self._sync_vendor_catalog_from_misa_to_odoo(
+                unmapped_only=unmapped_only,
+                create_missing=create_missing,
+                job=job,
+            )
+            vendor_summary = vendor_result.get('vendors') or {}
+            vendor_complete = bool(vendor_result.get('complete', True))
+
+        product_summary = product_result.get('products') or {}
+        unit_summary = product_result.get('units') or {}
+        self.clear_dictionary_cache([1, 2, 4])
+        totals = {
+            'total': unit_summary['total'] + product_summary['total'] + vendor_summary['total'],
+            'updated': unit_summary['updated'] + product_summary['updated'] + vendor_summary['updated'],
+            'created': unit_summary.get('created', 0) + product_summary['created'] + vendor_summary['created'],
+            'skipped': unit_summary.get('skipped', 0) + product_summary.get('skipped', 0) + vendor_summary.get('skipped', 0),
+            'error': unit_summary.get('error', 0) + product_summary.get('error', 0) + vendor_summary.get('error', 0),
+        }
+        msg = (
+            'Đồng bộ danh mục MISA hoàn tất!\n'
+            '• Hàng hóa: map/cập nhật %(updated_product)s, tạo mới %(created_product)s '
+            '(trên %(total_product)s mục MISA).\n'
+            '• Đơn vị tính: map/cập nhật %(updated_unit)s (trên %(total_unit)s mục MISA).\n'
+            '• Nhà cung cấp: map/cập nhật %(updated_vendor)s, tạo mới %(created_vendor)s '
+            '(trên %(total_vendor)s mục MISA).'
+        ) % {
+            'updated_product': product_summary['updated'],
+            'created_product': product_summary['created'],
+            'total_product': product_summary['total'],
+            'updated_unit': unit_summary['updated'],
+            'total_unit': unit_summary['total'],
+            'updated_vendor': vendor_summary['updated'],
+            'created_vendor': vendor_summary['created'],
+            'total_vendor': vendor_summary['total'],
+        }
+        return {
+            'message': msg,
+            'units': unit_summary,
+            'products': product_summary,
+            'vendors': vendor_summary,
+            'totals': totals,
+            'complete': (not product_has_more) and vendor_complete,
+        }
+
+    def _sync_product_catalog_from_misa_to_odoo(self, unmapped_only=False, job=None):
+        self.ensure_one()
+        if job and job.unit_sync_done:
+            unit_summary = {'total': 0, 'updated': 0, 'created': 0, 'skipped': 0, 'error': 0}
+        else:
+            unit_summary = self._sync_misa_units_to_odoo(unmapped_only=unmapped_only, job=job)
+            if job:
+                job.sudo().write({'unit_sync_done': True})
+        product_summary = self._sync_misa_products_to_odoo(
+            unmapped_only=unmapped_only,
+            create_missing=False,
+            job=job,
+        )
+        product_has_more = bool(product_summary.get('has_more'))
+        totals = {
+            'total': unit_summary['total'] + product_summary['total'],
+            'updated': unit_summary['updated'] + product_summary['updated'],
+            'created': unit_summary.get('created', 0) + product_summary['created'],
+            'skipped': unit_summary.get('skipped', 0) + product_summary.get('skipped', 0),
+            'error': unit_summary.get('error', 0) + product_summary.get('error', 0),
+        }
+        msg = (
+            'Đồng bộ danh mục sản phẩm MISA %(status)s.\n'
+            '• Hàng hóa: map/cập nhật %(updated_product)s, tạo mới %(created_product)s '
+            '(trên %(total_product)s mục MISA).\n'
+            '• Đơn vị tính: map/cập nhật %(updated_unit)s (trên %(total_unit)s mục MISA).'
+        ) % {
+            'status': 'đang chạy theo batch' if product_has_more else 'hoàn tất',
+            'updated_product': product_summary['updated'],
+            'created_product': product_summary['created'],
+            'total_product': product_summary['total'],
+            'updated_unit': unit_summary['updated'],
+            'total_unit': unit_summary['total'],
+        }
+        return {
+            'message': msg,
+            'units': unit_summary,
+            'products': product_summary,
+            'totals': totals,
+            'complete': not product_has_more,
+        }
+
+    def _sync_vendor_catalog_from_misa_to_odoo(self, unmapped_only=False, create_missing=True, job=None):
+        self.ensure_one()
+        if job and job.vendor_sync_done:
+            vendor_summary = {'total': 0, 'updated': 0, 'created': 0, 'skipped': 0, 'error': 0}
+            vendor_has_more = False
+        else:
+            batch_skip = int(job.vendor_skip or 0) if job else 0
+            batch_take = int(job.batch_size or 100) if job else 100
+            vendor_summary = self._sync_misa_vendors_to_odoo(
+                unmapped_only=unmapped_only,
+                create_missing=create_missing,
+                job=job,
+                skip=batch_skip,
+                take=batch_take,
+            )
+            vendor_has_more = bool(vendor_summary.get('has_more'))
+            if job:
+                job.sudo().write({'vendor_sync_done': not vendor_has_more})
+        self.clear_dictionary_cache([1])
+        msg = (
+            'Đồng bộ danh mục nhà cung cấp MISA %(status)s.\n'
+            '• Nhà cung cấp: map/cập nhật %(updated_vendor)s, tạo mới %(created_vendor)s '
+            '(trên %(total_vendor)s mục MISA).'
+        ) % {
+            'status': 'đang chạy theo batch' if vendor_has_more else 'hoàn tất',
+            'updated_vendor': vendor_summary['updated'],
+            'created_vendor': vendor_summary['created'],
+            'total_vendor': vendor_summary['total'],
+        }
+        return {
+            'message': msg,
+            'vendors': vendor_summary,
+            'totals': vendor_summary,
+            'complete': not vendor_has_more,
+        }
+
+    def _sync_misa_units_to_odoo(self, unmapped_only=False, job=None):
+        Uom = self.env['uom.uom'].sudo().with_context(active_test=False)
+        domain = [('category_id.name', '=', 'Unit')]
+        if unmapped_only:
+            domain.append(('misa_unit_id', 'in', [False, '']))
+        uoms = Uom.search(domain)
+        name_to_uoms = {}
+        for uom in uoms:
+            if not self._is_misa_catalog_unit_category(uom.category_id):
+                continue
+            name = (uom.name or '').strip()
+            if name:
+                name_to_uoms.setdefault(name.casefold(), []).append(uom)
+
+        unit_items = self._get_all_dictionary(4)
+        updated = 0
+        skipped = 0
+        for item in unit_items:
+            unit_name = (item.get('unit_name') or '').strip()
+            unit_id = (item.get('unit_id') or '').strip()
+            if not unit_name or not unit_id:
+                skipped += 1
+                continue
+            matched_uoms = name_to_uoms.get(unit_name.casefold(), [])
+            categories = {
+                uom.category_id.id for uom in matched_uoms
+                if uom.category_id
+            }
+            if len(categories) > 1:
+                skipped += 1
+                summary = (
+                    'skipped MISA unit mapping because multiple Odoo UoM share name "%s" '
+                    'in different categories: %s'
+                ) % (
+                    unit_name,
+                    ', '.join(sorted(set(uom.category_id.display_name for uom in matched_uoms if uom.category_id))),
+                )
+                _logger.warning('MISA catalog unit mapping skipped: %s', summary)
+                self._catalog_log_change(
+                    job, 'unit', 'skip', 'uom.uom', 0,
+                    unit_id, unit_name, unit_name, summary,
+                )
+                continue
+            for uom in matched_uoms:
+                vals = {}
+                if (uom.misa_unit_id or '').strip() != unit_id:
+                    vals['misa_unit_id'] = unit_id
+                if vals:
+                    change_summary = self._catalog_change_summary(uom, vals)
+                    uom.write(vals)
+                    self._catalog_log_change(
+                        job, 'unit', 'map', 'uom.uom', uom.id,
+                        unit_id, unit_name, unit_name, change_summary,
+                    )
+                    updated += 1
+        return {'total': len(unit_items), 'updated': updated, 'created': 0, 'skipped': skipped, 'error': 0}
+
+    def _sync_misa_products_to_odoo(self, unmapped_only=False, create_missing=True, job=None):
+        Product = self.env['product.product'].sudo().with_context(active_test=False)
+        Uom = self.env['uom.uom'].sudo().with_context(active_test=False)
+        batch_skip = int(job.product_skip or 0) if job else 0
+        batch_take = int(job.batch_size or 100) if job else 100
+        if batch_take <= 0:
+            batch_take = 100
+
+        result = self.get_dictionary(data_type=2, skip=batch_skip, take=batch_take)
+        inv_items = result.get('items') or []
+        codes = {
+            (item.get('inventory_item_code') or '').strip()
+            for item in inv_items
+            if (item.get('inventory_item_code') or '').strip()
+        }
+        products_by_code = {}
+        if codes:
+            for product in Product.search([('default_code', 'in', list(codes))]):
+                code = (product.default_code or '').strip()
+                if code:
+                    products_by_code.setdefault(code, product)
+
+        uoms_by_misa_id = {}
+        for uom in Uom.search([('misa_unit_id', '!=', False)]):
+            if not self._is_misa_catalog_unit_category(uom.category_id):
+                continue
+            unit_id = (uom.misa_unit_id or '').strip()
+            if unit_id:
+                uoms_by_misa_id.setdefault(unit_id.lower(), []).append(uom)
+
+        updated = 0
+        created = 0
+        skipped = 0
+        error = 0
+        for item in inv_items:
+            item_id = (item.get('inventory_item_id') or '').strip()
+            code = (item.get('inventory_item_code') or '').strip()
+            name = (item.get('inventory_item_name') or '').strip()
+            if not item_id or not code or not name:
+                skipped += 1
+                continue
+            product = products_by_code.get(code)
+            if not product:
+                skipped += 1
+                continue
+            if product:
+                if unmapped_only and (product.misa_inventory_item_id or '').strip():
+                    continue
+                if self._log_catalog_product_uom_exception(product, item, uoms_by_misa_id, job=job):
+                    skipped += 1
+                existing_misa_id = (product.misa_inventory_item_id or '').strip()
+                if existing_misa_id and existing_misa_id.lower() != item_id.lower():
+                    skipped += 1
+                    summary = 'skipped MISA ID update: existing=%s, misa=%s' % (existing_misa_id, item_id)
+                    _logger.warning('MISA catalog product mapping conflict for %s (%s): %s', product.display_name, code, summary)
+                    self._catalog_log_change(
+                        job, 'product', 'skip', 'product.product', product.id,
+                        item_id, code, name, summary,
+                    )
+                    continue
+                write_vals = {}
+                if not existing_misa_id:
+                    write_vals['misa_inventory_item_id'] = item_id
+                if write_vals:
+                    change_summary = self._catalog_change_summary(product, write_vals)
+                    try:
+                        with self.env.cr.savepoint():
+                            product.write(write_vals)
+                    except Exception as exc:
+                        error += 1
+                        _logger.warning(
+                            'MISA catalog product update skipped for %s (%s): %s',
+                            product.display_name, code, exc,
+                        )
+                        self._catalog_log_change(
+                            job, 'product', 'error', 'product.product', product.id,
+                            item_id, code, name, 'update skipped: %s' % exc,
+                        )
+                        continue
+                    self._catalog_log_change(
+                        job, 'product', 'map', 'product.product', product.id,
+                        item_id, code, name, change_summary,
+                    )
+                    updated += 1
+                continue
+        next_skip = batch_skip + len(inv_items)
+        has_more = len(inv_items) >= min(batch_take, 100)
+        if job:
+            job.sudo().write({'product_skip': next_skip})
+        return {
+            'total': len(inv_items),
+            'updated': updated,
+            'created': created,
+            'skipped': skipped,
+            'error': error,
+            'skip': batch_skip,
+            'next_skip': next_skip,
+            'has_more': has_more,
+        }
+
+    def _log_catalog_product_uom_exception(self, product, item, uoms_by_misa_id, job=None):
+        unit_id = (item.get('unit_id') or item.get('main_unit_id') or '').strip().lower()
+        if not unit_id:
+            return False
+        code = (item.get('inventory_item_code') or '').strip()
+        name = (item.get('inventory_item_name') or '').strip()
+        item_id = (item.get('inventory_item_id') or '').strip()
+        candidates = uoms_by_misa_id.get(unit_id) or []
+        current_uoms = (product.uom_id | product.uom_po_id).filtered(lambda uom: uom)
+        if candidates and any(uom in current_uoms for uom in candidates):
+            return False
+        misa_uom_text = ', '.join(
+            '%s [%s]' % (uom.display_name, uom.category_id.display_name if uom.category_id else '')
+            for uom in candidates
+        ) or unit_id
+        odoo_uom_text = ', '.join(
+            '%s [%s]' % (uom.display_name, uom.category_id.display_name if uom.category_id else '')
+            for uom in current_uoms
+        )
+        summary = 'UoM needs manual check: Odoo=%s; MISA=%s. Product UoM was not updated.' % (
+            odoo_uom_text,
+            misa_uom_text,
+        )
+        _logger.warning('MISA catalog product UoM exception for %s (%s): %s', product.display_name, code, summary)
+        self._catalog_log_change(
+            job, 'product', 'skip', 'product.product', product.id,
+            item_id, code, name, summary,
+        )
+        return True
+
+    def _is_misa_catalog_unit_category(self, category):
+        name = (category.name or '').strip().casefold() if category else ''
+        return name == 'unit'
+
+    def _misa_product_vals(self, item, uoms_by_misa_id, product=None):
+        Product = self.env['product.product']
+        vals = {
+            'name': (item.get('inventory_item_name') or '').strip(),
+            'default_code': (item.get('inventory_item_code') or '').strip(),
+            'misa_inventory_item_id': (item.get('inventory_item_id') or '').strip(),
+        }
+        if 'purchase_ok' in Product._fields:
+            vals['purchase_ok'] = True
+        if 'sale_ok' in Product._fields:
+            vals['sale_ok'] = True
+        if 'active' in Product._fields:
+            vals['active'] = not bool(item.get('inactive'))
+        unit_id = (item.get('unit_id') or item.get('main_unit_id') or '').strip().lower()
+        uom = self._select_catalog_product_uom(uoms_by_misa_id.get(unit_id) or [], product=product)
+        if uom and 'uom_id' in Product._fields:
+            vals['uom_id'] = uom.id
+        if uom and 'uom_po_id' in Product._fields:
+            vals['uom_po_id'] = uom.id
+        return vals
+
+    def _select_catalog_product_uom(self, candidates, product=None):
+        if not candidates:
+            return self.env['uom.uom']
+        if product:
+            for uom in candidates:
+                if uom == product.uom_id or uom == product.uom_po_id:
+                    return uom
+            if product.uom_id:
+                for uom in candidates:
+                    if uom.category_id == product.uom_id.category_id:
+                        return uom
+        return candidates[0]
+
+    def _filter_catalog_product_uom_write_vals(self, product, write_vals, item, job=None):
+        uom_fields = [field for field in ('uom_id', 'uom_po_id') if field in write_vals]
+        if not uom_fields:
+            return write_vals, 0
+
+        Uom = self.env['uom.uom'].sudo()
+        StockMove = self.env['stock.move'].sudo()
+        has_stock_moves = bool(StockMove.search([('product_id', '=', product.id)], limit=1))
+        reasons = []
+        details = []
+        for field_name in uom_fields:
+            old_uom = product[field_name]
+            new_uom = Uom.browse(write_vals[field_name]) if write_vals[field_name] else Uom
+            old_category = old_uom.category_id.display_name if old_uom and old_uom.category_id else ''
+            new_category = new_uom.category_id.display_name if new_uom and new_uom.category_id else ''
+            details.append(
+                '%s: %s [%s] -> %s [%s]' % (
+                    field_name,
+                    old_uom.display_name if old_uom else '',
+                    old_category,
+                    new_uom.display_name if new_uom else '',
+                    new_category,
+                )
+            )
+            if old_uom and new_uom and old_uom.category_id != new_uom.category_id:
+                reasons.append('%s category differs (%s -> %s)' % (field_name, old_category, new_category))
+
+        if has_stock_moves:
+            reasons.append('product already has stock moves')
+        if not reasons:
+            return write_vals, 0
+
+        filtered_vals = dict(write_vals)
+        for field_name in uom_fields:
+            filtered_vals.pop(field_name, None)
+        code = (item.get('inventory_item_code') or '').strip()
+        name = (item.get('inventory_item_name') or '').strip()
+        item_id = (item.get('inventory_item_id') or '').strip()
+        summary = 'skipped UoM update: %s. Reason: %s' % (
+            '; '.join(details),
+            '; '.join(dict.fromkeys(reasons)),
+        )
+        _logger.warning(
+            'MISA catalog UoM update skipped for product %s (%s): %s',
+            product.display_name,
+            code,
+            summary,
+        )
+        self._catalog_log_change(
+            job, 'product', 'skip', 'product.product', product.id,
+            item_id, code, name, summary,
+        )
+        return filtered_vals, 1
+
+    def _sync_misa_vendors_to_odoo(self, unmapped_only=False, create_missing=True, job=None, skip=0, take=None):
+        Partner = self.env['res.partner'].sudo().with_context(
+            active_test=False,
+            skip_misa_partner_sync=True,
+        )
+        partners = Partner.search([('parent_id', '=', False)])
+        partners_by_misa_id = {}
+        partners_by_ref = {}
+        partners_by_name = {}
+        for partner in partners:
+            misa_id = (partner.misa_account_object_id or '').strip()
+            ref = (partner.ref or '').strip()
+            name = (partner.name or '').strip()
+            if misa_id:
+                partners_by_misa_id.setdefault(misa_id.lower(), partner)
+            if ref:
+                partners_by_ref.setdefault(ref.upper(), partner)
+            if name:
+                partners_by_name.setdefault(name.upper(), partner)
+
+        batch_take = int(take or 0)
+        if batch_take > 0:
+            if batch_take > 100:
+                batch_take = 100
+            batch_skip = int(skip or 0)
+            account_items = self.get_dictionary(data_type=1, skip=batch_skip, take=batch_take).get('items') or []
+        else:
+            batch_skip = 0
+            account_items = self._get_all_dictionary(1)
+        vendor_items = [item for item in account_items if item.get('is_vendor')]
+        updated = 0
+        created = 0
+        skipped = 0
+        for item in vendor_items:
+            misa_id = (item.get('account_object_id') or '').strip()
+            code = (item.get('account_object_code') or '').strip()
+            name = (item.get('account_object_name') or '').strip()
+            if not misa_id or not name:
+                skipped += 1
+                continue
+            partner = (
+                partners_by_misa_id.get(misa_id.lower())
+                or (code and partners_by_ref.get(code.upper()))
+                or partners_by_name.get(name.upper())
+            )
+            vals = self._misa_vendor_vals(item)
+            if partner:
+                if unmapped_only and (partner.misa_account_object_id or '').strip():
+                    continue
+                write_vals = {
+                    key: value for key, value in vals.items()
+                    if not self._record_value_matches(partner, key, value)
+                }
+                if write_vals:
+                    operation = 'map' if not (partner.misa_account_object_id or '').strip() and 'misa_account_object_id' in write_vals else 'update'
+                    change_summary = self._catalog_change_summary(partner, write_vals)
+                    partner.write(write_vals)
+                    self._catalog_log_change(
+                        job, 'vendor', operation, 'res.partner', partner.id,
+                        misa_id, code, name, change_summary,
+                    )
+                    updated += 1
+                continue
+            if not create_missing:
+                skipped += 1
+                continue
+            partner = Partner.create(vals)
+            partners_by_misa_id[misa_id.lower()] = partner
+            if code:
+                partners_by_ref[code.upper()] = partner
+            partners_by_name[name.upper()] = partner
+            self._catalog_log_change(
+                job, 'vendor', 'create', 'res.partner', partner.id,
+                misa_id, code, name, 'created from MISA dictionary',
+            )
+            created += 1
+        next_skip = batch_skip + len(account_items)
+        has_more = bool(batch_take > 0 and len(account_items) >= batch_take)
+        if job and batch_take > 0:
+            job.sudo().write({'vendor_skip': next_skip})
+        return {
+            'total': len(vendor_items),
+            'updated': updated,
+            'created': created,
+            'skipped': skipped,
+            'error': 0,
+            'skip': batch_skip,
+            'next_skip': next_skip,
+            'has_more': has_more,
+        }
+
+    def _misa_vendor_vals(self, item):
+        Partner = self.env['res.partner']
+        vals = {
+            'name': (item.get('account_object_name') or '').strip(),
+            'misa_account_object_id': (item.get('account_object_id') or '').strip(),
+            'ref': (item.get('account_object_code') or '').strip() or False,
+            'is_company': True,
+            'supplier_rank': 1,
+        }
+        field_map = {
+            'vat': item.get('company_tax_code'),
+            'phone': item.get('tel') or item.get('phone'),
+            'mobile': item.get('mobile'),
+            'email': item.get('email_address') or item.get('email'),
+            'street': item.get('account_object_address') or item.get('address'),
+        }
+        for field_name, value in field_map.items():
+            if field_name in Partner._fields:
+                vals[field_name] = (value or '').strip() or False
+        if 'active' in Partner._fields:
+            vals['active'] = not bool(item.get('inactive'))
+        return vals
+
+    def _record_value_matches(self, record, field_name, value):
+        field = record._fields.get(field_name)
+        current = record[field_name]
+        if field and field.type == 'many2one':
+            return (current.id or False) == (value or False)
+        return current == value
+
+    def _catalog_change_summary(self, record, vals):
+        parts = []
+        for field_name, new_value in vals.items():
+            old_value = record[field_name]
+            field = record._fields.get(field_name)
+            if field and field.type == 'many2one':
+                old_display = old_value.display_name if old_value else ''
+                new_record = self.env[field.comodel_name].browse(new_value) if new_value else self.env[field.comodel_name]
+                new_display = new_record.display_name if new_record else ''
+            else:
+                old_display = old_value
+                new_display = new_value
+            parts.append('%s: %s -> %s' % (field_name, old_display or '', new_display or ''))
+        return '; '.join(parts)
+
+    def _catalog_log_change(self, job, data_type, operation, odoo_model, res_id, misa_id, code, name, change_summary):
+        if not job:
+            return
+        job.sudo().add_change_line(
+            data_type=data_type,
+            operation=operation,
+            odoo_model=odoo_model,
+            res_id=res_id,
+            misa_id=misa_id,
+            code=code,
+            name=name,
+            change_summary=change_summary,
+        )
 
     def action_fetch_invoice_templates(self):
         """Lấy danh sách mẫu hóa đơn điện tử từ MISA và hiển thị dạng bảng."""

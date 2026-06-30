@@ -3,8 +3,11 @@ from . import shopee_webhook_status
 from . import webhook_queue
 from . import amis_callback_config
 from . import amis_callback_log
+from . import purchase_order_sync
 from . import stock_picking_sync
+from . import res_partner_sync
 from . import amis_sync_job
+from . import amis_catalog_sync_job
 from . import sale_order_sync
 from . import sale_order_webhook
 from . import misa_invoice_template_wizard
@@ -12,3 +15,4 @@ from . import meinvoice_publish_wizard
 from . import meinvoice_invoice
 from . import meinvoice_mail_queue
 from . import shopee_wallet_import_wizard
+from . import shopee_meinvoice_reconcile_wizard

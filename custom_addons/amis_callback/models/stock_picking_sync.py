@@ -178,15 +178,60 @@ class StockPickingAmisSync(models.Model):
         if not config.ensure_sync_ready():
             return
 
-        voucher_payload, dictionary_items = self._prepare_misa_inward_payload(config, purchase_order)
-        org_refid = voucher_payload.get('org_refid')
+        purchase_order._misa_refresh_purchase_order_refs_from_logs()
+        purchase_lines = self.move_ids_without_package.mapped('purchase_line_id')
+        purchase_order_refid = purchase_order._misa_purchase_order_link_refid()
+        if config.sync_purchase_order_enabled and not purchase_order._is_misa_imported_purchase_order():
+            missing_detail_lines = purchase_order._misa_purchase_order_lines_missing_ref_detail(purchase_lines)
+            purchase_order_refid = purchase_order._misa_purchase_order_link_refid()
+            if not purchase_order.misa_purchase_order_synced or not purchase_order_refid or missing_detail_lines:
+                purchase_order._enqueue_misa_purchase_order(raise_on_skip=False, force=True)
+                missing_names = ', '.join(missing_detail_lines.mapped('product_id.display_name'))
+                if not purchase_order.misa_purchase_order_synced:
+                    reason = 'callback thanh cong don mua'
+                elif not purchase_order_refid:
+                    reason = 'refid/org_refid don mua'
+                else:
+                    reason = 'ref_detail_id dong: %s' % missing_names
+                raise UserError(
+                    'Don mua hang %s chua co %s MISA thuc te; da enqueue don mua, phieu nhap se retry sau callback.'
+                    % (purchase_order.name, reason)
+                )
 
-        # Nghiep vu hien tai uu tien map theo ma (code), tranh dung cac GUID tu sinh de khong lech du lieu MISA.
-        # Neu danh muc da co san ben MISA, khong can goi save_dictionary.
-        config.push_inward_voucher(voucher_payload, dictionary_items=[])
+        if not purchase_order_refid:
+            raise UserError(
+                'Don mua hang %s chua co refid/org_refid MISA de lien ket phieu nhap.'
+                % purchase_order.name
+            )
+
+        voucher_payload, dictionary_items, reference_items = self._prepare_misa_inward_payload(config, purchase_order)
+        org_refid = voucher_payload.get('org_refid')
+        _logger.info(
+            'Push MISA inward %s: org_refid=%s, po=%s, po_refid=%s, detail_links=%s',
+            self.name,
+            org_refid,
+            purchase_order.name,
+            voucher_payload.get('detail') and voucher_payload['detail'][0].get('pu_order_refid') or '',
+            ', '.join(
+                '%s qty=%s inward_detail=%s po_detail=%s' % (
+                    detail.get('inventory_item_code') or detail.get('inventory_item_name') or '',
+                    detail.get('quantity') or 0.0,
+                    detail.get('ref_detail_id') or '',
+                    detail.get('pu_order_ref_detail_id') or '',
+                )
+                for detail in voucher_payload.get('detail') or []
+            ),
+        )
+
+        if dictionary_items:
+            config.push_dictionary(dictionary_items)
+            _logger.info(
+                'Created %d MISA dictionary items before inward picking %s sync...',
+                len(dictionary_items), self.name,
+            )
+        config.push_inward_voucher(voucher_payload, dictionary_items=[], reference_items=reference_items)
 
         self.sudo().write({
-            'misa_inward_synced': True,
             'misa_inward_org_refid': org_refid or '',
         })
 
@@ -357,10 +402,7 @@ class StockPickingAmisSync(models.Model):
             unit_id = (move.product_uom.misa_unit_id or '').strip()
             # Không gọi get_dictionary lúc sync (tránh 429). MISA match theo inventory_item_code nếu id trống.
 
-            ref_detail_id = (move.misa_ref_detail_id or '').strip()
-            if not ref_detail_id:
-                ref_detail_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'sa_v_detail|%d|%d' % (self.id, move.id)))
-                move.sudo().write({'misa_ref_detail_id': ref_detail_id})
+            ref_detail_id = self._misa_move_ref_detail_id(move, 'sa_v_detail')
 
             detail.append({
                 'ref_detail_id': ref_detail_id,
@@ -624,79 +666,81 @@ class StockPickingAmisSync(models.Model):
     def _prepare_misa_inward_payload(self, config, purchase_order):
         self.ensure_one()
         partner = self.partner_id or purchase_order.partner_id
+        if not partner:
+            raise UserError('Phieu nhap "%s" thieu nha cung cap.' % self.name)
 
         refid = (self.misa_inward_org_refid or '').strip()
         if not refid:
-            raise UserError('Thiếu MISA org_refid phiếu nhập. Vui lòng điền trường "MISA org_refid phiếu nhập" trên phiếu nhập trước khi đồng bộ.')
+            refid = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'misa_inward|%d' % self.id))
+            self.sudo().write({'misa_inward_org_refid': refid})
 
         branch_id = (config.misa_branch_id or '').strip()
         stock_id = (config.misa_stock_id or '').strip()
-
-        # Auto-lookup account_object_id nếu chưa có trên partner
-        account_object_id = (partner.misa_account_object_id or '').strip() if partner else ''
-        if not account_object_id and partner:
-            account_object_id = self._misa_lookup_account_object(config, partner)
-
-        missing_header = []
         if not branch_id:
-            missing_header.append('MISA Branch ID (cấu hình)')
+            raise UserError('Thieu MISA Branch ID trong cau hinh.')
         if not stock_id:
-            missing_header.append('MISA Stock ID (cấu hình)')
-        if not account_object_id:
-            missing_header.append('MISA Account Object ID (nhà cung cấp: %s)' % (partner.name if partner else '?'))
-        if missing_header:
-            raise UserError('Thiếu mapping ID MISA ở phần đầu chứng từ: %s' % ', '.join(missing_header))
+            raise UserError('Thieu MISA Stock ID trong cau hinh.')
 
-        # Kho MISA co dinh: HLV
+        dictionary_items = []
+        account_object = purchase_order._ensure_misa_account_object(config, partner, dictionary_items)
+        account_object_id = account_object.get('account_object_id') or ''
+        account_object_code = account_object.get('account_object_code') or purchase_order._misa_partner_code(partner)
+        account_object_name = account_object.get('account_object_name') or partner.display_name or partner.name or ''
+        if not account_object_id:
+            raise UserError('Khong tao/tim duoc MISA Account Object cho nha cung cap: %s' % partner.display_name)
+
+        # Kho MISA hien tai co dinh theo cau hinh kho HLV.
         misa_warehouse_code = 'HLV'
+
+        pu_order_refid = purchase_order._misa_purchase_order_link_refid()
+        if not pu_order_refid:
+            raise UserError('Don mua hang %s chua co org_refid MISA de lien ket phieu nhap.' % purchase_order.name)
+
+        moves = self.move_ids_without_package.filtered(lambda m: m.quantity > 0)
+        if not moves:
+            raise UserError('Phieu nhap "%s" khong co dong da nhap de sync MISA.' % self.name)
 
         detail = []
         total_amount = 0.0
+        total_vat_amount = 0.0
 
-        for idx, move in enumerate(self.move_ids_without_package.filtered(lambda m: m.quantity > 0), start=1):
+        for idx, move in enumerate(moves, start=1):
             product = move.product_id
-            qty_done = float(move.quantity)
-            price_unit = float(move.purchase_line_id.price_unit if move.purchase_line_id else 0.0)
+            purchase_line = move.purchase_line_id
+            if not purchase_line:
+                raise UserError('Dong nhap kho %s khong lien ket voi dong don mua hang.' % move.display_name)
+            qty_done = float(move.quantity or 0.0)
+            price_unit = float(purchase_line.price_unit or 0.0)
             amount = qty_done * price_unit
+            taxes = purchase_line.taxes_id.filtered(lambda t: t.amount_type == 'percent')
+            vat_rate = float(taxes[0].amount or 0.0) if taxes else 0.0
+            vat_amount = amount * vat_rate / 100.0
             total_amount += amount
-
-            inventory_item_id = (product.misa_inventory_item_id or '').strip()
-            unit_id = (move.product_uom.misa_unit_id or '').strip()
-
-            # Auto-lookup nếu thiếu
-            if not inventory_item_id and product.default_code:
-                inventory_item_id, fetched_unit_id = self._misa_lookup_inventory_item(
-                    config, product, move.product_uom
-                )
-                if not unit_id and fetched_unit_id:
-                    unit_id = fetched_unit_id
-            if not unit_id:
-                unit_id = self._misa_lookup_unit(config, move.product_uom)
-
-            ref_detail_id = (move.misa_ref_detail_id or '').strip()
-            if not ref_detail_id:
-                # Sinh ref_detail_id dạng stable UUID từ picking+move để idempotent
-                ref_detail_id = str(uuid.uuid5(
-                    uuid.NAMESPACE_DNS,
-                    'ref_detail|%s|%d' % (self.name, move.id)
-                ))
-                move.sudo().write({'misa_ref_detail_id': ref_detail_id})
-
-            missing_line = []
-            if not inventory_item_id:
-                missing_line.append('MISA Inventory Item ID (product: %s)' % (product.default_code or product.name))
-            if not unit_id:
-                missing_line.append('MISA Unit ID (uom: %s)' % move.product_uom.name)
-            if missing_line:
+            total_vat_amount += vat_amount
+            pu_order_ref_detail_id = purchase_order._misa_purchase_order_line_ref_detail_id(purchase_line)
+            if not pu_order_ref_detail_id:
                 raise UserError(
-                    'Thiếu mapping ID MISA ở dòng hàng %s (%s): %s' % (
-                        move.display_name,
-                        product.display_name,
-                        ', '.join(missing_line),
-                    )
+                    'Dong don mua %s/%s chua co ref_detail_id MISA thuc te de lien ket phieu nhap.'
+                    % (purchase_order.name, purchase_line.product_id.display_name)
                 )
 
-            # Tai khoan co dinh theo yeu cau: Kho 1561, Cong no 331
+            unit = purchase_order._ensure_misa_unit(config, move.product_uom, dictionary_items)
+            inventory_item = purchase_order._ensure_misa_inventory_item(
+                config, product, move.product_uom, unit, price_unit, dictionary_items
+            )
+            inventory_item_id = inventory_item.get('inventory_item_id') or ''
+            inventory_item_code = inventory_item.get('inventory_item_code') or product.default_code or str(product.id)
+            inventory_item_name = inventory_item.get('inventory_item_name') or product.display_name
+            unit_id = unit.get('unit_id') or ''
+            unit_name = unit.get('unit_name') or move.product_uom.name
+            if not inventory_item_id:
+                raise UserError('Khong tao/tim duoc MISA Inventory Item cho san pham: %s' % product.display_name)
+            if not unit_id:
+                raise UserError('Khong tao/tim duoc MISA Unit cho don vi tinh: %s' % move.product_uom.name)
+
+            ref_detail_id = self._misa_move_ref_detail_id(move, 'misa_inward_detail')
+
+            # Tai khoan co dinh theo yeu cau: Kho 1561, Cong no 331.
             debit_account = '1561'
             credit_account = '331'
 
@@ -713,8 +757,22 @@ class StockPickingAmisSync(models.Model):
                 'un_resonable_cost': False,
                 'is_promotion': False,
                 'quantity': qty_done,
+                'unit_price': price_unit,
+                'main_unit_price': price_unit,
+                'unit_price_after_tax': price_unit * (1.0 + vat_rate / 100.0),
                 'unit_price_finance': price_unit,
                 'amount_finance': amount,
+                'amount': amount,
+                'amount_oc': amount,
+                'vat_rate': vat_rate,
+                'vat_amount': vat_amount,
+                'vat_amount_oc': vat_amount,
+                'amount_after_tax': amount + vat_amount,
+                'inward_amount': amount,
+                'inward_amount_oc': amount,
+                'discount_rate': 0.0,
+                'discount_amount': 0.0,
+                'discount_amount_oc': 0.0,
                 'unit_price_management': price_unit,
                 'amount_management': amount,
                 'main_unit_price_finance': price_unit,
@@ -723,18 +781,18 @@ class StockPickingAmisSync(models.Model):
                 'main_quantity': qty_done,
                 'amount_finance_oc': amount,
                 'amount_management_oc': amount,
-                'description': product.display_name,
+                'description': move.name or inventory_item_name,
                 'debit_account': debit_account,
                 'credit_account': credit_account,
                 'exchange_rate_operator': '*',
-                'account_object_name': partner.display_name if partner else '',
-                'account_object_code': partner.ref or (partner.name if partner else ''),
-                'inventory_item_code': product.default_code or str(product.id),
+                'account_object_name': account_object_name,
+                'account_object_code': account_object_code,
+                'inventory_item_code': inventory_item_code,
                 'inventory_item_type': 0,
-                'unit_name': move.product_uom.name,
+                'unit_name': unit_name,
                 'stock_code': misa_warehouse_code,
-                'main_unit_name': move.product_uom.name,
-                'inventory_item_name': product.display_name,
+                'main_unit_name': unit_name,
+                'inventory_item_name': inventory_item_name,
                 'stock_name': misa_warehouse_code,
                 'account_name': debit_account,
                 'is_follow_serial_number': False,
@@ -743,21 +801,32 @@ class StockPickingAmisSync(models.Model):
                 'is_description_import': False,
                 'is_promotion_import': False,
                 'un_resonable_cost_import': False,
+                'pu_order_refid': pu_order_refid,
+                'pu_order_ref_detail_id': pu_order_ref_detail_id,
+                'pu_order_refno': purchase_order.name,
                 'state': 0,
             })
 
+        total_payment_amount = total_amount + total_vat_amount
+        reference_items = self._prepare_misa_inward_references(
+            purchase_order, refid, self.name, pu_order_refid
+        )
+
         voucher = {
-            'voucher_type': 7,
-            'is_get_new_id': True,
+            'voucher_type': 18,
+            # Keep the voucher/detail IDs we send. MISA can create different
+            # internal IDs when this is true; reference UI still works through
+            # org_refid, but purchase-order received qty depends on detail links.
+            'is_get_new_id': False,
             'org_refid': refid,
             'is_allow_group': False,
             'org_refno': self.name,
-            'org_reftype': 2014,
-            'org_reftype_name': 'Phieu nhap kho',
+            'org_reftype': 302,
+            'org_reftype_name': 'Mua hang trong nuoc nhap kho chua thanh toan',
             'refid': refid,
             'act_voucher_type': 0,
-            'reftype': 2014,
-            'reftype_name': 'Nhap kho',
+            'reftype': 302,
+            'reftype_name': 'Mua hang trong nuoc nhap kho chua thanh toan',
             'branch_id': branch_id,
             'account_object_id': account_object_id,
             'display_on_book': 0,
@@ -771,25 +840,60 @@ class StockPickingAmisSync(models.Model):
             'is_posted_inventory_book_management': False,
             'is_return_with_inward': False,
             'is_created_sa_return_last_year': False,
-            'total_amount': total_amount,
-            'total_amount_finance': total_amount,
-            'total_amount_management': total_amount,
+            'total_sale_amount': total_amount,
+            'total_sale_amount_oc': total_amount,
+            'total_vat_amount': total_vat_amount,
+            'total_vat_amount_oc': total_vat_amount,
+            'total_discount_amount': 0.0,
+            'total_discount_amount_oc': 0.0,
+            'total_inward_amount': total_amount,
+            'total_inward_amount_oc': total_amount,
+            'total_amount': total_payment_amount,
+            'total_amount_oc': total_payment_amount,
+            'total_amount_finance': total_payment_amount,
+            'total_amount_management': total_payment_amount,
             'exchange_rate': 1.0,
             'refno_finance': '',
             'refno_management': '',
-            'account_object_name': partner.display_name if partner else '',
-            'account_object_address': partner.contact_address_complete if partner else '',
+            'account_object_name': account_object_name,
+            'account_object_address': partner.contact_address_complete or '',
             'journal_memo': 'Nhap kho tu don mua %s (Odoo: %s)' % (purchase_order.name, self.name),
             'currency_id': (purchase_order.currency_id.name or 'VND'),
-            'account_object_code': partner.ref or (partner.name if partner else ''),
+            'account_object_code': account_object_code,
+            'paid_status': 0,
+            'is_paid': False,
             'is_executed': False,
             'is_adjust_value': False,
             'state': 0,
             'detail': detail,
         }
-        return voucher, []
+        return voucher, dictionary_items, reference_items
 
-    # ── Auto-lookup helpers ────────────────────────────────────────────────────
+    def _prepare_misa_inward_references(self, purchase_order, inward_refid, inward_refno, purchase_order_refid):
+        purchase_org_refid = (purchase_order.misa_purchase_order_org_refid or '').strip()
+        refer_refid = purchase_org_refid or (purchase_order_refid or '').strip()
+        if not refer_refid:
+            return []
+        return [{
+            'org_refid': inward_refid,
+            'org_refno': inward_refno,
+            'org_reftype': 302,
+            'org_reftype_name': 'Mua hang trong nuoc nhap kho chua thanh toan',
+            'org_refer_refid': refer_refid,
+            'org_refer_refno': purchase_order.name,
+            'org_refer_reftype': 301,
+            'org_refer_reftype_name': 'Don mua hang',
+            'sort_order': 1,
+        }]
+
+    def _misa_move_ref_detail_id(self, move, prefix):
+        ref_detail_id = str(uuid.uuid5(
+            uuid.NAMESPACE_DNS,
+            '%s|%d|%d' % (prefix, self.id, move.id)
+        ))
+        if (move.misa_ref_detail_id or '').strip() != ref_detail_id:
+            move.sudo().write({'misa_ref_detail_id': ref_detail_id})
+        return ref_detail_id
 
     def _misa_lookup_account_object_by_id(self, config, account_object_id):
         """Tìm item account_object trong MISA dictionary theo ID (UUID).
@@ -892,5 +996,6 @@ class StockMoveAmisMapping(models.Model):
 
     misa_ref_detail_id = fields.Char(
         string='MISA Ref Detail ID',
+        copy=False,
         help='ID thật của dòng chi tiết chứng từ trên MISA.',
     )

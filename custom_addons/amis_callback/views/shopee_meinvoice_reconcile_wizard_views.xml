@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_shopee_meinvoice_reconcile_wizard_form" model="ir.ui.view">
+        <field name="name">shopee.meinvoice.reconcile.wizard.form</field>
+        <field name="model">shopee.meinvoice.reconcile.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Đối chiếu HĐĐT Shopee">
+                <sheet>
+                    <group>
+                        <group string="Khoảng ngày đơn Shopee">
+                            <field name="date_start"/>
+                            <field name="date_end"/>
+                            <field name="tolerance"/>
+                        </group>
+                        <group string="Tùy chọn">
+                            <field name="limit"/>
+                            <field name="show_ok"/>
+                        </group>
+                    </group>
+                    <group string="Tổng kết" invisible="not result_summary">
+                        <group>
+                            <field name="total_order_count" readonly="1"/>
+                            <field name="ok_count" readonly="1"/>
+                        </group>
+                        <group>
+                            <field name="missing_invoice_count" readonly="1"/>
+                            <field name="amount_mismatch_count" readonly="1"/>
+                            <field name="multiple_invoice_count" readonly="1"/>
+                        </group>
+                        <field name="result_summary" readonly="1" nolabel="1"
+                               widget="text" style="white-space: pre-wrap; font-family: monospace;"/>
+                    </group>
+                    <field name="line_ids" nolabel="1" readonly="1">
+                        <list string="Kết quả đối chiếu"
+                              create="false"
+                              delete="false"
+                              decoration-success="status == 'ok'"
+                              decoration-warning="status in ('missing_invoice','amount_mismatch')"
+                              decoration-danger="status == 'multiple_invoice'">
+                            <field name="status" widget="badge"
+                                   decoration-success="status == 'ok'"
+                                   decoration-warning="status in ('missing_invoice','amount_mismatch')"
+                                   decoration-danger="status == 'multiple_invoice'"/>
+                            <field name="sale_order_id"/>
+                            <field name="order_date"/>
+                            <field name="shopee_order_ref"/>
+                            <field name="partner_id" optional="show"/>
+                            <field name="order_total" sum="Tổng đơn"/>
+                            <field name="invoice_count"/>
+                            <field name="invoice_total" sum="Tổng HĐĐT"/>
+                            <field name="amount_delta" sum="Chênh lệch"/>
+                            <field name="currency_id" invisible="1"/>
+                            <button name="action_open_sale_order" type="object"
+                                    string="Mở đơn" icon="fa-external-link"/>
+                            <button name="action_open_invoices" type="object"
+                                    string="Mở HĐĐT" icon="fa-file-text-o"
+                                    invisible="invoice_count == 0"/>
+                        </list>
+                    </field>
+                </sheet>
+                <footer>
+                    <button name="action_reconcile" string="Đối chiếu"
+                            type="object" class="btn-primary" icon="fa-refresh"/>
+                    <button string="Đóng" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_shopee_meinvoice_reconcile_wizard" model="ir.actions.act_window">
+        <field name="name">Đối chiếu HĐĐT Shopee</field>
+        <field name="res_model">shopee.meinvoice.reconcile.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">current</field>
+    </record>
+
+    <menuitem
+        id="menu_shopee_meinvoice_reconcile"
+        name="Đối chiếu HĐĐT Shopee"
+        parent="menu_amis_callback_root"
+        action="action_shopee_meinvoice_reconcile_wizard"
+        sequence="17"
+        groups="amis_callback.group_meinvoice_accountant,amis_callback.group_meinvoice_manager"/>
+</odoo>
