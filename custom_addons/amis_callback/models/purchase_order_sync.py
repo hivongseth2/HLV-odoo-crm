@@ -496,21 +496,48 @@ class PurchaseOrderAmisSync(models.Model):
             return self._normalize_misa_account_object(found, partner)
 
         misa_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'misa_account_object|%d' % partner.id))
+        branch_id = (config.misa_branch_id or '').strip()
+        if not branch_id:
+            raise UserError('Chưa cấu hình MISA Branch ID để đồng bộ nhà cung cấp.')
         code = partner_code
         name = (partner.display_name or partner.name or code).strip()
+        account_object_type = 0 if partner.is_company or partner.company_type == 'company' else 1
         item = {
             'dictionary_type': 1,
+            'branch_id': branch_id,
             'account_object_id': misa_id,
+            'account_object_type': account_object_type,
             'account_object_code': code,
             'account_object_name': name,
             'account_object_address': partner.contact_address_complete or '',
+            'address': partner.contact_address_complete or '',
+            'country': partner.country_id.name or '',
             'company_tax_code': partner.vat or '',
+            'due_time': 0,
             'tel': partner.phone or partner.mobile or '',
             'mobile': partner.mobile or partner.phone or '',
             'email_address': partner.email or '',
             'is_vendor': True,
             'is_customer': False,
+            'is_employee': False,
+            'is_same_address': False,
+            'pay_account': '331',
+            'receive_account': '131',
             'inactive': False,
+            'agreement_salary': 0.0,
+            'salary_coefficient': 0.0,
+            'insurance_salary': 0.0,
+            'maximize_debt_amount': 0.0,
+            'receiptable_debt_amount': 0.0,
+            'closing_amount': 0.0,
+            'reftype': 0,
+            'reftype_category': 0,
+            'is_convert': False,
+            'is_group': False,
+            'is_remind_debt': True,
+            'excel_row_index': 0,
+            'is_valid': False,
+            'auto_refno': False,
             'state': 1,
         }
         dictionary_items.append(item)

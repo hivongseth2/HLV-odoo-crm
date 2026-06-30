@@ -1328,13 +1328,21 @@ class AmisCallbackConfig(models.Model):
         if not config:
             _logger.info('MISA catalog cron skipped: no AMIS callback config.')
             return True
-        job = self.env['amis.catalog.sync.job'].sudo().enqueue_from_misa(
+        product_job = self.env['amis.catalog.sync.job'].sudo().enqueue_from_misa(
             config,
             trigger='cron',
             unmapped_only=False,
             create_missing=True,
+            scope='product',
         )
-        _logger.info('MISA catalog cron enqueued job %s', job.id)
+        vendor_job = self.env['amis.catalog.sync.job'].sudo().enqueue_from_misa(
+            config,
+            trigger='cron',
+            unmapped_only=False,
+            create_missing=True,
+            scope='vendor',
+        )
+        _logger.info('MISA catalog cron enqueued product job %s and vendor job %s', product_job.id, vendor_job.id)
         return True
 
     def action_sync_catalog_to_odoo(self):
@@ -1344,6 +1352,28 @@ class AmisCallbackConfig(models.Model):
             trigger='manual',
             unmapped_only=False,
             create_missing=True,
+        )
+        return self._open_catalog_sync_job(job)
+
+    def action_sync_product_catalog_to_odoo(self):
+        self.ensure_one()
+        job = self.env['amis.catalog.sync.job'].sudo().enqueue_from_misa(
+            self,
+            trigger='manual',
+            unmapped_only=False,
+            create_missing=False,
+            scope='product',
+        )
+        return self._open_catalog_sync_job(job)
+
+    def action_sync_vendor_catalog_to_odoo(self):
+        self.ensure_one()
+        job = self.env['amis.catalog.sync.job'].sudo().enqueue_from_misa(
+            self,
+            trigger='manual',
+            unmapped_only=False,
+            create_missing=True,
+            scope='vendor',
         )
         return self._open_catalog_sync_job(job)
 
@@ -1360,7 +1390,7 @@ class AmisCallbackConfig(models.Model):
     def _open_catalog_sync_job(self, job):
         return {
             'type': 'ir.actions.act_window',
-            'name': 'Hang doi dong bo danh muc MISA',
+            'name': 'Hàng đợi đồng bộ danh mục MISA',
             'res_model': 'amis.catalog.sync.job',
             'view_mode': 'form',
             'res_id': job.id,
@@ -1381,30 +1411,23 @@ class AmisCallbackConfig(models.Model):
 
     def _sync_catalog_from_misa_to_odoo(self, unmapped_only=False, create_missing=True, job=None):
         self.ensure_one()
-        if job and job.unit_sync_done:
-            unit_summary = {'total': 0, 'updated': 0, 'created': 0, 'skipped': 0, 'error': 0}
-        else:
-            unit_summary = self._sync_misa_units_to_odoo(unmapped_only=unmapped_only, job=job)
-            if job:
-                job.sudo().write({'unit_sync_done': True})
-        product_summary = self._sync_misa_products_to_odoo(
+        product_result = self._sync_product_catalog_from_misa_to_odoo(
             unmapped_only=unmapped_only,
-            create_missing=False,
             job=job,
         )
-        product_has_more = bool(product_summary.get('has_more'))
+        product_has_more = not bool(product_result.get('complete', True))
         if product_has_more:
             vendor_summary = {'total': 0, 'updated': 0, 'created': 0, 'skipped': 0, 'error': 0}
-        elif job and job.vendor_sync_done:
-            vendor_summary = {'total': 0, 'updated': 0, 'created': 0, 'skipped': 0, 'error': 0}
         else:
-            vendor_summary = self._sync_misa_vendors_to_odoo(
+            vendor_result = self._sync_vendor_catalog_from_misa_to_odoo(
                 unmapped_only=unmapped_only,
                 create_missing=create_missing,
                 job=job,
             )
-            if job:
-                job.sudo().write({'vendor_sync_done': True})
+            vendor_summary = vendor_result.get('vendors') or {}
+
+        product_summary = product_result.get('products') or {}
+        unit_summary = product_result.get('units') or {}
         self.clear_dictionary_cache([1, 2, 4])
         totals = {
             'total': unit_summary['total'] + product_summary['total'] + vendor_summary['total'],
@@ -1437,6 +1460,77 @@ class AmisCallbackConfig(models.Model):
             'vendors': vendor_summary,
             'totals': totals,
             'complete': not product_has_more,
+        }
+
+    def _sync_product_catalog_from_misa_to_odoo(self, unmapped_only=False, job=None):
+        self.ensure_one()
+        if job and job.unit_sync_done:
+            unit_summary = {'total': 0, 'updated': 0, 'created': 0, 'skipped': 0, 'error': 0}
+        else:
+            unit_summary = self._sync_misa_units_to_odoo(unmapped_only=unmapped_only, job=job)
+            if job:
+                job.sudo().write({'unit_sync_done': True})
+        product_summary = self._sync_misa_products_to_odoo(
+            unmapped_only=unmapped_only,
+            create_missing=False,
+            job=job,
+        )
+        product_has_more = bool(product_summary.get('has_more'))
+        totals = {
+            'total': unit_summary['total'] + product_summary['total'],
+            'updated': unit_summary['updated'] + product_summary['updated'],
+            'created': unit_summary.get('created', 0) + product_summary['created'],
+            'skipped': unit_summary.get('skipped', 0) + product_summary.get('skipped', 0),
+            'error': unit_summary.get('error', 0) + product_summary.get('error', 0),
+        }
+        msg = (
+            'Đồng bộ danh mục sản phẩm MISA %(status)s.\n'
+            '• Hàng hóa: map/cập nhật %(updated_product)s, tạo mới %(created_product)s '
+            '(trên %(total_product)s mục MISA).\n'
+            '• Đơn vị tính: map/cập nhật %(updated_unit)s (trên %(total_unit)s mục MISA).'
+        ) % {
+            'status': 'đang chạy theo batch' if product_has_more else 'hoàn tất',
+            'updated_product': product_summary['updated'],
+            'created_product': product_summary['created'],
+            'total_product': product_summary['total'],
+            'updated_unit': unit_summary['updated'],
+            'total_unit': unit_summary['total'],
+        }
+        return {
+            'message': msg,
+            'units': unit_summary,
+            'products': product_summary,
+            'totals': totals,
+            'complete': not product_has_more,
+        }
+
+    def _sync_vendor_catalog_from_misa_to_odoo(self, unmapped_only=False, create_missing=True, job=None):
+        self.ensure_one()
+        if job and job.vendor_sync_done:
+            vendor_summary = {'total': 0, 'updated': 0, 'created': 0, 'skipped': 0, 'error': 0}
+        else:
+            vendor_summary = self._sync_misa_vendors_to_odoo(
+                unmapped_only=unmapped_only,
+                create_missing=create_missing,
+                job=job,
+            )
+            if job:
+                job.sudo().write({'vendor_sync_done': True})
+        self.clear_dictionary_cache([1])
+        msg = (
+            'Đồng bộ danh mục nhà cung cấp MISA hoàn tất.\n'
+            '• Nhà cung cấp: map/cập nhật %(updated_vendor)s, tạo mới %(created_vendor)s '
+            '(trên %(total_vendor)s mục MISA).'
+        ) % {
+            'updated_vendor': vendor_summary['updated'],
+            'created_vendor': vendor_summary['created'],
+            'total_vendor': vendor_summary['total'],
+        }
+        return {
+            'message': msg,
+            'vendors': vendor_summary,
+            'totals': vendor_summary,
+            'complete': True,
         }
 
     def _sync_misa_units_to_odoo(self, unmapped_only=False, job=None):

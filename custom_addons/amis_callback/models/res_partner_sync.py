@@ -3,6 +3,7 @@ import logging
 import uuid
 
 from odoo import api, models
+from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
 
@@ -64,6 +65,8 @@ class ResPartnerAmisSync(models.Model):
                 trigger='partner_save',
             )
             _logger.info('Enqueued MISA vendor sync job %s for partner %s', job.id, vendor.display_name)
+            if job.status in ('pending', 'error'):
+                job._execute()
 
     def _misa_should_sync_vendor(self):
         self.ensure_one()
@@ -76,9 +79,12 @@ class ResPartnerAmisSync(models.Model):
 
     def _push_misa_vendor_dictionary(self, config, job=None):
         self.ensure_one()
+        branch_id = (config.misa_branch_id or '').strip()
+        if not branch_id:
+            raise UserError('Chưa cấu hình MISA Branch ID để đồng bộ nhà cung cấp.')
         had_misa_id = bool((self.misa_account_object_id or '').strip())
         operation = 'update' if had_misa_id else 'create'
-        item = self._misa_vendor_dictionary_item()
+        item = self._misa_vendor_dictionary_item(branch_id=branch_id)
         config.push_dictionary([item])
         config.clear_dictionary_cache([1])
         misa_id = item.get('account_object_id') or ''
@@ -104,7 +110,7 @@ class ResPartnerAmisSync(models.Model):
         )
         return operation
 
-    def _misa_vendor_dictionary_item(self):
+    def _misa_vendor_dictionary_item(self, branch_id=None):
         self.ensure_one()
         misa_id = (self.misa_account_object_id or '').strip()
         if not misa_id:
@@ -115,21 +121,43 @@ class ResPartnerAmisSync(models.Model):
         address = self.contact_address_complete or ''
         phone = self.phone or self.mobile or ''
         mobile = self.mobile or self.phone or ''
+        account_object_type = 0 if self.is_company or self.company_type == 'company' else 1
         return {
             'dictionary_type': 1,
+            'branch_id': branch_id or '',
             'account_object_id': misa_id,
+            'account_object_type': account_object_type,
             'account_object_code': code,
             'account_object_name': name,
             'account_object_address': address,
             'address': address,
+            'country': self.country_id.name or '',
             'company_tax_code': self.vat or '',
+            'due_time': 0,
             'tel': phone,
             'mobile': mobile,
             'email_address': self.email or '',
             'is_vendor': True,
             'is_customer': bool(self.customer_rank),
             'is_employee': False,
+            'is_same_address': False,
+            'pay_account': '331',
+            'receive_account': '131',
             'inactive': not bool(self.active),
+            'agreement_salary': 0.0,
+            'salary_coefficient': 0.0,
+            'insurance_salary': 0.0,
+            'maximize_debt_amount': 0.0,
+            'receiptable_debt_amount': 0.0,
+            'closing_amount': 0.0,
+            'reftype': 0,
+            'reftype_category': 0,
+            'is_convert': False,
+            'is_group': False,
+            'is_remind_debt': True,
+            'excel_row_index': 0,
+            'is_valid': False,
+            'auto_refno': False,
             'state': 1,
         }
 
