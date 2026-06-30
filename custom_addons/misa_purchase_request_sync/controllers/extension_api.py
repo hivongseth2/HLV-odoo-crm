@@ -23,6 +23,15 @@ Endpoints:
         }
         -> {"ok": True, "id": 123, "name": "PR00001"}
 
+    POST /api/extension/po/reconcile
+        Body JSON:
+        {
+            "token": "...",
+            "date_from": "2026-06-01",
+            "date_to": "2026-06-30"
+        }
+        -> {"ok": True, "data": {...}, "summary": {...}, "reconciled": [...]}
+
 Xác thực: Header `X-MISA-Token: <token>` (hoặc token trong body JSON).
 Token so sánh với System Parameter `misa_extension_token` (sudo).
 """
@@ -625,6 +634,236 @@ class MisaExtensionController(http.Controller):
             return json_response({"ok": False, "error": "exception", "message": str(e)}, 500)
 
     # ============================================================
+    # PO RECONCILE - HELPERS
+    # ============================================================
+
+    @staticmethod
+    def _classify_po_status(po_data, amis_po, amis_lines, odoo_lines_detail):
+        """
+        Phân loại trạng thái đối chiếu PO dựa trên dữ liệu Odoo và AMIS.
+        
+        Trả về: (status, severity, root_cause, suggested_action, differences)
+        """
+        differences = []
+        
+        # Trường hợp 1: Không tìm thấy trên AMIS
+        if not amis_po:
+            return (
+                "missing_in_misa",
+                "critical",
+                "workflow_missing",
+                "Đơn hàng chưa được đồng bộ sang MISA. Kiểm tra workflow AMIS Mua hàng, đồng bộ thủ công hoặc tạo lại đơn trên MISA",
+                []
+            )
+
+        # Trường hợp 2: Có trên AMIS, so sánh chi tiết
+        odoo_total = po_data.get("amount_total", 0.0)
+        amis_total = float(amis_po.get("total_amount") or 0.0)
+        
+        # So sánh tổng tiền
+        if abs(odoo_total - amis_total) >= 1.0:
+            differences.append({
+                "type": "price_mismatch",
+                "product_code": "__total__",
+                "product_name": "Tổng tiền đơn hàng",
+                "field": "amount_total",
+                "odoo_value": odoo_total,
+                "misa_value": amis_total,
+                "severity": "warning"
+            })
+
+        # So sánh từng dòng sản phẩm
+        odoo_prod_map = {}
+        for oline in odoo_lines_detail:
+            code = oline["code"]
+            odoo_prod_map[code] = oline
+
+        amis_prod_map = {}
+        for aline in amis_lines:
+            code = aline.get("inventory_item_code", "unknown_code").strip().lower()
+            amis_prod_map[code] = aline
+
+        all_codes = set(list(odoo_prod_map.keys()) + list(amis_prod_map.keys()))
+        
+        has_qty_diff = False
+        has_price_diff = False
+        has_missing_in_amis = False
+        has_missing_in_odoo = False
+
+        for code in all_codes:
+            oline = odoo_prod_map.get(code)
+            aline = amis_prod_map.get(code)
+            
+            display_code = oline["display"] if oline else (
+                f"[{aline.get('inventory_item_code', '')}] {aline.get('inventory_item_name', '')}"
+                if aline else code
+            )
+            prod_name = oline["name"] if oline else (aline.get("inventory_item_name", "") if aline else "")
+
+            if oline and not aline:
+                # Sản phẩm chỉ có trên Odoo
+                has_missing_in_amis = True
+                differences.append({
+                    "type": "missing_in_amis",
+                    "product_code": code,
+                    "product_name": prod_name,
+                    "field": "qty",
+                    "odoo_value": oline["qty"],
+                    "misa_value": 0,
+                    "severity": "critical"
+                })
+            elif aline and not oline:
+                # Sản phẩm chỉ có trên AMIS
+                has_missing_in_odoo = True
+                a_qty = float(aline.get("quantity_receipt", 0))
+                differences.append({
+                    "type": "missing_in_odoo",
+                    "product_code": code,
+                    "product_name": prod_name,
+                    "field": "qty",
+                    "odoo_value": 0,
+                    "misa_value": a_qty,
+                    "severity": "critical"
+                })
+            else:
+                # Cả 2 đều có, so sánh số lượng
+                o_qty = oline["qty"]
+                a_qty = float(aline.get("quantity_receipt", 0))
+                if abs(o_qty - a_qty) > 0.01:
+                    has_qty_diff = True
+                    differences.append({
+                        "type": "qty_mismatch",
+                        "product_code": code,
+                        "product_name": prod_name,
+                        "field": "qty_received",
+                        "odoo_value": o_qty,
+                        "misa_value": a_qty,
+                        "severity": "warning"
+                    })
+                
+                # So sánh đơn giá
+                o_price = oline.get("price_unit", 0.0)
+                a_price = float(aline.get("unit_price", 0) or 0)
+                if o_price > 0 and a_price > 0 and abs(o_price - a_price) > 100:
+                    has_price_diff = True
+                    differences.append({
+                        "type": "price_mismatch",
+                        "product_code": code,
+                        "product_name": prod_name,
+                        "field": "price_unit",
+                        "odoo_value": o_price,
+                        "misa_value": a_price,
+                        "severity": "warning"
+                    })
+
+        # Xác định status tổng thể
+        if not differences:
+            return ("matched", "info", None, None, [])
+        
+        # Xác định root_cause
+        if has_missing_in_amis:
+            root_cause = "workflow_missing"
+            suggested = "Đơn hàng chưa được đồng bộ sang MISA. Kiểm tra workflow AMIS Mua hàng"
+        elif has_missing_in_odoo:
+            root_cause = "workflow_missing"
+            suggested = "Sản phẩm tồn tại trên MISA nhưng chưa có trên Odoo. Kiểm tra app auto đồng bộ"
+        elif has_qty_diff and has_price_diff:
+            root_cause = "manual_edit"
+            suggested = "Cả số lượng và đơn giá đều lệch. Kiểm tra chứng từ gốc và đối chiếu với nhà cung cấp"
+        elif has_qty_diff:
+            root_cause = "partial_receipt"
+            suggested = "Số lượng nhập kho không khớp. Kiểm tra phiếu nhập kho thực tế, đối chiếu với chứng từ gốc"
+        elif has_price_diff:
+            root_cause = "manual_edit"
+            suggested = "Đơn giá giữa Odoo và MISA không khớp. Kiểm tra biên bản thỏa thuận giá"
+        else:
+            root_cause = "unknown"
+            suggested = "Có sai lệch không xác định. Kiểm tra thủ công"
+
+        # Xác định severity tổng thể
+        severities = [d["severity"] for d in differences]
+        if "critical" in severities:
+            overall_severity = "critical"
+        elif "warning" in severities:
+            overall_severity = "warning"
+        else:
+            overall_severity = "info"
+
+        # Xác định status tổng thể
+        if has_missing_in_amis or has_missing_in_odoo:
+            status = "missing_in_misa" if has_missing_in_amis else "missing_in_odoo"
+        elif has_qty_diff and has_price_diff:
+            status = "qty_price_mismatch"
+        elif has_qty_diff:
+            status = "qty_mismatch"
+        elif has_price_diff:
+            status = "price_mismatch"
+        else:
+            status = "diff"
+
+        return (status, overall_severity, root_cause, suggested, differences)
+
+    def _get_odoo_line_details(self, po):
+        """Trích xuất chi tiết dòng sản phẩm từ PO Odoo, bao gồm receipt history."""
+        lines = []
+        for oline in po.order_line:
+            if oline.display_type:
+                continue
+            orig_code = (oline.product_id.default_code or "").strip()
+            prod_name = (oline.product_id.name or "").strip()
+            code = orig_code.lower()
+            if not code:
+                code = "unknown_code"
+                orig_code = "Unknown"
+            
+            # Lấy lịch sử nhập kho
+            receipt_history = []
+            for pick in po.picking_ids.filtered(lambda p: p.state == 'done'):
+                for move in pick.move_ids.filtered(lambda m: m.product_id == oline.product_id):
+                    receipt_history.append({
+                        "picking": pick.name,
+                        "date": pick.date_done.strftime("%Y-%m-%d") if pick.date_done else "",
+                        "qty": move.product_uom_qty
+                    })
+            
+            display = f"[{orig_code}] {prod_name}" if orig_code != "Unknown" else "Unknown Code"
+            display = display.replace("'", "`")
+            
+            lines.append({
+                "code": code,
+                "orig_code": orig_code,
+                "name": prod_name,
+                "display": display,
+                "qty": oline.product_qty,
+                "qty_received": oline.qty_received,
+                "price_unit": oline.price_unit,
+                "price_subtotal": oline.price_subtotal,
+                "receipt_history": receipt_history
+            })
+        return lines
+
+    def _detect_duplicate_po(self, po_name, all_po_names):
+        """
+        Phát hiện PO Odoo có khả năng bị trùng/ghép với PO MISA.
+        VD: DMH123 và DMH123-1 cùng mapping với 1 PO MISA.
+        """
+        # Tìm các PO khác có cùng prefix
+        base_name = po_name
+        # Loại bỏ hậu tố như -1, -2, _copy, v.v.
+        import re as _re
+        m = _re.match(r"^(.*?)(?:[-_]\d+|_copy\d*)$", po_name)
+        if m:
+            base_name = m.group(1)
+        
+        duplicates = []
+        for other in all_po_names:
+            if other == po_name:
+                continue
+            if other.startswith(base_name) or base_name.startswith(other):
+                duplicates.append(other)
+        return duplicates
+
+    # ============================================================
     # POST /api/extension/po/reconcile
     # ============================================================
     @http.route(
@@ -638,6 +877,9 @@ class MisaExtensionController(http.Controller):
     def api_extension_po_reconcile(self, **kwargs):
         """
         Đối chiếu Đơn mua hàng (PO) dựa trên các Đơn ĐÃ NHẬP KHO trên Odoo.
+        
+        Response bao gồm cả format cũ (matched/diff/odoo_only) để giữ backward compatibility
+        và format mới (reconciled/summary) với thông tin chi tiết.
         """
         if request.httprequest.method == "OPTIONS":
             return request.make_response("", headers=[("Access-Control-Allow-Origin", "*"), ("Access-Control-Allow-Headers", "*")])
@@ -694,7 +936,14 @@ class MisaExtensionController(http.Controller):
                     "ok": True,
                     "data": {
                         "matched": [], "diff": [], "odoo_only": [], "total_odoo": 0
-                    }
+                    },
+                    "summary": {
+                        "total_odoo": 0,
+                        "total_misa": 0,
+                        "by_status": {},
+                        "by_severity": {}
+                    },
+                    "reconciled": []
                 })
                 
             amis_dict = {}
@@ -794,151 +1043,201 @@ class MisaExtensionController(http.Controller):
                     except Exception as e:
                         _logger.warning("Future exception: %s", e)
             
-            matched = []
-            diff = []
-            odoo_only = []
+            # ============================================================
+            # BUILD RECONCILED DATA (NEW FORMAT)
+            # ============================================================
+            reconciled = []
+            matched_old = []
+            diff_old = []
+            odoo_only_old = []
+            
+            # Collect all PO names for duplicate detection
+            all_po_names = [po.name for po in odoo_pos]
 
-            # Trích xuất dữ liệu từ Odoo ra dạng dict (chỉ chạy trên main thread để tránh lỗi cursor)
-            odoo_data_list = []
             for po in odoo_pos:
-                odoo_prod_qty = {}
-                for oline in po.order_line:
-                    orig_code = (oline.product_id.default_code or "").strip()
-                    prod_name = (oline.product_id.name or "").strip()
-                    code = orig_code.lower()
-                    if not code:
-                        code = "unknown_code"
-                        orig_code = "Unknown"
-                    qty = oline.qty_received
-                    
-                    if code not in odoo_prod_qty:
-                        display = f"[{orig_code}] {prod_name}" if orig_code != "Unknown" else "Unknown Code"
-                        display = display.replace("'", "`")
-                        odoo_prod_qty[code] = {"qty": 0.0, "display": display}
-                    odoo_prod_qty[code]["qty"] += qty
-                    
-                odoo_data_list.append({
-                    "name": po.name,
-                    "origin": po.origin or "",
-                    "amount_total": po.amount_total,
-                    "prod_qty": odoo_prod_qty
-                })
-
-            import requests
-            def _reconcile_po_data(po_data):
-                po_name = po_data["name"]
-                po_origin = po_data["origin"]
+                po_name = po.name
+                po_origin = po.origin or ""
+                
+                # Lấy chi tiết dòng Odoo
+                odoo_lines_detail = self._get_odoo_line_details(po)
                 
                 # Tìm trên AMIS
                 amis_po = amis_dict.get(po_name)
                 if not amis_po and po_origin:
                     amis_po = amis_dict.get(po_origin)
-                    
-                if not amis_po:
-                    return {"status": "odoo_only", "po_name": po_name}
-                    
-                refid = amis_po.get("refid")
-                amis_total = float(amis_po.get("total_amount") or 0.0)
-                odoo_total = po_data["amount_total"]
                 
-                # Lấy chi tiết dòng của AMIS PO
-                detail_page_index = 1
-                amis_lines = []
-                while True:
-                    detail_payload = {
-                        "columns": [2157, 1355, 2161, 4670, 1127, 5683, 5274, 3870, 3895, 5279, 308, 5364, 5350, 3404, 2358],
-                        "sort": "[{\"property\":4555,\"desc\":false,\"data_type\":4,\"operand\":1}]",
-                        "filter": [{"property": 3993, "operator": 7, "operand": 1, "value": refid, "data_type": 10}],
-                        "pageIndex": detail_page_index,
-                        "pageSize": 50,
-                        "useSp": False,
-                        "view": 92,
-                        "summaryColumns": [3488, 3870, 3895, 3896, 308, 5350],
-                        "loadMode": 2
+                # Khởi tạo reconciled item
+                reconciled_item = {
+                    "po_name": po_name,
+                    "po_origin": po_origin,
+                    "partner": po.partner_id.name if po.partner_id else "",
+                    "date_order": po.date_order.strftime("%Y-%m-%d") if po.date_order else "",
+                    "odoo": {
+                        "partner": po.partner_id.name if po.partner_id else "",
+                        "date_order": po.date_order.strftime("%Y-%m-%d") if po.date_order else "",
+                        "amount_total": po.amount_total,
+                        "lines": odoo_lines_detail
+                    },
+                    "amis": None,
+                    "differences": [],
+                    "duplicate_warning": None
+                }
+                
+                # Phát hiện duplicate PO
+                dup_po_names = self._detect_duplicate_po(po_name, all_po_names)
+                if dup_po_names:
+                    reconciled_item["duplicate_warning"] = {
+                        "message": f"Odoo có nhiều PO có cùng mã gốc: {', '.join([po_name] + dup_po_names)}. Kiểm tra khả năng sửa mã đơn.",
+                        "related_pos": dup_po_names
                     }
-                    try:
-                        detail_res = requests.post("https://actapp.misa.vn/g1/api/pu/v1/pu_order/get_paging_detail", headers=headers, json=detail_payload, timeout=30)
-                        if detail_res.status_code != 200:
-                            break
-                        det_json = detail_res.json()
-                    except Exception:
-                        break
-                        
-                    d_obj = det_json.get("Data")
-                    if isinstance(d_obj, str):
-                        import json as json_lib
-                        try: d_obj = json_lib.loads(d_obj)
-                        except: d_obj = {}
-                    if not d_obj: d_obj = {}
-                    page_lines = d_obj.get("PageData", [])
-                    if not page_lines:
-                        break
-                    amis_lines.extend(page_lines)
-                    detail_page_index += 1
-                    
-                odoo_prod_qty = {}
-                case_map = {}
-                for code, data in po_data["prod_qty"].items():
-                    qty = data["qty"]
-                    display = data["display"]
-                    odoo_prod_qty[code] = qty
-                    case_map[code] = display
-                    
-                amis_prod_qty = {}
-                for aline in amis_lines:
-                    orig_code = aline.get("inventory_item_code", "unknown_code").strip()
-                    prod_name = aline.get("inventory_item_name", "").strip()
-                    code = orig_code.lower()
-                    qty = float(aline.get("quantity_receipt", 0))
-                    amis_prod_qty[code] = amis_prod_qty.get(code, 0.0) + qty
-                    if code not in case_map:
-                        display = f"[{orig_code}] {prod_name}" if orig_code != "unknown_code" else "Unknown Code"
-                        display = display.replace("'", "`")
-                        case_map[code] = display
-                    
-                line_diffs = []
-                for code, o_qty in odoo_prod_qty.items():
-                    a_qty = amis_prod_qty.get(code, 0.0)
-                    if abs(o_qty - a_qty) > 0.01:
-                        display_code = case_map.get(code, code)
-                        line_diffs.append(f"Mã '{display_code}': Odoo {o_qty} != AMIS {a_qty}")
-                for code, a_qty in amis_prod_qty.items():
-                    if code not in odoo_prod_qty:
-                        display_code = case_map.get(code, code)
-                        line_diffs.append(f"Mã '{display_code}': Odoo thiếu (AMIS có {a_qty})")
-                        
-                amt_diff = ""
-                if abs(odoo_total - amis_total) >= 1.0:
-                    amt_diff = f"Tổng tiền: Odoo={odoo_total:,.0f} != AMIS={amis_total:,.0f}"
-                    
-                if not line_diffs and not amt_diff:
-                    return {"status": "matched", "po_name": po_name}
-                else:
-                    reasons = []
-                    if amt_diff: reasons.append(amt_diff)
-                    reasons.extend(line_diffs)
-                    return {"status": "diff", "po_name": po_name, "reason": " | ".join(reasons)}
-
-            # Thực thi đa luồng (max 4 luồng để tránh quá tải)
-            with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-                results = list(executor.map(_reconcile_po_data, odoo_data_list))
                 
-            for res in results:
-                if res["status"] == "matched":
-                    matched.append(res["po_name"])
-                elif res["status"] == "diff":
-                    diff.append({"po_name": res["po_name"], "reason": res["reason"]})
+                if not amis_po:
+                    # Odoo only
+                    status, severity, root_cause, suggested, diffs = self._classify_po_status(
+                        {"amount_total": po.amount_total}, None, [], odoo_lines_detail
+                    )
+                    reconciled_item["status"] = status
+                    reconciled_item["severity"] = severity
+                    reconciled_item["root_cause"] = root_cause
+                    reconciled_item["suggested_action"] = suggested
+                    reconciled_item["differences"] = diffs
+                    
+                    odoo_only_old.append(po_name)
                 else:
-                    odoo_only.append(res["po_name"])
-
+                    # Có trên AMIS, lấy chi tiết dòng
+                    refid = amis_po.get("refid")
+                    amis_total = float(amis_po.get("total_amount") or 0.0)
+                    
+                    # Lấy chi tiết dòng AMIS
+                    detail_page_index = 1
+                    amis_lines = []
+                    import requests
+                    while True:
+                        detail_payload = {
+                            "columns": [2157, 1355, 2161, 4670, 1127, 5683, 5274, 3870, 3895, 5279, 308, 5364, 5350, 3404, 2358],
+                            "sort": "[{\"property\":4555,\"desc\":false,\"data_type\":4,\"operand\":1}]",
+                            "filter": [{"property": 3993, "operator": 7, "operand": 1, "value": refid, "data_type": 10}],
+                            "pageIndex": detail_page_index,
+                            "pageSize": 50,
+                            "useSp": False,
+                            "view": 92,
+                            "summaryColumns": [3488, 3870, 3895, 3896, 308, 5350],
+                            "loadMode": 2
+                        }
+                        try:
+                            detail_res = requests.post("https://actapp.misa.vn/g1/api/pu/v1/pu_order/get_paging_detail", headers=headers, json=detail_payload, timeout=30)
+                            if detail_res.status_code != 200:
+                                break
+                            det_json = detail_res.json()
+                        except Exception:
+                            break
+                            
+                        d_obj = det_json.get("Data")
+                        if isinstance(d_obj, str):
+                            import json as json_lib
+                            try: d_obj = json_lib.loads(d_obj)
+                            except: d_obj = {}
+                        if not d_obj: d_obj = {}
+                        page_lines = d_obj.get("PageData", [])
+                        if not page_lines:
+                            break
+                        amis_lines.extend(page_lines)
+                        detail_page_index += 1
+                    
+                    # Build AMIS lines detail
+                    amis_lines_detail = []
+                    for aline in amis_lines:
+                        orig_code = aline.get("inventory_item_code", "unknown_code").strip()
+                        prod_name = aline.get("inventory_item_name", "").strip()
+                        code = orig_code.lower()
+                        amis_lines_detail.append({
+                            "code": code,
+                            "orig_code": orig_code,
+                            "name": prod_name,
+                            "display": f"[{orig_code}] {prod_name}" if orig_code != "unknown_code" else "Unknown Code",
+                            "qty": float(aline.get("quantity", 0)),
+                            "qty_receipt": float(aline.get("quantity_receipt", 0)),
+                            "price_unit": float(aline.get("unit_price", 0) or 0),
+                            "amount": float(aline.get("amount", 0) or 0)
+                        })
+                    
+                    reconciled_item["amis"] = {
+                        "partner": amis_po.get("account_object_name", ""),
+                        "refid": refid,
+                        "refno": amis_po.get("refno", ""),
+                        "amount_total": amis_total,
+                        "lines": amis_lines_detail
+                    }
+                    
+                    # Phân loại
+                    status, severity, root_cause, suggested, diffs = self._classify_po_status(
+                        {"amount_total": po.amount_total}, amis_po, amis_lines, odoo_lines_detail
+                    )
+                    reconciled_item["status"] = status
+                    reconciled_item["severity"] = severity
+                    reconciled_item["root_cause"] = root_cause
+                    reconciled_item["suggested_action"] = suggested
+                    reconciled_item["differences"] = diffs
+                    
+                    if status == "matched":
+                        matched_old.append(po_name)
+                    else:
+                        # Build reason string for backward compatibility
+                        reason_parts = []
+                        for d in diffs:
+                            if d["type"] == "price_mismatch" and d["product_code"] == "__total__":
+                                reason_parts.append(f"Tổng tiền: Odoo={d['odoo_value']:,.0f} != AMIS={d['misa_value']:,.0f}")
+                            elif d["type"] == "qty_mismatch":
+                                reason_parts.append(f"Mã '{d['product_name']}': Odoo {d['odoo_value']} != AMIS {d['misa_value']}")
+                            elif d["type"] == "missing_in_amis":
+                                reason_parts.append(f"Mã '{d['product_name']}': Odoo có {d['odoo_value']} (AMIS thiếu)")
+                            elif d["type"] == "missing_in_odoo":
+                                reason_parts.append(f"Mã '{d['product_name']}': Odoo thiếu (AMIS có {d['misa_value']})")
+                            elif d["type"] == "price_mismatch":
+                                reason_parts.append(f"Mã '{d['product_name']}': ĐG Odoo {d['odoo_value']:,.0f} != AMIS {d['misa_value']:,.0f}")
+                        
+                        diff_old.append({
+                            "po_name": po_name,
+                            "reason": " | ".join(reason_parts)
+                        })
+                
+                reconciled.append(reconciled_item)
+            
+            # ============================================================
+            # BUILD SUMMARY
+            # ============================================================
+            by_status = {}
+            by_severity = {}
+            for item in reconciled:
+                s = item["status"]
+                by_status[s] = by_status.get(s, 0) + 1
+                
+                sev = item["severity"]
+                if sev:
+                    by_severity[sev] = by_severity.get(sev, 0) + 1
+            
+            summary = {
+                "total_odoo": len(odoo_pos),
+                "total_misa": len(amis_dict),
+                "by_status": by_status,
+                "by_severity": by_severity
+            }
+            
+            # ============================================================
+            # BUILD RESPONSE (OLD FORMAT + NEW FORMAT)
+            # ============================================================
             return json_response({
                 "ok": True,
+                # Old format (backward compatible)
                 "data": {
-                    "matched": matched,
-                    "diff": diff,
-                    "odoo_only": odoo_only,
+                    "matched": matched_old,
+                    "diff": diff_old,
+                    "odoo_only": odoo_only_old,
                     "total_odoo": len(odoo_pos)
-                }
+                },
+                # New format
+                "summary": summary,
+                "reconciled": reconciled
             })
 
         except Exception as e:
