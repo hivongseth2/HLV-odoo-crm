@@ -672,16 +672,31 @@ class MisaExtensionController(http.Controller):
                 "severity": "warning"
             })
 
-        # So sánh từng dòng sản phẩm
-        odoo_prod_map = {}
+        # So sánh từng dòng sản phẩm — aggregate by code
+        # Odoo: aggregate qty_received (số lượng đã nhận thực tế, KHÔNG phải product_qty đặt hàng)
+        odoo_prod_map = {}  # code -> {"qty": float, "price_unit": float, "display": str, "name": str}
         for oline in odoo_lines_detail:
             code = oline["code"]
-            odoo_prod_map[code] = oline
+            if code not in odoo_prod_map:
+                odoo_prod_map[code] = {
+                    "qty": 0.0,
+                    "price_unit": oline.get("price_unit", 0.0),
+                    "display": oline["display"],
+                    "name": oline["name"],
+                }
+            odoo_prod_map[code]["qty"] += oline.get("qty_received", oline.get("qty", 0.0))
 
-        amis_prod_map = {}
+        # AMIS: aggregate quantity_receipt
+        amis_prod_map = {}  # code -> {"qty": float, "price_unit": float, "name": str}
         for aline in amis_lines:
-            code = aline.get("inventory_item_code", "unknown_code").strip().lower()
-            amis_prod_map[code] = aline
+            orig_code = aline.get("inventory_item_code", "unknown_code").strip()
+            code = orig_code.lower()
+            a_qty = float(aline.get("quantity_receipt", 0))
+            a_price = float(aline.get("unit_price", 0) or 0)
+            a_name = aline.get("inventory_item_name", "")
+            if code not in amis_prod_map:
+                amis_prod_map[code] = {"qty": 0.0, "price_unit": a_price, "name": a_name, "orig_code": orig_code}
+            amis_prod_map[code]["qty"] += a_qty
 
         all_codes = set(list(odoo_prod_map.keys()) + list(amis_prod_map.keys()))
         
@@ -691,16 +706,20 @@ class MisaExtensionController(http.Controller):
         has_missing_in_odoo = False
 
         for code in all_codes:
-            oline = odoo_prod_map.get(code)
-            aline = amis_prod_map.get(code)
+            o_item = odoo_prod_map.get(code)
+            a_item = amis_prod_map.get(code)
             
-            display_code = oline["display"] if oline else (
-                f"[{aline.get('inventory_item_code', '')}] {aline.get('inventory_item_name', '')}"
-                if aline else code
-            )
-            prod_name = oline["name"] if oline else (aline.get("inventory_item_name", "") if aline else "")
+            if o_item:
+                display_code = o_item["display"]
+                prod_name = o_item["name"]
+            elif a_item:
+                display_code = f"[{a_item.get('orig_code', code)}] {a_item.get('name', '')}"
+                prod_name = a_item.get("name", "")
+            else:
+                display_code = code
+                prod_name = ""
 
-            if oline and not aline:
+            if o_item and not a_item:
                 # Sản phẩm chỉ có trên Odoo
                 has_missing_in_amis = True
                 differences.append({
@@ -708,27 +727,26 @@ class MisaExtensionController(http.Controller):
                     "product_code": code,
                     "product_name": prod_name,
                     "field": "qty",
-                    "odoo_value": oline["qty"],
+                    "odoo_value": o_item["qty"],
                     "misa_value": 0,
                     "severity": "critical"
                 })
-            elif aline and not oline:
+            elif a_item and not o_item:
                 # Sản phẩm chỉ có trên AMIS
                 has_missing_in_odoo = True
-                a_qty = float(aline.get("quantity_receipt", 0))
                 differences.append({
                     "type": "missing_in_odoo",
                     "product_code": code,
                     "product_name": prod_name,
                     "field": "qty",
                     "odoo_value": 0,
-                    "misa_value": a_qty,
+                    "misa_value": a_item["qty"],
                     "severity": "critical"
                 })
             else:
-                # Cả 2 đều có, so sánh số lượng
-                o_qty = oline["qty"]
-                a_qty = float(aline.get("quantity_receipt", 0))
+                # Cả 2 đều có, so sánh số lượng đã nhập kho
+                o_qty = o_item["qty"]
+                a_qty = a_item["qty"]
                 if abs(o_qty - a_qty) > 0.01:
                     has_qty_diff = True
                     differences.append({
@@ -742,8 +760,8 @@ class MisaExtensionController(http.Controller):
                     })
                 
                 # So sánh đơn giá
-                o_price = oline.get("price_unit", 0.0)
-                a_price = float(aline.get("unit_price", 0) or 0)
+                o_price = o_item.get("price_unit", 0.0)
+                a_price = a_item.get("price_unit", 0.0)
                 if o_price > 0 and a_price > 0 and abs(o_price - a_price) > 100:
                     has_price_diff = True
                     differences.append({
