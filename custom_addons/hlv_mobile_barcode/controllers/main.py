@@ -212,8 +212,13 @@ def _step2_canonical_line_entries(picking):
     
     entries = []
     missing_source_lines = []
+    if not target_lines and source_lines:
+        missing_source_lines.extend(source_lines)
+        return entries, missing_source_lines
 
-    for product in source_lines.mapped('product_id'):
+    # A Step 2 backorder only carries the remaining products. Do not require
+    # products already received on earlier backorders to still exist here.
+    for product in target_lines.mapped('product_id'):
         product_source_lines = source_lines.filtered(lambda ml: ml.product_id == product)
         product_target_lines = target_lines.filtered(lambda ml: ml.product_id == product)
         
@@ -224,10 +229,10 @@ def _step2_canonical_line_entries(picking):
         
         # Allow target_qty to be LESS than source_qty (due to partial backorders)
         if (
-            not product_target_lines
+            not product_source_lines
             or float_compare(source_qty, target_qty, precision_rounding=product.uom_id.rounding) < 0
         ):
-            missing_source_lines.extend(product_source_lines)
+            missing_source_lines.extend(product_source_lines or product_target_lines)
             continue
 
         for target_line in product_target_lines:
