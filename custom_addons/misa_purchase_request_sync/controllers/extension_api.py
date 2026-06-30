@@ -657,20 +657,12 @@ class MisaExtensionController(http.Controller):
             )
 
         # Trường hợp 2: Có trên AMIS, so sánh chi tiết
+        # CHỈ so sánh tổng tiền SAU KHI check từng dòng, để tránh False Positive do
+        # MISA trả về total_amount = tổng chưa thuế, Odoo amount_total = tổng đã gồm thuế.
+        # Việc so sánh này chỉ có ý nghĩa khi không có lệch line nào.
         odoo_total = po_data.get("amount_total", 0.0)
+        odoo_untaxed = po_data.get("amount_untaxed", odoo_total)
         amis_total = float(amis_po.get("total_amount") or 0.0)
-        
-        # So sánh tổng tiền
-        if abs(odoo_total - amis_total) >= 1.0:
-            differences.append({
-                "type": "price_mismatch",
-                "product_code": "__total__",
-                "product_name": "Tổng tiền đơn hàng",
-                "field": "amount_total",
-                "odoo_value": odoo_total,
-                "misa_value": amis_total,
-                "severity": "warning"
-            })
 
         # So sánh từng dòng sản phẩm — aggregate by code
         # Odoo: aggregate qty_received (số lượng đã nhận thực tế, KHÔNG phải product_qty đặt hàng)
@@ -708,10 +700,26 @@ class MisaExtensionController(http.Controller):
         has_price_diff = False
         has_missing_in_amis = False
         has_missing_in_odoo = False
+        # So sánh tổng tiền CHƯA THUẾ (amount_untaxed Odoo vs total_amount MISA)
+        # để tránh False Positive do MISA không trả về tiền thuế trong total_amount.
+        # Nếu chỉ lệch tiền thuế, không đánh dấu là lỗi.
         has_total_diff = False
+        has_tax_diff = False
         
-        if abs(odoo_total - amis_total) >= 1.0:
+        if abs(odoo_untaxed - amis_total) >= 1.0:
             has_total_diff = True
+        elif abs(odoo_total - amis_total) >= 1.0:
+            # Chỉ lệch do thuế - đánh dấu info, không warning
+            has_tax_diff = True
+            differences.append({
+                "type": "tax_diff",
+                "product_code": "__total__",
+                "product_name": "Thuế GTGT",
+                "field": "amount_tax",
+                "odoo_value": odoo_total - odoo_untaxed,
+                "misa_value": 0,
+                "severity": "info"
+            })
 
         for code in all_codes:
             o_item = odoo_prod_map.get(code)
@@ -1134,62 +1142,69 @@ class MisaExtensionController(http.Controller):
                     
                     odoo_only_old.append(po_name)
                 else:
-                    # Có trên AMIS, lấy chi tiết dòng
+                    # Có trên AMIS, lấy chi tiết dòng qua API detail_full (1 call duy nhất)
                     refid = amis_po.get("refid")
                     amis_total = float(amis_po.get("total_amount") or 0.0)
+                    amis_total_oc = float(amis_po.get("total_amount_oc", amis_total))
+                    amis_total_vat = float(amis_po.get("total_vat_amount_oc", 0))
                     
-                    # Lấy chi tiết dòng AMIS
-                    detail_page_index = 1
+                    # Gọi detail_full: 1 call thay vì loop paginated get_paging_detail
                     amis_lines = []
-                    import requests
-                    while True:
-                        detail_payload = {
-                            "columns": [2157, 1355, 2161, 4670, 1127, 5683, 5274, 3870, 3895, 5279, 308, 5364, 5350, 3404, 2358],
-                            "sort": "[{\"property\":4555,\"desc\":false,\"data_type\":4,\"operand\":1}]",
-                            "filter": [{"property": 3993, "operator": 7, "operand": 1, "value": refid, "data_type": 10}],
-                            "pageIndex": detail_page_index,
-                            "pageSize": 50,
-                            "useSp": False,
-                            "view": 92,
-                            "summaryColumns": [3488, 3870, 3895, 3896, 308, 5350],
-                            "loadMode": 2
-                        }
-                        try:
-                            detail_res = requests.post("https://actapp.misa.vn/g1/api/pu/v1/pu_order/get_paging_detail", headers=headers, json=detail_payload, timeout=30)
-                            if detail_res.status_code != 200:
-                                break
-                            det_json = detail_res.json()
-                        except Exception:
-                            break
-                            
-                        d_obj = det_json.get("Data")
-                        if isinstance(d_obj, str):
-                            import json as json_lib
-                            try: d_obj = json_lib.loads(d_obj)
-                            except: d_obj = {}
-                        if not d_obj: d_obj = {}
-                        page_lines = d_obj.get("PageData", [])
-                        if not page_lines:
-                            break
-                        amis_lines.extend(page_lines)
-                        detail_page_index += 1
+                    amis_header = {}
+                    try:
+                        import base64
+                        import json as _json
+                        # Template từ MISA: base64 encoded JSON với Key = refid
+                        detail_full_payload = [{
+                            "Type": "pu_order",
+                            "Key": refid,
+                            "RefType": 301,
+                            "RefTypeCategory": 301,
+                            "View": "view_pu_order",
+                            "Details": [
+                                {"Type": "pu_order_detail", "Alias": "detail", "View": "view_pu_order_detail"},
+                                {"Type": "wesign_document", "Alias": "wesign_document", "ForeignKey": "refid", "Mode": "View"}
+                            ]
+                        }]
+                        detail_res = misa_utils._fetch_with_retry(
+                            "https://actapp.misa.vn/g2/api/pu/v1/pu_order/detail_full",
+                            headers, detail_full_payload
+                        )
+                        if detail_res.status_code == 200:
+                            dt_json = detail_res.json()
+                            d_obj = dt_json.get("Data", {}) if isinstance(dt_json, dict) else {}
+                            # Parse header
+                            pu_orders = d_obj.get("pu_order", [])
+                            if pu_orders:
+                                amis_header = pu_orders[0] if isinstance(pu_orders, list) else pu_orders
+                            # Parse detail lines
+                            amis_lines = d_obj.get("pu_order_detail", [])
+                            if not isinstance(amis_lines, list):
+                                amis_lines = []
+                    except Exception as e:
+                        _logger.warning("detail_full exception for %s: %s", po_name, e)
                     
-                    # Build AMIS lines detail
+                    # Build AMIS lines detail (phong phú hơn từ detail_full)
                     amis_lines_detail = []
                     for aline in amis_lines:
-                        orig_code = aline.get("inventory_item_code", "unknown_code").strip()
-                        prod_name = aline.get("inventory_item_name", "").strip()
+                        if not isinstance(aline, dict):
+                            continue
+                        orig_code = (aline.get("inventory_item_code") or "").strip()
+                        prod_name = (aline.get("description") or aline.get("inventory_item_name") or "").strip()
                         code = orig_code.lower()
                         amis_lines_detail.append({
                             "code": code,
                             "orig_code": orig_code,
                             "name": prod_name,
-                            "display": f"[{orig_code}] {prod_name}" if orig_code != "unknown_code" else "Unknown Code",
-                            "qty": float(aline.get("quantity", 0)),
-                            "qty_receipt": float(aline.get("quantity_receipt", 0)),
-                            "price_unit": float(aline.get("unit_price", 0) or 0),
-                            "amount": float(aline.get("amount", 0) or 0),
-                            "price_tax": float(aline.get("vat_amount", aline.get("tax_amount", 0)) or 0)
+                            "display": f"[{orig_code}] {prod_name}" if orig_code else "Unknown Code",
+                            "qty": float(aline.get("quantity") or 0),
+                            "qty_receipt": float(aline.get("quantity_receipt") or 0),
+                            "price_unit": float(aline.get("unit_price") or aline.get("main_unit_price") or 0),
+                            "amount": float(aline.get("amount") or aline.get("amount_oc") or 0),
+                            "price_tax": float(aline.get("vat_amount") or aline.get("vat_amount_oc") or 0),
+                            "vat_rate": float(aline.get("vat_rate") or 0),
+                            "discount_rate": float(aline.get("discount_rate") or 0),
+                            "discount_amount": float(aline.get("discount_amount") or aline.get("discount_amount_oc") or 0),
                         })
                     
                     reconciled_item["amis"] = {
