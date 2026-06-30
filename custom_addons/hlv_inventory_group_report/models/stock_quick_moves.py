@@ -13,7 +13,7 @@ class HlvStockQuick(models.TransientModel):
             BomLine = self.env.get("mrp.bom.line")
             if not BomLine:
                 return None
-            # Find kit BOMs that contain this product
+            # Find kit BOMs that contain this product.
             bom_lines = BomLine.search([
                 ("product_id", "=", move.product_id.id),
                 ("bom_id.type", "=", "phantom"),
