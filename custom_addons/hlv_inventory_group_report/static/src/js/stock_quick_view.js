@@ -413,6 +413,17 @@ export class StockQuickView extends Component {
             "hlv.stock.quick", "get_product_cost_layers", [productId, this.state.warehouseIds]
         );
         const cacheKey = productId + "-avg_cost";
+        const restoredLayerAmounts = {};
+        for (const layer of result.layers || []) {
+            if (layer.is_manual && layer.manual_amount !== null && layer.manual_amount !== undefined) {
+                restoredLayerAmounts[layer.id] = Number(layer.manual_amount);
+            }
+        }
+        this.state.manualLayerAmounts = Object.assign(
+            {},
+            this.state.manualLayerAmounts,
+            { [productId]: restoredLayerAmounts }
+        );
         this.state.cellPanelData = Object.assign({}, this.state.cellPanelData, { [cacheKey]: result });
         this.state.lines = this.state.lines.map((line) => {
             if (line.id !== productId) return line;

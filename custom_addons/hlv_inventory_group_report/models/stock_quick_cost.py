@@ -1,5 +1,4 @@
 from odoo import api, models
-import json
 
 
 class HlvStockQuick(models.TransientModel):
@@ -7,54 +6,60 @@ class HlvStockQuick(models.TransientModel):
 
     @api.model
     def _get_saved_manual_avg_override(self, product_id):
-        value = self.env["ir.config_parameter"].sudo().get_param(
-            f"hlv_inventory_group_report.manual_avg_cost.{product_id}"
-        )
-        if not value:
+        product = self.env["product.product"].sudo().browse(product_id).exists()
+        if not product or not product.hlv_manual_avg_cost_enabled:
             return None
-        try:
-            return float(value)
-        except (TypeError, ValueError):
-            return None
+        return float(product.hlv_manual_avg_cost or 0.0)
 
     @api.model
     def _get_saved_manual_layer_amounts(self, product_id):
-        raw = self.env["ir.config_parameter"].sudo().get_param(
-            f"hlv_inventory_group_report.manual_layer_amounts.{product_id}", "{}"
-        )
-        try:
-            data = json.loads(raw or "{}")
-        except json.JSONDecodeError:
-            data = {}
-        if not isinstance(data, dict):
-            data = {}
-        overrides = {}
-        for key, value in data.items():
-            try:
-                overrides[int(key)] = float(value)
-            except (TypeError, ValueError):
-                continue
-        return overrides
+        po_lines = self.env["purchase.order.line"].sudo().search([
+            ("product_id", "=", product_id),
+            ("hlv_manual_cost_total_enabled", "=", True),
+        ])
+        return {line.id: float(line.hlv_manual_cost_total or 0.0) for line in po_lines}
 
     @api.model
     def save_manual_overrides(self, product_id, avg_cost=None, layer_amounts=None):
-        config = self.env["ir.config_parameter"].sudo()
-        avg_key = f"hlv_inventory_group_report.manual_avg_cost.{product_id}"
-        layers_key = f"hlv_inventory_group_report.manual_layer_amounts.{product_id}"
-
-        if avg_cost is None:
-            config.set_param(avg_key, "")
-        else:
-            config.set_param(avg_key, str(float(avg_cost)))
+        product = self.env["product.product"].sudo().browse(product_id).exists()
+        if product:
+            if avg_cost is None:
+                product.write({
+                    "hlv_manual_avg_cost_enabled": False,
+                    "hlv_manual_avg_cost": 0.0,
+                })
+            else:
+                product.write({
+                    "hlv_manual_avg_cost_enabled": True,
+                    "hlv_manual_avg_cost": float(avg_cost),
+                })
 
         normalized_layers = {}
         if isinstance(layer_amounts, dict):
             for layer_id, amount in layer_amounts.items():
                 try:
-                    normalized_layers[str(int(layer_id))] = float(amount)
+                    normalized_layers[int(layer_id)] = float(amount)
                 except (TypeError, ValueError):
                     continue
-        config.set_param(layers_key, json.dumps(normalized_layers))
+
+        existing_lines = self.env["purchase.order.line"].sudo().search([
+            ("product_id", "=", product_id),
+            ("hlv_manual_cost_total_enabled", "=", True),
+        ])
+        kept_line_ids = set(normalized_layers)
+        lines_to_reset = existing_lines.filtered(lambda line: line.id not in kept_line_ids)
+        if lines_to_reset:
+            lines_to_reset.write({
+                "hlv_manual_cost_total_enabled": False,
+                "hlv_manual_cost_total": 0.0,
+            })
+        if normalized_layers:
+            po_lines = self.env["purchase.order.line"].sudo().browse(list(normalized_layers)).exists()
+            for po_line in po_lines.filtered(lambda line: line.product_id.id == product_id):
+                po_line.write({
+                    "hlv_manual_cost_total_enabled": True,
+                    "hlv_manual_cost_total": normalized_layers[po_line.id],
+                })
 
         return {
             "avg_cost": self._get_saved_manual_avg_override(product_id),
