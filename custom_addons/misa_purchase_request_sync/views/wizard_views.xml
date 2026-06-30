@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_purchase_request_line_make_purchase_order_inherit_misa" model="ir.ui.view">
+        <field name="name">purchase.request.line.make.purchase.order.inherit.misa</field>
+        <field name="model">purchase.request.line.make.purchase.order</field>
+        <field name="inherit_id" ref="purchase_request.view_purchase_request_line_make_purchase_order"/>
+        <field name="arch" type="xml">
+            <!-- Xóa các thành phần layout cũ -->
+            <xpath expr="//separator[1]" position="replace" />
+            <xpath expr="//group[field[@name='purchase_order_id']]" position="replace" />
+            <xpath expr="//separator[1]" position="replace" />
+            
+            <!-- Thay thế group chứa supplier_id thành layout mới hoàn chỉnh -->
+            <xpath expr="//group[field[@name='supplier_id']]" position="replace">
+                <group>
+                    <field name="supplier_id" string="Nhà cung cấp"
+                           domain="[('parent_id', '=', False), ('active', '=', True)]"
+                           options="{'no_create': True}"/>
+                </group>
+
+                <div class="alert alert-info" role="alert" style="margin-top: 10px; margin-bottom: 10px;">
+                    <i class="fa fa-info-circle me-1"/> <strong>Cập nhật vào RFQ đã có hoặc Tạo mới?</strong>
+                    <br/>
+                    - Chọn một <strong>RFQ có sẵn</strong> bên dưới để gộp/bổ sung các sản phẩm này vào đó.<br/>
+                    - <strong>Để trống</strong> nếu bạn muốn hệ thống tự động <strong>tạo RFQ mới</strong>.
+                </div>
+                
+                <group>
+                    <field name="purchase_order_id"
+                           domain="[('partner_id', '=', supplier_id)]"
+                           options="{'no_create': True}"
+                           placeholder="Để trống để tạo Đơn mua hàng mới..."/>
+                    <field name="sync_data_planned" />
+                </group>
+
+                <!-- Ẩn field gốc để lưu state -->
+                <field name="toggle_keep_description" invisible="1"/>
+                <field name="toggle_keep_estimated_cost" invisible="1"/>
+
+                <separator string="Tùy chọn hàng loạt" />
+                <div style="display: flex; gap: 40px; margin-bottom: 12px; padding-left: 8px;">
+                    <!-- Toggle Giữ Mô tả -->
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <button name="action_toggle_description_on" type="object"
+                                invisible="toggle_keep_description"
+                                class="btn btn-link p-0 border-0"
+                                title="Bấm để BẬT giữ mô tả cho tất cả dòng">
+                            <i class="fa fa-toggle-off fa-2x text-muted"/>
+                        </button>
+                        <button name="action_toggle_description_off" type="object"
+                                invisible="not toggle_keep_description"
+                                class="btn btn-link p-0 border-0"
+                                title="Bấm để TẮT giữ mô tả cho tất cả dòng">
+                            <i class="fa fa-toggle-on fa-2x text-success"/>
+                        </button>
+                        <span class="fw-bold">Giữ Mô tả (Tất cả)</span>
+                    </div>
+
+                    <!-- Toggle Giữ Giá -->
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <button name="action_toggle_cost_on" type="object"
+                                invisible="toggle_keep_estimated_cost"
+                                class="btn btn-link p-0 border-0"
+                                title="Bấm để BẬT giữ giá cho tất cả dòng">
+                            <i class="fa fa-toggle-off fa-2x text-muted"/>
+                        </button>
+                        <button name="action_toggle_cost_off" type="object"
+                                invisible="not toggle_keep_estimated_cost"
+                                class="btn btn-link p-0 border-0"
+                                title="Bấm để TẮT giữ giá cho tất cả dòng">
+                            <i class="fa fa-toggle-on fa-2x text-success"/>
+                        </button>
+                        <span class="fw-bold">Giữ Giá (Tất cả)</span>
+                    </div>
+                </div>
+            </xpath>
+
+            <!-- Thêm cột Đơn giá MISA vào danh sách sản phẩm -->
+            <xpath expr="//field[@name='item_ids']/list/field[@name='estimated_cost']" position="after">
+                <field name="misa_price_before_tax" optional="show" />
+            </xpath>
+        </field>
+    </record>
+</odoo>

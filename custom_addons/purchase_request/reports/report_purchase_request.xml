@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- Copyright 2018-2019 ForgeFlow, S.L.
+     License LGPL-3.0 or later (http://www.gnu.org/licenses/lgpl-3.0) -->
+<odoo>
+    <template id="report_purchase_request">
+        <t t-call="web.html_container">
+            <t t-foreach="docs" t-as="o">
+                <t t-call="web.external_layout">
+                    <div class="page">
+                        <div id="oe_structure_report_request_1" class="oe_structure" />
+                        <h2>
+                            Yêu cầu mua hàng
+                            <span t-field="o.name" />
+                        </h2>
+                        <div class="row mt32 mb32">
+                            <div class="col-2">
+                                <strong>Số tham chiếu yêu cầu:</strong>
+                                <br />
+                                <span t-field="o.name" />
+                            </div>
+                            <div class="col-2">
+                                <strong>Ngày tạo:</strong>
+                                <br />
+                                <span t-field="o.date_start" />
+                            </div>
+                            <div class="col-2">
+                                <strong>Nguồn:</strong>
+                                <br />
+                                <span t-field="o.origin" />
+                            </div>
+                            <div class="col-2">
+                                <strong>Người yêu cầu:</strong>
+                                <br />
+                                <span t-field="o.requested_by" />
+                            </div>
+                            <div class="col-2">
+                                <strong>Người phê duyệt:</strong>
+                                <br />
+                                <span t-field="o.assigned_to" />
+                            </div>
+                            <div class="col-2">
+                                <strong>Loại lấy hàng:</strong>
+                                <br />
+                                <span t-field="o.picking_type_id" />
+                            </div>
+                        </div>
+                        <div class="row mt32 mb32">
+                            <div class="col-12">
+                                <strong>Mô tả:</strong>
+                                <br />
+                                <span t-field="o.description" />
+                            </div>
+                        </div>
+                        <t t-if="o.line_ids">
+                            <h3>Sản phẩm</h3>
+                            <table class="table table-condensed">
+                                <thead>
+                                    <tr>
+                                        <th>
+                                            <strong>Mô tả</strong>
+                                        </th>
+                                        <th groups="analytic.group_analytic_accounting">
+                                            <strong>Phân bổ phân tích</strong>
+                                        </th>
+                                        <th class="text-right">
+                                            <strong>SL</strong>
+                                        </th>
+                                        <th class="text-center" groups="uom.group_uom">
+                                            <strong>ĐVT</strong>
+                                        </th>
+                                        <th>
+                                            <strong>Chi phí ước tính</strong>
+                                        </th>
+                                        <th class="text-right">
+                                            <strong>Ngày yêu cầu</strong>
+                                        </th>
+                                        <th>
+                                            <strong>Thông số kỹ thuật</strong>
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr t-foreach="o.line_ids" t-as="line_id">
+                                        <td>
+                                            <span t-field="line_id.name" />
+                                        </td>
+                                        <td groups="analytic.group_analytic_accounting">
+                                            <span
+                                                t-field="line_id.analytic_distribution"
+                                            />
+                                        </td>
+                                        <td class="text-right">
+                                            <span t-field="line_id.product_qty" />
+                                        </td>
+                                        <t>
+                                            <td
+                                                class="text-center"
+                                                groups="uom.group_uom"
+                                            >
+                                                <span
+                                                    t-field="line_id.product_uom_id.category_id.name"
+                                                />
+                                            </td>
+                                        </t>
+                                        <td>
+                                            <span t-field="line_id.estimated_cost" />
+                                        </td>
+                                        <td class="text-right">
+                                            <span t-field="line_id.date_required" />
+                                        </td>
+                                        <td>
+                                            <span t-field="line_id.specifications" />
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </t>
+                        <div id="oe_structure_report_request_2" class="oe_structure" />
+                    </div>
+                </t>
+            </t>
+        </t>
+    </template>
+</odoo>

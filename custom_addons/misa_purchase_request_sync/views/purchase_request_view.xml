@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Thêm nút "Đẩy sang MISA CRM" vào header của form Purchase Request.
+        Nút chỉ hiển thị ở state 'draft' (chưa phê duyệt) vì đó là lúc
+        người dùng cần đẩy ngược về MISA trước khi duyệt.
+    -->
+    <record id="view_purchase_request_form_inherit_misa_sync" model="ir.ui.view">
+        <field name="name">purchase.request.form.inherit.misa.sync</field>
+        <field name="model">purchase.request</field>
+        <field name="inherit_id" ref="purchase_request.view_purchase_request_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header" position="inside">
+                <button
+                    name="action_send_to_misa_crm"
+                    string="Đẩy sang MISA CRM"
+                    type="object"
+                    class="btn-secondary"
+                    invisible="state != 'draft'"
+                    groups="purchase_request.group_purchase_request_manager"
+                />
+            </xpath>
+            <xpath expr="//field[@name='requested_by']" position="after">
+                <field name="sale_order_id" readonly="state in ('done', 'rejected')"/>
+                <field name="delivery_address" readonly="state in ('done', 'rejected')"/>
+                <field name="create_date" readonly="1"/>
+                <field name="write_date" readonly="1"/>
+            </xpath>
+            <xpath expr="//button[@name='action_view_stock_picking']" position="attributes">
+                <attribute name="string">Phiếu nhập kho</attribute>
+            </xpath>
+            <xpath expr="//button[@name='action_view_stock_picking']/field[@name='move_count']" position="attributes">
+                <attribute name="string">Phiếu nhập kho</attribute>
+            </xpath>
+            <xpath expr="//field[@name='line_ids']/list/field[@name='estimated_cost']" position="after">
+                <field name="history_po_line_id" optional="hide"/>
+                <field name="misa_supplier_id" optional="show"/>
+                <field name="misa_stock_total" optional="hide"/>
+                <field name="misa_stock_selected" optional="show"/>
+                <field name="misa_stock_undelivered" optional="show"/>
+                <field name="misa_price_before_tax" optional="hide"/>
+                <field name="misa_discount_rate" optional="hide"/>
+                <field name="misa_discount_amount" optional="hide"/>
+                <field name="misa_tax_rate" optional="hide"/>
+                <field name="misa_tax_amount" optional="hide"/>
+                <field name="misa_price_after_tax" optional="hide"/>
+                <field name="misa_amount" optional="show" sum="Tổng tiền"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Thêm field history_po_line_id vào form view của PR line -->
+    <record id="view_purchase_request_line_form_inherit_misa" model="ir.ui.view">
+        <field name="name">purchase.request.line.form.inherit.misa</field>
+        <field name="model">purchase.request.line</field>
+        <field name="inherit_id" ref="purchase_request.purchase_request_line_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='estimated_cost']" position="after">
+                <field name="history_po_line_id" readonly="is_editable == False"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Thêm field history_po_line_id vào detail view của PR line và cải thiện giao diện -->
+    <record id="view_purchase_request_line_details_inherit_misa" model="ir.ui.view">
+        <field name="name">purchase.request.line.details.inherit.misa</field>
+        <field name="model">purchase.request.line</field>
+        <field name="inherit_id" ref="purchase_request.view_purchase_request_line_details"/>
+        <field name="arch" type="xml">
+            <xpath expr="//group[@name='main']/group" position="replace">
+                <div class="oe_title" colspan="2" style="width: 100%; margin-bottom: 20px;">
+                    <label for="product_id" class="oe_edit_only" string="Sản phẩm"/>
+                    <h1>
+                        <field name="product_id" readonly="is_editable == False" options="{'no_create': True}"/>
+                    </h1>
+                    <label for="name" class="oe_edit_only" string="Mô tả"/>
+                    <h3>
+                        <field name="name" readonly="is_editable == False"/>
+                    </h3>
+                </div>
+                <group name="left_col">
+                    <label for="product_qty" />
+                    <div class="o_row">
+                        <field name="product_qty" class="oe_inline" readonly="is_editable == False" />
+                        <field name="product_uom_id" groups="uom.group_uom" class="oe_inline" readonly="is_editable == False" />
+                    </div>
+                    <field name="date_required" readonly="is_editable == False" />
+                    <field name="analytic_distribution" widget="analytic_distribution" groups="analytic.group_analytic_accounting" options="{'product_field': 'product_id', 'business_domain': 'purchase_order'}" readonly="is_editable == False" />
+                </group>
+                <group name="right_col">
+                    <field name="estimated_cost" widget="monetary" readonly="is_editable == False" />
+                    <field name="history_po_line_id" readonly="is_editable == False" options="{'no_create': True}"/>
+                    <field name="cancelled" widget="boolean" />
+                    
+                    <!-- Hidden fields required by original logic -->
+                    <field name="is_editable" invisible="1" />
+                    <field name="currency_id" invisible="1" />
+                    <field name="product_uom_category_id" invisible="1" />
+                </group>
+            </xpath>
+            
+            <xpath expr="//group[@name='main']" position="after">
+                <group string="Thông tin từ MISA (Sale nhập)">
+                    <group>
+                        <field name="misa_supplier_id" readonly="is_editable == False" options="{'no_create': True}"/>
+                        <field name="misa_price_before_tax" readonly="is_editable == False" widget="monetary" options="{'currency_field': 'currency_id'}"/>
+                        <field name="misa_tax_rate" readonly="is_editable == False"/>
+                        <field name="misa_tax_amount" readonly="is_editable == False" widget="monetary" options="{'currency_field': 'currency_id'}"/>
+                        <field name="misa_price_after_tax" readonly="is_editable == False" widget="monetary" options="{'currency_field': 'currency_id'}"/>
+                        <field name="misa_amount" readonly="is_editable == False" widget="monetary" options="{'currency_field': 'currency_id'}"/>
+                    </group>
+                    <group>
+                        <field name="misa_discount_rate" readonly="is_editable == False"/>
+                        <field name="misa_discount_amount" readonly="is_editable == False" widget="monetary" options="{'currency_field': 'currency_id'}"/>
+                        <field name="misa_stock_total" readonly="is_editable == False"/>
+                        <field name="misa_stock_selected" readonly="is_editable == False"/>
+                        <field name="misa_stock_undelivered" readonly="is_editable == False"/>
+                    </group>
+                </group>
+            </xpath>
+            
+            <xpath expr="//group[@name='specifications']" position="attributes">
+                <attribute name="string">Thông số kỹ thuật</attribute>
+            </xpath>
+            <xpath expr="//group[@name='specifications']/separator" position="replace"/>
+        </field>
+    </record>
+</odoo>
