@@ -701,33 +701,39 @@ class MisaExtensionController(http.Controller):
             po_names = odoo_pos.mapped('name')
             
             def fetch_amis_po(po_name):
-                amis_payload = {
-                    "SearchValue": po_name,
-                    "loadMode": 2, "pageIndex": 1, "pageSize": 10, 
-                    "useSp": False, "view": 2, "summaryColumns": []
-                }
-                response = misa_utils._fetch_with_retry("https://actapp.misa.vn/g1/api/pu/v1/pu_list/paging_filter_v2", headers, amis_payload)
-                if response.status_code == 200:
-                    resp_json = response.json()
-                    data_obj = resp_json.get("Data")
-                    if isinstance(data_obj, str):
-                        import json as json_lib
-                        try: data_obj = json_lib.loads(data_obj)
-                        except: data_obj = {}
-                    if not data_obj: data_obj = {}
-                    for apo in data_obj.get("PageData", []):
-                        refno = apo.get("refno")
-                        # MISA might return partial matches in SearchValue, check exact match
-                        if refno == po_name:
-                            return po_name, apo
+                try:
+                    amis_payload = {
+                        "SearchValue": po_name,
+                        "loadMode": 2, "pageIndex": 1, "pageSize": 10, 
+                        "useSp": False, "view": 2, "summaryColumns": []
+                    }
+                    response = misa_utils._fetch_with_retry("https://actapp.misa.vn/g1/api/pu/v1/pu_list/paging_filter_v2", headers, amis_payload)
+                    if response.status_code == 200:
+                        resp_json = response.json()
+                        data_obj = resp_json.get("Data")
+                        if isinstance(data_obj, str):
+                            import json as json_lib
+                            try: data_obj = json_lib.loads(data_obj)
+                            except: data_obj = {}
+                        if not data_obj: data_obj = {}
+                        for apo in data_obj.get("PageData", []):
+                            refno = apo.get("refno")
+                            # MISA might return partial matches in SearchValue, check exact match
+                            if refno == po_name:
+                                return po_name, apo
+                except Exception as e:
+                    _logger.warning("fetch_amis_po exception for %s: %s", po_name, e)
                 return po_name, None
 
-            with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
                 futures = {executor.submit(fetch_amis_po, name): name for name in po_names}
                 for future in concurrent.futures.as_completed(futures):
-                    po_name, apo = future.result()
-                    if apo:
-                        amis_dict[po_name] = apo
+                    try:
+                        po_name, apo = future.result()
+                        if apo:
+                            amis_dict[po_name] = apo
+                    except Exception as e:
+                        _logger.warning("Future exception: %s", e)
             
             matched = []
             diff = []
