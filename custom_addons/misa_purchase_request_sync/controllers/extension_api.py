@@ -681,10 +681,12 @@ class MisaExtensionController(http.Controller):
                 odoo_prod_map[code] = {
                     "qty": 0.0,
                     "price_unit": oline.get("price_unit", 0.0),
+                    "price_tax": 0.0,
                     "display": oline["display"],
                     "name": oline["name"],
                 }
             odoo_prod_map[code]["qty"] += oline.get("qty_received", oline.get("qty", 0.0))
+            odoo_prod_map[code]["price_tax"] += oline.get("price_tax", 0.0)
 
         # AMIS: aggregate quantity_receipt
         amis_prod_map = {}  # code -> {"qty": float, "price_unit": float, "name": str}
@@ -693,10 +695,12 @@ class MisaExtensionController(http.Controller):
             code = orig_code.lower()
             a_qty = float(aline.get("quantity_receipt", 0))
             a_price = float(aline.get("unit_price", 0) or 0)
+            a_tax = float(aline.get("vat_amount", aline.get("tax_amount", 0)) or 0)
             a_name = aline.get("inventory_item_name", "")
             if code not in amis_prod_map:
-                amis_prod_map[code] = {"qty": 0.0, "price_unit": a_price, "name": a_name, "orig_code": orig_code}
+                amis_prod_map[code] = {"qty": 0.0, "price_unit": a_price, "price_tax": 0.0, "name": a_name, "orig_code": orig_code}
             amis_prod_map[code]["qty"] += a_qty
+            amis_prod_map[code]["price_tax"] += a_tax
 
         all_codes = set(list(odoo_prod_map.keys()) + list(amis_prod_map.keys()))
         
@@ -704,6 +708,10 @@ class MisaExtensionController(http.Controller):
         has_price_diff = False
         has_missing_in_amis = False
         has_missing_in_odoo = False
+        has_total_diff = False
+        
+        if abs(odoo_total - amis_total) >= 1.0:
+            has_total_diff = True
 
         for code in all_codes:
             o_item = odoo_prod_map.get(code)
@@ -794,6 +802,9 @@ class MisaExtensionController(http.Controller):
         elif has_price_diff:
             root_cause = "manual_edit"
             suggested = "Đơn giá giữa Odoo và MISA không khớp. Kiểm tra biên bản thỏa thuận giá"
+        elif has_total_diff:
+            root_cause = "tax_fee_diff"
+            suggested = "Lệch tổng tiền do Thuế, Phí hoặc làm tròn. Kiểm tra chi phí phát sinh"
         else:
             root_cause = "unknown"
             suggested = "Có sai lệch không xác định. Kiểm tra thủ công"
@@ -856,6 +867,7 @@ class MisaExtensionController(http.Controller):
                 "qty_received": oline.qty_received,
                 "price_unit": oline.price_unit,
                 "price_subtotal": oline.price_subtotal,
+                "price_tax": oline.price_tax,
                 "receipt_history": receipt_history
             })
         return lines
@@ -1176,7 +1188,8 @@ class MisaExtensionController(http.Controller):
                             "qty": float(aline.get("quantity", 0)),
                             "qty_receipt": float(aline.get("quantity_receipt", 0)),
                             "price_unit": float(aline.get("unit_price", 0) or 0),
-                            "amount": float(aline.get("amount", 0) or 0)
+                            "amount": float(aline.get("amount", 0) or 0),
+                            "price_tax": float(aline.get("vat_amount", aline.get("tax_amount", 0)) or 0)
                         })
                     
                     reconciled_item["amis"] = {
