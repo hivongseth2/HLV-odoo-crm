@@ -1339,7 +1339,7 @@ class AmisCallbackConfig(models.Model):
             config,
             trigger='cron',
             unmapped_only=False,
-            create_missing=True,
+            create_missing=False,
             scope='vendor',
         )
         _logger.info('MISA catalog cron enqueued product job %s and vendor job %s', product_job.id, vendor_job.id)
@@ -1372,7 +1372,7 @@ class AmisCallbackConfig(models.Model):
             self,
             trigger='manual',
             unmapped_only=False,
-            create_missing=True,
+            create_missing=False,
             scope='vendor',
         )
         return self._open_catalog_sync_job(job)
@@ -1416,6 +1416,7 @@ class AmisCallbackConfig(models.Model):
             job=job,
         )
         product_has_more = not bool(product_result.get('complete', True))
+        vendor_complete = True
         if product_has_more:
             vendor_summary = {'total': 0, 'updated': 0, 'created': 0, 'skipped': 0, 'error': 0}
         else:
@@ -1425,6 +1426,7 @@ class AmisCallbackConfig(models.Model):
                 job=job,
             )
             vendor_summary = vendor_result.get('vendors') or {}
+            vendor_complete = bool(vendor_result.get('complete', True))
 
         product_summary = product_result.get('products') or {}
         unit_summary = product_result.get('units') or {}
@@ -1459,7 +1461,7 @@ class AmisCallbackConfig(models.Model):
             'products': product_summary,
             'vendors': vendor_summary,
             'totals': totals,
-            'complete': not product_has_more,
+            'complete': (not product_has_more) and vendor_complete,
         }
 
     def _sync_product_catalog_from_misa_to_odoo(self, unmapped_only=False, job=None):
@@ -1508,20 +1510,27 @@ class AmisCallbackConfig(models.Model):
         self.ensure_one()
         if job and job.vendor_sync_done:
             vendor_summary = {'total': 0, 'updated': 0, 'created': 0, 'skipped': 0, 'error': 0}
+            vendor_has_more = False
         else:
+            batch_skip = int(job.vendor_skip or 0) if job else 0
+            batch_take = int(job.batch_size or 100) if job else 100
             vendor_summary = self._sync_misa_vendors_to_odoo(
                 unmapped_only=unmapped_only,
                 create_missing=create_missing,
                 job=job,
+                skip=batch_skip,
+                take=batch_take,
             )
+            vendor_has_more = bool(vendor_summary.get('has_more'))
             if job:
-                job.sudo().write({'vendor_sync_done': True})
+                job.sudo().write({'vendor_sync_done': not vendor_has_more})
         self.clear_dictionary_cache([1])
         msg = (
-            'Đồng bộ danh mục nhà cung cấp MISA hoàn tất.\n'
+            'Đồng bộ danh mục nhà cung cấp MISA %(status)s.\n'
             '• Nhà cung cấp: map/cập nhật %(updated_vendor)s, tạo mới %(created_vendor)s '
             '(trên %(total_vendor)s mục MISA).'
         ) % {
+            'status': 'đang chạy theo batch' if vendor_has_more else 'hoàn tất',
             'updated_vendor': vendor_summary['updated'],
             'created_vendor': vendor_summary['created'],
             'total_vendor': vendor_summary['total'],
@@ -1530,7 +1539,7 @@ class AmisCallbackConfig(models.Model):
             'message': msg,
             'vendors': vendor_summary,
             'totals': vendor_summary,
-            'complete': True,
+            'complete': not vendor_has_more,
         }
 
     def _sync_misa_units_to_odoo(self, unmapped_only=False, job=None):
@@ -1812,7 +1821,7 @@ class AmisCallbackConfig(models.Model):
         )
         return filtered_vals, 1
 
-    def _sync_misa_vendors_to_odoo(self, unmapped_only=False, create_missing=True, job=None):
+    def _sync_misa_vendors_to_odoo(self, unmapped_only=False, create_missing=True, job=None, skip=0, take=None):
         Partner = self.env['res.partner'].sudo().with_context(
             active_test=False,
             skip_misa_partner_sync=True,
@@ -1832,7 +1841,15 @@ class AmisCallbackConfig(models.Model):
             if name:
                 partners_by_name.setdefault(name.upper(), partner)
 
-        account_items = self._get_all_dictionary(1)
+        batch_take = int(take or 0)
+        if batch_take > 0:
+            if batch_take > 100:
+                batch_take = 100
+            batch_skip = int(skip or 0)
+            account_items = self.get_dictionary(data_type=1, skip=batch_skip, take=batch_take).get('items') or []
+        else:
+            batch_skip = 0
+            account_items = self._get_all_dictionary(1)
         vendor_items = [item for item in account_items if item.get('is_vendor')]
         updated = 0
         created = 0
@@ -1880,7 +1897,20 @@ class AmisCallbackConfig(models.Model):
                 misa_id, code, name, 'created from MISA dictionary',
             )
             created += 1
-        return {'total': len(vendor_items), 'updated': updated, 'created': created, 'skipped': skipped, 'error': 0}
+        next_skip = batch_skip + len(account_items)
+        has_more = bool(batch_take > 0 and len(account_items) >= batch_take)
+        if job and batch_take > 0:
+            job.sudo().write({'vendor_skip': next_skip})
+        return {
+            'total': len(vendor_items),
+            'updated': updated,
+            'created': created,
+            'skipped': skipped,
+            'error': 0,
+            'skip': batch_skip,
+            'next_skip': next_skip,
+            'has_more': has_more,
+        }
 
     def _misa_vendor_vals(self, item):
         Partner = self.env['res.partner']

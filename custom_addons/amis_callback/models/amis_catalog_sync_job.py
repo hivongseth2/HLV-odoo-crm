@@ -42,6 +42,7 @@ class AmisCatalogSyncJob(models.Model):
     unmapped_only = fields.Boolean(string='Chỉ đồng bộ chưa map')
     create_missing = fields.Boolean(string='Tạo mới trên Odoo', default=True)
     product_skip = fields.Integer(string='Vị trí batch hàng hóa MISA', default=0)
+    vendor_skip = fields.Integer(string='Vị trí batch nhà cung cấp MISA', default=0)
     batch_size = fields.Integer(string='Số item mỗi batch', default=100)
     unit_sync_done = fields.Boolean(string='Đã xử lý đơn vị tính')
     vendor_sync_done = fields.Boolean(string='Đã xử lý nhà cung cấp')
@@ -205,6 +206,7 @@ class AmisCatalogSyncJob(models.Model):
                 'error_msg': False,
                 'processed_at': False,
                 'product_skip': 0,
+                'vendor_skip': 0,
                 'unit_sync_done': False,
                 'vendor_sync_done': False,
                 'total_count': 0,
