@@ -698,12 +698,34 @@ class MisaExtensionController(http.Controller):
                 })
                 
             amis_dict = {}
-            po_names = odoo_pos.mapped('name')
+            # Lấy list tuple (name, date_order)
+            po_infos = [(po.name, po.date_order) for po in odoo_pos]
             
-            def fetch_amis_po(po_name):
+            def fetch_amis_po(po_name, po_date):
                 try:
+                    from datetime import timedelta
+                    # Broad date range to avoid MISA API timeouts from global scans
+                    date_from = po_date - timedelta(days=365)
+                    date_to = po_date + timedelta(days=365)
+                    
                     amis_payload = {
                         "SearchValue": po_name,
+                        "filter": [
+                            {
+                                "property": 3972,
+                                "value": date_from.isoformat() + "Z",
+                                "operator": 10,
+                                "operand": 1,
+                                "data_type": 3
+                            },
+                            {
+                                "property": 3972,
+                                "value": date_to.isoformat() + "Z",
+                                "operator": 12,
+                                "operand": 1,
+                                "data_type": 3
+                            }
+                        ],
                         "loadMode": 2, "pageIndex": 1, "pageSize": 10, 
                         "useSp": False, "view": 2, "summaryColumns": []
                     }
@@ -726,7 +748,7 @@ class MisaExtensionController(http.Controller):
                 return po_name, None
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-                futures = {executor.submit(fetch_amis_po, name): name for name in po_names}
+                futures = {executor.submit(fetch_amis_po, info[0], info[1]): info[0] for info in po_infos}
                 for future in concurrent.futures.as_completed(futures):
                     try:
                         po_name, apo = future.result()
