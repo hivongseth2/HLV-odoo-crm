@@ -123,11 +123,14 @@ class MisaExtensionController(http.Controller):
         "/api/extension/pr/check",
         type="http",
         auth="none",
-        methods=["GET"],
+        methods=["GET", "OPTIONS"],
         csrf=False,
         cors="*",
     )
     def api_extension_pr_check(self, **kwargs):
+        if request.httprequest.method == "OPTIONS":
+            return request.make_response("", headers=[("Access-Control-Allow-Origin", "*"), ("Access-Control-Allow-Headers", "*"), ("Access-Control-Allow-Methods", "GET, POST, OPTIONS")])
+
         """
         Kiểm tra YCMH đã tồn tại trên Odoo hay chưa.
 
@@ -254,6 +257,9 @@ class MisaExtensionController(http.Controller):
         cors="*",
     )
     def api_extension_pr_revoke(self, **payload):
+        if request.httprequest.method == "OPTIONS":
+            return request.make_response("", headers=[("Access-Control-Allow-Origin", "*"), ("Access-Control-Allow-Headers", "*"), ("Access-Control-Allow-Methods", "GET, POST, OPTIONS")])
+
         """
         Thu hồi (xóa) YCMH trên Odoo.
         """
@@ -357,6 +363,9 @@ class MisaExtensionController(http.Controller):
         cors="*",
     )
     def api_extension_pr_create(self, **payload):
+        if request.httprequest.method == "OPTIONS":
+            return request.make_response("", headers=[("Access-Control-Allow-Origin", "*"), ("Access-Control-Allow-Headers", "*"), ("Access-Control-Allow-Methods", "GET, POST, OPTIONS")])
+
         """
         Tạo YCMH mới từ payload JSON của MISA CRM.
 
