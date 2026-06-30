@@ -65,6 +65,8 @@ class ResPartnerAmisSync(models.Model):
                 trigger='partner_save',
             )
             _logger.info('Enqueued MISA vendor sync job %s for partner %s', job.id, vendor.display_name)
+            if job.status in ('pending', 'error'):
+                job._execute()
 
     def _misa_should_sync_vendor(self):
         self.ensure_one()
@@ -79,7 +81,7 @@ class ResPartnerAmisSync(models.Model):
         self.ensure_one()
         branch_id = (config.misa_branch_id or '').strip()
         if not branch_id:
-            raise UserError('Chua cau hinh MISA Branch ID de dong bo nha cung cap.')
+            raise UserError('Chưa cấu hình MISA Branch ID để đồng bộ nhà cung cấp.')
         had_misa_id = bool((self.misa_account_object_id or '').strip())
         operation = 'update' if had_misa_id else 'create'
         item = self._misa_vendor_dictionary_item(branch_id=branch_id)

@@ -10,51 +10,52 @@ MAX_RETRY = 3
 
 class AmisCatalogSyncJob(models.Model):
     _name = 'amis.catalog.sync.job'
-    _description = 'Hang doi dong bo danh muc MISA'
+    _description = 'Hàng đợi đồng bộ danh mục MISA'
     _order = 'create_date desc'
     _rec_name = 'name'
 
-    name = fields.Char(string='Ten job', compute='_compute_name', store=True)
-    config_id = fields.Many2one('amis.callback.config', string='Cau hinh', ondelete='set null')
-    partner_id = fields.Many2one('res.partner', string='Nha cung cap', ondelete='set null', index=True)
+    name = fields.Char(string='Tên job', compute='_compute_name', store=True)
+    config_id = fields.Many2one('amis.callback.config', string='Cấu hình', ondelete='set null')
+    partner_id = fields.Many2one('res.partner', string='Nhà cung cấp', ondelete='set null', index=True)
     direction = fields.Selection([
         ('from_misa', 'MISA -> Odoo'),
         ('to_misa', 'Odoo -> MISA'),
-    ], string='Huong dong bo', required=True, default='from_misa', index=True)
+    ], string='Hướng đồng bộ', required=True, default='from_misa', index=True)
     scope = fields.Selection([
-        ('all', 'Tat ca danh muc'),
-        ('unmapped', 'Danh muc moi/chua map'),
-        ('vendor', 'Nha cung cap'),
-    ], string='Pham vi', required=True, default='all', index=True)
+        ('all', 'Tất cả danh mục'),
+        ('unmapped', 'Danh mục mới/chưa map'),
+        ('product', 'Sản phẩm'),
+        ('vendor', 'Nhà cung cấp'),
+    ], string='Phạm vi', required=True, default='all', index=True)
     trigger = fields.Selection([
         ('cron', 'Cron'),
-        ('manual', 'Thu cong'),
-        ('partner_save', 'Luu nha cung cap'),
-    ], string='Nguon tao', required=True, default='manual', index=True)
+        ('manual', 'Thủ công'),
+        ('partner_save', 'Lưu nhà cung cấp'),
+    ], string='Nguồn tạo', required=True, default='manual', index=True)
     status = fields.Selection([
-        ('pending', 'Cho xu ly'),
-        ('running', 'Dang xu ly'),
-        ('done', 'Thanh cong'),
-        ('error', 'Loi'),
-        ('skipped', 'Bo qua'),
-    ], string='Trang thai', default='pending', index=True)
-    unmapped_only = fields.Boolean(string='Chi dong bo chua map')
-    create_missing = fields.Boolean(string='Tao moi tren Odoo', default=True)
-    product_skip = fields.Integer(string='Vi tri batch hang hoa MISA', default=0)
-    batch_size = fields.Integer(string='So item moi batch', default=100)
-    unit_sync_done = fields.Boolean(string='Da xu ly don vi tinh')
-    vendor_sync_done = fields.Boolean(string='Da xu ly nha cung cap')
-    retry_count = fields.Integer(string='So lan thu', default=0)
-    started_at = fields.Datetime(string='Bat dau luc')
-    processed_at = fields.Datetime(string='Xu ly luc')
-    error_msg = fields.Text(string='Loi cuoi')
-    summary = fields.Text(string='Tom tat')
-    total_count = fields.Integer(string='Tong item MISA')
-    created_count = fields.Integer(string='Da tao')
-    updated_count = fields.Integer(string='Da cap nhat/map')
-    skipped_count = fields.Integer(string='Bo qua')
-    error_count = fields.Integer(string='So loi')
-    line_ids = fields.One2many('amis.catalog.sync.job.line', 'job_id', string='Chi tiet thay doi')
+        ('pending', 'Chờ xử lý'),
+        ('running', 'Đang xử lý'),
+        ('done', 'Thành công'),
+        ('error', 'Lỗi'),
+        ('skipped', 'Bỏ qua'),
+    ], string='Trạng thái', default='pending', index=True)
+    unmapped_only = fields.Boolean(string='Chỉ đồng bộ chưa map')
+    create_missing = fields.Boolean(string='Tạo mới trên Odoo', default=True)
+    product_skip = fields.Integer(string='Vị trí batch hàng hóa MISA', default=0)
+    batch_size = fields.Integer(string='Số item mỗi batch', default=100)
+    unit_sync_done = fields.Boolean(string='Đã xử lý đơn vị tính')
+    vendor_sync_done = fields.Boolean(string='Đã xử lý nhà cung cấp')
+    retry_count = fields.Integer(string='Số lần thử', default=0)
+    started_at = fields.Datetime(string='Bắt đầu lúc')
+    processed_at = fields.Datetime(string='Xử lý lúc')
+    error_msg = fields.Text(string='Lỗi cuối')
+    summary = fields.Text(string='Tóm tắt')
+    total_count = fields.Integer(string='Tổng item MISA')
+    created_count = fields.Integer(string='Đã tạo')
+    updated_count = fields.Integer(string='Đã cập nhật/map')
+    skipped_count = fields.Integer(string='Bỏ qua')
+    error_count = fields.Integer(string='Số lỗi')
+    line_ids = fields.One2many('amis.catalog.sync.job.line', 'job_id', string='Chi tiết thay đổi')
 
     @api.depends('direction', 'scope', 'create_date')
     def _compute_name(self):
@@ -67,8 +68,8 @@ class AmisCatalogSyncJob(models.Model):
             )
 
     @api.model
-    def enqueue_from_misa(self, config, trigger='manual', unmapped_only=False, create_missing=True):
-        scope = 'unmapped' if unmapped_only else 'all'
+    def enqueue_from_misa(self, config, trigger='manual', unmapped_only=False, create_missing=True, scope=None):
+        scope = scope or ('unmapped' if unmapped_only else 'all')
         existing = self.sudo().search([
             ('direction', '=', 'from_misa'),
             ('scope', '=', scope),
@@ -137,14 +138,26 @@ class AmisCatalogSyncJob(models.Model):
         try:
             config = self.config_id or self.env['amis.callback.config'].sudo().search([], limit=1)
             if not config:
-                raise ValueError('Chua co cau hinh AMIS callback.')
+                raise ValueError('Chưa có cấu hình AMIS callback.')
             config.ensure_sync_ready()
             if self.direction == 'from_misa':
-                summary = config._sync_catalog_from_misa_to_odoo(
-                    unmapped_only=self.unmapped_only,
-                    create_missing=self.create_missing,
-                    job=self,
-                )
+                if self.scope == 'product':
+                    summary = config._sync_product_catalog_from_misa_to_odoo(
+                        unmapped_only=self.unmapped_only,
+                        job=self,
+                    )
+                elif self.scope == 'vendor':
+                    summary = config._sync_vendor_catalog_from_misa_to_odoo(
+                        unmapped_only=self.unmapped_only,
+                        create_missing=self.create_missing,
+                        job=self,
+                    )
+                else:
+                    summary = config._sync_catalog_from_misa_to_odoo(
+                        unmapped_only=self.unmapped_only,
+                        create_missing=self.create_missing,
+                        job=self,
+                    )
                 totals = summary.get('totals') or {}
                 complete = bool(summary.get('complete', True))
                 self.write({
@@ -160,11 +173,11 @@ class AmisCatalogSyncJob(models.Model):
                 })
             elif self.direction == 'to_misa' and self.scope == 'vendor':
                 if not self.partner_id:
-                    raise ValueError('Job dong bo NCC sang MISA thieu partner_id.')
+                    raise ValueError('Job đồng bộ NCC sang MISA thiếu partner_id.')
                 operation = self.partner_id.with_context(skip_misa_partner_sync=True)._push_misa_vendor_dictionary(config, job=self)
                 self.write({
                     'status': 'done',
-                    'summary': 'Da dong bo nha cung cap %s sang MISA.' % self.partner_id.display_name,
+                    'summary': 'Đã đồng bộ nhà cung cấp %s sang MISA.' % self.partner_id.display_name,
                     'total_count': 1,
                     'created_count': 1 if operation == 'create' else 0,
                     'updated_count': 1 if operation != 'create' else 0,
@@ -174,7 +187,7 @@ class AmisCatalogSyncJob(models.Model):
                     'error_msg': False,
                 })
             else:
-                raise ValueError('Huong dong bo danh muc khong ho tro: %s' % self.direction)
+                raise ValueError('Hướng đồng bộ danh mục không hỗ trợ: %s' % self.direction)
         except Exception as exc:
             self.write({
                 'retry_count': self.retry_count + 1,
@@ -235,25 +248,25 @@ class AmisCatalogSyncJob(models.Model):
 
 class AmisCatalogSyncJobLine(models.Model):
     _name = 'amis.catalog.sync.job.line'
-    _description = 'Chi tiet dong bo danh muc MISA'
+    _description = 'Chi tiết đồng bộ danh mục MISA'
     _order = 'id asc'
 
     job_id = fields.Many2one('amis.catalog.sync.job', string='Job', required=True, ondelete='cascade', index=True)
     data_type = fields.Selection([
-        ('unit', 'Don vi tinh'),
-        ('product', 'Hang hoa'),
-        ('vendor', 'Nha cung cap'),
-    ], string='Loai danh muc', required=True, index=True)
+        ('unit', 'Đơn vị tính'),
+        ('product', 'Hàng hóa'),
+        ('vendor', 'Nhà cung cấp'),
+    ], string='Loại danh mục', required=True, index=True)
     operation = fields.Selection([
-        ('create', 'Tao moi'),
-        ('update', 'Cap nhat'),
+        ('create', 'Tạo mới'),
+        ('update', 'Cập nhật'),
         ('map', 'Map ID'),
-        ('skip', 'Bo qua'),
-        ('error', 'Loi'),
-    ], string='Thao tac', required=True, index=True)
+        ('skip', 'Bỏ qua'),
+        ('error', 'Lỗi'),
+    ], string='Thao tác', required=True, index=True)
     odoo_model = fields.Char(string='Model Odoo')
     res_id = fields.Integer(string='ID Odoo')
     misa_id = fields.Char(string='ID MISA', index=True)
-    code = fields.Char(string='Ma')
-    name = fields.Char(string='Ten')
-    change_summary = fields.Text(string='Thay doi')
+    code = fields.Char(string='Mã')
+    name = fields.Char(string='Tên')
+    change_summary = fields.Text(string='Thay đổi')

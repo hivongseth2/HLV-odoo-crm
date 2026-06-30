@@ -498,7 +498,7 @@ class PurchaseOrderAmisSync(models.Model):
         misa_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'misa_account_object|%d' % partner.id))
         branch_id = (config.misa_branch_id or '').strip()
         if not branch_id:
-            raise UserError('Chua cau hinh MISA Branch ID de dong bo nha cung cap.')
+            raise UserError('Chưa cấu hình MISA Branch ID để đồng bộ nhà cung cấp.')
         code = partner_code
         name = (partner.display_name or partner.name or code).strip()
         account_object_type = 0 if partner.is_company or partner.company_type == 'company' else 1
