@@ -205,6 +205,7 @@ class MisaExtensionController(http.Controller):
                     misa_supplier_name = (f"[{ref}] " if ref else "") + line.misa_supplier_id.name
 
                 lines_data.append({
+                    "misa_line_id": line.misa_line_id or "",
                     "product_code": line.product_id.default_code if line.product_id else "",
                     "name": line.name,
                     "qty": line.product_qty,
@@ -467,7 +468,15 @@ class MisaExtensionController(http.Controller):
                     pass
 
             # --- Kiểm tra PR đã tồn tại ---
+            # Lấy product_model và uom_model sớm để dùng trong resolve line
+            line_model = env_admin["purchase.request.line"]
+            product_model = env_admin["product.product"]
+            uom_model = env_admin["uom.uom"]
+            
             pr = pr_model.search([("name", "=", pr_name)], limit=1)
+            is_new_pr = False
+            existing_lines_by_misa_id = {}  # misa_line_id → record
+            
             if pr:
                 if pr.state not in ['draft', 'to_approve']:
                     return json_response({
@@ -475,8 +484,11 @@ class MisaExtensionController(http.Controller):
                         "error": "invalid_state", 
                         "message": f"YCMH {pr_name} đã tồn tại và ở trạng thái {pr.state}, không thể cập nhật."
                     }, 400)
-                # Xóa lines cũ để tạo lại
-                pr.line_ids.unlink()
+                
+                # Build map existing lines by misa_line_id (chỉ những line có misa_line_id)
+                for existing_line in pr.line_ids:
+                    if existing_line.misa_line_id:
+                        existing_lines_by_misa_id[existing_line.misa_line_id] = existing_line
                 
                 write_vals = {
                     "requested_by": user_id,
@@ -494,6 +506,7 @@ class MisaExtensionController(http.Controller):
                     env_admin.cr.execute("UPDATE purchase_request SET create_date=%s WHERE id=%s", (create_date, pr.id))
             else:
                 # --- Tạo PR ---
+                is_new_pr = True
                 pr_vals = {
                     "name": pr_name,
                     "requested_by": user_id,
@@ -511,74 +524,57 @@ class MisaExtensionController(http.Controller):
                     
                 pr = pr_model.create(pr_vals)
 
-            # --- Tạo lines ---
-            line_model = env_admin["purchase.request.line"]
-            product_model = env_admin["product.product"]
-            uom_model = env_admin["uom.uom"]
-
-            for idx, line in enumerate(lines_in, start=1):
-                if not isinstance(line, dict):
-                    continue
-
-                product = False
+            # ─── Helper: Resolve sản phẩm + UoM từ 1 line dict ───
+            def _resolve_product_and_uom(line):
                 pcode = (line.get("product_code") or "").strip()
+                product = False
                 if pcode:
                     product = product_model.search(
                         [("default_code", "=ilike", pcode)], limit=1
                     )
                 if not product:
-                    # Fallback: tìm theo tên
                     pname = (line.get("name") or "").strip()
                     if pname:
                         product = product_model.search(
                             [("name", "=ilike", pname)], limit=1
                         )
-
                 # Fallback 2: Gọi API MISA để tạo sản phẩm nếu chưa có
                 if not product and pcode and "odoo.utils" in env_admin:
                     odoo_utils = env_admin["odoo.utils"]
                     try:
                         OdooUtilsClass = type(odoo_utils)
                         if hasattr(OdooUtilsClass, "_get_token_api_crm"):
-                            token = OdooUtilsClass._get_token_api_crm()
-                            product = odoo_utils.get_misa_product(token, pcode)
+                            token_api = OdooUtilsClass._get_token_api_crm()
+                            product = odoo_utils.get_misa_product(token_api, pcode)
                     except Exception as e:
                         _logger.error("Lỗi khi fetch sản phẩm từ MISA: %s", str(e))
 
                 uom = False
                 uom_name = (line.get("uom") or "").strip()
-                
-                # Ưu tiên sử dụng UoM của sản phẩm nếu trùng tên (tránh lỗi khác Category)
                 if product and uom_name:
                     if uom_name.lower() == product.uom_id.name.lower():
                         uom = product.uom_id
                     elif product.uom_po_id and uom_name.lower() == product.uom_po_id.name.lower():
                         uom = product.uom_po_id
-                        
                 if not uom and uom_name:
-                    # Nếu có product, thử tìm UoM cùng tên và cùng Category với product trước
                     if product:
                         uom = uom_model.search([("name", "=ilike", uom_name), ("category_id", "=", product.uom_id.category_id.id)], limit=1)
-                    # Nếu vẫn không thấy, tìm tự do
                     if not uom:
                         uom = uom_model.search([("name", "=ilike", uom_name)], limit=1)
-                        
                 if not uom and product:
                     uom = product.uom_id
+                return product, uom
 
-                misa_price_before_tax = float(line.get("misa_price_before_tax") or 0.0)
-                misa_price_after_tax = float(line.get("misa_price_after_tax") or 0.0)
-                misa_amount = float(line.get("misa_amount") or 0.0)
-
-                estimated_cost = 0.0
-
-                line_vals = {
+            # ─── Build line_vals từ 1 line dict ───
+            def _build_line_vals(line, product, uom):
+                vals = {
                     "request_id": pr.id,
                     "name": line.get("name") or (product.display_name if product else ""),
                     "product_id": product.id if product else False,
                     "product_qty": float(line.get("qty") or 0.0),
                     "product_uom_id": uom.id if uom else False,
-                    "estimated_cost": estimated_cost,
+                    "estimated_cost": 0.0,
+                    "misa_line_id": (line.get("misa_line_id") or "").strip() or False,
                     "misa_supplier_id": int(line.get("misa_supplier_id")) if line.get("misa_supplier_id") else False,
                     "misa_price_before_tax": float(line.get("misa_price_before_tax") or 0.0),
                     "misa_price_after_tax": float(line.get("misa_price_after_tax") or 0.0),
@@ -592,9 +588,48 @@ class MisaExtensionController(http.Controller):
                     "misa_stock_undelivered": float(line.get("misa_stock_undelivered") or 0.0),
                 }
                 if date_required:
-                    line_vals["date_required"] = date_required
-                    
-                line_model.create(line_vals)
+                    vals["date_required"] = date_required
+                return vals
+
+            # ─── Process từng line ───
+            incoming_misa_ids = set()
+            lines_created = 0
+            lines_updated = 0
+
+            for line in lines_in:
+                if not isinstance(line, dict):
+                    continue
+                misa_id = (line.get("misa_line_id") or "").strip()
+                if misa_id:
+                    incoming_misa_ids.add(misa_id)
+
+                product, uom = _resolve_product_and_uom(line)
+                line_vals = _build_line_vals(line, product, uom)
+
+                if misa_id and misa_id in existing_lines_by_misa_id:
+                    # ── UPDATE existing line ──
+                    existing_line = existing_lines_by_misa_id[misa_id]
+                    # Bỏ request_id khỏi vals khi write (không cần)
+                    write_vals = {k: v for k, v in line_vals.items() if k != "request_id"}
+                    existing_line.write(write_vals)
+                    lines_updated += 1
+                else:
+                    # ── CREATE new line (kể cả trường hợp misa_id rỗng hoặc PR mới) ──
+                    line_model.create(line_vals)
+                    lines_created += 1
+
+            # ── XÓA các line cũ không còn trong MISA (chỉ khi có misa_line_id để so sánh) ──
+            if not is_new_pr and incoming_misa_ids:
+                stale_lines = pr.line_ids.filtered(
+                    lambda l: l.misa_line_id and l.misa_line_id not in incoming_misa_ids
+                )
+                if stale_lines:
+                    stale_lines.unlink()
+                    _logger.info(
+                        "MISA PR Sync: Deleted %d stale lines from PR %s (IDs: %s)",
+                        len(stale_lines), pr.name,
+                        ", ".join(stale_lines.mapped("misa_line_id"))
+                    )
 
             # --- Post Chatter nếu là Admin fallback ---
             if owner_message:
