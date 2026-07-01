@@ -576,7 +576,6 @@ class MisaExtensionController(http.Controller):
                     "estimated_cost": 0.0,
                     "misa_line_id": (line.get("misa_line_id") or "").strip() or False,
                     "misa_supplier_id": int(line.get("misa_supplier_id")) if line.get("misa_supplier_id") else False,
-                    "misa_supplier_name": (line.get("misa_supplier_name") or "").strip(),
                     "misa_price_before_tax": float(line.get("misa_price_before_tax") or 0.0),
                     "misa_price_after_tax": float(line.get("misa_price_after_tax") or 0.0),
                     "misa_amount": float(line.get("misa_amount") or 0.0),
