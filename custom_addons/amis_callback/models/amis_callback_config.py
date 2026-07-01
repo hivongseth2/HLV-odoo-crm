@@ -843,6 +843,26 @@ class AmisCallbackConfig(models.Model):
         )
         return result
 
+    def push_payment_request(self, voucher_payload):
+        """Push ba_withdraw (de nghi chi tien nha cung cap, voucher_type=3) len MISA."""
+        self.ensure_one()
+        payload = {
+            'app_id': self.app_id,
+            'org_company_code': self.org_company_code,
+            'voucher': [voucher_payload],
+            'dictionary': [],
+        }
+        _logger.info(
+            'AMIS save payment request payload:\n%s',
+            json.dumps(payload, ensure_ascii=False, default=str, indent=2),
+        )
+        result = self._post_actopen('/apir/sync/actopen/save', payload, include_token=True)
+        _logger.info(
+            'AMIS save payment request response: %s',
+            json.dumps(result, ensure_ascii=False, default=str),
+        )
+        return result
+
     def push_outgoing_voucher(self, voucher_payload, dictionary_items=None):
         """Dua phieu xuat kho sang MISA.
         

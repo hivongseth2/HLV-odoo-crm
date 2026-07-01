@@ -5,6 +5,11 @@ access_amis_callback_log_line_user,amis.callback.log.line user,model_amis_callba
 access_amis_callback_config_manager,amis.callback.config manager,model_amis_callback_config,amis_callback.group_meinvoice_manager,1,1,1,1
 access_amis_sync_job_user,amis.sync.job user,model_amis_sync_job,amis_callback.group_meinvoice_user,1,0,0,0
 access_amis_sync_job_manager,amis.sync.job manager,model_amis_sync_job,amis_callback.group_meinvoice_manager,1,1,1,1
+access_amis_payment_request_user,amis.payment.request user,model_amis_payment_request,amis_callback.group_meinvoice_user,1,1,1,0
+access_amis_payment_request_manager,amis.payment.request manager,model_amis_payment_request,amis_callback.group_meinvoice_manager,1,1,1,1
+access_amis_payment_request_wizard_user,amis.payment.request.wizard user,model_amis_payment_request_wizard,amis_callback.group_meinvoice_user,1,1,1,1
+access_amis_payment_request_purchase_user,amis.payment.request purchase user,model_amis_payment_request,purchase.group_purchase_user,1,1,1,0
+access_amis_payment_request_wizard_purchase_user,amis.payment.request.wizard purchase user,model_amis_payment_request_wizard,purchase.group_purchase_user,1,1,1,1
 access_amis_catalog_sync_job_user,amis.catalog.sync.job user,model_amis_catalog_sync_job,amis_callback.group_meinvoice_user,1,0,0,0
 access_amis_catalog_sync_job_manager,amis.catalog.sync.job manager,model_amis_catalog_sync_job,amis_callback.group_meinvoice_manager,1,1,1,1
 access_amis_catalog_sync_job_line_user,amis.catalog.sync.job.line user,model_amis_catalog_sync_job_line,amis_callback.group_meinvoice_user,1,0,0,0
