@@ -320,7 +320,7 @@ class MisaExtensionController(http.Controller):
         env = request.env(user=admin_user) if admin_user else request.env
 
         # 1. Lấy danh sách NCC
-        domain = [('parent_id', '=', False)]
+        domain = [('parent_id', '=', False), ('supplier_rank', '>', 0)]
         q = payload.get('q') or kwargs.get('q')
         if q:
             domain.append('|')
