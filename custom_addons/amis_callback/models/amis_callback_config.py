@@ -2,6 +2,7 @@
 import json
 import logging
 import time
+import unicodedata
 
 import requests
 from requests.exceptions import HTTPError
@@ -1927,11 +1928,31 @@ class AmisCallbackConfig(models.Model):
             if not misa_id or not name:
                 skipped += 1
                 continue
-            partner = (
-                partners_by_misa_id.get(misa_id.lower())
-                or (code and partners_by_ref.get(code.upper()))
-                or partners_by_name.get(name.upper())
-            )
+            partner = partners_by_misa_id.get(misa_id.lower())
+            match_source = 'misa_id' if partner else ''
+            if not partner and code:
+                partner = partners_by_ref.get(code.upper())
+                match_source = 'ref' if partner else ''
+            if not partner:
+                partner = partners_by_name.get(name.upper())
+                match_source = 'name' if partner else ''
+            if partner and match_source == 'name':
+                skip_reason = self._misa_vendor_name_match_skip_reason(partner, code, name, misa_id)
+                if skip_reason:
+                    skipped += 1
+                    self._catalog_log_change(
+                        job, 'vendor', 'skip', 'res.partner', partner.id,
+                        misa_id, code, name, skip_reason,
+                    )
+                    continue
+            if not partner and self._misa_vendor_is_pm_variant(code, name):
+                skipped += 1
+                self._catalog_log_change(
+                    job, 'vendor', 'skip', 'res.partner', 0,
+                    misa_id, code, name,
+                    'skipped PM variant because no exact Odoo vendor mapping was found',
+                )
+                continue
             vals = self._misa_vendor_vals(item)
             if partner:
                 if unmapped_only and (partner.misa_account_object_id or '').strip():
@@ -1951,7 +1972,7 @@ class AmisCallbackConfig(models.Model):
                     )
                     partner_updated = True
                 bank_updated = self._sync_misa_vendor_bank_accounts(partner, item, job=job)
-                if bank_updated and not partner_updated:
+                if bank_updated:
                     self._catalog_log_change(
                         job, 'vendor', 'update', 'res.partner', partner.id,
                         misa_id, code, name, 'updated bank account information from MISA',
@@ -1959,6 +1980,10 @@ class AmisCallbackConfig(models.Model):
                     partner_updated = True
                 if partner_updated:
                     updated += 1
+                    partners_by_misa_id[misa_id.lower()] = partner
+                    if code:
+                        partners_by_ref[code.upper()] = partner
+                    partners_by_name[name.upper()] = partner
                 continue
             if not create_missing:
                 skipped += 1
@@ -1989,6 +2014,61 @@ class AmisCallbackConfig(models.Model):
             'has_more': has_more,
         }
 
+    def _misa_text_key(self, value):
+        text = unicodedata.normalize('NFKD', str(value or ''))
+        text = ''.join(char for char in text if not unicodedata.combining(char))
+        return ' '.join(text.replace('_', ' ').replace('-', ' ').split()).upper()
+
+    def _misa_vendor_is_pm_variant(self, code, name):
+        code_key = (code or '').strip().upper()
+        name_key = (name or '').strip().upper()
+        return (
+            code_key.endswith('_PM')
+            or code_key.endswith('-PM')
+            or code_key.endswith(' - PM')
+            or name_key.endswith('_PM')
+            or name_key.endswith(' - PM')
+        )
+
+    def _misa_vendor_pm_base_code(self, code):
+        code_key = (code or '').strip().upper()
+        for suffix in ('_PM', '-PM', ' - PM'):
+            if code_key.endswith(suffix):
+                return code_key[:-len(suffix)].strip()
+        return ''
+
+    def _misa_vendor_name_match_skip_reason(self, partner, code, name, misa_id):
+        incoming_is_pm = self._misa_vendor_is_pm_variant(code, name)
+        if incoming_is_pm:
+            return 'skipped PM variant matched only by name to avoid overwriting base vendor'
+
+        existing_ref = (partner.ref or '').strip()
+        incoming_code = (code or '').strip()
+        existing_pm_base = self._misa_vendor_pm_base_code(existing_ref)
+        incoming_code_key = incoming_code.upper()
+        restoring_base_from_pm = bool(existing_pm_base and incoming_code_key == existing_pm_base)
+        if restoring_base_from_pm:
+            return ''
+
+        existing_misa_id = (partner.misa_account_object_id or '').strip()
+        if existing_misa_id and existing_misa_id.lower() != (misa_id or '').strip().lower():
+            return 'skipped name-only match because Odoo vendor already has a different MISA ID'
+        if existing_ref and incoming_code and existing_ref.upper() != incoming_code_key:
+            return 'skipped name-only match because Odoo vendor already has a different code'
+        return ''
+
+    def _misa_resolve_country(self, value):
+        raw = (value or '').strip()
+        if not raw:
+            return self.env['res.country']
+        Country = self.env['res.country'].sudo()
+        key = self._misa_text_key(raw)
+        if key in {'VI', 'VN', 'VNM', 'VIET NAM', 'VIETNAM'}:
+            return Country.search([('code', '=', 'VN')], limit=1)
+        if raw.isascii() and len(raw) in (2, 3):
+            return Country.search([('code', '=', raw.upper())], limit=1)
+        return Country.search([('name', '=ilike', raw)], limit=1)
+
     def _misa_vendor_vals(self, item):
         Partner = self.env['res.partner']
         vals = {
@@ -2018,11 +2098,7 @@ class AmisCallbackConfig(models.Model):
             vals['street2'] = street2
         country_name = (item.get('country') or '').strip()
         if country_name and 'country_id' in Partner._fields:
-            country = self.env['res.country'].sudo().search([
-                '|',
-                ('name', '=ilike', country_name),
-                ('code', '=ilike', country_name),
-            ], limit=1)
+            country = self._misa_resolve_country(country_name)
             if country:
                 vals['country_id'] = country.id
         if 'active' in Partner._fields:
