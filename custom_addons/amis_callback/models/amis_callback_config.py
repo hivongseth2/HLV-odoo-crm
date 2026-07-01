@@ -1154,30 +1154,64 @@ class AmisCallbackConfig(models.Model):
             return []
         body = self._post_meinvoice('/invoice/status', payload=transaction_ids)
         data = body.get('data') or body.get('Data') or []
+        # API trả về data dưới dạng JSON string (ví dụ: "[]") — cần parse
+        if isinstance(data, str):
+            try:
+                import json as _json
+                data = _json.loads(data)
+            except Exception:
+                data = []
         if isinstance(data, dict):
             data = [data]
         _logger.info('meInvoice invoice status: %s', data)
         return data
 
     def get_meinvoice_download_url(self, transaction_id, file_type='PDF'):
-        """Lấy link tải hóa đơn (PDF hoặc XML) qua meInvoice /invoice/download.
+        """Tải file hóa đơn từ meInvoice /invoice/download.
 
-        Args:
-            transaction_id: str — TransactionID hóa đơn đã phát hành.
-            file_type: str — 'PDF' hoặc 'XML'.
+        Body: ["TransactionID"] (list of string)
+        Params: invoiceWithCode=true, invoiceCalcu=false, downloadDataType=pdf/xml
+        Response Data: base64 encoded file content (JSON string wrapping list of dicts)
 
         Returns:
-            str — download URL, hoặc '' nếu không lấy được.
+            str — base64 encoded file content.
         """
         self.ensure_one()
         if not transaction_id:
             raise UserError('Thiếu TransactionID để tải hóa đơn.')
-        # /invoice/download dùng GET với query params
-        params = {'transactionId': transaction_id, 'fileType': file_type.upper()}
-        body = self._get_meinvoice('/invoice/download', params=params)
-        url = body.get('data') or body.get('Data') or ''
-        _logger.info('meInvoice download URL (%s): %s', file_type, url)
-        return url
+        import json as _json
+        params = {
+            'invoiceWithCode': 'true',
+            'invoiceCalcu': 'false',
+            'downloadDataType': file_type.lower(),
+        }
+        body = self._post_meinvoice('/invoice/download', payload=[transaction_id], params=params)
+        data = body.get('data') or body.get('Data') or '[]'
+        if isinstance(data, str):
+            try:
+                data = _json.loads(data)
+            except Exception:
+                data = []
+        if isinstance(data, dict):
+            data = [data]
+        if not data:
+            raise UserError('meInvoice không trả về dữ liệu hóa đơn.')
+        item = data[0]
+        if not isinstance(item, dict):
+            raise UserError('meInvoice trả về định dạng không xác định: %s' % str(item)[:200])
+        err_code = (item.get('ErrorCode') or item.get('errorCode') or '').strip()
+        if err_code:
+            if err_code == 'InvoiceNotExist':
+                raise UserError(
+                    'Hóa đơn đã được cấp số trên meInvoice nhưng chưa được chuyển tiếp lên Cơ quan Thuế.\n'
+                    'Vui lòng chờ meInvoice xử lý hoặc liên hệ meInvoice để kiểm tra trạng thái hóa đơn.'
+                )
+            raise UserError('meInvoice lỗi tải hóa đơn: %s' % err_code)
+        b64_data = item.get('Data') or item.get('data') or ''
+        if not b64_data:
+            raise UserError('meInvoice không trả về nội dung file hóa đơn.')
+        _logger.info('meInvoice download (%s): nhận được %d bytes base64', file_type, len(b64_data))
+        return b64_data
 
     def get_meinvoice_pdf_bytes(self, transaction_id):
         """Tải PDF hóa đơn từ meInvoice và trả về raw bytes.
@@ -1287,7 +1321,19 @@ class AmisCallbackConfig(models.Model):
         for inv in invoices:
             item = status_map.get(inv.transaction_id)
             if not item:
-                inv.sudo().write({'cqt_checked_at': now})
+                # Nếu InvCode đã được lưu → CQT đã cấp mã (trả về từ POST /invoice)
+                if inv.inv_code:
+                    inv.sudo().write({
+                        'state': 'accepted',
+                        'cqt_check_queued': False,
+                        'cqt_checked_at': now,
+                    })
+                    _logger.info(
+                        'meInvoice cron: %s đã có InvCode=%s → đánh dấu accepted',
+                        inv.transaction_id, inv.inv_code,
+                    )
+                else:
+                    inv.sudo().write({'cqt_checked_at': now})
                 continue
 
             raw_status = item.get('InvStatus') or item.get('invStatus') or item.get('Status') or 0

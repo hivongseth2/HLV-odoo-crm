@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import json
 import logging
+import uuid
 
 from markupsafe import Markup, escape
 
@@ -261,8 +262,26 @@ class MeinvoiceInvoice(models.Model):
             len(new_series) >= 5 and new_series[4].upper() == 'M'
         )
 
+        # Lưu lại invoice_data đã patched để invoice_data_json luôn phản ánh đúng
+        # những gì thực sự được gửi lên meInvoice
+        self.write({'invoice_data_json': json.dumps(invoice_data, ensure_ascii=False)})
+
         config = self.env['amis.callback.config'].sudo().ensure_singleton()
         results = config.push_meinvoice_invoice([invoice_data])
+
+        # Nếu DuplicateInvoiceRefID → tự sinh RefID mới và retry 1 lần
+        if results and isinstance(results, list):
+            first_check = results[0] if results else {}
+            if (first_check.get('ErrorCode') or '') == 'DuplicateInvoiceRefID':
+                new_ref_id = str(uuid.uuid4())
+                invoice_data['RefID'] = new_ref_id
+                self.write({'invoice_data_json': json.dumps(invoice_data, ensure_ascii=False)})
+                if self.sale_order_id:
+                    self.sale_order_id.sudo().write({'misa_meinvoice_ref_id': new_ref_id})
+                _logger.info(
+                    'meInvoice DuplicateInvoiceRefID — auto-retry với RefID mới: %s', new_ref_id,
+                )
+                results = config.push_meinvoice_invoice([invoice_data])
 
         transaction_id = ''
         inv_no = ''
@@ -283,10 +302,13 @@ class MeinvoiceInvoice(models.Model):
                     pass
             err_code = first.get('ErrorCode') or ''
             if err_code:
-                raise UserError('meInvoice phát hành lỗi: %s' % err_code)
+                err_desc = first.get('DescriptionErrorCode') or ''
+                raise UserError('meInvoice phát hành lỗi: %s — %s' % (err_code, err_desc))
 
+        # Nếu InvCode trả về ngay → CQT đã cấp mã, không cần chờ
+        new_state = 'accepted' if inv_code else 'submitted'
         self.write({
-            'state': 'submitted',
+            'state': new_state,
             'transaction_id': transaction_id,
             'inv_no': inv_no,
             'inv_code': inv_code,
@@ -294,7 +316,7 @@ class MeinvoiceInvoice(models.Model):
             'inv_date_result': inv_date_result or (
                 inv_date.strftime('%Y-%m-%d') if inv_date else False
             ),
-            'cqt_check_queued': True,  # đưa vào queue cron check CQT
+            'cqt_check_queued': new_state == 'submitted',  # chỉ queue nếu chưa có InvCode
         })
 
         # Cập nhật SO để backward compat với các field kết quả trên đơn hàng
@@ -311,10 +333,18 @@ class MeinvoiceInvoice(models.Model):
         })
 
         _logger.info(
-            'meInvoice submitted for SO %s: TransactionID=%s InvNo=%s — chờ CQT xác nhận.',
-            order.name, transaction_id, inv_no,
+            'meInvoice submitted for SO %s: TransactionID=%s InvNo=%s InvCode=%s state=%s',
+            order.name, transaction_id, inv_no, inv_code, new_state,
         )
 
+        if new_state == 'accepted':
+            msg = 'Hóa đơn %s %s đã được Cơ quan Thuế cấp mã: %s' % (
+                inv_series_result or new_series, inv_no, inv_code,
+            )
+        else:
+            msg = 'Hóa đơn %s %s đã được gửi. TransactionID: %s — Hệ thống sẽ tự kiểm tra kết quả CQT.' % (
+                inv_series_result or new_series, inv_no, transaction_id,
+            )
         # Auto-send email cho khách hàng (mẫu "Đã cấp mã") nếu được cấu hình
         try:
             if (config.meinvoice_mail_enabled
@@ -331,9 +361,7 @@ class MeinvoiceInvoice(models.Model):
             'tag': 'display_notification',
             'params': {
                 'title': 'Đã gửi lên Cơ quan Thuế',
-                'message': 'Hóa đơn %s %s đã được gửi. TransactionID: %s — Hệ thống sẽ tự kiểm tra kết quả CQT.' % (
-                    inv_series_result or new_series, inv_no, transaction_id,
-                ),
+                'message': msg,
                 'type': 'success',
                 'sticky': False,
             },
@@ -392,14 +420,26 @@ class MeinvoiceInvoice(models.Model):
         from datetime import datetime as _dt
         now = _dt.utcnow()
         if not status_list:
+            # Nếu InvCode đã có → CQT đã cấp mã trước đó (từ POST /invoice response)
+            if self.inv_code:
+                self.write({'state': 'accepted', 'cqt_check_queued': False, 'cqt_checked_at': now})
+                return {
+                    'type': 'ir.actions.client',
+                    'tag': 'display_notification',
+                    'params': {
+                        'title': 'Kiểm tra CQT',
+                        'message': 'Hóa đơn đã được Cơ quan Thuế cấp mã: %s' % self.inv_code,
+                        'type': 'success', 'sticky': False,
+                    },
+                }
             self.write({'cqt_checked_at': now})
             return {
                 'type': 'ir.actions.client',
                 'tag': 'display_notification',
                 'params': {
                     'title': 'Kiểm tra CQT',
-                    'message': 'meInvoice không trả về trạng thái cho hóa đơn này.',
-                    'type': 'warning', 'sticky': False,
+                    'message': 'Hóa đơn đã được cấp số trên meInvoice và đang chờ chuyển tiếp lên Cơ quan Thuế. Vui lòng kiểm tra lại sau.',
+                    'type': 'info', 'sticky': False,
                 },
             }
 
@@ -464,9 +504,11 @@ class MeinvoiceInvoice(models.Model):
         if self.state not in ('submitted', 'accepted', 'rejected') or not self.transaction_id:
             raise UserError('Chỉ hóa đơn đã gửi CQT mới có thể tải xuống.')
         config = self.env['amis.callback.config'].sudo().ensure_singleton()
-        url = config.get_meinvoice_download_url(self.transaction_id, file_type='PDF')
+        # /invoice/publishview trả về URL viewer PDF — đổi Viewer=1 sang Viewer=0 để force download
+        url = config.get_meinvoice_publishview_url([self.transaction_id])
         if not url:
             raise UserError('meInvoice không trả về link tải PDF.')
+        url = url.replace('Viewer=1', 'Viewer=0')
         return {'type': 'ir.actions.act_url', 'url': url, 'target': 'new'}
 
     def action_download_xml(self):
@@ -475,9 +517,11 @@ class MeinvoiceInvoice(models.Model):
         if self.state not in ('submitted', 'accepted', 'rejected') or not self.transaction_id:
             raise UserError('Chỉ hóa đơn đã gửi CQT mới có thể tải xuống.')
         config = self.env['amis.callback.config'].sudo().ensure_singleton()
-        url = config.get_meinvoice_download_url(self.transaction_id, file_type='XML')
+        # Dùng publishview URL, đổi type=pdf → type=xml
+        url = config.get_meinvoice_publishview_url([self.transaction_id])
         if not url:
             raise UserError('meInvoice không trả về link tải XML.')
+        url = url.replace('type=pdf', 'type=xml').replace('Viewer=1', 'Viewer=0')
         return {'type': 'ir.actions.act_url', 'url': url, 'target': 'new'}
 
     def action_view_invoice(self):
@@ -498,6 +542,51 @@ class MeinvoiceInvoice(models.Model):
             rec.write({'state': 'cancelled', 'cqt_check_queued': False})
         return True
 
+    def action_reset_to_draft(self):
+        """Đặt lại hóa đơn về Nháp với RefID mới để gửi lại sau khi điều chỉnh/hủy.
+
+        - Sinh UUID mới cho RefID trong invoice_data_json
+        - Xóa misa_meinvoice_ref_id trên SO để lần gửi tiếp theo cũng dùng RefID mới
+        - Xóa các kết quả cũ (transaction_id, inv_no, inv_code, ...)
+        """
+        for rec in self:
+            # Sinh RefID mới
+            new_ref_id = str(uuid.uuid4())
+
+            # Cập nhật RefID trong invoice_data_json
+            try:
+                inv_data = json.loads(rec.invoice_data_json or '{}')
+            except Exception:
+                inv_data = {}
+            inv_data['RefID'] = new_ref_id
+            new_json = json.dumps(inv_data, ensure_ascii=False)
+
+            rec.write({
+                'state': 'draft',
+                'invoice_data_json': new_json,
+                'transaction_id': False,
+                'inv_no': False,
+                'inv_code': False,
+                'inv_series_result': False,
+                'inv_date_result': False,
+                'cqt_status_code': False,
+                'cqt_status_desc': False,
+                'cqt_checked_at': False,
+                'cqt_check_queued': False,
+            })
+
+            # Xóa misa_meinvoice_ref_id trên SO để SO-level sync cũng dùng RefID mới
+            if rec.sale_order_id:
+                rec.sale_order_id.sudo().write({
+                    'misa_meinvoice_ref_id': new_ref_id,
+                })
+
+            _logger.info(
+                'meInvoice reset to draft for SO %s: new RefID=%s',
+                rec.sale_order_id.name if rec.sale_order_id else '?',
+                new_ref_id,
+            )
+        return True
     # ── Mail compose: gợi ý người nhận ─────────────────────────────────────
 
     def message_get_suggested_recipients(self):
