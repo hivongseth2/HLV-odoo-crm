@@ -71,7 +71,9 @@ class AmisWebhookQueue(models.Model):
 
     @api.model
     def _is_within_publish_window(self, config):
-        """Kiểm tra giờ hiện tại (timezone công ty) có trong khung giờ cấu hình không."""
+        """Kiểm tra giờ hiện tại (timezone công ty) có trong khung giờ cấu hình không.
+        Trả về False nếu là Chủ nhật hoặc ngoài khung giờ.
+        """
         if not config.webhook_publish_time_restrict:
             return True
         tz_name = (self.env.company.partner_id.tz
@@ -79,6 +81,9 @@ class AmisWebhookQueue(models.Model):
                    or 'Asia/Ho_Chi_Minh')
         tz = pytz.timezone(tz_name)
         now_local = datetime.now(tz)
+        # Bỏ qua Chủ nhật (isoweekday() == 7)
+        if now_local.isoweekday() == 7:
+            return False
         current_hour = now_local.hour + now_local.minute / 60.0
         return config.webhook_publish_time_from <= current_hour < config.webhook_publish_time_to
 
@@ -101,9 +106,12 @@ class AmisWebhookQueue(models.Model):
         within_window = self._is_within_publish_window(config)
 
         if config.webhook_publish_time_restrict and not within_window:
-            # Ngoài khung giờ: chuyển tất cả pending → deferred
-            pending = self.sudo().search([('state', '=', 'pending')])
-            if pending:
+            # Ngoài khung giờ: chuyển tất cả pending + error (chưa hết lượt) → deferred
+            to_defer = self.sudo().search([
+                ('state', 'in', ('pending', 'error')),
+                ('attempts', '<', MAX_ATTEMPTS),
+            ])
+            if to_defer:
                 time_from = self._format_float_time(config.webhook_publish_time_from)
                 time_to = self._format_float_time(config.webhook_publish_time_to)
                 msg = 'Ngoài khung giờ phát hành (%s – %s). ' % (time_from, time_to)
@@ -111,9 +119,9 @@ class AmisWebhookQueue(models.Model):
                     msg += 'Sẽ tự động xử lý khi vào khung giờ.'
                 else:
                     msg += 'Vui lòng bấm Thử lại thủ công khi sẵn sàng.'
-                pending.sudo().write({'state': 'deferred', 'error_msg': msg})
+                to_defer.sudo().write({'state': 'deferred', 'error_msg': msg})
                 _logger.info(
-                    'WebhookQueue: Ngoài khung giờ — %d đơn chuyển sang deferred.', len(pending)
+                    'WebhookQueue: Ngoài khung giờ — %d đơn chuyển sang deferred.', len(to_defer)
                 )
             return
 
@@ -204,6 +212,16 @@ class AmisWebhookQueue(models.Model):
 
             draft = drafts[0]
 
+            # Cập nhật inv_date về ngày hôm nay (giờ địa phương) trước khi gửi CQT.
+            # CQT yêu cầu InvDate = ngày gửi thực tế; nếu dùng ngày tạo nháp cũ
+            # sẽ bị lỗi InvalidInvoiceDate.
+            tz_name = (self.env.company.partner_id.tz
+                       or self.env.user.tz
+                       or 'Asia/Ho_Chi_Minh')
+            today_local = datetime.now(pytz.timezone(tz_name)).date()
+            if draft.inv_date != today_local:
+                draft.sudo().write({'inv_date': today_local})
+
             # Submit nháp lên CQT
             draft.sudo().action_publish()
 
@@ -224,8 +242,11 @@ class AmisWebhookQueue(models.Model):
                 'WebhookQueue [%d]: error publishing for order_ref=%s: %s',
                 self.id, self.order_ref, err,
             )
-            new_state = 'error' if self.attempts < MAX_ATTEMPTS else 'error'
-            self.sudo().write({'state': new_state, 'error_msg': err})
+            self.sudo().write({
+                'state': 'error',
+                'error_msg': err,
+                'processed_at': fields.Datetime.now(),
+            })
 
     # ── Manual actions ────────────────────────────────────────────────────────
 

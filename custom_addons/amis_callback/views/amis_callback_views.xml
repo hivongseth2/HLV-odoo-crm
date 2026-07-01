@@ -449,6 +449,12 @@
                                 <button name="action_view_invoice" type="object" string="Xem HĐ"
                                         icon="fa-eye"
                                         invisible="state not in ('submitted','accepted','rejected')"/>
+                                
+                                 <button name="action_reset_to_draft" type="object" string="Gửi lại"
+                                        icon="fa-undo"
+                                        invisible="state not in ('submitted','accepted','rejected','cancelled')"
+                                        groups="amis_callback.group_meinvoice_accountant"
+                                        confirm="Đặt hóa đơn về Nháp với RefID mới để gửi lại? Hành động này sẽ xóa kết quả CQT cũ."/>
                             </list>
                         </field>
                     </page>
