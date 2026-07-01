@@ -457,12 +457,19 @@ class LoyaltyExternalAPI(http.Controller):
             relay_key = (ICP.get_param('hlv_loyalty.zalo_phone_relay_key') or '').strip()
 
             if relay_url:
+                if not relay_key:
+                    _logger.error('Zalo phone exchange blocked: missing hlv_loyalty.zalo_phone_relay_key')
+                    return self._json_err(
+                        'Missing Zalo phone relay key configuration on Odoo',
+                        status=503,
+                        code='missing_zalo_phone_relay_key',
+                    )
+
                 headers = {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json',
+                    'x-relay-key': relay_key,
                 }
-                if relay_key:
-                    headers['x-relay-key'] = relay_key
                 _logger.info('Zalo phone exchange using relay: url=%s', relay_url)
                 zalo_res = requests.post(
                     relay_url,
