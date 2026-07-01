@@ -990,7 +990,7 @@ class HLVMobileBarcodeController(http.Controller):
                             continue
                         line_demand = ml.quantity
                     elif picking.source_transfer_id:
-                        line_demand = ml.quantity
+                        line_demand = ml.quantity_product_uom or ml.quantity
                     elif uses_qty_scanned and is_putaway and len(move.move_line_ids) > 1:
                         if ml.quantity <= 0 and ml.qty_scanned <= 0:
                             continue
@@ -1005,6 +1005,13 @@ class HLVMobileBarcodeController(http.Controller):
                     )
                     if is_package_transfer_line:
                         line_demand = ml.quantity
+                    display_qty_done = (
+                        ml.package_transfer_qty
+                        if is_package_transfer_line
+                        else (ml.qty_scanned if uses_qty_scanned else ml.quantity)
+                    )
+                    if line_demand <= 0 and display_qty_done <= 0:
+                        continue
 
                     lines.append({
                         'id': ml.id,
@@ -1014,11 +1021,7 @@ class HLVMobileBarcodeController(http.Controller):
                         'product_barcode': move.product_id.barcode,
                         'product_uom_qty': line_demand,
                         # Use qty_scanned as mobile scan progress; quantity is finalized on validate.
-                        'qty_done': (
-                            ml.package_transfer_qty
-                            if is_package_transfer_line
-                            else (ml.qty_scanned if uses_qty_scanned else ml.quantity)
-                        ),
+                        'qty_done': display_qty_done,
                         'warehouse_qty': warehouse_qty_by_product.get(move.product_id.id, 0.0),
                         'uom_name': move.product_uom.name,
                         'state': move.state,
@@ -1031,6 +1034,8 @@ class HLVMobileBarcodeController(http.Controller):
                     })
             else:
                 if is_pick_picking or picking.source_transfer_id:
+                    continue
+                if move.product_uom_qty <= 0:
                     continue
                 if is_putaway:
                     loc_name = move.location_dest_id.display_name
