@@ -576,6 +576,7 @@ class MisaExtensionController(http.Controller):
                     "estimated_cost": 0.0,
                     "misa_line_id": (line.get("misa_line_id") or "").strip() or False,
                     "misa_supplier_id": int(line.get("misa_supplier_id")) if line.get("misa_supplier_id") else False,
+                    "misa_supplier_name": (line.get("misa_supplier_name") or "").strip(),
                     "misa_price_before_tax": float(line.get("misa_price_before_tax") or 0.0),
                     "misa_price_after_tax": float(line.get("misa_price_after_tax") or 0.0),
                     "misa_amount": float(line.get("misa_amount") or 0.0),
@@ -635,19 +636,21 @@ class MisaExtensionController(http.Controller):
             if owner_message:
                 pr.message_post(body=owner_message)
                 
-            # --- Post thông tin Nhà cung cấp mới vào Chatter ---
-            new_suppliers = payload.get("new_suppliers") or []
-            if new_suppliers:
+            # --- Post thông tin Nhà cung cấp mới vào Chatter (gắn với từng dòng sản phẩm) ---
+            new_supplier_lines = [l for l in lines_in if l.get("new_supplier_data")]
+            if new_supplier_lines:
                 from markupsafe import Markup
                 msg_body = "<p><b>[MISA Extension] Thêm Nhà cung cấp mới:</b></p><ul>"
-                for ns in new_suppliers:
+                for sl in new_supplier_lines:
+                    ns = sl.get("new_supplier_data", {})
                     ns_name = ns.get("name", "")
                     ns_address = ns.get("address", "")
                     ns_phone = ns.get("phone", "")
                     ns_vat = ns.get("vat", "")
                     ns_note = ns.get("note", "")
+                    product_name = sl.get("name") or sl.get("product_code") or "Không xác định"
                     
-                    msg_body += f"<li><b>Tên NCC:</b> {ns_name}"
+                    msg_body += f"<li><b>Sản phẩm:</b> {product_name}<br/><b>Tên NCC:</b> {ns_name}"
                     if ns_address:
                         msg_body += f"<br/><b>Địa chỉ:</b> {ns_address}"
                     if ns_phone:
