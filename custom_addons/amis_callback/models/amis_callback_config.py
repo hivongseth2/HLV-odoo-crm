@@ -2,6 +2,7 @@
 import json
 import logging
 import time
+import unicodedata
 
 import requests
 from requests.exceptions import HTTPError
@@ -839,6 +840,26 @@ class AmisCallbackConfig(models.Model):
         result = self._post_actopen('/apir/sync/actopen/save', payload, include_token=True)
         _logger.info(
             'AMIS save purchase order response: %s',
+            json.dumps(result, ensure_ascii=False, default=str),
+        )
+        return result
+
+    def push_payment_request(self, voucher_payload):
+        """Push ba_withdraw (de nghi chi tien nha cung cap, voucher_type=3) len MISA."""
+        self.ensure_one()
+        payload = {
+            'app_id': self.app_id,
+            'org_company_code': self.org_company_code,
+            'voucher': [voucher_payload],
+            'dictionary': [],
+        }
+        _logger.info(
+            'AMIS save payment request payload:\n%s',
+            json.dumps(payload, ensure_ascii=False, default=str, indent=2),
+        )
+        result = self._post_actopen('/apir/sync/actopen/save', payload, include_token=True)
+        _logger.info(
+            'AMIS save payment request response: %s',
             json.dumps(result, ensure_ascii=False, default=str),
         )
         return result
@@ -1907,15 +1928,36 @@ class AmisCallbackConfig(models.Model):
             if not misa_id or not name:
                 skipped += 1
                 continue
-            partner = (
-                partners_by_misa_id.get(misa_id.lower())
-                or (code and partners_by_ref.get(code.upper()))
-                or partners_by_name.get(name.upper())
-            )
+            partner = partners_by_misa_id.get(misa_id.lower())
+            match_source = 'misa_id' if partner else ''
+            if not partner and code:
+                partner = partners_by_ref.get(code.upper())
+                match_source = 'ref' if partner else ''
+            if not partner:
+                partner = partners_by_name.get(name.upper())
+                match_source = 'name' if partner else ''
+            if partner and match_source == 'name':
+                skip_reason = self._misa_vendor_name_match_skip_reason(partner, code, name, misa_id)
+                if skip_reason:
+                    skipped += 1
+                    self._catalog_log_change(
+                        job, 'vendor', 'skip', 'res.partner', partner.id,
+                        misa_id, code, name, skip_reason,
+                    )
+                    continue
+            if not partner and self._misa_vendor_is_pm_variant(code, name):
+                skipped += 1
+                self._catalog_log_change(
+                    job, 'vendor', 'skip', 'res.partner', 0,
+                    misa_id, code, name,
+                    'skipped PM variant because no exact Odoo vendor mapping was found',
+                )
+                continue
             vals = self._misa_vendor_vals(item)
             if partner:
                 if unmapped_only and (partner.misa_account_object_id or '').strip():
                     continue
+                partner_updated = False
                 write_vals = {
                     key: value for key, value in vals.items()
                     if not self._record_value_matches(partner, key, value)
@@ -1928,12 +1970,26 @@ class AmisCallbackConfig(models.Model):
                         job, 'vendor', operation, 'res.partner', partner.id,
                         misa_id, code, name, change_summary,
                     )
+                    partner_updated = True
+                bank_updated = self._sync_misa_vendor_bank_accounts(partner, item, job=job)
+                if bank_updated:
+                    self._catalog_log_change(
+                        job, 'vendor', 'update', 'res.partner', partner.id,
+                        misa_id, code, name, 'updated bank account information from MISA',
+                    )
+                    partner_updated = True
+                if partner_updated:
                     updated += 1
+                    partners_by_misa_id[misa_id.lower()] = partner
+                    if code:
+                        partners_by_ref[code.upper()] = partner
+                    partners_by_name[name.upper()] = partner
                 continue
             if not create_missing:
                 skipped += 1
                 continue
             partner = Partner.create(vals)
+            self._sync_misa_vendor_bank_accounts(partner, item, job=job)
             partners_by_misa_id[misa_id.lower()] = partner
             if code:
                 partners_by_ref[code.upper()] = partner
@@ -1958,6 +2014,61 @@ class AmisCallbackConfig(models.Model):
             'has_more': has_more,
         }
 
+    def _misa_text_key(self, value):
+        text = unicodedata.normalize('NFKD', str(value or ''))
+        text = ''.join(char for char in text if not unicodedata.combining(char))
+        return ' '.join(text.replace('_', ' ').replace('-', ' ').split()).upper()
+
+    def _misa_vendor_is_pm_variant(self, code, name):
+        code_key = (code or '').strip().upper()
+        name_key = (name or '').strip().upper()
+        return (
+            code_key.endswith('_PM')
+            or code_key.endswith('-PM')
+            or code_key.endswith(' - PM')
+            or name_key.endswith('_PM')
+            or name_key.endswith(' - PM')
+        )
+
+    def _misa_vendor_pm_base_code(self, code):
+        code_key = (code or '').strip().upper()
+        for suffix in ('_PM', '-PM', ' - PM'):
+            if code_key.endswith(suffix):
+                return code_key[:-len(suffix)].strip()
+        return ''
+
+    def _misa_vendor_name_match_skip_reason(self, partner, code, name, misa_id):
+        incoming_is_pm = self._misa_vendor_is_pm_variant(code, name)
+        if incoming_is_pm:
+            return 'skipped PM variant matched only by name to avoid overwriting base vendor'
+
+        existing_ref = (partner.ref or '').strip()
+        incoming_code = (code or '').strip()
+        existing_pm_base = self._misa_vendor_pm_base_code(existing_ref)
+        incoming_code_key = incoming_code.upper()
+        restoring_base_from_pm = bool(existing_pm_base and incoming_code_key == existing_pm_base)
+        if restoring_base_from_pm:
+            return ''
+
+        existing_misa_id = (partner.misa_account_object_id or '').strip()
+        if existing_misa_id and existing_misa_id.lower() != (misa_id or '').strip().lower():
+            return 'skipped name-only match because Odoo vendor already has a different MISA ID'
+        if existing_ref and incoming_code and existing_ref.upper() != incoming_code_key:
+            return 'skipped name-only match because Odoo vendor already has a different code'
+        return ''
+
+    def _misa_resolve_country(self, value):
+        raw = (value or '').strip()
+        if not raw:
+            return self.env['res.country']
+        Country = self.env['res.country'].sudo()
+        key = self._misa_text_key(raw)
+        if key in {'VI', 'VN', 'VNM', 'VIET NAM', 'VIETNAM'}:
+            return Country.search([('code', '=', 'VN')], limit=1)
+        if raw.isascii() and len(raw) in (2, 3):
+            return Country.search([('code', '=', raw.upper())], limit=1)
+        return Country.search([('name', '=ilike', raw)], limit=1)
+
     def _misa_vendor_vals(self, item):
         Partner = self.env['res.partner']
         vals = {
@@ -1973,13 +2084,158 @@ class AmisCallbackConfig(models.Model):
             'mobile': item.get('mobile'),
             'email': item.get('email_address') or item.get('email'),
             'street': item.get('account_object_address') or item.get('address'),
+            'city': item.get('province_or_city'),
+            'website': item.get('website'),
         }
         for field_name, value in field_map.items():
             if field_name in Partner._fields:
                 vals[field_name] = (value or '').strip() or False
+        street2 = ', '.join(filter(None, [
+            (item.get('ward_or_commune') or '').strip(),
+            (item.get('district') or '').strip(),
+        ]))
+        if street2 and 'street2' in Partner._fields:
+            vals['street2'] = street2
+        country_name = (item.get('country') or '').strip()
+        if country_name and 'country_id' in Partner._fields:
+            country = self._misa_resolve_country(country_name)
+            if country:
+                vals['country_id'] = country.id
         if 'active' in Partner._fields:
             vals['active'] = not bool(item.get('inactive'))
         return vals
+
+    def _sync_misa_vendor_bank_accounts(self, partner, item, job=None):
+        PartnerBank = self.env['res.partner.bank'].sudo().with_context(active_test=False)
+        changed = 0
+        for bank_item in self._misa_vendor_bank_items(item):
+            acc_number = (
+                bank_item.get('bank_account_number')
+                or bank_item.get('account_number')
+                or bank_item.get('bank_account')
+                or bank_item.get('acc_number')
+                or ''
+            )
+            acc_number = str(acc_number).strip()
+            if not acc_number:
+                continue
+
+            bank_name = str(bank_item.get('bank_name') or '').strip()
+            bank_code = str(bank_item.get('bank_code') or bank_item.get('bank_id') or '').strip()
+            branch_name = str(bank_item.get('bank_branch_name') or bank_item.get('branch_name') or '').strip()
+            bank_city = str(
+                bank_item.get('bank_province_or_city')
+                or bank_item.get('province_or_city')
+                or bank_item.get('provin_or_city')
+                or ''
+            ).strip()
+            holder_name = str(
+                bank_item.get('account_holder')
+                or bank_item.get('account_holder_name')
+                or item.get('account_object_name')
+                or partner.name
+                or ''
+            ).strip()
+
+            bank = self._misa_get_or_create_bank(bank_name, bank_code, branch_name, bank_city)
+            vals = {
+                'partner_id': partner.id,
+                'acc_number': acc_number,
+            }
+            if bank:
+                vals['bank_id'] = bank.id
+            if 'acc_holder_name' in PartnerBank._fields and holder_name:
+                vals['acc_holder_name'] = holder_name
+
+            partner_bank = PartnerBank.search([
+                ('partner_id', '=', partner.id),
+                ('acc_number', '=', acc_number),
+            ], limit=1)
+            if partner_bank:
+                write_vals = {
+                    key: value for key, value in vals.items()
+                    if key in PartnerBank._fields and not self._record_value_matches(partner_bank, key, value)
+                }
+                if write_vals:
+                    partner_bank.write(write_vals)
+                    changed += 1
+                continue
+
+            create_vals = {
+                key: value for key, value in vals.items()
+                if key in PartnerBank._fields
+            }
+            PartnerBank.create(create_vals)
+            changed += 1
+
+        return changed
+
+    def _misa_vendor_bank_items(self, item):
+        bank_items = []
+        raw = item.get('account_object_bank_account')
+        if raw:
+            parsed = raw
+            if isinstance(raw, str):
+                raw_text = raw.strip()
+                try:
+                    parsed = json.loads(raw_text) if raw_text else []
+                except Exception:
+                    parsed = []
+            if isinstance(parsed, dict):
+                parsed = (
+                    parsed.get('data')
+                    or parsed.get('Data')
+                    or parsed.get('items')
+                    or parsed.get('Items')
+                    or [parsed]
+                )
+            if isinstance(parsed, list):
+                bank_items.extend([bank for bank in parsed if isinstance(bank, dict)])
+
+        single_bank = {
+            'bank_account_number': item.get('bank_account') or item.get('bank_account_number'),
+            'bank_name': item.get('bank_name'),
+            'bank_branch_name': item.get('bank_branch_name'),
+            'bank_province_or_city': item.get('bank_province_or_city'),
+            'account_holder': item.get('account_object_name'),
+        }
+        if any((value or '').strip() if isinstance(value, str) else value for value in single_bank.values()):
+            bank_items.append(single_bank)
+
+        seen = set()
+        result = []
+        for bank_item in bank_items:
+            acc_number = str(
+                bank_item.get('bank_account_number')
+                or bank_item.get('account_number')
+                or bank_item.get('bank_account')
+                or bank_item.get('acc_number')
+                or ''
+            ).strip()
+            if not acc_number or acc_number in seen:
+                continue
+            seen.add(acc_number)
+            result.append(bank_item)
+        return result
+
+    def _misa_get_or_create_bank(self, bank_name, bank_code='', branch_name='', bank_city=''):
+        Bank = self.env['res.bank'].sudo()
+        bank = Bank
+        if bank_code and 'bic' in Bank._fields:
+            bank = Bank.search([('bic', '=', bank_code)], limit=1)
+        if not bank and bank_name:
+            bank = Bank.search([('name', '=', bank_name)], limit=1)
+        if bank or not bank_name:
+            return bank
+
+        vals = {'name': bank_name}
+        if bank_code and 'bic' in Bank._fields:
+            vals['bic'] = bank_code
+        if branch_name and 'street' in Bank._fields:
+            vals['street'] = branch_name
+        if bank_city and 'city' in Bank._fields:
+            vals['city'] = bank_city
+        return Bank.create(vals)
 
     def _record_value_matches(self, record, field_name, value):
         field = record._fields.get(field_name)

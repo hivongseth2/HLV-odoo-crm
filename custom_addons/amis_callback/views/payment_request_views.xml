@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="view_amis_payment_request_list" model="ir.ui.view">
+        <field name="name">amis.payment.request.list</field>
+        <field name="model">amis.payment.request</field>
+        <field name="arch" type="xml">
+            <list string="Đề nghị chi tiền MISA" default_order="create_date desc"
+                  decoration-danger="state == 'error'"
+                  decoration-success="state == 'synced'"
+                  decoration-warning="state in ('pending','sent')">
+                <field name="name"/>
+                <field name="purchase_order_id"/>
+                <field name="partner_id"/>
+                <field name="payment_date"/>
+                <field name="amount" widget="monetary"/>
+                <field name="currency_id" optional="hide"/>
+                <field name="vendor_bank_account_number" optional="show"/>
+                <field name="vendor_bank_name" optional="show"/>
+                <field name="state"/>
+                <field name="job_id" optional="show"/>
+                <field name="error_msg" optional="show"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_amis_payment_request_form" model="ir.ui.view">
+        <field name="name">amis.payment.request.form</field>
+        <field name="model">amis.payment.request</field>
+        <field name="arch" type="xml">
+            <form string="Đề nghị chi tiền MISA">
+                <header>
+                    <button name="action_enqueue_sync" type="object" string="Đưa vào hàng đợi"
+                            invisible="state not in ('draft','error')" class="btn-secondary"/>
+                    <button name="action_run_sync" type="object" string="Đồng bộ ngay"
+                            invisible="state not in ('draft','pending','error')" class="btn-primary"/>
+                    <button name="action_open_purchase_order" type="object" string="Mở đơn mua"
+                            class="btn-secondary"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,pending,sent,synced,error"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="name" readonly="1"/>
+                            <field name="purchase_order_id" readonly="1"/>
+                            <field name="partner_id" readonly="1"/>
+                            <field name="company_id" readonly="1"/>
+                            <field name="payment_date" readonly="state not in ('draft','error')"/>
+                            <field name="amount" readonly="state not in ('draft','error')"/>
+                            <field name="currency_id" readonly="1"/>
+                        </group>
+                        <group>
+                            <field name="org_refid" readonly="1"/>
+                            <field name="misa_refid" readonly="1"/>
+                            <field name="job_id" readonly="1"/>
+                            <field name="error_msg" readonly="1" invisible="not error_msg"/>
+                        </group>
+                    </group>
+                    <group string="Tài khoản chi">
+                        <field name="company_bank_id" readonly="state not in ('draft','error')"/>
+                        <field name="company_bank_account_number" readonly="state not in ('draft','error')"/>
+                        <field name="company_bank_name" readonly="state not in ('draft','error')"/>
+                    </group>
+                    <group string="Tài khoản nhận của nhà cung cấp">
+                        <field name="vendor_bank_id" readonly="state not in ('draft','error')"/>
+                        <field name="vendor_account_holder" readonly="state not in ('draft','error')"/>
+                        <field name="vendor_bank_account_number" readonly="state not in ('draft','error')"/>
+                        <field name="vendor_bank_name" readonly="state not in ('draft','error')"/>
+                        <field name="vendor_bank_branch" readonly="state not in ('draft','error')"/>
+                    </group>
+                    <group string="Hạch toán">
+                        <field name="debit_account" readonly="state not in ('draft','error')"/>
+                        <field name="credit_account" readonly="state not in ('draft','error')"/>
+                    </group>
+                    <group string="Diễn giải">
+                        <field name="memo" nolabel="1" readonly="state not in ('draft','error')"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_amis_payment_request_wizard_form" model="ir.ui.view">
+        <field name="name">amis.payment.request.wizard.form</field>
+        <field name="model">amis.payment.request.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Lập đề nghị chi tiền nhà cung cấp">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="purchase_order_id"/>
+                            <field name="partner_id"/>
+                            <field name="company_id"/>
+                            <field name="payment_date"/>
+                            <field name="amount"/>
+                            <field name="currency_id"/>
+                        </group>
+                        <group string="Hạch toán">
+                            <field name="debit_account"/>
+                            <field name="credit_account"/>
+                        </group>
+                    </group>
+                    <group string="Tài khoản chi">
+                        <field name="company_bank_id"/>
+                        <field name="company_bank_account_number"/>
+                        <field name="company_bank_name"/>
+                    </group>
+                    <group string="Tài khoản nhận của nhà cung cấp">
+                        <field name="vendor_bank_id"/>
+                        <field name="vendor_account_holder"/>
+                        <field name="vendor_bank_account_number"/>
+                        <field name="vendor_bank_name"/>
+                        <field name="vendor_bank_branch"/>
+                    </group>
+                    <group string="Diễn giải">
+                        <field name="memo" nolabel="1"/>
+                    </group>
+                </sheet>
+                <footer>
+                    <button name="action_create_payment_request" type="object"
+                            string="Tạo đề nghị chi" class="btn-primary"/>
+                    <button string="Hủy" special="cancel" class="btn-secondary"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_amis_payment_request" model="ir.actions.act_window">
+        <field name="name">Đề nghị chi tiền MISA</field>
+        <field name="res_model">amis.payment.request</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <record id="view_purchase_order_form_amis_payment_inherit" model="ir.ui.view">
+        <field name="name">purchase.order.form.amis.payment.inherit</field>
+        <field name="model">purchase.order</field>
+        <field name="inherit_id" ref="purchase.purchase_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_open_misa_payment_request_wizard" type="object"
+                        class="oe_stat_button" icon="fa-money"
+                        invisible="state not in ('purchase','done')">
+                    <div class="o_field_widget o_stat_info">
+                        <span class="o_stat_text">Lập đề nghị</span>
+                        <span class="o_stat_text">chi tiền</span>
+                    </div>
+                </button>
+                <button name="action_view_misa_payment_requests" type="object"
+                        class="oe_stat_button" icon="fa-list"
+                        invisible="misa_payment_request_count == 0">
+                    <field name="misa_payment_request_count" widget="statinfo" string="Đề nghị chi"/>
+                </button>
+            </xpath>
+            <xpath expr="//notebook" position="inside">
+                <page string="Đề nghị chi MISA" name="misa_payment_requests"
+                      invisible="misa_payment_request_count == 0">
+                    <field name="misa_payment_request_ids" readonly="1">
+                        <list string="Đề nghị chi MISA" create="false" edit="false" delete="false">
+                            <field name="name"/>
+                            <field name="payment_date"/>
+                            <field name="amount" widget="monetary"/>
+                            <field name="currency_id" optional="hide"/>
+                            <field name="vendor_bank_account_number"/>
+                            <field name="vendor_bank_name"/>
+                            <field name="state"/>
+                            <field name="error_msg" optional="show"/>
+                        </list>
+                    </field>
+                </page>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_amis_sync_job_list_payment_inherit" model="ir.ui.view">
+        <field name="name">amis.sync.job.list.payment.inherit</field>
+        <field name="model">amis.sync.job</field>
+        <field name="inherit_id" ref="amis_callback.view_amis_sync_job_list"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='purchase_order_id']" position="after">
+                <field name="payment_request_id" optional="show"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_amis_sync_job_form_payment_inherit" model="ir.ui.view">
+        <field name="name">amis.sync.job.form.payment.inherit</field>
+        <field name="model">amis.sync.job</field>
+        <field name="inherit_id" ref="amis_callback.view_amis_sync_job_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='purchase_order_id']" position="after">
+                <field name="payment_request_id"/>
+            </xpath>
+        </field>
+    </record>
+
+    <menuitem id="menu_amis_payment_requests"
+              name="Đề nghị chi tiền MISA"
+              parent="menu_amis_callback_root"
+              action="action_amis_payment_request"
+              sequence="17"
+              groups="amis_callback.group_meinvoice_user"/>
+</odoo>

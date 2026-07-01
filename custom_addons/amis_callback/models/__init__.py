@@ -4,6 +4,8 @@ from . import webhook_queue
 from . import amis_callback_config
 from . import amis_callback_log
 from . import purchase_order_sync
+from . import payment_request
+from . import payment_request_wizard
 from . import stock_picking_sync
 from . import res_partner_sync
 from . import amis_sync_job

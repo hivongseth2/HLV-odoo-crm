@@ -453,28 +453,57 @@ class LoyaltyExternalAPI(http.Controller):
                 )
 
             ICP = request.env['ir.config_parameter'].sudo()
-            secret_key = (
-                ICP.get_param('hlv_loyalty.zalo_secret_key')
-                or ICP.get_param('zalo.secret_key')
-                or ''
-            ).strip()
-            if not secret_key:
-                _logger.error('Zalo phone exchange blocked: missing hlv_loyalty.zalo_secret_key')
-                return self._json_err(
-                    'Missing Zalo secret_key configuration on Odoo',
-                    status=503,
-                    code='missing_secret_key',
-                )
+            relay_url = (ICP.get_param('hlv_loyalty.zalo_phone_relay_url') or '').strip()
+            relay_key = (ICP.get_param('hlv_loyalty.zalo_phone_relay_key') or '').strip()
 
-            zalo_res = requests.get(
-                'https://graph.zalo.me/v2.0/me/info',
-                headers={
-                    'access_token': access_token,
-                    'code': phone_token,
-                    'secret_key': secret_key,
-                },
-                timeout=10,
-            )
+            if relay_url:
+                if not relay_key:
+                    _logger.error('Zalo phone exchange blocked: missing hlv_loyalty.zalo_phone_relay_key')
+                    return self._json_err(
+                        'Missing Zalo phone relay key configuration on Odoo',
+                        status=503,
+                        code='missing_zalo_phone_relay_key',
+                    )
+
+                headers = {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'x-relay-key': relay_key,
+                    'Authorization': 'Bearer %s' % relay_key,
+                }
+                _logger.info('Zalo phone exchange using relay: url=%s', relay_url)
+                zalo_res = requests.post(
+                    relay_url,
+                    headers=headers,
+                    json={
+                        'token': phone_token,
+                        'access_token': access_token,
+                    },
+                    timeout=10,
+                )
+            else:
+                secret_key = (
+                    ICP.get_param('hlv_loyalty.zalo_secret_key')
+                    or ICP.get_param('zalo.secret_key')
+                    or ''
+                ).strip()
+                if not secret_key:
+                    _logger.error('Zalo phone exchange blocked: missing hlv_loyalty.zalo_secret_key')
+                    return self._json_err(
+                        'Missing Zalo secret_key or relay configuration on Odoo',
+                        status=503,
+                        code='missing_zalo_phone_config',
+                    )
+
+                zalo_res = requests.get(
+                    'https://graph.zalo.me/v2.0/me/info',
+                    headers={
+                        'access_token': access_token,
+                        'code': phone_token,
+                        'secret_key': secret_key,
+                    },
+                    timeout=10,
+                )
             response_text = (zalo_res.text or '')[:2000]
             _logger.info(
                 'Zalo phone exchange response: status=%s body=%s',

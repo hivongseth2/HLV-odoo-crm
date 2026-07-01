@@ -207,7 +207,20 @@ class AmisCallbackLogLine(models.Model):
                 po.write(vals)
                 if success:
                     line._apply_purchase_order_detail_ids(po, voucher_data)
-            elif voucher_type in (0, 7, 18):
+            else:
+                payment_request = self.env['amis.payment.request'].sudo().search([
+                    ('org_refid', '=', org_refid),
+                ], limit=1)
+                if payment_request:
+                    vals = {
+                        'state': 'synced' if success else 'error',
+                        'error_msg': False if success else (line.error_message or line.error_call_back_message or ''),
+                    }
+                    if success and actual_refid:
+                        vals['misa_refid'] = actual_refid
+                    payment_request.write(vals)
+                    continue
+            if voucher_type in (0, 7, 18):
                 picking = self.env['stock.picking'].sudo().search([
                     ('misa_inward_org_refid', '=', org_refid),
                 ], limit=1)

@@ -57,6 +57,20 @@
                                  help="Server-side secret key used to exchange getPhoneNumber token for a phone number">
                             <field name="loyalty_zalo_secret_key" password="True"/>
                         </setting>
+                        <setting id="loyalty_zalo_phone_relay_setting"
+                                 string="Zalo Phone Relay"
+                                 help="Optional Vietnam-hosted relay URL used when Odoo.sh outbound IP is blocked by Zalo">
+                            <div class="content-group">
+                                <div class="row mt16">
+                                    <label for="loyalty_zalo_phone_relay_url" class="col-lg-3 o_light_label"/>
+                                    <field name="loyalty_zalo_phone_relay_url" placeholder="https://example.com/api/zalo/phone"/>
+                                </div>
+                                <div class="row">
+                                    <label for="loyalty_zalo_phone_relay_key" class="col-lg-3 o_light_label"/>
+                                    <field name="loyalty_zalo_phone_relay_key" password="True"/>
+                                </div>
+                            </div>
+                        </setting>
                     </block>
                 </app>
             </xpath>

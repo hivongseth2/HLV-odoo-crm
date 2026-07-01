@@ -74,6 +74,9 @@ class AmisCatalogSyncJob(models.Model):
         existing = self.sudo().search([
             ('direction', '=', 'from_misa'),
             ('scope', '=', scope),
+            ('config_id', '=', config.id if config else False),
+            ('unmapped_only', '=', bool(unmapped_only)),
+            ('create_missing', '=', bool(create_missing)),
             ('status', 'in', ('pending', 'running')),
         ], limit=1)
         if existing:
