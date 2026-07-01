@@ -469,6 +469,7 @@ class LoyaltyExternalAPI(http.Controller):
                     'Content-Type': 'application/json',
                     'Accept': 'application/json',
                     'x-relay-key': relay_key,
+                    'Authorization': 'Bearer %s' % relay_key,
                 }
                 _logger.info('Zalo phone exchange using relay: url=%s', relay_url)
                 zalo_res = requests.post(
