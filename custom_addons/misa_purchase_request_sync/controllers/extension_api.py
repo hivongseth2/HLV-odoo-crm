@@ -1067,6 +1067,7 @@ class MisaExtensionController(http.Controller):
                 Sử dụng customFilter với property=4008 (refno) để tìm chính xác,
                 không phụ thuộc vào khoảng thời gian (dùng date range rộng để tránh timeout).
                 """
+                _logger.info("🔍 _search_po_in_misa_by_code: searching for PO '%s' in MISA", po_name)
                 try:
                     from datetime import datetime, timezone
                     
@@ -1110,13 +1111,18 @@ class MisaExtensionController(http.Controller):
                         "loadMode": 2
                     }
 
+                    _logger.info("🔍 Sending request to MISA API for PO '%s'", po_name)
                     response = misa_utils._fetch_with_retry(
                         "https://actapp.misa.vn/g2/api/pu/v1/pu_order/paging_filter_v2",
                         headers, amis_payload
                     )
+                    _logger.info("🔍 MISA API response status for '%s': %s", po_name, response.status_code)
 
                     if response.status_code == 200:
                         resp_json = response.json()
+                        _logger.info("🔍 MISA API response for '%s': Success=%s, Code=%s", 
+                                     po_name, resp_json.get("Success"), resp_json.get("Code"))
+                        
                         data_obj = resp_json.get("Data")
                         if isinstance(data_obj, str):
                             import json as json_lib
@@ -1126,22 +1132,42 @@ class MisaExtensionController(http.Controller):
                                 data_obj = {}
                         if not data_obj:
                             data_obj = {}
+                        
                         page_data = data_obj.get("PageData", [])
+                        total = data_obj.get("Total", "N/A")
+                        _logger.info("🔍 MISA API for '%s': PageData count=%s, Total=%s", 
+                                     po_name, len(page_data), total)
+                        
                         if page_data:
                             # Ưu tiên tìm bản ghi có refno khớp chính xác
                             for apo in page_data:
                                 refno = apo.get("refno")
-                                if refno == po_name:
+                                _logger.info("🔍 Checking refno='%s' against po_name='%s'", refno, po_name)
+                                if refno and refno.strip() == po_name.strip():
                                     _logger.info("✅ Tìm thấy PO %s trong MISA (refid: %s)", po_name, apo.get("refid"))
                                     return po_name, apo
                             # Nếu không có refno khớp chính xác, trả về bản ghi đầu tiên
                             if page_data:
-                                _logger.warning("⚠️ Không tìm thấy refno khớp chính xác cho %s, dùng kết quả đầu tiên", po_name)
+                                _logger.warning("⚠️ Không tìm thấy refno khớp chính xác cho '%s', dùng kết quả đầu tiên (refno='%s')", 
+                                                po_name, page_data[0].get("refno"))
                                 return po_name, page_data[0]
+                        else:
+                            _logger.warning("⚠️ MISA API trả về PageData rỗng cho PO '%s' (Total=%s, TableEmpty=%s)", 
+                                            po_name, total, data_obj.get("TableEmpty"))
+                    else:
+                        # Log chi tiết response khi không phải 200
+                        try:
+                            error_text = response.text[:500]
+                        except Exception:
+                            error_text = "Không thể đọc response text"
+                        _logger.warning("⚠️ MISA API trả về status %s cho PO '%s': %s", 
+                                        response.status_code, po_name, error_text)
 
                     _logger.warning("⚠️ Không tìm thấy PO %s trong MISA", po_name)
                 except Exception as e:
                     _logger.warning("_search_po_in_misa_by_code exception for %s: %s", po_name, e)
+                    import traceback
+                    _logger.warning("Traceback: %s", traceback.format_exc())
                 return po_name, None
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
