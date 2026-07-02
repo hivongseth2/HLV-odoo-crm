@@ -905,7 +905,9 @@ Kiểm tra mã voucher có hợp lệ không (khi checkout).
 
 ### 6.9 POST `/loyalty/redeem/submit`
 
-Tạo yêu cầu đổi thưởng ở trạng thái `pending`. Điểm của request pending được xem là `pending_reward_points`/điểm đang treo, chưa trừ khỏi số dư thật nhưng không còn khả dụng để tạo request khác.
+Lưu ý: `request_type="gift"` được xử lý ngay, trả về `state="done"` và `voucher_code`; không cần admin duyệt. Chỉ `request_type="cash"` ở trạng thái `pending` để admin xử lý.
+
+Với đổi tiền mặt, request `pending` được tính vào `pending_reward_points`/điểm đang treo. Với đổi quà, điểm được trừ ngay và voucher được phát hành ngay.
 
 **Input đổi tiền mặt:**
 
