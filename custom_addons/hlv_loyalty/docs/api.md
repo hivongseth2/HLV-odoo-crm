@@ -903,6 +903,120 @@ Kiểm tra mã voucher có hợp lệ không (khi checkout).
 
 ---
 
+### 6.9 POST `/loyalty/redeem/submit`
+
+Tạo yêu cầu đổi thưởng ở trạng thái `pending`. Điểm của request pending được xem là `pending_reward_points`/điểm đang treo, chưa trừ khỏi số dư thật nhưng không còn khả dụng để tạo request khác.
+
+**Input đổi tiền mặt:**
+
+```json
+{
+  "partner_id": 123,
+  "request_type": "cash",
+  "points_to_redeem": 160,
+  "bank_name": "Sacombank",
+  "account_number": "040084366041",
+  "account_name": "NGUYEN VAN A",
+  "customer_note": "..."
+}
+```
+
+**Output thành công:**
+
+```json
+{
+  "success": true,
+  "request_id": 55,
+  "request_name": "RRQ/2026/0005",
+  "request_type": "cash",
+  "points_required": 160,
+  "pending_reward_points": 160,
+  "exchange_points_available": 0
+}
+```
+
+**Output lỗi khi còn request treo:**
+
+```json
+{
+  "error": "Không đủ điểm khả dụng. Cần 160 điểm, bạn còn 0 điểm. Đang treo 160 điểm trong yêu cầu chờ xử lý.",
+  "code": "PENDING_REWARD_POINTS",
+  "exchange_points": 160,
+  "pending_reward_points": 160,
+  "exchange_points_available": 0
+}
+```
+
+Nếu không có điểm treo nhưng số dư thật không đủ, `code` là `INSUFFICIENT_POINTS`.
+
+---
+
+### 6.10 GET `/loyalty/redeem/requests`
+
+Lấy danh sách yêu cầu đổi thưởng của partner.
+
+**Query:** `partner_id=123`
+
+**Output:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "requests": [
+      {
+        "id": 55,
+        "name": "RRQ/2026/0005",
+        "request_type": "cash",
+        "points_required": 160,
+        "state": "pending"
+      }
+    ],
+    "pending_reward_points": 160,
+    "exchange_points_available": 0
+  }
+}
+```
+
+---
+
+### 6.11 POST `/loyalty/redeem/cancel`
+
+Hủy yêu cầu đổi thưởng đang `pending` để giải phóng điểm đang treo.
+
+**Input:**
+
+```json
+{
+  "partner_id": 123,
+  "request_id": 55
+}
+```
+
+Có thể gọi path thay thế: `POST /loyalty/redeem/requests/{request_id}/cancel`.
+
+**Output thành công:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "request": {
+      "id": 55,
+      "name": "RRQ/2026/0005",
+      "state": "cancelled",
+      "points_required": 160
+    },
+    "pending_reward_points": 0,
+    "exchange_points_available": 160
+  }
+}
+```
+
+**Lỗi chính:** `REQUEST_NOT_FOUND`, `REQUEST_NOT_PENDING`.
+
+---
+
 ## Tổng hợp Endpoints
 
 | #  | Method | Endpoint                              | Mô tả                        |
@@ -927,5 +1041,8 @@ Kiểm tra mã voucher có hợp lệ không (khi checkout).
 | 18 | GET    | `/loyalty/voucher-packages`           | Gói voucher khả dụng          |
 | 19 | POST   | `/loyalty/redeem`                     | Đổi điểm lấy voucher          |
 | 20 | POST   | `/loyalty/voucher/validate`           | Kiểm tra mã voucher           |
+| 21 | POST   | `/loyalty/redeem/submit`              | Gửi yêu cầu đổi thưởng        |
+| 22 | GET    | `/loyalty/redeem/requests`            | Danh sách yêu cầu đổi thưởng  |
+| 23 | POST   | `/loyalty/redeem/cancel`              | Hủy yêu cầu đổi thưởng pending |
 
 > **Tỉnh/Thành phố, Quận/Huyện, Phường/Xã**: Sử dụng API miễn phí `https://provinces.open-api.vn/api/` — KHÔNG cần expose từ Odoo.

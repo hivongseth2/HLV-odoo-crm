@@ -14,6 +14,8 @@
                 <field name="email" optional="hide"/>
                 <field name="loyalty_total_points" string="Điểm xếp hạng" sum="Tổng"/>
                 <field name="loyalty_exchange_points" string="Điểm đổi thưởng" sum="Tổng" optional="show"/>
+                <field name="loyalty_reward_pending_points" string="Điểm đang treo" optional="show"/>
+                <field name="loyalty_exchange_available_points" string="Điểm khả dụng" optional="show"/>
                 <field name="loyalty_voucher_count" string="Voucher hiện có"/>
                 <field name="company_id" groups="base.group_multi_company" optional="show"/>
             </list>
@@ -116,6 +118,12 @@
                             </div>
                             <div class="small mt-1" style="opacity:.85">
                                 (<field name="loyalty_pending_points" readonly="1" nolabel="1"/> chờ xác nhận)
+                            </div>
+                            <div class="small mt-1" style="opacity:.85">
+                                Đang treo <field name="loyalty_reward_pending_points" readonly="1" nolabel="1"/> điểm
+                            </div>
+                            <div class="small mt-1" style="opacity:.85">
+                                Khả dụng <field name="loyalty_exchange_available_points" readonly="1" nolabel="1"/> điểm
                             </div>
                         </div>
                         <div class="col d-flex align-items-center px-4 bg-light border-start">

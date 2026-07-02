@@ -5,6 +5,7 @@ import logging
 import requests
 from datetime import timedelta
 from odoo import fields as odoo_fields, http
+from odoo.exceptions import UserError
 from odoo.http import request, Response
 
 _logger = logging.getLogger(__name__)
@@ -138,9 +139,14 @@ class LoyaltyAPIController(http.Controller):
         if not package.exists() or not package.active:
             return {'error': 'Gói Voucher không tồn tại hoặc đã ngừng'}
 
-        if partner.loyalty_total_points < package.points_required:
+        root = partner._get_loyalty_root()
+        available_points = root.loyalty_exchange_available_points
+        if available_points < package.points_required:
             return {
-                'error': f'Không đủ điểm. Cần {package.points_required}, có {partner.loyalty_total_points}',
+                'error': (
+                    f'Không đủ điểm khả dụng. Cần {package.points_required}, '
+                    f'còn {available_points}. Đang treo {root.loyalty_reward_pending_points} điểm.'
+                ),
             }
 
         # Tạo wizard context và thực hiện đổi 123
@@ -148,19 +154,26 @@ class LoyaltyAPIController(http.Controller):
         date_expiry = odoo_fields.Datetime.now() + timedelta(days=validity_days)
 
         voucher = request.env['hlv.loyalty.voucher'].sudo().create({
-            'partner_id': partner.id,
+            'partner_id': root.id,
             'package_id': package.id,
             'date_expiry': date_expiry,
         })
 
         request.env['hlv.loyalty.history'].sudo().create({
-            'partner_id': partner.id,
+            'partner_id': root.id,
             'point_amount': -package.points_required,
+            'point_type': 'exchange',
             'transaction_type': 'redeem',
+            'state': 'confirmed',
             'description': f'Đổi Voucher [{package.name}] - Mã: {voucher.code} (API)',
             'voucher_id': voucher.id,
             'company_id': request.env.company.id,
         })
+        root.invalidate_recordset([
+            'loyalty_exchange_points',
+            'loyalty_reward_pending_points',
+            'loyalty_exchange_available_points',
+        ])
 
         return {
             'success': True,
@@ -170,7 +183,9 @@ class LoyaltyAPIController(http.Controller):
                 'discount_value': voucher.discount_value,
                 'date_expiry': date_expiry.isoformat(),
             },
-            'remaining_points': partner.loyalty_total_points,
+            'remaining_points': root.loyalty_exchange_points,
+            'exchange_points_available': root.loyalty_exchange_available_points,
+            'pending_reward_points': root.loyalty_reward_pending_points,
         }
 
     @http.route('/api/loyalty/validate-voucher', type='json',
@@ -333,6 +348,8 @@ class LoyaltyExternalAPI(http.Controller):
         tier = partner.loyalty_tier_id
         pts = partner.loyalty_total_points
         exc_pts = partner.loyalty_exchange_points
+        pending_reward_points = partner.loyalty_reward_pending_points
+        available_exchange_points = partner.loyalty_exchange_available_points
         # tiers sorted asc — next tier là tier đầu tiên có min_points > pts
         next_tier = next((t for t in tiers if t.min_points > pts), None)
         return {
@@ -342,6 +359,8 @@ class LoyaltyExternalAPI(http.Controller):
             'email': partner.email or '',
             'ranking_points': pts,
             'exchange_points': exc_pts,
+            'pending_reward_points': pending_reward_points,
+            'exchange_points_available': available_exchange_points,
             # backward-compat alias
             'total_points': pts,
             'image_url': LoyaltyExternalAPI._partner_image_url(partner),
@@ -862,12 +881,15 @@ class LoyaltyExternalAPI(http.Controller):
             return {'error': 'Khách hàng không tồn tại'}
 
         root = partner._get_loyalty_root()
-        avail_exchange = root.loyalty_exchange_points
+        balance_exchange = root.loyalty_exchange_points
+        avail_exchange = root.loyalty_exchange_available_points
+        pending_reward_points = root.loyalty_reward_pending_points
+        insufficient_code = 'PENDING_REWARD_POINTS' if pending_reward_points else 'INSUFFICIENT_POINTS'
 
         vals = {
             'partner_id': root.id,
             'request_type': request_type,
-            'balance_at_request': avail_exchange,
+            'balance_at_request': balance_exchange,
             'company_id': request.env.company.id,
         }
 
@@ -880,8 +902,13 @@ class LoyaltyExternalAPI(http.Controller):
                 return {'error': 'Gói quà không tồn tại hoặc đã ngừng'}
             if avail_exchange < package.points_required:
                 return {
-                    'error': f'Không đủ điểm đổi thưởng. '
-                             f'Cần {package.points_required:,} điểm, bạn có {avail_exchange:,} điểm.'
+                    'error': f'Không đủ điểm khả dụng. '
+                             f'Cần {package.points_required:,} điểm, bạn còn {avail_exchange:,} điểm. '
+                             f'Đang treo {pending_reward_points:,} điểm trong yêu cầu chờ xử lý.',
+                    'code': insufficient_code,
+                    'exchange_points': balance_exchange,
+                    'pending_reward_points': pending_reward_points,
+                    'exchange_points_available': avail_exchange,
                 }
             vals['package_id'] = package.id
 
@@ -891,8 +918,13 @@ class LoyaltyExternalAPI(http.Controller):
                 return {'error': 'points_to_redeem phải lớn hơn 0'}
             if avail_exchange < points_to_redeem:
                 return {
-                    'error': f'Không đủ điểm đổi thưởng. '
-                             f'Cần {points_to_redeem:,} điểm, bạn có {avail_exchange:,} điểm.'
+                    'error': f'Không đủ điểm khả dụng. '
+                             f'Cần {points_to_redeem:,} điểm, bạn còn {avail_exchange:,} điểm. '
+                             f'Đang treo {pending_reward_points:,} điểm trong yêu cầu chờ xử lý.',
+                    'code': insufficient_code,
+                    'exchange_points': balance_exchange,
+                    'pending_reward_points': pending_reward_points,
+                    'exchange_points_available': avail_exchange,
                 }
             bank_name = (kwargs.get('bank_name') or '').strip()
             account_number = (kwargs.get('account_number') or '').strip()
@@ -907,7 +939,16 @@ class LoyaltyExternalAPI(http.Controller):
                 'customer_note': kwargs.get('customer_note') or '',
             })
 
-        req = request.env['hlv.loyalty.reward.request'].sudo().create(vals)
+        try:
+            req = request.env['hlv.loyalty.reward.request'].sudo().create(vals)
+        except UserError as exc:
+            return {
+                'error': str(exc),
+                'code': 'PENDING_REWARD_POINTS',
+                'exchange_points': balance_exchange,
+                'pending_reward_points': pending_reward_points,
+                'exchange_points_available': avail_exchange,
+            }
 
         return {
             'success': True,
@@ -916,7 +957,54 @@ class LoyaltyExternalAPI(http.Controller):
             'request_type': req.request_type,
             'points_required': req.points_required,
             'cash_value': req.cash_value,
-            'exchange_points_remaining': avail_exchange - req.points_required,
+            'exchange_points': balance_exchange,
+            'pending_reward_points': root.loyalty_reward_pending_points,
+            'exchange_points_available': root.loyalty_exchange_available_points,
+            'exchange_points_remaining': max(avail_exchange - req.points_required, 0),
             'message': 'Yêu cầu đổi thưởng đã được gửi thành công. Vui lòng chờ xét duyệt.',
+        }
+
+    @http.route('/api/v1/loyalty/redeem/cancel', type='json',
+                auth='public', methods=['POST'], csrf=False, cors='*')
+    def cancel_redeem_request(self, **kwargs):
+        """POST /api/v1/loyalty/redeem/cancel
+        Body: {"partner_id": 42, "request_id": 123}
+        """
+        partner_id = kwargs.get('partner_id')
+        request_id = kwargs.get('request_id')
+        if not partner_id:
+            return {'error': 'Thiếu partner_id'}
+        if not request_id:
+            return {'error': 'Thiếu request_id'}
+
+        partner = request.env['res.partner'].sudo().browse(int(partner_id))
+        if not partner.exists():
+            return {'error': 'Khách hàng không tồn tại'}
+        root = partner._get_loyalty_root()
+
+        req = request.env['hlv.loyalty.reward.request'].sudo().browse(int(request_id))
+        if not req.exists() or req.partner_id.id not in root._get_loyalty_family_partner_ids():
+            return {'error': 'Yêu cầu đổi thưởng không tồn tại', 'code': 'REQUEST_NOT_FOUND'}
+        if req.state != 'pending':
+            return {
+                'error': 'Chỉ hủy được yêu cầu đang chờ xử lý',
+                'code': 'REQUEST_NOT_PENDING',
+                'state': req.state,
+            }
+
+        try:
+            req.action_cancel()
+        except UserError as exc:
+            return {'error': str(exc), 'code': 'CANCEL_FAILED'}
+
+        return {
+            'success': True,
+            'request_id': req.id,
+            'request_name': req.name,
+            'state': req.state,
+            'exchange_points': root.loyalty_exchange_points,
+            'pending_reward_points': root.loyalty_reward_pending_points,
+            'exchange_points_available': root.loyalty_exchange_available_points,
+            'message': 'Yêu cầu đổi thưởng đã được hủy.',
         }
 

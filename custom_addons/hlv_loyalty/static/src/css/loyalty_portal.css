@@ -996,6 +996,23 @@ a { color:inherit; }
 }
 .sr-rq-vcode .ms { font-size:14px; }
 .sr-rq-date { font-size:.72rem; color:#999; margin-top:8px; display:flex; align-items:center; gap:5px; flex-wrap:wrap; }
+.sr-rq-cancel-form { margin-top:10px; }
+.sr-rq-cancel-btn {
+    border:1px solid #d8dbe6;
+    background:#fff;
+    color:#9f1d2f;
+    min-height:34px;
+    padding:0 12px;
+    border-radius:7px;
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    font-size:.78rem;
+    font-weight:700;
+    cursor:pointer;
+}
+.sr-rq-cancel-btn:hover { background:#fff3f5; border-color:#efb8c3; }
+.sr-rq-cancel-btn .ms { font-size:15px; }
 
 /* Empty state */
 .sr-rdm-empty {
