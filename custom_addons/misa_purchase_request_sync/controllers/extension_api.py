@@ -603,6 +603,38 @@ class MisaExtensionController(http.Controller):
                     incoming_misa_ids.add(misa_id)
 
                 product, uom = _resolve_product_and_uom(line)
+
+                # --- APPLY UoM CONVERSION ---
+                misa_uom_text = (line.get("uom") or "").strip()
+                default_uom_name = product.uom_id.name.strip() if product and product.uom_id else ""
+                misa_product_id = line.get("misa_product_id")
+                
+                if misa_product_id and product and misa_uom_text and default_uom_name and misa_uom_text.lower() != default_uom_name.lower():
+                    try:
+                        headers, _ = env_admin['sale.order']._misa_headers()
+                        orig_qty = float(line.get("qty") or 0.0)
+                        orig_price_before = float(line.get("misa_price_before_tax") or 0.0)
+                        qty_base, price_base, use_default = env_admin['sale.order']._convert_qty_price_to_default_uom(
+                            product=product,
+                            misa_uom_text=misa_uom_text,
+                            qty=orig_qty,
+                            price=orig_price_before,
+                            misa_product_id=misa_product_id,
+                            headers=headers
+                        )
+                        line["qty"] = qty_base
+                        line["misa_price_before_tax"] = price_base
+                        
+                        orig_price_after = float(line.get("misa_price_after_tax") or 0.0)
+                        if orig_price_before:
+                            rate_price = price_base / orig_price_before
+                            line["misa_price_after_tax"] = orig_price_after * rate_price
+                        
+                        uom = product.uom_id
+                    except Exception as e:
+                        _logger.error("Lỗi khi gọi API chuyển đổi ĐVT: %s", str(e))
+                # -----------------------------
+
                 line_vals = _build_line_vals(line, product, uom)
 
                 if misa_id and misa_id in existing_lines_by_misa_id:
