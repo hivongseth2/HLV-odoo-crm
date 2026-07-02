@@ -3,12 +3,23 @@ import base64
 import json
 import logging
 import requests
-from datetime import timedelta
+from datetime import timedelta, timezone
 from odoo import fields as odoo_fields, http
 from odoo.exceptions import UserError
 from odoo.http import request, Response
 
 _logger = logging.getLogger(__name__)
+
+
+def _vn_datetime(value):
+    if not value:
+        return None
+    dt = odoo_fields.Datetime.to_datetime(value)
+    if not dt:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone(timedelta(hours=7))).replace(microsecond=0).isoformat()
 
 
 class LoyaltyAPIController(http.Controller):
@@ -61,7 +72,7 @@ class LoyaltyAPIController(http.Controller):
         for rec in history_records:
             data.append({
                 'id': rec.id,
-                'date': rec.date.isoformat() if rec.date else None,
+                'date': _vn_datetime(rec.date),
                 'point_amount': rec.point_amount,
                 'transaction_type': rec.transaction_type,
                 'description': rec.description or '',
@@ -105,8 +116,8 @@ class LoyaltyAPIController(http.Controller):
                 'discount_type': v.discount_type,
                 'discount_value': v.discount_value,
                 'max_discount_amount': v.max_discount_amount,
-                'date_issued': v.date_issued.isoformat() if v.date_issued else None,
-                'date_expiry': v.date_expiry.isoformat() if v.date_expiry else None,
+                'date_issued': _vn_datetime(v.date_issued),
+                'date_expiry': _vn_datetime(v.date_expiry),
                 'package_name': v.package_id.name or '',
             })
         return Response(
@@ -181,7 +192,7 @@ class LoyaltyAPIController(http.Controller):
                 'code': voucher.code,
                 'discount_type': voucher.discount_type,
                 'discount_value': voucher.discount_value,
-                'date_expiry': date_expiry.isoformat(),
+                'date_expiry': _vn_datetime(date_expiry),
             },
             'remaining_points': root.loyalty_exchange_points,
             'exchange_points_available': root.loyalty_exchange_available_points,
@@ -234,7 +245,7 @@ class LoyaltyAPIController(http.Controller):
                 'discount_type': voucher.discount_type,
                 'discount_value': voucher.discount_value,
                 'estimated_discount': discount,
-                'date_expiry': voucher.date_expiry.isoformat() if voucher.date_expiry else None,
+                'date_expiry': _vn_datetime(voucher.date_expiry),
             },
         }
 
@@ -620,7 +631,7 @@ class LoyaltyExternalAPI(http.Controller):
             'code': v.code,
             'discount_type': v.discount_type,
             'discount_value': v.discount_value,
-            'date_expiry': v.date_expiry.isoformat() if v.date_expiry else None,
+            'date_expiry': _vn_datetime(v.date_expiry),
         } for v in vouchers]
 
         # Lịch sử 10 gần nhất
@@ -629,7 +640,7 @@ class LoyaltyExternalAPI(http.Controller):
         ], limit=10, order='date desc')
         summary['recent_history'] = [{
             'id': h.id,
-            'date': h.date.isoformat() if h.date else None,
+            'date': _vn_datetime(h.date),
             'point_amount': h.point_amount,
             'point_type': h.point_type or 'ranking',
             'transaction_type': h.transaction_type,
@@ -718,7 +729,7 @@ class LoyaltyExternalAPI(http.Controller):
             },
             'records': [{
                 'id': h.id,
-                'date': h.date.isoformat() if h.date else None,
+                'date': _vn_datetime(h.date),
                 'point_amount': h.point_amount,
                 'point_type': h.point_type or 'ranking',
                 'transaction_type': h.transaction_type,
@@ -811,8 +822,8 @@ class LoyaltyExternalAPI(http.Controller):
             'discount_type': v.discount_type,
             'discount_value': v.discount_value,
             'max_discount_amount': v.max_discount_amount,
-            'date_issued': v.date_issued.isoformat() if v.date_issued else None,
-            'date_expiry': v.date_expiry.isoformat() if v.date_expiry else None,
+            'date_issued': _vn_datetime(v.date_issued),
+            'date_expiry': _vn_datetime(v.date_expiry),
             'package_name': v.package_id.name or '',
             'reward_type': v.reward_type or 'discount',
         } for v in vouchers])
@@ -850,7 +861,7 @@ class LoyaltyExternalAPI(http.Controller):
                 'discount_type': voucher.discount_type,
                 'discount_value': voucher.discount_value,
                 'estimated_discount': discount,
-                'date_expiry': voucher.date_expiry.isoformat() if voucher.date_expiry else None,
+                'date_expiry': _vn_datetime(voucher.date_expiry),
                 'partner_id': voucher.partner_id.id,
                 'partner_name': voucher.partner_id.name,
             },
@@ -909,9 +920,8 @@ class LoyaltyExternalAPI(http.Controller):
             'voucher_code': req.voucher_id.code if req.voucher_id else '',
             'package_name': req.package_id.name if req.package_id else '',
             'state': req.state,
-            'date_request': req.date_request.isoformat() if req.date_request else None,
+            'date_request': _vn_datetime(req.date_request),
             'customer_note': req.customer_note or '',
-            'voucher_code': req.voucher_id.code if req.voucher_id else '',
         }
 
     @http.route('/api/v1/loyalty/redeem/requests', type='http',

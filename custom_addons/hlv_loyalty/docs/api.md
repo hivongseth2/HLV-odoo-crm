@@ -249,7 +249,7 @@ Danh sách đơn hàng của user.
         "id": 501,
         "name": "SO/2026/0501",
         "state": "shipping",
-        "date_order": "2026-04-10T14:30:00Z",
+        "date_order": "2026-04-10T14:30:00+07:00",
         "amount_total": 2580000,
         "items": [
           {
@@ -292,7 +292,7 @@ Chi tiết 1 đơn hàng.
       "id": 501,
       "name": "SO/2026/0501",
       "state": "shipping",
-      "date_order": "2026-04-10T14:30:00Z",
+      "date_order": "2026-04-10T14:30:00+07:00",
       "amount_total": 2580000,
       "amount_tax": 0,
       "shipping_fee": 0,
@@ -367,7 +367,7 @@ Tạo đơn hàng mới.
       "id": 502,
       "name": "SO/2026/0502",
       "state": "pending",
-      "date_order": "2026-04-15T10:00:00Z",
+      "date_order": "2026-04-15T10:00:00+07:00",
       "amount_total": 3870000,
       "items": [...]
     }
@@ -655,7 +655,7 @@ Lấy đầy đủ thông tin loyalty của 1 partner.
     "recent_history": [
       {
         "id": 401,
-        "date": "2026-04-10T14:30:00Z",
+        "date": "2026-04-10T14:30:00+07:00",
         "point_amount": 129,
         "transaction_type": "earn",
         "description": "Mua hàng SO/2026/0501"
@@ -689,14 +689,14 @@ Lịch sử tích / tiêu điểm (phân trang).
     "history": [
       {
         "id": 401,
-        "date": "2026-04-10T14:30:00Z",
+        "date": "2026-04-10T14:30:00+07:00",
         "point_amount": 129,
         "transaction_type": "earn",
         "description": "Mua hàng SO/2026/0501"
       },
       {
         "id": 400,
-        "date": "2026-04-08T09:00:00Z",
+        "date": "2026-04-08T09:00:00+07:00",
         "point_amount": -500,
         "transaction_type": "redeem",
         "description": "Đổi voucher Giảm 50K"
@@ -978,7 +978,7 @@ Lấy danh sách yêu cầu đổi thưởng của partner.
         "account_number": "040084366041",
         "account_name": "NGUYEN VAN A",
         "state": "pending",
-        "date_request": "2026-07-02T13:41:00",
+        "date_request": "2026-07-02T13:41:00+07:00",
         "date_done": null,
         "customer_note": "",
         "voucher_id": null,

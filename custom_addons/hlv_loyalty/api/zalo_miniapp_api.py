@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import base64
 import json
-from datetime import timedelta
+from datetime import timedelta, timezone
 from odoo import fields, http
 from odoo.exceptions import UserError
 from odoo.http import request, Response
@@ -63,6 +63,17 @@ class ZaloMiniAppAPI(http.Controller):
         if isinstance(value, bool):
             return value
         return str(value).strip().lower() in ("1", "true", "yes", "y", "on")
+
+    @staticmethod
+    def _vn_datetime(value):
+        if not value:
+            return None
+        dt = fields.Datetime.to_datetime(value)
+        if not dt:
+            return None
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone(timedelta(hours=7))).replace(microsecond=0).isoformat()
 
     @staticmethod
     def _img_url(model, rec_id, field_name="image_1920"):
@@ -222,8 +233,8 @@ class ZaloMiniAppAPI(http.Controller):
             "gift_qty": voucher.gift_qty,
             "min_order_amount": voucher.min_order_amount,
             "apply_on": voucher.apply_on,
-            "date_issued": voucher.date_issued.isoformat() if voucher.date_issued else None,
-            "date_expiry": voucher.date_expiry.isoformat() if voucher.date_expiry else None,
+            "date_issued": ZaloMiniAppAPI._vn_datetime(voucher.date_issued),
+            "date_expiry": ZaloMiniAppAPI._vn_datetime(voucher.date_expiry),
             "package_name": voucher.package_id.name if voucher.package_id else "",
         }
 
@@ -246,7 +257,7 @@ class ZaloMiniAppAPI(http.Controller):
             "id": order.id,
             "name": order.name,
             "state": order.state,
-            "date_order": order.date_order.isoformat() if order.date_order else None,
+            "date_order": ZaloMiniAppAPI._vn_datetime(order.date_order),
             "amount_total": order.amount_total,
             "amount_tax": order.amount_tax,
             "voucher_code": order.loyalty_voucher_code or None,
@@ -305,7 +316,7 @@ class ZaloMiniAppAPI(http.Controller):
     def _history_to_dict(history):
         return {
             "id": history.id,
-            "date": history.date.isoformat() if history.date else None,
+            "date": ZaloMiniAppAPI._vn_datetime(history.date),
             "point_amount": history.point_amount,
             "transaction_type": history.transaction_type,
             "description": history.description or "",
@@ -763,7 +774,7 @@ class ZaloMiniAppAPI(http.Controller):
                 "id": order.id,
                 "name": order.name,
                 "state": order.state,
-                "date_order": order.date_order.isoformat() if order.date_order else None,
+                "date_order": self._vn_datetime(order.date_order),
                 "amount_total": order.amount_total,
                 "items": items,
             })
@@ -803,7 +814,7 @@ class ZaloMiniAppAPI(http.Controller):
                 "id": order.id,
                 "name": order.name,
                 "state": order.state,
-                "date_order": order.date_order.isoformat() if order.date_order else None,
+                "date_order": self._vn_datetime(order.date_order),
                 "amount_total": order.amount_total,
                 "amount_tax": order.amount_tax,
                 "shipping_fee": 0,
@@ -885,7 +896,7 @@ class ZaloMiniAppAPI(http.Controller):
                 "id": order.id,
                 "name": order.name,
                 "state": order.state,
-                "date_order": order.date_order.isoformat() if order.date_order else None,
+                "date_order": self._vn_datetime(order.date_order),
                 "amount_total": order.amount_total,
                 "items": items_data,
             }
@@ -1126,8 +1137,8 @@ class ZaloMiniAppAPI(http.Controller):
                 "account_number": req.account_number or "",
                 "account_name": req.account_name or "",
                 "state": req.state,
-                "date_request": req.date_request.isoformat() if req.date_request else None,
-                "date_done": req.date_done.isoformat() if req.date_done else None,
+                "date_request": self._vn_datetime(req.date_request),
+                "date_done": self._vn_datetime(req.date_done),
                 "customer_note": req.customer_note or "",
                 "voucher_id": req.voucher_id.id if req.voucher_id else None,
                 "voucher_code": req.voucher_id.code if req.voucher_id else "",
