@@ -1273,6 +1273,7 @@ class MisaExtensionController(http.Controller):
                     try:
                         import base64
                         import json as _json
+                        import requests
                         # Template từ MISA: base64 encoded JSON với Key = refid
                         detail_full_payload = [{
                             "Type": "pu_order",
@@ -1285,10 +1286,13 @@ class MisaExtensionController(http.Controller):
                                 {"Type": "wesign_document", "Alias": "wesign_document", "ForeignKey": "refid", "Mode": "View"}
                             ]
                         }]
-                        detail_res = misa_utils._fetch_with_retry(
-                            "https://actapp.misa.vn/g2/api/pu/v1/pu_order/detail_full",
-                            headers, detail_full_payload
-                        )
+                        req_base64 = base64.b64encode(
+                            _json.dumps(detail_full_payload, separators=(',', ':')).encode('utf-8')
+                        ).decode('utf-8')
+                        detail_url = f"https://actapp.misa.vn/g2/api/pu/v1/pu_order/detail_full?req={req_base64}"
+                        
+                        detail_res = requests.get(detail_url, headers=headers, timeout=30)
+                        
                         if detail_res.status_code == 200:
                             dt_json = detail_res.json()
                             d_obj = dt_json.get("Data", {}) if isinstance(dt_json, dict) else {}
