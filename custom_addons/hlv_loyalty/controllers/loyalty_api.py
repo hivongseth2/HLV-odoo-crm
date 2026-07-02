@@ -415,7 +415,7 @@ class LoyaltyExternalAPI(http.Controller):
 
         Tìm khách hàng theo SĐT hoặc email, trả về điểm + hạng.
         """
-        phone = (kwargs.get('phone') or '').strip()
+        phone = self._normalize_vn_phone(kwargs.get('phone') or '')
         email = (kwargs.get('email') or '').strip().lower()
 
         if not phone and not email:
@@ -426,7 +426,7 @@ class LoyaltyExternalAPI(http.Controller):
         if phone:
             # Chỉ tìm qua portal_phone (đã chuẩn hóa)
             accounts = request.env['hlv.loyalty.portal.account'].sudo().search(
-                [('portal_phone', 'like', phone), ('active', '=', True)], limit=5
+                [('portal_phone', '=', phone), ('active', '=', True)], limit=5
             )
             for acc in accounts:
                 partner_ids.add(acc.partner_id.id)
@@ -746,9 +746,7 @@ class LoyaltyExternalAPI(http.Controller):
 
         Body (JSON):
         {
-            "partner_id": 42,          // hoặc dùng phone/email
-            "phone": "0901234567",
-            "email": "abc@example.com",
+            "partner_id": 42,
             "points": 100,             // âm để trừ điểm
             "description": "Cộng điểm ưu đãi sinh nhật"
         }
@@ -762,21 +760,12 @@ class LoyaltyExternalAPI(http.Controller):
         if points == 0:
             return {'error': 'points không được bằng 0'}
 
-        # Tìm partner
-        partner = None
-        if kwargs.get('partner_id'):
-            partner = request.env['res.partner'].sudo().browse(int(kwargs['partner_id']))
-            if not partner.exists():
-                return {'error': 'Khách hàng không tồn tại'}
-        elif kwargs.get('phone'):
-            partner = request.env['res.partner'].sudo().search(
-                [('phone', 'like', kwargs['phone'].strip())], limit=1)
-        elif kwargs.get('email'):
-            partner = request.env['res.partner'].sudo().search(
-                [('email', '=ilike', kwargs['email'].strip())], limit=1)
-
-        if not partner:
-            return {'error': 'Không tìm thấy khách hàng'}
+        partner_id = kwargs.get('partner_id')
+        if not partner_id:
+            return {'error': 'Thiếu partner_id'}
+        partner = request.env['res.partner'].sudo().browse(int(partner_id))
+        if not partner.exists():
+            return {'error': 'Khách hàng không tồn tại'}
 
         root = partner._get_loyalty_root()
 

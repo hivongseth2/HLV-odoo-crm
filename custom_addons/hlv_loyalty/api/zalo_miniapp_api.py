@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import base64
 import json
+import re
 from datetime import timedelta, timezone
 from odoo import fields, http
 from odoo.exceptions import UserError
@@ -63,6 +64,17 @@ class ZaloMiniAppAPI(http.Controller):
         if isinstance(value, bool):
             return value
         return str(value).strip().lower() in ("1", "true", "yes", "y", "on")
+
+    @staticmethod
+    def _normalize_vn_phone(phone):
+        if not phone:
+            return ""
+        digits = re.sub(r"\D", "", str(phone))
+        if len(digits) == 11 and digits.startswith("84"):
+            digits = "0" + digits[2:]
+        elif len(digits) == 12 and digits.startswith("084"):
+            digits = "0" + digits[3:]
+        return digits
 
     @staticmethod
     def _vn_datetime(value):
@@ -188,18 +200,30 @@ class ZaloMiniAppAPI(http.Controller):
 
     def _partner_from_session_or_param(self, params=None):
         params = params or {}
-        partner = None
-        session_partner_id = request.session.get("zalo_partner_id")
-        if session_partner_id:
-            partner = request.env["res.partner"].sudo().browse(int(session_partner_id))
-            if partner.exists():
-                return partner.commercial_partner_id or partner
-
         partner_id = params.get("partner_id") or request.httprequest.args.get("partner_id")
         if partner_id:
             partner = request.env["res.partner"].sudo().browse(int(partner_id))
             if partner.exists():
-                return partner.commercial_partner_id or partner
+                return partner._get_loyalty_root()
+
+        session_partner_id = request.session.get("zalo_partner_id")
+        if session_partner_id:
+            partner = request.env["res.partner"].sudo().browse(int(session_partner_id))
+            if partner.exists():
+                return partner._get_loyalty_root()
+        return None
+
+    def _partner_from_phone(self, phone):
+        normalized = self._normalize_vn_phone(phone)
+        if not normalized:
+            return None
+
+        account = request.env["hlv.loyalty.portal.account"].sudo().search([
+            ("portal_phone", "=", normalized),
+            ("active", "=", True),
+        ], order="id desc", limit=1)
+        if account:
+            return account.partner_id._get_loyalty_root()
         return None
 
     @staticmethod
@@ -331,31 +355,49 @@ class ZaloMiniAppAPI(http.Controller):
         payload = self._request_json()
         access_token = (payload.get("access_token") or "").strip()
         user_id = (payload.get("user_id") or "").strip()
+        phone = payload.get("phone") or ""
         if not access_token or not user_id:
             return self._response_error("INVALID_INPUT", "access_token and user_id are required", status=400)
+        if not phone:
+            return self._response_error("INVALID_INPUT", "phone is required", status=400)
 
         partner_model = request.env["res.partner"].sudo()
-        domain = [("ref", "=", user_id)]
-        # Support optional custom fields if they exist in the DB.
-        if "zalo_user_id" in partner_model._fields:
-            domain = ["|", ("zalo_user_id", "=", user_id), ("ref", "=", user_id)]
-        elif "x_zalo_user_id" in partner_model._fields:
-            domain = ["|", ("x_zalo_user_id", "=", user_id), ("ref", "=", user_id)]
-
-        partner = partner_model.search(domain, limit=1)
+        partner = self._partner_from_phone(phone)
         if not partner:
-            create_vals = {
-                "name": "Zalo User %s" % user_id,
-                "ref": user_id,
-                "customer_rank": 1,
-            }
-            if "zalo_user_id" in partner_model._fields:
-                create_vals["zalo_user_id"] = user_id
-            if "x_zalo_user_id" in partner_model._fields:
-                create_vals["x_zalo_user_id"] = user_id
-            partner = partner_model.create(create_vals)
+            return self._response_error("PARTNER_NOT_FOUND", "No active loyalty portal account found for phone", status=404)
 
-        root = partner.commercial_partner_id or partner
+        root = partner._get_loyalty_root()
+        bind_vals = {}
+        clear_vals = {}
+        binding_domain = [
+            ("id", "!=", root.id),
+            ("ref", "=", user_id),
+        ]
+        if "zalo_user_id" in partner_model._fields:
+            bind_vals["zalo_user_id"] = user_id
+            clear_vals["zalo_user_id"] = False
+            binding_domain = [
+                ("id", "!=", root.id),
+                "|",
+                ("zalo_user_id", "=", user_id),
+                ("ref", "=", user_id),
+            ]
+        elif "x_zalo_user_id" in partner_model._fields:
+            bind_vals["x_zalo_user_id"] = user_id
+            clear_vals["x_zalo_user_id"] = False
+            binding_domain = [
+                ("id", "!=", root.id),
+                "|",
+                ("x_zalo_user_id", "=", user_id),
+                ("ref", "=", user_id),
+            ]
+        else:
+            bind_vals["ref"] = user_id
+        clear_vals["ref"] = False
+        if bind_vals:
+            partner_model.search(binding_domain).write(clear_vals)
+            root.write(bind_vals)
+
         loyalty_root = root._get_loyalty_root()
         request.session["zalo_partner_id"] = root.id
 
