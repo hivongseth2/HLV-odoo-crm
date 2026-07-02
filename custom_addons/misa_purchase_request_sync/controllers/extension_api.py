@@ -1176,9 +1176,13 @@ class MisaExtensionController(http.Controller):
                     try:
                         po_name, apo = future.result()
                         if apo:
-                            amis_dict[po_name] = apo
+                            # Chuẩn hóa key: strip whitespace để tránh lỗi lookup
+                            amis_dict[po_name.strip()] = apo
                     except Exception as e:
                         _logger.warning("Future exception: %s", e)
+            
+            _logger.info("🔍 amis_dict keys after search: %s", list(amis_dict.keys()))
+            _logger.info("🔍 amis_dict count: %s POs found in MISA", len(amis_dict))
             
             # ============================================================
             # BUILD RECONCILED DATA (NEW FORMAT)
@@ -1193,15 +1197,19 @@ class MisaExtensionController(http.Controller):
 
             for po in odoo_pos:
                 po_name = po.name
-                po_origin = po.origin or ""
+                po_origin = (po.origin or "").strip()
+                
+                _logger.info("🔍 Processing PO '%s' (origin='%s')", po_name, po_origin)
                 
                 # Lấy chi tiết dòng Odoo
                 odoo_lines_detail = self._get_odoo_line_details(po)
                 
-                # Tìm trên AMIS
-                amis_po = amis_dict.get(po_name)
+                # Tìm trên AMIS - dùng key đã strip
+                amis_po = amis_dict.get(po_name.strip())
+                _logger.info("🔍 Lookup amis_dict with stripped po_name='%s': found=%s", po_name.strip(), bool(amis_po))
                 if not amis_po and po_origin:
-                    amis_po = amis_dict.get(po_origin)
+                    amis_po = amis_dict.get(po_origin.strip())
+                    _logger.info("🔍 Fallback lookup with origin='%s': found=%s", po_origin.strip(), bool(amis_po))
                 
                 # Khởi tạo reconciled item
                 reconciled_item = {
