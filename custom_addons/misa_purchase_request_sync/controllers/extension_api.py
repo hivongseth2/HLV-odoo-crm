@@ -199,10 +199,10 @@ class MisaExtensionController(http.Controller):
                 # Prepare supplier name if available
                 misa_supplier_id = None
                 misa_supplier_name = ""
-                if hasattr(line, 'misa_supplier_id') and line.misa_supplier_id:
-                    misa_supplier_id = line.misa_supplier_id.id
-                    ref = line.misa_supplier_id.ref
-                    misa_supplier_name = (f"[{ref}] " if ref else "") + line.misa_supplier_id.name
+                if hasattr(line, 'sale_proposed_supplier_id') and line.sale_proposed_supplier_id:
+                    misa_supplier_id = line.sale_proposed_supplier_id.id
+                    ref = line.sale_proposed_supplier_id.ref
+                    misa_supplier_name = (f"[{ref}] " if ref else "") + line.sale_proposed_supplier_id.name
 
                 lines_data.append({
                     "misa_line_id": line.misa_line_id or "",
@@ -212,6 +212,7 @@ class MisaExtensionController(http.Controller):
                     "qty_received": qty_received,
                     "purchase_state": purchase_state,
                     # --- MISA Extension Custom Fields ---
+                    "sale_proposed_supplier_id": misa_supplier_id,
                     "misa_supplier_id": misa_supplier_id,
                     "misa_supplier_name": misa_supplier_name,
                     "misa_price_before_tax": line.misa_price_before_tax if hasattr(line, 'misa_price_before_tax') else 0.0,
@@ -573,7 +574,7 @@ class MisaExtensionController(http.Controller):
                     "product_uom_id": uom.id if uom else False,
                     "estimated_cost": 0.0,
                     "misa_line_id": (line.get("misa_line_id") or "").strip() or False,
-                    "misa_supplier_id": int(line.get("misa_supplier_id")) if line.get("misa_supplier_id") else False,
+                    "sale_proposed_supplier_id": int(line.get("misa_supplier_id")) if line.get("misa_supplier_id") else False,
                     "misa_price_before_tax": float(line.get("misa_price_before_tax") or 0.0),
                     "misa_price_after_tax": float(line.get("misa_price_after_tax") or 0.0),
                     "misa_amount": float(line.get("misa_amount") or 0.0),
