@@ -12,6 +12,9 @@
     "category": "Sales",
     "author": "HLV",
     "depends": ["sale_management", "stock", "mail", "website"],
+    "external_dependencies": {
+        "python": ["bs4"],
+    },
     "data": [
         "security/loyalty_security.xml",
         "security/ir.model.access.csv",

@@ -74,6 +74,8 @@ def _load_partner_data(partner):
         'masked_phone': _mask_phone(root.phone),
         'masked_email': _mask_email(root.email),
         'exchange_points': root.loyalty_exchange_points,
+        'reward_pending_points': root.loyalty_reward_pending_points,
+        'exchange_available_points': root.loyalty_exchange_available_points,
         'pending_points': root.loyalty_pending_points,
         'fmt_vn_date': lambda dt: _vn_datetime(dt, '%d Thg %m, %Y'),
         'fmt_vn_time': lambda dt: _vn_datetime(dt, '%H:%M'),
@@ -308,11 +310,13 @@ class LoyaltyPublicPortal(http.Controller):
         if not pkg.exists() or not pkg.active:
             return request.redirect('/loyalty/redeem?tab=gift')
 
-        avail = root.loyalty_exchange_points
+        balance = root.loyalty_exchange_points
+        avail = root.loyalty_exchange_available_points
         if avail < pkg.points_required:
             return request.redirect(
                 f'/loyalty/redeem?tab=gift&error_msg='
-                f'Không đủ điểm. Bạn có {avail} điểm, cần {pkg.points_required} điểm.'
+                f'Không đủ điểm khả dụng. Bạn còn {avail} điểm, cần {pkg.points_required} điểm. '
+                f'Đang treo {root.loyalty_reward_pending_points} điểm trong yêu cầu chờ xử lý.'
             )
 
         # Create and immediately process (gift = no admin approval needed)
@@ -320,7 +324,7 @@ class LoyaltyPublicPortal(http.Controller):
             'partner_id': root.id,
             'request_type': 'gift',
             'package_id': pkg.id,
-            'balance_at_request': avail,
+            'balance_at_request': balance,
             'company_id': request.env.company.id,
         })
         rq.action_done()
@@ -339,7 +343,8 @@ class LoyaltyPublicPortal(http.Controller):
             return request.redirect('/loyalty')
 
         root = account.partner_id._get_loyalty_root()
-        avail = root.loyalty_exchange_points
+        balance = root.loyalty_exchange_points
+        avail = root.loyalty_exchange_available_points
 
         points_to_redeem = int(post.get('points_to_redeem') or 0)
         bank_name = (post.get('bank_name') or '').strip()
@@ -351,7 +356,10 @@ class LoyaltyPublicPortal(http.Controller):
         if points_to_redeem <= 0:
             errors.append('Vui lòng nhập số điểm muốn đổi.')
         elif points_to_redeem > avail:
-            errors.append(f'Không đủ điểm. Bạn có {avail:,} điểm, yêu cầu {points_to_redeem:,} điểm.')
+            errors.append(
+                f'Không đủ điểm khả dụng. Bạn còn {avail:,} điểm, yêu cầu {points_to_redeem:,} điểm. '
+                f'Đang treo {root.loyalty_reward_pending_points:,} điểm trong yêu cầu chờ xử lý.'
+            )
         if not bank_name:
             errors.append('Vui lòng nhập tên ngân hàng.')
         if not account_number:
@@ -394,13 +402,31 @@ class LoyaltyPublicPortal(http.Controller):
             'account_number': account_number,
             'account_name': account_name,
             'customer_note': customer_note,
-            'balance_at_request': avail,
+            'balance_at_request': balance,
             'company_id': request.env.company.id,
         })
         return request.redirect(
             '/loyalty/redeem?tab=history'
             '&success_msg=Yêu cầu đổi tiền đã được gửi. Chúng tôi sẽ xử lý sớm nhất!'
         )
+
+    @http.route('/loyalty/redeem/request/<int:request_id>/cancel', type='http',
+                auth='public', website=True, sitemap=False, methods=['POST'])
+    def loyalty_cancel_redeem_request(self, request_id, **post):
+        account = _get_current_account()
+        if not account:
+            return request.redirect('/loyalty')
+
+        root = account.partner_id._get_loyalty_root()
+        req = request.env['hlv.loyalty.reward.request'].sudo().browse(request_id)
+        if not req.exists() or req.partner_id.id not in root._get_loyalty_family_partner_ids():
+            return request.redirect('/loyalty/redeem?tab=history&error_msg=Không tìm thấy yêu cầu cần hủy.')
+        try:
+            req.action_cancel()
+        except UserError as exc:
+            return request.redirect(f'/loyalty/redeem?tab=history&error_msg={exc.args[0]}')
+
+        return request.redirect('/loyalty/redeem?tab=history&success_msg=Yêu cầu đổi thưởng đã được hủy.')
 
     @http.route('/loyalty/vouchers', type='http', auth='public', website=True,
                 sitemap=False)
