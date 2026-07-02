@@ -308,9 +308,79 @@
         "code": "string",
         "order_amount": "number"
       }
+    },
+    {
+      "id": 28,
+      "name": "Submit reward request",
+      "method": "POST",
+      "path": "/loyalty/redeem/submit",
+      "description": "Create a reward request. Gift requests are processed immediately and return a voucher; cash requests remain pending for approval.",
+      "body": {
+        "partner_id": "number",
+        "request_type": "gift|cash",
+        "package_id": "number|required when request_type=gift",
+        "points_to_redeem": "number|required when request_type=cash",
+        "bank_name": "string|required when request_type=cash",
+        "account_number": "string|required when request_type=cash",
+        "account_name": "string|required when request_type=cash",
+        "customer_note": "string"
+      },
+      "returns": {
+        "request_id": "number",
+        "request_name": "string",
+        "state": "done|pending",
+        "voucher_id": "number|null",
+        "voucher_code": "string",
+        "points_required": "number",
+        "pending_reward_points": "number",
+        "exchange_points_available": "number"
+      },
+      "errors": [
+        "PENDING_REWARD_POINTS when pending requests are holding points",
+        "INSUFFICIENT_POINTS when total exchange points are not enough"
+      ]
+    },
+    {
+      "id": 29,
+      "name": "List reward requests",
+      "method": "GET",
+      "path": "/loyalty/redeem/requests",
+      "query": {
+        "partner_id": "number",
+        "limit": "number|optional|max 100"
+      },
+      "returns": {
+        "requests": "array<{id,name,request_type,points_required,cash_value,package_id,package_name,bank_name,account_number,account_name,state,date_request,date_done,customer_note,voucher_id,voucher_code}>",
+        "exchange_points": "number",
+        "pending_reward_points": "number",
+        "exchange_points_available": "number"
+      }
+    },
+    {
+      "id": 30,
+      "name": "Cancel reward request",
+      "method": "POST",
+      "path": "/loyalty/redeem/cancel",
+      "description": "Cancel a pending reward request so its reserved points become available again.",
+      "body": {
+        "partner_id": "number",
+        "request_id": "number"
+      },
+      "alternate_path": "/loyalty/redeem/requests/{request_id}/cancel",
+      "returns": {
+        "request_id": "number",
+        "state": "cancelled",
+        "pending_reward_points": "number",
+        "exchange_points_available": "number"
+      },
+      "errors": [
+        "REQUEST_NOT_FOUND",
+        "REQUEST_NOT_PENDING"
+      ]
     }
   ],
   "notes": [
+    "Loyalty point responses expose exchange_points, pending_reward_points, and exchange_points_available. App should disable new reward requests when exchange_points_available is lower than requested points.",
     "Province/ward/district can use public API https://provinces.open-api.vn/api/",
     "If your deployment already prefixes API path, prepend that host/base path in Mini App env config"
   ]

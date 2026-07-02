@@ -9,6 +9,8 @@
                     <group string="Thông tin Khách hàng">
                         <field name="partner_id"/>
                         <field name="current_points" widget="integer"/>
+                        <field name="reward_pending_points" widget="integer"/>
+                        <field name="available_points" widget="integer"/>
                     </group>
                     <group string="Chọn Gói Voucher">
                         <field name="package_id" options="{'no_create': True}"/>

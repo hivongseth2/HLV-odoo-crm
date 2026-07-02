@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 import base64
 import json
-from datetime import timedelta
+from datetime import timedelta, timezone
 from odoo import fields, http
+from odoo.exceptions import UserError
 from odoo.http import request, Response
 
 
@@ -62,6 +63,17 @@ class ZaloMiniAppAPI(http.Controller):
         if isinstance(value, bool):
             return value
         return str(value).strip().lower() in ("1", "true", "yes", "y", "on")
+
+    @staticmethod
+    def _vn_datetime(value):
+        if not value:
+            return None
+        dt = fields.Datetime.to_datetime(value)
+        if not dt:
+            return None
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone(timedelta(hours=7))).replace(microsecond=0).isoformat()
 
     @staticmethod
     def _img_url(model, rec_id, field_name="image_1920"):
@@ -221,8 +233,8 @@ class ZaloMiniAppAPI(http.Controller):
             "gift_qty": voucher.gift_qty,
             "min_order_amount": voucher.min_order_amount,
             "apply_on": voucher.apply_on,
-            "date_issued": voucher.date_issued.isoformat() if voucher.date_issued else None,
-            "date_expiry": voucher.date_expiry.isoformat() if voucher.date_expiry else None,
+            "date_issued": ZaloMiniAppAPI._vn_datetime(voucher.date_issued),
+            "date_expiry": ZaloMiniAppAPI._vn_datetime(voucher.date_expiry),
             "package_name": voucher.package_id.name if voucher.package_id else "",
         }
 
@@ -245,7 +257,7 @@ class ZaloMiniAppAPI(http.Controller):
             "id": order.id,
             "name": order.name,
             "state": order.state,
-            "date_order": order.date_order.isoformat() if order.date_order else None,
+            "date_order": ZaloMiniAppAPI._vn_datetime(order.date_order),
             "amount_total": order.amount_total,
             "amount_tax": order.amount_tax,
             "voucher_code": order.loyalty_voucher_code or None,
@@ -304,7 +316,7 @@ class ZaloMiniAppAPI(http.Controller):
     def _history_to_dict(history):
         return {
             "id": history.id,
-            "date": history.date.isoformat() if history.date else None,
+            "date": ZaloMiniAppAPI._vn_datetime(history.date),
             "point_amount": history.point_amount,
             "transaction_type": history.transaction_type,
             "description": history.description or "",
@@ -344,6 +356,7 @@ class ZaloMiniAppAPI(http.Controller):
             partner = partner_model.create(create_vals)
 
         root = partner.commercial_partner_id or partner
+        loyalty_root = root._get_loyalty_root()
         request.session["zalo_partner_id"] = root.id
 
         api_key = request.env["ir.config_parameter"].sudo().get_param("hlv_loyalty.zalo_api_key", "")
@@ -355,8 +368,11 @@ class ZaloMiniAppAPI(http.Controller):
             "phone": root.phone or root.mobile or "",
             "email": root.email or "",
             "avatar": self._img_url("res.partner", root.id),
-            "loyalty_points": root.loyalty_total_points,
-            "tier": root.loyalty_tier_id.name if root.loyalty_tier_id else None,
+            "loyalty_points": loyalty_root.loyalty_total_points,
+            "exchange_points": loyalty_root.loyalty_exchange_points,
+            "pending_reward_points": loyalty_root.loyalty_reward_pending_points,
+            "exchange_points_available": loyalty_root.loyalty_exchange_available_points,
+            "tier": loyalty_root.loyalty_tier_id.name if loyalty_root.loyalty_tier_id else None,
         })
 
     @http.route("/api/v1/account", type="http", auth="public", methods=["GET"], csrf=False)
@@ -365,6 +381,7 @@ class ZaloMiniAppAPI(http.Controller):
         if not partner:
             return self._response_error("UNAUTHORIZED", "Missing partner context. Call /auth/zalo first.", status=401)
 
+        loyalty_root = partner._get_loyalty_root()
         addresses = request.env["res.partner"].sudo().search([
             ("parent_id", "=", partner.id),
             ("type", "=", "delivery"),
@@ -377,9 +394,12 @@ class ZaloMiniAppAPI(http.Controller):
                 "phone": partner.phone or partner.mobile or "",
                 "email": partner.email or "",
                 "avatar": self._partner_image_url(partner),
-                "loyalty_points": getattr(partner, "loyalty_total_points", 0),
-                "tier": partner.loyalty_tier_id.name if partner.loyalty_tier_id else None,
-                "tier_image_url": partner.loyalty_tier_id.image_url if partner.loyalty_tier_id else "",
+                "loyalty_points": getattr(loyalty_root, "loyalty_total_points", 0),
+                "exchange_points": loyalty_root.loyalty_exchange_points,
+                "pending_reward_points": loyalty_root.loyalty_reward_pending_points,
+                "exchange_points_available": loyalty_root.loyalty_exchange_available_points,
+                "tier": loyalty_root.loyalty_tier_id.name if loyalty_root.loyalty_tier_id else None,
+                "tier_image_url": loyalty_root.loyalty_tier_id.image_url if loyalty_root.loyalty_tier_id else "",
                 "default_address_id": self._get_default_address_id(partner),
                 "address_count": len(addresses),
                 "cart_id": cart.id if cart else None,
@@ -754,7 +774,7 @@ class ZaloMiniAppAPI(http.Controller):
                 "id": order.id,
                 "name": order.name,
                 "state": order.state,
-                "date_order": order.date_order.isoformat() if order.date_order else None,
+                "date_order": self._vn_datetime(order.date_order),
                 "amount_total": order.amount_total,
                 "items": items,
             })
@@ -794,7 +814,7 @@ class ZaloMiniAppAPI(http.Controller):
                 "id": order.id,
                 "name": order.name,
                 "state": order.state,
-                "date_order": order.date_order.isoformat() if order.date_order else None,
+                "date_order": self._vn_datetime(order.date_order),
                 "amount_total": order.amount_total,
                 "amount_tax": order.amount_tax,
                 "shipping_fee": 0,
@@ -876,7 +896,7 @@ class ZaloMiniAppAPI(http.Controller):
                 "id": order.id,
                 "name": order.name,
                 "state": order.state,
-                "date_order": order.date_order.isoformat() if order.date_order else None,
+                "date_order": self._vn_datetime(order.date_order),
                 "amount_total": order.amount_total,
                 "items": items_data,
             }
@@ -1040,6 +1060,7 @@ class ZaloMiniAppAPI(http.Controller):
         partner = self._partner_from_session_or_param(payload)
         if not partner:
             return self._response_error("UNAUTHORIZED", "Missing partner context. Call /auth/zalo first.", status=401)
+        root = partner._get_loyalty_root()
 
         package_id = self._parse_int(payload.get("package_id"), 0)
         if package_id <= 0:
@@ -1049,10 +1070,12 @@ class ZaloMiniAppAPI(http.Controller):
         if not package.exists() or not package.active:
             return self._response_error("INVALID_PACKAGE", "Voucher package not found or inactive", status=404)
 
-        if partner.loyalty_total_points < package.points_required:
+        available_points = root.loyalty_exchange_available_points
+        if available_points < package.points_required:
             return self._response_error(
                 "INSUFFICIENT_POINTS",
-                "Ban can %s diem, hien co %s diem" % (package.points_required, partner.loyalty_total_points),
+                "Ban can %s diem, hien con %s diem kha dung. Dang treo %s diem."
+                % (package.points_required, available_points, root.loyalty_reward_pending_points),
                 status=400,
             )
 
@@ -1060,23 +1083,32 @@ class ZaloMiniAppAPI(http.Controller):
         date_expiry = fields.Datetime.now() + timedelta(days=validity_days)
 
         voucher = request.env["hlv.loyalty.voucher"].sudo().create({
-            "partner_id": partner.id,
+            "partner_id": root.id,
             "package_id": package.id,
             "date_expiry": date_expiry,
         })
 
         request.env["hlv.loyalty.history"].sudo().create({
-            "partner_id": partner.id,
+            "partner_id": root.id,
             "point_amount": -package.points_required,
+            "point_type": "exchange",
             "transaction_type": "redeem",
+            "state": "confirmed",
             "description": "Redeem voucher [%s] - %s" % (package.name, voucher.code),
             "voucher_id": voucher.id,
             "company_id": request.env.company.id,
         })
+        root.invalidate_recordset([
+            "loyalty_exchange_points",
+            "loyalty_reward_pending_points",
+            "loyalty_exchange_available_points",
+        ])
 
         return self._response_success({
             "voucher": self._voucher_to_dict(voucher),
-            "remaining_points": partner.loyalty_total_points,
+            "remaining_points": root.loyalty_exchange_points,
+            "pending_reward_points": root.loyalty_reward_pending_points,
+            "exchange_points_available": root.loyalty_exchange_available_points,
         }, status=201)
 
     @http.route("/api/v1/loyalty/redeem/requests", type="http", auth="public", methods=["GET"], csrf=False)
@@ -1084,10 +1116,12 @@ class ZaloMiniAppAPI(http.Controller):
         partner = self._partner_from_session_or_param(kwargs)
         if not partner:
             return self._response_error("UNAUTHORIZED", "Missing partner context. Call /auth/zalo first.", status=401)
+        root = partner._get_loyalty_root()
+        limit = min(max(self._parse_int(kwargs.get("limit") or request.httprequest.args.get("limit"), 50), 1), 100)
 
         requests = request.env["hlv.loyalty.reward.request"].sudo().search([
-            ("partner_id", "=", partner.id),
-        ], order="date_request desc, id desc", limit=50)
+            ("partner_id", "in", root._get_loyalty_family_partner_ids()),
+        ], order="date_request desc, id desc", limit=limit)
 
         data = []
         for req in requests:
@@ -1097,13 +1131,60 @@ class ZaloMiniAppAPI(http.Controller):
                 "request_type": req.request_type,
                 "points_required": req.points_required,
                 "cash_value": req.cash_value,
+                "package_id": req.package_id.id if req.package_id else None,
                 "package_name": req.package_id.name if req.package_id else "",
+                "bank_name": req.bank_name or "",
+                "account_number": req.account_number or "",
+                "account_name": req.account_name or "",
                 "state": req.state,
-                "date_request": req.date_request.isoformat() if req.date_request else None,
+                "date_request": self._vn_datetime(req.date_request),
+                "date_done": self._vn_datetime(req.date_done),
                 "customer_note": req.customer_note or "",
+                "voucher_id": req.voucher_id.id if req.voucher_id else None,
                 "voucher_code": req.voucher_id.code if req.voucher_id else "",
             })
-        return self._response_success({"requests": data})
+        return self._response_success({
+            "requests": data,
+            "exchange_points": root.loyalty_exchange_points,
+            "pending_reward_points": root.loyalty_reward_pending_points,
+            "exchange_points_available": root.loyalty_exchange_available_points,
+        })
+
+    @http.route("/api/v1/loyalty/redeem/requests/<int:request_id>/cancel", type="http", auth="public", methods=["POST"], csrf=False)
+    def loyalty_cancel_redeem_request(self, request_id=None, **kwargs):
+        payload = self._request_json()
+        partner = self._partner_from_session_or_param(payload)
+        if not partner:
+            return self._response_error("UNAUTHORIZED", "Missing partner context. Call /auth/zalo first.", status=401)
+        root = partner._get_loyalty_root()
+
+        request_id = request_id or self._parse_int(payload.get("request_id"), 0)
+        if request_id <= 0:
+            return self._response_error("INVALID_INPUT", "request_id is required", status=400)
+
+        req = request.env["hlv.loyalty.reward.request"].sudo().browse(request_id)
+        if not req.exists() or req.partner_id.id not in root._get_loyalty_family_partner_ids():
+            return self._response_error("REQUEST_NOT_FOUND", "Reward request not found", status=404)
+        if req.state != "pending":
+            return self._response_error("REQUEST_NOT_PENDING", "Only pending reward requests can be cancelled", status=400)
+
+        try:
+            req.action_cancel()
+        except UserError as exc:
+            return self._response_error("CANCEL_FAILED", str(exc), status=400)
+
+        return self._response_success({
+            "request": {
+                "id": req.id,
+                "name": req.name,
+                "state": req.state,
+                "points_required": req.points_required,
+            },
+            "exchange_points": root.loyalty_exchange_points,
+            "pending_reward_points": root.loyalty_reward_pending_points,
+            "exchange_points_available": root.loyalty_exchange_available_points,
+            "message": "Reward request cancelled",
+        })
 
     @http.route("/api/v1/account/change-password", type="http", auth="public", methods=["POST"], csrf=False)
     def api_change_password(self, **kwargs):

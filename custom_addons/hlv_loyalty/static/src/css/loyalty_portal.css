@@ -996,6 +996,37 @@ a { color:inherit; }
 }
 .sr-rq-vcode .ms { font-size:14px; }
 .sr-rq-date { font-size:.72rem; color:#999; margin-top:8px; display:flex; align-items:center; gap:5px; flex-wrap:wrap; }
+.sr-rq-cancel-form { margin:9px 0 0; display:inline-flex; }
+button.sr-rq-cancel-btn {
+    appearance:none;
+    -webkit-appearance:none;
+    border:1px solid #f1ccd3;
+    background:#fff7f8;
+    color:#9f1d2f;
+    min-height:28px;
+    padding:0 11px;
+    border-radius:999px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:0;
+    font:700 .74rem/1 'Inter', sans-serif;
+    cursor:pointer;
+    box-shadow:none;
+    text-decoration:none;
+    transition:background .16s ease, border-color .16s ease, color .16s ease, transform .16s ease;
+}
+button.sr-rq-cancel-btn:hover {
+    background:#ffecef;
+    border-color:#eaaeb9;
+    color:#7f1726;
+    transform:translateY(-1px);
+}
+button.sr-rq-cancel-btn:focus-visible {
+    outline:2px solid rgba(159,29,47,.25);
+    outline-offset:2px;
+}
+button.sr-rq-cancel-btn .ms { display:none; }
 
 /* Empty state */
 .sr-rdm-empty {

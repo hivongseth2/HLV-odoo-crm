@@ -3,11 +3,23 @@ import base64
 import json
 import logging
 import requests
-from datetime import timedelta
+from datetime import timedelta, timezone
 from odoo import fields as odoo_fields, http
+from odoo.exceptions import UserError
 from odoo.http import request, Response
 
 _logger = logging.getLogger(__name__)
+
+
+def _vn_datetime(value):
+    if not value:
+        return None
+    dt = odoo_fields.Datetime.to_datetime(value)
+    if not dt:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone(timedelta(hours=7))).replace(microsecond=0).isoformat()
 
 
 class LoyaltyAPIController(http.Controller):
@@ -60,7 +72,7 @@ class LoyaltyAPIController(http.Controller):
         for rec in history_records:
             data.append({
                 'id': rec.id,
-                'date': rec.date.isoformat() if rec.date else None,
+                'date': _vn_datetime(rec.date),
                 'point_amount': rec.point_amount,
                 'transaction_type': rec.transaction_type,
                 'description': rec.description or '',
@@ -104,8 +116,8 @@ class LoyaltyAPIController(http.Controller):
                 'discount_type': v.discount_type,
                 'discount_value': v.discount_value,
                 'max_discount_amount': v.max_discount_amount,
-                'date_issued': v.date_issued.isoformat() if v.date_issued else None,
-                'date_expiry': v.date_expiry.isoformat() if v.date_expiry else None,
+                'date_issued': _vn_datetime(v.date_issued),
+                'date_expiry': _vn_datetime(v.date_expiry),
                 'package_name': v.package_id.name or '',
             })
         return Response(
@@ -138,9 +150,14 @@ class LoyaltyAPIController(http.Controller):
         if not package.exists() or not package.active:
             return {'error': 'Gói Voucher không tồn tại hoặc đã ngừng'}
 
-        if partner.loyalty_total_points < package.points_required:
+        root = partner._get_loyalty_root()
+        available_points = root.loyalty_exchange_available_points
+        if available_points < package.points_required:
             return {
-                'error': f'Không đủ điểm. Cần {package.points_required}, có {partner.loyalty_total_points}',
+                'error': (
+                    f'Không đủ điểm khả dụng. Cần {package.points_required}, '
+                    f'còn {available_points}. Đang treo {root.loyalty_reward_pending_points} điểm.'
+                ),
             }
 
         # Tạo wizard context và thực hiện đổi 123
@@ -148,19 +165,26 @@ class LoyaltyAPIController(http.Controller):
         date_expiry = odoo_fields.Datetime.now() + timedelta(days=validity_days)
 
         voucher = request.env['hlv.loyalty.voucher'].sudo().create({
-            'partner_id': partner.id,
+            'partner_id': root.id,
             'package_id': package.id,
             'date_expiry': date_expiry,
         })
 
         request.env['hlv.loyalty.history'].sudo().create({
-            'partner_id': partner.id,
+            'partner_id': root.id,
             'point_amount': -package.points_required,
+            'point_type': 'exchange',
             'transaction_type': 'redeem',
+            'state': 'confirmed',
             'description': f'Đổi Voucher [{package.name}] - Mã: {voucher.code} (API)',
             'voucher_id': voucher.id,
             'company_id': request.env.company.id,
         })
+        root.invalidate_recordset([
+            'loyalty_exchange_points',
+            'loyalty_reward_pending_points',
+            'loyalty_exchange_available_points',
+        ])
 
         return {
             'success': True,
@@ -168,9 +192,11 @@ class LoyaltyAPIController(http.Controller):
                 'code': voucher.code,
                 'discount_type': voucher.discount_type,
                 'discount_value': voucher.discount_value,
-                'date_expiry': date_expiry.isoformat(),
+                'date_expiry': _vn_datetime(date_expiry),
             },
-            'remaining_points': partner.loyalty_total_points,
+            'remaining_points': root.loyalty_exchange_points,
+            'exchange_points_available': root.loyalty_exchange_available_points,
+            'pending_reward_points': root.loyalty_reward_pending_points,
         }
 
     @http.route('/api/loyalty/validate-voucher', type='json',
@@ -219,7 +245,7 @@ class LoyaltyAPIController(http.Controller):
                 'discount_type': voucher.discount_type,
                 'discount_value': voucher.discount_value,
                 'estimated_discount': discount,
-                'date_expiry': voucher.date_expiry.isoformat() if voucher.date_expiry else None,
+                'date_expiry': _vn_datetime(voucher.date_expiry),
             },
         }
 
@@ -333,6 +359,8 @@ class LoyaltyExternalAPI(http.Controller):
         tier = partner.loyalty_tier_id
         pts = partner.loyalty_total_points
         exc_pts = partner.loyalty_exchange_points
+        pending_reward_points = partner.loyalty_reward_pending_points
+        available_exchange_points = partner.loyalty_exchange_available_points
         # tiers sorted asc — next tier là tier đầu tiên có min_points > pts
         next_tier = next((t for t in tiers if t.min_points > pts), None)
         return {
@@ -342,6 +370,8 @@ class LoyaltyExternalAPI(http.Controller):
             'email': partner.email or '',
             'ranking_points': pts,
             'exchange_points': exc_pts,
+            'pending_reward_points': pending_reward_points,
+            'exchange_points_available': available_exchange_points,
             # backward-compat alias
             'total_points': pts,
             'image_url': LoyaltyExternalAPI._partner_image_url(partner),
@@ -453,28 +483,57 @@ class LoyaltyExternalAPI(http.Controller):
                 )
 
             ICP = request.env['ir.config_parameter'].sudo()
-            secret_key = (
-                ICP.get_param('hlv_loyalty.zalo_secret_key')
-                or ICP.get_param('zalo.secret_key')
-                or ''
-            ).strip()
-            if not secret_key:
-                _logger.error('Zalo phone exchange blocked: missing hlv_loyalty.zalo_secret_key')
-                return self._json_err(
-                    'Missing Zalo secret_key configuration on Odoo',
-                    status=503,
-                    code='missing_secret_key',
-                )
+            relay_url = (ICP.get_param('hlv_loyalty.zalo_phone_relay_url') or '').strip()
+            relay_key = (ICP.get_param('hlv_loyalty.zalo_phone_relay_key') or '').strip()
 
-            zalo_res = requests.get(
-                'https://graph.zalo.me/v2.0/me/info',
-                headers={
-                    'access_token': access_token,
-                    'code': phone_token,
-                    'secret_key': secret_key,
-                },
-                timeout=10,
-            )
+            if relay_url:
+                if not relay_key:
+                    _logger.error('Zalo phone exchange blocked: missing hlv_loyalty.zalo_phone_relay_key')
+                    return self._json_err(
+                        'Missing Zalo phone relay key configuration on Odoo',
+                        status=503,
+                        code='missing_zalo_phone_relay_key',
+                    )
+
+                headers = {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'x-relay-key': relay_key,
+                    'Authorization': 'Bearer %s' % relay_key,
+                }
+                _logger.info('Zalo phone exchange using relay: url=%s', relay_url)
+                zalo_res = requests.post(
+                    relay_url,
+                    headers=headers,
+                    json={
+                        'token': phone_token,
+                        'access_token': access_token,
+                    },
+                    timeout=10,
+                )
+            else:
+                secret_key = (
+                    ICP.get_param('hlv_loyalty.zalo_secret_key')
+                    or ICP.get_param('zalo.secret_key')
+                    or ''
+                ).strip()
+                if not secret_key:
+                    _logger.error('Zalo phone exchange blocked: missing hlv_loyalty.zalo_secret_key')
+                    return self._json_err(
+                        'Missing Zalo secret_key or relay configuration on Odoo',
+                        status=503,
+                        code='missing_zalo_phone_config',
+                    )
+
+                zalo_res = requests.get(
+                    'https://graph.zalo.me/v2.0/me/info',
+                    headers={
+                        'access_token': access_token,
+                        'code': phone_token,
+                        'secret_key': secret_key,
+                    },
+                    timeout=10,
+                )
             response_text = (zalo_res.text or '')[:2000]
             _logger.info(
                 'Zalo phone exchange response: status=%s body=%s',
@@ -572,7 +631,7 @@ class LoyaltyExternalAPI(http.Controller):
             'code': v.code,
             'discount_type': v.discount_type,
             'discount_value': v.discount_value,
-            'date_expiry': v.date_expiry.isoformat() if v.date_expiry else None,
+            'date_expiry': _vn_datetime(v.date_expiry),
         } for v in vouchers]
 
         # Lịch sử 10 gần nhất
@@ -581,7 +640,7 @@ class LoyaltyExternalAPI(http.Controller):
         ], limit=10, order='date desc')
         summary['recent_history'] = [{
             'id': h.id,
-            'date': h.date.isoformat() if h.date else None,
+            'date': _vn_datetime(h.date),
             'point_amount': h.point_amount,
             'point_type': h.point_type or 'ranking',
             'transaction_type': h.transaction_type,
@@ -594,7 +653,14 @@ class LoyaltyExternalAPI(http.Controller):
     @http.route('/api/v1/loyalty/partner/<int:partner_id>/history', type='http',
                 auth='public', methods=['GET'], csrf=False, cors='*')
     def get_partner_history(self, partner_id, **kwargs):
-        """GET /api/v1/loyalty/partner/<id>/history?limit=20&offset=0"""
+        """GET /api/v1/loyalty/partner/<id>/history?limit=20&offset=0
+
+        Optional filters:
+        - pt / point_type: all | ranking | exchange
+        - st / state: all | pending | confirmed | cancelled
+        - tt / transaction_type: all | earn | redeem | return | manual
+        - date_from / date_to: YYYY-MM-DD
+        """
         partner = request.env['res.partner'].sudo().browse(partner_id)
         if not partner.exists():
             return self._json_err('Khách hàng không tồn tại', status=404)
@@ -602,22 +668,68 @@ class LoyaltyExternalAPI(http.Controller):
         limit = min(int(kwargs.get('limit', 20)), 100)
         offset = int(kwargs.get('offset', 0))
         root = partner._get_loyalty_root()
+        family_ids = root._get_loyalty_family_partner_ids()
+        active_pt = kwargs.get('pt') or kwargs.get('point_type') or 'all'
+        active_st = kwargs.get('st') or kwargs.get('state') or 'all'
+        active_tt = kwargs.get('tt') or kwargs.get('transaction_type') or 'all'
+
+        if active_pt not in ('all', 'ranking', 'exchange'):
+            active_pt = 'all'
+        if active_st not in ('all', 'pending', 'confirmed', 'cancelled'):
+            active_st = 'all'
+        if active_tt not in ('all', 'earn', 'redeem', 'return', 'manual'):
+            active_tt = 'all'
+
+        domain = [('partner_id', 'in', family_ids)]
+        if active_pt != 'all':
+            domain.append(('point_type', '=', active_pt))
+        if active_st != 'all':
+            domain.append(('state', '=', active_st))
+        if active_tt != 'all':
+            domain.append(('transaction_type', '=', active_tt))
+
+        date_from = (kwargs.get('date_from') or '').strip()
+        date_to = (kwargs.get('date_to') or '').strip()
+        try:
+            if date_from:
+                from_dt = odoo_fields.Datetime.to_datetime(
+                    date_from if len(date_from) > 10 else f'{date_from} 00:00:00'
+                )
+                domain.append(('date', '>=', from_dt))
+            if date_to:
+                to_dt = odoo_fields.Datetime.to_datetime(
+                    date_to if len(date_to) > 10 else f'{date_to} 23:59:59'
+                )
+                domain.append(('date', '<=', to_dt))
+        except Exception:
+            return self._json_err('Khoảng ngày không hợp lệ', status=400)
+
         history = request.env['hlv.loyalty.history'].sudo().search(
-            [('partner_id', '=', root.id)],
+            domain,
             limit=limit, offset=offset, order='date desc',
         )
         total = request.env['hlv.loyalty.history'].sudo().search_count(
-            [('partner_id', '=', root.id)]
+            domain
         )
         return self._json_ok({
             'partner_id': partner_id,
             'total_points': root.loyalty_total_points,
+            'exchange_points': root.loyalty_exchange_points,
+            'pending_reward_points': root.loyalty_reward_pending_points,
+            'exchange_points_available': root.loyalty_exchange_available_points,
             'total_records': total,
             'limit': limit,
             'offset': offset,
+            'filters': {
+                'point_type': active_pt,
+                'state': active_st,
+                'transaction_type': active_tt,
+                'date_from': date_from,
+                'date_to': date_to,
+            },
             'records': [{
                 'id': h.id,
-                'date': h.date.isoformat() if h.date else None,
+                'date': _vn_datetime(h.date),
                 'point_amount': h.point_amount,
                 'point_type': h.point_type or 'ranking',
                 'transaction_type': h.transaction_type,
@@ -710,8 +822,8 @@ class LoyaltyExternalAPI(http.Controller):
             'discount_type': v.discount_type,
             'discount_value': v.discount_value,
             'max_discount_amount': v.max_discount_amount,
-            'date_issued': v.date_issued.isoformat() if v.date_issued else None,
-            'date_expiry': v.date_expiry.isoformat() if v.date_expiry else None,
+            'date_issued': _vn_datetime(v.date_issued),
+            'date_expiry': _vn_datetime(v.date_expiry),
             'package_name': v.package_id.name or '',
             'reward_type': v.reward_type or 'discount',
         } for v in vouchers])
@@ -749,7 +861,7 @@ class LoyaltyExternalAPI(http.Controller):
                 'discount_type': voucher.discount_type,
                 'discount_value': voucher.discount_value,
                 'estimated_discount': discount,
-                'date_expiry': voucher.date_expiry.isoformat() if voucher.date_expiry else None,
+                'date_expiry': _vn_datetime(voucher.date_expiry),
                 'partner_id': voucher.partner_id.id,
                 'partner_name': voucher.partner_id.name,
             },
@@ -796,6 +908,53 @@ class LoyaltyExternalAPI(http.Controller):
             'gift_qty': p.gift_qty,
         } for p in packages])
 
+    @staticmethod
+    def _reward_request_dict(req):
+        return {
+            'id': req.id,
+            'name': req.name,
+            'request_type': req.request_type,
+            'points_required': req.points_required,
+            'cash_value': req.cash_value,
+            'voucher_id': req.voucher_id.id if req.voucher_id else None,
+            'voucher_code': req.voucher_id.code if req.voucher_id else '',
+            'package_name': req.package_id.name if req.package_id else '',
+            'state': req.state,
+            'date_request': _vn_datetime(req.date_request),
+            'customer_note': req.customer_note or '',
+        }
+
+    @http.route('/api/v1/loyalty/redeem/requests', type='http',
+                auth='public', methods=['GET'], csrf=False, cors='*')
+    def list_redeem_requests(self, **kwargs):
+        """GET /api/v1/loyalty/redeem/requests?partner_id=42&state=all"""
+        partner_id = kwargs.get('partner_id')
+        if not partner_id:
+            return self._json_err('Thiếu partner_id', status=400, code='MISSING_PARTNER_ID')
+
+        partner = request.env['res.partner'].sudo().browse(int(partner_id))
+        if not partner.exists():
+            return self._json_err('Khách hàng không tồn tại', status=404, code='PARTNER_NOT_FOUND')
+
+        root = partner._get_loyalty_root()
+        domain = [('partner_id', 'in', root._get_loyalty_family_partner_ids())]
+        state = kwargs.get('state') or 'all'
+        if state in ('pending', 'done', 'cancelled'):
+            domain.append(('state', '=', state))
+
+        requests = request.env['hlv.loyalty.reward.request'].sudo().search(
+            domain, order='date_request desc, id desc'
+        )
+        return self._json_ok({
+            'success': True,
+            'data': {
+                'requests': [self._reward_request_dict(req) for req in requests],
+                'exchange_points': root.loyalty_exchange_points,
+                'pending_reward_points': root.loyalty_reward_pending_points,
+                'exchange_points_available': root.loyalty_exchange_available_points,
+            },
+        })
+
     @http.route('/api/v1/loyalty/redeem/submit', type='json',
                 auth='public', methods=['POST'], csrf=False, cors='*')
     def submit_redeem(self, **kwargs):
@@ -833,12 +992,15 @@ class LoyaltyExternalAPI(http.Controller):
             return {'error': 'Khách hàng không tồn tại'}
 
         root = partner._get_loyalty_root()
-        avail_exchange = root.loyalty_exchange_points
+        balance_exchange = root.loyalty_exchange_points
+        avail_exchange = root.loyalty_exchange_available_points
+        pending_reward_points = root.loyalty_reward_pending_points
+        insufficient_code = 'PENDING_REWARD_POINTS' if pending_reward_points else 'INSUFFICIENT_POINTS'
 
         vals = {
             'partner_id': root.id,
             'request_type': request_type,
-            'balance_at_request': avail_exchange,
+            'balance_at_request': balance_exchange,
             'company_id': request.env.company.id,
         }
 
@@ -851,8 +1013,13 @@ class LoyaltyExternalAPI(http.Controller):
                 return {'error': 'Gói quà không tồn tại hoặc đã ngừng'}
             if avail_exchange < package.points_required:
                 return {
-                    'error': f'Không đủ điểm đổi thưởng. '
-                             f'Cần {package.points_required:,} điểm, bạn có {avail_exchange:,} điểm.'
+                    'error': f'Không đủ điểm khả dụng. '
+                             f'Cần {package.points_required:,} điểm, bạn còn {avail_exchange:,} điểm. '
+                             f'Đang treo {pending_reward_points:,} điểm trong yêu cầu chờ xử lý.',
+                    'code': insufficient_code,
+                    'exchange_points': balance_exchange,
+                    'pending_reward_points': pending_reward_points,
+                    'exchange_points_available': avail_exchange,
                 }
             vals['package_id'] = package.id
 
@@ -862,8 +1029,13 @@ class LoyaltyExternalAPI(http.Controller):
                 return {'error': 'points_to_redeem phải lớn hơn 0'}
             if avail_exchange < points_to_redeem:
                 return {
-                    'error': f'Không đủ điểm đổi thưởng. '
-                             f'Cần {points_to_redeem:,} điểm, bạn có {avail_exchange:,} điểm.'
+                    'error': f'Không đủ điểm khả dụng. '
+                             f'Cần {points_to_redeem:,} điểm, bạn còn {avail_exchange:,} điểm. '
+                             f'Đang treo {pending_reward_points:,} điểm trong yêu cầu chờ xử lý.',
+                    'code': insufficient_code,
+                    'exchange_points': balance_exchange,
+                    'pending_reward_points': pending_reward_points,
+                    'exchange_points_available': avail_exchange,
                 }
             bank_name = (kwargs.get('bank_name') or '').strip()
             account_number = (kwargs.get('account_number') or '').strip()
@@ -878,16 +1050,81 @@ class LoyaltyExternalAPI(http.Controller):
                 'customer_note': kwargs.get('customer_note') or '',
             })
 
-        req = request.env['hlv.loyalty.reward.request'].sudo().create(vals)
+        try:
+            req = request.env['hlv.loyalty.reward.request'].sudo().create(vals)
+            if request_type == 'gift':
+                req.action_done()
+        except UserError as exc:
+            return {
+                'error': str(exc),
+                'code': 'PENDING_REWARD_POINTS',
+                'exchange_points': balance_exchange,
+                'pending_reward_points': pending_reward_points,
+                'exchange_points_available': avail_exchange,
+            }
+
+        message = 'Gift redeemed successfully.' if req.request_type == 'gift' else 'Reward request submitted successfully. Please wait for approval.'
 
         return {
             'success': True,
             'request_id': req.id,
             'request_name': req.name,
             'request_type': req.request_type,
+            'state': req.state,
             'points_required': req.points_required,
             'cash_value': req.cash_value,
-            'exchange_points_remaining': avail_exchange - req.points_required,
-            'message': 'Yêu cầu đổi thưởng đã được gửi thành công. Vui lòng chờ xét duyệt.',
+            'voucher_id': req.voucher_id.id if req.voucher_id else None,
+            'voucher_code': req.voucher_id.code if req.voucher_id else '',
+            'exchange_points': root.loyalty_exchange_points,
+            'pending_reward_points': root.loyalty_reward_pending_points,
+            'exchange_points_available': root.loyalty_exchange_available_points,
+            'exchange_points_remaining': max(avail_exchange - req.points_required, 0),
+            'message': message,
+        }
+
+    @http.route([
+        '/api/v1/loyalty/redeem/cancel',
+        '/api/v1/loyalty/redeem/requests/<int:request_id>/cancel',
+    ], type='json', auth='public', methods=['POST'], csrf=False, cors='*')
+    def cancel_redeem_request(self, request_id=None, **kwargs):
+        """POST /api/v1/loyalty/redeem/cancel
+        Body: {"partner_id": 42, "request_id": 123}
+        """
+        partner_id = kwargs.get('partner_id')
+        request_id = request_id or kwargs.get('request_id')
+        if not partner_id:
+            return {'error': 'Thiếu partner_id'}
+        if not request_id:
+            return {'error': 'Thiếu request_id'}
+
+        partner = request.env['res.partner'].sudo().browse(int(partner_id))
+        if not partner.exists():
+            return {'error': 'Khách hàng không tồn tại'}
+        root = partner._get_loyalty_root()
+
+        req = request.env['hlv.loyalty.reward.request'].sudo().browse(int(request_id))
+        if not req.exists() or req.partner_id.id not in root._get_loyalty_family_partner_ids():
+            return {'error': 'Yêu cầu đổi thưởng không tồn tại', 'code': 'REQUEST_NOT_FOUND'}
+        if req.state != 'pending':
+            return {
+                'error': 'Chỉ hủy được yêu cầu đang chờ xử lý',
+                'code': 'REQUEST_NOT_PENDING',
+                'state': req.state,
+            }
+
+        try:
+            req.action_cancel()
+        except UserError as exc:
+            return {'error': str(exc), 'code': 'CANCEL_FAILED'}
+
+        return {
+            'success': True,
+            'request_id': req.id,
+            'request_name': req.name,
+            'state': req.state,
+            'exchange_points': root.loyalty_exchange_points,
+            'pending_reward_points': root.loyalty_reward_pending_points,
+            'exchange_points_available': root.loyalty_exchange_available_points,
+            'message': 'Yêu cầu đổi thưởng đã được hủy.',
         }
 

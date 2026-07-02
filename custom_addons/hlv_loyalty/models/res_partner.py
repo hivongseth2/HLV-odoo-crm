@@ -22,6 +22,18 @@ class ResPartner(models.Model):
         string='Điểm chờ xác nhận', compute='_compute_loyalty_pending_points',
         store=False, readonly=True,
     )
+    loyalty_reward_pending_points = fields.Integer(
+        string='Điểm đổi thưởng đang treo',
+        compute='_compute_loyalty_reward_request_points',
+        store=False, readonly=True,
+        help='Tổng điểm của các yêu cầu đổi thưởng đang chờ xử lý. Điểm này chưa bị trừ khỏi số dư thật nhưng không còn khả dụng để tạo yêu cầu mới.',
+    )
+    loyalty_exchange_available_points = fields.Integer(
+        string='Điểm đổi thưởng khả dụng',
+        compute='_compute_loyalty_reward_request_points',
+        store=False, readonly=True,
+        help='Điểm đổi thưởng còn có thể dùng sau khi trừ điểm đang treo ở các yêu cầu chờ xử lý.',
+    )
     loyalty_history_ids = fields.One2many(
         'hlv.loyalty.history', 'partner_id', string='Lịch sử điểm',
     )
@@ -96,6 +108,36 @@ class ResPartner(models.Model):
                 ('state', '=', 'pending'),
             ])
             partner.loyalty_pending_points = sum(records.mapped('point_amount'))
+
+    def _get_loyalty_family_partner_ids(self):
+        self.ensure_one()
+        root = self._get_loyalty_root()
+        return [root.id] + root.child_ids.ids
+
+    def _get_loyalty_pending_reward_requests(self, exclude_request=None):
+        self.ensure_one()
+        domain = [
+            ('partner_id', 'in', self._get_loyalty_family_partner_ids()),
+            ('state', '=', 'pending'),
+        ]
+        exclude_ids = []
+        if exclude_request:
+            exclude_ids = exclude_request.ids if hasattr(exclude_request, 'ids') else [int(exclude_request)]
+        if exclude_ids:
+            domain.append(('id', 'not in', exclude_ids))
+        return self.env['hlv.loyalty.reward.request'].sudo().search(domain)
+
+    def _get_loyalty_pending_reward_points(self, exclude_request=None):
+        self.ensure_one()
+        requests = self._get_loyalty_pending_reward_requests(exclude_request=exclude_request)
+        return sum(requests.mapped('points_required'))
+
+    @api.depends('loyalty_exchange_points')
+    def _compute_loyalty_reward_request_points(self):
+        for partner in self:
+            pending_points = partner._get_loyalty_pending_reward_points()
+            partner.loyalty_reward_pending_points = pending_points
+            partner.loyalty_exchange_available_points = max((partner.loyalty_exchange_points or 0) - pending_points, 0)
 
     @api.depends('loyalty_total_points')
     def _compute_loyalty_tier(self):

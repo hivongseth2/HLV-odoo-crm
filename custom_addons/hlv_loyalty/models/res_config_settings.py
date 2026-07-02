@@ -10,6 +10,14 @@ class ResConfigSettings(models.TransientModel):
         string='Zalo App Secret Key',
         config_parameter='hlv_loyalty.zalo_secret_key',
     )
+    loyalty_zalo_phone_relay_url = fields.Char(
+        string='Zalo Phone Relay URL',
+        config_parameter='hlv_loyalty.zalo_phone_relay_url',
+    )
+    loyalty_zalo_phone_relay_key = fields.Char(
+        string='Zalo Phone Relay Key',
+        config_parameter='hlv_loyalty.zalo_phone_relay_key',
+    )
     loyalty_bulk_default_discount = fields.Float(
         string='% chiết khấu mặc định mới',
         digits=(5, 4),

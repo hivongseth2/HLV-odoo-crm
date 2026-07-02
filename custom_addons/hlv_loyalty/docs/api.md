@@ -249,7 +249,7 @@ Danh sách đơn hàng của user.
         "id": 501,
         "name": "SO/2026/0501",
         "state": "shipping",
-        "date_order": "2026-04-10T14:30:00Z",
+        "date_order": "2026-04-10T14:30:00+07:00",
         "amount_total": 2580000,
         "items": [
           {
@@ -292,7 +292,7 @@ Chi tiết 1 đơn hàng.
       "id": 501,
       "name": "SO/2026/0501",
       "state": "shipping",
-      "date_order": "2026-04-10T14:30:00Z",
+      "date_order": "2026-04-10T14:30:00+07:00",
       "amount_total": 2580000,
       "amount_tax": 0,
       "shipping_fee": 0,
@@ -367,7 +367,7 @@ Tạo đơn hàng mới.
       "id": 502,
       "name": "SO/2026/0502",
       "state": "pending",
-      "date_order": "2026-04-15T10:00:00Z",
+      "date_order": "2026-04-15T10:00:00+07:00",
       "amount_total": 3870000,
       "items": [...]
     }
@@ -655,7 +655,7 @@ Lấy đầy đủ thông tin loyalty của 1 partner.
     "recent_history": [
       {
         "id": 401,
-        "date": "2026-04-10T14:30:00Z",
+        "date": "2026-04-10T14:30:00+07:00",
         "point_amount": 129,
         "transaction_type": "earn",
         "description": "Mua hàng SO/2026/0501"
@@ -689,14 +689,14 @@ Lịch sử tích / tiêu điểm (phân trang).
     "history": [
       {
         "id": 401,
-        "date": "2026-04-10T14:30:00Z",
+        "date": "2026-04-10T14:30:00+07:00",
         "point_amount": 129,
         "transaction_type": "earn",
         "description": "Mua hàng SO/2026/0501"
       },
       {
         "id": 400,
-        "date": "2026-04-08T09:00:00Z",
+        "date": "2026-04-08T09:00:00+07:00",
         "point_amount": -500,
         "transaction_type": "redeem",
         "description": "Đổi voucher Giảm 50K"
@@ -903,6 +903,134 @@ Kiểm tra mã voucher có hợp lệ không (khi checkout).
 
 ---
 
+### 6.9 POST `/loyalty/redeem/submit`
+
+Lưu ý: `request_type="gift"` được xử lý ngay, trả về `state="done"` và `voucher_code`; không cần admin duyệt. Chỉ `request_type="cash"` ở trạng thái `pending` để admin xử lý.
+
+Với đổi tiền mặt, request `pending` được tính vào `pending_reward_points`/điểm đang treo. Với đổi quà, điểm được trừ ngay và voucher được phát hành ngay.
+
+**Input đổi tiền mặt:**
+
+```json
+{
+  "partner_id": 123,
+  "request_type": "cash",
+  "points_to_redeem": 160,
+  "bank_name": "Sacombank",
+  "account_number": "040084366041",
+  "account_name": "NGUYEN VAN A",
+  "customer_note": "..."
+}
+```
+
+**Output thành công:**
+
+```json
+{
+  "success": true,
+  "request_id": 55,
+  "request_name": "RRQ/2026/0005",
+  "request_type": "cash",
+  "points_required": 160,
+  "pending_reward_points": 160,
+  "exchange_points_available": 0
+}
+```
+
+**Output lỗi khi còn request treo:**
+
+```json
+{
+  "error": "Không đủ điểm khả dụng. Cần 160 điểm, bạn còn 0 điểm. Đang treo 160 điểm trong yêu cầu chờ xử lý.",
+  "code": "PENDING_REWARD_POINTS",
+  "exchange_points": 160,
+  "pending_reward_points": 160,
+  "exchange_points_available": 0
+}
+```
+
+Nếu không có điểm treo nhưng số dư thật không đủ, `code` là `INSUFFICIENT_POINTS`.
+
+---
+
+### 6.10 GET `/loyalty/redeem/requests`
+
+Lấy danh sách yêu cầu đổi thưởng của partner.
+
+**Query:** `partner_id=123&limit=50`
+
+**Output:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "requests": [
+      {
+        "id": 55,
+        "name": "RRQ/2026/0005",
+        "request_type": "cash",
+        "points_required": 160,
+        "cash_value": 200000,
+        "package_id": null,
+        "package_name": "",
+        "bank_name": "Sacombank",
+        "account_number": "040084366041",
+        "account_name": "NGUYEN VAN A",
+        "state": "pending",
+        "date_request": "2026-07-02T13:41:00+07:00",
+        "date_done": null,
+        "customer_note": "",
+        "voucher_id": null,
+        "voucher_code": ""
+      }
+    ],
+    "exchange_points": 160,
+    "pending_reward_points": 160,
+    "exchange_points_available": 0
+  }
+}
+```
+
+---
+
+### 6.11 POST `/loyalty/redeem/cancel`
+
+Hủy yêu cầu đổi thưởng đang `pending` để giải phóng điểm đang treo.
+
+**Input:**
+
+```json
+{
+  "partner_id": 123,
+  "request_id": 55
+}
+```
+
+Có thể gọi path thay thế: `POST /loyalty/redeem/requests/{request_id}/cancel`.
+
+**Output thành công:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "request": {
+      "id": 55,
+      "name": "RRQ/2026/0005",
+      "state": "cancelled",
+      "points_required": 160
+    },
+    "pending_reward_points": 0,
+    "exchange_points_available": 160
+  }
+}
+```
+
+**Lỗi chính:** `REQUEST_NOT_FOUND`, `REQUEST_NOT_PENDING`.
+
+---
+
 ## Tổng hợp Endpoints
 
 | #  | Method | Endpoint                              | Mô tả                        |
@@ -927,5 +1055,8 @@ Kiểm tra mã voucher có hợp lệ không (khi checkout).
 | 18 | GET    | `/loyalty/voucher-packages`           | Gói voucher khả dụng          |
 | 19 | POST   | `/loyalty/redeem`                     | Đổi điểm lấy voucher          |
 | 20 | POST   | `/loyalty/voucher/validate`           | Kiểm tra mã voucher           |
+| 21 | POST   | `/loyalty/redeem/submit`              | Gửi yêu cầu đổi thưởng        |
+| 22 | GET    | `/loyalty/redeem/requests`            | Danh sách yêu cầu đổi thưởng  |
+| 23 | POST   | `/loyalty/redeem/cancel`              | Hủy yêu cầu đổi thưởng pending |
 
 > **Tỉnh/Thành phố, Quận/Huyện, Phường/Xã**: Sử dụng API miễn phí `https://provinces.open-api.vn/api/` — KHÔNG cần expose từ Odoo.

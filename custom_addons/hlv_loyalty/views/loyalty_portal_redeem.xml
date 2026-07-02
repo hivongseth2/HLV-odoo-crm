@@ -32,12 +32,22 @@
                     <div class="sr-rdm-stat sr-rdm-stat-exchange">
                         <span class="ms ms-fill sr-rdm-stat-icon">swap_horiz</span>
                         <div>
-                            <div class="sr-rdm-stat-lbl">Điểm đổi thưởng</div>
-                            <div class="sr-rdm-stat-val"><t t-out="'{:,}'.format(exchange_points)"/></div>
-                            <div class="sr-rdm-stat-unit">điểm khả dụng</div>
+                            <div class="sr-rdm-stat-lbl">Điểm khả dụng</div>
+                            <div class="sr-rdm-stat-val"><t t-out="'{:,}'.format(exchange_available_points)"/></div>
+                            <div class="sr-rdm-stat-unit">sau khi trừ điểm treo</div>
                         </div>
                     </div>
-                    <t t-if="pending_points > 0">
+                    <t t-if="reward_pending_points &gt; 0">
+                        <div class="sr-rdm-stat sr-rdm-stat-pending">
+                            <span class="ms sr-rdm-stat-icon">pending_actions</span>
+                            <div>
+                                <div class="sr-rdm-stat-lbl">Đang treo</div>
+                                <div class="sr-rdm-stat-val">-<t t-out="'{:,}'.format(reward_pending_points)"/></div>
+                                <div class="sr-rdm-stat-unit">điểm ở yêu cầu chờ xử lý</div>
+                            </div>
+                        </div>
+                    </t>
+                    <t t-if="pending_points &gt; 0">
                         <div class="sr-rdm-stat sr-rdm-stat-pending">
                             <span class="ms sr-rdm-stat-icon">hourglass_top</span>
                             <div>
@@ -114,7 +124,7 @@
                     <t t-if="packages">
                         <div class="sr-pkg-grid">
                             <t t-foreach="packages" t-as="pkg">
-                                <t t-set="can_redeem" t-value="exchange_points >= pkg.points_required"/>
+                                <t t-set="can_redeem" t-value="exchange_available_points >= pkg.points_required"/>
                                 <div t-att-class="'sr-pkg-card' + ('' if can_redeem else ' sr-pkg-disabled')">
                                     <div class="sr-pkg-top">
                                         <div class="sr-pkg-icon-wrap">
@@ -156,7 +166,7 @@
                                     <t t-else="">
                                         <div class="sr-pkg-insufficient">
                                             <span class="ms" style="font-size:15px">lock</span>
-                                            Cần thêm <t t-out="'{:,}'.format(pkg.points_required - exchange_points)"/> điểm
+                                            Cần thêm <t t-out="'{:,}'.format(pkg.points_required - exchange_available_points)"/> điểm
                                         </div>
                                     </t>
                                 </div>
@@ -190,12 +200,15 @@
                                     </label>
                                     <input id="pts_input" type="number" name="points_to_redeem"
                                            class="sr-cf-input" min="1"
-                                           t-att-max="exchange_points"
+                                           t-att-max="exchange_available_points"
                                            placeholder="Nhập số điểm..."
                                            required="required"
                                            t-att-value="form_vals.get('points_to_redeem', '')"/>
                                     <div class="sr-cf-hint">
-                                        Bạn có <strong><t t-out="'{:,}'.format(exchange_points)"/> điểm</strong> khả dụng.
+                                        Bạn có <strong><t t-out="'{:,}'.format(exchange_available_points)"/> điểm</strong> khả dụng.
+                                        <t t-if="reward_pending_points &gt; 0">
+                                            Đang treo <strong><t t-out="'{:,}'.format(reward_pending_points)"/> điểm</strong> ở yêu cầu chờ xử lý.
+                                        </t>
                                     </div>
                                     <t t-if="program and program.cash_rate_per_point > 0">
                                         <div class="sr-cash-preview sr-cash-preview-zero" id="cash-preview">
@@ -251,7 +264,7 @@
                             <span class="ms sr-cash-side-icon">account_balance_wallet</span>
                             <div class="sr-cash-side-ttl">Quy đổi điểm</div>
                             <div class="sr-cash-side-pts">
-                                <span class="sr-cash-side-num"><t t-out="'{:,}'.format(exchange_points)"/></span>
+                                <span class="sr-cash-side-num"><t t-out="'{:,}'.format(exchange_available_points)"/></span>
                                 <span class="sr-cash-side-unit">points khả dụng</span>
                             </div>
                             <t t-if="program and program.cash_rate_per_point > 0">
@@ -261,7 +274,7 @@
                                 </div>
                                 <div class="sr-cash-side-max">
                                     Tối đa có thể đổi:<br/>
-                                    <strong><t t-out="'{:,.0f}'.format(exchange_points * program.cash_rate_per_point)"/>đ</strong>
+                                    <strong><t t-out="'{:,.0f}'.format(exchange_available_points * program.cash_rate_per_point)"/>đ</strong>
                                 </div>
                             </t>
                             <div class="sr-cash-side-steps">
@@ -286,7 +299,7 @@
                     <script>
                     (function(){
                         var rate = <t t-out="program.cash_rate_per_point"/>;
-                        var max  = <t t-out="exchange_points"/>;
+                        var max  = <t t-out="exchange_available_points"/>;
                         var inp  = document.getElementById('pts_input');
                         var prv  = document.getElementById('cash-preview');
                         var val  = document.getElementById('preview-val');
@@ -378,6 +391,17 @@
                                                 <span style="margin:0 4px">→</span> Xử lý: <t t-out="fmt_vn_date(rq.date_done)"/>
                                             </t>
                                         </div>
+                                        <t t-if="rq.state == 'pending'">
+                                            <form t-att-action="'/loyalty/redeem/request/%s/cancel' % rq.id"
+                                                  method="post"
+                                                  class="sr-rq-cancel-form"
+                                                  onsubmit="return confirm('Hủy yêu cầu đổi thưởng này?')">
+                                                <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                                                <button type="submit" class="sr-rq-cancel-btn">
+                                                    Hủy yêu cầu
+                                                </button>
+                                            </form>
+                                        </t>
                                     </div>
                                 </div>
                             </t>

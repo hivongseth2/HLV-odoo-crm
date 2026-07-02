@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import logging
 from datetime import timedelta
+from bs4 import BeautifulSoup
+from markupsafe import Markup
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 from odoo.tools import html_escape
@@ -135,8 +137,65 @@ class HlvLoyaltyRewardRequest(models.Model):
                     or 'New'
                 )
         records = super().create(vals_list)
+        records._lock_loyalty_root_rows()
+        records._validate_pending_reward_points()
+        records._invalidate_loyalty_reward_point_cache()
         records.filtered(lambda rec: rec.request_type != 'gift')._send_loyalty_reward_bus_notification('request_created')
         return records
+
+    def write(self, vals):
+        res = super().write(vals)
+        if {'partner_id', 'request_type', 'package_id', 'points_to_redeem', 'state'} & set(vals):
+            self._lock_loyalty_root_rows()
+            self._validate_pending_reward_points()
+            self._invalidate_loyalty_reward_point_cache()
+        return res
+
+    def _invalidate_loyalty_reward_point_cache(self):
+        roots = self.env['res.partner'].browse()
+        for rec in self:
+            if rec.partner_id:
+                roots |= rec.partner_id._get_loyalty_root()
+        if roots:
+            roots.invalidate_recordset([
+                'loyalty_reward_pending_points',
+                'loyalty_exchange_available_points',
+            ])
+
+    def _lock_loyalty_root_rows(self):
+        root_ids = {
+            rec.partner_id._get_loyalty_root().id
+            for rec in self
+            if rec.partner_id
+        }
+        if root_ids:
+            self.env.cr.execute(
+                'SELECT id FROM res_partner WHERE id = ANY(%s) FOR UPDATE',
+                [list(root_ids)],
+            )
+
+    def _validate_pending_reward_points(self):
+        for rec in self.filtered(lambda item: item.state == 'pending' and item.partner_id):
+            root = rec.partner_id._get_loyalty_root()
+            exchange_points = root.loyalty_exchange_points or 0
+            pending_points = root._get_loyalty_pending_reward_points(exclude_request=rec)
+            available_points = max(exchange_points - pending_points, 0)
+            required_points = rec.points_required or 0
+            if required_points > available_points:
+                raise UserError(
+                    _(
+                        'Không thể tạo yêu cầu đổi thưởng vượt quá điểm còn khả dụng.\n'
+                        'Điểm đổi thưởng hiện có: %(exchange)s\n'
+                        'Điểm đang treo: %(pending)s\n'
+                        'Điểm còn có thể yêu cầu: %(available)s\n'
+                        'Yêu cầu này cần: %(required)s\n'
+                        'Vui lòng hủy yêu cầu đang treo rồi tạo yêu cầu mới.',
+                        exchange=f'{exchange_points:,}',
+                        pending=f'{pending_points:,}',
+                        available=f'{available_points:,}',
+                        required=f'{required_points:,}',
+                    )
+                )
 
     def _get_loyalty_notification_users(self):
         self.ensure_one()
@@ -219,7 +278,7 @@ class HlvLoyaltyRewardRequest(models.Model):
         if not partner_ids:
             return
 
-        body = (
+        body = Markup(
             f'<p><strong>{html_escape(title)}</strong></p>'
             f'<p>{html_escape(message)}</p>'
             f'<ul>'
@@ -228,10 +287,11 @@ class HlvLoyaltyRewardRequest(models.Model):
             f'<li>{html_escape(_("Trạng thái"))}: {html_escape(dict(self._fields["state"].selection).get(self.state, self.state))}</li>'
             f'</ul>'
         )
+        plain_body = self._html_to_plain_text(body)
         try:
             self.sudo().with_context(mail_post_autofollow=False).message_post(
                 body=body,
-                subject=title,
+                subject=self._html_to_plain_text(title),
                 partner_ids=partner_ids,
                 message_type='comment',
                 subtype_xmlid='mail.mt_comment',
@@ -242,7 +302,20 @@ class HlvLoyaltyRewardRequest(models.Model):
                 self.id,
                 exc_info=True,
             )
-        self._create_loyalty_reward_activities(users, title, message)
+        self._create_loyalty_reward_activities(users, title, plain_body)
+
+    @staticmethod
+    def _html_to_plain_text(html):
+        soup = BeautifulSoup(str(html or ''), 'html.parser')
+        for br in soup.find_all('br'):
+            br.replace_with('\n')
+        text = soup.get_text('\n')
+        return '\n'.join(line.strip() for line in text.splitlines() if line.strip())
+
+    @staticmethod
+    def _plain_text_to_html(text):
+        lines = [html_escape(line) for line in (text or '').splitlines() if line.strip()]
+        return Markup('<p>%s</p>') % Markup('<br/>').join(Markup(line) for line in lines)
 
     def _create_loyalty_reward_activities(self, users, title, message):
         self.ensure_one()
@@ -265,9 +338,35 @@ class HlvLoyaltyRewardRequest(models.Model):
                 'res_id': self.id,
                 'user_id': user.id,
                 'summary': title,
-                'note': html_escape(message),
+                'note': self._plain_text_to_html(message),
                 'date_deadline': fields.Date.context_today(self),
             })
+
+    def _mark_loyalty_reward_activities_done(self, feedback=None):
+        todo_type = self.env.ref('mail.mail_activity_data_todo', raise_if_not_found=False)
+        domain = [
+            ('res_model', '=', self._name),
+            ('res_id', 'in', self.ids),
+        ]
+        if todo_type:
+            domain.append(('activity_type_id', '=', todo_type.id))
+        activities = self.env['mail.activity'].sudo().search(domain)
+        if not activities:
+            return
+        feedback = feedback or _('Yêu cầu đổi thưởng đã được xử lý.')
+        try:
+            if hasattr(activities, 'action_feedback'):
+                activities.action_feedback(feedback=feedback)
+            elif hasattr(activities, '_action_done'):
+                activities._action_done(feedback=feedback)
+            else:
+                activities.unlink()
+        except Exception:
+            _logger.debug(
+                'Failed to mark loyalty reward activities done for requests %s',
+                self.ids,
+                exc_info=True,
+            )
 
     # ── Business logic ─────────────────────────────────────────────────────
 
@@ -281,7 +380,7 @@ class HlvLoyaltyRewardRequest(models.Model):
                 f'Không đủ điểm đổi thưởng.\n'
                 f'Khách hàng hiện có {avail:,} điểm, yêu cầu {self.points_required:,} điểm.'
             )
-        return self.env['hlv.loyalty.history'].sudo().create({
+        history = self.env['hlv.loyalty.history'].sudo().create({
             'partner_id': root.id,
             'point_amount': -self.points_required,
             'point_type': 'exchange',
@@ -290,6 +389,12 @@ class HlvLoyaltyRewardRequest(models.Model):
             'description': description,
             'company_id': self.company_id.id,
         })
+        root.invalidate_recordset([
+            'loyalty_exchange_points',
+            'loyalty_reward_pending_points',
+            'loyalty_exchange_available_points',
+        ])
+        return history
 
     def _create_voucher(self):
         """Create voucher for gift request, return voucher record."""
@@ -322,6 +427,9 @@ class HlvLoyaltyRewardRequest(models.Model):
                 'history_id': hist.id,
                 'voucher_id': voucher_id or False,
             })
+            rec._mark_loyalty_reward_activities_done(
+                _('Yêu cầu đổi thưởng %(name)s đã được xử lý.', name=rec.name)
+            )
             if rec.request_type == 'gift':
                 rec._send_loyalty_reward_bus_notification('gift_redeemed')
             _logger.info(
@@ -334,3 +442,6 @@ class HlvLoyaltyRewardRequest(models.Model):
             if rec.state == 'done':
                 raise UserError('Không thể hủy yêu cầu đã xử lý.')
             rec.write({'state': 'cancelled'})
+            rec._mark_loyalty_reward_activities_done(
+                _('Yêu cầu đổi thưởng %(name)s đã bị hủy.', name=rec.name)
+            )
