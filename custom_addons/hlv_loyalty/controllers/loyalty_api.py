@@ -905,6 +905,8 @@ class LoyaltyExternalAPI(http.Controller):
             'request_type': req.request_type,
             'points_required': req.points_required,
             'cash_value': req.cash_value,
+            'voucher_id': req.voucher_id.id if req.voucher_id else None,
+            'voucher_code': req.voucher_id.code if req.voucher_id else '',
             'package_name': req.package_id.name if req.package_id else '',
             'state': req.state,
             'date_request': req.date_request.isoformat() if req.date_request else None,
@@ -1040,6 +1042,8 @@ class LoyaltyExternalAPI(http.Controller):
 
         try:
             req = request.env['hlv.loyalty.reward.request'].sudo().create(vals)
+            if request_type == 'gift':
+                req.action_done()
         except UserError as exc:
             return {
                 'error': str(exc),
@@ -1049,18 +1053,23 @@ class LoyaltyExternalAPI(http.Controller):
                 'exchange_points_available': avail_exchange,
             }
 
+        message = 'Gift redeemed successfully.' if req.request_type == 'gift' else 'Reward request submitted successfully. Please wait for approval.'
+
         return {
             'success': True,
             'request_id': req.id,
             'request_name': req.name,
             'request_type': req.request_type,
+            'state': req.state,
             'points_required': req.points_required,
             'cash_value': req.cash_value,
-            'exchange_points': balance_exchange,
+            'voucher_id': req.voucher_id.id if req.voucher_id else None,
+            'voucher_code': req.voucher_id.code if req.voucher_id else '',
+            'exchange_points': root.loyalty_exchange_points,
             'pending_reward_points': root.loyalty_reward_pending_points,
             'exchange_points_available': root.loyalty_exchange_available_points,
             'exchange_points_remaining': max(avail_exchange - req.points_required, 0),
-            'message': 'Yêu cầu đổi thưởng đã được gửi thành công. Vui lòng chờ xét duyệt.',
+            'message': message,
         }
 
     @http.route([

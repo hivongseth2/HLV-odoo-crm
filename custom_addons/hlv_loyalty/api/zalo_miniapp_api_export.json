@@ -314,7 +314,7 @@
       "name": "Submit reward request",
       "method": "POST",
       "path": "/loyalty/redeem/submit",
-      "description": "Create a pending reward request. Pending requests reserve points until approved or cancelled.",
+      "description": "Create a reward request. Gift requests are processed immediately and return a voucher; cash requests remain pending for approval.",
       "body": {
         "partner_id": "number",
         "request_type": "gift|cash",
@@ -328,6 +328,9 @@
       "returns": {
         "request_id": "number",
         "request_name": "string",
+        "state": "done|pending",
+        "voucher_id": "number|null",
+        "voucher_code": "string",
         "points_required": "number",
         "pending_reward_points": "number",
         "exchange_points_available": "number"
