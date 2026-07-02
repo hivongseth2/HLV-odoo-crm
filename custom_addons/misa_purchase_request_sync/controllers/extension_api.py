@@ -1738,9 +1738,18 @@ class MisaExtensionController(http.Controller):
                     except Exception as e:
                         _logger.warning("detail_full exception for %s: %s", po_name, e)
                     
+                    # V>i "?`i chiu ?MH", chA1ng ta ch% so sAnh s` lng `t hAng (ordered qty)
+                    # nAn ta ghi `A? qty_received bng qty ` hAm _classify_po_status so sAnh chA-nh xAc.
+                    for ol in odoo_lines_detail:
+                        ol["qty_received"] = ol.get("qty", 0.0)
+
                     amis_lines_detail = []
                     for aline in amis_lines:
                         if not isinstance(aline, dict): continue
+                        
+                        # Ghi `A? quantity_receipt bng quantity ` _classify_po_status so sAnh s` lng `t hAng
+                        aline["quantity_receipt"] = aline.get("quantity", 0.0)
+                        
                         orig_code = (aline.get("inventory_item_code") or "").strip()
                         prod_name = (aline.get("description") or aline.get("inventory_item_name") or "").strip()
                         code = orig_code.lower()
@@ -1750,7 +1759,7 @@ class MisaExtensionController(http.Controller):
                             "name": prod_name,
                             "display": f"[{orig_code}] {prod_name}" if orig_code else "Unknown Code",
                             "qty": float(aline.get("quantity") or 0),
-                            "qty_receipt": float(aline.get("quantity_receipt") or 0),
+                            "qty_receipt": float(aline.get("quantity") or 0),
                             "price_unit": float(aline.get("unit_price") or aline.get("main_unit_price") or 0),
                             "amount": float(aline.get("amount") or aline.get("amount_oc") or 0),
                             "price_tax": float(aline.get("vat_amount") or aline.get("vat_amount_oc") or 0),
@@ -1765,7 +1774,7 @@ class MisaExtensionController(http.Controller):
                     }
                     
                     status, severity, root_cause, suggested, diffs = self._classify_po_status(
-                        reconciled_item["odoo"], reconciled_item["amis"], amis_lines_detail, odoo_lines_detail
+                        reconciled_item["odoo"], amis_po, amis_lines, odoo_lines_detail
                     )
                     reconciled_item["status"] = status
                     reconciled_item["severity"] = severity
