@@ -302,6 +302,28 @@ class LoyaltyExternalAPI(http.Controller):
             digits = '0' + digits[2:]
         return digits
 
+    def _partner_from_portal_phone(self, partner_id, phone):
+        try:
+            partner = request.env['res.partner'].sudo().browse(int(partner_id))
+        except Exception:
+            return None, '', self._json_err('Invalid partner_id', status=400, code='INVALID_PARTNER_ID')
+        if not partner.exists():
+            return None, '', self._json_err('Khach hang khong ton tai', status=404, code='PARTNER_NOT_FOUND')
+
+        normalized = self._normalize_vn_phone(phone)
+        if not normalized:
+            return None, '', self._json_err('Missing phone', status=401, code='MISSING_PHONE')
+
+        root = partner._get_loyalty_root()
+        accounts = request.env['hlv.loyalty.portal.account'].sudo().search([
+            ('portal_phone', '=', normalized),
+            ('active', '=', True),
+        ])
+        account = accounts.filtered(lambda acc: acc.partner_id._get_loyalty_root().id == root.id)[:1]
+        if not account:
+            return None, normalized, self._json_err('Missing or invalid partner_id/phone', status=401, code='UNAUTHORIZED')
+        return root, normalized, None
+
     @staticmethod
     def _guess_image_mimetype(raw_bytes):
         if raw_bytes.startswith(b'\xff\xd8\xff'):
@@ -618,12 +640,11 @@ class LoyaltyExternalAPI(http.Controller):
         """GET /api/v1/loyalty/partner/<id>
         Lấy thông tin điểm + hạng + voucher đang có.
         """
-        partner = request.env['res.partner'].sudo().browse(partner_id)
-        if not partner.exists():
-            return self._json_err('Khách hàng không tồn tại', status=404)
-
-        root = partner._get_loyalty_root()
+        root, portal_phone, error = self._partner_from_portal_phone(partner_id, kwargs.get('phone'))
+        if error:
+            return error
         summary = self._partner_summary(root)
+        summary['phone'] = portal_phone
 
         # Voucher active
         vouchers = request.env['hlv.loyalty.voucher'].sudo().search([
@@ -638,8 +659,9 @@ class LoyaltyExternalAPI(http.Controller):
         } for v in vouchers]
 
         # Lịch sử 10 gần nhất
+        family_ids = root._get_loyalty_family_partner_ids()
         history = request.env['hlv.loyalty.history'].sudo().search([
-            ('partner_id', '=', root.id),
+            ('partner_id', 'in', family_ids),
         ], limit=10, order='date desc')
         summary['recent_history'] = [{
             'id': h.id,
@@ -664,13 +686,12 @@ class LoyaltyExternalAPI(http.Controller):
         - tt / transaction_type: all | earn | redeem | return | manual
         - date_from / date_to: YYYY-MM-DD
         """
-        partner = request.env['res.partner'].sudo().browse(partner_id)
-        if not partner.exists():
-            return self._json_err('Khách hàng không tồn tại', status=404)
+        root, portal_phone, error = self._partner_from_portal_phone(partner_id, kwargs.get('phone'))
+        if error:
+            return error
 
         limit = min(int(kwargs.get('limit', 20)), 100)
         offset = int(kwargs.get('offset', 0))
-        root = partner._get_loyalty_root()
         family_ids = root._get_loyalty_family_partner_ids()
         active_pt = kwargs.get('pt') or kwargs.get('point_type') or 'all'
         active_st = kwargs.get('st') or kwargs.get('state') or 'all'
@@ -715,7 +736,8 @@ class LoyaltyExternalAPI(http.Controller):
             domain
         )
         return self._json_ok({
-            'partner_id': partner_id,
+            'partner_id': root.id,
+            'phone': portal_phone,
             'total_points': root.loyalty_total_points,
             'exchange_points': root.loyalty_exchange_points,
             'pending_reward_points': root.loyalty_reward_pending_points,
@@ -796,12 +818,11 @@ class LoyaltyExternalAPI(http.Controller):
                 auth='public', methods=['GET'], csrf=False, cors='*')
     def get_partner_vouchers(self, partner_id, **kwargs):
         """GET /api/v1/loyalty/vouchers/<id>?state=active"""
-        partner = request.env['res.partner'].sudo().browse(partner_id)
-        if not partner.exists():
-            return self._json_err('Khách hàng không tồn tại', status=404)
+        root, portal_phone, error = self._partner_from_portal_phone(partner_id, kwargs.get('phone'))
+        if error:
+            return error
 
-        root_id = partner._get_loyalty_root().id
-        domain = [('partner_id', '=', root_id)]
+        domain = [('partner_id', '=', root.id)]
         if kwargs.get('state'):
             domain.append(('state', '=', kwargs['state']))
 

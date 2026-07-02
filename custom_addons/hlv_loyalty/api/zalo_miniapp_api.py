@@ -1354,9 +1354,25 @@ class ZaloMiniAppAPI(http.Controller):
         if not re.match(r'^[\d\s\-\+]{7,15}$', new_phone):
             return self._response_error("INVALID_INPUT", "Số điện thoại không hợp lệ.", status=400)
 
+        new_phone_normalized = self._normalize_vn_phone(new_phone)
+        if not new_phone_normalized:
+            return self._response_error("INVALID_INPUT", "Số điện thoại không hợp lệ.", status=400)
+
+        duplicate = request.env['hlv.loyalty.portal.account'].sudo().search([
+            ('id', '!=', account.id),
+            ('portal_phone', '=', new_phone_normalized),
+            ('active', '=', True),
+        ], limit=1)
+        if duplicate:
+            return self._response_error("PHONE_IN_USE", "Số điện thoại đã được dùng cho tài khoản loyalty khác.", status=409)
+
         try:
-            account.write({'portal_phone': new_phone})
+            account.write({'portal_phone': new_phone_normalized})
         except Exception as e:
             return self._response_error("SAVE_ERROR", str(e), status=500)
 
-        return self._response_success({"message": "Đổi số điện thoại đăng ký thành công."})
+        return self._response_success({
+            "message": "Đổi số điện thoại đăng ký thành công.",
+            "partner_id": partner.id,
+            "phone": new_phone_normalized,
+        })
