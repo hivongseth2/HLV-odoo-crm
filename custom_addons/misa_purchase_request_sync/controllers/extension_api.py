@@ -1292,6 +1292,14 @@ class MisaExtensionController(http.Controller):
                         if detail_res.status_code == 200:
                             dt_json = detail_res.json()
                             d_obj = dt_json.get("Data", {}) if isinstance(dt_json, dict) else {}
+                            if isinstance(d_obj, str):
+                                try:
+                                    d_obj = _json.loads(d_obj)
+                                except Exception:
+                                    d_obj = {}
+                            if not isinstance(d_obj, dict):
+                                d_obj = {}
+                            
                             # Parse header
                             pu_orders = d_obj.get("pu_order", [])
                             if pu_orders:
