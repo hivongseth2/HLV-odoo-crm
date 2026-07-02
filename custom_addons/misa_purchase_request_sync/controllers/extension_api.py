@@ -1058,8 +1058,15 @@ class MisaExtensionController(http.Controller):
                 })
                 
             amis_dict = {}
-            # Lấy list tuple (name, date_order)
-            po_infos = [(po.name, po.date_order) for po in odoo_pos]
+            # Lấy list các mã PO cần tìm (bao gồm name và origin)
+            search_codes = set()
+            for po in odoo_pos:
+                if po.name:
+                    search_codes.add(po.name.strip())
+                if po.origin:
+                    for org in po.origin.split(','):
+                        if org.strip():
+                            search_codes.add(org.strip())
 
             def _search_po_in_misa_by_code(po_name):
                 """
@@ -1111,10 +1118,11 @@ class MisaExtensionController(http.Controller):
                         "loadMode": 2
                     }
 
+                    local_headers = dict(headers)
                     _logger.info("🔍 Sending request to MISA API for PO '%s'", po_name)
                     response = misa_utils._fetch_with_retry(
                         "https://actapp.misa.vn/g2/api/pu/v1/pu_order/paging_filter_v2",
-                        headers, amis_payload
+                        local_headers, amis_payload
                     )
                     _logger.info("🔍 MISA API response status for '%s': %s", po_name, response.status_code)
 
@@ -1171,7 +1179,7 @@ class MisaExtensionController(http.Controller):
                 return po_name, None
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-                futures = {executor.submit(_search_po_in_misa_by_code, info[0]): info[0] for info in po_infos}
+                futures = {executor.submit(_search_po_in_misa_by_code, code): code for code in search_codes}
                 for future in concurrent.futures.as_completed(futures):
                     try:
                         po_name, apo = future.result()
@@ -1208,8 +1216,12 @@ class MisaExtensionController(http.Controller):
                 amis_po = amis_dict.get(po_name.strip())
                 _logger.info("🔍 Lookup amis_dict with stripped po_name='%s': found=%s", po_name.strip(), bool(amis_po))
                 if not amis_po and po_origin:
-                    amis_po = amis_dict.get(po_origin.strip())
-                    _logger.info("🔍 Fallback lookup with origin='%s': found=%s", po_origin.strip(), bool(amis_po))
+                    for org in po_origin.split(','):
+                        org = org.strip()
+                        if org and org in amis_dict:
+                            amis_po = amis_dict[org]
+                            _logger.info("🔍 Fallback lookup with origin='%s': found=%s", org, bool(amis_po))
+                            break
                 
                 # Khởi tạo reconciled item
                 reconciled_item = {
