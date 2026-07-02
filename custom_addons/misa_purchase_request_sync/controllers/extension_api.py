@@ -1445,8 +1445,8 @@ class MisaExtensionController(http.Controller):
     )
     def api_extension_po_reconcile_only(self, **kwargs):
         """
-        Đối chiếu Đơn mua hàng (PO) dựa trên NGÀY LẬP ĐƠN.
-        Không quan tâm phiếu nhập kho. Tìm ra các PO bị thiếu ở MISA hoặc Odoo.
+        Đối chiếu Đơn mua hàng (PO) dựa trên NGÀY LẬP ĐƠN (với cross-check).
+        Tìm ra các PO bị thiếu ở MISA hoặc Odoo thực sự (bằng cách search ngược không giới hạn ngày).
         """
         if request.httprequest.method == "OPTIONS":
             return request.make_response("", headers=[("Access-Control-Allow-Origin", "*"), ("Access-Control-Allow-Headers", "*")])
@@ -1474,7 +1474,7 @@ class MisaExtensionController(http.Controller):
             return json_response({"ok": False, "error": "missing_date", "message": "Missing date_from or date_to"}, 400)
 
         try:
-            from datetime import datetime
+            from datetime import datetime, timezone
             import concurrent.futures
             
             env_admin = request.env(su=True)
@@ -1489,7 +1489,6 @@ class MisaExtensionController(http.Controller):
             date_from_utc = date_from_dt.strftime('%Y-%m-%d 00:00:00')
             date_to_utc = date_to_dt.strftime('%Y-%m-%d 23:59:59')
             
-            # MISA uses isoformat Z
             date_from_iso = date_from_dt.strftime('%Y-%m-%dT00:00:00.00Z')
             date_to_iso = date_to_dt.strftime('%Y-%m-%dT23:59:59.00Z')
             
@@ -1499,19 +1498,10 @@ class MisaExtensionController(http.Controller):
                 ('date_approve', '<=', date_to_utc),
                 ('state', 'in', ['purchase', 'done'])
             ])
+            odoo_pos_list = list(odoo_pos)
             
-            # Lấy list các mã PO cần tìm (bao gồm name và origin)
-            all_po_names = [po.name for po in odoo_pos]
-            odoo_po_names = set(all_po_names)
-            for po in odoo_pos:
-                if po.origin:
-                    for org in po.origin.split(','):
-                        if org.strip():
-                            odoo_po_names.add(org.strip())
-
             # Tìm kiếm ALL POs trong MISA AMIS theo Date
             _logger.info("🔍 Fetching ALL POs from MISA between %s and %s", date_from_iso, date_to_iso)
-            
             amis_dict = {}
             amis_all_list = []
             
@@ -1553,16 +1543,12 @@ class MisaExtensionController(http.Controller):
                     data_obj = resp_json.get("Data")
                     if isinstance(data_obj, str):
                         import json as json_lib
-                        try:
-                            data_obj = json_lib.loads(data_obj)
-                        except:
-                            data_obj = {}
-                    if not data_obj:
-                        break
+                        try: data_obj = json_lib.loads(data_obj)
+                        except: data_obj = {}
+                    if not data_obj: break
                     
                     page_data = data_obj.get("PageData", [])
-                    if not page_data:
-                        break
+                    if not page_data: break
                         
                     for apo in page_data:
                         refno = apo.get("refno")
@@ -1572,8 +1558,83 @@ class MisaExtensionController(http.Controller):
                 else:
                     break
             
-            _logger.info("🔍 amis_dict count: %s POs found in MISA", len(amis_dict))
-            
+            # CROSS-CHECK: Search Odoo POs that are missing in amis_dict
+            def _search_po_in_misa_by_code(po_name):
+                try:
+                    custom_filter = [{
+                        "property": 4008,
+                        "value": po_name,
+                        "operator": 1,
+                        "operand": 1,
+                        "data_type": 1
+                    }]
+                    payload2 = {
+                        "sort": "[{\"property\":3972,\"desc\":true,\"data_type\":3,\"operand\":1},{\"property\":4008,\"desc\":true,\"data_type\":1,\"operand\":1}]",
+                        "filter": [
+                            {"property": 3972, "value": "2015-01-01T00:00:00.00Z", "operator": 10, "operand": 1, "data_type": 3},
+                            {"property": 3972, "value": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'), "operator": 12, "operand": 1, "data_type": 3}
+                        ],
+                        "customFilter": custom_filter,
+                        "pageIndex": 1,
+                        "pageSize": 100,
+                        "useSp": False,
+                        "view": 2,
+                        "summaryColumns": [5039, 5104, 247],
+                        "loadMode": 2
+                    }
+                    res2 = misa_utils._fetch_with_retry("https://actapp.misa.vn/g2/api/pu/v1/pu_order/paging_filter_v2", dict(headers), payload2)
+                    if res2.status_code == 200:
+                        d2 = res2.json().get("Data", {})
+                        if isinstance(d2, str):
+                            import json as json_lib
+                            try: d2 = json_lib.loads(d2)
+                            except: d2 = {}
+                        p2 = d2.get("PageData", []) if isinstance(d2, dict) else []
+                        for a2 in p2:
+                            r2 = a2.get("refno")
+                            if r2 and r2.strip() == po_name.strip():
+                                return po_name, a2
+                        if p2: return po_name, p2[0]
+                except Exception as e:
+                    _logger.warning("_search_po_in_misa_by_code ex for %s: %s", po_name, e)
+                return po_name, None
+
+            missing_in_misa_names = []
+            for po in odoo_pos_list:
+                if po.name.strip() not in amis_dict:
+                    missing_in_misa_names.append(po.name.strip())
+                    
+            if missing_in_misa_names:
+                _logger.info("🔍 CROSS-CHECK: %d Odoo POs missing in MISA date range. Searching exact matches...", len(missing_in_misa_names))
+                with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+                    futures = {executor.submit(_search_po_in_misa_by_code, name): name for name in missing_in_misa_names}
+                    for future in concurrent.futures.as_completed(futures):
+                        po_name, apo = future.result()
+                        if apo:
+                            _logger.info("✅ CROSS-CHECK: Found PO %s in MISA!", po_name)
+                            amis_dict[po_name.strip()] = apo
+                            amis_all_list.append(apo)
+                            
+            # CROSS-CHECK: Search MISA POs that are missing in odoo_pos_list
+            odoo_po_names_lower = {po.name.strip().lower() for po in odoo_pos_list}
+            missing_in_odoo_refnos = []
+            for apo in amis_all_list:
+                refno = apo.get("refno", "").strip()
+                if refno and refno.lower() not in odoo_po_names_lower:
+                    missing_in_odoo_refnos.append(refno)
+                    
+            if missing_in_odoo_refnos:
+                _logger.info("🔍 CROSS-CHECK: %d MISA POs missing in Odoo date range. Searching exact matches...", len(missing_in_odoo_refnos))
+                found_in_odoo = env_admin['purchase.order'].search([
+                    ('name', 'in', missing_in_odoo_refnos),
+                    ('state', 'in', ['purchase', 'done'])
+                ])
+                for po in found_in_odoo:
+                    if po.name.strip().lower() not in odoo_po_names_lower:
+                        _logger.info("✅ CROSS-CHECK: Found PO %s in Odoo!", po.name)
+                        odoo_pos_list.append(po)
+                        odoo_po_names_lower.add(po.name.strip().lower())
+
             # ============================================================
             # BUILD RECONCILED DATA
             # ============================================================
@@ -1583,15 +1644,14 @@ class MisaExtensionController(http.Controller):
             odoo_only_old = []
             
             processed_misa_refnos = set()
+            all_po_names = [po.name for po in odoo_pos_list]
 
-            for po in odoo_pos:
+            for po in odoo_pos_list:
                 po_name = po.name
                 po_origin = (po.origin or "").strip()
                 
-                # Lấy chi tiết dòng Odoo
                 odoo_lines_detail = self._get_odoo_line_details(po)
                 
-                # Tìm trên AMIS
                 amis_po = amis_dict.get(po_name.strip())
                 if amis_po:
                     processed_misa_refnos.add(po_name.strip())
@@ -1748,24 +1808,19 @@ class MisaExtensionController(http.Controller):
                     }
                     reconciled.append(reconciled_item)
 
-            # Sort results by status then po_name
             reconciled.sort(key=lambda x: (x.get("status", ""), x.get("po_name", "")))
 
-            # ============================================================
-            # SUMMARY
-            # ============================================================
             by_status = {}
             by_severity = {}
             for item in reconciled:
                 s = item["status"]
                 by_status[s] = by_status.get(s, 0) + 1
-                
                 sev = item["severity"]
                 if sev:
                     by_severity[sev] = by_severity.get(sev, 0) + 1
             
             summary = {
-                "total_odoo": len(odoo_pos),
+                "total_odoo": len(odoo_pos_list),
                 "total_misa": len(amis_dict),
                 "by_status": by_status,
                 "by_severity": by_severity
@@ -1777,7 +1832,7 @@ class MisaExtensionController(http.Controller):
                     "matched": matched_old,
                     "diff": diff_old,
                     "odoo_only": odoo_only_old,
-                    "total_odoo": len(odoo_pos)
+                    "total_odoo": len(odoo_pos_list)
                 },
                 "summary": summary,
                 "reconciled": reconciled
@@ -1786,3 +1841,4 @@ class MisaExtensionController(http.Controller):
         except Exception as e:
             _logger.exception("Extension API /po/reconcile_only exception: %s", e)
             return json_response({"ok": False, "error": "exception", "message": str(e)}, 500)
+
