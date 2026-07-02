@@ -199,10 +199,10 @@ class MisaExtensionController(http.Controller):
                 # Prepare supplier name if available
                 misa_supplier_id = None
                 misa_supplier_name = ""
-                if hasattr(line, 'misa_supplier_id') and line.misa_supplier_id:
-                    misa_supplier_id = line.misa_supplier_id.id
-                    ref = line.misa_supplier_id.ref
-                    misa_supplier_name = (f"[{ref}] " if ref else "") + line.misa_supplier_id.name
+                if hasattr(line, 'sale_proposed_supplier_id') and line.sale_proposed_supplier_id:
+                    misa_supplier_id = line.sale_proposed_supplier_id.id
+                    ref = line.sale_proposed_supplier_id.ref
+                    misa_supplier_name = (f"[{ref}] " if ref else "") + line.sale_proposed_supplier_id.name
 
                 lines_data.append({
                     "misa_line_id": line.misa_line_id or "",
@@ -212,6 +212,7 @@ class MisaExtensionController(http.Controller):
                     "qty_received": qty_received,
                     "purchase_state": purchase_state,
                     # --- MISA Extension Custom Fields ---
+                    "sale_proposed_supplier_id": misa_supplier_id,
                     "misa_supplier_id": misa_supplier_id,
                     "misa_supplier_name": misa_supplier_name,
                     "misa_price_before_tax": line.misa_price_before_tax if hasattr(line, 'misa_price_before_tax') else 0.0,
@@ -323,9 +324,7 @@ class MisaExtensionController(http.Controller):
         # 1. Lấy danh sách NCC
         domain = [
             ('parent_id', '=', False),
-            '|',
-            ('supplier_rank', '>', 0),
-            ('hlv_business_role', '=', 'supplier')
+            ('hlv_business_role', 'in', ['supplier', 'vendor'])
         ]
         q = payload.get('q') or kwargs.get('q')
         if q:
@@ -575,7 +574,7 @@ class MisaExtensionController(http.Controller):
                     "product_uom_id": uom.id if uom else False,
                     "estimated_cost": 0.0,
                     "misa_line_id": (line.get("misa_line_id") or "").strip() or False,
-                    "misa_supplier_id": int(line.get("misa_supplier_id")) if line.get("misa_supplier_id") else False,
+                    "sale_proposed_supplier_id": int(line.get("misa_supplier_id")) if line.get("misa_supplier_id") else False,
                     "misa_price_before_tax": float(line.get("misa_price_before_tax") or 0.0),
                     "misa_price_after_tax": float(line.get("misa_price_after_tax") or 0.0),
                     "misa_amount": float(line.get("misa_amount") or 0.0),
@@ -604,6 +603,38 @@ class MisaExtensionController(http.Controller):
                     incoming_misa_ids.add(misa_id)
 
                 product, uom = _resolve_product_and_uom(line)
+
+                # --- APPLY UoM CONVERSION ---
+                misa_uom_text = (line.get("uom") or "").strip()
+                default_uom_name = product.uom_id.name.strip() if product and product.uom_id else ""
+                misa_product_id = line.get("misa_product_id")
+                
+                if misa_product_id and product and misa_uom_text and default_uom_name and misa_uom_text.lower() != default_uom_name.lower():
+                    try:
+                        headers, _ = env_admin['sale.order']._misa_headers()
+                        orig_qty = float(line.get("qty") or 0.0)
+                        orig_price_before = float(line.get("misa_price_before_tax") or 0.0)
+                        qty_base, price_base, use_default = env_admin['sale.order']._convert_qty_price_to_default_uom(
+                            product=product,
+                            misa_uom_text=misa_uom_text,
+                            qty=orig_qty,
+                            price=orig_price_before,
+                            misa_product_id=misa_product_id,
+                            headers=headers
+                        )
+                        line["qty"] = qty_base
+                        line["misa_price_before_tax"] = price_base
+                        
+                        orig_price_after = float(line.get("misa_price_after_tax") or 0.0)
+                        if orig_price_before:
+                            rate_price = price_base / orig_price_before
+                            line["misa_price_after_tax"] = orig_price_after * rate_price
+                        
+                        uom = product.uom_id
+                    except Exception as e:
+                        _logger.error("Lỗi khi gọi API chuyển đổi ĐVT: %s", str(e))
+                # -----------------------------
+
                 line_vals = _build_line_vals(line, product, uom)
 
                 if misa_id and misa_id in existing_lines_by_misa_id:
@@ -635,19 +666,21 @@ class MisaExtensionController(http.Controller):
             if owner_message:
                 pr.message_post(body=owner_message)
                 
-            # --- Post thông tin Nhà cung cấp mới vào Chatter ---
-            new_suppliers = payload.get("new_suppliers") or []
-            if new_suppliers:
+            # --- Post thông tin Nhà cung cấp mới vào Chatter (gắn với từng dòng sản phẩm) ---
+            new_supplier_lines = [l for l in lines_in if l.get("new_supplier_data")]
+            if new_supplier_lines:
                 from markupsafe import Markup
                 msg_body = "<p><b>[MISA Extension] Thêm Nhà cung cấp mới:</b></p><ul>"
-                for ns in new_suppliers:
+                for sl in new_supplier_lines:
+                    ns = sl.get("new_supplier_data", {})
                     ns_name = ns.get("name", "")
                     ns_address = ns.get("address", "")
                     ns_phone = ns.get("phone", "")
                     ns_vat = ns.get("vat", "")
                     ns_note = ns.get("note", "")
+                    product_name = sl.get("name") or sl.get("product_code") or "Không xác định"
                     
-                    msg_body += f"<li><b>Tên NCC:</b> {ns_name}"
+                    msg_body += f"<li><b>Sản phẩm:</b> {product_name}<br/><b>Tên NCC:</b> {ns_name}"
                     if ns_address:
                         msg_body += f"<br/><b>Địa chỉ:</b> {ns_address}"
                     if ns_phone:

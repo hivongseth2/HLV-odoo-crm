@@ -34,7 +34,8 @@
             </xpath>
             <xpath expr="//field[@name='line_ids']/list/field[@name='estimated_cost']" position="after">
                 <field name="history_po_line_id" optional="hide"/>
-                <field name="misa_supplier_id" optional="show"/>
+                <field name="sale_proposed_supplier_id" optional="show"/>
+                <field name="misa_supplier_id" optional="hide"/>
                 <field name="misa_stock_total" optional="hide"/>
                 <field name="misa_stock_selected" optional="show"/>
                 <field name="misa_stock_undelivered" optional="show"/>
@@ -120,6 +121,7 @@
             <xpath expr="//group[@name='main']" position="after">
                 <group string="Thông tin từ MISA (Sale nhập)">
                     <group>
+                        <field name="sale_proposed_supplier_id" readonly="is_editable == False" options="{'no_create': True}"/>
                         <field name="misa_supplier_id" readonly="is_editable == False" options="{'no_create': True}"/>
                         <field name="misa_price_before_tax" readonly="is_editable == False" widget="monetary" options="{'currency_field': 'currency_id'}"/>
                         <field name="misa_tax_rate" readonly="is_editable == False"/>

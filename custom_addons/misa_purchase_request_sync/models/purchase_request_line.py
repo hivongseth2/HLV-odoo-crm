@@ -20,6 +20,7 @@ class PurchaseRequestLine(models.Model):
 
     # --- Các trường lấy từ MISA CRM (Sale tự điền) ---
     misa_supplier_id = fields.Many2one('res.partner', string="Mã/Tên NCC (MISA)")
+    sale_proposed_supplier_id = fields.Many2one('res.partner', string="NCC Sale Đề Xuất")
     misa_price_before_tax = fields.Float(string="Đơn giá trước thuế (MISA)")
     misa_price_after_tax = fields.Float(string="Đơn giá sau thuế (MISA)")
     misa_amount = fields.Float(string="Thành tiền (MISA)")
