@@ -955,7 +955,7 @@ Nếu không có điểm treo nhưng số dư thật không đủ, `code` là `I
 
 Lấy danh sách yêu cầu đổi thưởng của partner.
 
-**Query:** `partner_id=123`
+**Query:** `partner_id=123&limit=50`
 
 **Output:**
 
@@ -969,9 +969,21 @@ Lấy danh sách yêu cầu đổi thưởng của partner.
         "name": "RRQ/2026/0005",
         "request_type": "cash",
         "points_required": 160,
-        "state": "pending"
+        "cash_value": 200000,
+        "package_id": null,
+        "package_name": "",
+        "bank_name": "Sacombank",
+        "account_number": "040084366041",
+        "account_name": "NGUYEN VAN A",
+        "state": "pending",
+        "date_request": "2026-07-02T13:41:00",
+        "date_done": null,
+        "customer_note": "",
+        "voucher_id": null,
+        "voucher_code": ""
       }
     ],
+    "exchange_points": 160,
     "pending_reward_points": 160,
     "exchange_points_available": 0
   }

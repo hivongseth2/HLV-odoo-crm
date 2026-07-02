@@ -343,10 +343,12 @@
       "method": "GET",
       "path": "/loyalty/redeem/requests",
       "query": {
-        "partner_id": "number"
+        "partner_id": "number",
+        "limit": "number|optional|max 100"
       },
       "returns": {
-        "requests": "array",
+        "requests": "array<{id,name,request_type,points_required,cash_value,package_id,package_name,bank_name,account_number,account_name,state,date_request,date_done,customer_note,voucher_id,voucher_code}>",
+        "exchange_points": "number",
         "pending_reward_points": "number",
         "exchange_points_available": "number"
       }
