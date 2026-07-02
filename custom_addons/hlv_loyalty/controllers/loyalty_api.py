@@ -448,7 +448,10 @@ class LoyaltyExternalAPI(http.Controller):
             root = p._get_loyalty_root()
             if root.id not in seen:
                 seen.add(root.id)
-                results.append(self._partner_summary(root))
+                summary = self._partner_summary(root)
+                if phone:
+                    summary['phone'] = phone
+                results.append(summary)
 
         if not results:
             return self._json_err('Không tìm thấy khách hàng', status=404)

@@ -428,7 +428,7 @@ Nhóm route `/api/v1/loyalty/*` dùng `auth='public'` và `sudo()` để:
 
 `api/zalo_miniapp_api.py` mở rộng phạm vi module sang commerce:
 
-- Xác thực Zalo và gắn partner vào session.
+- Xác thực Zalo bằng SĐT portal loyalty và trả `partner_id`.
 - Thông tin tài khoản.
 - Danh mục, sản phẩm, ảnh và tồn kho.
 - Giỏ hàng dựa trên Sale Order nháp.
@@ -436,7 +436,7 @@ Nhóm route `/api/v1/loyalty/*` dùng `auth='public'` và `sudo()` để:
 - CRUD địa chỉ giao hàng.
 - Danh sách gói voucher và đổi voucher.
 
-Các route dùng `auth='public'`, lấy partner từ `request.session["zalo_partner_id"]` hoặc tham số `partner_id`, sau đó thao tác dữ liệu bằng `sudo()`. Route `/api/v1/auth/zalo` hiện kiểm tra `access_token` và `user_id` có được gửi lên nhưng chưa gọi Zalo để xác minh token.
+Các route Mini App dùng `auth='public'`, nhưng không lấy partner từ session. Route `/api/v1/auth/zalo` đối chiếu `phone` với `hlv.loyalty.portal.account.portal_phone`; các API theo khách hàng phải gửi kèm cặp `partner_id` + `phone` khớp tài khoản portal active trước khi thao tác dữ liệu bằng `sudo()`. Route này hiện kiểm tra `access_token`, `user_id` và `phone` có được gửi lên nhưng chưa gọi Zalo để xác minh token.
 
 Chi tiết payload Zalo API được mô tả riêng tại `docs/api.md`.
 

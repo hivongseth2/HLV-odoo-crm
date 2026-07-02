@@ -2,7 +2,7 @@
 
 > Base URL: `https://{domain}/api/v1`
 >
-> Authentication: `Authorization: Bearer {API_KEY}` hoặc session token từ `/auth/zalo`
+> Authentication: Mini App phải đối chiếu SĐT Zalo với tài khoản portal loyalty và gửi kèm `partner_id` + `phone` cho các API theo khách hàng; không dùng session token.
 >
 > Content-Type: `application/json`
 >
@@ -22,14 +22,15 @@
 
 ### 1.1 POST `/auth/zalo`
 
-Xác thực user Zalo → tạo session / trả API key.
+Xác thực user Zalo bằng SĐT portal loyalty → trả `partner_id` / API key.
 
 **Input:**
 
 ```json
 {
   "access_token": "zalo_access_token_string",
-  "user_id": "zalo_user_id"
+  "user_id": "zalo_user_id",
+  "phone": "0901234567"
 }
 ```
 
@@ -914,6 +915,7 @@ Với đổi tiền mặt, request `pending` được tính vào `pending_reward
 ```json
 {
   "partner_id": 123,
+  "phone": "0901234567",
   "request_type": "cash",
   "points_to_redeem": 160,
   "bank_name": "Sacombank",
@@ -957,7 +959,7 @@ Nếu không có điểm treo nhưng số dư thật không đủ, `code` là `I
 
 Lấy danh sách yêu cầu đổi thưởng của partner.
 
-**Query:** `partner_id=123&limit=50`
+**Query:** `partner_id=123&phone=0901234567&limit=50`
 
 **Output:**
 
@@ -1003,6 +1005,7 @@ Hủy yêu cầu đổi thưởng đang `pending` để giải phóng điểm đ
 ```json
 {
   "partner_id": 123,
+  "phone": "0901234567",
   "request_id": 55
 }
 ```

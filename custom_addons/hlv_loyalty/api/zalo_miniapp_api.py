@@ -1,11 +1,15 @@
 # -*- coding: utf-8 -*-
 import base64
 import json
+import logging
 import re
 from datetime import timedelta, timezone
 from odoo import fields, http
 from odoo.exceptions import UserError
 from odoo.http import request, Response
+
+
+_logger = logging.getLogger(__name__)
 
 
 class ZaloMiniAppAPI(http.Controller):
@@ -75,6 +79,11 @@ class ZaloMiniAppAPI(http.Controller):
         elif len(digits) == 12 and digits.startswith("084"):
             digits = "0" + digits[3:]
         return digits
+
+    @staticmethod
+    def _mask_phone(phone):
+        normalized = ZaloMiniAppAPI._normalize_vn_phone(phone)
+        return "***%s" % normalized[-3:] if normalized else ""
 
     @staticmethod
     def _vn_datetime(value):
@@ -202,24 +211,61 @@ class ZaloMiniAppAPI(http.Controller):
         params = params or {}
         partner_id = params.get("partner_id") or request.httprequest.args.get("partner_id")
         phone = params.get("phone") or request.httprequest.args.get("phone")
+        path = request.httprequest.path
         if not partner_id or not phone:
+            _logger.warning(
+                "Zalo MiniApp partner guard failed: missing partner_id/phone path=%s has_partner_id=%s has_phone=%s",
+                path,
+                bool(partner_id),
+                bool(phone),
+            )
             return None
 
-        partner = request.env["res.partner"].sudo().browse(int(partner_id))
+        try:
+            partner = request.env["res.partner"].sudo().browse(int(partner_id))
+        except Exception:
+            _logger.warning(
+                "Zalo MiniApp partner guard failed: invalid partner_id=%s phone=%s path=%s",
+                partner_id,
+                self._mask_phone(phone),
+                path,
+            )
+            return None
         if not partner.exists():
+            _logger.warning(
+                "Zalo MiniApp partner guard failed: partner not found partner_id=%s phone=%s path=%s",
+                partner_id,
+                self._mask_phone(phone),
+                path,
+            )
             return None
 
         root = partner._get_loyalty_root()
         normalized = self._normalize_vn_phone(phone)
         if not normalized:
+            _logger.warning(
+                "Zalo MiniApp partner guard failed: invalid phone partner_id=%s phone=%s path=%s",
+                partner_id,
+                self._mask_phone(phone),
+                path,
+            )
             return None
 
-        account = request.env["hlv.loyalty.portal.account"].sudo().search([
-            ("partner_id", "=", root.id),
+        accounts = request.env["hlv.loyalty.portal.account"].sudo().search([
             ("portal_phone", "=", normalized),
             ("active", "=", True),
-        ], limit=1)
-        return root if account else None
+        ])
+        account = accounts.filtered(lambda acc: acc.partner_id._get_loyalty_root().id == root.id)[:1]
+        if not account:
+            _logger.warning(
+                "Zalo MiniApp partner guard failed: portal account mismatch partner_id=%s root_id=%s phone=%s path=%s",
+                partner_id,
+                root.id,
+                self._mask_phone(phone),
+                path,
+            )
+            return None
+        return root
 
     def _partner_from_phone(self, phone):
         normalized = self._normalize_vn_phone(phone)
@@ -365,13 +411,22 @@ class ZaloMiniAppAPI(http.Controller):
         user_id = (payload.get("user_id") or "").strip()
         phone = payload.get("phone") or ""
         if not access_token or not user_id:
+            _logger.warning(
+                "Zalo MiniApp auth failed: missing access_token/user_id has_access_token=%s has_user_id=%s phone=%s",
+                bool(access_token),
+                bool(user_id),
+                self._mask_phone(phone),
+            )
             return self._response_error("INVALID_INPUT", "access_token and user_id are required", status=400)
         if not phone:
+            _logger.warning("Zalo MiniApp auth failed: missing phone has_user_id=%s", bool(user_id))
             return self._response_error("INVALID_INPUT", "phone is required", status=400)
 
+        normalized_phone = self._normalize_vn_phone(phone)
         partner_model = request.env["res.partner"].sudo()
         partner = self._partner_from_phone(phone)
         if not partner:
+            _logger.warning("Zalo MiniApp auth failed: partner not found phone=%s", self._mask_phone(phone))
             return self._response_error("PARTNER_NOT_FOUND", "No active loyalty portal account found for phone", status=404)
 
         root = partner._get_loyalty_root()
@@ -405,6 +460,7 @@ class ZaloMiniAppAPI(http.Controller):
         if bind_vals:
             partner_model.search(binding_domain).write(clear_vals)
             root.write(bind_vals)
+        _logger.info("Zalo MiniApp auth success: partner_id=%s phone=%s", root.id, self._mask_phone(phone))
 
         loyalty_root = root._get_loyalty_root()
 
@@ -414,7 +470,7 @@ class ZaloMiniAppAPI(http.Controller):
             "api_key": api_key or None,
             "partner_id": root.id,
             "name": root.name,
-            "phone": root.phone or root.mobile or "",
+            "phone": normalized_phone,
             "email": root.email or "",
             "avatar": self._img_url("res.partner", root.id),
             "loyalty_points": loyalty_root.loyalty_total_points,
@@ -1242,10 +1298,12 @@ class ZaloMiniAppAPI(http.Controller):
         if not partner:
             return self._response_error("UNAUTHORIZED", "Missing or invalid partner_id/phone. Call /auth/zalo and pass returned partner_id with the same phone.", status=401)
 
-        account = request.env['hlv.loyalty.portal.account'].sudo().search([
-            ('partner_id', '=', partner.id),
+        phone = self._normalize_vn_phone(payload.get('phone') or '')
+        accounts = request.env['hlv.loyalty.portal.account'].sudo().search([
+            ('portal_phone', '=', phone),
             ('active', '=', True)
-        ], limit=1)
+        ])
+        account = accounts.filtered(lambda acc: acc.partner_id._get_loyalty_root().id == partner.id)[:1]
         if not account:
             return self._response_error("NOT_FOUND", "No active portal account found.", status=404)
 
@@ -1279,10 +1337,12 @@ class ZaloMiniAppAPI(http.Controller):
         if not partner:
             return self._response_error("UNAUTHORIZED", "Missing or invalid partner_id/phone. Call /auth/zalo and pass returned partner_id with the same phone.", status=401)
 
-        account = request.env['hlv.loyalty.portal.account'].sudo().search([
-            ('partner_id', '=', partner.id),
+        phone = self._normalize_vn_phone(payload.get('phone') or '')
+        accounts = request.env['hlv.loyalty.portal.account'].sudo().search([
+            ('portal_phone', '=', phone),
             ('active', '=', True)
-        ], limit=1)
+        ])
+        account = accounts.filtered(lambda acc: acc.partner_id._get_loyalty_root().id == partner.id)[:1]
         if not account:
             return self._response_error("NOT_FOUND", "No active portal account found.", status=404)
 
