@@ -642,7 +642,14 @@ class LoyaltyExternalAPI(http.Controller):
     @http.route('/api/v1/loyalty/partner/<int:partner_id>/history', type='http',
                 auth='public', methods=['GET'], csrf=False, cors='*')
     def get_partner_history(self, partner_id, **kwargs):
-        """GET /api/v1/loyalty/partner/<id>/history?limit=20&offset=0"""
+        """GET /api/v1/loyalty/partner/<id>/history?limit=20&offset=0
+
+        Optional filters:
+        - pt / point_type: all | ranking | exchange
+        - st / state: all | pending | confirmed | cancelled
+        - tt / transaction_type: all | earn | redeem | return | manual
+        - date_from / date_to: YYYY-MM-DD
+        """
         partner = request.env['res.partner'].sudo().browse(partner_id)
         if not partner.exists():
             return self._json_err('Khách hàng không tồn tại', status=404)
@@ -650,19 +657,65 @@ class LoyaltyExternalAPI(http.Controller):
         limit = min(int(kwargs.get('limit', 20)), 100)
         offset = int(kwargs.get('offset', 0))
         root = partner._get_loyalty_root()
+        family_ids = root._get_loyalty_family_partner_ids()
+        active_pt = kwargs.get('pt') or kwargs.get('point_type') or 'all'
+        active_st = kwargs.get('st') or kwargs.get('state') or 'all'
+        active_tt = kwargs.get('tt') or kwargs.get('transaction_type') or 'all'
+
+        if active_pt not in ('all', 'ranking', 'exchange'):
+            active_pt = 'all'
+        if active_st not in ('all', 'pending', 'confirmed', 'cancelled'):
+            active_st = 'all'
+        if active_tt not in ('all', 'earn', 'redeem', 'return', 'manual'):
+            active_tt = 'all'
+
+        domain = [('partner_id', 'in', family_ids)]
+        if active_pt != 'all':
+            domain.append(('point_type', '=', active_pt))
+        if active_st != 'all':
+            domain.append(('state', '=', active_st))
+        if active_tt != 'all':
+            domain.append(('transaction_type', '=', active_tt))
+
+        date_from = (kwargs.get('date_from') or '').strip()
+        date_to = (kwargs.get('date_to') or '').strip()
+        try:
+            if date_from:
+                from_dt = odoo_fields.Datetime.to_datetime(
+                    date_from if len(date_from) > 10 else f'{date_from} 00:00:00'
+                )
+                domain.append(('date', '>=', from_dt))
+            if date_to:
+                to_dt = odoo_fields.Datetime.to_datetime(
+                    date_to if len(date_to) > 10 else f'{date_to} 23:59:59'
+                )
+                domain.append(('date', '<=', to_dt))
+        except Exception:
+            return self._json_err('Khoảng ngày không hợp lệ', status=400)
+
         history = request.env['hlv.loyalty.history'].sudo().search(
-            [('partner_id', '=', root.id)],
+            domain,
             limit=limit, offset=offset, order='date desc',
         )
         total = request.env['hlv.loyalty.history'].sudo().search_count(
-            [('partner_id', '=', root.id)]
+            domain
         )
         return self._json_ok({
             'partner_id': partner_id,
             'total_points': root.loyalty_total_points,
+            'exchange_points': root.loyalty_exchange_points,
+            'pending_reward_points': root.loyalty_reward_pending_points,
+            'exchange_points_available': root.loyalty_exchange_available_points,
             'total_records': total,
             'limit': limit,
             'offset': offset,
+            'filters': {
+                'point_type': active_pt,
+                'state': active_st,
+                'transaction_type': active_tt,
+                'date_from': date_from,
+                'date_to': date_to,
+            },
             'records': [{
                 'id': h.id,
                 'date': h.date.isoformat() if h.date else None,
@@ -844,6 +897,52 @@ class LoyaltyExternalAPI(http.Controller):
             'gift_qty': p.gift_qty,
         } for p in packages])
 
+    @staticmethod
+    def _reward_request_dict(req):
+        return {
+            'id': req.id,
+            'name': req.name,
+            'request_type': req.request_type,
+            'points_required': req.points_required,
+            'cash_value': req.cash_value,
+            'package_name': req.package_id.name if req.package_id else '',
+            'state': req.state,
+            'date_request': req.date_request.isoformat() if req.date_request else None,
+            'customer_note': req.customer_note or '',
+            'voucher_code': req.voucher_id.code if req.voucher_id else '',
+        }
+
+    @http.route('/api/v1/loyalty/redeem/requests', type='http',
+                auth='public', methods=['GET'], csrf=False, cors='*')
+    def list_redeem_requests(self, **kwargs):
+        """GET /api/v1/loyalty/redeem/requests?partner_id=42&state=all"""
+        partner_id = kwargs.get('partner_id')
+        if not partner_id:
+            return self._json_err('Thiếu partner_id', status=400, code='MISSING_PARTNER_ID')
+
+        partner = request.env['res.partner'].sudo().browse(int(partner_id))
+        if not partner.exists():
+            return self._json_err('Khách hàng không tồn tại', status=404, code='PARTNER_NOT_FOUND')
+
+        root = partner._get_loyalty_root()
+        domain = [('partner_id', 'in', root._get_loyalty_family_partner_ids())]
+        state = kwargs.get('state') or 'all'
+        if state in ('pending', 'done', 'cancelled'):
+            domain.append(('state', '=', state))
+
+        requests = request.env['hlv.loyalty.reward.request'].sudo().search(
+            domain, order='date_request desc, id desc'
+        )
+        return self._json_ok({
+            'success': True,
+            'data': {
+                'requests': [self._reward_request_dict(req) for req in requests],
+                'exchange_points': root.loyalty_exchange_points,
+                'pending_reward_points': root.loyalty_reward_pending_points,
+                'exchange_points_available': root.loyalty_exchange_available_points,
+            },
+        })
+
     @http.route('/api/v1/loyalty/redeem/submit', type='json',
                 auth='public', methods=['POST'], csrf=False, cors='*')
     def submit_redeem(self, **kwargs):
@@ -964,14 +1063,16 @@ class LoyaltyExternalAPI(http.Controller):
             'message': 'Yêu cầu đổi thưởng đã được gửi thành công. Vui lòng chờ xét duyệt.',
         }
 
-    @http.route('/api/v1/loyalty/redeem/cancel', type='json',
-                auth='public', methods=['POST'], csrf=False, cors='*')
-    def cancel_redeem_request(self, **kwargs):
+    @http.route([
+        '/api/v1/loyalty/redeem/cancel',
+        '/api/v1/loyalty/redeem/requests/<int:request_id>/cancel',
+    ], type='json', auth='public', methods=['POST'], csrf=False, cors='*')
+    def cancel_redeem_request(self, request_id=None, **kwargs):
         """POST /api/v1/loyalty/redeem/cancel
         Body: {"partner_id": 42, "request_id": 123}
         """
         partner_id = kwargs.get('partner_id')
-        request_id = kwargs.get('request_id')
+        request_id = request_id or kwargs.get('request_id')
         if not partner_id:
             return {'error': 'Thiếu partner_id'}
         if not request_id:
