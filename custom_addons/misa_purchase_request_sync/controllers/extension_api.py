@@ -773,11 +773,9 @@ class MisaExtensionController(http.Controller):
         has_price_diff = False
         has_missing_in_amis = False
         has_missing_in_odoo = False
-        # So sánh tổng tiền CHƯA THUẾ (amount_untaxed Odoo vs total_amount MISA)
-        # để tránh False Positive do MISA không trả về tiền thuế trong total_amount.
-        # Nếu chỉ lệch tiền thuế, không đánh dấu là lỗi.
         has_total_diff = False
         has_tax_diff = False
+        has_vat_diff = False
         
         if abs(odoo_untaxed - amis_total) >= 1.0:
             has_total_diff = True
@@ -862,6 +860,21 @@ class MisaExtensionController(http.Controller):
                         "misa_value": a_price,
                         "severity": "warning"
                     })
+                    
+                # So sánh Thuế %
+                o_vat = float(o_item.get("vat_rate", 0.0))
+                a_vat = float(a_item.get("vat_rate", 0.0))
+                if abs(o_vat - a_vat) > 0.01:
+                    has_vat_diff = True
+                    differences.append({
+                        "type": "tax_diff",
+                        "product_code": code,
+                        "product_name": prod_name,
+                        "field": "vat_rate",
+                        "odoo_value": o_vat,
+                        "misa_value": a_vat,
+                        "severity": "warning"
+                    })
 
         # Xác định status tổng thể
         if not differences:
@@ -908,6 +921,8 @@ class MisaExtensionController(http.Controller):
             status = "qty_mismatch"
         elif has_price_diff:
             status = "price_mismatch"
+        elif has_vat_diff or has_total_diff:
+            status = "tax_diff"
         else:
             status = "diff"
 
@@ -939,6 +954,8 @@ class MisaExtensionController(http.Controller):
             display = f"[{orig_code}] {prod_name}" if orig_code != "Unknown" else "Unknown Code"
             display = display.replace("'", "`")
             
+            vat_rate = oline.taxes_id[0].amount if oline.taxes_id else 0.0
+            
             lines.append({
                 "code": code,
                 "orig_code": orig_code,
@@ -949,6 +966,7 @@ class MisaExtensionController(http.Controller):
                 "price_unit": oline.price_unit,
                 "price_subtotal": oline.price_subtotal,
                 "price_tax": oline.price_tax,
+                "vat_rate": vat_rate,
                 "receipt_history": receipt_history
             })
         return lines
@@ -1083,11 +1101,6 @@ class MisaExtensionController(http.Controller):
                         "value": po_name,
                         "operator": 1,
                         "operand": 1,
-                        "childrens": [
-                            {"property": 57, "value": po_name, "operator": 1, "operand": 2, "data_type": 1},
-                            {"property": 2656, "value": po_name, "operator": 1, "operand": 2, "data_type": 1},
-                            {"property": 4030, "value": po_name, "operator": 1, "operand": 2}
-                        ],
                         "data_type": 1
                     }]
 
@@ -1096,7 +1109,7 @@ class MisaExtensionController(http.Controller):
                         "filter": [
                             {
                                 "property": 3972,
-                                "value": "2024-01-01T00:00:00.00Z",
+                                "value": "2015-01-01T00:00:00.00Z",
                                 "operator": 10,
                                 "operand": 1,
                                 "data_type": 3
@@ -1111,7 +1124,7 @@ class MisaExtensionController(http.Controller):
                         ],
                         "customFilter": custom_filter,
                         "pageIndex": 1,
-                        "pageSize": 20,
+                        "pageSize": 100,
                         "useSp": False,
                         "view": 2,
                         "summaryColumns": [5039, 5104, 247],
