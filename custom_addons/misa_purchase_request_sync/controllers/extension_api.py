@@ -1432,4 +1432,357 @@ class MisaExtensionController(http.Controller):
 
         except Exception as e:
             _logger.exception("Extension API /po/reconcile exception: %s", e)
+            return json_response({"ok": False, "error": "exception", "message": str(e)}, 500)    # ============================================================
+    # POST /api/extension/po/reconcile_only
+    # ============================================================
+    @http.route(
+        "/api/extension/po/reconcile_only",
+        type="http",
+        auth="none",
+        methods=["POST", "OPTIONS"],
+        csrf=False,
+        cors="*",
+    )
+    def api_extension_po_reconcile_only(self, **kwargs):
+        """
+        Đối chiếu Đơn mua hàng (PO) dựa trên NGÀY LẬP ĐƠN.
+        Không quan tâm phiếu nhập kho. Tìm ra các PO bị thiếu ở MISA hoặc Odoo.
+        """
+        if request.httprequest.method == "OPTIONS":
+            return request.make_response("", headers=[("Access-Control-Allow-Origin", "*"), ("Access-Control-Allow-Headers", "*")])
+
+        payload = self._parse_json_body(kwargs)
+        token = self._extract_token(payload)
+        ok, err = self._authenticate(token)
+
+        def json_response(data, status=200):
+            return request.make_response(
+                json.dumps(data),
+                headers=[
+                    ("Content-Type", "application/json"),
+                    ("Access-Control-Allow-Origin", "*"),
+                ],
+                status=status,
+            )
+
+        if not ok:
+            return json_response(err, 401)
+
+        date_from_str = payload.get("date_from")
+        date_to_str = payload.get("date_to")
+        if not date_from_str or not date_to_str:
+            return json_response({"ok": False, "error": "missing_date", "message": "Missing date_from or date_to"}, 400)
+
+        try:
+            from datetime import datetime
+            import concurrent.futures
+            
+            env_admin = request.env(su=True)
+            misa_utils = env_admin['misa.api.utils']
+            misa_config = env_admin['misa.config']
+            access_token = misa_utils._get_misa_token()
+            headers = misa_config.get_default_headers(access_token)
+            
+            date_from_dt = datetime.strptime(date_from_str, "%Y-%m-%d")
+            date_to_dt = datetime.strptime(date_to_str, "%Y-%m-%d")
+            
+            date_from_utc = date_from_dt.strftime('%Y-%m-%d 00:00:00')
+            date_to_utc = date_to_dt.strftime('%Y-%m-%d 23:59:59')
+            
+            # MISA uses isoformat Z
+            date_from_iso = date_from_dt.strftime('%Y-%m-%dT00:00:00.00Z')
+            date_to_iso = date_to_dt.strftime('%Y-%m-%dT23:59:59.00Z')
+            
+            # Lấy Odoo POs created/approved in date range
+            odoo_pos = env_admin['purchase.order'].search([
+                ('date_approve', '>=', date_from_utc),
+                ('date_approve', '<=', date_to_utc),
+                ('state', 'in', ['purchase', 'done'])
+            ])
+            
+            # Lấy list các mã PO cần tìm (bao gồm name và origin)
+            all_po_names = [po.name for po in odoo_pos]
+            odoo_po_names = set(all_po_names)
+            for po in odoo_pos:
+                if po.origin:
+                    for org in po.origin.split(','):
+                        if org.strip():
+                            odoo_po_names.add(org.strip())
+
+            # Tìm kiếm ALL POs trong MISA AMIS theo Date
+            _logger.info("🔍 Fetching ALL POs from MISA between %s and %s", date_from_iso, date_to_iso)
+            
+            amis_dict = {}
+            amis_all_list = []
+            
+            for page in range(1, 10):
+                amis_payload = {
+                    "sort": "[{\"property\":3972,\"desc\":true,\"data_type\":3,\"operand\":1},{\"property\":4008,\"desc\":true,\"data_type\":1,\"operand\":1}]",
+                    "filter": [
+                        {
+                            "property": 3972,
+                            "value": date_from_iso,
+                            "operator": 10,
+                            "operand": 1,
+                            "data_type": 3
+                        },
+                        {
+                            "property": 3972,
+                            "value": date_to_iso,
+                            "operator": 12,
+                            "operand": 1,
+                            "data_type": 3
+                        }
+                    ],
+                    "pageIndex": page,
+                    "pageSize": 500,
+                    "useSp": False,
+                    "view": 2,
+                    "summaryColumns": [5039, 5104, 247],
+                    "loadMode": 2
+                }
+
+                local_headers = dict(headers)
+                response = misa_utils._fetch_with_retry(
+                    "https://actapp.misa.vn/g2/api/pu/v1/pu_order/paging_filter_v2",
+                    local_headers, amis_payload
+                )
+
+                if response.status_code == 200:
+                    resp_json = response.json()
+                    data_obj = resp_json.get("Data")
+                    if isinstance(data_obj, str):
+                        import json as json_lib
+                        try:
+                            data_obj = json_lib.loads(data_obj)
+                        except:
+                            data_obj = {}
+                    if not data_obj:
+                        break
+                    
+                    page_data = data_obj.get("PageData", [])
+                    if not page_data:
+                        break
+                        
+                    for apo in page_data:
+                        refno = apo.get("refno")
+                        if refno:
+                            amis_dict[refno.strip()] = apo
+                            amis_all_list.append(apo)
+                else:
+                    break
+            
+            _logger.info("🔍 amis_dict count: %s POs found in MISA", len(amis_dict))
+            
+            # ============================================================
+            # BUILD RECONCILED DATA
+            # ============================================================
+            reconciled = []
+            matched_old = []
+            diff_old = []
+            odoo_only_old = []
+            
+            processed_misa_refnos = set()
+
+            for po in odoo_pos:
+                po_name = po.name
+                po_origin = (po.origin or "").strip()
+                
+                # Lấy chi tiết dòng Odoo
+                odoo_lines_detail = self._get_odoo_line_details(po)
+                
+                # Tìm trên AMIS
+                amis_po = amis_dict.get(po_name.strip())
+                if amis_po:
+                    processed_misa_refnos.add(po_name.strip())
+                if not amis_po and po_origin:
+                    for org in po_origin.split(','):
+                        org = org.strip()
+                        if org and org in amis_dict:
+                            amis_po = amis_dict[org]
+                            processed_misa_refnos.add(org)
+                            break
+                
+                reconciled_item = {
+                    "po_name": po_name,
+                    "po_origin": po_origin,
+                    "partner": po.partner_id.name if po.partner_id else "",
+                    "date_order": po.date_order.strftime("%Y-%m-%d") if po.date_order else "",
+                    "odoo": {
+                        "partner": po.partner_id.name if po.partner_id else "",
+                        "date_order": po.date_order.strftime("%Y-%m-%d") if po.date_order else "",
+                        "amount_total": po.amount_total,
+                        "lines": odoo_lines_detail
+                    },
+                    "amis": None,
+                    "differences": [],
+                    "duplicate_warning": None
+                }
+                
+                dup_po_names = self._detect_duplicate_po(po_name, all_po_names)
+                if dup_po_names:
+                    reconciled_item["duplicate_warning"] = {
+                        "message": f"Odoo có nhiều PO cùng mã gốc: {', '.join([po_name] + dup_po_names)}.",
+                        "related_pos": dup_po_names
+                    }
+                
+                if not amis_po:
+                    status, severity, root_cause, suggested, diffs = self._classify_po_status(
+                        {"amount_total": po.amount_total}, None, [], odoo_lines_detail
+                    )
+                    reconciled_item["status"] = "missing_in_misa"
+                    reconciled_item["severity"] = "critical"
+                    reconciled_item["root_cause"] = "odoo_only"
+                    reconciled_item["suggested_action"] = "Tạo ĐMH trên AMIS"
+                    reconciled_item["differences"] = [{"type": "system", "desc": "Đơn không tồn tại trên MISA"}]
+                    
+                    odoo_only_old.append(po_name)
+                else:
+                    refid = amis_po.get("refid")
+                    amis_total = float(amis_po.get("total_amount") or 0.0)
+                    amis_total_oc = float(amis_po.get("total_amount_oc", amis_total))
+                    
+                    amis_lines = []
+                    amis_header = {}
+                    try:
+                        import base64
+                        import json as _json
+                        import requests
+                        detail_full_payload = [{
+                            "Type": "pu_order",
+                            "Key": refid,
+                            "RefType": 301,
+                            "RefTypeCategory": 301,
+                            "View": "view_pu_order",
+                            "Details": [
+                                {"Type": "pu_order_detail", "Alias": "detail", "View": "view_pu_order_detail"}
+                            ]
+                        }]
+                        req_base64 = base64.b64encode(
+                            _json.dumps(detail_full_payload, separators=(',', ':')).encode('utf-8')
+                        ).decode('utf-8')
+                        detail_url = f"https://actapp.misa.vn/g2/api/pu/v1/pu_order/detail_full?req={req_base64}"
+                        detail_res = requests.get(detail_url, headers=headers, timeout=30)
+                        
+                        if detail_res.status_code == 200:
+                            dt_json = detail_res.json()
+                            d_obj = dt_json.get("Data", {}) if isinstance(dt_json, dict) else {}
+                            if isinstance(d_obj, str):
+                                try: d_obj = _json.loads(d_obj)
+                                except Exception: d_obj = {}
+                            if isinstance(d_obj, dict):
+                                pu_orders = d_obj.get("pu_order", [])
+                                if pu_orders:
+                                    amis_header = pu_orders[0] if isinstance(pu_orders, list) else pu_orders
+                                amis_lines = d_obj.get("pu_order_detail", [])
+                    except Exception as e:
+                        _logger.warning("detail_full exception for %s: %s", po_name, e)
+                    
+                    amis_lines_detail = []
+                    for aline in amis_lines:
+                        if not isinstance(aline, dict): continue
+                        orig_code = (aline.get("inventory_item_code") or "").strip()
+                        prod_name = (aline.get("description") or aline.get("inventory_item_name") or "").strip()
+                        code = orig_code.lower()
+                        amis_lines_detail.append({
+                            "code": code,
+                            "orig_code": orig_code,
+                            "name": prod_name,
+                            "display": f"[{orig_code}] {prod_name}" if orig_code else "Unknown Code",
+                            "qty": float(aline.get("quantity") or 0),
+                            "qty_receipt": float(aline.get("quantity_receipt") or 0),
+                            "price_unit": float(aline.get("unit_price") or aline.get("main_unit_price") or 0),
+                            "amount": float(aline.get("amount") or aline.get("amount_oc") or 0),
+                            "price_tax": float(aline.get("vat_amount") or aline.get("vat_amount_oc") or 0),
+                            "vat_rate": float(aline.get("vat_rate") or 0)
+                        })
+                    
+                    reconciled_item["amis"] = {
+                        "partner": amis_header.get("account_object_name") or amis_po.get("account_object_name") or "",
+                        "date_order": amis_po.get("refdate", "")[:10],
+                        "amount_total": amis_total_oc,
+                        "lines": amis_lines_detail
+                    }
+                    
+                    status, severity, root_cause, suggested, diffs = self._classify_po_status(
+                        reconciled_item["odoo"], reconciled_item["amis"], amis_lines_detail, odoo_lines_detail
+                    )
+                    reconciled_item["status"] = status
+                    reconciled_item["severity"] = severity
+                    reconciled_item["root_cause"] = root_cause
+                    reconciled_item["suggested_action"] = suggested
+                    reconciled_item["differences"] = diffs
+                    
+                    if status == "matched":
+                        matched_old.append(po_name)
+                    else:
+                        diff_old.append(po_name)
+                
+                reconciled.append(reconciled_item)
+
+            # ============================================================
+            # MISA ONLY
+            # ============================================================
+            for apo in amis_all_list:
+                refno = apo.get("refno", "").strip()
+                if refno not in processed_misa_refnos:
+                    # MISA Only item
+                    reconciled_item = {
+                        "po_name": refno,
+                        "po_origin": "",
+                        "partner": apo.get("account_object_name") or "",
+                        "date_order": apo.get("refdate", "")[:10],
+                        "odoo": None,
+                        "amis": {
+                            "partner": apo.get("account_object_name") or "",
+                            "date_order": apo.get("refdate", "")[:10],
+                            "amount_total": float(apo.get("total_amount_oc", apo.get("total_amount") or 0)),
+                            "lines": []
+                        },
+                        "status": "missing_in_odoo",
+                        "severity": "critical",
+                        "root_cause": "misa_only",
+                        "suggested_action": "Tạo PO trên Odoo",
+                        "differences": [{"type": "system", "desc": "Đơn có trên MISA nhưng không có trên Odoo"}],
+                        "duplicate_warning": None
+                    }
+                    reconciled.append(reconciled_item)
+
+            # Sort results by status then po_name
+            reconciled.sort(key=lambda x: (x.get("status", ""), x.get("po_name", "")))
+
+            # ============================================================
+            # SUMMARY
+            # ============================================================
+            by_status = {}
+            by_severity = {}
+            for item in reconciled:
+                s = item["status"]
+                by_status[s] = by_status.get(s, 0) + 1
+                
+                sev = item["severity"]
+                if sev:
+                    by_severity[sev] = by_severity.get(sev, 0) + 1
+            
+            summary = {
+                "total_odoo": len(odoo_pos),
+                "total_misa": len(amis_dict),
+                "by_status": by_status,
+                "by_severity": by_severity
+            }
+            
+            return json_response({
+                "ok": True,
+                "data": {
+                    "matched": matched_old,
+                    "diff": diff_old,
+                    "odoo_only": odoo_only_old,
+                    "total_odoo": len(odoo_pos)
+                },
+                "summary": summary,
+                "reconciled": reconciled
+            })
+
+        except Exception as e:
+            _logger.exception("Extension API /po/reconcile_only exception: %s", e)
             return json_response({"ok": False, "error": "exception", "message": str(e)}, 500)
