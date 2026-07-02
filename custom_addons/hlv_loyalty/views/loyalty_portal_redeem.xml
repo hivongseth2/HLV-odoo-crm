@@ -398,7 +398,7 @@
                                                   onsubmit="return confirm('Hủy yêu cầu đổi thưởng này?')">
                                                 <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
                                                 <button type="submit" class="sr-rq-cancel-btn">
-                                                    <span class="ms">cancel</span> Hủy yêu cầu
+                                                    Hủy yêu cầu
                                                 </button>
                                             </form>
                                         </t>

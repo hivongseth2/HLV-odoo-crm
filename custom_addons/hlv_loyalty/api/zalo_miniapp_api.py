@@ -1106,10 +1106,11 @@ class ZaloMiniAppAPI(http.Controller):
         if not partner:
             return self._response_error("UNAUTHORIZED", "Missing partner context. Call /auth/zalo first.", status=401)
         root = partner._get_loyalty_root()
+        limit = min(max(self._parse_int(kwargs.get("limit") or request.httprequest.args.get("limit"), 50), 1), 100)
 
         requests = request.env["hlv.loyalty.reward.request"].sudo().search([
             ("partner_id", "in", root._get_loyalty_family_partner_ids()),
-        ], order="date_request desc, id desc", limit=50)
+        ], order="date_request desc, id desc", limit=limit)
 
         data = []
         for req in requests:
@@ -1119,10 +1120,16 @@ class ZaloMiniAppAPI(http.Controller):
                 "request_type": req.request_type,
                 "points_required": req.points_required,
                 "cash_value": req.cash_value,
+                "package_id": req.package_id.id if req.package_id else None,
                 "package_name": req.package_id.name if req.package_id else "",
+                "bank_name": req.bank_name or "",
+                "account_number": req.account_number or "",
+                "account_name": req.account_name or "",
                 "state": req.state,
                 "date_request": req.date_request.isoformat() if req.date_request else None,
+                "date_done": req.date_done.isoformat() if req.date_done else None,
                 "customer_note": req.customer_note or "",
+                "voucher_id": req.voucher_id.id if req.voucher_id else None,
                 "voucher_code": req.voucher_id.code if req.voucher_id else "",
             })
         return self._response_success({
