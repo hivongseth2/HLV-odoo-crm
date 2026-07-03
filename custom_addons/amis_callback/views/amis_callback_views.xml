@@ -675,6 +675,8 @@
                                     <field name="resolved"/>
                                     <button name="action_open_odoo_record" type="object" string="Mở Odoo"
                                             icon="fa-external-link"/>
+                                    <button name="action_open_uom_resolution_wizard" type="object" string="Xử lý ĐVT"
+                                            icon="fa-random" invisible="resolved or issue_type != 'uom_mismatch'"/>
                                     <button name="action_mark_resolved" type="object" string="Đã xử lý"
                                             icon="fa-check" invisible="resolved"/>
                                 </list>
@@ -760,6 +762,8 @@
                 <field name="resolved_note" optional="hide"/>
                 <button name="action_open_odoo_record" type="object" string="Mở Odoo"
                         icon="fa-external-link"/>
+                <button name="action_open_uom_resolution_wizard" type="object" string="Xử lý ĐVT"
+                        icon="fa-random" invisible="resolved or issue_type != 'uom_mismatch'"/>
                 <button name="action_mark_resolved" type="object" string="Đã xử lý"
                         icon="fa-check" invisible="resolved"/>
                 <button name="action_mark_unresolved" type="object" string="Mở lại"
@@ -776,6 +780,8 @@
                 <header>
                     <button name="action_open_odoo_record" type="object" string="Mở Odoo"
                             class="btn-secondary"/>
+                    <button name="action_open_uom_resolution_wizard" type="object" string="Xử lý ĐVT"
+                            class="btn-primary" invisible="resolved or issue_type != 'uom_mismatch'"/>
                     <button name="action_mark_resolved" type="object" string="Đã xử lý"
                             class="btn-primary" invisible="resolved"/>
                     <button name="action_mark_unresolved" type="object" string="Mở lại"
@@ -833,6 +839,38 @@
                     <filter name="group_resolved" string="Trạng thái xử lý" context="{'group_by': 'resolved'}"/>
                 </group>
             </search>
+        </field>
+    </record>
+
+    <record id="view_amis_catalog_uom_issue_resolve_wizard_form" model="ir.ui.view">
+        <field name="name">amis.catalog.uom.issue.resolve.wizard.form</field>
+        <field name="model">amis.catalog.uom.issue.resolve.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Xử lý ĐVT lệch thật">
+                <sheet>
+                    <group>
+                        <field name="issue_line_id"/>
+                        <field name="old_product_id"/>
+                        <field name="current_uom_id"/>
+                        <field name="target_uom_id"/>
+                        <field name="current_qty"/>
+                        <field name="transfer_code"/>
+                        <field name="transfer_barcode"/>
+                    </group>
+                    <group string="Cảnh báo">
+                        <field name="warning_text" nolabel="1"/>
+                    </group>
+                    <group>
+                        <field name="note" placeholder="Ghi chú thêm nếu cần"/>
+                        <field name="confirm"/>
+                    </group>
+                </sheet>
+                <footer>
+                    <button name="action_confirm" type="object" string="Xác nhận xử lý"
+                            class="btn-primary"/>
+                    <button string="Hủy" special="cancel" class="btn-secondary"/>
+                </footer>
+            </form>
         </field>
     </record>
 
