@@ -2068,7 +2068,7 @@ class AmisCallbackConfig(models.Model):
                     'Bỏ qua mã phụ PM vì không tìm thấy NCC Odoo khớp chính xác',
                 )
                 continue
-            vals = self._misa_vendor_vals(item)
+            vals = self._misa_vendor_vals(item, partner=partner)
             if partner:
                 if unmapped_only and (partner.misa_account_object_id or '').strip():
                     continue
@@ -2151,6 +2151,58 @@ class AmisCallbackConfig(models.Model):
                 return code_key[:-len(suffix)].strip()
         return ''
 
+    def _misa_vendor_base_code(self, code):
+        raw = (code or '').strip()
+        raw_upper = raw.upper()
+        for suffix in ('_PM', '-PM', ' - PM'):
+            if raw_upper.endswith(suffix):
+                return raw[:-len(suffix)].strip()
+        return raw
+
+    def _misa_vendor_same_pm_base(self, left, right):
+        left_key = self._misa_vendor_match_code(left)
+        right_key = self._misa_vendor_match_code(right)
+        if not left_key or not right_key:
+            return False
+        left_base = self._misa_vendor_pm_base_code(left_key) or left_key
+        right_base = self._misa_vendor_pm_base_code(right_key) or right_key
+        return left_base == right_base
+
+    def _misa_vendor_tax_name_matches(self, partner, item):
+        if not partner:
+            return False
+        partner_tax = self._misa_vendor_match_tax(partner.vat)
+        item_tax = self._misa_vendor_match_tax(item.get('company_tax_code'))
+        partner_name = self._misa_text_key(partner.name)
+        raw_item_name = (item.get('account_object_name') or '').strip()
+        item_names = {
+            self._misa_text_key(raw_item_name),
+            self._misa_text_key(self._misa_vendor_base_code(raw_item_name)),
+        }
+        return bool(partner_tax and partner_tax == item_tax and partner_name and partner_name in item_names)
+
+    def _misa_vendor_should_update_ref(self, partner, code):
+        incoming_code = (code or '').strip()
+        if not incoming_code:
+            return False
+        if not partner:
+            return True
+        current_code = (partner.ref or '').strip()
+        if not current_code:
+            return True
+        if self._misa_vendor_match_code(current_code) == self._misa_vendor_match_code(incoming_code):
+            return True
+        if not self._misa_vendor_same_pm_base(current_code, incoming_code):
+            return True
+
+        incoming_is_pm = self._misa_vendor_is_pm_variant(incoming_code, '')
+        current_is_pm = self._misa_vendor_is_pm_variant(current_code, '')
+        if incoming_is_pm and not current_is_pm:
+            return False
+        if current_is_pm and not incoming_is_pm:
+            return True
+        return False
+
     def _misa_vendor_match_code(self, value):
         return ' '.join(str(value or '').strip().upper().split())
 
@@ -2179,7 +2231,12 @@ class AmisCallbackConfig(models.Model):
             return ''
 
         if match_source == 'misa_id':
-            if existing_ref and incoming_code_key and existing_ref != incoming_code_key:
+            if (
+                existing_ref
+                and incoming_code_key
+                and existing_ref != incoming_code_key
+                and not self._misa_vendor_same_pm_base(existing_ref, incoming_code_key)
+            ):
                 return 'Bỏ qua vì ID MISA khớp nhưng mã NCC trên Odoo và MISA khác nhau'
             if existing_tax and tax_key and existing_tax != tax_key:
                 return 'Bỏ qua vì ID MISA khớp nhưng mã số thuế trên Odoo và MISA khác nhau'
@@ -2215,15 +2272,26 @@ class AmisCallbackConfig(models.Model):
             return Country.search([('code', '=', raw.upper())], limit=1)
         return Country.search([('name', '=ilike', raw)], limit=1)
 
-    def _misa_vendor_vals(self, item):
+    def _misa_vendor_vals(self, item, partner=None):
         Partner = self.env['res.partner']
+        code = (item.get('account_object_code') or '').strip()
+        base_code = self._misa_vendor_base_code(code)
+        raw_name = (item.get('account_object_name') or '').strip()
+        name = self._misa_vendor_base_code(raw_name) if self._misa_vendor_is_pm_variant(code, raw_name) else raw_name
         vals = {
-            'name': (item.get('account_object_name') or '').strip(),
+            'name': name,
             'misa_account_object_id': (item.get('account_object_id') or '').strip(),
-            'ref': (item.get('account_object_code') or '').strip() or False,
             'is_company': True,
             'supplier_rank': 1,
         }
+        if code and self._misa_vendor_should_update_ref(partner, code):
+            vals['ref'] = code
+        if (
+            base_code
+            and 'company_registry' in Partner._fields
+            and (not partner or self._misa_vendor_tax_name_matches(partner, item))
+        ):
+            vals['company_registry'] = base_code
         field_map = {
             'vat': item.get('company_tax_code'),
             'phone': item.get('tel') or item.get('phone'),
@@ -2235,7 +2303,9 @@ class AmisCallbackConfig(models.Model):
         }
         for field_name, value in field_map.items():
             if field_name in Partner._fields:
-                vals[field_name] = (value or '').strip() or False
+                cleaned_value = (value or '').strip()
+                if cleaned_value:
+                    vals[field_name] = cleaned_value
         street2 = ', '.join(filter(None, [
             (item.get('ward_or_commune') or '').strip(),
             (item.get('district') or '').strip(),
@@ -2248,7 +2318,7 @@ class AmisCallbackConfig(models.Model):
             if country:
                 vals['country_id'] = country.id
         if 'active' in Partner._fields:
-            vals['active'] = not bool(item.get('inactive'))
+            vals['active'] = not self._misa_truthy(item.get('inactive'))
         return vals
 
     def _sync_misa_vendor_bank_accounts(self, partner, item, job=None):
