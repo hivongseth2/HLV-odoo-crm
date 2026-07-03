@@ -57,6 +57,24 @@ class AmisCatalogSyncJob(models.Model):
     skipped_count = fields.Integer(string='Bỏ qua')
     error_count = fields.Integer(string='Số lỗi')
     line_ids = fields.One2many('amis.catalog.sync.job.line', 'job_id', string='Chi tiết thay đổi')
+    issue_line_ids = fields.One2many(
+        'amis.catalog.sync.job.line',
+        'job_id',
+        string='Cần xử lý',
+        domain=[('issue_type', '!=', False), ('resolved', '=', False)],
+    )
+    issue_count = fields.Integer(string='Cần xử lý', compute='_compute_issue_count')
+
+    @api.depends('line_ids.issue_type', 'line_ids.resolved')
+    def _compute_issue_count(self):
+        grouped = self.env['amis.catalog.sync.job.line'].sudo().read_group(
+            [('job_id', 'in', self.ids), ('issue_type', '!=', False), ('resolved', '=', False)],
+            ['job_id'],
+            ['job_id'],
+        )
+        counts = {item['job_id'][0]: item['job_id_count'] for item in grouped if item.get('job_id')}
+        for job in self:
+            job.issue_count = counts.get(job.id, 0)
 
     @api.depends('direction', 'scope', 'create_date')
     def _compute_name(self):
@@ -236,7 +254,10 @@ class AmisCatalogSyncJob(models.Model):
                 _logger.exception('AMIS catalog sync job %d: action_run_now failed', job.id)
         return True
 
-    def add_change_line(self, data_type, operation, odoo_model, res_id, misa_id, code, name, change_summary):
+    def add_change_line(
+        self, data_type, operation, odoo_model, res_id, misa_id, code, name, change_summary,
+        issue_type=False,
+    ):
         self.ensure_one()
         self.env['amis.catalog.sync.job.line'].sudo().create({
             'job_id': self.id,
@@ -248,6 +269,7 @@ class AmisCatalogSyncJob(models.Model):
             'code': code or '',
             'name': name or '',
             'change_summary': change_summary or '',
+            'issue_type': issue_type or False,
         })
 
 
@@ -275,3 +297,66 @@ class AmisCatalogSyncJobLine(models.Model):
     code = fields.Char(string='Mã')
     name = fields.Char(string='Tên')
     change_summary = fields.Text(string='Thay đổi')
+    issue_type = fields.Selection([
+        ('uom_mismatch', 'ĐVT lệch thật'),
+    ], string='Loại cần xử lý', index=True)
+    resolved = fields.Boolean(string='Đã xử lý', default=False, index=True)
+    resolved_note = fields.Text(string='Ghi chú xử lý')
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            if not vals.get('issue_type') and self._is_uom_issue_vals(vals):
+                vals['issue_type'] = 'uom_mismatch'
+        return super().create(vals_list)
+
+    @api.model
+    def _is_uom_issue_vals(self, vals):
+        if vals.get('data_type') != 'product' or vals.get('operation') != 'skip':
+            return False
+        summary = (vals.get('change_summary') or '').casefold()
+        return 'đvt' in summary and (
+            'lệch thật' in summary
+            or 'cần xử lý' in summary
+            or 'bỏ qua cập nhật' in summary
+        )
+
+    def init(self):
+        self.env.cr.execute("""
+            UPDATE amis_catalog_sync_job_line
+               SET issue_type = 'uom_mismatch'
+             WHERE issue_type IS NULL
+               AND data_type = 'product'
+               AND operation = 'skip'
+               AND (
+                    change_summary ILIKE '%%ĐVT%%'
+                    OR change_summary ILIKE '%%UoM needs manual check%%'
+               )
+               AND (
+                    change_summary ILIKE '%%lệch thật%%'
+                    OR change_summary ILIKE '%%cần xử lý%%'
+                    OR change_summary ILIKE '%%bỏ qua cập nhật%%'
+                    OR change_summary ILIKE '%%manual check%%'
+               )
+        """)
+
+    def action_open_odoo_record(self):
+        self.ensure_one()
+        if not self.odoo_model or not self.res_id:
+            return False
+        return {
+            'type': 'ir.actions.act_window',
+            'name': self.name or self.code or self.odoo_model,
+            'res_model': self.odoo_model,
+            'res_id': self.res_id,
+            'view_mode': 'form',
+            'target': 'current',
+        }
+
+    def action_mark_resolved(self):
+        self.write({'resolved': True})
+        return True
+
+    def action_mark_unresolved(self):
+        self.write({'resolved': False})
+        return True

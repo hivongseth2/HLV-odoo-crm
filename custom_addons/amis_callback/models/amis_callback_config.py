@@ -1887,6 +1887,7 @@ class AmisCallbackConfig(models.Model):
         self._catalog_log_change(
             job, 'product', 'skip', 'product.product', product.id,
             item_id, code, name, summary,
+            issue_type='uom_mismatch',
         )
         return True
 
@@ -1977,6 +1978,7 @@ class AmisCallbackConfig(models.Model):
         self._catalog_log_change(
             job, 'product', 'skip', 'product.product', product.id,
             item_id, code, name, summary,
+            issue_type='uom_mismatch',
         )
         return filtered_vals, 1
 
@@ -2475,7 +2477,10 @@ class AmisCallbackConfig(models.Model):
             parts.append('%s: %s -> %s' % (field_name, old_display or '', new_display or ''))
         return '; '.join(parts)
 
-    def _catalog_log_change(self, job, data_type, operation, odoo_model, res_id, misa_id, code, name, change_summary):
+    def _catalog_log_change(
+        self, job, data_type, operation, odoo_model, res_id, misa_id, code, name, change_summary,
+        issue_type=False,
+    ):
         if not job:
             return
         job.sudo().add_change_line(
@@ -2487,6 +2492,7 @@ class AmisCallbackConfig(models.Model):
             code=code,
             name=name,
             change_summary=change_summary,
+            issue_type=issue_type,
         )
 
     def action_fetch_invoice_templates(self):
