@@ -14,6 +14,7 @@ access_amis_catalog_sync_job_user,amis.catalog.sync.job user,model_amis_catalog_
 access_amis_catalog_sync_job_manager,amis.catalog.sync.job manager,model_amis_catalog_sync_job,amis_callback.group_meinvoice_manager,1,1,1,1
 access_amis_catalog_sync_job_line_user,amis.catalog.sync.job.line user,model_amis_catalog_sync_job_line,amis_callback.group_meinvoice_user,1,0,0,0
 access_amis_catalog_sync_job_line_manager,amis.catalog.sync.job.line manager,model_amis_catalog_sync_job_line,amis_callback.group_meinvoice_manager,1,1,1,1
+access_amis_catalog_uom_issue_resolve_wizard_manager,amis.catalog.uom.issue.resolve.wizard manager,model_amis_catalog_uom_issue_resolve_wizard,amis_callback.group_meinvoice_manager,1,1,1,1
 access_misa_invoice_template_wizard,misa.invoice.template.wizard,model_misa_invoice_template_wizard,amis_callback.group_meinvoice_manager,1,1,1,1
 access_misa_invoice_template_wizard_line,misa.invoice.template.wizard.line,model_misa_invoice_template_wizard_line,amis_callback.group_meinvoice_manager,1,1,1,1
 access_meinvoice_publish_wizard_user,meinvoice.publish.wizard user,model_meinvoice_publish_wizard,amis_callback.group_meinvoice_user,1,1,1,1

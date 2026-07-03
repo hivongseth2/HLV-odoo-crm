@@ -25,6 +25,65 @@ def _vn_datetime(value):
 class LoyaltyAPIController(http.Controller):
     """API Controller cho tích hợp App Mobile / Website bên ngoài."""
 
+    @staticmethod
+    def _normalize_vn_phone(phone):
+        if not phone:
+            return ''
+        digits = ''.join(ch for ch in str(phone).strip() if ch.isdigit())
+        if digits.startswith('84'):
+            digits = '0' + digits[2:]
+        return digits
+
+    def _json_response_error(self, message, status=400, code=None):
+        payload = {'error': message}
+        if code:
+            payload['code'] = code
+        return Response(json.dumps(payload), status=status, content_type='application/json')
+
+    def _partner_from_portal_phone_http(self, partner_id, phone):
+        try:
+            partner = request.env['res.partner'].sudo().browse(int(partner_id))
+        except Exception:
+            return None, '', self._json_response_error('Invalid partner_id', status=400, code='INVALID_PARTNER_ID')
+        if not partner.exists():
+            return None, '', self._json_response_error('Khach hang khong ton tai', status=404, code='PARTNER_NOT_FOUND')
+
+        normalized = self._normalize_vn_phone(phone)
+        if not normalized:
+            return None, '', self._json_response_error('Missing phone', status=401, code='MISSING_PHONE')
+
+        root = partner._get_loyalty_root()
+        accounts = request.env['hlv.loyalty.portal.account'].sudo().search([
+            ('portal_phone', '=', normalized),
+            ('active', '=', True),
+        ])
+        account = accounts.filtered(lambda acc: acc.partner_id._get_loyalty_root().id == root.id)[:1]
+        if not account:
+            return None, normalized, self._json_response_error('Missing or invalid partner_id/phone', status=401, code='UNAUTHORIZED')
+        return root, normalized, None
+
+    def _partner_from_portal_phone_rpc(self, partner_id, phone):
+        try:
+            partner = request.env['res.partner'].sudo().browse(int(partner_id))
+        except Exception:
+            return None, {'error': 'Invalid partner_id', 'code': 'INVALID_PARTNER_ID'}
+        if not partner.exists():
+            return None, {'error': 'Khach hang khong ton tai', 'code': 'PARTNER_NOT_FOUND'}
+
+        normalized = self._normalize_vn_phone(phone)
+        if not normalized:
+            return None, {'error': 'Missing phone', 'code': 'MISSING_PHONE'}
+
+        root = partner._get_loyalty_root()
+        accounts = request.env['hlv.loyalty.portal.account'].sudo().search([
+            ('portal_phone', '=', normalized),
+            ('active', '=', True),
+        ])
+        account = accounts.filtered(lambda acc: acc.partner_id._get_loyalty_root().id == root.id)[:1]
+        if not account:
+            return None, {'error': 'Missing or invalid partner_id/phone', 'code': 'UNAUTHORIZED'}
+        return root, None
+
     @http.route('/api/loyalty/points/<int:partner_id>', type='http',
                 auth='user', methods=['GET'], csrf=False)
     def get_partner_points(self, partner_id, **kwargs):
@@ -32,17 +91,15 @@ class LoyaltyAPIController(http.Controller):
 
         GET /api/loyalty/points/<partner_id>
         """
-        partner = request.env['res.partner'].sudo().browse(partner_id)
-        if not partner.exists():
-            return Response(
-                json.dumps({'error': 'Khách hàng không tồn tại'}),
-                status=404, content_type='application/json',
-            )
+        root, portal_phone, error = self._partner_from_portal_phone_http(partner_id, kwargs.get('phone'))
+        if error:
+            return error
         return Response(
             json.dumps({
-                'partner_id': partner.id,
-                'partner_name': partner.name,
-                'total_points': partner.loyalty_total_points,
+                'partner_id': root.id,
+                'partner_name': root.name,
+                'phone': portal_phone,
+                'total_points': root.loyalty_total_points,
             }),
             status=200, content_type='application/json',
         )
@@ -54,18 +111,15 @@ class LoyaltyAPIController(http.Controller):
 
         GET /api/loyalty/history/<partner_id>?limit=20&offset=0
         """
-        partner = request.env['res.partner'].sudo().browse(partner_id)
-        if not partner.exists():
-            return Response(
-                json.dumps({'error': 'Khách hàng không tồn tại'}),
-                status=404, content_type='application/json',
-            )
+        root, portal_phone, error = self._partner_from_portal_phone_http(partner_id, kwargs.get('phone'))
+        if error:
+            return error
 
         limit = min(int(kwargs.get('limit', 20)), 100)
         offset = int(kwargs.get('offset', 0))
 
         history_records = request.env['hlv.loyalty.history'].sudo().search(
-            [('partner_id', '=', partner_id)],
+            [('partner_id', 'in', root._get_loyalty_family_partner_ids())],
             limit=limit, offset=offset, order='date desc',
         )
         data = []
@@ -80,8 +134,9 @@ class LoyaltyAPIController(http.Controller):
             })
         return Response(
             json.dumps({
-                'partner_id': partner_id,
-                'total_points': partner.loyalty_total_points,
+                'partner_id': root.id,
+                'phone': portal_phone,
+                'total_points': root.loyalty_total_points,
                 'records': data,
             }),
             status=200, content_type='application/json',
@@ -94,14 +149,11 @@ class LoyaltyAPIController(http.Controller):
 
         GET /api/loyalty/vouchers/<partner_id>?state=active
         """
-        partner = request.env['res.partner'].sudo().browse(partner_id)
-        if not partner.exists():
-            return Response(
-                json.dumps({'error': 'Khách hàng không tồn tại'}),
-                status=404, content_type='application/json',
-            )
+        root, portal_phone, error = self._partner_from_portal_phone_http(partner_id, kwargs.get('phone'))
+        if error:
+            return error
 
-        domain = [('partner_id', '=', partner_id)]
+        domain = [('partner_id', '=', root.id)]
         state_filter = kwargs.get('state')
         if state_filter:
             domain.append(('state', '=', state_filter))
@@ -122,7 +174,8 @@ class LoyaltyAPIController(http.Controller):
             })
         return Response(
             json.dumps({
-                'partner_id': partner_id,
+                'partner_id': root.id,
+                'phone': portal_phone,
                 'vouchers': data,
             }),
             status=200, content_type='application/json',
@@ -142,15 +195,14 @@ class LoyaltyAPIController(http.Controller):
         if not partner_id or not package_id:
             return {'error': 'Thiếu partner_id hoặc package_id'}
 
-        partner = request.env['res.partner'].sudo().browse(int(partner_id))
-        if not partner.exists():
-            return {'error': 'Khách hàng không tồn tại'}
+        root, error = self._partner_from_portal_phone_rpc(partner_id, kwargs.get('phone'))
+        if error:
+            return error
 
         package = request.env['hlv.loyalty.voucher.package'].sudo().browse(int(package_id))
         if not package.exists() or not package.active:
             return {'error': 'Gói Voucher không tồn tại hoặc đã ngừng'}
 
-        root = partner._get_loyalty_root()
         available_points = root.loyalty_exchange_available_points
         if available_points < package.points_required:
             return {
@@ -214,6 +266,12 @@ class LoyaltyAPIController(http.Controller):
         if not code:
             return {'valid': False, 'error': 'Thiếu mã Voucher'}
 
+        root = None
+        if partner_id:
+            root, error = self._partner_from_portal_phone_rpc(partner_id, kwargs.get('phone'))
+            if error:
+                return {'valid': False, 'error': error.get('error'), 'code': error.get('code')}
+
         voucher = request.env['hlv.loyalty.voucher'].sudo().search([
             ('code', '=', code),
         ], limit=1)
@@ -227,7 +285,7 @@ class LoyaltyAPIController(http.Controller):
         if voucher.date_expiry and voucher.date_expiry < odoo_fields.Datetime.now():
             return {'valid': False, 'error': 'Voucher đã hết hạn'}
 
-        if partner_id and voucher.partner_id.id != int(partner_id):
+        if root and voucher.partner_id.id not in root._get_loyalty_family_partner_ids():
             return {'valid': False, 'error': 'Voucher không thuộc sở hữu của khách hàng này'}
 
         if voucher.min_order_amount > 0 and order_amount < voucher.min_order_amount:
@@ -323,6 +381,28 @@ class LoyaltyExternalAPI(http.Controller):
         if not account:
             return None, normalized, self._json_err('Missing or invalid partner_id/phone', status=401, code='UNAUTHORIZED')
         return root, normalized, None
+
+    def _partner_from_portal_phone_rpc(self, partner_id, phone):
+        try:
+            partner = request.env['res.partner'].sudo().browse(int(partner_id))
+        except Exception:
+            return None, {'error': 'Invalid partner_id', 'code': 'INVALID_PARTNER_ID'}
+        if not partner.exists():
+            return None, {'error': 'Khach hang khong ton tai', 'code': 'PARTNER_NOT_FOUND'}
+
+        normalized = self._normalize_vn_phone(phone)
+        if not normalized:
+            return None, {'error': 'Missing phone', 'code': 'MISSING_PHONE'}
+
+        root = partner._get_loyalty_root()
+        accounts = request.env['hlv.loyalty.portal.account'].sudo().search([
+            ('portal_phone', '=', normalized),
+            ('active', '=', True),
+        ])
+        account = accounts.filtered(lambda acc: acc.partner_id._get_loyalty_root().id == root.id)[:1]
+        if not account:
+            return None, {'error': 'Missing or invalid partner_id/phone', 'code': 'UNAUTHORIZED'}
+        return root, None
 
     @staticmethod
     def _guess_image_mimetype(raw_bytes):
@@ -788,11 +868,9 @@ class LoyaltyExternalAPI(http.Controller):
         partner_id = kwargs.get('partner_id')
         if not partner_id:
             return {'error': 'Thiếu partner_id'}
-        partner = request.env['res.partner'].sudo().browse(int(partner_id))
-        if not partner.exists():
-            return {'error': 'Khách hàng không tồn tại'}
-
-        root = partner._get_loyalty_root()
+        root, error = self._partner_from_portal_phone_rpc(partner_id, kwargs.get('phone'))
+        if error:
+            return error
 
         if points < 0 and root.loyalty_total_points + points < 0:
             return {'error': f'Không đủ điểm. Hiện có {root.loyalty_total_points}'}
@@ -848,8 +926,15 @@ class LoyaltyExternalAPI(http.Controller):
         Body: {"code": "VHQ-XXXXX", "partner_id": 42, "order_amount": 500000}
         """
         code = (kwargs.get('code') or '').strip().upper()
+        partner_id = kwargs.get('partner_id')
         if not code:
             return {'valid': False, 'error': 'Thiếu mã Voucher'}
+
+        root = None
+        if partner_id:
+            root, error = self._partner_from_portal_phone_rpc(partner_id, kwargs.get('phone'))
+            if error:
+                return {'valid': False, 'error': error.get('error'), 'code': error.get('code')}
 
         voucher = request.env['hlv.loyalty.voucher'].sudo().search(
             [('code', '=', code)], limit=1)
@@ -859,6 +944,9 @@ class LoyaltyExternalAPI(http.Controller):
             return {'valid': False, 'error': f'Voucher trạng thái: {voucher.state}'}
         if voucher.date_expiry and voucher.date_expiry < odoo_fields.Datetime.now():
             return {'valid': False, 'error': 'Voucher đã hết hạn'}
+
+        if root and voucher.partner_id.id not in root._get_loyalty_family_partner_ids():
+            return {'valid': False, 'error': 'Voucher không thuộc sở hữu của khách hàng này'}
 
         order_amount = float(kwargs.get('order_amount', 0))
         if voucher.min_order_amount > 0 and order_amount < voucher.min_order_amount:
@@ -945,11 +1033,9 @@ class LoyaltyExternalAPI(http.Controller):
         if not partner_id:
             return self._json_err('Thiếu partner_id', status=400, code='MISSING_PARTNER_ID')
 
-        partner = request.env['res.partner'].sudo().browse(int(partner_id))
-        if not partner.exists():
-            return self._json_err('Khách hàng không tồn tại', status=404, code='PARTNER_NOT_FOUND')
-
-        root = partner._get_loyalty_root()
+        root, portal_phone, error = self._partner_from_portal_phone(partner_id, kwargs.get('phone'))
+        if error:
+            return error
         domain = [('partner_id', 'in', root._get_loyalty_family_partner_ids())]
         state = kwargs.get('state') or 'all'
         if state in ('pending', 'done', 'cancelled'):
@@ -965,6 +1051,7 @@ class LoyaltyExternalAPI(http.Controller):
                 'exchange_points': root.loyalty_exchange_points,
                 'pending_reward_points': root.loyalty_reward_pending_points,
                 'exchange_points_available': root.loyalty_exchange_available_points,
+                'phone': portal_phone,
             },
         })
 
@@ -1000,11 +1087,9 @@ class LoyaltyExternalAPI(http.Controller):
         if request_type not in ('gift', 'cash'):
             return {'error': 'request_type phải là gift hoặc cash'}
 
-        partner = request.env['res.partner'].sudo().browse(int(partner_id))
-        if not partner.exists():
-            return {'error': 'Khách hàng không tồn tại'}
-
-        root = partner._get_loyalty_root()
+        root, error = self._partner_from_portal_phone_rpc(partner_id, kwargs.get('phone'))
+        if error:
+            return error
         balance_exchange = root.loyalty_exchange_points
         avail_exchange = root.loyalty_exchange_available_points
         pending_reward_points = root.loyalty_reward_pending_points
@@ -1110,10 +1195,9 @@ class LoyaltyExternalAPI(http.Controller):
         if not request_id:
             return {'error': 'Thiếu request_id'}
 
-        partner = request.env['res.partner'].sudo().browse(int(partner_id))
-        if not partner.exists():
-            return {'error': 'Khách hàng không tồn tại'}
-        root = partner._get_loyalty_root()
+        root, error = self._partner_from_portal_phone_rpc(partner_id, kwargs.get('phone'))
+        if error:
+            return error
 
         req = request.env['hlv.loyalty.reward.request'].sudo().browse(int(request_id))
         if not req.exists() or req.partner_id.id not in root._get_loyalty_family_partner_ids():
@@ -1140,4 +1224,3 @@ class LoyaltyExternalAPI(http.Controller):
             'exchange_points_available': root.loyalty_exchange_available_points,
             'message': 'Yêu cầu đổi thưởng đã được hủy.',
         }
-

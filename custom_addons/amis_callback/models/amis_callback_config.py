@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import json
 import logging
+import re
 import time
 import unicodedata
 
@@ -16,6 +17,8 @@ _logger = logging.getLogger(__name__)
 # Tồn tại trong suốt vòng đời worker process — tránh 429 khi cron xử lý nhiều picking
 _DICT_CACHE_TTL = 300  # seconds (5 phút)
 _DICT_CACHE: dict = {}
+_DICT_PAGE_CACHE: dict = {}
+_GET_DICTIONARY_MIN_INTERVAL = 1.2  # seconds, serialized across Odoo workers
 
 
 class AmisCallbackConfig(models.Model):
@@ -628,15 +631,24 @@ class AmisCallbackConfig(models.Model):
         if not api_url:
             raise UserError('Thiếu API URL.')
         url = f'{api_url}{path}'
+        if include_token:
+            self._ensure_token_valid()
         headers = self._build_headers(include_token=include_token)
-        max_retries = 3
+        max_retries = 5 if path == '/apir/sync/actopen/get_dictionary' else 3
         delay = 5  # seconds
         last_exc = None
+        token_refreshed = False
         for attempt in range(max_retries):
             try:
-                response = requests.post(url, json=payload, headers=headers, timeout=timeout)
+                response = self._actopen_post_with_rate_limit(path, url, payload, headers, timeout)
+                if include_token and response.status_code in (401, 403) and not token_refreshed and self.access_code:
+                    _logger.info('AMIS token rejected with HTTP %s on %s, reconnecting once.', response.status_code, path)
+                    self.sudo().action_connect_misa()
+                    headers = self._build_headers(include_token=True)
+                    token_refreshed = True
+                    continue
                 if response.status_code == 429:
-                    wait = delay * (2 ** attempt)  # 5s, 10s, 20s
+                    wait = self._misa_429_wait_seconds(response, attempt, default_delay=delay)
                     _logger.warning('AMIS 429 Too Many Requests: %s (attempt %d/%d) — waiting %ds', path, attempt + 1, max_retries, wait)
                     time.sleep(wait)
                     last_exc = HTTPError(f'429 Client Error: Too Many Requests for url: {url}', response=response)
@@ -651,11 +663,46 @@ class AmisCallbackConfig(models.Model):
 
             if not body.get('Success'):
                 err = body.get('ErrorMessage') or body.get('ErrorCode') or 'Không rõ lỗi'
+                if include_token and not token_refreshed and self.access_code and self._is_misa_token_expired_error(err):
+                    _logger.info('AMIS returned token error on %s (%s), reconnecting once.', path, err)
+                    self.sudo().action_connect_misa()
+                    headers = self._build_headers(include_token=True)
+                    token_refreshed = True
+                    continue
                 raise UserError(f'MISA trả về lỗi: {err}')
             return body
 
         _logger.error('AMIS call failed after %d retries (429): %s', max_retries, path)
         raise UserError(f'Gọi API MISA thất bại sau {max_retries} lần thử: 429 Too Many Requests ({path})')
+
+    def _actopen_post_with_rate_limit(self, path, url, payload, headers, timeout):
+        if path != '/apir/sync/actopen/get_dictionary':
+            return requests.post(url, json=payload, headers=headers, timeout=timeout)
+
+        lock_name = 'amis_callback:get_dictionary:%s' % self.env.cr.dbname
+        self.env.cr.execute("SELECT pg_advisory_lock(hashtext(%s)::bigint)", [lock_name])
+        try:
+            response = requests.post(url, json=payload, headers=headers, timeout=timeout)
+            time.sleep(_GET_DICTIONARY_MIN_INTERVAL)
+            return response
+        finally:
+            self.env.cr.execute("SELECT pg_advisory_unlock(hashtext(%s)::bigint)", [lock_name])
+
+    def _misa_429_wait_seconds(self, response, attempt, default_delay=5):
+        retry_after = (response.headers.get('Retry-After') or '').strip() if response is not None else ''
+        if retry_after:
+            try:
+                return max(1, min(int(float(retry_after)), 300))
+            except (TypeError, ValueError):
+                pass
+        if response is not None and '/get_dictionary' in getattr(response, 'url', ''):
+            return min(30 * (attempt + 1), 180)
+        return default_delay * (2 ** attempt)
+
+    def _is_misa_token_expired_error(self, error):
+        text = unicodedata.normalize('NFKD', str(error or ''))
+        text = ''.join(char for char in text if not unicodedata.combining(char)).lower()
+        return 'token' in text and any(marker in text for marker in ('het han', 'expired', 'invalid'))
 
     def push_dictionary(self, dictionary_items):
         self.ensure_one()
@@ -666,14 +713,33 @@ class AmisCallbackConfig(models.Model):
             'org_company_code': self.org_company_code,
             'dictionary': dictionary_items,
         }
-        return self._post_actopen('/apir/sync/actopen/save_dictionary', payload, include_token=True)
+        result = self._post_actopen('/apir/sync/actopen/save_dictionary', payload, include_token=True)
+        changed_data_types = set()
+        for item in dictionary_items:
+            try:
+                dictionary_type = int(item.get('dictionary_type') or 0)
+            except (TypeError, ValueError):
+                continue
+            if dictionary_type == 1:
+                changed_data_types.add(1)  # account_object
+            elif dictionary_type == 3:
+                changed_data_types.add(2)  # inventory_item
+            elif dictionary_type == 6:
+                changed_data_types.add(4)  # unit
+        if changed_data_types:
+            self.clear_dictionary_cache(changed_data_types)
+        return result
 
     def clear_dictionary_cache(self, data_types=None):
         self.ensure_one()
         data_types = data_types or []
         db_name = self.env.cr.dbname
-        for data_type in data_types:
-            _DICT_CACHE.pop((db_name, int(data_type)), None)
+        data_type_set = {int(data_type) for data_type in data_types}
+        for data_type in data_type_set:
+            _DICT_CACHE.pop((db_name, data_type), None)
+        for key in list(_DICT_PAGE_CACHE):
+            if key[0] == db_name and key[1] in data_type_set:
+                _DICT_PAGE_CACHE.pop(key, None)
         cr = self.env.cr
         tx_cache = getattr(cr, '_amis_dict_cache', None)
         if tx_cache is not None:
@@ -715,7 +781,7 @@ class AmisCallbackConfig(models.Model):
             skip += 100
 
         # Lưu cả hai cache
-        _DICT_CACHE[cache_key] = (now, all_items)
+        _DICT_CACHE[cache_key] = (time.monotonic(), all_items)
         tx_cache[key] = all_items
         _logger.info('MISA dictionary type=%d: fetched %d items (cached for this transaction)', data_type, len(all_items))
         return all_items
@@ -747,6 +813,19 @@ class AmisCallbackConfig(models.Model):
             'app_id': self.app_id,
             'last_sync_time': last_sync_time or None,
         }
+        cache_key = (
+            self.env.cr.dbname,
+            int(data_type),
+            branch_id or '',
+            int(skip or 0),
+            take,
+            last_sync_time or '',
+        )
+        now = time.monotonic()
+        cached = _DICT_PAGE_CACHE.get(cache_key)
+        if cached and (now - cached[0]) < _DICT_CACHE_TTL:
+            return cached[1]
+
         body = self._post_actopen('/apir/sync/actopen/get_dictionary', payload, include_token=True)
 
         data_raw = body.get('Data')
@@ -771,12 +850,14 @@ class AmisCallbackConfig(models.Model):
         elif isinstance(custom_raw, dict):
             custom_data = custom_raw
 
-        return {
+        result = {
             'raw': body,
             'items': items,
             'custom_data': custom_data,
             'last_sync_time': custom_data.get('LastSyncTime'),
         }
+        _DICT_PAGE_CACHE[cache_key] = (time.monotonic(), result)
+        return result
 
     def find_dictionary_item_by_code(self, data_type, code_field, code_value, branch_id=None, take=100, max_pages=30):
         """Tim 1 item danh muc theo code voi phan trang get_dictionary."""
@@ -1393,13 +1474,13 @@ class AmisCallbackConfig(models.Model):
     def cron_sync_catalog_from_misa(self):
         config = self.sudo().search([], limit=1)
         if not config:
-            _logger.info('MISA catalog cron skipped: no AMIS callback config.')
+            _logger.info('Bỏ qua cron đồng bộ danh mục MISA: chưa có cấu hình AMIS callback.')
             return True
         product_job = self.env['amis.catalog.sync.job'].sudo().enqueue_from_misa(
             config,
             trigger='cron',
             unmapped_only=False,
-            create_missing=True,
+            create_missing=False,
             scope='product',
         )
         vendor_job = self.env['amis.catalog.sync.job'].sudo().enqueue_from_misa(
@@ -1409,7 +1490,7 @@ class AmisCallbackConfig(models.Model):
             create_missing=False,
             scope='vendor',
         )
-        _logger.info('MISA catalog cron enqueued product job %s and vendor job %s', product_job.id, vendor_job.id)
+        _logger.info('Cron đồng bộ danh mục MISA đã tạo job sản phẩm %s và job nhà cung cấp %s', product_job.id, vendor_job.id)
         return True
 
     def action_sync_catalog_to_odoo(self):
@@ -1497,7 +1578,6 @@ class AmisCallbackConfig(models.Model):
 
         product_summary = product_result.get('products') or {}
         unit_summary = product_result.get('units') or {}
-        self.clear_dictionary_cache([1, 2, 4])
         totals = {
             'total': unit_summary['total'] + product_summary['total'] + vendor_summary['total'],
             'updated': unit_summary['updated'] + product_summary['updated'] + vendor_summary['updated'],
@@ -1591,7 +1671,6 @@ class AmisCallbackConfig(models.Model):
             vendor_has_more = bool(vendor_summary.get('has_more'))
             if job:
                 job.sudo().write({'vendor_sync_done': not vendor_has_more})
-        self.clear_dictionary_cache([1])
         msg = (
             'Đồng bộ danh mục nhà cung cấp MISA %(status)s.\n'
             '• Nhà cung cấp: map/cập nhật %(updated_vendor)s, tạo mới %(created_vendor)s '
@@ -1611,14 +1690,12 @@ class AmisCallbackConfig(models.Model):
 
     def _sync_misa_units_to_odoo(self, unmapped_only=False, job=None):
         Uom = self.env['uom.uom'].sudo().with_context(active_test=False)
-        domain = [('category_id.name', '=', 'Unit')]
+        domain = []
         if unmapped_only:
             domain.append(('misa_unit_id', 'in', [False, '']))
         uoms = Uom.search(domain)
         name_to_uoms = {}
         for uom in uoms:
-            if not self._is_misa_catalog_unit_category(uom.category_id):
-                continue
             name = (uom.name or '').strip()
             if name:
                 name_to_uoms.setdefault(name.casefold(), []).append(uom)
@@ -1633,25 +1710,6 @@ class AmisCallbackConfig(models.Model):
                 skipped += 1
                 continue
             matched_uoms = name_to_uoms.get(unit_name.casefold(), [])
-            categories = {
-                uom.category_id.id for uom in matched_uoms
-                if uom.category_id
-            }
-            if len(categories) > 1:
-                skipped += 1
-                summary = (
-                    'skipped MISA unit mapping because multiple Odoo UoM share name "%s" '
-                    'in different categories: %s'
-                ) % (
-                    unit_name,
-                    ', '.join(sorted(set(uom.category_id.display_name for uom in matched_uoms if uom.category_id))),
-                )
-                _logger.warning('MISA catalog unit mapping skipped: %s', summary)
-                self._catalog_log_change(
-                    job, 'unit', 'skip', 'uom.uom', 0,
-                    unit_id, unit_name, unit_name, summary,
-                )
-                continue
             for uom in matched_uoms:
                 vals = {}
                 if (uom.misa_unit_id or '').strip() != unit_id:
@@ -1690,8 +1748,6 @@ class AmisCallbackConfig(models.Model):
 
         uoms_by_misa_id = {}
         for uom in Uom.search([('misa_unit_id', '!=', False)]):
-            if not self._is_misa_catalog_unit_category(uom.category_id):
-                continue
             unit_id = (uom.misa_unit_id or '').strip()
             if unit_id:
                 uoms_by_misa_id.setdefault(unit_id.lower(), []).append(uom)
@@ -1714,13 +1770,14 @@ class AmisCallbackConfig(models.Model):
             if product:
                 if unmapped_only and (product.misa_inventory_item_id or '').strip():
                     continue
+                self._ensure_catalog_product_units_mapped(item, uoms_by_misa_id, job=job)
                 if self._log_catalog_product_uom_exception(product, item, uoms_by_misa_id, job=job):
                     skipped += 1
                 existing_misa_id = (product.misa_inventory_item_id or '').strip()
                 if existing_misa_id and existing_misa_id.lower() != item_id.lower():
                     skipped += 1
-                    summary = 'skipped MISA ID update: existing=%s, misa=%s' % (existing_misa_id, item_id)
-                    _logger.warning('MISA catalog product mapping conflict for %s (%s): %s', product.display_name, code, summary)
+                    summary = 'Bỏ qua cập nhật ID MISA: Odoo đang có=%s, MISA trả về=%s' % (existing_misa_id, item_id)
+                    _logger.warning('Xung đột map hàng hóa MISA cho %s (%s): %s', product.display_name, code, summary)
                     self._catalog_log_change(
                         job, 'product', 'skip', 'product.product', product.id,
                         item_id, code, name, summary,
@@ -1737,12 +1794,12 @@ class AmisCallbackConfig(models.Model):
                     except Exception as exc:
                         error += 1
                         _logger.warning(
-                            'MISA catalog product update skipped for %s (%s): %s',
+                            'Bỏ qua cập nhật hàng hóa MISA cho %s (%s): %s',
                             product.display_name, code, exc,
                         )
                         self._catalog_log_change(
                             job, 'product', 'error', 'product.product', product.id,
-                            item_id, code, name, 'update skipped: %s' % exc,
+                            item_id, code, name, 'Bỏ qua cập nhật: %s' % exc,
                         )
                         continue
                     self._catalog_log_change(
@@ -1766,6 +1823,84 @@ class AmisCallbackConfig(models.Model):
             'has_more': has_more,
         }
 
+    def _misa_catalog_product_unit_entries(self, item):
+        entries = []
+
+        def add(unit_id, unit_name=''):
+            unit_id = (unit_id or '').strip()
+            unit_name = (unit_name or '').strip()
+            if unit_id and not unit_name:
+                unit_name = self._misa_catalog_unit_name_by_id(unit_id)
+            if unit_id:
+                entries.append({'unit_id': unit_id, 'unit_name': unit_name})
+
+        add(item.get('unit_id'), item.get('unit_name'))
+        add(item.get('main_unit_id'), item.get('main_unit_name'))
+        raw_converts = (
+            item.get('inventory_item_unit_convert')
+            or item.get('inventory_item_unit_converts')
+            or item.get('unit_convert')
+            or item.get('unit_list')
+            or []
+        )
+        if isinstance(raw_converts, str):
+            try:
+                raw_converts = json.loads(raw_converts) if raw_converts.strip() else []
+            except Exception:
+                raw_converts = []
+        if isinstance(raw_converts, dict):
+            raw_converts = [raw_converts]
+        if isinstance(raw_converts, list):
+            for convert in raw_converts:
+                if not isinstance(convert, dict):
+                    continue
+                add(
+                    convert.get('unit_id'),
+                    convert.get('unit_name') or convert.get('unit_name_convert'),
+                )
+
+        seen = set()
+        result = []
+        for entry in entries:
+            key = (entry['unit_id'].lower(), entry.get('unit_name', '').casefold())
+            if key in seen:
+                continue
+            seen.add(key)
+            result.append(entry)
+        return result
+
+    def _misa_catalog_unit_name_by_id(self, unit_id):
+        unit_id = (unit_id or '').strip().lower()
+        if not unit_id:
+            return ''
+        for item in self._get_all_dictionary(4):
+            if (item.get('unit_id') or '').strip().lower() == unit_id:
+                return (item.get('unit_name') or '').strip()
+        return ''
+
+    def _ensure_catalog_product_units_mapped(self, item, uoms_by_misa_id, job=None):
+        Uom = self.env['uom.uom'].sudo().with_context(active_test=False)
+        for entry in self._misa_catalog_product_unit_entries(item):
+            unit_id = (entry.get('unit_id') or '').strip()
+            unit_name = (entry.get('unit_name') or '').strip()
+            if not unit_id or not unit_name:
+                continue
+            key = unit_id.lower()
+            existing_candidates = uoms_by_misa_id.setdefault(key, [])
+            matched_uoms = Uom.search([('name', '=ilike', unit_name)])
+            for uom in matched_uoms:
+                if uom not in existing_candidates:
+                    existing_candidates.append(uom)
+                if (uom.misa_unit_id or '').strip() == unit_id:
+                    continue
+                old_value = uom.misa_unit_id or ''
+                uom.write({'misa_unit_id': unit_id})
+                self._catalog_log_change(
+                    job, 'unit', 'map', 'uom.uom', uom.id,
+                    unit_id, unit_name, unit_name,
+                    'Map ID ĐVT theo hàng hóa MISA: %s -> %s' % (old_value, unit_id),
+                )
+
     def _log_catalog_product_uom_exception(self, product, item, uoms_by_misa_id, job=None):
         unit_id = (item.get('unit_id') or item.get('main_unit_id') or '').strip().lower()
         if not unit_id:
@@ -1777,28 +1912,42 @@ class AmisCallbackConfig(models.Model):
         current_uoms = (product.uom_id | product.uom_po_id).filtered(lambda uom: uom)
         if candidates and any(uom in current_uoms for uom in candidates):
             return False
+        current_names = {
+            (uom.name or '').strip().casefold()
+            for uom in current_uoms
+            if (uom.name or '').strip()
+        }
+        candidate_names = {
+            (uom.name or '').strip().casefold()
+            for uom in candidates
+            if (uom.name or '').strip()
+        }
+        misa_names = {
+            (entry.get('unit_name') or '').strip().casefold()
+            for entry in self._misa_catalog_product_unit_entries(item)
+            if (entry.get('unit_name') or '').strip()
+        }
+        if current_names & (candidate_names | misa_names):
+            return False
         misa_uom_text = ', '.join(
             '%s [%s]' % (uom.display_name, uom.category_id.display_name if uom.category_id else '')
             for uom in candidates
-        ) or unit_id
+        ) or ', '.join(entry.get('unit_name') or entry.get('unit_id') or '' for entry in self._misa_catalog_product_unit_entries(item)) or unit_id
         odoo_uom_text = ', '.join(
             '%s [%s]' % (uom.display_name, uom.category_id.display_name if uom.category_id else '')
             for uom in current_uoms
         )
-        summary = 'UoM needs manual check: Odoo=%s; MISA=%s. Product UoM was not updated.' % (
+        summary = 'ĐVT lệch thật, cần xử lý mapping thủ công: Odoo=%s; MISA=%s. Chưa cập nhật ĐVT sản phẩm.' % (
             odoo_uom_text,
             misa_uom_text,
         )
-        _logger.warning('MISA catalog product UoM exception for %s (%s): %s', product.display_name, code, summary)
+        _logger.warning('Ngoại lệ ĐVT hàng hóa MISA cho %s (%s): %s', product.display_name, code, summary)
         self._catalog_log_change(
             job, 'product', 'skip', 'product.product', product.id,
             item_id, code, name, summary,
+            issue_type='uom_mismatch',
         )
         return True
-
-    def _is_misa_catalog_unit_category(self, category):
-        name = (category.name or '').strip().casefold() if category else ''
-        return name == 'unit'
 
     def _misa_product_vals(self, item, uoms_by_misa_id, product=None):
         Product = self.env['product.product']
@@ -1858,11 +2007,13 @@ class AmisCallbackConfig(models.Model):
                     new_category,
                 )
             )
-            if old_uom and new_uom and old_uom.category_id != new_uom.category_id:
-                reasons.append('%s category differs (%s -> %s)' % (field_name, old_category, new_category))
+            old_name = (old_uom.name or '').strip().casefold() if old_uom else ''
+            new_name = (new_uom.name or '').strip().casefold() if new_uom else ''
+            if old_uom and new_uom and old_uom.category_id != new_uom.category_id and old_name != new_name:
+                reasons.append('%s khác nhóm ĐVT (%s -> %s)' % (field_name, old_category, new_category))
 
         if has_stock_moves:
-            reasons.append('product already has stock moves')
+            reasons.append('sản phẩm đã có phát sinh kho')
         if not reasons:
             return write_vals, 0
 
@@ -1872,12 +2023,12 @@ class AmisCallbackConfig(models.Model):
         code = (item.get('inventory_item_code') or '').strip()
         name = (item.get('inventory_item_name') or '').strip()
         item_id = (item.get('inventory_item_id') or '').strip()
-        summary = 'skipped UoM update: %s. Reason: %s' % (
+        summary = 'Bỏ qua cập nhật ĐVT: %s. Lý do: %s' % (
             '; '.join(details),
             '; '.join(dict.fromkeys(reasons)),
         )
         _logger.warning(
-            'MISA catalog UoM update skipped for product %s (%s): %s',
+            'Bỏ qua cập nhật ĐVT MISA cho hàng hóa %s (%s): %s',
             product.display_name,
             code,
             summary,
@@ -1885,6 +2036,7 @@ class AmisCallbackConfig(models.Model):
         self._catalog_log_change(
             job, 'product', 'skip', 'product.product', product.id,
             item_id, code, name, summary,
+            issue_type='uom_mismatch',
         )
         return filtered_vals, 1
 
@@ -1893,20 +2045,38 @@ class AmisCallbackConfig(models.Model):
             active_test=False,
             skip_misa_partner_sync=True,
         )
-        partners = Partner.search([('parent_id', '=', False)])
+        partner_domain = [('parent_id', '=', False), ('supplier_rank', '>', 0)]
+        if 'hlv_business_role' in Partner._fields:
+            partner_domain = [
+                ('parent_id', '=', False),
+                '|',
+                ('supplier_rank', '>', 0),
+                ('hlv_business_role', '=', 'supplier'),
+            ]
+        partners = Partner.search(partner_domain)
         partners_by_misa_id = {}
         partners_by_ref = {}
-        partners_by_name = {}
+        partners_by_tax = {}
+        partners_by_tax_ref = {}
+        ambiguous_tax_keys = set()
         for partner in partners:
             misa_id = (partner.misa_account_object_id or '').strip()
-            ref = (partner.ref or '').strip()
-            name = (partner.name or '').strip()
+            ref_key = self._misa_vendor_match_code(partner.ref)
+            tax_key = self._misa_vendor_match_tax(partner.vat)
             if misa_id:
                 partners_by_misa_id.setdefault(misa_id.lower(), partner)
-            if ref:
-                partners_by_ref.setdefault(ref.upper(), partner)
-            if name:
-                partners_by_name.setdefault(name.upper(), partner)
+            if ref_key:
+                partners_by_ref.setdefault(ref_key, partner)
+            if tax_key:
+                existing_tax_partner = partners_by_tax.get(tax_key)
+                if existing_tax_partner and existing_tax_partner.id != partner.id:
+                    ambiguous_tax_keys.add(tax_key)
+                elif tax_key not in ambiguous_tax_keys:
+                    partners_by_tax[tax_key] = partner
+            if tax_key and ref_key:
+                partners_by_tax_ref.setdefault((tax_key, ref_key), partner)
+        for tax_key in ambiguous_tax_keys:
+            partners_by_tax.pop(tax_key, None)
 
         batch_take = int(take or 0)
         if batch_take > 0:
@@ -1917,7 +2087,7 @@ class AmisCallbackConfig(models.Model):
         else:
             batch_skip = 0
             account_items = self._get_all_dictionary(1)
-        vendor_items = [item for item in account_items if item.get('is_vendor')]
+        vendor_items = [item for item in account_items if self._misa_truthy(item.get('is_vendor'))]
         updated = 0
         created = 0
         skipped = 0
@@ -1925,19 +2095,24 @@ class AmisCallbackConfig(models.Model):
             misa_id = (item.get('account_object_id') or '').strip()
             code = (item.get('account_object_code') or '').strip()
             name = (item.get('account_object_name') or '').strip()
+            code_key = self._misa_vendor_match_code(code)
+            tax_key = self._misa_vendor_match_tax(item.get('company_tax_code'))
             if not misa_id or not name:
                 skipped += 1
                 continue
             partner = partners_by_misa_id.get(misa_id.lower())
             match_source = 'misa_id' if partner else ''
-            if not partner and code:
-                partner = partners_by_ref.get(code.upper())
+            if not partner and tax_key and code_key:
+                partner = partners_by_tax_ref.get((tax_key, code_key))
+                match_source = 'tax_ref' if partner else ''
+            if not partner and tax_key:
+                partner = partners_by_tax.get(tax_key)
+                match_source = 'tax' if partner else ''
+            if not partner and code_key:
+                partner = partners_by_ref.get(code_key)
                 match_source = 'ref' if partner else ''
-            if not partner:
-                partner = partners_by_name.get(name.upper())
-                match_source = 'name' if partner else ''
-            if partner and match_source == 'name':
-                skip_reason = self._misa_vendor_name_match_skip_reason(partner, code, name, misa_id)
+            if partner:
+                skip_reason = self._misa_vendor_match_skip_reason(partner, code, name, misa_id, tax_key, match_source)
                 if skip_reason:
                     skipped += 1
                     self._catalog_log_change(
@@ -1950,10 +2125,10 @@ class AmisCallbackConfig(models.Model):
                 self._catalog_log_change(
                     job, 'vendor', 'skip', 'res.partner', 0,
                     misa_id, code, name,
-                    'skipped PM variant because no exact Odoo vendor mapping was found',
+                    'Bỏ qua mã phụ PM vì không tìm thấy NCC Odoo khớp chính xác',
                 )
                 continue
-            vals = self._misa_vendor_vals(item)
+            vals = self._misa_vendor_vals(item, partner=partner)
             if partner:
                 if unmapped_only and (partner.misa_account_object_id or '').strip():
                     continue
@@ -1975,30 +2150,20 @@ class AmisCallbackConfig(models.Model):
                 if bank_updated:
                     self._catalog_log_change(
                         job, 'vendor', 'update', 'res.partner', partner.id,
-                        misa_id, code, name, 'updated bank account information from MISA',
+                        misa_id, code, name, 'Đã cập nhật thông tin tài khoản ngân hàng từ MISA',
                     )
                     partner_updated = True
                 if partner_updated:
                     updated += 1
                     partners_by_misa_id[misa_id.lower()] = partner
-                    if code:
-                        partners_by_ref[code.upper()] = partner
-                    partners_by_name[name.upper()] = partner
+                    if code_key:
+                        partners_by_ref[code_key] = partner
+                    if tax_key and tax_key not in ambiguous_tax_keys:
+                        partners_by_tax[tax_key] = partner
+                    if tax_key and code_key:
+                        partners_by_tax_ref[(tax_key, code_key)] = partner
                 continue
-            if not create_missing:
-                skipped += 1
-                continue
-            partner = Partner.create(vals)
-            self._sync_misa_vendor_bank_accounts(partner, item, job=job)
-            partners_by_misa_id[misa_id.lower()] = partner
-            if code:
-                partners_by_ref[code.upper()] = partner
-            partners_by_name[name.upper()] = partner
-            self._catalog_log_change(
-                job, 'vendor', 'create', 'res.partner', partner.id,
-                misa_id, code, name, 'created from MISA dictionary',
-            )
-            created += 1
+            skipped += 1
         next_skip = batch_skip + len(account_items)
         has_more = bool(batch_take > 0 and len(account_items) >= batch_take)
         if job and batch_take > 0:
@@ -2019,6 +2184,15 @@ class AmisCallbackConfig(models.Model):
         text = ''.join(char for char in text if not unicodedata.combining(char))
         return ' '.join(text.replace('_', ' ').replace('-', ' ').split()).upper()
 
+    def _misa_truthy(self, value):
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return bool(value)
+        if isinstance(value, str):
+            return value.strip().lower() in {'1', 'true', 'yes', 'y', 'co', 'có'}
+        return bool(value)
+
     def _misa_vendor_is_pm_variant(self, code, name):
         code_key = (code or '').strip().upper()
         name_key = (name or '').strip().upper()
@@ -2037,25 +2211,114 @@ class AmisCallbackConfig(models.Model):
                 return code_key[:-len(suffix)].strip()
         return ''
 
-    def _misa_vendor_name_match_skip_reason(self, partner, code, name, misa_id):
-        incoming_is_pm = self._misa_vendor_is_pm_variant(code, name)
-        if incoming_is_pm:
-            return 'skipped PM variant matched only by name to avoid overwriting base vendor'
+    def _misa_vendor_base_code(self, code):
+        raw = (code or '').strip()
+        raw_upper = raw.upper()
+        for suffix in ('_PM', '-PM', ' - PM'):
+            if raw_upper.endswith(suffix):
+                return raw[:-len(suffix)].strip()
+        return raw
 
-        existing_ref = (partner.ref or '').strip()
+    def _misa_vendor_same_pm_base(self, left, right):
+        left_key = self._misa_vendor_match_code(left)
+        right_key = self._misa_vendor_match_code(right)
+        if not left_key or not right_key:
+            return False
+        left_base = self._misa_vendor_pm_base_code(left_key) or left_key
+        right_base = self._misa_vendor_pm_base_code(right_key) or right_key
+        return left_base == right_base
+
+    def _misa_vendor_tax_name_matches(self, partner, item):
+        if not partner:
+            return False
+        partner_tax = self._misa_vendor_match_tax(partner.vat)
+        item_tax = self._misa_vendor_match_tax(item.get('company_tax_code'))
+        partner_name = self._misa_text_key(partner.name)
+        raw_item_name = (item.get('account_object_name') or '').strip()
+        item_names = {
+            self._misa_text_key(raw_item_name),
+            self._misa_text_key(self._misa_vendor_base_code(raw_item_name)),
+        }
+        return bool(partner_tax and partner_tax == item_tax and partner_name and partner_name in item_names)
+
+    def _misa_vendor_should_update_ref(self, partner, code):
         incoming_code = (code or '').strip()
+        if not incoming_code:
+            return False
+        if not partner:
+            return True
+        current_code = (partner.ref or '').strip()
+        if not current_code:
+            return True
+        if self._misa_vendor_match_code(current_code) == self._misa_vendor_match_code(incoming_code):
+            return True
+        if not self._misa_vendor_same_pm_base(current_code, incoming_code):
+            return True
+
+        incoming_is_pm = self._misa_vendor_is_pm_variant(incoming_code, '')
+        current_is_pm = self._misa_vendor_is_pm_variant(current_code, '')
+        if incoming_is_pm and not current_is_pm:
+            return False
+        if current_is_pm and not incoming_is_pm:
+            return True
+        return False
+
+    def _misa_vendor_match_code(self, value):
+        return ' '.join(str(value or '').strip().upper().split())
+
+    def _misa_vendor_match_tax(self, value):
+        return re.sub(r'[^0-9A-Z]+', '', str(value or '').strip().upper())
+
+    def _misa_partner_is_supplier(self, partner):
+        business_role = getattr(partner, 'hlv_business_role', '') or ''
+        return int(partner.supplier_rank or 0) > 0 or business_role == 'supplier'
+
+    def _misa_vendor_match_skip_reason(self, partner, code, name, misa_id, tax_key, match_source):
+        if not self._misa_partner_is_supplier(partner):
+            return 'Bỏ qua vì partner Odoo không phải nhà cung cấp'
+
+        existing_ref = self._misa_vendor_match_code(partner.ref)
+        incoming_code_key = self._misa_vendor_match_code(code)
+        existing_tax = self._misa_vendor_match_tax(partner.vat)
+        tax_matched = bool(existing_tax and tax_key and existing_tax == tax_key)
+        incoming_is_pm = self._misa_vendor_is_pm_variant(code, name)
+        if incoming_is_pm and match_source != 'misa_id' and not tax_matched:
+            return 'Bỏ qua mã phụ PM vì chưa khớp ID MISA hoặc mã số thuế'
+
         existing_pm_base = self._misa_vendor_pm_base_code(existing_ref)
-        incoming_code_key = incoming_code.upper()
         restoring_base_from_pm = bool(existing_pm_base and incoming_code_key == existing_pm_base)
         if restoring_base_from_pm:
             return ''
 
+        if match_source == 'misa_id':
+            if (
+                existing_ref
+                and incoming_code_key
+                and existing_ref != incoming_code_key
+                and not self._misa_vendor_same_pm_base(existing_ref, incoming_code_key)
+            ):
+                return 'Bỏ qua vì ID MISA khớp nhưng mã NCC trên Odoo và MISA khác nhau'
+            if existing_tax and tax_key and existing_tax != tax_key:
+                return 'Bỏ qua vì ID MISA khớp nhưng mã số thuế trên Odoo và MISA khác nhau'
+            return ''
+
+        if match_source == 'tax_ref':
+            return ''
+
+        if match_source == 'tax':
+            return ''
+
+        if match_source == 'ref':
+            if not incoming_code_key or existing_ref != incoming_code_key:
+                return 'Bỏ qua vì mã NCC trên Odoo và MISA không khớp'
+            if existing_tax and tax_key and existing_tax != tax_key:
+                return 'Bỏ qua vì mã NCC khớp nhưng mã số thuế khác nhau'
+            return ''
+
         existing_misa_id = (partner.misa_account_object_id or '').strip()
         if existing_misa_id and existing_misa_id.lower() != (misa_id or '').strip().lower():
-            return 'skipped name-only match because Odoo vendor already has a different MISA ID'
-        if existing_ref and incoming_code and existing_ref.upper() != incoming_code_key:
-            return 'skipped name-only match because Odoo vendor already has a different code'
-        return ''
+            return 'Bỏ qua vì NCC Odoo đã có ID MISA khác'
+        return 'Bỏ qua vì không có khóa khớp đủ tin cậy (ID MISA, mã NCC hoặc mã số thuế + mã NCC)'
 
     def _misa_resolve_country(self, value):
         raw = (value or '').strip()
@@ -2069,15 +2332,26 @@ class AmisCallbackConfig(models.Model):
             return Country.search([('code', '=', raw.upper())], limit=1)
         return Country.search([('name', '=ilike', raw)], limit=1)
 
-    def _misa_vendor_vals(self, item):
+    def _misa_vendor_vals(self, item, partner=None):
         Partner = self.env['res.partner']
+        code = (item.get('account_object_code') or '').strip()
+        base_code = self._misa_vendor_base_code(code)
+        raw_name = (item.get('account_object_name') or '').strip()
+        name = self._misa_vendor_base_code(raw_name) if self._misa_vendor_is_pm_variant(code, raw_name) else raw_name
         vals = {
-            'name': (item.get('account_object_name') or '').strip(),
+            'name': name,
             'misa_account_object_id': (item.get('account_object_id') or '').strip(),
-            'ref': (item.get('account_object_code') or '').strip() or False,
             'is_company': True,
             'supplier_rank': 1,
         }
+        if code and self._misa_vendor_should_update_ref(partner, code):
+            vals['ref'] = code
+        if (
+            base_code
+            and 'company_registry' in Partner._fields
+            and (not partner or self._misa_vendor_tax_name_matches(partner, item))
+        ):
+            vals['company_registry'] = base_code
         field_map = {
             'vat': item.get('company_tax_code'),
             'phone': item.get('tel') or item.get('phone'),
@@ -2089,7 +2363,9 @@ class AmisCallbackConfig(models.Model):
         }
         for field_name, value in field_map.items():
             if field_name in Partner._fields:
-                vals[field_name] = (value or '').strip() or False
+                cleaned_value = (value or '').strip()
+                if cleaned_value:
+                    vals[field_name] = cleaned_value
         street2 = ', '.join(filter(None, [
             (item.get('ward_or_commune') or '').strip(),
             (item.get('district') or '').strip(),
@@ -2102,7 +2378,7 @@ class AmisCallbackConfig(models.Model):
             if country:
                 vals['country_id'] = country.id
         if 'active' in Partner._fields:
-            vals['active'] = not bool(item.get('inactive'))
+            vals['active'] = not self._misa_truthy(item.get('inactive'))
         return vals
 
     def _sync_misa_vendor_bank_accounts(self, partner, item, job=None):
@@ -2259,7 +2535,10 @@ class AmisCallbackConfig(models.Model):
             parts.append('%s: %s -> %s' % (field_name, old_display or '', new_display or ''))
         return '; '.join(parts)
 
-    def _catalog_log_change(self, job, data_type, operation, odoo_model, res_id, misa_id, code, name, change_summary):
+    def _catalog_log_change(
+        self, job, data_type, operation, odoo_model, res_id, misa_id, code, name, change_summary,
+        issue_type=False,
+    ):
         if not job:
             return
         job.sudo().add_change_line(
@@ -2271,6 +2550,7 @@ class AmisCallbackConfig(models.Model):
             code=code,
             name=name,
             change_summary=change_summary,
+            issue_type=issue_type,
         )
 
     def action_fetch_invoice_templates(self):
