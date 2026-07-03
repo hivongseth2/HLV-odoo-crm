@@ -589,7 +589,7 @@ class MisaExtensionController(http.Controller):
                     "product_id": product.id if product else False,
                     "product_qty": float(line.get("qty") or 0.0),
                     "product_uom_id": uom.id if uom else False,
-                    "estimated_cost": 0.0,
+                    "estimated_cost": float(line.get("misa_price_before_tax") or 0.0),
                     "misa_line_id": (line.get("misa_line_id") or "").strip() or False,
                     "sale_proposed_supplier_id": int(line.get("misa_supplier_id")) if line.get("misa_supplier_id") else False,
                     "misa_price_before_tax": float(line.get("misa_price_before_tax") or 0.0),

@@ -92,9 +92,28 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
 
     def _post_process_po_line(self, item, po_line, new_pr_line):
         super()._post_process_po_line(item, po_line, new_pr_line)
-        # Nu kA-ch hot gi_ giA (keep_estimated_cost), Odoo t chia estimated_cost.
-        # Nhng ta A set estimated_cost = 0, nAn chAng ta cn ghi A li bng giA MISA
-        if item.keep_estimated_cost and item.line_id:
+        if item.line_id:
+            # ── Cập nhật đơn giá ──
+            # Ưu tiên misa_price_before_tax, fallback về estimated_cost (giá gốc Odoo)
+            price = False
             if hasattr(item.line_id, 'misa_price_before_tax') and item.line_id.misa_price_before_tax:
-                po_line.price_unit = item.line_id.misa_price_before_tax
-                po_line._compute_amount()
+                price = item.line_id.misa_price_before_tax
+            elif item.line_id.estimated_cost:
+                price = item.line_id.estimated_cost
+            if price:
+                po_line.price_unit = price
+
+            # ── Cập nhật thuế ──
+            if hasattr(item.line_id, 'misa_tax_rate') and item.line_id.misa_tax_rate:
+                tax_rate = item.line_id.misa_tax_rate / 100.0
+                Tax = po_line.env['account.tax']
+                matched_tax = Tax.search([
+                    ('type_tax_use', '=', 'purchase'),
+                    ('amount', '=', tax_rate),
+                    ('company_id', '=', po_line.company_id.id)
+                ], limit=1)
+                if matched_tax:
+                    po_line.taxes_id = [(6, 0, [matched_tax.id])]
+            # Nếu không có misa_tax_rate, giữ nguyên taxes_id mặc định (từ product/company)
+
+            po_line._compute_amount()
