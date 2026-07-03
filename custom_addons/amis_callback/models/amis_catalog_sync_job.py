@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import logging
+import re
 
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
@@ -472,11 +473,42 @@ def _line_uom_resolution_config(self):
     return config
 
 
+def _line_uom_resolution_target_uom_from_summary(self):
+    self.ensure_one()
+    summary = self.change_summary or ''
+    match = re.search(r'MISA=([^.;\n]+)', summary)
+    if not match:
+        return self.env['uom.uom']
+
+    Uom = self.env['uom.uom'].sudo().with_context(active_test=False)
+    for raw_part in match.group(1).split(','):
+        name = re.sub(r'\[[^\]]*\]', '', raw_part).strip()
+        if not name or re.fullmatch(r'[0-9a-fA-F-]{32,}', name):
+            continue
+        candidates = Uom.search([('name', '=ilike', name)])
+        if not candidates:
+            continue
+        target = candidates.filtered(
+            lambda uom: (uom.category_id.name or '').strip().casefold() != 'stopused'
+        )[:1] or candidates[:1]
+        if target:
+            return target
+    return self.env['uom.uom']
+
+
 def _line_uom_resolution_misa_item(self):
     self.ensure_one()
     config = self._uom_resolution_config()
     misa_id = (self.misa_id or '').strip().lower()
     code = (self.code or '').strip()
+    if misa_id:
+        item = config.find_dictionary_item_by_code(2, 'inventory_item_id', misa_id, max_pages=1000)
+        if item:
+            return item
+    if code:
+        item = config.find_dictionary_item_by_code(2, 'inventory_item_code', code, max_pages=1000)
+        if item:
+            return item
     for item in config._get_all_dictionary(2):
         item_id = (item.get('inventory_item_id') or '').strip().lower()
         item_code = (item.get('inventory_item_code') or '').strip()
@@ -487,6 +519,9 @@ def _line_uom_resolution_misa_item(self):
 
 def _line_uom_resolution_target_uom(self):
     self.ensure_one()
+    summary_uom = self._uom_resolution_target_uom_from_summary()
+    if summary_uom:
+        return summary_uom
     config = self._uom_resolution_config()
     item = self._uom_resolution_misa_item()
     Uom = self.env['uom.uom'].sudo().with_context(active_test=False)
@@ -697,6 +732,7 @@ def _line_resolve_uom_mismatch_by_duplicate(self, note=''):
 
 AmisCatalogSyncJobLine._uom_resolution_product = _line_uom_resolution_product
 AmisCatalogSyncJobLine._uom_resolution_config = _line_uom_resolution_config
+AmisCatalogSyncJobLine._uom_resolution_target_uom_from_summary = _line_uom_resolution_target_uom_from_summary
 AmisCatalogSyncJobLine._uom_resolution_misa_item = _line_uom_resolution_misa_item
 AmisCatalogSyncJobLine._uom_resolution_target_uom = _line_uom_resolution_target_uom
 AmisCatalogSyncJobLine._uom_resolution_blockers = _line_uom_resolution_blockers

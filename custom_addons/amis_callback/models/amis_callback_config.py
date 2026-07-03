@@ -17,6 +17,8 @@ _logger = logging.getLogger(__name__)
 # Tồn tại trong suốt vòng đời worker process — tránh 429 khi cron xử lý nhiều picking
 _DICT_CACHE_TTL = 300  # seconds (5 phút)
 _DICT_CACHE: dict = {}
+_DICT_PAGE_CACHE: dict = {}
+_GET_DICTIONARY_MIN_INTERVAL = 1.2  # seconds, serialized across Odoo workers
 
 
 class AmisCallbackConfig(models.Model):
@@ -632,13 +634,13 @@ class AmisCallbackConfig(models.Model):
         if include_token:
             self._ensure_token_valid()
         headers = self._build_headers(include_token=include_token)
-        max_retries = 3
+        max_retries = 5 if path == '/apir/sync/actopen/get_dictionary' else 3
         delay = 5  # seconds
         last_exc = None
         token_refreshed = False
         for attempt in range(max_retries):
             try:
-                response = requests.post(url, json=payload, headers=headers, timeout=timeout)
+                response = self._actopen_post_with_rate_limit(path, url, payload, headers, timeout)
                 if include_token and response.status_code in (401, 403) and not token_refreshed and self.access_code:
                     _logger.info('AMIS token rejected with HTTP %s on %s, reconnecting once.', response.status_code, path)
                     self.sudo().action_connect_misa()
@@ -646,7 +648,7 @@ class AmisCallbackConfig(models.Model):
                     token_refreshed = True
                     continue
                 if response.status_code == 429:
-                    wait = delay * (2 ** attempt)  # 5s, 10s, 20s
+                    wait = self._misa_429_wait_seconds(response, attempt, default_delay=delay)
                     _logger.warning('AMIS 429 Too Many Requests: %s (attempt %d/%d) — waiting %ds', path, attempt + 1, max_retries, wait)
                     time.sleep(wait)
                     last_exc = HTTPError(f'429 Client Error: Too Many Requests for url: {url}', response=response)
@@ -673,6 +675,30 @@ class AmisCallbackConfig(models.Model):
         _logger.error('AMIS call failed after %d retries (429): %s', max_retries, path)
         raise UserError(f'Gọi API MISA thất bại sau {max_retries} lần thử: 429 Too Many Requests ({path})')
 
+    def _actopen_post_with_rate_limit(self, path, url, payload, headers, timeout):
+        if path != '/apir/sync/actopen/get_dictionary':
+            return requests.post(url, json=payload, headers=headers, timeout=timeout)
+
+        lock_name = 'amis_callback:get_dictionary:%s' % self.env.cr.dbname
+        self.env.cr.execute("SELECT pg_advisory_lock(hashtext(%s)::bigint)", [lock_name])
+        try:
+            response = requests.post(url, json=payload, headers=headers, timeout=timeout)
+            time.sleep(_GET_DICTIONARY_MIN_INTERVAL)
+            return response
+        finally:
+            self.env.cr.execute("SELECT pg_advisory_unlock(hashtext(%s)::bigint)", [lock_name])
+
+    def _misa_429_wait_seconds(self, response, attempt, default_delay=5):
+        retry_after = (response.headers.get('Retry-After') or '').strip() if response is not None else ''
+        if retry_after:
+            try:
+                return max(1, min(int(float(retry_after)), 300))
+            except (TypeError, ValueError):
+                pass
+        if response is not None and '/get_dictionary' in getattr(response, 'url', ''):
+            return min(30 * (attempt + 1), 180)
+        return default_delay * (2 ** attempt)
+
     def _is_misa_token_expired_error(self, error):
         text = unicodedata.normalize('NFKD', str(error or ''))
         text = ''.join(char for char in text if not unicodedata.combining(char)).lower()
@@ -687,14 +713,33 @@ class AmisCallbackConfig(models.Model):
             'org_company_code': self.org_company_code,
             'dictionary': dictionary_items,
         }
-        return self._post_actopen('/apir/sync/actopen/save_dictionary', payload, include_token=True)
+        result = self._post_actopen('/apir/sync/actopen/save_dictionary', payload, include_token=True)
+        changed_data_types = set()
+        for item in dictionary_items:
+            try:
+                dictionary_type = int(item.get('dictionary_type') or 0)
+            except (TypeError, ValueError):
+                continue
+            if dictionary_type == 1:
+                changed_data_types.add(1)  # account_object
+            elif dictionary_type == 3:
+                changed_data_types.add(2)  # inventory_item
+            elif dictionary_type == 6:
+                changed_data_types.add(4)  # unit
+        if changed_data_types:
+            self.clear_dictionary_cache(changed_data_types)
+        return result
 
     def clear_dictionary_cache(self, data_types=None):
         self.ensure_one()
         data_types = data_types or []
         db_name = self.env.cr.dbname
-        for data_type in data_types:
-            _DICT_CACHE.pop((db_name, int(data_type)), None)
+        data_type_set = {int(data_type) for data_type in data_types}
+        for data_type in data_type_set:
+            _DICT_CACHE.pop((db_name, data_type), None)
+        for key in list(_DICT_PAGE_CACHE):
+            if key[0] == db_name and key[1] in data_type_set:
+                _DICT_PAGE_CACHE.pop(key, None)
         cr = self.env.cr
         tx_cache = getattr(cr, '_amis_dict_cache', None)
         if tx_cache is not None:
@@ -736,7 +781,7 @@ class AmisCallbackConfig(models.Model):
             skip += 100
 
         # Lưu cả hai cache
-        _DICT_CACHE[cache_key] = (now, all_items)
+        _DICT_CACHE[cache_key] = (time.monotonic(), all_items)
         tx_cache[key] = all_items
         _logger.info('MISA dictionary type=%d: fetched %d items (cached for this transaction)', data_type, len(all_items))
         return all_items
@@ -768,6 +813,19 @@ class AmisCallbackConfig(models.Model):
             'app_id': self.app_id,
             'last_sync_time': last_sync_time or None,
         }
+        cache_key = (
+            self.env.cr.dbname,
+            int(data_type),
+            branch_id or '',
+            int(skip or 0),
+            take,
+            last_sync_time or '',
+        )
+        now = time.monotonic()
+        cached = _DICT_PAGE_CACHE.get(cache_key)
+        if cached and (now - cached[0]) < _DICT_CACHE_TTL:
+            return cached[1]
+
         body = self._post_actopen('/apir/sync/actopen/get_dictionary', payload, include_token=True)
 
         data_raw = body.get('Data')
@@ -792,12 +850,14 @@ class AmisCallbackConfig(models.Model):
         elif isinstance(custom_raw, dict):
             custom_data = custom_raw
 
-        return {
+        result = {
             'raw': body,
             'items': items,
             'custom_data': custom_data,
             'last_sync_time': custom_data.get('LastSyncTime'),
         }
+        _DICT_PAGE_CACHE[cache_key] = (time.monotonic(), result)
+        return result
 
     def find_dictionary_item_by_code(self, data_type, code_field, code_value, branch_id=None, take=100, max_pages=30):
         """Tim 1 item danh muc theo code voi phan trang get_dictionary."""
@@ -1518,7 +1578,6 @@ class AmisCallbackConfig(models.Model):
 
         product_summary = product_result.get('products') or {}
         unit_summary = product_result.get('units') or {}
-        self.clear_dictionary_cache([1, 2, 4])
         totals = {
             'total': unit_summary['total'] + product_summary['total'] + vendor_summary['total'],
             'updated': unit_summary['updated'] + product_summary['updated'] + vendor_summary['updated'],
@@ -1612,7 +1671,6 @@ class AmisCallbackConfig(models.Model):
             vendor_has_more = bool(vendor_summary.get('has_more'))
             if job:
                 job.sudo().write({'vendor_sync_done': not vendor_has_more})
-        self.clear_dictionary_cache([1])
         msg = (
             'Đồng bộ danh mục nhà cung cấp MISA %(status)s.\n'
             '• Nhà cung cấp: map/cập nhật %(updated_vendor)s, tạo mới %(created_vendor)s '
