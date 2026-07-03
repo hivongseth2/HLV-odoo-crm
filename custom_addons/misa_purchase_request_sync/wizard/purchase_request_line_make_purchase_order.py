@@ -30,22 +30,15 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
         res['keep_description'] = True
         res['keep_estimated_cost'] = True
 
-        # Cập nhật estimated_cost cho wizard item
+        # Cập nhật estimated_cost tạm thời (OCA dùng để tính price_unit mặc định)
+        # _post_process_po_line sẽ ghi đè price_unit sau cùng
         misa_price = False
         if hasattr(line, 'misa_price_before_tax') and line.misa_price_before_tax:
             misa_price = line.misa_price_before_tax
         if not misa_price and line.estimated_cost:
             misa_price = line.estimated_cost
-            
         if misa_price:
-            # OCA wizard xử lý item.estimated_cost là TỔNG GIÁ (Total Cost)
-            # Do _post_process_po_line của OCA tính: price_unit = item.estimated_cost / item.product_qty
-            total_cost = misa_price * line.pending_qty_to_receive
-            res['estimated_cost'] = total_cost
-
-        # Copy % thuế MISA vào item
-        if hasattr(line, 'misa_tax_rate') and line.misa_tax_rate:
-            res['misa_tax_rate'] = line.misa_tax_rate
+            res['estimated_cost'] = misa_price
 
         # NCC: ưu tiên sale_proposed_supplier_id, fallback misa_supplier_id
         supplier = line.sale_proposed_supplier_id if hasattr(line, 'sale_proposed_supplier_id') and line.sale_proposed_supplier_id else False
