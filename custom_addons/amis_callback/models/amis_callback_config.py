@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import json
 import logging
+import re
 import time
 import unicodedata
 
@@ -1413,7 +1414,7 @@ class AmisCallbackConfig(models.Model):
     def cron_sync_catalog_from_misa(self):
         config = self.sudo().search([], limit=1)
         if not config:
-            _logger.info('MISA catalog cron skipped: no AMIS callback config.')
+            _logger.info('Bỏ qua cron đồng bộ danh mục MISA: chưa có cấu hình AMIS callback.')
             return True
         vendor_job = self.env['amis.catalog.sync.job'].sudo().enqueue_from_misa(
             config,
@@ -1653,13 +1654,13 @@ class AmisCallbackConfig(models.Model):
             if len(categories) > 1:
                 skipped += 1
                 summary = (
-                    'skipped MISA unit mapping because multiple Odoo UoM share name "%s" '
-                    'in different categories: %s'
+                    'Bỏ qua map đơn vị tính MISA vì có nhiều ĐVT Odoo trùng tên "%s" '
+                    'ở các nhóm khác nhau: %s'
                 ) % (
                     unit_name,
                     ', '.join(sorted(set(uom.category_id.display_name for uom in matched_uoms if uom.category_id))),
                 )
-                _logger.warning('MISA catalog unit mapping skipped: %s', summary)
+                _logger.warning('Bỏ qua map đơn vị tính MISA: %s', summary)
                 self._catalog_log_change(
                     job, 'unit', 'skip', 'uom.uom', 0,
                     unit_id, unit_name, unit_name, summary,
@@ -1732,7 +1733,7 @@ class AmisCallbackConfig(models.Model):
                 existing_misa_id = (product.misa_inventory_item_id or '').strip()
                 if existing_misa_id and existing_misa_id.lower() != item_id.lower():
                     skipped += 1
-                    summary = 'skipped MISA ID update: existing=%s, misa=%s' % (existing_misa_id, item_id)
+                    summary = 'Bỏ qua cập nhật ID MISA: Odoo đang có=%s, MISA trả về=%s' % (existing_misa_id, item_id)
                     _logger.warning('MISA catalog product mapping conflict for %s (%s): %s', product.display_name, code, summary)
                     self._catalog_log_change(
                         job, 'product', 'skip', 'product.product', product.id,
@@ -1750,12 +1751,12 @@ class AmisCallbackConfig(models.Model):
                     except Exception as exc:
                         error += 1
                         _logger.warning(
-                            'MISA catalog product update skipped for %s (%s): %s',
+                            'Bỏ qua cập nhật hàng hóa MISA cho %s (%s): %s',
                             product.display_name, code, exc,
                         )
                         self._catalog_log_change(
                             job, 'product', 'error', 'product.product', product.id,
-                            item_id, code, name, 'update skipped: %s' % exc,
+                            item_id, code, name, 'Bỏ qua cập nhật: %s' % exc,
                         )
                         continue
                     self._catalog_log_change(
@@ -1885,12 +1886,12 @@ class AmisCallbackConfig(models.Model):
         code = (item.get('inventory_item_code') or '').strip()
         name = (item.get('inventory_item_name') or '').strip()
         item_id = (item.get('inventory_item_id') or '').strip()
-        summary = 'skipped UoM update: %s. Reason: %s' % (
+        summary = 'Bỏ qua cập nhật ĐVT: %s. Lý do: %s' % (
             '; '.join(details),
             '; '.join(dict.fromkeys(reasons)),
         )
         _logger.warning(
-            'MISA catalog UoM update skipped for product %s (%s): %s',
+            'Bỏ qua cập nhật ĐVT MISA cho hàng hóa %s (%s): %s',
             product.display_name,
             code,
             summary,
@@ -1917,17 +1918,17 @@ class AmisCallbackConfig(models.Model):
         partners = Partner.search(partner_domain)
         partners_by_misa_id = {}
         partners_by_ref = {}
-        partners_by_name = {}
+        partners_by_tax_ref = {}
         for partner in partners:
             misa_id = (partner.misa_account_object_id or '').strip()
-            ref = (partner.ref or '').strip()
-            name = (partner.name or '').strip()
+            ref_key = self._misa_vendor_match_code(partner.ref)
+            tax_key = self._misa_vendor_match_tax(partner.vat)
             if misa_id:
                 partners_by_misa_id.setdefault(misa_id.lower(), partner)
-            if ref:
-                partners_by_ref.setdefault(ref.upper(), partner)
-            if name:
-                partners_by_name.setdefault(name.upper(), partner)
+            if ref_key:
+                partners_by_ref.setdefault(ref_key, partner)
+            if tax_key and ref_key:
+                partners_by_tax_ref.setdefault((tax_key, ref_key), partner)
 
         batch_take = int(take or 0)
         if batch_take > 0:
@@ -1938,7 +1939,7 @@ class AmisCallbackConfig(models.Model):
         else:
             batch_skip = 0
             account_items = self._get_all_dictionary(1)
-        vendor_items = [item for item in account_items if item.get('is_vendor')]
+        vendor_items = [item for item in account_items if self._misa_truthy(item.get('is_vendor'))]
         updated = 0
         created = 0
         skipped = 0
@@ -1946,19 +1947,21 @@ class AmisCallbackConfig(models.Model):
             misa_id = (item.get('account_object_id') or '').strip()
             code = (item.get('account_object_code') or '').strip()
             name = (item.get('account_object_name') or '').strip()
+            code_key = self._misa_vendor_match_code(code)
+            tax_key = self._misa_vendor_match_tax(item.get('company_tax_code'))
             if not misa_id or not name:
                 skipped += 1
                 continue
             partner = partners_by_misa_id.get(misa_id.lower())
             match_source = 'misa_id' if partner else ''
-            if not partner and code:
-                partner = partners_by_ref.get(code.upper())
+            if not partner and tax_key and code_key:
+                partner = partners_by_tax_ref.get((tax_key, code_key))
+                match_source = 'tax_ref' if partner else ''
+            if not partner and code_key:
+                partner = partners_by_ref.get(code_key)
                 match_source = 'ref' if partner else ''
-            if not partner:
-                partner = partners_by_name.get(name.upper())
-                match_source = 'name' if partner else ''
-            if partner and match_source == 'name':
-                skip_reason = self._misa_vendor_name_match_skip_reason(partner, code, name, misa_id)
+            if partner:
+                skip_reason = self._misa_vendor_match_skip_reason(partner, code, name, misa_id, tax_key, match_source)
                 if skip_reason:
                     skipped += 1
                     self._catalog_log_change(
@@ -1971,7 +1974,7 @@ class AmisCallbackConfig(models.Model):
                 self._catalog_log_change(
                     job, 'vendor', 'skip', 'res.partner', 0,
                     misa_id, code, name,
-                    'skipped PM variant because no exact Odoo vendor mapping was found',
+                    'Bỏ qua mã phụ PM vì không tìm thấy NCC Odoo khớp chính xác',
                 )
                 continue
             vals = self._misa_vendor_vals(item)
@@ -1996,30 +1999,18 @@ class AmisCallbackConfig(models.Model):
                 if bank_updated:
                     self._catalog_log_change(
                         job, 'vendor', 'update', 'res.partner', partner.id,
-                        misa_id, code, name, 'updated bank account information from MISA',
+                        misa_id, code, name, 'Đã cập nhật thông tin tài khoản ngân hàng từ MISA',
                     )
                     partner_updated = True
                 if partner_updated:
                     updated += 1
                     partners_by_misa_id[misa_id.lower()] = partner
-                    if code:
-                        partners_by_ref[code.upper()] = partner
-                    partners_by_name[name.upper()] = partner
+                    if code_key:
+                        partners_by_ref[code_key] = partner
+                    if tax_key and code_key:
+                        partners_by_tax_ref[(tax_key, code_key)] = partner
                 continue
-            if not create_missing:
-                skipped += 1
-                continue
-            partner = Partner.create(vals)
-            self._sync_misa_vendor_bank_accounts(partner, item, job=job)
-            partners_by_misa_id[misa_id.lower()] = partner
-            if code:
-                partners_by_ref[code.upper()] = partner
-            partners_by_name[name.upper()] = partner
-            self._catalog_log_change(
-                job, 'vendor', 'create', 'res.partner', partner.id,
-                misa_id, code, name, 'created from MISA dictionary',
-            )
-            created += 1
+            skipped += 1
         next_skip = batch_skip + len(account_items)
         has_more = bool(batch_take > 0 and len(account_items) >= batch_take)
         if job and batch_take > 0:
@@ -2040,6 +2031,15 @@ class AmisCallbackConfig(models.Model):
         text = ''.join(char for char in text if not unicodedata.combining(char))
         return ' '.join(text.replace('_', ' ').replace('-', ' ').split()).upper()
 
+    def _misa_truthy(self, value):
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return bool(value)
+        if isinstance(value, str):
+            return value.strip().lower() in {'1', 'true', 'yes', 'y', 'co', 'có'}
+        return bool(value)
+
     def _misa_vendor_is_pm_variant(self, code, name):
         code_key = (code or '').strip().upper()
         name_key = (name or '').strip().upper()
@@ -2058,25 +2058,53 @@ class AmisCallbackConfig(models.Model):
                 return code_key[:-len(suffix)].strip()
         return ''
 
-    def _misa_vendor_name_match_skip_reason(self, partner, code, name, misa_id):
+    def _misa_vendor_match_code(self, value):
+        return ' '.join(str(value or '').strip().upper().split())
+
+    def _misa_vendor_match_tax(self, value):
+        return re.sub(r'[^0-9A-Z]+', '', str(value or '').strip().upper())
+
+    def _misa_partner_is_supplier(self, partner):
+        business_role = getattr(partner, 'hlv_business_role', '') or ''
+        return int(partner.supplier_rank or 0) > 0 or business_role == 'supplier'
+
+    def _misa_vendor_match_skip_reason(self, partner, code, name, misa_id, tax_key, match_source):
+        if not self._misa_partner_is_supplier(partner):
+            return 'Bỏ qua vì partner Odoo không phải nhà cung cấp'
+
         incoming_is_pm = self._misa_vendor_is_pm_variant(code, name)
         if incoming_is_pm:
-            return 'skipped PM variant matched only by name to avoid overwriting base vendor'
+            return 'Bỏ qua mã phụ PM vì không cho cập nhật NCC bằng mã phụ'
 
-        existing_ref = (partner.ref or '').strip()
-        incoming_code = (code or '').strip()
+        existing_ref = self._misa_vendor_match_code(partner.ref)
+        incoming_code_key = self._misa_vendor_match_code(code)
         existing_pm_base = self._misa_vendor_pm_base_code(existing_ref)
-        incoming_code_key = incoming_code.upper()
         restoring_base_from_pm = bool(existing_pm_base and incoming_code_key == existing_pm_base)
         if restoring_base_from_pm:
             return ''
 
+        existing_tax = self._misa_vendor_match_tax(partner.vat)
+        if match_source == 'misa_id':
+            if existing_ref and incoming_code_key and existing_ref != incoming_code_key:
+                return 'Bỏ qua vì ID MISA khớp nhưng mã NCC trên Odoo và MISA khác nhau'
+            if existing_tax and tax_key and existing_tax != tax_key:
+                return 'Bỏ qua vì ID MISA khớp nhưng mã số thuế trên Odoo và MISA khác nhau'
+            return ''
+
+        if match_source == 'tax_ref':
+            return ''
+
+        if match_source == 'ref':
+            if not incoming_code_key or existing_ref != incoming_code_key:
+                return 'Bỏ qua vì mã NCC trên Odoo và MISA không khớp'
+            if existing_tax and tax_key and existing_tax != tax_key:
+                return 'Bỏ qua vì mã NCC khớp nhưng mã số thuế khác nhau'
+            return ''
+
         existing_misa_id = (partner.misa_account_object_id or '').strip()
         if existing_misa_id and existing_misa_id.lower() != (misa_id or '').strip().lower():
-            return 'skipped name-only match because Odoo vendor already has a different MISA ID'
-        if existing_ref and incoming_code and existing_ref.upper() != incoming_code_key:
-            return 'skipped name-only match because Odoo vendor already has a different code'
-        return ''
+            return 'Bỏ qua vì NCC Odoo đã có ID MISA khác'
+        return 'Bỏ qua vì không có khóa khớp đủ tin cậy (ID MISA, mã NCC hoặc mã số thuế + mã NCC)'
 
     def _misa_resolve_country(self, value):
         raw = (value or '').strip()
