@@ -227,7 +227,12 @@ class MisaExtensionController(http.Controller):
                     "misa_stock_undelivered": line.misa_stock_undelivered if hasattr(line, 'misa_stock_undelivered') else 0.0,
                 })
 
-            can_revoke = pr.state in ['draft', 'to_approve']
+            # Kiểm tra xem YCMH đã có RFQ/PO liên kết chưa
+            has_rfq = any(
+                line.purchase_lines for line in pr.line_ids
+                if hasattr(line, 'purchase_lines') and line.purchase_lines
+            )
+            can_revoke = (pr.state in ['draft', 'to_approve']) and not has_rfq
 
             payload = {
                 "ok": True,
@@ -283,6 +288,18 @@ class MisaExtensionController(http.Controller):
 
         if pr.state not in ['draft', 'to_approve']:
             return json_response({"ok": False, "error": "invalid_state", "message": f"Không thể thu hồi YCMH ở trạng thái {pr.state}."}, 400)
+
+        # Kiểm tra xem YCMH đã có RFQ/PO liên kết chưa
+        has_rfq = any(
+            line.purchase_lines for line in pr.line_ids
+            if hasattr(line, 'purchase_lines') and line.purchase_lines
+        )
+        if has_rfq:
+            return json_response({
+                "ok": False,
+                "error": "has_rfq",
+                "message": "Không thể thu hồi do YCMH đã có RFQ/Đơn mua hàng liên kết."
+            }, 400)
 
         try:
             if pr.state != 'draft':
