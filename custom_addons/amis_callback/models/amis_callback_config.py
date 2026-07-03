@@ -1416,6 +1416,13 @@ class AmisCallbackConfig(models.Model):
         if not config:
             _logger.info('Bỏ qua cron đồng bộ danh mục MISA: chưa có cấu hình AMIS callback.')
             return True
+        product_job = self.env['amis.catalog.sync.job'].sudo().enqueue_from_misa(
+            config,
+            trigger='cron',
+            unmapped_only=False,
+            create_missing=False,
+            scope='product',
+        )
         vendor_job = self.env['amis.catalog.sync.job'].sudo().enqueue_from_misa(
             config,
             trigger='cron',
@@ -1423,7 +1430,7 @@ class AmisCallbackConfig(models.Model):
             create_missing=False,
             scope='vendor',
         )
-        _logger.info('MISA catalog cron enqueued vendor job %s', vendor_job.id)
+        _logger.info('MISA catalog cron enqueued product job %s and vendor job %s', product_job.id, vendor_job.id)
         return True
 
     def action_sync_catalog_to_odoo(self):
@@ -1918,7 +1925,9 @@ class AmisCallbackConfig(models.Model):
         partners = Partner.search(partner_domain)
         partners_by_misa_id = {}
         partners_by_ref = {}
+        partners_by_tax = {}
         partners_by_tax_ref = {}
+        ambiguous_tax_keys = set()
         for partner in partners:
             misa_id = (partner.misa_account_object_id or '').strip()
             ref_key = self._misa_vendor_match_code(partner.ref)
@@ -1927,8 +1936,16 @@ class AmisCallbackConfig(models.Model):
                 partners_by_misa_id.setdefault(misa_id.lower(), partner)
             if ref_key:
                 partners_by_ref.setdefault(ref_key, partner)
+            if tax_key:
+                existing_tax_partner = partners_by_tax.get(tax_key)
+                if existing_tax_partner and existing_tax_partner.id != partner.id:
+                    ambiguous_tax_keys.add(tax_key)
+                elif tax_key not in ambiguous_tax_keys:
+                    partners_by_tax[tax_key] = partner
             if tax_key and ref_key:
                 partners_by_tax_ref.setdefault((tax_key, ref_key), partner)
+        for tax_key in ambiguous_tax_keys:
+            partners_by_tax.pop(tax_key, None)
 
         batch_take = int(take or 0)
         if batch_take > 0:
@@ -1957,6 +1974,9 @@ class AmisCallbackConfig(models.Model):
             if not partner and tax_key and code_key:
                 partner = partners_by_tax_ref.get((tax_key, code_key))
                 match_source = 'tax_ref' if partner else ''
+            if not partner and tax_key:
+                partner = partners_by_tax.get(tax_key)
+                match_source = 'tax' if partner else ''
             if not partner and code_key:
                 partner = partners_by_ref.get(code_key)
                 match_source = 'ref' if partner else ''
@@ -2007,6 +2027,8 @@ class AmisCallbackConfig(models.Model):
                     partners_by_misa_id[misa_id.lower()] = partner
                     if code_key:
                         partners_by_ref[code_key] = partner
+                    if tax_key and tax_key not in ambiguous_tax_keys:
+                        partners_by_tax[tax_key] = partner
                     if tax_key and code_key:
                         partners_by_tax_ref[(tax_key, code_key)] = partner
                 continue
@@ -2072,18 +2094,19 @@ class AmisCallbackConfig(models.Model):
         if not self._misa_partner_is_supplier(partner):
             return 'Bỏ qua vì partner Odoo không phải nhà cung cấp'
 
-        incoming_is_pm = self._misa_vendor_is_pm_variant(code, name)
-        if incoming_is_pm:
-            return 'Bỏ qua mã phụ PM vì không cho cập nhật NCC bằng mã phụ'
-
         existing_ref = self._misa_vendor_match_code(partner.ref)
         incoming_code_key = self._misa_vendor_match_code(code)
+        existing_tax = self._misa_vendor_match_tax(partner.vat)
+        tax_matched = bool(existing_tax and tax_key and existing_tax == tax_key)
+        incoming_is_pm = self._misa_vendor_is_pm_variant(code, name)
+        if incoming_is_pm and match_source != 'misa_id' and not tax_matched:
+            return 'Bỏ qua mã phụ PM vì chưa khớp ID MISA hoặc mã số thuế'
+
         existing_pm_base = self._misa_vendor_pm_base_code(existing_ref)
         restoring_base_from_pm = bool(existing_pm_base and incoming_code_key == existing_pm_base)
         if restoring_base_from_pm:
             return ''
 
-        existing_tax = self._misa_vendor_match_tax(partner.vat)
         if match_source == 'misa_id':
             if existing_ref and incoming_code_key and existing_ref != incoming_code_key:
                 return 'Bỏ qua vì ID MISA khớp nhưng mã NCC trên Odoo và MISA khác nhau'
@@ -2092,6 +2115,9 @@ class AmisCallbackConfig(models.Model):
             return ''
 
         if match_source == 'tax_ref':
+            return ''
+
+        if match_source == 'tax':
             return ''
 
         if match_source == 'ref':
