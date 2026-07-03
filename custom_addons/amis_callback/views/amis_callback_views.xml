@@ -1,5 +1,24 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <odoo>
+    <record id="view_res_partner_form_misa_bank_accounts" model="ir.ui.view">
+        <field name="name">res.partner.form.misa.bank.accounts</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page string="Ngân hàng MISA" name="misa_bank_accounts">
+                    <field name="bank_ids" context="{'default_partner_id': id}">
+                        <list editable="bottom">
+                            <field name="acc_number"/>
+                            <field name="acc_holder_name"/>
+                            <field name="bank_id"/>
+                        </list>
+                    </field>
+                </page>
+            </xpath>
+        </field>
+    </record>
+
     <record id="view_amis_callback_log_tree" model="ir.ui.view">
         <field name="name">amis.callback.log.tree</field>
         <field name="model">amis.callback.log</field>

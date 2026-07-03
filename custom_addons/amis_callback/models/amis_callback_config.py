@@ -628,13 +628,22 @@ class AmisCallbackConfig(models.Model):
         if not api_url:
             raise UserError('Thiếu API URL.')
         url = f'{api_url}{path}'
+        if include_token:
+            self._ensure_token_valid()
         headers = self._build_headers(include_token=include_token)
         max_retries = 3
         delay = 5  # seconds
         last_exc = None
+        token_refreshed = False
         for attempt in range(max_retries):
             try:
                 response = requests.post(url, json=payload, headers=headers, timeout=timeout)
+                if include_token and response.status_code in (401, 403) and not token_refreshed and self.access_code:
+                    _logger.info('AMIS token rejected with HTTP %s on %s, reconnecting once.', response.status_code, path)
+                    self.sudo().action_connect_misa()
+                    headers = self._build_headers(include_token=True)
+                    token_refreshed = True
+                    continue
                 if response.status_code == 429:
                     wait = delay * (2 ** attempt)  # 5s, 10s, 20s
                     _logger.warning('AMIS 429 Too Many Requests: %s (attempt %d/%d) — waiting %ds', path, attempt + 1, max_retries, wait)
@@ -651,11 +660,22 @@ class AmisCallbackConfig(models.Model):
 
             if not body.get('Success'):
                 err = body.get('ErrorMessage') or body.get('ErrorCode') or 'Không rõ lỗi'
+                if include_token and not token_refreshed and self.access_code and self._is_misa_token_expired_error(err):
+                    _logger.info('AMIS returned token error on %s (%s), reconnecting once.', path, err)
+                    self.sudo().action_connect_misa()
+                    headers = self._build_headers(include_token=True)
+                    token_refreshed = True
+                    continue
                 raise UserError(f'MISA trả về lỗi: {err}')
             return body
 
         _logger.error('AMIS call failed after %d retries (429): %s', max_retries, path)
         raise UserError(f'Gọi API MISA thất bại sau {max_retries} lần thử: 429 Too Many Requests ({path})')
+
+    def _is_misa_token_expired_error(self, error):
+        text = unicodedata.normalize('NFKD', str(error or ''))
+        text = ''.join(char for char in text if not unicodedata.combining(char)).lower()
+        return 'token' in text and any(marker in text for marker in ('het han', 'expired', 'invalid'))
 
     def push_dictionary(self, dictionary_items):
         self.ensure_one()
@@ -1395,13 +1415,6 @@ class AmisCallbackConfig(models.Model):
         if not config:
             _logger.info('MISA catalog cron skipped: no AMIS callback config.')
             return True
-        product_job = self.env['amis.catalog.sync.job'].sudo().enqueue_from_misa(
-            config,
-            trigger='cron',
-            unmapped_only=False,
-            create_missing=True,
-            scope='product',
-        )
         vendor_job = self.env['amis.catalog.sync.job'].sudo().enqueue_from_misa(
             config,
             trigger='cron',
@@ -1409,7 +1422,7 @@ class AmisCallbackConfig(models.Model):
             create_missing=False,
             scope='vendor',
         )
-        _logger.info('MISA catalog cron enqueued product job %s and vendor job %s', product_job.id, vendor_job.id)
+        _logger.info('MISA catalog cron enqueued vendor job %s', vendor_job.id)
         return True
 
     def action_sync_catalog_to_odoo(self):
@@ -1893,7 +1906,15 @@ class AmisCallbackConfig(models.Model):
             active_test=False,
             skip_misa_partner_sync=True,
         )
-        partners = Partner.search([('parent_id', '=', False)])
+        partner_domain = [('parent_id', '=', False), ('supplier_rank', '>', 0)]
+        if 'hlv_business_role' in Partner._fields:
+            partner_domain = [
+                ('parent_id', '=', False),
+                '|',
+                ('supplier_rank', '>', 0),
+                ('hlv_business_role', '=', 'supplier'),
+            ]
+        partners = Partner.search(partner_domain)
         partners_by_misa_id = {}
         partners_by_ref = {}
         partners_by_name = {}

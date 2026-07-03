@@ -42,6 +42,7 @@ class ResPartnerAmisSync(models.Model):
             'country_id',
             'supplier_rank',
             'customer_rank',
+            'hlv_business_role',
             'active',
             'is_company',
             'company_type',
@@ -75,7 +76,8 @@ class ResPartnerAmisSync(models.Model):
             return False
         if not partner.name:
             return False
-        return int(partner.supplier_rank or 0) > 0
+        business_role = getattr(partner, 'hlv_business_role', '') or ''
+        return int(partner.supplier_rank or 0) > 0 or business_role == 'supplier'
 
     def _push_misa_vendor_dictionary(self, config, job=None):
         self.ensure_one()
