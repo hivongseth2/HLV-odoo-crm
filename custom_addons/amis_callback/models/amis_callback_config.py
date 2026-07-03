@@ -1712,6 +1712,7 @@ class AmisCallbackConfig(models.Model):
             if product:
                 if unmapped_only and (product.misa_inventory_item_id or '').strip():
                     continue
+                self._ensure_catalog_product_units_mapped(item, uoms_by_misa_id, job=job)
                 if self._log_catalog_product_uom_exception(product, item, uoms_by_misa_id, job=job):
                     skipped += 1
                 existing_misa_id = (product.misa_inventory_item_id or '').strip()
@@ -1764,6 +1765,84 @@ class AmisCallbackConfig(models.Model):
             'has_more': has_more,
         }
 
+    def _misa_catalog_product_unit_entries(self, item):
+        entries = []
+
+        def add(unit_id, unit_name=''):
+            unit_id = (unit_id or '').strip()
+            unit_name = (unit_name or '').strip()
+            if unit_id and not unit_name:
+                unit_name = self._misa_catalog_unit_name_by_id(unit_id)
+            if unit_id:
+                entries.append({'unit_id': unit_id, 'unit_name': unit_name})
+
+        add(item.get('unit_id'), item.get('unit_name'))
+        add(item.get('main_unit_id'), item.get('main_unit_name'))
+        raw_converts = (
+            item.get('inventory_item_unit_convert')
+            or item.get('inventory_item_unit_converts')
+            or item.get('unit_convert')
+            or item.get('unit_list')
+            or []
+        )
+        if isinstance(raw_converts, str):
+            try:
+                raw_converts = json.loads(raw_converts) if raw_converts.strip() else []
+            except Exception:
+                raw_converts = []
+        if isinstance(raw_converts, dict):
+            raw_converts = [raw_converts]
+        if isinstance(raw_converts, list):
+            for convert in raw_converts:
+                if not isinstance(convert, dict):
+                    continue
+                add(
+                    convert.get('unit_id'),
+                    convert.get('unit_name') or convert.get('unit_name_convert'),
+                )
+
+        seen = set()
+        result = []
+        for entry in entries:
+            key = (entry['unit_id'].lower(), entry.get('unit_name', '').casefold())
+            if key in seen:
+                continue
+            seen.add(key)
+            result.append(entry)
+        return result
+
+    def _misa_catalog_unit_name_by_id(self, unit_id):
+        unit_id = (unit_id or '').strip().lower()
+        if not unit_id:
+            return ''
+        for item in self._get_all_dictionary(4):
+            if (item.get('unit_id') or '').strip().lower() == unit_id:
+                return (item.get('unit_name') or '').strip()
+        return ''
+
+    def _ensure_catalog_product_units_mapped(self, item, uoms_by_misa_id, job=None):
+        Uom = self.env['uom.uom'].sudo().with_context(active_test=False)
+        for entry in self._misa_catalog_product_unit_entries(item):
+            unit_id = (entry.get('unit_id') or '').strip()
+            unit_name = (entry.get('unit_name') or '').strip()
+            if not unit_id or not unit_name:
+                continue
+            key = unit_id.lower()
+            existing_candidates = uoms_by_misa_id.setdefault(key, [])
+            matched_uoms = Uom.search([('name', '=ilike', unit_name)])
+            for uom in matched_uoms:
+                if uom not in existing_candidates:
+                    existing_candidates.append(uom)
+                if (uom.misa_unit_id or '').strip() == unit_id:
+                    continue
+                old_value = uom.misa_unit_id or ''
+                uom.write({'misa_unit_id': unit_id})
+                self._catalog_log_change(
+                    job, 'unit', 'map', 'uom.uom', uom.id,
+                    unit_id, unit_name, unit_name,
+                    'Map ID ĐVT theo hàng hóa MISA: %s -> %s' % (old_value, unit_id),
+                )
+
     def _log_catalog_product_uom_exception(self, product, item, uoms_by_misa_id, job=None):
         unit_id = (item.get('unit_id') or item.get('main_unit_id') or '').strip().lower()
         if not unit_id:
@@ -1775,15 +1854,32 @@ class AmisCallbackConfig(models.Model):
         current_uoms = (product.uom_id | product.uom_po_id).filtered(lambda uom: uom)
         if candidates and any(uom in current_uoms for uom in candidates):
             return False
+        current_names = {
+            (uom.name or '').strip().casefold()
+            for uom in current_uoms
+            if (uom.name or '').strip()
+        }
+        candidate_names = {
+            (uom.name or '').strip().casefold()
+            for uom in candidates
+            if (uom.name or '').strip()
+        }
+        misa_names = {
+            (entry.get('unit_name') or '').strip().casefold()
+            for entry in self._misa_catalog_product_unit_entries(item)
+            if (entry.get('unit_name') or '').strip()
+        }
+        if current_names & (candidate_names | misa_names):
+            return False
         misa_uom_text = ', '.join(
             '%s [%s]' % (uom.display_name, uom.category_id.display_name if uom.category_id else '')
             for uom in candidates
-        ) or unit_id
+        ) or ', '.join(entry.get('unit_name') or entry.get('unit_id') or '' for entry in self._misa_catalog_product_unit_entries(item)) or unit_id
         odoo_uom_text = ', '.join(
             '%s [%s]' % (uom.display_name, uom.category_id.display_name if uom.category_id else '')
             for uom in current_uoms
         )
-        summary = 'ĐVT cần kiểm tra thủ công: Odoo=%s; MISA=%s. Chưa cập nhật ĐVT sản phẩm.' % (
+        summary = 'ĐVT lệch thật, cần xử lý mapping thủ công: Odoo=%s; MISA=%s. Chưa cập nhật ĐVT sản phẩm.' % (
             odoo_uom_text,
             misa_uom_text,
         )

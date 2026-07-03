@@ -733,6 +733,9 @@ class StockPickingAmisSync(models.Model):
             inventory_item_name = inventory_item.get('inventory_item_name') or product.display_name
             unit_id = unit.get('unit_id') or ''
             unit_name = unit.get('unit_name') or move.product_uom.name
+            unit_values = purchase_order._misa_document_unit_values(
+                config, inventory_item, move.product_uom, unit, qty_done, price_unit
+            )
             if not inventory_item_id:
                 raise UserError('Khong tao/tim duoc MISA Inventory Item cho san pham: %s' % product.display_name)
             if not unit_id:
@@ -749,8 +752,8 @@ class StockPickingAmisSync(models.Model):
                 'refid': refid,
                 'inventory_item_id': inventory_item_id,
                 'stock_id': stock_id,
-                'unit_id': unit_id,
-                'main_unit_id': unit_id,
+                'unit_id': unit_values['unit_id'],
+                'main_unit_id': unit_values['main_unit_id'],
                 'account_object_id': account_object_id,
                 'sort_order': idx,
                 'inventory_resale_type_id': 0,
@@ -758,7 +761,7 @@ class StockPickingAmisSync(models.Model):
                 'is_promotion': False,
                 'quantity': qty_done,
                 'unit_price': price_unit,
-                'main_unit_price': price_unit,
+                'main_unit_price': unit_values['main_unit_price'],
                 'unit_price_after_tax': price_unit * (1.0 + vat_rate / 100.0),
                 'unit_price_finance': price_unit,
                 'amount_finance': amount,
@@ -775,23 +778,23 @@ class StockPickingAmisSync(models.Model):
                 'discount_amount_oc': 0.0,
                 'unit_price_management': price_unit,
                 'amount_management': amount,
-                'main_unit_price_finance': price_unit,
-                'main_unit_price_management': price_unit,
-                'main_convert_rate': 1.0,
-                'main_quantity': qty_done,
+                'main_unit_price_finance': unit_values['main_unit_price'],
+                'main_unit_price_management': unit_values['main_unit_price'],
+                'main_convert_rate': unit_values['main_convert_rate'],
+                'main_quantity': unit_values['main_quantity'],
                 'amount_finance_oc': amount,
                 'amount_management_oc': amount,
                 'description': move.name or inventory_item_name,
                 'debit_account': debit_account,
                 'credit_account': credit_account,
-                'exchange_rate_operator': '*',
+                'exchange_rate_operator': unit_values['exchange_rate_operator'],
                 'account_object_name': account_object_name,
                 'account_object_code': account_object_code,
                 'inventory_item_code': inventory_item_code,
                 'inventory_item_type': 0,
-                'unit_name': unit_name,
+                'unit_name': unit_values['unit_name'],
                 'stock_code': misa_warehouse_code,
-                'main_unit_name': unit_name,
+                'main_unit_name': unit_values['main_unit_name'],
                 'inventory_item_name': inventory_item_name,
                 'stock_name': misa_warehouse_code,
                 'account_name': debit_account,
