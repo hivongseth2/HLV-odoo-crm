@@ -1291,7 +1291,7 @@ class ZaloMiniAppAPI(http.Controller):
             "message": "Reward request cancelled",
         })
 
-    @http.route("/api/v1/account/change-password", type="http", auth="public", methods=["POST"], csrf=False)
+    @http.route("/api/v1/account/change-password", type="http", auth="public", methods=["POST"], csrf=False, cors="*")
     def api_change_password(self, **kwargs):
         payload = self._request_json()
         partner = self._partner_from_param(payload)
@@ -1330,7 +1330,7 @@ class ZaloMiniAppAPI(http.Controller):
 
         return self._response_success({"message": "Đổi mật khẩu thành công."})
 
-    @http.route("/api/v1/account/change-phone", type="http", auth="public", methods=["POST"], csrf=False)
+    @http.route("/api/v1/account/change-phone", type="http", auth="public", methods=["POST"], csrf=False, cors="*")
     def api_change_phone(self, **kwargs):
         payload = self._request_json()
         partner = self._partner_from_param(payload)
