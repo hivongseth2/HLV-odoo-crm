@@ -30,10 +30,11 @@
       "method": "POST",
       "path": "/auth/zalo",
       "auth_required": false,
-      "description": "Authenticate Zalo user and create session/api key",
+      "description": "Authenticate Zalo user by portal phone and return partner/api key",
       "body": {
         "access_token": "string",
-        "user_id": "string"
+        "user_id": "string",
+        "phone": "string"
       }
     },
     {
@@ -266,6 +267,7 @@
         "partner_id": "number"
       },
       "query": {
+        "phone": "string",
         "page": "number",
         "limit": "number",
         "type": "earn|redeem|return|manual"
@@ -280,6 +282,7 @@
         "partner_id": "number"
       },
       "query": {
+        "phone": "string",
         "state": "active|used|expired|cancelled"
       }
     },
@@ -317,6 +320,7 @@
       "description": "Create a reward request. Gift requests are processed immediately and return a voucher; cash requests remain pending for approval.",
       "body": {
         "partner_id": "number",
+        "phone": "string",
         "request_type": "gift|cash",
         "package_id": "number|required when request_type=gift",
         "points_to_redeem": "number|required when request_type=cash",
@@ -347,6 +351,7 @@
       "path": "/loyalty/redeem/requests",
       "query": {
         "partner_id": "number",
+        "phone": "string",
         "limit": "number|optional|max 100"
       },
       "returns": {
@@ -364,6 +369,7 @@
       "description": "Cancel a pending reward request so its reserved points become available again.",
       "body": {
         "partner_id": "number",
+        "phone": "string",
         "request_id": "number"
       },
       "alternate_path": "/loyalty/redeem/requests/{request_id}/cancel",

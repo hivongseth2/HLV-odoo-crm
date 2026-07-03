@@ -1,10 +1,15 @@
 # -*- coding: utf-8 -*-
 import base64
 import json
+import logging
+import re
 from datetime import timedelta, timezone
 from odoo import fields, http
 from odoo.exceptions import UserError
 from odoo.http import request, Response
+
+
+_logger = logging.getLogger(__name__)
 
 
 class ZaloMiniAppAPI(http.Controller):
@@ -63,6 +68,22 @@ class ZaloMiniAppAPI(http.Controller):
         if isinstance(value, bool):
             return value
         return str(value).strip().lower() in ("1", "true", "yes", "y", "on")
+
+    @staticmethod
+    def _normalize_vn_phone(phone):
+        if not phone:
+            return ""
+        digits = re.sub(r"\D", "", str(phone))
+        if len(digits) == 11 and digits.startswith("84"):
+            digits = "0" + digits[2:]
+        elif len(digits) == 12 and digits.startswith("084"):
+            digits = "0" + digits[3:]
+        return digits
+
+    @staticmethod
+    def _mask_phone(phone):
+        normalized = ZaloMiniAppAPI._normalize_vn_phone(phone)
+        return "***%s" % normalized[-3:] if normalized else ""
 
     @staticmethod
     def _vn_datetime(value):
@@ -186,20 +207,77 @@ class ZaloMiniAppAPI(http.Controller):
             "benefits": [{"id": b.id, "name": b.name, "icon": b.icon or ""} for b in tier.benefit_ids],
         }
 
-    def _partner_from_session_or_param(self, params=None):
+    def _partner_from_param(self, params=None):
         params = params or {}
-        partner = None
-        session_partner_id = request.session.get("zalo_partner_id")
-        if session_partner_id:
-            partner = request.env["res.partner"].sudo().browse(int(session_partner_id))
-            if partner.exists():
-                return partner.commercial_partner_id or partner
-
         partner_id = params.get("partner_id") or request.httprequest.args.get("partner_id")
-        if partner_id:
+        phone = params.get("phone") or request.httprequest.args.get("phone")
+        path = request.httprequest.path
+        if not partner_id or not phone:
+            _logger.warning(
+                "Zalo MiniApp partner guard failed: missing partner_id/phone path=%s has_partner_id=%s has_phone=%s",
+                path,
+                bool(partner_id),
+                bool(phone),
+            )
+            return None
+
+        try:
             partner = request.env["res.partner"].sudo().browse(int(partner_id))
-            if partner.exists():
-                return partner.commercial_partner_id or partner
+        except Exception:
+            _logger.warning(
+                "Zalo MiniApp partner guard failed: invalid partner_id=%s phone=%s path=%s",
+                partner_id,
+                self._mask_phone(phone),
+                path,
+            )
+            return None
+        if not partner.exists():
+            _logger.warning(
+                "Zalo MiniApp partner guard failed: partner not found partner_id=%s phone=%s path=%s",
+                partner_id,
+                self._mask_phone(phone),
+                path,
+            )
+            return None
+
+        root = partner._get_loyalty_root()
+        normalized = self._normalize_vn_phone(phone)
+        if not normalized:
+            _logger.warning(
+                "Zalo MiniApp partner guard failed: invalid phone partner_id=%s phone=%s path=%s",
+                partner_id,
+                self._mask_phone(phone),
+                path,
+            )
+            return None
+
+        accounts = request.env["hlv.loyalty.portal.account"].sudo().search([
+            ("portal_phone", "=", normalized),
+            ("active", "=", True),
+        ])
+        account = accounts.filtered(lambda acc: acc.partner_id._get_loyalty_root().id == root.id)[:1]
+        if not account:
+            _logger.warning(
+                "Zalo MiniApp partner guard failed: portal account mismatch partner_id=%s root_id=%s phone=%s path=%s",
+                partner_id,
+                root.id,
+                self._mask_phone(phone),
+                path,
+            )
+            return None
+        return root
+
+    def _partner_from_phone(self, phone):
+        normalized = self._normalize_vn_phone(phone)
+        if not normalized:
+            return None
+
+        account = request.env["hlv.loyalty.portal.account"].sudo().search([
+            ("portal_phone", "=", normalized),
+            ("active", "=", True),
+        ], order="id desc", limit=1)
+        if account:
+            return account.partner_id._get_loyalty_root()
         return None
 
     @staticmethod
@@ -331,33 +409,60 @@ class ZaloMiniAppAPI(http.Controller):
         payload = self._request_json()
         access_token = (payload.get("access_token") or "").strip()
         user_id = (payload.get("user_id") or "").strip()
+        phone = payload.get("phone") or ""
         if not access_token or not user_id:
+            _logger.warning(
+                "Zalo MiniApp auth failed: missing access_token/user_id has_access_token=%s has_user_id=%s phone=%s",
+                bool(access_token),
+                bool(user_id),
+                self._mask_phone(phone),
+            )
             return self._response_error("INVALID_INPUT", "access_token and user_id are required", status=400)
+        if not phone:
+            _logger.warning("Zalo MiniApp auth failed: missing phone has_user_id=%s", bool(user_id))
+            return self._response_error("INVALID_INPUT", "phone is required", status=400)
 
+        normalized_phone = self._normalize_vn_phone(phone)
         partner_model = request.env["res.partner"].sudo()
-        domain = [("ref", "=", user_id)]
-        # Support optional custom fields if they exist in the DB.
-        if "zalo_user_id" in partner_model._fields:
-            domain = ["|", ("zalo_user_id", "=", user_id), ("ref", "=", user_id)]
-        elif "x_zalo_user_id" in partner_model._fields:
-            domain = ["|", ("x_zalo_user_id", "=", user_id), ("ref", "=", user_id)]
-
-        partner = partner_model.search(domain, limit=1)
+        partner = self._partner_from_phone(phone)
         if not partner:
-            create_vals = {
-                "name": "Zalo User %s" % user_id,
-                "ref": user_id,
-                "customer_rank": 1,
-            }
-            if "zalo_user_id" in partner_model._fields:
-                create_vals["zalo_user_id"] = user_id
-            if "x_zalo_user_id" in partner_model._fields:
-                create_vals["x_zalo_user_id"] = user_id
-            partner = partner_model.create(create_vals)
+            _logger.warning("Zalo MiniApp auth failed: partner not found phone=%s", self._mask_phone(phone))
+            return self._response_error("PARTNER_NOT_FOUND", "No active loyalty portal account found for phone", status=404)
 
-        root = partner.commercial_partner_id or partner
+        root = partner._get_loyalty_root()
+        bind_vals = {}
+        clear_vals = {}
+        binding_domain = [
+            ("id", "!=", root.id),
+            ("ref", "=", user_id),
+        ]
+        if "zalo_user_id" in partner_model._fields:
+            bind_vals["zalo_user_id"] = user_id
+            clear_vals["zalo_user_id"] = False
+            binding_domain = [
+                ("id", "!=", root.id),
+                "|",
+                ("zalo_user_id", "=", user_id),
+                ("ref", "=", user_id),
+            ]
+        elif "x_zalo_user_id" in partner_model._fields:
+            bind_vals["x_zalo_user_id"] = user_id
+            clear_vals["x_zalo_user_id"] = False
+            binding_domain = [
+                ("id", "!=", root.id),
+                "|",
+                ("x_zalo_user_id", "=", user_id),
+                ("ref", "=", user_id),
+            ]
+        else:
+            bind_vals["ref"] = user_id
+        clear_vals["ref"] = False
+        if bind_vals:
+            partner_model.search(binding_domain).write(clear_vals)
+            root.write(bind_vals)
+        _logger.info("Zalo MiniApp auth success: partner_id=%s phone=%s", root.id, self._mask_phone(phone))
+
         loyalty_root = root._get_loyalty_root()
-        request.session["zalo_partner_id"] = root.id
 
         api_key = request.env["ir.config_parameter"].sudo().get_param("hlv_loyalty.zalo_api_key", "")
 
@@ -365,7 +470,7 @@ class ZaloMiniAppAPI(http.Controller):
             "api_key": api_key or None,
             "partner_id": root.id,
             "name": root.name,
-            "phone": root.phone or root.mobile or "",
+            "phone": normalized_phone,
             "email": root.email or "",
             "avatar": self._img_url("res.partner", root.id),
             "loyalty_points": loyalty_root.loyalty_total_points,
@@ -377,9 +482,9 @@ class ZaloMiniAppAPI(http.Controller):
 
     @http.route("/api/v1/account", type="http", auth="public", methods=["GET"], csrf=False)
     def account(self, **kwargs):
-        partner = self._partner_from_session_or_param(kwargs)
+        partner = self._partner_from_param(kwargs)
         if not partner:
-            return self._response_error("UNAUTHORIZED", "Missing partner context. Call /auth/zalo first.", status=401)
+            return self._response_error("UNAUTHORIZED", "Missing or invalid partner_id/phone. Call /auth/zalo and pass returned partner_id with the same phone.", status=401)
 
         loyalty_root = partner._get_loyalty_root()
         addresses = request.env["res.partner"].sudo().search([
@@ -597,9 +702,9 @@ class ZaloMiniAppAPI(http.Controller):
 
     @http.route("/api/v1/cart", type="http", auth="public", methods=["GET"], csrf=False)
     def cart_get(self, **kwargs):
-        partner = self._partner_from_session_or_param(kwargs)
+        partner = self._partner_from_param(kwargs)
         if not partner:
-            return self._response_error("UNAUTHORIZED", "Missing partner context. Call /auth/zalo first.", status=401)
+            return self._response_error("UNAUTHORIZED", "Missing or invalid partner_id/phone. Call /auth/zalo and pass returned partner_id with the same phone.", status=401)
 
         cart = self._get_cart_order(partner, create_if_missing=False)
         if not cart:
@@ -626,9 +731,9 @@ class ZaloMiniAppAPI(http.Controller):
     @http.route("/api/v1/cart/items", type="http", auth="public", methods=["POST"], csrf=False)
     def cart_add_item(self, **kwargs):
         payload = self._request_json()
-        partner = self._partner_from_session_or_param(payload)
+        partner = self._partner_from_param(payload)
         if not partner:
-            return self._response_error("UNAUTHORIZED", "Missing partner context. Call /auth/zalo first.", status=401)
+            return self._response_error("UNAUTHORIZED", "Missing or invalid partner_id/phone. Call /auth/zalo and pass returned partner_id with the same phone.", status=401)
 
         product_id = self._parse_int(payload.get("product_id"), 0)
         quantity = self._parse_float(payload.get("quantity"), 0)
@@ -649,9 +754,9 @@ class ZaloMiniAppAPI(http.Controller):
     @http.route("/api/v1/cart/items/<int:line_id>", type="http", auth="public", methods=["PUT"], csrf=False)
     def cart_update_item(self, line_id, **kwargs):
         payload = self._request_json()
-        partner = self._partner_from_session_or_param(payload)
+        partner = self._partner_from_param(payload)
         if not partner:
-            return self._response_error("UNAUTHORIZED", "Missing partner context. Call /auth/zalo first.", status=401)
+            return self._response_error("UNAUTHORIZED", "Missing or invalid partner_id/phone. Call /auth/zalo and pass returned partner_id with the same phone.", status=401)
 
         cart = self._get_cart_order(partner, create_if_missing=False)
         if not cart:
@@ -671,9 +776,9 @@ class ZaloMiniAppAPI(http.Controller):
     @http.route("/api/v1/cart/items/<int:line_id>", type="http", auth="public", methods=["DELETE"], csrf=False)
     def cart_delete_item(self, line_id, **kwargs):
         payload = self._request_json()
-        partner = self._partner_from_session_or_param(payload)
+        partner = self._partner_from_param(payload)
         if not partner:
-            return self._response_error("UNAUTHORIZED", "Missing partner context. Call /auth/zalo first.", status=401)
+            return self._response_error("UNAUTHORIZED", "Missing or invalid partner_id/phone. Call /auth/zalo and pass returned partner_id with the same phone.", status=401)
 
         cart = self._get_cart_order(partner, create_if_missing=False)
         if not cart:
@@ -688,9 +793,9 @@ class ZaloMiniAppAPI(http.Controller):
     @http.route("/api/v1/cart/clear", type="http", auth="public", methods=["POST"], csrf=False)
     def cart_clear(self, **kwargs):
         payload = self._request_json()
-        partner = self._partner_from_session_or_param(payload)
+        partner = self._partner_from_param(payload)
         if not partner:
-            return self._response_error("UNAUTHORIZED", "Missing partner context. Call /auth/zalo first.", status=401)
+            return self._response_error("UNAUTHORIZED", "Missing or invalid partner_id/phone. Call /auth/zalo and pass returned partner_id with the same phone.", status=401)
 
         cart = self._get_cart_order(partner, create_if_missing=False)
         if not cart:
@@ -702,9 +807,9 @@ class ZaloMiniAppAPI(http.Controller):
     @http.route("/api/v1/cart/checkout", type="http", auth="public", methods=["POST"], csrf=False)
     def cart_checkout(self, **kwargs):
         payload = self._request_json()
-        partner = self._partner_from_session_or_param(payload)
+        partner = self._partner_from_param(payload)
         if not partner:
-            return self._response_error("UNAUTHORIZED", "Missing partner context. Call /auth/zalo first.", status=401)
+            return self._response_error("UNAUTHORIZED", "Missing or invalid partner_id/phone. Call /auth/zalo and pass returned partner_id with the same phone.", status=401)
 
         cart = self._get_cart_order(partner, create_if_missing=False)
         if not cart or not cart.order_line.filtered(lambda l: not l.display_type):
@@ -733,9 +838,9 @@ class ZaloMiniAppAPI(http.Controller):
 
     @http.route("/api/v1/orders", type="http", auth="public", methods=["GET"], csrf=False)
     def list_orders(self, **kwargs):
-        partner = self._partner_from_session_or_param(kwargs)
+        partner = self._partner_from_param(kwargs)
         if not partner:
-            return self._response_error("UNAUTHORIZED", "Missing partner context. Call /auth/zalo first.", status=401)
+            return self._response_error("UNAUTHORIZED", "Missing or invalid partner_id/phone. Call /auth/zalo and pass returned partner_id with the same phone.", status=401)
 
         page = max(self._parse_int(kwargs.get("page"), 1), 1)
         limit = max(self._parse_int(kwargs.get("limit"), 20), 1)
@@ -788,9 +893,9 @@ class ZaloMiniAppAPI(http.Controller):
 
     @http.route("/api/v1/orders/<int:order_id>", type="http", auth="public", methods=["GET"], csrf=False)
     def order_detail(self, order_id, **kwargs):
-        partner = self._partner_from_session_or_param(kwargs)
+        partner = self._partner_from_param(kwargs)
         if not partner:
-            return self._response_error("UNAUTHORIZED", "Missing partner context. Call /auth/zalo first.", status=401)
+            return self._response_error("UNAUTHORIZED", "Missing or invalid partner_id/phone. Call /auth/zalo and pass returned partner_id with the same phone.", status=401)
 
         order = request.env["sale.order"].sudo().browse(order_id)
         if not order.exists() or order.partner_id.commercial_partner_id.id != partner.id:
@@ -837,9 +942,9 @@ class ZaloMiniAppAPI(http.Controller):
     @http.route("/api/v1/orders", type="http", auth="public", methods=["POST"], csrf=False)
     def create_order(self, **kwargs):
         payload = self._request_json()
-        partner = self._partner_from_session_or_param(payload)
+        partner = self._partner_from_param(payload)
         if not partner:
-            return self._response_error("UNAUTHORIZED", "Missing partner context. Call /auth/zalo first.", status=401)
+            return self._response_error("UNAUTHORIZED", "Missing or invalid partner_id/phone. Call /auth/zalo and pass returned partner_id with the same phone.", status=401)
 
         items = payload.get("items") or []
         if not isinstance(items, list) or not items:
@@ -908,9 +1013,9 @@ class ZaloMiniAppAPI(http.Controller):
 
     @http.route("/api/v1/addresses", type="http", auth="public", methods=["GET"], csrf=False)
     def list_addresses(self, **kwargs):
-        partner = self._partner_from_session_or_param(kwargs)
+        partner = self._partner_from_param(kwargs)
         if not partner:
-            return self._response_error("UNAUTHORIZED", "Missing partner context. Call /auth/zalo first.", status=401)
+            return self._response_error("UNAUTHORIZED", "Missing or invalid partner_id/phone. Call /auth/zalo and pass returned partner_id with the same phone.", status=401)
 
         addresses = request.env["res.partner"].sudo().search([
             ("parent_id", "=", partner.id),
@@ -935,9 +1040,9 @@ class ZaloMiniAppAPI(http.Controller):
     @http.route("/api/v1/addresses", type="http", auth="public", methods=["POST"], csrf=False)
     def create_address(self, **kwargs):
         payload = self._request_json()
-        partner = self._partner_from_session_or_param(payload)
+        partner = self._partner_from_param(payload)
         if not partner:
-            return self._response_error("UNAUTHORIZED", "Missing partner context. Call /auth/zalo first.", status=401)
+            return self._response_error("UNAUTHORIZED", "Missing or invalid partner_id/phone. Call /auth/zalo and pass returned partner_id with the same phone.", status=401)
 
         required_fields = ["name", "phone", "street", "ward", "city"]
         missing = [f for f in required_fields if not (payload.get(f) or "").strip()]
@@ -974,9 +1079,9 @@ class ZaloMiniAppAPI(http.Controller):
     @http.route("/api/v1/addresses/<int:address_id>", type="http", auth="public", methods=["PUT"], csrf=False)
     def update_address(self, address_id, **kwargs):
         payload = self._request_json()
-        partner = self._partner_from_session_or_param(payload)
+        partner = self._partner_from_param(payload)
         if not partner:
-            return self._response_error("UNAUTHORIZED", "Missing partner context. Call /auth/zalo first.", status=401)
+            return self._response_error("UNAUTHORIZED", "Missing or invalid partner_id/phone. Call /auth/zalo and pass returned partner_id with the same phone.", status=401)
 
         addr = request.env["res.partner"].sudo().browse(address_id)
         if not addr.exists() or addr.parent_id.id != partner.id:
@@ -1015,9 +1120,9 @@ class ZaloMiniAppAPI(http.Controller):
     @http.route("/api/v1/addresses/<int:address_id>", type="http", auth="public", methods=["DELETE"], csrf=False)
     def delete_address(self, address_id, **kwargs):
         payload = self._request_json()
-        partner = self._partner_from_session_or_param(payload)
+        partner = self._partner_from_param(payload)
         if not partner:
-            return self._response_error("UNAUTHORIZED", "Missing partner context. Call /auth/zalo first.", status=401)
+            return self._response_error("UNAUTHORIZED", "Missing or invalid partner_id/phone. Call /auth/zalo and pass returned partner_id with the same phone.", status=401)
 
         addr = request.env["res.partner"].sudo().browse(address_id)
         if not addr.exists() or addr.parent_id.id != partner.id:
@@ -1057,9 +1162,9 @@ class ZaloMiniAppAPI(http.Controller):
     @http.route("/api/v1/loyalty/redeem", type="http", auth="public", methods=["POST"], csrf=False)
     def loyalty_redeem(self, **kwargs):
         payload = self._request_json()
-        partner = self._partner_from_session_or_param(payload)
+        partner = self._partner_from_param(payload)
         if not partner:
-            return self._response_error("UNAUTHORIZED", "Missing partner context. Call /auth/zalo first.", status=401)
+            return self._response_error("UNAUTHORIZED", "Missing or invalid partner_id/phone. Call /auth/zalo and pass returned partner_id with the same phone.", status=401)
         root = partner._get_loyalty_root()
 
         package_id = self._parse_int(payload.get("package_id"), 0)
@@ -1113,9 +1218,9 @@ class ZaloMiniAppAPI(http.Controller):
 
     @http.route("/api/v1/loyalty/redeem/requests", type="http", auth="public", methods=["GET"], csrf=False)
     def loyalty_redeem_requests(self, **kwargs):
-        partner = self._partner_from_session_or_param(kwargs)
+        partner = self._partner_from_param(kwargs)
         if not partner:
-            return self._response_error("UNAUTHORIZED", "Missing partner context. Call /auth/zalo first.", status=401)
+            return self._response_error("UNAUTHORIZED", "Missing or invalid partner_id/phone. Call /auth/zalo and pass returned partner_id with the same phone.", status=401)
         root = partner._get_loyalty_root()
         limit = min(max(self._parse_int(kwargs.get("limit") or request.httprequest.args.get("limit"), 50), 1), 100)
 
@@ -1153,9 +1258,9 @@ class ZaloMiniAppAPI(http.Controller):
     @http.route("/api/v1/loyalty/redeem/requests/<int:request_id>/cancel", type="http", auth="public", methods=["POST"], csrf=False)
     def loyalty_cancel_redeem_request(self, request_id=None, **kwargs):
         payload = self._request_json()
-        partner = self._partner_from_session_or_param(payload)
+        partner = self._partner_from_param(payload)
         if not partner:
-            return self._response_error("UNAUTHORIZED", "Missing partner context. Call /auth/zalo first.", status=401)
+            return self._response_error("UNAUTHORIZED", "Missing or invalid partner_id/phone. Call /auth/zalo and pass returned partner_id with the same phone.", status=401)
         root = partner._get_loyalty_root()
 
         request_id = request_id or self._parse_int(payload.get("request_id"), 0)
@@ -1186,17 +1291,19 @@ class ZaloMiniAppAPI(http.Controller):
             "message": "Reward request cancelled",
         })
 
-    @http.route("/api/v1/account/change-password", type="http", auth="public", methods=["POST"], csrf=False)
+    @http.route("/api/v1/account/change-password", type="http", auth="public", methods=["POST"], csrf=False, cors="*")
     def api_change_password(self, **kwargs):
         payload = self._request_json()
-        partner = self._partner_from_session_or_param(payload)
+        partner = self._partner_from_param(payload)
         if not partner:
-            return self._response_error("UNAUTHORIZED", "Missing partner context. Call /auth/zalo first.", status=401)
+            return self._response_error("UNAUTHORIZED", "Missing or invalid partner_id/phone. Call /auth/zalo and pass returned partner_id with the same phone.", status=401)
 
-        account = request.env['hlv.loyalty.portal.account'].sudo().search([
-            ('partner_id', '=', partner.id),
+        phone = self._normalize_vn_phone(payload.get('phone') or '')
+        accounts = request.env['hlv.loyalty.portal.account'].sudo().search([
+            ('portal_phone', '=', phone),
             ('active', '=', True)
-        ], limit=1)
+        ])
+        account = accounts.filtered(lambda acc: acc.partner_id._get_loyalty_root().id == partner.id)[:1]
         if not account:
             return self._response_error("NOT_FOUND", "No active portal account found.", status=404)
 
@@ -1223,17 +1330,19 @@ class ZaloMiniAppAPI(http.Controller):
 
         return self._response_success({"message": "Đổi mật khẩu thành công."})
 
-    @http.route("/api/v1/account/change-phone", type="http", auth="public", methods=["POST"], csrf=False)
+    @http.route("/api/v1/account/change-phone", type="http", auth="public", methods=["POST"], csrf=False, cors="*")
     def api_change_phone(self, **kwargs):
         payload = self._request_json()
-        partner = self._partner_from_session_or_param(payload)
+        partner = self._partner_from_param(payload)
         if not partner:
-            return self._response_error("UNAUTHORIZED", "Missing partner context. Call /auth/zalo first.", status=401)
+            return self._response_error("UNAUTHORIZED", "Missing or invalid partner_id/phone. Call /auth/zalo and pass returned partner_id with the same phone.", status=401)
 
-        account = request.env['hlv.loyalty.portal.account'].sudo().search([
-            ('partner_id', '=', partner.id),
+        phone = self._normalize_vn_phone(payload.get('phone') or '')
+        accounts = request.env['hlv.loyalty.portal.account'].sudo().search([
+            ('portal_phone', '=', phone),
             ('active', '=', True)
-        ], limit=1)
+        ])
+        account = accounts.filtered(lambda acc: acc.partner_id._get_loyalty_root().id == partner.id)[:1]
         if not account:
             return self._response_error("NOT_FOUND", "No active portal account found.", status=404)
 
@@ -1245,9 +1354,25 @@ class ZaloMiniAppAPI(http.Controller):
         if not re.match(r'^[\d\s\-\+]{7,15}$', new_phone):
             return self._response_error("INVALID_INPUT", "Số điện thoại không hợp lệ.", status=400)
 
+        new_phone_normalized = self._normalize_vn_phone(new_phone)
+        if not new_phone_normalized:
+            return self._response_error("INVALID_INPUT", "Số điện thoại không hợp lệ.", status=400)
+
+        duplicate = request.env['hlv.loyalty.portal.account'].sudo().search([
+            ('id', '!=', account.id),
+            ('portal_phone', '=', new_phone_normalized),
+            ('active', '=', True),
+        ], limit=1)
+        if duplicate:
+            return self._response_error("PHONE_IN_USE", "Số điện thoại đã được dùng cho tài khoản loyalty khác.", status=409)
+
         try:
-            account.write({'portal_phone': new_phone})
+            account.write({'portal_phone': new_phone_normalized})
         except Exception as e:
             return self._response_error("SAVE_ERROR", str(e), status=500)
 
-        return self._response_success({"message": "Đổi số điện thoại đăng ký thành công."})
+        return self._response_success({
+            "message": "Đổi số điện thoại đăng ký thành công.",
+            "partner_id": partner.id,
+            "phone": new_phone_normalized,
+        })
