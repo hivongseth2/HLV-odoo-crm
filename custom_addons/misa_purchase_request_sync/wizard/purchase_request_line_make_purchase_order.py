@@ -29,8 +29,13 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
         res = super(PurchaseRequestLineMakePurchaseOrder, self)._prepare_item(line)
         res['keep_description'] = True
         res['keep_estimated_cost'] = True
-        if hasattr(line, 'misa_supplier_id') and line.misa_supplier_id:
-            res['supplier_id'] = line.misa_supplier_id.id
+        # Ưu tiên sale_proposed_supplier_id (field được set khi đồng bộ từ extension)
+        # Fallback sang misa_supplier_id nếu không có
+        supplier = line.sale_proposed_supplier_id if hasattr(line, 'sale_proposed_supplier_id') and line.sale_proposed_supplier_id else False
+        if not supplier:
+            supplier = line.misa_supplier_id if hasattr(line, 'misa_supplier_id') and line.misa_supplier_id else False
+        if supplier:
+            res['supplier_id'] = supplier.id
         return res
 
     def _reload_wizard(self):
