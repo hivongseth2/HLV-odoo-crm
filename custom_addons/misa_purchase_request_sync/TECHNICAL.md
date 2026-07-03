@@ -72,7 +72,7 @@ Module bổ sung các computed fields trên `purchase.request` để hiển th�
 - **`progress_total`** (`Integer`, `store=True`): Tổng số dòng yêu cầu (không tính dòng đã hủy).
 - **`progress_purchased`** (`Integer`, `store=True`): Số dòng đã có Đơn mua hàng (PO/RFQ).
 - **`progress_received`** (`Integer`, `store=True`): Số dòng đã nhận đủ hàng.
-- **`progress_badge`** (`Char`, `store=True`): Hiển thị gọn dạng `4/5 (3/5)` = đã tạo ĐH 4/5, đã nhận 3/5.
+- **`progress_badge`** (`Char`, `store=True`): Hiển thị gọn dạng `ĐH 4/5 • NK 3/5` = đã tạo ĐH 4/5, đã nhận 3/5.
 - **`progress_status`** (`Selection`, `store=True`): Trạng thái tiến độ, dùng cho `decoration-*` trong list view:
   - `not_started`: Chưa có PO nào (muted/xám)
   - `in_progress`: Đang mua (info/xanh dương)
