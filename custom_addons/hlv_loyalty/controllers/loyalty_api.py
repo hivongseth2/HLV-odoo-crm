@@ -324,6 +324,28 @@ class LoyaltyExternalAPI(http.Controller):
             return None, normalized, self._json_err('Missing or invalid partner_id/phone', status=401, code='UNAUTHORIZED')
         return root, normalized, None
 
+    def _partner_from_portal_phone_rpc(self, partner_id, phone):
+        try:
+            partner = request.env['res.partner'].sudo().browse(int(partner_id))
+        except Exception:
+            return None, {'error': 'Invalid partner_id', 'code': 'INVALID_PARTNER_ID'}
+        if not partner.exists():
+            return None, {'error': 'Khach hang khong ton tai', 'code': 'PARTNER_NOT_FOUND'}
+
+        normalized = self._normalize_vn_phone(phone)
+        if not normalized:
+            return None, {'error': 'Missing phone', 'code': 'MISSING_PHONE'}
+
+        root = partner._get_loyalty_root()
+        accounts = request.env['hlv.loyalty.portal.account'].sudo().search([
+            ('portal_phone', '=', normalized),
+            ('active', '=', True),
+        ])
+        account = accounts.filtered(lambda acc: acc.partner_id._get_loyalty_root().id == root.id)[:1]
+        if not account:
+            return None, {'error': 'Missing or invalid partner_id/phone', 'code': 'UNAUTHORIZED'}
+        return root, None
+
     @staticmethod
     def _guess_image_mimetype(raw_bytes):
         if raw_bytes.startswith(b'\xff\xd8\xff'):
@@ -945,11 +967,9 @@ class LoyaltyExternalAPI(http.Controller):
         if not partner_id:
             return self._json_err('Thiếu partner_id', status=400, code='MISSING_PARTNER_ID')
 
-        partner = request.env['res.partner'].sudo().browse(int(partner_id))
-        if not partner.exists():
-            return self._json_err('Khách hàng không tồn tại', status=404, code='PARTNER_NOT_FOUND')
-
-        root = partner._get_loyalty_root()
+        root, portal_phone, error = self._partner_from_portal_phone(partner_id, kwargs.get('phone'))
+        if error:
+            return error
         domain = [('partner_id', 'in', root._get_loyalty_family_partner_ids())]
         state = kwargs.get('state') or 'all'
         if state in ('pending', 'done', 'cancelled'):
@@ -965,6 +985,7 @@ class LoyaltyExternalAPI(http.Controller):
                 'exchange_points': root.loyalty_exchange_points,
                 'pending_reward_points': root.loyalty_reward_pending_points,
                 'exchange_points_available': root.loyalty_exchange_available_points,
+                'phone': portal_phone,
             },
         })
 
@@ -1000,11 +1021,9 @@ class LoyaltyExternalAPI(http.Controller):
         if request_type not in ('gift', 'cash'):
             return {'error': 'request_type phải là gift hoặc cash'}
 
-        partner = request.env['res.partner'].sudo().browse(int(partner_id))
-        if not partner.exists():
-            return {'error': 'Khách hàng không tồn tại'}
-
-        root = partner._get_loyalty_root()
+        root, error = self._partner_from_portal_phone_rpc(partner_id, kwargs.get('phone'))
+        if error:
+            return error
         balance_exchange = root.loyalty_exchange_points
         avail_exchange = root.loyalty_exchange_available_points
         pending_reward_points = root.loyalty_reward_pending_points
@@ -1110,10 +1129,9 @@ class LoyaltyExternalAPI(http.Controller):
         if not request_id:
             return {'error': 'Thiếu request_id'}
 
-        partner = request.env['res.partner'].sudo().browse(int(partner_id))
-        if not partner.exists():
-            return {'error': 'Khách hàng không tồn tại'}
-        root = partner._get_loyalty_root()
+        root, error = self._partner_from_portal_phone_rpc(partner_id, kwargs.get('phone'))
+        if error:
+            return error
 
         req = request.env['hlv.loyalty.reward.request'].sudo().browse(int(request_id))
         if not req.exists() or req.partner_id.id not in root._get_loyalty_family_partner_ids():
@@ -1140,4 +1158,3 @@ class LoyaltyExternalAPI(http.Controller):
             'exchange_points_available': root.loyalty_exchange_available_points,
             'message': 'Yêu cầu đổi thưởng đã được hủy.',
         }
-
