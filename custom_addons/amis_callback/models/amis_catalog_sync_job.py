@@ -546,24 +546,112 @@ def _line_uom_resolution_target_uom(self):
 def _line_uom_resolution_blockers(self, product):
     self.ensure_one()
     blockers = []
-    checks = [
-        ('sale.order.line', [('product_id', '=', product.id), ('state', 'not in', ('cancel', 'done'))], _('Đơn bán chưa xử lý')),
-        ('purchase.order.line', [('product_id', '=', product.id), ('state', 'not in', ('cancel', 'done'))], _('Đơn mua chưa xử lý')),
-        ('stock.move', [('product_id', '=', product.id), ('state', 'not in', ('cancel', 'done'))], _('Phiếu kho/chuyển kho chưa xử lý')),
-        ('stock.move.line', [('product_id', '=', product.id), ('state', 'not in', ('cancel', 'done'))], _('Dòng phiếu kho chưa xử lý')),
-    ]
-    for model_name, domain, label in checks:
-        try:
-            Model = self.env[model_name].sudo()
-        except KeyError:
-            continue
-        if 'state' not in Model._fields:
-            continue
-        records = Model.search(domain, limit=6)
-        if records:
-            sample = ', '.join(records[:5].mapped('display_name'))
-            more = '...' if len(records) > 5 else ''
-            blockers.append('%s: %s%s' % (label, sample, more))
+    rounding = product.uom_id.rounding if product.uom_id else 0.00001
+
+    def add_blocker(label, entries):
+        if not entries:
+            return
+        sample = ', '.join(entries[:5])
+        more = '... (+%s)' % (len(entries) - 5) if len(entries) > 5 else ''
+        blockers.append('%s: %s%s' % (label, sample, more))
+
+    try:
+        SaleLine = self.env['sale.order.line'].sudo()
+    except KeyError:
+        SaleLine = None
+    sale_entries = []
+    if SaleLine is not None and {'state', 'order_id', 'product_uom_qty', 'qty_delivered'}.issubset(SaleLine._fields):
+        sale_lines = SaleLine.search([
+            ('product_id', '=', product.id),
+            ('state', 'not in', ('cancel', 'done')),
+        ], limit=200)
+        for line in sale_lines:
+            ordered_qty = float(line.product_uom_qty or 0.0)
+            delivered_qty = float(line.qty_delivered or 0.0)
+            remaining_qty = ordered_qty - delivered_qty
+            if float_compare(remaining_qty, 0.0, precision_rounding=rounding) <= 0:
+                continue
+            if 'move_ids' in line._fields:
+                active_moves = line.move_ids.filtered(lambda move: move.state != 'cancel')
+                open_moves = active_moves.filtered(lambda move: move.state != 'done')
+                if active_moves and not open_moves:
+                    continue
+            order_name = line.order_id.name or line.order_id.display_name
+            sale_entries.append(
+                '%s (còn giao %s/%s)' % (
+                    order_name,
+                    self._uom_resolution_format_qty(remaining_qty),
+                    self._uom_resolution_format_qty(ordered_qty),
+                )
+            )
+    add_blocker(_('Đơn bán chưa giao đủ'), sale_entries)
+
+    try:
+        PurchaseLine = self.env['purchase.order.line'].sudo()
+    except KeyError:
+        PurchaseLine = None
+    purchase_entries = []
+    if PurchaseLine is not None and {'state', 'order_id', 'product_qty', 'qty_received'}.issubset(PurchaseLine._fields):
+        purchase_lines = PurchaseLine.search([
+            ('product_id', '=', product.id),
+            ('state', 'not in', ('cancel', 'done')),
+        ], limit=200)
+        for line in purchase_lines:
+            ordered_qty = float(line.product_qty or 0.0)
+            received_qty = float(line.qty_received or 0.0)
+            remaining_qty = ordered_qty - received_qty
+            if float_compare(remaining_qty, 0.0, precision_rounding=rounding) <= 0:
+                continue
+            if 'move_ids' in line._fields:
+                active_moves = line.move_ids.filtered(lambda move: move.state != 'cancel')
+                open_moves = active_moves.filtered(lambda move: move.state != 'done')
+                if active_moves and not open_moves:
+                    continue
+            order_name = line.order_id.name or line.order_id.display_name
+            purchase_entries.append(
+                '%s (còn nhận %s/%s)' % (
+                    order_name,
+                    self._uom_resolution_format_qty(remaining_qty),
+                    self._uom_resolution_format_qty(ordered_qty),
+                )
+            )
+    add_blocker(_('Đơn mua chưa nhận đủ'), purchase_entries)
+
+    try:
+        StockMove = self.env['stock.move'].sudo()
+    except KeyError:
+        StockMove = None
+    move_entries = []
+    if StockMove is not None and 'state' in StockMove._fields:
+        move_domain = [
+            ('product_id', '=', product.id),
+            ('state', 'not in', ('cancel', 'done')),
+        ]
+        if 'sale_line_id' in StockMove._fields:
+            move_domain.append(('sale_line_id', '=', False))
+        if 'purchase_line_id' in StockMove._fields:
+            move_domain.append(('purchase_line_id', '=', False))
+        moves = StockMove.search(move_domain, limit=200)
+        for move in moves:
+            picking_name = move.picking_id.name if getattr(move, 'picking_id', False) else ''
+            move_entries.append(picking_name or move.reference or move.origin or move.display_name)
+    add_blocker(_('Phiếu kho/chuyển kho chưa xử lý'), move_entries)
+
+    try:
+        StockMoveLine = self.env['stock.move.line'].sudo()
+    except KeyError:
+        StockMoveLine = None
+    move_line_entries = []
+    if StockMoveLine is not None and 'state' in StockMoveLine._fields:
+        move_lines = StockMoveLine.search([
+            ('product_id', '=', product.id),
+            ('state', 'not in', ('cancel', 'done')),
+            ('move_id', '=', False),
+        ], limit=200)
+        for move_line in move_lines:
+            picking_name = move_line.picking_id.name if getattr(move_line, 'picking_id', False) else ''
+            move_line_entries.append(picking_name or move_line.reference or move_line.display_name)
+    add_blocker(_('Dòng phiếu kho chưa xử lý'), move_line_entries)
 
     Quant = self.env['stock.quant'].sudo()
     reserved_quants = Quant.search([
@@ -576,6 +664,13 @@ def _line_uom_resolution_blockers(self, product):
         blockers.append(_('Tồn kho đang được giữ chỗ tại: %s%s') % (sample, more))
 
     return blockers
+
+
+def _line_uom_resolution_format_qty(self, qty):
+    qty = float(qty or 0.0)
+    if qty.is_integer():
+        return str(int(qty))
+    return ('%.6f' % qty).rstrip('0').rstrip('.')
 
 
 def _line_uom_resolution_copy_lot(self, old_lot, new_product):
@@ -736,6 +831,7 @@ AmisCatalogSyncJobLine._uom_resolution_target_uom_from_summary = _line_uom_resol
 AmisCatalogSyncJobLine._uom_resolution_misa_item = _line_uom_resolution_misa_item
 AmisCatalogSyncJobLine._uom_resolution_target_uom = _line_uom_resolution_target_uom
 AmisCatalogSyncJobLine._uom_resolution_blockers = _line_uom_resolution_blockers
+AmisCatalogSyncJobLine._uom_resolution_format_qty = _line_uom_resolution_format_qty
 AmisCatalogSyncJobLine._uom_resolution_copy_lot = _line_uom_resolution_copy_lot
 AmisCatalogSyncJobLine._uom_resolution_transfer_quants = _line_uom_resolution_transfer_quants
 AmisCatalogSyncJobLine._uom_resolution_post_log = _line_uom_resolution_post_log
