@@ -103,10 +103,10 @@ class ResPartnerAmisSync(models.Model):
                 misa_id=misa_id,
                 code=item.get('account_object_code') or '',
                 name=item.get('account_object_name') or '',
-                change_summary='pushed to MISA: account_object_code, account_object_name, tax, phone, email, address',
+                change_summary='Đã đẩy sang MISA: mã NCC, tên NCC, mã số thuế, điện thoại, email, địa chỉ',
             )
         _logger.info(
-            'Synced Odoo vendor %s to MISA account_object %s',
+            'Đã đồng bộ nhà cung cấp Odoo %s sang account_object MISA %s',
             self.display_name,
             item.get('account_object_code') or misa_id,
         )

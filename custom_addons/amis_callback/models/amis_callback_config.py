@@ -1430,7 +1430,7 @@ class AmisCallbackConfig(models.Model):
             create_missing=False,
             scope='vendor',
         )
-        _logger.info('MISA catalog cron enqueued product job %s and vendor job %s', product_job.id, vendor_job.id)
+        _logger.info('Cron đồng bộ danh mục MISA đã tạo job sản phẩm %s và job nhà cung cấp %s', product_job.id, vendor_job.id)
         return True
 
     def action_sync_catalog_to_odoo(self):
@@ -1632,14 +1632,12 @@ class AmisCallbackConfig(models.Model):
 
     def _sync_misa_units_to_odoo(self, unmapped_only=False, job=None):
         Uom = self.env['uom.uom'].sudo().with_context(active_test=False)
-        domain = [('category_id.name', '=', 'Unit')]
+        domain = []
         if unmapped_only:
             domain.append(('misa_unit_id', 'in', [False, '']))
         uoms = Uom.search(domain)
         name_to_uoms = {}
         for uom in uoms:
-            if not self._is_misa_catalog_unit_category(uom.category_id):
-                continue
             name = (uom.name or '').strip()
             if name:
                 name_to_uoms.setdefault(name.casefold(), []).append(uom)
@@ -1654,25 +1652,6 @@ class AmisCallbackConfig(models.Model):
                 skipped += 1
                 continue
             matched_uoms = name_to_uoms.get(unit_name.casefold(), [])
-            categories = {
-                uom.category_id.id for uom in matched_uoms
-                if uom.category_id
-            }
-            if len(categories) > 1:
-                skipped += 1
-                summary = (
-                    'Bỏ qua map đơn vị tính MISA vì có nhiều ĐVT Odoo trùng tên "%s" '
-                    'ở các nhóm khác nhau: %s'
-                ) % (
-                    unit_name,
-                    ', '.join(sorted(set(uom.category_id.display_name for uom in matched_uoms if uom.category_id))),
-                )
-                _logger.warning('Bỏ qua map đơn vị tính MISA: %s', summary)
-                self._catalog_log_change(
-                    job, 'unit', 'skip', 'uom.uom', 0,
-                    unit_id, unit_name, unit_name, summary,
-                )
-                continue
             for uom in matched_uoms:
                 vals = {}
                 if (uom.misa_unit_id or '').strip() != unit_id:
@@ -1711,8 +1690,6 @@ class AmisCallbackConfig(models.Model):
 
         uoms_by_misa_id = {}
         for uom in Uom.search([('misa_unit_id', '!=', False)]):
-            if not self._is_misa_catalog_unit_category(uom.category_id):
-                continue
             unit_id = (uom.misa_unit_id or '').strip()
             if unit_id:
                 uoms_by_misa_id.setdefault(unit_id.lower(), []).append(uom)
@@ -1741,7 +1718,7 @@ class AmisCallbackConfig(models.Model):
                 if existing_misa_id and existing_misa_id.lower() != item_id.lower():
                     skipped += 1
                     summary = 'Bỏ qua cập nhật ID MISA: Odoo đang có=%s, MISA trả về=%s' % (existing_misa_id, item_id)
-                    _logger.warning('MISA catalog product mapping conflict for %s (%s): %s', product.display_name, code, summary)
+                    _logger.warning('Xung đột map hàng hóa MISA cho %s (%s): %s', product.display_name, code, summary)
                     self._catalog_log_change(
                         job, 'product', 'skip', 'product.product', product.id,
                         item_id, code, name, summary,
@@ -1806,20 +1783,16 @@ class AmisCallbackConfig(models.Model):
             '%s [%s]' % (uom.display_name, uom.category_id.display_name if uom.category_id else '')
             for uom in current_uoms
         )
-        summary = 'UoM needs manual check: Odoo=%s; MISA=%s. Product UoM was not updated.' % (
+        summary = 'ĐVT cần kiểm tra thủ công: Odoo=%s; MISA=%s. Chưa cập nhật ĐVT sản phẩm.' % (
             odoo_uom_text,
             misa_uom_text,
         )
-        _logger.warning('MISA catalog product UoM exception for %s (%s): %s', product.display_name, code, summary)
+        _logger.warning('Ngoại lệ ĐVT hàng hóa MISA cho %s (%s): %s', product.display_name, code, summary)
         self._catalog_log_change(
             job, 'product', 'skip', 'product.product', product.id,
             item_id, code, name, summary,
         )
         return True
-
-    def _is_misa_catalog_unit_category(self, category):
-        name = (category.name or '').strip().casefold() if category else ''
-        return name == 'unit'
 
     def _misa_product_vals(self, item, uoms_by_misa_id, product=None):
         Product = self.env['product.product']
@@ -1879,11 +1852,13 @@ class AmisCallbackConfig(models.Model):
                     new_category,
                 )
             )
-            if old_uom and new_uom and old_uom.category_id != new_uom.category_id:
-                reasons.append('%s category differs (%s -> %s)' % (field_name, old_category, new_category))
+            old_name = (old_uom.name or '').strip().casefold() if old_uom else ''
+            new_name = (new_uom.name or '').strip().casefold() if new_uom else ''
+            if old_uom and new_uom and old_uom.category_id != new_uom.category_id and old_name != new_name:
+                reasons.append('%s khác nhóm ĐVT (%s -> %s)' % (field_name, old_category, new_category))
 
         if has_stock_moves:
-            reasons.append('product already has stock moves')
+            reasons.append('sản phẩm đã có phát sinh kho')
         if not reasons:
             return write_vals, 0
 
