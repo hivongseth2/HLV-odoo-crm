@@ -794,10 +794,10 @@ def _line_resolve_uom_mismatch_by_duplicate(self, note=''):
         copy_vals['default_code'] = old_code
     if old_barcode and 'barcode' in product._fields:
         copy_vals['barcode'] = old_barcode
-    if new_misa_id and 'misa_inventory_item_id' in product._fields:
-        copy_vals['misa_inventory_item_id'] = new_misa_id
 
     new_product = product.copy(copy_vals)
+    if new_misa_id and 'misa_inventory_item_id' in new_product._fields:
+        new_product.write({'misa_inventory_item_id': new_misa_id})
     moved_qty = self._uom_resolution_transfer_quants(product, new_product)
     if 'active' in product._fields:
         product.write({'active': False})
