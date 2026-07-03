@@ -227,7 +227,12 @@ class MisaExtensionController(http.Controller):
                     "misa_stock_undelivered": line.misa_stock_undelivered if hasattr(line, 'misa_stock_undelivered') else 0.0,
                 })
 
-            can_revoke = pr.state in ['draft', 'to_approve']
+            # Kiểm tra xem YCMH đã có RFQ/PO liên kết chưa
+            has_rfq = any(
+                line.purchase_lines for line in pr.line_ids
+                if hasattr(line, 'purchase_lines') and line.purchase_lines
+            )
+            can_revoke = (pr.state in ['draft', 'to_approve']) and not has_rfq
 
             payload = {
                 "ok": True,
@@ -283,6 +288,18 @@ class MisaExtensionController(http.Controller):
 
         if pr.state not in ['draft', 'to_approve']:
             return json_response({"ok": False, "error": "invalid_state", "message": f"Không thể thu hồi YCMH ở trạng thái {pr.state}."}, 400)
+
+        # Kiểm tra xem YCMH đã có RFQ/PO liên kết chưa
+        has_rfq = any(
+            line.purchase_lines for line in pr.line_ids
+            if hasattr(line, 'purchase_lines') and line.purchase_lines
+        )
+        if has_rfq:
+            return json_response({
+                "ok": False,
+                "error": "has_rfq",
+                "message": "Không thể thu hồi do YCMH đã có RFQ/Đơn mua hàng liên kết."
+            }, 400)
 
         try:
             if pr.state != 'draft':
@@ -572,7 +589,7 @@ class MisaExtensionController(http.Controller):
                     "product_id": product.id if product else False,
                     "product_qty": float(line.get("qty") or 0.0),
                     "product_uom_id": uom.id if uom else False,
-                    "estimated_cost": 0.0,
+                    "estimated_cost": float(line.get("misa_price_before_tax") or 0.0),
                     "misa_line_id": (line.get("misa_line_id") or "").strip() or False,
                     "sale_proposed_supplier_id": int(line.get("misa_supplier_id")) if line.get("misa_supplier_id") else False,
                     "misa_price_before_tax": float(line.get("misa_price_before_tax") or 0.0),
