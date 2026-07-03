@@ -29,8 +29,25 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
         res = super(PurchaseRequestLineMakePurchaseOrder, self)._prepare_item(line)
         res['keep_description'] = True
         res['keep_estimated_cost'] = True
-        # Ưu tiên sale_proposed_supplier_id (field được set khi đồng bộ từ extension)
-        # Fallback sang misa_supplier_id nếu không có
+
+        # Cập nhật estimated_cost cho wizard item
+        misa_price = False
+        if hasattr(line, 'misa_price_before_tax') and line.misa_price_before_tax:
+            misa_price = line.misa_price_before_tax
+        if not misa_price and line.estimated_cost:
+            misa_price = line.estimated_cost
+            
+        if misa_price:
+            # OCA wizard xử lý item.estimated_cost là TỔNG GIÁ (Total Cost)
+            # Do _post_process_po_line của OCA tính: price_unit = item.estimated_cost / item.product_qty
+            total_cost = misa_price * line.pending_qty_to_receive
+            res['estimated_cost'] = total_cost
+
+        # Copy % thuế MISA vào item
+        if hasattr(line, 'misa_tax_rate') and line.misa_tax_rate:
+            res['misa_tax_rate'] = line.misa_tax_rate
+
+        # NCC: ưu tiên sale_proposed_supplier_id, fallback misa_supplier_id
         supplier = line.sale_proposed_supplier_id if hasattr(line, 'sale_proposed_supplier_id') and line.sale_proposed_supplier_id else False
         if not supplier:
             supplier = line.misa_supplier_id if hasattr(line, 'misa_supplier_id') and line.misa_supplier_id else False
@@ -94,14 +111,15 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
         super()._post_process_po_line(item, po_line, new_pr_line)
         if item.line_id:
             # ── Cập nhật đơn giá ──
-            # Ưu tiên misa_price_before_tax, fallback về estimated_cost (giá gốc Odoo)
+            # Sử dụng write để đảm bảo Odoo 18 lưu dữ liệu và không bị compute đè lại
             price = False
             if hasattr(item.line_id, 'misa_price_before_tax') and item.line_id.misa_price_before_tax:
                 price = item.line_id.misa_price_before_tax
             elif item.line_id.estimated_cost:
                 price = item.line_id.estimated_cost
+            
             if price:
-                po_line.price_unit = price
+                po_line.write({'price_unit': price})
 
             # ── Cập nhật thuế ──
             if hasattr(item.line_id, 'misa_tax_rate') and item.line_id.misa_tax_rate:
@@ -113,7 +131,5 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
                     ('company_id', '=', po_line.company_id.id)
                 ], limit=1)
                 if matched_tax:
-                    po_line.taxes_id = [(6, 0, [matched_tax.id])]
+                    po_line.write({'taxes_id': [(6, 0, [matched_tax.id])]})
             # Nếu không có misa_tax_rate, giữ nguyên taxes_id mặc định (từ product/company)
-
-            po_line._compute_amount()
