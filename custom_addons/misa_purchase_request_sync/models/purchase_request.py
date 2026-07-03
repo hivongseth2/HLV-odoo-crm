@@ -56,7 +56,7 @@ class PurchaseRequest(models.Model):
         string="Tiến độ mua hàng",
         compute="_compute_purchase_progress",
         store=True,
-        help="Hiển thị gọn: '4/5 (3/5)' = đã tạo ĐH 4/5, đã nhận 3/5.",
+        help="Hiển thị: 'ĐH 4/5 • NK 3/5' = đã tạo ĐH 4/5, đã nhập kho 3/5.",
     )
     progress_status = fields.Selection(
         selection=[
@@ -111,7 +111,7 @@ class PurchaseRequest(models.Model):
             rec.progress_total = total
             rec.progress_purchased = purchased
             rec.progress_received = received
-            rec.progress_badge = f"{purchased}/{total} ({received}/{total})"
+            rec.progress_badge = f"ĐH {purchased}/{total} • NK {received}/{total}"
 
             if received >= total and total > 0:
                 rec.progress_status = "done"
