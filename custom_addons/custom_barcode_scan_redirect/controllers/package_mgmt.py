@@ -5,6 +5,8 @@ from odoo.http import request
 from werkzeug.utils import redirect
 import logging
 
+from ._shared import move_package_quants_to_loose
+
 _logger = logging.getLogger(__name__)
 
 
@@ -100,34 +102,14 @@ class PackageManagementController(http.Controller):
             # 3. Chuyển quant ra khỏi SOURCE package (re-pack scenario)
             #    Bình thường (đóng gói lần đầu) thì src_packages rỗng, bước này bỏ qua
             if src_packages:
-                Quant = request.env['stock.quant'].sudo()
                 for pkg in src_packages:
-                    pkg_quants = Quant.search([
-                        ('package_id', '=', pkg.id),
-                        ('location_id', '=', location.id),
-                        ('quantity', '!=', 0),
-                    ])
-                    for q in pkg_quants:
-                        existing = Quant.search([
-                            ('product_id', '=', q.product_id.id),
-                            ('location_id', '=', q.location_id.id),
-                            ('lot_id', '=', q.lot_id.id if q.lot_id else False),
-                            ('package_id', '=', False),
-                            ('owner_id', '=', q.owner_id.id if q.owner_id else False),
-                        ], limit=1)
-                        if existing:
-                            existing.quantity += q.quantity
-                        else:
-                            Quant.create({
-                                'product_id': q.product_id.id,
-                                'location_id': q.location_id.id,
-                                'lot_id': q.lot_id.id if q.lot_id else False,
-                                'package_id': False,
-                                'owner_id': q.owner_id.id if q.owner_id else False,
-                                'quantity': q.quantity,
-                            })
-                        q.quantity = 0
-                    _logger.info("UNPACK_ALL: moved quants out of source package %s", pkg.name)
+                    move_package_quants_to_loose(
+                        request.env,
+                        pkg,
+                        location=location,
+                        logger=_logger,
+                    )
+                    _logger.info("UNPACK_ALL: moved positive quants out of source package %s", pkg.name)
 
             # 4. Xóa tất cả move_lines còn sót sau do_unreserve()
             #    do_unreserve() xóa MLs có qty_done=0, nhưng giữ lại MLs có qty_done>0
