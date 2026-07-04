@@ -43,6 +43,17 @@ class StockPickingPartial(models.Model):
         if self.state not in ['assigned', 'confirmed', 'in_progress']:
             raise ValidationError("Chỉ có thể tạo gói từ các phiếu đã xác nhận hoặc đang làm!")
         
+        self.env.cr.execute(
+            "SELECT id FROM stock_move WHERE picking_id = %s ORDER BY id FOR UPDATE",
+            (self.id,),
+        )
+        self.env.cr.execute(
+            "SELECT id FROM stock_move_line WHERE picking_id = %s ORDER BY id FOR UPDATE",
+            (self.id,),
+        )
+        self.env.invalidate_all()
+        self = self.browse(self.id)
+
         Package = self.env['stock.quant.package']
         
         # ⭐ NEW: Kiểm tra xem package_name có tồn tại không
@@ -123,33 +134,13 @@ class StockPickingPartial(models.Model):
             
             _logger.info(f"[PACK] After loose Check, Need: {qty_needed}")
 
-            # 2. KHÔNG ĐỦ HÀNG LẺ -> MỚI LẤY TỪ LINE ĐƯỢC CHỈ ĐỊNH (Fallback)
-            # Chỉ chạy vào đây nếu ref_ml KHI NÃY chưa bị xử lý (ví dụ ref_ml cũng là loose line thì đã bị xử lý ở trên rồi)
-            # Tuy nhiên nếu ref_ml là line ĐÃ ĐÓNG GÓI (trong gói khác), logic này sẽ tách hàng từ gói đó ra (Steal).
             if qty_needed > 0:
-                # Refresh ref_ml để lấy data mới nhất (lỡ nó bị sửa ở step 1)
-                ref_ml = self.env['stock.move.line'].browse(ref_ml.id)
-                
-                # Chỉ xử lý nếu ref_ml vẫn còn qty và CHƯA ĐƯỢC GÁN VÀO GÓI MỚI NÀY
-                # (Nếu ref_ml là loose_ml vừa được gán package_id = new_package thì skip)
-                if ref_ml.result_package_id.id != new_package.id and ref_ml.qty_done > 0:
-                     available = ref_ml.qty_done
-                     take_qty = min(qty_needed, available)
-                     
-                     if take_qty > 0:
-                        if take_qty == available:
-                            ref_ml.sudo().with_context(skip_qty_validation=True).write({
-                                'result_package_id': new_package.id
-                            })
-                        else:
-                            ref_ml.sudo().with_context(skip_qty_validation=True).copy({
-                                'qty_done': take_qty,
-                                'result_package_id': new_package.id,
-                            })
-                            ref_ml.sudo().with_context(skip_qty_validation=True).write({
-                                'qty_done': available - take_qty
-                            })
-        
+                raise ValidationError(
+                    "Khong du so luong chua dong goi cho %s. "
+                    "Vui long tai lai man hinh hoac bam Lam lai truoc khi tao kien."
+                    % (ref_ml.product_id.display_name,)
+                )
+
         # [NEW] Trả về thông tin đồng bộ (Global Packed Qty) để frontend tự sửa
         sync_info = []
         # Lấy danh sách sản phẩm liên quan đến các line vừa đóng gói

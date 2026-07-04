@@ -434,12 +434,84 @@ class PackScanController(http.Controller):
             total_done = sum(ml.qty_done for ml in move.move_line_ids)
             if total_done < move.product_uom_qty:
                 return {"error": f"⚠️ Sản phẩm '{move.product_id.display_name}' chưa đủ số lượng!"}
+        package_stock_error = self._check_source_package_availability_before_validate(picking)
+        if package_stock_error:
+            return package_stock_error
         try:
             picking.button_validate()
             picking.with_user(request.env.user).mark_pack_done(user=request.env.user)
             return {"success": True, "message": f"✅ Phiếu {picking.name} đã được xác nhận!"}
         except Exception as e:
             return {"error": str(e)}
+
+    def _check_source_package_availability_before_validate(self, picking):
+        """Prevent validation from creating negative stock inside source packages."""
+        Quant = request.env['stock.quant'].sudo()
+        required_by_key = {}
+        sample_by_key = {}
+
+        for ml in picking.move_line_ids:
+            qty_done = float(ml.qty_done or 0.0)
+            if qty_done <= 0.0 or not ml.package_id or ml.location_id.usage != 'internal':
+                continue
+
+            key = (
+                ml.product_id.id,
+                ml.location_id.id,
+                ml.lot_id.id or False,
+                ml.package_id.id,
+                ml.owner_id.id or False,
+            )
+            required_by_key[key] = required_by_key.get(key, 0.0) + qty_done
+            sample_by_key[key] = ml
+
+        if required_by_key:
+            package_ids = sorted({key[3] for key in required_by_key})
+            request.env.cr.execute(
+                'SELECT id FROM stock_quant_package WHERE id IN %s ORDER BY id FOR UPDATE',
+                [tuple(package_ids)],
+            )
+
+        for key, required_qty in required_by_key.items():
+            product_id, location_id, lot_id, package_id, owner_id = key
+            quants = Quant.search([
+                ('product_id', '=', product_id),
+                ('location_id', '=', location_id),
+                ('lot_id', '=', lot_id),
+                ('package_id', '=', package_id),
+                ('owner_id', '=', owner_id),
+            ])
+            if quants:
+                request.env.cr.execute(
+                    'SELECT id FROM stock_quant WHERE id IN %s ORDER BY id FOR UPDATE',
+                    [tuple(quants.ids)],
+                )
+                request.env.invalidate_all()
+                quants = Quant.browse(quants.ids)
+            available_qty = sum(max(float(q.quantity or 0.0), 0.0) for q in quants)
+            if required_qty > available_qty + 0.001:
+                ml = sample_by_key[key]
+                _logger.warning(
+                    "PACK VALIDATE BLOCKED: %s package=%s product=%s required=%s available=%s",
+                    picking.name,
+                    ml.package_id.name,
+                    ml.product_id.display_name,
+                    required_qty,
+                    available_qty,
+                )
+                return {
+                    "error": (
+                        "Kien %s tai %s khong du ton cho %s: can %.3f, hien co %.3f. "
+                        "Vui long bam Lam lai / go kien nguon roi dong goi lai truoc khi hoan tat."
+                    ) % (
+                        ml.package_id.name,
+                        ml.location_id.display_name,
+                        ml.product_id.display_name,
+                        required_qty,
+                        available_qty,
+                    )
+                }
+        return None
 
     @http.route('/pack_scan/check_and_print_label', type='json', auth='user', csrf=False)
     def check_and_print_label(self, **kwargs):

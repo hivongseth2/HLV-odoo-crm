@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Shared helpers, constants and background tasks used across controllers."""
 from odoo import api, SUPERUSER_ID
+from odoo.exceptions import UserError
 import logging
 import os
 import uuid
@@ -94,6 +95,73 @@ def get_ml_demand(ml):
         return move_demand / n_mls
 
     return 0
+
+
+def move_package_quants_to_loose(env, package, location=None, logger=None):
+    """Move positive quants out of a package using stock.quant APIs."""
+    package.ensure_one()
+    Quant = env['stock.quant'].sudo()
+
+    domain = [
+        ('package_id', '=', package.id),
+        ('quantity', '>', 0.0),
+    ]
+    if location:
+        domain.append(('location_id', '=', location.id))
+
+    quants = Quant.search(domain, order='id')
+    if not quants:
+        return 0.0
+
+    env.cr.execute(
+        'SELECT id FROM stock_quant_package WHERE id = %s FOR UPDATE',
+        (package.id,),
+    )
+    env.cr.execute(
+        'SELECT id FROM stock_quant WHERE id IN %s ORDER BY id FOR UPDATE',
+        [tuple(quants.ids)],
+    )
+    env.invalidate_all()
+    quants = Quant.browse(quants.ids)
+
+    reserved_quants = quants.filtered(lambda q: (q.reserved_quantity or 0.0) > 0.0)
+    if reserved_quants:
+        raise UserError(
+            'Package %s still has reserved quantity; cannot reset package stock safely.'
+            % (package.name,)
+        )
+
+    moved_qty = 0.0
+    for quant in quants:
+        qty = quant.quantity or 0.0
+        if qty <= 0.0:
+            continue
+
+        Quant._update_available_quantity(
+            quant.product_id,
+            quant.location_id,
+            -qty,
+            lot_id=quant.lot_id,
+            package_id=package,
+            owner_id=quant.owner_id,
+        )
+        Quant._update_available_quantity(
+            quant.product_id,
+            quant.location_id,
+            qty,
+            lot_id=quant.lot_id,
+            package_id=False,
+            owner_id=quant.owner_id,
+        )
+        moved_qty += qty
+
+    if logger:
+        logger.info(
+            "Moved %.3f units out of package %s via stock.quant API",
+            moved_qty,
+            package.name,
+        )
+    return moved_qty
 
 
 # ====== Background task: upload file -> Google Drive (My Drive) ======
