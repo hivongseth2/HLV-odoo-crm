@@ -91,11 +91,16 @@ def _is_invalid_token_response(body):
     """Return True when Shopee response means access_token must be refreshed."""
     if not isinstance(body, dict):
         return False
+    invalid_token_errors = (
+        'invalid_access_token',
+        'invalid_acceess_token',
+        'error_auth',
+    )
     text = ' '.join(
         str(body.get(key) or '').lower()
         for key in ('error', 'message', 'debug_message')
     )
-    return any(code in text for code in SHOPEE_INVALID_TOKEN_ERRORS)
+    return any(code in text for code in invalid_token_errors)
 
 
 # ──────────────────────────────────────────────────────
