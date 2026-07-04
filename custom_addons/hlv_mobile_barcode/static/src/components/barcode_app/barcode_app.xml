@@ -192,7 +192,7 @@
                     <BatchLocationMove t-if="state.currentView === 'batch_move'" sourceLocationBarcode="state.prefillLocationBarcode" sourceLocationName="state.prefillLocationName" onBack="() => this.goBack()" registerScanner="(cb) => this.registerScanner(cb)"/>
                     
                     <!-- Lookup Component -->
-                    <InventoryLookup t-if="state.currentView === 'lookup'" t-key="state.lookupType + '_' + state.recordId + '_' + (state.lookupRefreshTick || 0)" lookupType="state.lookupType" recordId="state.recordId" onBack="() => this.goBack()" onMove="(productId, locBarcode, locName, qty, productName) => this.promptMoveWarehouse(productId, locBarcode, locName, qty, productName)" onBatchMove="(locBarcode, locName) => this.promptBatchMoveWarehouse(locBarcode, locName)" onProductSelect="(productId, productName) => this.goToProductLookup(productId, productName)"/>
+                    <InventoryLookup t-if="state.currentView === 'lookup'" t-key="state.lookupType + '_' + state.recordId + '_' + (state.lookupRefreshTick || 0)" lookupType="state.lookupType" recordId="state.recordId" onBack="() => this.goBack()" onMove="(productId, locBarcode, locName, qty, productName) => this.promptMoveWarehouse(productId, locBarcode, locName, qty, productName)" onBatchMove="(locBarcode, locName) => this.promptBatchMoveWarehouse(locBarcode, locName)" onPackageMove="(packageId, packageName, locationId, locBarcode, locName) => this.promptPackageMoveWarehouse(packageId, packageName, locationId, locBarcode, locName)" onProductSelect="(productId, productName) => this.goToProductLookup(productId, productName)"/>
                 </div>
             </div>
 
