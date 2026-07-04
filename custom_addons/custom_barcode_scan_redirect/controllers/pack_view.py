@@ -279,11 +279,13 @@ class PackViewController(http.Controller):
                 continue
 
             total_done = sum(ml.qty_done for ml in pkg_mls)
-            total_demand = sum(get_ml_demand(ml) for ml in pkg_mls)
+            # Package cards show package contents, not the move demand split
+            # across all package move lines.
+            total_demand = total_done
             package_lines = [{
                 'product_name': ml.product_id.display_name,
                 'done_qty': ml.qty_done,
-                'demand_qty': get_ml_demand(ml),
+                'demand_qty': ml.qty_done,
                 'product_uom': ml.product_uom_id.name,
             } for ml in pkg_mls]
 
