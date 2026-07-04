@@ -8,9 +8,9 @@
                     <i class="fa fa-search"></i> <t t-esc="state.title"/>
                 </div>
                 <div t-if="props.lookupType !== 'product'" style="display: flex; gap: 8px; flex-wrap: wrap;">
-                    <button class="btn btn-outline" style="padding: 6px 12px; font-size: 0.85rem;" t-on-click="props.onBack">
+                    <!-- <button class="btn btn-outline" style="padding: 6px 12px; font-size: 0.85rem;" t-on-click="props.onBack">
                         <i class="fa fa-arrow-left"></i> Quay lại
-                    </button>
+                    </button> -->
                     <button t-if="props.lookupType === 'location'" class="btn btn-primary" style="padding: 6px 12px; font-size: 0.85rem; flex: 1;" t-on-click="() => props.onBatchMove(state.location_barcode, state.location_name)">
                         <i class="fa fa-boxes"></i> Tạo chuyển kho
                     </button>
