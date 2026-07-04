@@ -113,8 +113,8 @@ class SaleOrderStatusPoll(models.Model):
                 batch = shop_orders[i:i + _BATCH_SIZE]
                 order_sns = ','.join(so.shopee_order_ref for so in batch)
                 try:
-                    status_code, body, _ = shopee_api.call_order_detail(
-                        creds, order_sns,
+                    status_code, body, _, _creds = shopee_api.call_order_detail_with_token_refresh(
+                        shop, order_sns,
                         optional_fields='',  # chỉ lấy trường mặc định (có order_status)
                     )
                 except Exception as exc:
