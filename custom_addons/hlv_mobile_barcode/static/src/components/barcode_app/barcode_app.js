@@ -784,6 +784,20 @@ export class BarcodeApp extends Component {
 
     promptBatchMoveWarehouse(locBarcode, locName) {
         this.pendingBatchMove = { locBarcode, locName, multiLocation: false };
+        this.pendingPackageMove = null;
+        this.resetDestPopupState();
+        this.state.showWarehouseSelectPopup = true;
+        this.focusDestLocationInput();
+        setTimeout(() => this.openDestLocationCamera(), 200);
+    }
+
+    promptPackageMoveWarehouse(packageId, packageName, locationId, locBarcode, locName) {
+        if (!packageId || !locationId) {
+            this.notification.add("Không xác định được kiện hoặc vị trí nguồn", { type: "warning" });
+            return;
+        }
+        this.pendingBatchMove = null;
+        this.pendingPackageMove = { packageId, packageName, locationId, locBarcode, locName };
         this.resetDestPopupState();
         this.state.showWarehouseSelectPopup = true;
         this.focusDestLocationInput();
@@ -792,6 +806,7 @@ export class BarcodeApp extends Component {
 
     promptMultiLocationMove() {
         this.pendingBatchMove = { multiLocation: true };
+        this.pendingPackageMove = null;
         this.state.multiLocationSourceWarehouseId = this.state.warehouses && this.state.warehouses.length > 0 ? this.state.warehouses[0].id.toString() : false;
         this.resetDestPopupState();
         this.state.showWarehouseSelectPopup = true;
@@ -873,6 +888,7 @@ export class BarcodeApp extends Component {
         }
         this.state.showWarehouseSelectPopup = false;
         this.pendingBatchMove = null;
+        this.pendingPackageMove = null;
         this.pendingMove = null;
         if (restoreFocus && this.state.currentView === 'main') {
             this.restoreScannerFocus(80);
@@ -899,6 +915,7 @@ export class BarcodeApp extends Component {
         const destLocationId = isLoc ? this.state.destLocationId : false;
         
         const pendingBatchMove = this.pendingBatchMove;
+        const pendingPackageMove = this.pendingPackageMove;
         
         let sourceWarehouseId = false;
         if (pendingBatchMove && pendingBatchMove.multiLocation) {
@@ -914,6 +931,8 @@ export class BarcodeApp extends Component {
                 const { locBarcode, locName } = pendingBatchMove;
                 await this.goToBatchMove(locBarcode, locName, destWarehouseId, destLocationId, false);
             }
+        } else if (pendingPackageMove) {
+            await this.goToPackageMove(pendingPackageMove, destWarehouseId, destLocationId);
         }
     }
 
@@ -947,6 +966,45 @@ export class BarcodeApp extends Component {
                 this.state.isMultiLocationMode = isMultiLocation;
                 this.state.preferredMoveLineId = null;
                 this.state.cameraManuallyOff = !this.state.cameraDefaultOn;
+                setTimeout(async () => {
+                    await this.startPersistentCamera(false);
+                }, 200);
+            }
+        } catch (e) {
+            this.notification.add("Lỗi kết nối máy chủ", { type: "danger" });
+            this.goBack();
+        }
+    }
+
+    async goToPackageMove(packageMove, destWarehouseId = false, destLocationId = false) {
+        this.pushHistory();
+        try {
+            this.notification.add("Đang tạo phiếu chuyển nguyên kiện...", { type: "info" });
+            const res = await rpc("/hlv_mobile_barcode/create_empty_int", {
+                location_id: packageMove.locationId,
+                dest_warehouse_id: destWarehouseId,
+                dest_location_id: destLocationId,
+                package_id: packageMove.packageId,
+            });
+
+            if (res.error) {
+                this.notification.add(res.error, { type: "danger" });
+                this.goBack();
+            } else {
+                this.state.pickingId = res.picking_id;
+                this.state.pickingName = res.picking_name;
+                this.state.pickingPackerName = "";
+                this.state.warehouseCode = res.warehouse_code || "HLV";
+                this.state.pickingIsPutaway = false;
+                this.state.scannedLocationId = res.location_id;
+                this.state.scannedLocationName = res.location_name;
+                this.state.pickingLocationName = res.location_name;
+                this.state.pickingLocationDestName = res.location_dest_name;
+                this.state.currentView = 'picking';
+                this.state.isMultiLocationMode = false;
+                this.state.preferredMoveLineId = null;
+                this.state.cameraManuallyOff = !this.state.cameraDefaultOn;
+                this.notification.add(`Đã thêm kiện ${res.package_name || packageMove.packageName} vào phiếu`, { type: "success" });
                 setTimeout(async () => {
                     await this.startPersistentCamera(false);
                 }, 200);
