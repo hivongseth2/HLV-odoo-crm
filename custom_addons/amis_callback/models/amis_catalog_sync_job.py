@@ -2,6 +2,9 @@
 import logging
 import re
 
+from bs4 import BeautifulSoup
+from markupsafe import Markup
+
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 from odoo.tools.float_utils import float_compare
@@ -729,16 +732,16 @@ def _line_uom_resolution_transfer_quants(self, old_product, new_product):
 
 
 def _line_uom_resolution_post_log(self, new_product, old_product, old_code, old_barcode, old_uom, new_uom, moved_qty, note):
-    old_link = '<a href="#" data-oe-model="product.product" data-oe-id="%s">%s</a>' % (
+    old_link = Markup('<a href="#" data-oe-model="product.product" data-oe-id="%s">%s</a>') % (
         old_product.id,
         old_product.display_name,
     )
-    body = _(
+    body = Markup(_(
         'Đã xử lý ĐVT lệch MISA bằng cách tạo sản phẩm mới này từ sản phẩm cũ %(old_link)s.<br/>'
         'ĐVT cũ: %(old_uom)s; ĐVT mới theo MISA: %(new_uom)s.<br/>'
         'Đã chuyển mã tham chiếu: %(code)s; barcode: %(barcode)s; tồn kho chuyển: %(qty)s.<br/>'
         'Ghi chú: %(note)s'
-    ) % {
+    )) % {
         'old_link': old_link,
         'old_uom': old_uom.display_name if old_uom else '',
         'new_uom': new_uom.display_name if new_uom else '',
@@ -748,15 +751,36 @@ def _line_uom_resolution_post_log(self, new_product, old_product, old_code, old_
         'note': note or '',
     }
     target = new_product if hasattr(new_product, 'message_post') else new_product.product_tmpl_id
-    target.message_post(body=body, subtype_xmlid='mail.mt_note')
+    target.message_post(body=self._uom_resolution_html_body(body), subtype_xmlid='mail.mt_note')
 
-    new_link = '<a href="#" data-oe-model="product.product" data-oe-id="%s">%s</a>' % (
+    new_link = Markup('<a href="#" data-oe-model="product.product" data-oe-id="%s">%s</a>') % (
         new_product.id,
         new_product.display_name,
     )
-    old_body = _('Sản phẩm đã được lưu trữ sau khi tạo sản phẩm mới xử lý ĐVT MISA: %s') % new_link
+    old_body = Markup(_('Sản phẩm đã được lưu trữ sau khi tạo sản phẩm mới xử lý ĐVT MISA: %s')) % new_link
     old_target = old_product if hasattr(old_product, 'message_post') else old_product.product_tmpl_id
-    old_target.message_post(body=old_body, subtype_xmlid='mail.mt_note')
+    old_target.message_post(body=self._uom_resolution_html_body(old_body), subtype_xmlid='mail.mt_note')
+
+
+def _line_uom_resolution_html_body(self, body):
+    return Markup(str(BeautifulSoup(str(body or ''), 'html.parser')))
+
+
+def _line_uom_resolution_clean_copy_name(self, name):
+    cleaned = (name or '').strip()
+    while True:
+        next_name = re.sub(r'\s*\((?:bản sao|copy)\)\s*$', '', cleaned, flags=re.IGNORECASE).strip()
+        if next_name == cleaned:
+            return cleaned
+        cleaned = next_name
+
+
+def _line_uom_resolution_archive_old_product(self, product):
+    if 'active' in product._fields and product.active:
+        product.write({'active': False})
+    template = product.product_tmpl_id
+    if template and 'active' in template._fields and template.active:
+        template.write({'active': False})
 
 
 def _line_resolve_uom_mismatch_by_duplicate(self, note=''):
@@ -786,6 +810,7 @@ def _line_resolve_uom_mismatch_by_duplicate(self, note=''):
         product.write(old_clear_vals)
 
     copy_vals = {
+        'name': self._uom_resolution_clean_copy_name(product.name or product.product_tmpl_id.name),
         'uom_id': target_uom.id,
         'uom_po_id': target_uom.id,
         'active': True,
@@ -796,13 +821,13 @@ def _line_resolve_uom_mismatch_by_duplicate(self, note=''):
         copy_vals['barcode'] = old_barcode
 
     new_product = product.copy(copy_vals)
+    clean_new_name = self._uom_resolution_clean_copy_name(new_product.product_tmpl_id.name)
+    if clean_new_name and clean_new_name != new_product.product_tmpl_id.name:
+        new_product.product_tmpl_id.write({'name': clean_new_name})
     if new_misa_id and 'misa_inventory_item_id' in new_product._fields:
         new_product.write({'misa_inventory_item_id': new_misa_id})
     moved_qty = self._uom_resolution_transfer_quants(product, new_product)
-    if 'active' in product._fields:
-        product.write({'active': False})
-    elif 'active' in product.product_tmpl_id._fields:
-        product.product_tmpl_id.write({'active': False})
+    self._uom_resolution_archive_old_product(product)
 
     self.write({
         'resolved': True,
@@ -835,4 +860,7 @@ AmisCatalogSyncJobLine._uom_resolution_format_qty = _line_uom_resolution_format_
 AmisCatalogSyncJobLine._uom_resolution_copy_lot = _line_uom_resolution_copy_lot
 AmisCatalogSyncJobLine._uom_resolution_transfer_quants = _line_uom_resolution_transfer_quants
 AmisCatalogSyncJobLine._uom_resolution_post_log = _line_uom_resolution_post_log
+AmisCatalogSyncJobLine._uom_resolution_html_body = _line_uom_resolution_html_body
+AmisCatalogSyncJobLine._uom_resolution_clean_copy_name = _line_uom_resolution_clean_copy_name
+AmisCatalogSyncJobLine._uom_resolution_archive_old_product = _line_uom_resolution_archive_old_product
 AmisCatalogSyncJobLine._resolve_uom_mismatch_by_duplicate = _line_resolve_uom_mismatch_by_duplicate
