@@ -485,6 +485,19 @@ class PurchaseOrderAmisSync(models.Model):
             found = self._find_misa_account_object_by_id(config, existing_id)
             if found:
                 return self._normalize_misa_account_object(found, partner)
+            stale = self.env['amis.misa.vendor.cache'].sudo().search([
+                ('config_id', '=', config.id),
+                ('account_object_id', '=', existing_id),
+                '|',
+                ('is_deleted', '=', True),
+                ('misa_inactive', '=', True),
+            ], limit=1)
+            if stale:
+                state = 'đã xóa' if stale.is_deleted else 'ngừng sử dụng'
+                raise UserError(
+                    'Nhà cung cấp "%s" đang map với NCC MISA %s (%s). Vui lòng xử lý cache NCC trước khi sync.'
+                    % (partner.display_name, state, existing_id)
+                )
             return {
                 'account_object_id': existing_id,
                 'account_object_code': self._misa_partner_code(partner),
@@ -560,13 +573,19 @@ class PurchaseOrderAmisSync(models.Model):
         if existing_id:
             return {'unit_id': existing_id, 'unit_name': name}
 
-        for item in config._get_all_dictionary(4):
-            if name and (item.get('unit_name') or '').strip().casefold() == name.casefold():
-                unit_id = (item.get('unit_id') or '').strip()
-                unit_name = (item.get('unit_name') or name).strip()
-                if unit_id:
-                    uom.sudo().write({'misa_unit_id': unit_id})
-                    return {'unit_id': unit_id, 'unit_name': unit_name}
+        cache, stale = self.env['amis.misa.unit.cache'].sudo().lookup_for_uom(config, uom)
+        if cache:
+            unit_id = (cache.unit_id or '').strip()
+            unit_name = (cache.unit_name or name).strip()
+            if unit_id:
+                uom.sudo().write({'misa_unit_id': unit_id})
+                return {'unit_id': unit_id, 'unit_name': unit_name}
+        if stale:
+            state = 'đã xóa' if stale.is_deleted else 'ngừng sử dụng'
+            raise UserError(
+                'ĐVT "%s" trùng với ĐVT MISA %s (%s). Vui lòng xử lý cache ĐVT trước khi sync.'
+                % (name, state, stale.unit_id)
+            )
 
         unit_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'misa_unit|%s' % name.casefold()))
         item = {
@@ -697,9 +716,12 @@ class PurchaseOrderAmisSync(models.Model):
         unit_id = (unit_id or '').strip().lower()
         if not unit_id:
             return None
-        for item in config._get_all_dictionary(4):
-            if (item.get('unit_id') or '').strip().lower() == unit_id:
-                return item
+        cache = self.env['amis.misa.unit.cache'].sudo().search([
+            ('config_id', '=', config.id),
+            ('unit_id', '=', unit_id),
+        ], limit=1)
+        if cache:
+            return cache.to_misa_item()
         return None
 
     def _misa_parse_list(self, value):
@@ -827,28 +849,42 @@ class PurchaseOrderAmisSync(models.Model):
         partner_name = (partner_name or '').strip()
         partner_ref_upper = partner_ref.upper()
         partner_name_upper = partner_name.upper()
-        for item in config._get_all_dictionary(1):
-            code = (item.get('account_object_code') or '').strip()
-            name = (item.get('account_object_name') or '').strip()
-            if partner_ref_upper and partner_ref_upper == code.upper():
-                return item
-            if partner_name_upper and partner_name_upper == name.upper():
-                return item
-        for item in config._get_all_dictionary(1):
-            code = (item.get('account_object_code') or '').strip()
-            name = (item.get('account_object_name') or '').strip()
-            haystack = '%s %s' % (code.upper(), name.upper())
-            if partner_name_upper and partner_name_upper in haystack:
-                return item
+        Cache = self.env['amis.misa.vendor.cache'].sudo()
+        domain_base = [
+            ('config_id', '=', config.id),
+            ('is_deleted', '=', False),
+            ('misa_inactive', '=', False),
+        ]
+        if partner_ref:
+            cache = Cache.search(domain_base + [('account_object_code', '=', partner_ref)], limit=1)
+            if cache:
+                return cache.to_misa_item()
+        if partner_name:
+            cache = Cache.search(domain_base + [('account_object_name', '=ilike', partner_name)], limit=1)
+            if cache:
+                return cache.to_misa_item()
+        if partner_name_upper:
+            caches = Cache.search(domain_base + [('account_object_name', 'ilike', partner_name)], limit=5)
+            for cache in caches:
+                code = (cache.account_object_code or '').strip()
+                name = (cache.account_object_name or '').strip()
+                haystack = '%s %s' % (code.upper(), name.upper())
+                if partner_name_upper in haystack:
+                    return cache.to_misa_item()
         return None
 
     def _find_misa_account_object_by_id(self, config, account_object_id):
         account_object_id = (account_object_id or '').strip().lower()
         if not account_object_id:
             return None
-        for item in config._get_all_dictionary(1):
-            if (item.get('account_object_id') or '').strip().lower() == account_object_id:
-                return item
+        cache = self.env['amis.misa.vendor.cache'].sudo().search([
+            ('config_id', '=', config.id),
+            ('account_object_id', '=', account_object_id),
+            ('is_deleted', '=', False),
+            ('misa_inactive', '=', False),
+        ], limit=1)
+        if cache:
+            return cache.to_misa_item()
         return None
 
     def _normalize_misa_account_object(self, item, partner):

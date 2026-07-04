@@ -16,7 +16,7 @@ MAX_RETRY = 3
 
 class AmisCatalogSyncJob(models.Model):
     _name = 'amis.catalog.sync.job'
-    _description = 'Hàng đợi đồng bộ danh mục MISA'
+    _description = 'Hàng đợi mirror MISA'
     _order = 'create_date desc'
     _rec_name = 'name'
 
@@ -30,9 +30,18 @@ class AmisCatalogSyncJob(models.Model):
     scope = fields.Selection([
         ('all', 'Tất cả danh mục'),
         ('unmapped', 'Danh mục mới/chưa map'),
+        ('unit', 'Đơn vị tính'),
         ('product', 'Sản phẩm'),
         ('vendor', 'Nhà cung cấp'),
     ], string='Phạm vi', required=True, default='all', index=True)
+    mirror_operation = fields.Selection([
+        ('changed', 'Thay đổi'),
+        ('deleted', 'Đã xóa'),
+    ], string='Loại mirror', default='changed', index=True)
+    mirror_mode = fields.Selection([
+        ('full', 'Full sync'),
+        ('incremental', 'Tăng dần'),
+    ], string='Chế độ mirror', default='incremental', index=True)
     trigger = fields.Selection([
         ('cron', 'Cron'),
         ('manual', 'Thủ công'),
@@ -48,8 +57,11 @@ class AmisCatalogSyncJob(models.Model):
     unmapped_only = fields.Boolean(string='Chỉ đồng bộ chưa map')
     create_missing = fields.Boolean(string='Tạo mới trên Odoo', default=True)
     product_skip = fields.Integer(string='Vị trí batch hàng hóa MISA', default=0)
+    unit_skip = fields.Integer(string='Vị trí batch ĐVT MISA', default=0)
     vendor_skip = fields.Integer(string='Vị trí batch nhà cung cấp MISA', default=0)
     batch_size = fields.Integer(string='Số item mỗi batch', default=100)
+    request_cursor = fields.Char(string='Cursor request')
+    next_cursor = fields.Char(string='Cursor kế tiếp')
     unit_sync_done = fields.Boolean(string='Đã xử lý đơn vị tính')
     vendor_sync_done = fields.Boolean(string='Đã xử lý nhà cung cấp')
     retry_count = fields.Integer(string='Số lần thử', default=0)
@@ -82,13 +94,15 @@ class AmisCatalogSyncJob(models.Model):
         for job in self:
             job.issue_count = counts.get(job.id, 0)
 
-    @api.depends('direction', 'scope', 'create_date')
+    @api.depends('direction', 'scope', 'mirror_operation', 'mirror_mode', 'create_date')
     def _compute_name(self):
         for job in self:
             created = fields.Datetime.to_string(job.create_date) if job.create_date else ''
-            job.name = '%s - %s - %s' % (
+            job.name = '%s - %s - %s - %s - %s' % (
                 dict(job._fields['direction'].selection).get(job.direction, job.direction),
                 dict(job._fields['scope'].selection).get(job.scope, job.scope),
+                dict(job._fields['mirror_operation'].selection).get(job.mirror_operation, job.mirror_operation),
+                dict(job._fields['mirror_mode'].selection).get(job.mirror_mode, job.mirror_mode),
                 created,
             )
 
@@ -112,6 +126,30 @@ class AmisCatalogSyncJob(models.Model):
             'trigger': trigger,
             'unmapped_only': bool(unmapped_only),
             'create_missing': bool(create_missing),
+        })
+
+    @api.model
+    def enqueue_mirror(self, config, scope, operation='changed', mode='incremental', trigger='manual'):
+        existing = self.sudo().search([
+            ('direction', '=', 'from_misa'),
+            ('scope', '=', scope),
+            ('mirror_operation', '=', operation),
+            ('mirror_mode', '=', mode),
+            ('config_id', '=', config.id if config else False),
+            ('status', 'in', ('pending', 'running')),
+        ], limit=1)
+        if existing:
+            return existing
+        return self.sudo().create({
+            'config_id': config.id if config else False,
+            'direction': 'from_misa',
+            'scope': scope,
+            'mirror_operation': operation,
+            'mirror_mode': mode,
+            'trigger': trigger,
+            'unmapped_only': False,
+            'create_missing': False,
+            'batch_size': 100,
         })
 
     @api.model
@@ -142,7 +180,7 @@ class AmisCatalogSyncJob(models.Model):
             ('status', '=', 'pending'),
             ('retry_count', '<', MAX_RETRY),
         ], order='create_date asc').ids
-        _logger.info('AMIS catalog sync queue: xu ly %d jobs', len(job_ids))
+        _logger.info('AMIS mirror queue: xu ly %d jobs', len(job_ids))
         for job_id in job_ids:
             try:
                 import odoo
@@ -169,36 +207,16 @@ class AmisCatalogSyncJob(models.Model):
                 raise ValueError('Chưa có cấu hình AMIS callback.')
             config.ensure_sync_ready()
             if self.direction == 'from_misa':
-                if self.scope == 'product':
-                    summary = config._sync_product_catalog_from_misa_to_odoo(
-                        unmapped_only=self.unmapped_only,
-                        job=self,
-                    )
-                elif self.scope == 'vendor':
-                    summary = config._sync_vendor_catalog_from_misa_to_odoo(
-                        unmapped_only=self.unmapped_only,
-                        create_missing=self.create_missing,
-                        job=self,
-                    )
-                else:
-                    summary = config._sync_catalog_from_misa_to_odoo(
-                        unmapped_only=self.unmapped_only,
-                        create_missing=self.create_missing,
-                        job=self,
-                    )
-                totals = summary.get('totals') or {}
-                complete = bool(summary.get('complete', True))
-                self.write({
-                    'status': 'done' if complete else 'pending',
-                    'summary': summary.get('message') or '',
-                    'total_count': self.total_count + int(totals.get('total') or 0),
-                    'created_count': self.created_count + int(totals.get('created') or 0),
-                    'updated_count': self.updated_count + int(totals.get('updated') or 0),
-                    'skipped_count': self.skipped_count + int(totals.get('skipped') or 0),
-                    'error_count': self.error_count + int(totals.get('error') or 0),
-                    'processed_at': fields.Datetime.now(),
-                    'error_msg': False,
-                })
+                if self.scope not in ('unit', 'product', 'vendor'):
+                    self.write({
+                        'status': 'skipped',
+                        'summary': 'Job danh mục cũ đã được thay bằng mirror MISA.',
+                        'processed_at': fields.Datetime.now(),
+                        'error_msg': False,
+                    })
+                    return
+                config._execute_misa_mirror_job(self)
+                return
             elif self.direction == 'to_misa' and self.scope == 'vendor':
                 if not self.partner_id:
                     raise ValueError('Job đồng bộ NCC sang MISA thiếu partner_id.')
@@ -233,7 +251,10 @@ class AmisCatalogSyncJob(models.Model):
                 'error_msg': False,
                 'processed_at': False,
                 'product_skip': 0,
+                'unit_skip': 0,
                 'vendor_skip': 0,
+                'request_cursor': False,
+                'next_cursor': False,
                 'unit_sync_done': False,
                 'vendor_sync_done': False,
                 'total_count': 0,
@@ -281,7 +302,7 @@ class AmisCatalogSyncJob(models.Model):
 
 class AmisCatalogSyncJobLine(models.Model):
     _name = 'amis.catalog.sync.job.line'
-    _description = 'Chi tiết đồng bộ danh mục MISA'
+    _description = 'Chi tiết mirror MISA'
     _order = 'id asc'
 
     job_id = fields.Many2one('amis.catalog.sync.job', string='Job', required=True, ondelete='cascade', index=True)
@@ -289,6 +310,7 @@ class AmisCatalogSyncJobLine(models.Model):
         ('unit', 'Đơn vị tính'),
         ('product', 'Hàng hóa'),
         ('vendor', 'Nhà cung cấp'),
+        ('bank', 'Tài khoản ngân hàng'),
     ], string='Loại danh mục', required=True, index=True)
     operation = fields.Selection([
         ('create', 'Tạo mới'),
@@ -296,6 +318,7 @@ class AmisCatalogSyncJobLine(models.Model):
         ('map', 'Map ID'),
         ('skip', 'Bỏ qua'),
         ('error', 'Lỗi'),
+        ('delete', 'Đã xóa'),
     ], string='Thao tác', required=True, index=True)
     odoo_model = fields.Char(string='Model Odoo')
     res_id = fields.Integer(string='ID Odoo')
@@ -828,6 +851,13 @@ def _line_resolve_uom_mismatch_by_duplicate(self, note=''):
         new_product.product_tmpl_id.write({'name': clean_new_name})
     if new_misa_id and 'misa_inventory_item_id' in new_product._fields:
         new_product.write({'misa_inventory_item_id': new_misa_id})
+        config = self._uom_resolution_config()
+        cache = self.env['amis.misa.inventory.cache'].sudo().search([
+            ('config_id', '=', config.id),
+            ('inventory_item_id', '=', new_misa_id),
+        ], limit=1)
+        if cache:
+            cache.write({'product_id': new_product.id})
     moved_qty = self._uom_resolution_transfer_quants(product, new_product)
     self._uom_resolution_archive_old_product(product)
 

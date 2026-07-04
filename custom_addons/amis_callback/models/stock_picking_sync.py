@@ -904,26 +904,33 @@ class StockPickingAmisSync(models.Model):
         if not account_object_id:
             return None
         uid_lower = account_object_id.lower()
-        for a in config._get_all_dictionary(1):
-            if (a.get('account_object_id') or '').lower() == uid_lower:
-                return a
+        cache = self.env['amis.misa.vendor.cache'].sudo().search([
+            ('config_id', '=', config.id),
+            ('account_object_id', '=', uid_lower),
+            ('is_deleted', '=', False),
+            ('misa_inactive', '=', False),
+        ], limit=1)
+        if cache:
+            return cache.to_misa_item()
         return None
 
     def _misa_lookup_account_object(self, config, partner):
         """Tìm account_object_id MISA theo tên partner, lưu vào partner."""
         if not partner:
             return ''
-        search_name = (partner.name or '').upper()
-        for a in config._get_all_dictionary(1):
-            aname = (a.get('account_object_name') or '').upper()
-            acode = (a.get('account_object_code') or '').upper()
-            if search_name and (search_name in aname or search_name in acode):
-                misa_id = a.get('account_object_id') or ''
-                if misa_id:
-                    partner.sudo().write({'misa_account_object_id': misa_id})
-                    _logger.info('Auto-mapped partner %s → account_object_id=%s', partner.name, misa_id)
-                return misa_id
-        _logger.warning('MISA account_object not found for partner: %s', partner.name)
+        cache, stale = self.env['amis.misa.vendor.cache'].sudo().lookup_for_partner(config, partner)
+        if cache:
+            misa_id = cache.account_object_id or ''
+            if misa_id:
+                partner.sudo().write({'misa_account_object_id': misa_id})
+                if cache.partner_id.id != partner.id:
+                    cache.sudo().write({'partner_id': partner.id})
+                _logger.info('Auto-mapped partner %s → account_object_id=%s from MISA vendor cache', partner.name, misa_id)
+            return misa_id
+        if stale:
+            _logger.warning('MISA vendor cache for partner %s is inactive/deleted: %s', partner.name, stale.account_object_id)
+        else:
+            _logger.warning('MISA vendor cache not found for partner: %s', partner.name)
         return ''
 
     def _misa_lookup_inventory_item(self, config, product, uom):
@@ -965,14 +972,17 @@ class StockPickingAmisSync(models.Model):
         if not uom:
             return ''
         name = (uom.name or '').strip()
-        for u in config._get_all_dictionary(4):
-            if (u.get('unit_name') or '').strip() == name:
-                unit_id = u.get('unit_id') or ''
-                if unit_id:
-                    uom.sudo().write({'misa_unit_id': unit_id})
-                    _logger.info('Auto-mapped uom %s → unit_id=%s', name, unit_id)
-                return unit_id
-        _logger.warning('MISA unit not found for uom: %s', name)
+        cache, stale = self.env['amis.misa.unit.cache'].sudo().lookup_for_uom(config, uom)
+        if cache:
+            unit_id = cache.unit_id or ''
+            if unit_id:
+                uom.sudo().write({'misa_unit_id': unit_id})
+                _logger.info('Auto-mapped uom %s → unit_id=%s from MISA unit cache', name, unit_id)
+            return unit_id
+        if stale:
+            _logger.warning('MISA unit cache for uom %s is inactive/deleted: %s', name, stale.unit_id)
+        else:
+            _logger.warning('MISA unit cache not found for uom: %s', name)
         return ''
 
 

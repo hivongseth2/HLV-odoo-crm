@@ -137,9 +137,9 @@
                     <button name="action_connect_misa" type="object" string="Kết nối MISA" class="btn-primary"/>
                     <button name="action_connect_meinvoice" type="object" string="Kết nối meInvoice" class="btn-secondary"/>
                     <button name="action_get_meinvoice_templates" type="object" string="Lấy mẫu HĐ" class="btn-secondary"/>
-                    <button name="action_sync_product_catalog_to_odoo" type="object" string="Đồng bộ sản phẩm MISA" class="btn-secondary"/>
-                    <button name="action_sync_vendor_catalog_to_odoo" type="object" string="Đồng bộ nhà cung cấp MISA" class="btn-secondary"/>
-                    <button name="action_sync_catalog_unmapped_only" type="object" string="Đồng bộ danh mục chưa map" class="btn-secondary"/>
+                    <button name="action_enqueue_misa_mirror_incremental" type="object" string="Cập nhật mirror MISA" class="btn-secondary"/>
+                    <button name="action_enqueue_misa_mirror_full" type="object" string="Full sync mirror MISA" class="btn-secondary"/>
+                    <button name="action_open_misa_mirror_jobs" type="object" string="Hàng đợi mirror MISA" class="btn-secondary"/>
                     <button name="check_call_back_data" type="object" string="Kiểm tra Callback" class="btn-secondary"/>
                     <button name="delete_call_back_data" type="object" string="Xóa Callback" class="btn-secondary"/>
                 </header>
@@ -579,7 +579,7 @@
         <field name="name">amis.catalog.sync.job.list</field>
         <field name="model">amis.catalog.sync.job</field>
         <field name="arch" type="xml">
-            <list string="Hàng đợi đồng bộ danh mục MISA" default_order="create_date desc"
+            <list string="Hàng đợi mirror MISA" default_order="create_date desc"
                   decoration-danger="status == 'error'"
                   decoration-success="status == 'done'"
                   decoration-warning="status == 'running'">
@@ -587,13 +587,18 @@
                 <field name="create_date" string="Tạo lúc"/>
                 <field name="direction"/>
                 <field name="scope"/>
+                <field name="mirror_operation"/>
+                <field name="mirror_mode"/>
                 <field name="partner_id" optional="show"/>
                 <field name="trigger"/>
                 <field name="status"/>
                 <field name="total_count"/>
+                <field name="unit_skip" optional="hide"/>
                 <field name="product_skip" optional="show"/>
                 <field name="vendor_skip" optional="show"/>
                 <field name="batch_size" optional="hide"/>
+                <field name="request_cursor" optional="hide"/>
+                <field name="next_cursor" optional="hide"/>
                 <field name="created_count"/>
                 <field name="updated_count"/>
                 <field name="skipped_count"/>
@@ -614,7 +619,7 @@
         <field name="name">amis.catalog.sync.job.form</field>
         <field name="model">amis.catalog.sync.job</field>
         <field name="arch" type="xml">
-            <form string="Hàng đợi đồng bộ danh mục MISA">
+            <form string="Hàng đợi mirror MISA">
                 <header>
                     <button name="action_run_now" type="object" string="Chạy ngay"
                             invisible="status not in ('pending','error')" class="btn-primary"/>
@@ -628,6 +633,8 @@
                             <field name="name" readonly="1"/>
                             <field name="direction"/>
                             <field name="scope"/>
+                            <field name="mirror_operation"/>
+                            <field name="mirror_mode"/>
                             <field name="partner_id"/>
                             <field name="trigger"/>
                             <field name="config_id"/>
@@ -635,9 +642,12 @@
                         <group>
                             <field name="unmapped_only"/>
                             <field name="create_missing"/>
+                            <field name="unit_skip"/>
                             <field name="product_skip"/>
                             <field name="vendor_skip"/>
                             <field name="batch_size"/>
+                            <field name="request_cursor"/>
+                            <field name="next_cursor"/>
                             <field name="unit_sync_done"/>
                             <field name="vendor_sync_done"/>
                             <field name="retry_count"/>
@@ -711,7 +721,7 @@
         <field name="name">amis.catalog.sync.job.search</field>
         <field name="model">amis.catalog.sync.job</field>
         <field name="arch" type="xml">
-            <search string="Tìm hàng đợi danh mục MISA">
+            <search string="Tìm hàng đợi mirror MISA">
                 <field name="name"/>
                 <field name="partner_id"/>
                 <field name="scope"/>
@@ -721,7 +731,10 @@
                 <filter name="error" string="Lỗi" domain="[('status', '=', 'error')]"/>
                 <separator/>
                 <filter name="scope_product" string="Sản phẩm" domain="[('scope', '=', 'product')]"/>
+                <filter name="scope_unit" string="Đơn vị tính" domain="[('scope', '=', 'unit')]"/>
                 <filter name="scope_vendor" string="Nhà cung cấp" domain="[('scope', '=', 'vendor')]"/>
+                <filter name="mirror_full" string="Full sync" domain="[('mirror_mode', '=', 'full')]"/>
+                <filter name="mirror_incremental" string="Tăng dần" domain="[('mirror_mode', '=', 'incremental')]"/>
                 <filter name="from_misa" string="MISA → Odoo" domain="[('direction', '=', 'from_misa')]"/>
                 <filter name="to_misa" string="Odoo → MISA" domain="[('direction', '=', 'to_misa')]"/>
                 <group expand="0" string="Nhóm theo">
@@ -734,7 +747,7 @@
     </record>
 
     <record id="action_amis_catalog_sync_job" model="ir.actions.act_window">
-        <field name="name">Hàng đợi danh mục MISA</field>
+        <field name="name">Hàng đợi mirror MISA</field>
         <field name="res_model">amis.catalog.sync.job</field>
         <field name="view_mode">list,form</field>
         <field name="search_view_id" ref="view_amis_catalog_sync_job_search"/>
@@ -745,7 +758,7 @@
         <field name="name">amis.catalog.sync.job.line.list</field>
         <field name="model">amis.catalog.sync.job.line</field>
         <field name="arch" type="xml">
-            <list string="Danh mục MISA cần xử lý" default_order="id desc"
+            <list string="Mirror MISA cần xử lý" default_order="id desc"
                   decoration-danger="issue_type and not resolved"
                   decoration-muted="resolved">
                 <field name="job_id"/>
@@ -776,7 +789,7 @@
         <field name="name">amis.catalog.sync.job.line.form</field>
         <field name="model">amis.catalog.sync.job.line</field>
         <field name="arch" type="xml">
-            <form string="Chi tiết cần xử lý">
+            <form string="Chi tiết mirror cần xử lý">
                 <header>
                     <button name="action_open_odoo_record" type="object" string="Mở Odoo"
                             class="btn-secondary"/>
@@ -819,7 +832,7 @@
         <field name="name">amis.catalog.sync.job.line.search</field>
         <field name="model">amis.catalog.sync.job.line</field>
         <field name="arch" type="xml">
-            <search string="Tìm danh mục MISA cần xử lý">
+            <search string="Tìm mirror MISA cần xử lý">
                 <field name="job_id"/>
                 <field name="code"/>
                 <field name="name"/>
@@ -918,7 +931,7 @@
               groups="amis_callback.group_meinvoice_manager"/>
     <menuitem id="menu_amis_sync_jobs" name="Hàng đợi đồng bộ MISA" parent="menu_amis_callback_root" action="action_amis_sync_job" sequence="15"
               groups="amis_callback.group_meinvoice_manager"/>
-    <menuitem id="menu_amis_catalog_sync_jobs" name="Hàng đợi danh mục MISA" parent="menu_amis_callback_root" action="action_amis_catalog_sync_job" sequence="16"
+    <menuitem id="menu_amis_catalog_sync_jobs" name="Hàng đợi mirror MISA" parent="menu_amis_callback_root" action="action_amis_catalog_sync_job" sequence="16"
               groups="amis_callback.group_meinvoice_manager"/>
     <menuitem id="menu_amis_catalog_uom_issues" name="ĐVT cần xử lý" parent="menu_amis_callback_root" action="action_amis_catalog_uom_issues" sequence="17"
               groups="amis_callback.group_meinvoice_manager"/>

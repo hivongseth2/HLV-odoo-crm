@@ -1,27 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <odoo>
     <record id="ir_cron_amis_sync_catalog_unmapped" model="ir.cron">
-        <field name="name">AMIS: Tạo hàng đợi đồng bộ sản phẩm và NCC MISA (30 phút)</field>
+        <field name="name">AMIS: Cron danh mục cũ (đã tắt)</field>
         <field name="model_id" ref="model_amis_callback_config"/>
         <field name="state">code</field>
         <field name="code">model.cron_sync_catalog_from_misa()</field>
         <field name="interval_number">30</field>
         <field name="interval_type">minutes</field>
-        <field name="active">True</field>
+        <field name="active">False</field>
     </record>
 
     <record id="ir_cron_amis_inventory_cache_sync" model="ir.cron">
-        <field name="name">AMIS: Cập nhật cache hàng hóa MISA</field>
+        <field name="name">AMIS: Tạo hàng đợi mirror MISA</field>
         <field name="model_id" ref="model_amis_callback_config"/>
         <field name="state">code</field>
-        <field name="code">model.cron_sync_inventory_cache_from_misa()</field>
-        <field name="interval_number">30</field>
+        <field name="code">model.cron_sync_misa_mirror()</field>
+        <field name="interval_number">2</field>
         <field name="interval_type">minutes</field>
         <field name="active">True</field>
     </record>
 
     <record id="ir_cron_amis_catalog_sync_queue" model="ir.cron">
-        <field name="name">AMIS: Xử lý hàng đợi đồng bộ danh mục MISA</field>
+        <field name="name">AMIS: Xử lý hàng đợi mirror MISA</field>
         <field name="model_id" ref="model_amis_catalog_sync_job"/>
         <field name="state">code</field>
         <field name="code">model._process_pending()</field>
