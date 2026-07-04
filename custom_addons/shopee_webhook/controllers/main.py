@@ -151,11 +151,10 @@ class ShopeeWebhookController(http.Controller):
                         _logger.warning("Shopee Webhook: Shop ID %s not found in Odoo.", shop_id_raw)
                     else:
                         try:
-                            # Use services from shopee_order_fetch to pull full details
-                            creds = shopee_api.get_credentials_from_shop(shop)
-                            
                             # Get full order detail
-                            status_code, body, _params = shopee_api.call_order_detail(creds, ordersn)
+                            status_code, body, _params, creds = shopee_api.call_order_detail_with_token_refresh(
+                                shop, ordersn
+                            )
                             if status_code == 200 and not body.get('error'):
                                 order_list = body.get('response', {}).get('order_list', [])
                                 if order_list:

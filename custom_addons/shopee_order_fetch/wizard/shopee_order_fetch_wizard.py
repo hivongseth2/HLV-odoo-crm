@@ -83,10 +83,9 @@ class ShopeeOrderFetchWizard(models.TransientModel):
     def action_fetch_order(self):
         """Gọi Shopee API get_order_detail và hiển thị kết quả. Không ghi DB."""
         self.ensure_one()
-        creds = shopee_api.get_credentials_from_wizard(self)
         sns = self._parse_order_sn_list()
-        status_code, body, params = shopee_api.call_order_detail(
-            creds, ','.join(sns), self.response_optional_fields
+        status_code, body, params, _creds = shopee_api.call_order_detail_with_token_refresh(
+            self.shop_id, ','.join(sns), self.response_optional_fields
         )
 
         result = {
@@ -100,10 +99,9 @@ class ShopeeOrderFetchWizard(models.TransientModel):
     def action_fetch_and_create_order(self):
         """Gọi Shopee API, sau đó tạo Sale Order từ response."""
         self.ensure_one()
-        creds = shopee_api.get_credentials_from_wizard(self)
         sns = self._parse_order_sn_list()
-        status_code, body, _params = shopee_api.call_order_detail(
-            creds, ','.join(sns), self.response_optional_fields
+        status_code, body, _params, creds = shopee_api.call_order_detail_with_token_refresh(
+            self.shop_id, ','.join(sns), self.response_optional_fields
         )
 
         if status_code != 200:
