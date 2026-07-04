@@ -583,14 +583,8 @@ export class PickingScanner extends Component {
             if (res.error) {
                 this.notification.add(res.error, { type: "danger" });
             } else {
-                this.notification.add(res.message || "Đã gỡ đóng gói thành công", { type: "success" });
+                this.notification.add("Đã gỡ đóng gói thành công", { type: "success" });
                 this.playSound('success');
-                if (this.state.editingPackage?.id === pkg.id) {
-                    this.state.editingPackage = null;
-                    this.state.packageEditItems = [];
-                    this.state.packageAvailableItems = [];
-                    this.state.packageOtherPackages = [];
-                }
                 await this.loadPicking();
             }
         } catch (e) {
