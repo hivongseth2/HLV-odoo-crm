@@ -504,20 +504,22 @@ def _line_uom_resolution_misa_item(self):
     config = self._uom_resolution_config()
     misa_id = (self.misa_id or '').strip().lower()
     code = (self.code or '').strip()
+    Cache = self.env['amis.misa.inventory.cache'].sudo()
     if misa_id:
-        item = config.find_dictionary_item_by_code(2, 'inventory_item_id', misa_id, max_pages=1000)
-        if item:
-            return item
+        cache = Cache.search([
+            ('config_id', '=', config.id),
+            ('inventory_item_id', '=', misa_id),
+        ], limit=1)
+        if cache:
+            return cache.to_misa_item()
     if code:
-        item = config.find_dictionary_item_by_code(2, 'inventory_item_code', code, max_pages=1000)
-        if item:
-            return item
-    for item in config._get_all_dictionary(2):
-        item_id = (item.get('inventory_item_id') or '').strip().lower()
-        item_code = (item.get('inventory_item_code') or '').strip()
-        if (misa_id and item_id == misa_id) or (code and item_code == code):
-            return item
-    raise UserError(_('Không tìm thấy hàng hóa MISA tương ứng để lấy ĐVT.'))
+        cache = Cache.search([
+            ('config_id', '=', config.id),
+            ('inventory_item_code', '=', code),
+        ], order='is_deleted asc, misa_inactive asc, write_date desc', limit=1)
+        if cache:
+            return cache.to_misa_item()
+    raise UserError(_('Không tìm thấy cache hàng hóa MISA tương ứng để lấy ĐVT. Vui lòng cập nhật cache hàng hóa MISA trước.'))
 
 
 def _line_uom_resolution_target_uom(self):

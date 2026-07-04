@@ -586,37 +586,72 @@ class PurchaseOrderAmisSync(models.Model):
         existing_id = (getattr(product, 'misa_inventory_item_id', '') or '').strip()
         code = self._misa_required_code(product.default_code or '', fallback_prefix='VT', fallback_id=product.id)
         name = (product.display_name or product.name or code).strip()
+        unit_id = (unit or {}).get('unit_id') or (getattr(uom, 'misa_unit_id', '') or '').strip()
+        unit_name = (unit or {}).get('unit_name') or (uom.name if uom else '')
+
         if existing_id:
-            existing_item = self._find_misa_inventory_item_by_id(config, existing_id) or {}
-            if existing_item:
-                return dict(existing_item, **{
-                    'inventory_item_id': existing_id,
-                    'inventory_item_code': existing_item.get('inventory_item_code') or product.default_code or code,
-                    'inventory_item_name': existing_item.get('inventory_item_name') or name,
-                })
+            cache, stale = self.env['amis.misa.inventory.cache'].sudo().lookup_for_product(config, product)
+            if stale and stale.inventory_item_id == existing_id:
+                state = 'da xoa' if stale.is_deleted else 'ngung su dung'
+                raise UserError(
+                    'San pham "%s" dang map voi hang hoa MISA %s (%s). Vui long cap nhat cache/xu ly mapping truoc khi sync.'
+                    % (product.display_name, state, existing_id)
+                )
+            if cache and cache.inventory_item_id == existing_id:
+                return cache.to_misa_item()
             return {
                 'inventory_item_id': existing_id,
                 'inventory_item_code': product.default_code or code,
                 'inventory_item_name': name,
+                'unit_id': unit_id,
+                'unit_name': unit_name,
+                'main_unit_id': unit_id,
+                'main_unit_name': unit_name,
             }
 
-        for item in config._get_all_dictionary(2):
-            if (item.get('inventory_item_code') or '').strip() == code:
-                item_id = (item.get('inventory_item_id') or '').strip()
-                unit_id = (item.get('unit_id') or '').strip()
-                if item_id:
-                    product.sudo().write({'misa_inventory_item_id': item_id})
-                if unit_id and uom and not (getattr(uom, 'misa_unit_id', '') or '').strip():
-                    uom.sudo().write({'misa_unit_id': unit_id})
-                return dict(item, **{
-                    'inventory_item_id': item_id,
-                    'inventory_item_code': item.get('inventory_item_code') or code,
-                    'inventory_item_name': item.get('inventory_item_name') or name,
-                })
+        lock_name = 'amis_callback:inventory_item:%s:%s' % (self.env.cr.dbname, code)
+        self.env.cr.execute("SELECT pg_advisory_xact_lock(hashtext(%s)::bigint)", [lock_name])
+
+        if hasattr(product, 'invalidate_recordset'):
+            product.invalidate_recordset(['misa_inventory_item_id'])
+        existing_id = (getattr(product, 'misa_inventory_item_id', '') or '').strip()
+        if existing_id:
+            return {
+                'inventory_item_id': existing_id,
+                'inventory_item_code': product.default_code or code,
+                'inventory_item_name': name,
+                'unit_id': unit_id,
+                'unit_name': unit_name,
+                'main_unit_id': unit_id,
+                'main_unit_name': unit_name,
+            }
+
+        cache, stale = self.env['amis.misa.inventory.cache'].sudo().lookup_for_product(config, product)
+        if cache:
+            product.sudo().write({'misa_inventory_item_id': cache.inventory_item_id})
+            if cache.product_id.id != product.id:
+                cache.sudo().write({'product_id': product.id})
+            cache_unit_name = (cache.unit_name or cache.main_unit_name or '').strip()
+            if (
+                cache.unit_id
+                and uom
+                and not (getattr(uom, 'misa_unit_id', '') or '').strip()
+                and cache_unit_name
+                and (uom.name or '').strip().casefold() == cache_unit_name.casefold()
+            ):
+                uom.sudo().write({'misa_unit_id': cache.unit_id})
+            _logger.info('Mapped product %s to MISA inventory cache %s (%s)', code, cache.inventory_item_id, cache.inventory_item_name)
+            return cache.to_misa_item()
+        if stale:
+            state = 'da xoa' if stale.is_deleted else 'ngung su dung'
+            raise UserError(
+                'San pham "%s" co ma "%s" trung voi hang hoa MISA %s (%s). Vui long xu ly cache truoc khi sync.'
+                % (product.display_name, code, state, stale.inventory_item_id)
+            )
 
         item_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'misa_inventory_item|%d' % product.id))
-        unit_id = unit.get('unit_id') or ''
-        unit_name = unit.get('unit_name') or (uom.name if uom else '')
+        unit_id = unit_id or ''
+        unit_name = unit_name or ''
         item = {
             'dictionary_type': 3,
             'inventory_item_id': item_id,
@@ -664,15 +699,6 @@ class PurchaseOrderAmisSync(models.Model):
             return None
         for item in config._get_all_dictionary(4):
             if (item.get('unit_id') or '').strip().lower() == unit_id:
-                return item
-        return None
-
-    def _find_misa_inventory_item_by_id(self, config, inventory_item_id):
-        inventory_item_id = (inventory_item_id or '').strip().lower()
-        if not inventory_item_id:
-            return None
-        for item in config._get_all_dictionary(2):
-            if (item.get('inventory_item_id') or '').strip().lower() == inventory_item_id:
                 return item
         return None
 

@@ -3,6 +3,8 @@ access_amis_callback_log_user,amis.callback.log user,model_amis_callback_log,ami
 access_amis_callback_log_manager,amis.callback.log manager,model_amis_callback_log,amis_callback.group_meinvoice_manager,1,1,1,1
 access_amis_callback_log_line_user,amis.callback.log.line user,model_amis_callback_log_line,amis_callback.group_meinvoice_user,1,0,0,0
 access_amis_callback_config_manager,amis.callback.config manager,model_amis_callback_config,amis_callback.group_meinvoice_manager,1,1,1,1
+access_amis_misa_inventory_cache_user,amis.misa.inventory.cache user,model_amis_misa_inventory_cache,amis_callback.group_meinvoice_user,1,0,0,0
+access_amis_misa_inventory_cache_manager,amis.misa.inventory.cache manager,model_amis_misa_inventory_cache,amis_callback.group_meinvoice_manager,1,1,1,1
 access_amis_sync_job_user,amis.sync.job user,model_amis_sync_job,amis_callback.group_meinvoice_user,1,0,0,0
 access_amis_sync_job_manager,amis.sync.job manager,model_amis_sync_job,amis_callback.group_meinvoice_manager,1,1,1,1
 access_amis_payment_request_user,amis.payment.request user,model_amis_payment_request,amis_callback.group_meinvoice_user,1,1,1,0

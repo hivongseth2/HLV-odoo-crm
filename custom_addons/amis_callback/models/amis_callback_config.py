@@ -4,11 +4,12 @@ import logging
 import re
 import time
 import unicodedata
+from datetime import datetime, timedelta
 
 import requests
 from requests.exceptions import HTTPError
 
-from odoo import fields, models
+from odoo import api, fields, models
 from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
@@ -96,6 +97,24 @@ class AmisCallbackConfig(models.Model):
         string='MISA Stock ID',
         default='de167b2d-ec5f-404a-8532-08257193bc91',
         help='Stock ID thật trên MISA (kho HLV).',
+    )
+
+    misa_inventory_cache_last_sync_time = fields.Char(
+        string='Cursor hàng hóa MISA',
+        readonly=True,
+        copy=False,
+        help='LastSyncTime của lần đồng bộ thay đổi hàng hóa MISA thành công gần nhất.',
+    )
+    misa_inventory_cache_delete_last_sync_time = fields.Char(
+        string='Cursor hàng hóa MISA đã xóa',
+        readonly=True,
+        copy=False,
+        help='LastSyncTime của lần đồng bộ danh mục hàng hóa bị xóa thành công gần nhất.',
+    )
+    misa_inventory_cache_overlap_minutes = fields.Integer(
+        string='Overlap cursor hàng hóa MISA (phút)',
+        default=5,
+        help='Khi đồng bộ tăng dần, request sẽ lùi cursor lại khoảng này để replay vùng biên paging MISA.',
     )
 
     # ── Mapping khách hàng Shopee → Account Object MISA ───────────────────────
@@ -634,7 +653,10 @@ class AmisCallbackConfig(models.Model):
         if include_token:
             self._ensure_token_valid()
         headers = self._build_headers(include_token=include_token)
-        max_retries = 5 if path == '/apir/sync/actopen/get_dictionary' else 3
+        max_retries = 5 if path in (
+            '/apir/sync/actopen/get_dictionary',
+            '/apir/sync/actopen/get_dictionary_delete',
+        ) else 3
         delay = 5  # seconds
         last_exc = None
         token_refreshed = False
@@ -676,10 +698,13 @@ class AmisCallbackConfig(models.Model):
         raise UserError(f'Gọi API MISA thất bại sau {max_retries} lần thử: 429 Too Many Requests ({path})')
 
     def _actopen_post_with_rate_limit(self, path, url, payload, headers, timeout):
-        if path != '/apir/sync/actopen/get_dictionary':
+        if path not in (
+            '/apir/sync/actopen/get_dictionary',
+            '/apir/sync/actopen/get_dictionary_delete',
+        ):
             return requests.post(url, json=payload, headers=headers, timeout=timeout)
 
-        lock_name = 'amis_callback:get_dictionary:%s' % self.env.cr.dbname
+        lock_name = 'amis_callback:%s:%s' % (path.rsplit('/', 1)[-1], self.env.cr.dbname)
         self.env.cr.execute("SELECT pg_advisory_lock(hashtext(%s)::bigint)", [lock_name])
         try:
             response = requests.post(url, json=payload, headers=headers, timeout=timeout)
@@ -728,6 +753,7 @@ class AmisCallbackConfig(models.Model):
                 changed_data_types.add(4)  # unit
         if changed_data_types:
             self.clear_dictionary_cache(changed_data_types)
+        self.upsert_inventory_cache_from_dictionary_items(dictionary_items)
         return result
 
     def clear_dictionary_cache(self, data_types=None):
@@ -786,7 +812,7 @@ class AmisCallbackConfig(models.Model):
         _logger.info('MISA dictionary type=%d: fetched %d items (cached for this transaction)', data_type, len(all_items))
         return all_items
 
-    def get_dictionary(self, data_type, branch_id=None, skip=0, take=100, last_sync_time=None):
+    def get_dictionary(self, data_type, branch_id=None, skip=0, take=100, last_sync_time=None, use_cache=True):
         """Lay danh muc tu AMIS ke toan theo endpoint get_dictionary.
 
         Returns:
@@ -823,7 +849,7 @@ class AmisCallbackConfig(models.Model):
         )
         now = time.monotonic()
         cached = _DICT_PAGE_CACHE.get(cache_key)
-        if cached and (now - cached[0]) < _DICT_CACHE_TTL:
+        if use_cache and cached and (now - cached[0]) < _DICT_CACHE_TTL:
             return cached[1]
 
         body = self._post_actopen('/apir/sync/actopen/get_dictionary', payload, include_token=True)
@@ -856,8 +882,58 @@ class AmisCallbackConfig(models.Model):
             'custom_data': custom_data,
             'last_sync_time': custom_data.get('LastSyncTime'),
         }
-        _DICT_PAGE_CACHE[cache_key] = (time.monotonic(), result)
+        if use_cache:
+            _DICT_PAGE_CACHE[cache_key] = (time.monotonic(), result)
         return result
+
+    def get_dictionary_delete(self, data_type, branch_id=None, skip=0, take=100, last_sync_time=None):
+        """Lay danh muc da bi xoa tu AMIS ke toan theo endpoint get_dictionary_delete."""
+        self.ensure_one()
+
+        take = int(take or 0)
+        if take <= 0:
+            take = 100
+        if take > 100:
+            take = 100
+
+        payload = {
+            'data_type': int(data_type),
+            'branch_id': branch_id or None,
+            'skip': int(skip or 0),
+            'take': take,
+            'app_id': self.app_id,
+            'last_sync_time': last_sync_time or None,
+        }
+        body = self._post_actopen('/apir/sync/actopen/get_dictionary_delete', payload, include_token=True)
+
+        data_raw = body.get('Data')
+        items = []
+        if isinstance(data_raw, str):
+            try:
+                parsed = json.loads(data_raw)
+                if isinstance(parsed, list):
+                    items = parsed
+            except Exception:
+                items = []
+        elif isinstance(data_raw, list):
+            items = data_raw
+
+        custom_raw = body.get('CustomData')
+        custom_data = {}
+        if isinstance(custom_raw, str):
+            try:
+                custom_data = json.loads(custom_raw) or {}
+            except Exception:
+                custom_data = {}
+        elif isinstance(custom_raw, dict):
+            custom_data = custom_raw
+
+        return {
+            'raw': body,
+            'items': items,
+            'custom_data': custom_data,
+            'last_sync_time': custom_data.get('LastSyncTime'),
+        }
 
     def find_dictionary_item_by_code(self, data_type, code_field, code_value, branch_id=None, take=100, max_pages=30):
         """Tim 1 item danh muc theo code voi phan trang get_dictionary."""
@@ -883,6 +959,213 @@ class AmisCallbackConfig(models.Model):
                 break
             skip += take
         return False
+
+    def _misa_inventory_cache_request_cursor(self, cursor):
+        cursor = (cursor or '').strip()
+        if not cursor:
+            return None
+        minutes = max(int(self.misa_inventory_cache_overlap_minutes or 0), 0)
+        if not minutes:
+            return cursor
+        try:
+            parsed = datetime.fromisoformat(cursor.replace('Z', '+00:00'))
+            return (parsed - timedelta(minutes=minutes)).isoformat()
+        except Exception:
+            _logger.warning('Khong parse duoc LastSyncTime hang hoa MISA "%s", dung nguyen cursor.', cursor)
+            return cursor
+
+    def _upsert_inventory_cache_items(self, items):
+        self.ensure_one()
+        Cache = self.env['amis.misa.inventory.cache'].sudo()
+        created = 0
+        updated = 0
+        skipped = 0
+        for item in items or []:
+            item_id = (item.get('inventory_item_id') or item.get('id') or item.get('ID') or '').strip()
+            if not item_id:
+                skipped += 1
+                continue
+            existed = bool(Cache.search([
+                ('config_id', '=', self.id),
+                ('inventory_item_id', '=', item_id),
+            ], limit=1))
+            Cache.upsert_from_misa_item(self, item)
+            if existed:
+                updated += 1
+            else:
+                created += 1
+        return {'created': created, 'updated': updated, 'skipped': skipped}
+
+    def _mark_inventory_cache_deleted_items(self, items):
+        self.ensure_one()
+        Cache = self.env['amis.misa.inventory.cache'].sudo()
+        marked = 0
+        skipped = 0
+        for item in items or []:
+            rec = Cache.mark_deleted_from_misa_item(self, item)
+            if rec:
+                marked += 1
+            else:
+                skipped += 1
+        return {'deleted': marked, 'skipped': skipped}
+
+    def upsert_inventory_cache_from_dictionary_items(self, dictionary_items):
+        self.ensure_one()
+        inventory_items = []
+        for item in dictionary_items or []:
+            try:
+                dictionary_type = int(item.get('dictionary_type') or 0)
+            except (TypeError, ValueError):
+                dictionary_type = 0
+            if dictionary_type == 3:
+                inventory_items.append(item)
+        if not inventory_items:
+            return {'created': 0, 'updated': 0, 'skipped': 0}
+        return self._upsert_inventory_cache_items(inventory_items)
+
+    def _sync_inventory_cache_changed_from_misa(self, full=False, page_size=100):
+        self.ensure_one()
+        page_size = min(max(int(page_size or 100), 1), 100)
+        request_cursor = None if full else self._misa_inventory_cache_request_cursor(
+            self.misa_inventory_cache_last_sync_time
+        )
+        skip = 0
+        total = 0
+        created = 0
+        updated = 0
+        skipped = 0
+        next_cursor = False
+        while True:
+            result = self.get_dictionary(
+                data_type=2,
+                skip=skip,
+                take=page_size,
+                last_sync_time=request_cursor,
+                use_cache=False,
+            )
+            if not next_cursor and result.get('last_sync_time'):
+                next_cursor = result.get('last_sync_time')
+            items = result.get('items') or []
+            stats = self._upsert_inventory_cache_items(items)
+            total += len(items)
+            created += stats.get('created', 0)
+            updated += stats.get('updated', 0)
+            skipped += stats.get('skipped', 0)
+            if len(items) < page_size:
+                break
+            skip += page_size
+
+        if next_cursor:
+            self.sudo().write({'misa_inventory_cache_last_sync_time': next_cursor})
+        _logger.info(
+            'MISA inventory cache changed sync: full=%s request_cursor=%s next_cursor=%s total=%d created=%d updated=%d skipped=%d',
+            full, request_cursor, next_cursor, total, created, updated, skipped,
+        )
+        return {
+            'total': total,
+            'created': created,
+            'updated': updated,
+            'skipped': skipped,
+            'request_cursor': request_cursor,
+            'next_cursor': next_cursor,
+        }
+
+    def _sync_inventory_cache_deleted_from_misa(self, full=False, page_size=100):
+        self.ensure_one()
+        page_size = min(max(int(page_size or 100), 1), 100)
+        request_cursor = None if full else self._misa_inventory_cache_request_cursor(
+            self.misa_inventory_cache_delete_last_sync_time
+        )
+        skip = 0
+        total = 0
+        deleted = 0
+        skipped = 0
+        next_cursor = False
+        while True:
+            result = self.get_dictionary_delete(
+                data_type=2,
+                skip=skip,
+                take=page_size,
+                last_sync_time=request_cursor,
+            )
+            if not next_cursor and result.get('last_sync_time'):
+                next_cursor = result.get('last_sync_time')
+            items = result.get('items') or []
+            stats = self._mark_inventory_cache_deleted_items(items)
+            total += len(items)
+            deleted += stats.get('deleted', 0)
+            skipped += stats.get('skipped', 0)
+            if len(items) < page_size:
+                break
+            skip += page_size
+
+        if next_cursor:
+            self.sudo().write({'misa_inventory_cache_delete_last_sync_time': next_cursor})
+        _logger.info(
+            'MISA inventory cache deleted sync: full=%s request_cursor=%s next_cursor=%s total=%d deleted=%d skipped=%d',
+            full, request_cursor, next_cursor, total, deleted, skipped,
+        )
+        return {
+            'total': total,
+            'deleted': deleted,
+            'skipped': skipped,
+            'request_cursor': request_cursor,
+            'next_cursor': next_cursor,
+        }
+
+    def _sync_inventory_cache_from_misa(self, full=False):
+        self.ensure_one()
+        self.ensure_sync_ready()
+        changed = self._sync_inventory_cache_changed_from_misa(full=full)
+        deleted = self._sync_inventory_cache_deleted_from_misa(full=full)
+        return {'changed': changed, 'deleted': deleted}
+
+    def action_sync_inventory_cache_full(self):
+        self.ensure_one()
+        result = self._sync_inventory_cache_from_misa(full=True)
+        return self._catalog_sync_notification(
+            'Đã đồng bộ cache hàng hóa MISA',
+            'Thay đổi: %(changed)d item, đã xóa: %(deleted)d item.' % {
+                'changed': result['changed'].get('total', 0),
+                'deleted': result['deleted'].get('total', 0),
+            },
+        )
+
+    def action_sync_inventory_cache_incremental(self):
+        self.ensure_one()
+        result = self._sync_inventory_cache_from_misa(full=False)
+        return self._catalog_sync_notification(
+            'Đã cập nhật cache hàng hóa MISA',
+            'Thay đổi: %(changed)d item, đã xóa: %(deleted)d item.' % {
+                'changed': result['changed'].get('total', 0),
+                'deleted': result['deleted'].get('total', 0),
+            },
+        )
+
+    def action_open_inventory_cache(self):
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Cache hàng hóa MISA',
+            'res_model': 'amis.misa.inventory.cache',
+            'view_mode': 'list,form',
+            'domain': [('config_id', '=', self.id)],
+            'context': {'default_config_id': self.id},
+            'target': 'current',
+        }
+
+    @api.model
+    def cron_sync_inventory_cache_from_misa(self):
+        configs = self.sudo().search([('active', '=', True)])
+        if not configs:
+            _logger.info('Skip MISA inventory cache cron: no active AMIS callback config.')
+            return True
+        for config in configs:
+            try:
+                config._sync_inventory_cache_from_misa(full=False)
+            except Exception:
+                _logger.exception('MISA inventory cache cron failed for config %s', config.id)
+        return True
 
     def push_inward_voucher(self, voucher_payload, dictionary_items=None, reference_items=None):
         self.ensure_one()
@@ -1734,6 +2017,7 @@ class AmisCallbackConfig(models.Model):
 
         result = self.get_dictionary(data_type=2, skip=batch_skip, take=batch_take)
         inv_items = result.get('items') or []
+        self._upsert_inventory_cache_items(inv_items)
         codes = {
             (item.get('inventory_item_code') or '').strip()
             for item in inv_items

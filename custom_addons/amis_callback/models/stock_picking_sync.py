@@ -927,8 +927,6 @@ class StockPickingAmisSync(models.Model):
         return ''
 
     def _misa_lookup_inventory_item(self, config, product, uom):
-        """Tìm inventory_item_id MISA theo default_code, lưu vào product + uom."""
-        # Nếu đã có sẵn trên product, trả về ngay không gọi API
         existing_item_id = (product.misa_inventory_item_id or '').strip()
         existing_unit_id = (uom.misa_unit_id or '').strip() if uom else ''
         if existing_item_id:
@@ -937,18 +935,29 @@ class StockPickingAmisSync(models.Model):
         code = (product.default_code or '').strip()
         if not code:
             return '', ''
-        for p in config._get_all_dictionary(2):
-            if (p.get('inventory_item_code') or '').strip() == code:
-                item_id = p.get('inventory_item_id') or ''
-                unit_id = p.get('unit_id') or ''
-                if item_id:
-                    product.sudo().write({'misa_inventory_item_id': item_id})
-                    _logger.info('Auto-mapped product %s → inventory_item_id=%s', code, item_id)
-                if unit_id and uom and not uom.misa_unit_id:
-                    uom.sudo().write({'misa_unit_id': unit_id})
-                    _logger.info('Auto-mapped uom %s → unit_id=%s', uom.name, unit_id)
-                return item_id, unit_id
-        _logger.warning('MISA inventory_item not found for product code: %s', code)
+        cache, stale = self.env['amis.misa.inventory.cache'].sudo().lookup_for_product(config, product)
+        if cache:
+            product.sudo().write({'misa_inventory_item_id': cache.inventory_item_id})
+            if cache.product_id.id != product.id:
+                cache.sudo().write({'product_id': product.id})
+            cache_unit_name = (cache.unit_name or cache.main_unit_name or '').strip()
+            if (
+                cache.unit_id
+                and uom
+                and not (uom.misa_unit_id or '').strip()
+                and cache_unit_name
+                and (uom.name or '').strip().casefold() == cache_unit_name.casefold()
+            ):
+                uom.sudo().write({'misa_unit_id': cache.unit_id})
+            _logger.info('Auto-mapped product %s from MISA inventory cache %s', code, cache.inventory_item_id)
+            return cache.inventory_item_id, (uom.misa_unit_id or cache.unit_id or '')
+        if stale:
+            _logger.warning(
+                'Skip MISA inventory cache for product %s: item %s is inactive/deleted.',
+                code, stale.inventory_item_id,
+            )
+        else:
+            _logger.warning('MISA inventory cache not found for product code: %s', code)
         return '', ''
 
     def _misa_lookup_unit(self, config, uom):
