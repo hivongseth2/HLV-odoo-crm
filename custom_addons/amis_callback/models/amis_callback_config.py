@@ -1324,9 +1324,18 @@ class AmisCallbackConfig(models.Model):
                 skipped += 1
                 continue
             for uom in matched_uoms:
-                vals = {}
-                if (uom.misa_unit_id or '').strip() != unit_id:
-                    vals['misa_unit_id'] = unit_id
+                current_unit_id = (uom.misa_unit_id or '').strip()
+                if current_unit_id:
+                    if current_unit_id.lower() != unit_id.lower():
+                        skipped += 1
+                        self._catalog_log_change(
+                            job, 'unit', 'skip', 'uom.uom', uom.id,
+                            unit_id, unit_name, unit_name,
+                            'Bỏ qua map ĐVT vì Odoo đã có MISA ID khác: %s. '
+                            'Không cập nhật để tránh đảo mapping khi MISA có nhiều ĐVT cùng tên.' % current_unit_id,
+                        )
+                    continue
+                vals = {'misa_unit_id': unit_id}
                 if not vals:
                     continue
                 change_summary = self._catalog_change_summary(uom, vals)
@@ -2724,15 +2733,6 @@ class AmisCallbackConfig(models.Model):
             for uom in matched_uoms:
                 if uom not in existing_candidates:
                     existing_candidates.append(uom)
-                if (uom.misa_unit_id or '').strip() == unit_id:
-                    continue
-                old_value = uom.misa_unit_id or ''
-                uom.write({'misa_unit_id': unit_id})
-                self._catalog_log_change(
-                    job, 'unit', 'map', 'uom.uom', uom.id,
-                    unit_id, unit_name, unit_name,
-                    'Map ID ĐVT theo hàng hóa MISA: %s -> %s' % (old_value, unit_id),
-                )
 
     def _log_catalog_product_uom_exception(self, product, item, uoms_by_misa_id, job=None):
         unit_id = (item.get('unit_id') or item.get('main_unit_id') or '').strip().lower()
