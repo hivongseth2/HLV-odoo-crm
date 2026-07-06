@@ -89,6 +89,9 @@ def _loose_package_vals():
     return {
         'result_package_id': False,
         'package_id': False,
+        'package_level_id': False,
+        'package_transfer_qty': 0.0,
+        'package_transfer_qty_set': False,
     }
 
 def _pick_line_remaining_qty(move_line):
@@ -275,6 +278,104 @@ def _lock_packages(package_ids):
         [tuple(package_ids)],
     )
     _lock_package_reservations(package_ids)
+
+def _barcode_operation_error(warehouse, picking_type_code, operation_field):
+    if not warehouse or not picking_type_code:
+        return None
+    use_independent = request.env['ir.config_parameter'].sudo().get_param(
+        'hlv_mobile_barcode.hlv_barcode_use_independent_permissions'
+    ) == 'True'
+    if use_independent:
+        Permission = request.env.get('hlv.barcode.user.permission')
+    else:
+        Permission = request.env.get('warehouse.user.permission')
+    if not Permission:
+        return None
+    if Permission.check_picking_operation(request.env.user, warehouse, picking_type_code, operation_field):
+        return None
+    operation_label = {
+        'can_view': _('xem/quét'),
+        'can_edit': _('sửa/quét hàng'),
+        'can_delete': _('xóa dòng'),
+        'can_confirm': _('xác nhận'),
+    }.get(operation_field, operation_field)
+    return {
+        'error': _(
+            'Bạn không có quyền %s phiếu %s tại kho "%s". Vui lòng liên hệ Admin!',
+            operation_label,
+            picking_type_code,
+            warehouse.name,
+        )
+    }
+
+def _package_positive_quants(package):
+    return request.env['stock.quant'].sudo().search([
+        ('package_id', '=', package.id),
+        ('quantity', '>', 0.0),
+    ], order='id')
+
+def _single_package_location(package):
+    quants = _package_positive_quants(package)
+    if not quants:
+        raise UserError(_('Kiện "%s" không còn tồn kho.', package.name))
+    locations = quants.mapped('location_id')
+    if len(locations) != 1:
+        raise UserError(_('Kiện "%s" đang nằm ở nhiều vị trí, không thể xử lý nguyên kiện.', package.name))
+    return locations[0]
+
+def _move_package_quants_to_loose(package):
+    _lock_packages([package.id])
+    Quant = request.env['stock.quant'].sudo()
+    package_quants = _package_positive_quants(package)
+    if not package_quants:
+        raise UserError(_('Kiện "%s" không còn tồn kho để gỡ.', package.name))
+
+    conflicts = request.env['stock.move.line'].sudo().search([
+        ('picking_id.state', 'not in', ['done', 'cancel']),
+        '|',
+        ('package_id', '=', package.id),
+        ('result_package_id', '=', package.id),
+    ], limit=5)
+    if conflicts:
+        raise UserError(_(
+            'Kiện "%s" đang được giữ bởi phiếu: %s.',
+            package.name,
+            ', '.join(sorted(set(conflicts.mapped('picking_id.name')))),
+        ))
+
+    reserved_quants = package_quants.filtered(
+        lambda quant: float_compare(
+            quant.reserved_quantity,
+            0.0,
+            precision_rounding=quant.product_id.uom_id.rounding,
+        ) > 0
+    )
+    if reserved_quants:
+        raise UserError(_('Kiện "%s" đang có số lượng được dự trữ bởi nghiệp vụ khác.', package.name))
+
+    moved_qty = 0.0
+    for quant in package_quants:
+        qty = quant.quantity
+        if float_compare(qty, 0.0, precision_rounding=quant.product_id.uom_id.rounding) <= 0:
+            continue
+        Quant._update_available_quantity(
+            quant.product_id,
+            quant.location_id,
+            -qty,
+            lot_id=quant.lot_id,
+            package_id=package,
+            owner_id=quant.owner_id,
+        )
+        Quant._update_available_quantity(
+            quant.product_id,
+            quant.location_id,
+            qty,
+            lot_id=quant.lot_id,
+            package_id=False,
+            owner_id=quant.owner_id,
+        )
+        moved_qty += qty
+    return moved_qty
 
 def _add_exact_package_to_new_transfer(picking, package):
     """Reserve every physical item from one exact package on a new INT transfer."""
@@ -613,94 +714,6 @@ def _prepare_partial_packages_for_validation(picking):
         empty_moves._action_cancel()
         empty_moves.unlink()
     return
-
-def _move_package_quants_to_loose(package, source_location=False):
-    """Physically unpack one stock package into loose quants."""
-    Quant = request.env['stock.quant'].sudo()
-    package_quants = Quant.search([
-        ('package_id', '=', package.id),
-        ('quantity', '>', 0),
-    ], order='id')
-    if not package_quants:
-        return 0.0
-
-    if source_location:
-        source_quants = Quant.search([
-            ('package_id', '=', package.id),
-            ('quantity', '>', 0),
-            ('location_id', 'child_of', source_location.id),
-        ], order='id')
-        if set(source_quants.ids) != set(package_quants.ids):
-            raise UserError(_(
-                'Kiện "%s" không nằm hoàn toàn trong vị trí nguồn "%s".',
-                package.name,
-                source_location.display_name,
-            ))
-
-    reserved_quants = package_quants.filtered(
-        lambda quant: float_compare(
-            quant.reserved_quantity,
-            0.0,
-            precision_rounding=quant.product_id.uom_id.rounding,
-        ) > 0
-    )
-    if reserved_quants:
-        raise UserError(_('Kiện "%s" đang có số lượng được dự trữ bởi nghiệp vụ khác.', package.name))
-
-    moved_qty = 0.0
-    for quant in package_quants:
-        qty = quant.quantity
-        if float_compare(qty, 0.0, precision_rounding=quant.product_id.uom_id.rounding) <= 0:
-            continue
-        Quant._update_available_quantity(
-            quant.product_id,
-            quant.location_id,
-            -qty,
-            lot_id=quant.lot_id,
-            package_id=package,
-            owner_id=quant.owner_id,
-        )
-        Quant._update_available_quantity(
-            quant.product_id,
-            quant.location_id,
-            qty,
-            lot_id=quant.lot_id,
-            package_id=False,
-            owner_id=quant.owner_id,
-        )
-        moved_qty += qty
-    return moved_qty
-
-def _sync_new_transfer_move_demands(picking, moves):
-    if not _is_new_internal_transfer(picking):
-        return
-
-    empty_moves = request.env['stock.move'].sudo()
-    for move in moves.sudo().filtered(lambda m: m.state not in ['done', 'cancel']):
-        demand = sum(
-            ml.product_uom_id._compute_quantity(
-                ml.package_transfer_qty if ml.package_transfer_qty_set else ml.quantity,
-                move.product_uom,
-            )
-            for ml in move.move_line_ids
-            if ml.state != 'cancel'
-            and float_compare(
-                ml.package_transfer_qty if ml.package_transfer_qty_set else ml.quantity,
-                0.0,
-                precision_rounding=ml.product_uom_id.rounding,
-            ) > 0
-        )
-        if float_compare(demand, 0.0, precision_rounding=move.product_uom.rounding) <= 0:
-            if not move.move_orig_ids:
-                empty_moves |= move
-            else:
-                move.product_uom_qty = 0.0
-        else:
-            move.product_uom_qty = demand
-
-    if empty_moves:
-        empty_moves._action_cancel()
-        empty_moves.unlink()
 
 def _lock_package_reservations(package_ids):
     if not package_ids:
@@ -1078,7 +1091,7 @@ class HLVMobileBarcodeController(http.Controller):
                             continue
                         line_demand = ml.quantity
                     elif picking.source_transfer_id:
-                        line_demand = ml.quantity_product_uom or ml.quantity
+                        line_demand = ml.quantity
                     elif uses_qty_scanned and is_putaway and len(move.move_line_ids) > 1:
                         if ml.quantity <= 0 and ml.qty_scanned <= 0:
                             continue
@@ -1093,13 +1106,6 @@ class HLVMobileBarcodeController(http.Controller):
                     )
                     if is_package_transfer_line:
                         line_demand = ml.quantity
-                    display_qty_done = (
-                        ml.package_transfer_qty
-                        if is_package_transfer_line
-                        else (ml.qty_scanned if uses_qty_scanned else ml.quantity)
-                    )
-                    if line_demand <= 0 and display_qty_done <= 0:
-                        continue
 
                     lines.append({
                         'id': ml.id,
@@ -1109,7 +1115,11 @@ class HLVMobileBarcodeController(http.Controller):
                         'product_barcode': move.product_id.barcode,
                         'product_uom_qty': line_demand,
                         # Use qty_scanned as mobile scan progress; quantity is finalized on validate.
-                        'qty_done': display_qty_done,
+                        'qty_done': (
+                            ml.package_transfer_qty
+                            if is_package_transfer_line
+                            else (ml.qty_scanned if uses_qty_scanned else ml.quantity)
+                        ),
                         'warehouse_qty': warehouse_qty_by_product.get(move.product_id.id, 0.0),
                         'uom_name': move.product_uom.name,
                         'state': move.state,
@@ -1122,8 +1132,6 @@ class HLVMobileBarcodeController(http.Controller):
                     })
             else:
                 if is_pick_picking or picking.source_transfer_id:
-                    continue
-                if move.product_uom_qty <= 0:
                     continue
                 if is_putaway:
                     loc_name = move.location_dest_id.display_name
@@ -1334,7 +1342,6 @@ class HLVMobileBarcodeController(http.Controller):
                     and picking.move_line_ids.filtered('package_transfer_qty_set')
                 )
             ),
-            'can_unpack_packages': _can_edit_packages(picking),
             'show_qty_buttons': show_qty_buttons,
             'qty_button_threshold': qty_button_threshold,
             'camera_default_on': camera_default_on,
@@ -1365,9 +1372,20 @@ class HLVMobileBarcodeController(http.Controller):
         }
 
     @http.route('/hlv_mobile_barcode/create_empty_int', type='json', auth='user')
-    def create_empty_int(self, location_id=None, dest_warehouse_id=False, dest_location_id=False, is_multi_location=False, source_warehouse_id=False):
+    def create_empty_int(self, location_id=None, dest_warehouse_id=False, dest_location_id=False, is_multi_location=False, source_warehouse_id=False, package_id=False):
         source_loc = request.env['stock.location'].browse()
         warehouse = None
+        package = request.env['stock.quant.package'].sudo().browse()
+
+        if package_id:
+            package = request.env['stock.quant.package'].sudo().browse(int(package_id))
+            if not package.exists():
+                return {'error': _('Không tìm thấy kiện hàng')}
+            if not location_id:
+                try:
+                    location_id = _single_package_location(package).id
+                except UserError as error:
+                    return {'error': str(error)}
         
         if location_id:
             source_loc = request.env['stock.location'].browse(location_id)
@@ -1426,6 +1444,15 @@ class HLVMobileBarcodeController(http.Controller):
         if not picking_type_int:
             return {'error': _('Chưa cấu hình Operation Types (INT)')}
 
+        if package:
+            permission_error = _barcode_operation_error(
+                warehouse,
+                picking_type_int.sequence_code or 'INT',
+                'can_edit',
+            )
+            if permission_error:
+                return permission_error
+
         partner_id = False
         target_location_dest_id = transit_loc.id
         override_dest_loc_id = False
@@ -1463,8 +1490,19 @@ class HLVMobileBarcodeController(http.Controller):
             picking_vals['note'] += f"DEST_LOC_OVERRIDE:{override_dest_loc_id}\n"
             
         picking_int = request.env['stock.picking'].create(picking_vals)
+
+        if package:
+            try:
+                with request.env.cr.savepoint():
+                    _add_exact_package_to_new_transfer(picking_int, package)
+            except UserError as error:
+                picking_int.sudo().unlink()
+                return {'error': str(error)}
+            except Exception as error:
+                picking_int.sudo().unlink()
+                return {'error': str(error)}
         
-        # Keep it in draft so user can add lines
+        # Empty INT stays draft; package-prefilled INT may be confirmed by move creation.
         return {
             'success': True, 
             'picking_id': picking_int.id, 
@@ -1472,7 +1510,9 @@ class HLVMobileBarcodeController(http.Controller):
             'warehouse_code': picking_int.picking_type_id.warehouse_id.code or 'HLV',
             'location_id': source_loc.id,
             'location_name': source_loc.display_name or source_loc.name,
-            'location_dest_name': picking_int.location_dest_id.display_name or picking_int.location_dest_id.name
+            'location_dest_name': picking_int.location_dest_id.display_name or picking_int.location_dest_id.name,
+            'package_id': package.id if package else False,
+            'package_name': package.name if package else False,
         }
 
     @http.route('/hlv_mobile_barcode/process_barcode', type='json', auth='user')
@@ -3005,83 +3045,14 @@ class HLVMobileBarcodeController(http.Controller):
             return assignment_error
         if not _can_edit_packages(picking):
             return {'error': _('Phiếu này không cho phép chỉnh sửa kiện hàng.')}
-
-        package = request.env['stock.quant.package'].sudo().browse(package_id)
-        if not package.exists():
-            return {'error': _('Kiện hàng không tồn tại.')}
-
-        move_lines = picking.sudo().move_line_ids.filtered(
-            lambda ml: _line_in_package(ml, package.id) and ml.state not in ['done', 'cancel']
-        )
+            
+        move_lines = picking.move_line_ids.filtered(lambda ml: _line_in_package(ml, package_id))
+        
         if not move_lines:
             return {'error': _('Không tìm thấy sản phẩm nào trong kiện này.')}
-
-        try:
-            with request.env.cr.savepoint():
-                _lock_packages([package.id])
-                conflicts = request.env['stock.move.line'].sudo().search([
-                    ('picking_id', '!=', picking.id),
-                    ('picking_id.state', 'not in', ['done', 'cancel']),
-                    ('quantity', '>', 0),
-                    '|',
-                    ('package_id', '=', package.id),
-                    ('result_package_id', '=', package.id),
-                ])
-                if conflicts:
-                    raise UserError(_(
-                        'Kiện "%s" đang được giữ bởi phiếu khác: %s.',
-                        package.name,
-                        ', '.join(sorted(set(conflicts.mapped('picking_id.name')))),
-                    ))
-
-                source_package_lines = move_lines.filtered(lambda ml: ml.package_id == package)
-                touched_moves = move_lines.mapped('move_id')
-                line_quantities = {}
-                lines_to_unlink = request.env['stock.move.line'].sudo()
-                for ml in move_lines:
-                    loose_qty = ml.package_transfer_qty if ml.package_transfer_qty_set else ml.quantity
-                    line_quantities[ml.id] = loose_qty
-                    if (
-                        ml.package_transfer_qty_set
-                        and float_compare(loose_qty, 0.0, precision_rounding=ml.product_uom_id.rounding) <= 0
-                    ):
-                        lines_to_unlink |= ml
-
-                if source_package_lines:
-                    source_package_lines.with_context(skip_qty_validation=True).write({'quantity': 0.0})
-                    _move_package_quants_to_loose(package, source_location=picking.location_id)
-
-                remaining_lines = move_lines - lines_to_unlink
-                if lines_to_unlink:
-                    lines_to_unlink.with_context(skip_qty_validation=True).unlink()
-
-                for ml in remaining_lines:
-                    vals = {
-                        **_loose_package_vals(),
-                        'package_level_id': False,
-                    }
-                    if ml in source_package_lines:
-                        vals['quantity'] = line_quantities.get(ml.id, 0.0)
-                    if ml.package_transfer_qty_set:
-                        vals.update({
-                            'quantity': line_quantities.get(ml.id, 0.0),
-                            'package_transfer_qty': 0.0,
-                            'package_transfer_qty_set': False,
-                        })
-                    ml.with_context(skip_qty_validation=True).write(vals)
-
-                _sync_new_transfer_move_demands(picking, touched_moves)
-
-        except UserError as error:
-            return {'error': str(error)}
-        except Exception as error:
-            _logger.error("unpack_package error for picking %s package %s: %s", picking_id, package_id, str(error), exc_info=True)
-            return {'error': str(error)}
-
-        return {
-            'success': True,
-            'message': _('Đã gỡ đóng gói kiện "%s". Tất cả sản phẩm trong kiện đã chuyển thành hàng lẻ.', package.name),
-        }
+            
+        move_lines.write(_loose_package_vals())
+        return {'success': True}
 
     @http.route('/hlv_mobile_barcode/validate_picking', type='json', auth='user')
     def validate_picking(self, picking_id):
@@ -3452,24 +3423,76 @@ class HLVMobileBarcodeController(http.Controller):
             return {'title': title, 'location_barcode': location_barcode, 'location_name': title, 'results': results, 'reservations': reservations, 'warehouse_code': warehouse_code}
         elif lookup_type == 'package':
             package = request.env['stock.quant.package'].sudo().browse(record_id)
+            if not package.exists():
+                return {'error': _('Không tìm thấy kiện hàng')}
             title = package.name
             warehouse_code = 'HLV'
             location = package.location_id
             # Use sudo() to bypass company constraints on packages
             quants = quants.sudo().search([('package_id', '=', package.id), ('quantity', '>', 0.0)])
+            quant_locations = quants.mapped('location_id')
+            if not location and len(quant_locations) == 1:
+                location = quant_locations[0]
             for q in quants:
                 results.append({
+                    'product_id': q.product_id.id,
                     'product_name': q.product_id.display_name,
                     'quantity': q.quantity,
                     'location_name': q.location_id.display_name,
+                    'quant_id': q.id,
                 })
                 if not location and q.location_id:
                     location = q.location_id
             if location:
                 warehouse_code = location.warehouse_id.code or 'HLV'
-            return {'title': title, 'results': results, 'reservations': reservations, 'warehouse_code': warehouse_code}
+            can_process_whole_package = bool(quants and location and len(quant_locations) == 1)
+            return {
+                'title': title,
+                'results': results,
+                'reservations': reservations,
+                'warehouse_code': warehouse_code,
+                'package_id': package.id,
+                'location_id': location.id if location else False,
+                'location_barcode': (location.barcode or location.name) if location else '',
+                'location_name': location.display_name if location else '',
+                'can_unpack_package': bool(quants),
+                'can_move_package': can_process_whole_package,
+            }
                 
         return {'title': title, 'results': results, 'reservations': reservations}
+
+    @http.route('/hlv_mobile_barcode/unpack_inventory_package', type='json', auth='user')
+    def unpack_inventory_package(self, package_id):
+        package = request.env['stock.quant.package'].sudo().browse(int(package_id or 0))
+        if not package.exists():
+            return {'error': _('Không tìm thấy kiện hàng')}
+        try:
+            source_location = _single_package_location(package)
+        except UserError:
+            source_location = package.location_id
+
+        warehouse = source_location.warehouse_id if source_location else False
+        if source_location and not warehouse:
+            warehouse = request.env['stock.warehouse'].sudo().search([
+                ('view_location_id', 'parent_of', source_location.id),
+            ], limit=1)
+        permission_error = _barcode_operation_error(warehouse, 'INT', 'can_edit')
+        if permission_error:
+            return permission_error
+
+        try:
+            with request.env.cr.savepoint():
+                _move_package_quants_to_loose(package)
+        except UserError as error:
+            return {'error': str(error)}
+        except Exception as error:
+            _logger.error("unpack_inventory_package error: %s", str(error), exc_info=True)
+            return {'error': str(error)}
+
+        return {
+            'success': True,
+            'message': _('Đã gỡ kiện "%s" thành hàng lẻ.', package.name),
+        }
 
     @http.route('/hlv_mobile_barcode/validate_location', type='json', auth='user')
     def validate_location(self, barcode):

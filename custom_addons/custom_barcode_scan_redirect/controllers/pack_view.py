@@ -4,7 +4,7 @@ from odoo import http
 from odoo.http import request
 import logging
 
-from ._shared import get_ml_demand
+from ._shared import get_ml_demand, move_package_quants_to_loose
 
 _logger = logging.getLogger(__name__)
 
@@ -236,35 +236,15 @@ class PackViewController(http.Controller):
             # Step 1: Unreserve — removes pass-through lines (qty_done=0), keeps packed lines
             picking.do_unreserve()
 
-            # Step 2: Move quants out of source packages to loose
-            Quant = request.env['stock.quant'].sudo()
+            # Step 2: Move positive quants out of source packages to loose
             for pkg in source_packages:
-                pkg_quants = Quant.search([
-                    ('package_id', '=', pkg.id),
-                    ('location_id', '=', location.id),
-                    ('quantity', '!=', 0),
-                ])
-                for q in pkg_quants:
-                    existing = Quant.search([
-                        ('product_id', '=', q.product_id.id),
-                        ('location_id', '=', q.location_id.id),
-                        ('lot_id', '=', q.lot_id.id if q.lot_id else False),
-                        ('package_id', '=', False),
-                        ('owner_id', '=', q.owner_id.id if q.owner_id else False),
-                    ], limit=1)
-                    if existing:
-                        existing.quantity += q.quantity
-                    else:
-                        Quant.create({
-                            'product_id': q.product_id.id,
-                            'location_id': q.location_id.id,
-                            'lot_id': q.lot_id.id if q.lot_id else False,
-                            'package_id': False,
-                            'owner_id': q.owner_id.id if q.owner_id else False,
-                            'quantity': q.quantity,
-                        })
-                    q.quantity = 0
-                _logger.info("[AUTO-CLEAN] Moved quants out of %s", pkg.name)
+                move_package_quants_to_loose(
+                    request.env,
+                    pkg,
+                    location=location,
+                    logger=_logger,
+                )
+                _logger.info("[AUTO-CLEAN] Moved positive quants out of %s", pkg.name)
 
             # Step 3: Re-reserve with clean loose quants
             picking.action_assign()
@@ -299,11 +279,13 @@ class PackViewController(http.Controller):
                 continue
 
             total_done = sum(ml.qty_done for ml in pkg_mls)
-            total_demand = sum(get_ml_demand(ml) for ml in pkg_mls)
+            # Package cards show package contents, not the move demand split
+            # across all package move lines.
+            total_demand = total_done
             package_lines = [{
                 'product_name': ml.product_id.display_name,
                 'done_qty': ml.qty_done,
-                'demand_qty': get_ml_demand(ml),
+                'demand_qty': ml.qty_done,
                 'product_uom': ml.product_uom_id.name,
             } for ml in pkg_mls]
 

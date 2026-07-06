@@ -87,6 +87,22 @@ def _do_get(api_path, params, timeout=30):
     return resp.status_code, body
 
 
+def _is_invalid_token_response(body):
+    """Return True when Shopee response means access_token must be refreshed."""
+    if not isinstance(body, dict):
+        return False
+    invalid_token_errors = (
+        'invalid_access_token',
+        'invalid_acceess_token',
+        'error_auth',
+    )
+    text = ' '.join(
+        str(body.get(key) or '').lower()
+        for key in ('error', 'message', 'debug_message')
+    )
+    return any(code in text for code in invalid_token_errors)
+
+
 # ──────────────────────────────────────────────────────
 #  Public API
 # ──────────────────────────────────────────────────────
@@ -167,6 +183,28 @@ def call_order_detail(creds, order_sn_list_str, optional_fields=None):
     _logger.info("Shopee API get_order_detail – params: %s", {k: v for k, v in params.items() if k != 'sign'})
     status_code, body = _do_get(api_path, params)
     return status_code, body, params
+
+
+def call_order_detail_with_token_refresh(shop, order_sn_list_str, optional_fields=None):
+    """
+    Call get_order_detail and refresh access_token once when Shopee rejects it.
+
+    Returns (status_code, body_dict, params_sent, creds_used) so callers can reuse
+    the fresh credentials for follow-up API calls such as escrow.
+    """
+    creds = get_credentials_from_shop(shop)
+    status_code, body, params = call_order_detail(creds, order_sn_list_str, optional_fields)
+    if not _is_invalid_token_response(body):
+        return status_code, body, params, creds
+
+    _logger.warning(
+        "Shopee get_order_detail invalid access_token for shop %s - refreshing and retrying once.",
+        shop.display_name,
+    )
+    refresh_shopee_access_token(shop)
+    creds = get_credentials_from_shop(shop)
+    status_code, body, params = call_order_detail(creds, order_sn_list_str, optional_fields)
+    return status_code, body, params, creds
 
 
 def call_escrow_detail(creds, order_sn):

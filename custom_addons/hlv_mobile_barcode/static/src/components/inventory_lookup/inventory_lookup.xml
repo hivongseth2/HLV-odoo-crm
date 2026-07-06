@@ -8,11 +8,18 @@
                     <i class="fa fa-search"></i> <t t-esc="state.title"/>
                 </div>
                 <div t-if="props.lookupType !== 'product'" style="display: flex; gap: 8px; flex-wrap: wrap;">
-                    <button class="btn btn-outline" style="padding: 6px 12px; font-size: 0.85rem;" t-on-click="props.onBack">
+                    <!-- <button class="btn btn-outline" style="padding: 6px 12px; font-size: 0.85rem;" t-on-click="props.onBack">
                         <i class="fa fa-arrow-left"></i> Quay lại
-                    </button>
+                    </button> -->
                     <button t-if="props.lookupType === 'location'" class="btn btn-primary" style="padding: 6px 12px; font-size: 0.85rem; flex: 1;" t-on-click="() => props.onBatchMove(state.location_barcode, state.location_name)">
                         <i class="fa fa-boxes"></i> Tạo chuyển kho
+                    </button>
+                    <button t-if="props.lookupType === 'package' and state.can_unpack_package" class="btn btn-warning" style="padding: 6px 12px; font-size: 0.85rem; color: #fff;" t-on-click="unpackPackage" t-att-disabled="state.actionLoading">
+                        <t t-if="!state.actionLoading"><i class="fa fa-box-open"></i> Gỡ kiện</t>
+                        <t t-else=""><i class="fa fa-spin fa-spinner"></i> Đang gỡ</t>
+                    </button>
+                    <button t-if="props.lookupType === 'package' and state.can_move_package" class="btn btn-primary" style="padding: 6px 12px; font-size: 0.85rem; flex: 1;" t-on-click="movePackage" t-att-disabled="state.actionLoading">
+                        <i class="fa fa-exchange-alt"></i> Chuyển vị trí kiện
                     </button>
                 </div>
             </div>

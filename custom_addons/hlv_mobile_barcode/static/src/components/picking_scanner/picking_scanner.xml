@@ -130,11 +130,11 @@
                                                 </div>
                                             </t>
                                         </div>
-                                        <div class="package-card-footer" t-if="state.picking.state !== 'done' and (state.picking.can_edit_packages or state.picking.can_unpack_packages)">
+                                        <div class="package-card-footer" t-if="state.picking.state !== 'done' and state.picking.can_edit_packages">
                                             <button t-if="state.picking.can_edit_packages" class="btn btn-outline btn-sm btn-pkg-edit" t-on-click="() => this.openPackageEdit(pkg)">
                                                 <i class="fa fa-edit"></i> Chỉnh sửa
                                             </button>
-                                            <button t-if="state.picking.can_unpack_packages" class="btn btn-warning btn-sm btn-pkg-unpack" t-on-click="() => this.unpackPackage(pkg)">
+                                            <button t-if="state.picking.can_edit_packages" class="btn btn-warning btn-sm" style="margin-left: 8px; padding: 4px 12px; font-size: 0.85rem; color: #fff;" t-on-click="() => this.unpackPackage(pkg)">
                                                 <i class="fa fa-box-open"></i> Gỡ đóng gói
                                             </button>
                                         </div>
@@ -427,9 +427,6 @@
                         <!-- Modal Footer -->
                         <div class="modal-footer-custom">
                             <button class="btn btn-outline" style="flex: 1;" t-on-click="closePackageEdit">Đóng</button>
-                            <button t-if="state.picking.can_unpack_packages" class="btn btn-warning" style="flex: 1; color: #fff;" t-on-click="() => this.unpackPackage(state.editingPackage)">
-                                <i class="fa fa-box-open"></i> Gỡ đóng gói
-                            </button>
                             <button t-if="state.picking.can_edit_packages" class="btn btn-success" style="flex: 1;" t-on-click="savePackageChanges">Lưu thay đổi</button>
                         </div>
                     </div>
