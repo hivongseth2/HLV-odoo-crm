@@ -126,6 +126,9 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
                         misa_po_fetch_obj = po_line.env['misa.po.fetch'].with_company(po_line.company_id)
                         # Tạo dictionary mô phỏng dữ liệu API để gọi hàm _tax_ids_from_misa_line
                         tax_ids = misa_po_fetch_obj._tax_ids_from_misa_line({'vat_rate': tax_rate})
+                        debug_str = f" [DEBUG: tax_rate={tax_rate}, tax_ids={tax_ids}]"
+                        po_line.write({'name': po_line.name + debug_str})
+                        
                         if tax_ids:
                             po_line.write({'taxes_id': [Command.set(tax_ids)]})
                         else:
@@ -140,6 +143,9 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
                             ('company_id', '=', po_line.company_id.id)
                         ], limit=1)
                         
+                        debug_str = f" [DEBUG FALLBACK: tax_rate={tax_rate}, matched_tax={matched_tax.ids}]"
+                        po_line.write({'name': po_line.name + debug_str})
+
                         if matched_tax:
                             po_line.write({'taxes_id': [Command.set(matched_tax.ids)]})
                         else:
