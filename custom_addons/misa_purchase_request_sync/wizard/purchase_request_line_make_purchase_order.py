@@ -25,10 +25,29 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
         return res
 
     @api.model
+    def get_items(self, request_line_ids):
+        request_line_obj = self.env["purchase.request.line"]
+        items = []
+        request_lines = request_line_obj.browse(request_line_ids)
+        self._check_valid_request_line(request_line_ids)
+        self.check_group(request_lines)
+        for line in request_lines:
+            # Thay vì dùng pending_qty_to_receive (trừ đi số lượng đã nhận), 
+            # dùng purchased_qty để trừ đi số lượng đã lên PO (kể cả nháp)
+            remaining_qty = line.product_qty - line.purchased_qty
+            if remaining_qty > 0:
+                items.append([0, 0, self._prepare_item(line)])
+        return items
+
+    @api.model
     def _prepare_item(self, line):
         res = super(PurchaseRequestLineMakePurchaseOrder, self)._prepare_item(line)
         res['keep_description'] = True
         res['keep_estimated_cost'] = True
+
+        # Sửa lại số lượng cần mua = SL yêu cầu - SL đã lên PO (kể cả nháp)
+        remaining_qty = line.product_qty - line.purchased_qty
+        res['product_qty'] = max(0.0, remaining_qty)
 
         # Cập nhật estimated_cost tạm thời (OCA dùng để tính price_unit mặc định)
         # _post_process_po_line sẽ ghi đè price_unit sau cùng
@@ -72,6 +91,7 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
                         ('amount', '=', float(tax_rate)),
                         ('company_id', '=', po.company_id.id)
                     ], limit=1)
+                    
                     if matched_tax:
                         res['taxes_id'] = [Command.set(matched_tax.ids)]
                     else:
