@@ -40,6 +40,42 @@ class StockMoveLine(models.Model):
         return Markup("<h3>{}</h3>{}{}").format(title, message_body, product_line)
 
     @api.model
+    def _purchase_request_confirm_done_messages_content(self, messages_data):
+        if not messages_data:
+            return ""
+        
+        first_data = messages_data[0]
+        title = _(
+            "Đã nhập kho {picking_name} cho yêu cầu {request_name}"
+        ).format(
+            picking_name=first_data["picking_name"],
+            request_name=first_data["request_name"],
+        )
+
+        message_body = _(
+            "Các sản phẩm thuộc YCMH {request_name} "
+            "vừa được nhập vào {location_name} "
+            "từ phiếu nhập kho {picking_name}:"
+        ).format(
+            request_name=first_data["request_name"],
+            location_name=first_data["location_name"],
+            picking_name=first_data["picking_name"],
+        )
+
+        product_lines = "<ul>"
+        for data in messages_data:
+            product_lines += Markup(
+                "<li><b>{}</b>: " + _("Số lượng thực nhập") + " {} {}</li>"
+            ).format(
+                html_escape(data["product_name"]),
+                data["product_qty"],
+                html_escape(data["product_uom"]),
+            )
+        product_lines += "</ul>"
+
+        return Markup("<h3>{}</h3>{}{}").format(title, message_body, Markup(product_lines))
+
+    @api.model
     def _picking_confirm_done_message_content(self, message_data):
         title = _("Đã nhập kho cho YCMH {name}").format(
             name=message_data["request_name"]
@@ -65,6 +101,39 @@ class StockMoveLine(models.Model):
 
         return Markup("<h3>{}</h3>{}{}").format(title, message_body, product_line)
 
+    @api.model
+    def _picking_confirm_done_messages_content(self, messages_data):
+        if not messages_data:
+            return ""
+            
+        first_data = messages_data[0]
+        title = _("Đã nhập kho cho YCMH {name}").format(
+            name=first_data["request_name"]
+        )
+
+        message_body = _(
+            "Các sản phẩm thuộc YCMH {request_name} "
+            "(người yêu cầu: {requestor}) "
+            "vừa được nhập vào {location_name}:"
+        ).format(
+            request_name=first_data["request_name"],
+            requestor=first_data["requestor"],
+            location_name=first_data["location_name"],
+        )
+
+        product_lines = "<ul>"
+        for data in messages_data:
+            product_lines += Markup(
+                "<li><b>{}</b>: " + _("Số lượng thực nhập") + " {} {}</li>"
+            ).format(
+                html_escape(data["product_name"]),
+                data["product_qty"],
+                html_escape(data["product_uom"]),
+            )
+        product_lines += "</ul>"
+
+        return Markup("<h3>{}</h3>{}{}").format(title, message_body, Markup(product_lines))
+
     def _prepare_message_data(self, ml, request, allocated_qty):
         return {
             "request_name": request.name,
@@ -77,6 +146,7 @@ class StockMoveLine(models.Model):
         }
 
     def allocate(self):
+        grouped_messages = {}
         for ml in self.filtered(
             lambda m: m.exists() and m.move_id.purchase_request_allocation_ids
         ):
@@ -104,27 +174,37 @@ class StockMoveLine(models.Model):
                     message_data = self._prepare_message_data(
                         ml, request, allocated_qty
                     )
-                    message = self._purchase_request_confirm_done_message_content(
-                        message_data
-                    )
-                    if message:
-                        request.message_post(
-                            body=Markup(message),
-                            subtype_id=self.env.ref(
-                                "purchase_request.mt_request_picking_done"
-                            ).id,
-                        )
-
-                    picking_message = self._picking_confirm_done_message_content(
-                        message_data
-                    )
-                    if picking_message:
-                        ml.move_id.picking_id.message_post(
-                            body=Markup(picking_message),
-                            subtype_id=self.env.ref("mail.mt_comment").id,
-                        )
+                    key = (request, ml.picking_id)
+                    if key not in grouped_messages:
+                        grouped_messages[key] = []
+                    grouped_messages[key].append(message_data)
 
                 allocation._compute_open_product_qty()
+
+        # Send grouped messages
+        for (request, picking), messages_data in grouped_messages.items():
+            if not messages_data:
+                continue
+                
+            message = self._purchase_request_confirm_done_messages_content(
+                messages_data
+            )
+            if message:
+                request.message_post(
+                    body=Markup(message),
+                    subtype_id=self.env.ref(
+                        "purchase_request.mt_request_picking_done"
+                    ).id,
+                )
+
+            picking_message = self._picking_confirm_done_messages_content(
+                messages_data
+            )
+            if picking_message:
+                picking.message_post(
+                    body=Markup(picking_message),
+                    subtype_id=self.env.ref("mail.mt_comment").id,
+                )
 
     def _action_done(self):
         res = super()._action_done()
