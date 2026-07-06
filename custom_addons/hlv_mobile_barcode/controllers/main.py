@@ -64,7 +64,7 @@ def _can_edit_packages(picking):
         picking
         and picking.exists()
         and picking.state not in ['done', 'cancel']
-        and not _is_putaway_picking(picking)
+        and (not _is_putaway_picking(picking) or _is_return_picking(picking))
     )
 
 def _line_package(line):
