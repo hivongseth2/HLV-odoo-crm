@@ -64,7 +64,7 @@ def _can_edit_packages(picking):
         picking
         and picking.exists()
         and picking.state not in ['done', 'cancel']
-        and (picking.source_transfer_id or not _is_putaway_picking(picking))
+        and not _is_putaway_picking(picking)
     )
 
 def _line_package(line):
