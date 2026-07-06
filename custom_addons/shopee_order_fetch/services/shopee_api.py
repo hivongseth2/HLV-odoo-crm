@@ -174,6 +174,27 @@ def call_order_detail(creds, order_sn_list_str, optional_fields=None):
     return status_code, body, params
 
 
+def _refresh_shop_access_token(shop):
+    """Refresh a shop token through the installed shop hook, with a local fallback."""
+    shop = shop.sudo()
+    if hasattr(shop, 'action_force_update_shop'):
+        shop.action_force_update_shop()
+        return
+    if hasattr(shop, '_refresh_shopee_token'):
+        shop._refresh_shopee_token()
+        return
+
+    refresh_func = globals().get('refresh_shopee_access_token')
+    if refresh_func:
+        refresh_func(shop)
+        return
+
+    raise UserError(
+        _("Shop '%s' không có hàm làm mới Shopee access_token khả dụng.")
+        % shop.display_name
+    )
+
+
 def call_order_detail_with_token_refresh(shop, order_sn_list_str, optional_fields=None):
     """
     Call get_order_detail and refresh access_token once when Shopee rejects it.
@@ -190,7 +211,7 @@ def call_order_detail_with_token_refresh(shop, order_sn_list_str, optional_field
         "Shopee get_order_detail invalid access_token for shop %s - refreshing and retrying once.",
         shop.display_name,
     )
-    refresh_shopee_access_token(shop)
+    _refresh_shop_access_token(shop)
     creds = get_credentials_from_shop(shop)
     status_code, body, params = call_order_detail(creds, order_sn_list_str, optional_fields)
     return status_code, body, params, creds
