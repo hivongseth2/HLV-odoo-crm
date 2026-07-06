@@ -69,10 +69,9 @@ def _check_package_permission(picking):
     use_independent = request.env['ir.config_parameter'].sudo().get_param(
         'hlv_mobile_barcode.hlv_barcode_use_independent_permissions'
     ) == 'True'
-    if use_independent:
-        Permission = request.env.get('hlv.barcode.user.permission')
-    else:
-        Permission = request.env.get('warehouse.user.permission')
+    if not use_independent:
+        return False
+    Permission = request.env.get('hlv.barcode.user.permission')
     if not Permission:
         return True
     warehouse = picking.picking_type_id.warehouse_id

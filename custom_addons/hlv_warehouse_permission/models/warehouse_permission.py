@@ -74,8 +74,6 @@ class WarehouseUserPermission(models.Model):
         )
         if not line:
             return False
-        if operation_field not in line._fields:
-            return False
         return bool(line[0][operation_field])
 
     @api.model
