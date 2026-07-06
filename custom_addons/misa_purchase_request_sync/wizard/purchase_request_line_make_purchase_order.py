@@ -49,15 +49,12 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
         remaining_qty = line.product_qty - line.purchased_qty
         res['product_qty'] = max(0.0, remaining_qty)
 
-        # Cập nhật estimated_cost tạm thời (OCA dùng để tính price_unit mặc định)
-        # _post_process_po_line sẽ ghi đè price_unit sau cùng
-        misa_price = False
+        # Cập nhật estimated_cost (OCA dùng để tính price_unit = estimated_cost / product_qty)
         if hasattr(line, 'misa_price_before_tax') and line.misa_price_before_tax:
-            misa_price = line.misa_price_before_tax
-        if not misa_price and line.estimated_cost:
-            misa_price = line.estimated_cost
-        if misa_price:
-            res['estimated_cost'] = misa_price
+            # misa_price_before_tax là ĐƠN GIÁ, nên estimated_cost (tổng) = đơn giá * số lượng
+            res['estimated_cost'] = line.misa_price_before_tax * res['product_qty']
+        elif line.estimated_cost:
+            res['estimated_cost'] = line.estimated_cost
 
         # NCC: ưu tiên sale_proposed_supplier_id, fallback misa_supplier_id
         supplier = line.sale_proposed_supplier_id if hasattr(line, 'sale_proposed_supplier_id') and line.sale_proposed_supplier_id else False
@@ -149,17 +146,3 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
         string="Đơn giá MISA", 
         readonly=True
     )
-
-    def _post_process_po_line(self, item, po_line, new_pr_line):
-        super()._post_process_po_line(item, po_line, new_pr_line)
-        if item.line_id:
-            # ── Cập nhật đơn giá ──
-            # Sử dụng write để đảm bảo Odoo 18 lưu dữ liệu và không bị compute đè lại
-            price = False
-            if hasattr(item.line_id, 'misa_price_before_tax') and item.line_id.misa_price_before_tax:
-                price = item.line_id.misa_price_before_tax
-            elif item.line_id.estimated_cost:
-                price = item.line_id.estimated_cost
-            
-            if price:
-                po_line.write({'price_unit': price})
