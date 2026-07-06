@@ -112,59 +112,6 @@ class HlvBarcodeUserPermission(models.Model):
         return bool(line[0][operation_field])
 
     @api.model
-    def action_sync_from_common(self, *args, **kwargs):
-        """Đồng bộ cấu hình từ Phân quyền Kho Chung (warehouse.user.permission) 
-        sang Phân quyền Barcode (hlv.barcode.user.permission)."""
-        CommonPerm = self.env['warehouse.user.permission']
-        common_records = CommonPerm.sudo().search([])
-        
-        created = 0
-        updated = 0
-        for common in common_records:
-            barcode_perm = self.sudo().search([
-                ('user_id', '=', common.user_id.id),
-                ('warehouse_id', '=', common.warehouse_id.id),
-            ], limit=1)
-            
-            if not barcode_perm:
-                barcode_perm = self.sudo().create({
-                    'user_id': common.user_id.id,
-                    'warehouse_id': common.warehouse_id.id,
-                })
-                created += 1
-            
-            for common_line in common.picking_permission_ids:
-                barcode_line = barcode_perm.picking_permission_ids.filtered(
-                    lambda l: l.picking_type_code == common_line.picking_type_code
-                )
-                barcode_fields = {
-                    'can_view': common_line.can_view,
-                    'can_edit': common_line.can_edit,
-                    'can_delete': common_line.can_delete,
-                    'can_confirm': common_line.can_confirm,
-                    'can_edit_packages': True,
-                }
-                if barcode_line:
-                    barcode_line.sudo().write(barcode_fields)
-                    updated += 1
-                else:
-                    barcode_fields['picking_type_code'] = common_line.picking_type_code
-                    barcode_fields['permission_id'] = barcode_perm.id
-                    self.env['hlv.barcode.picking.permission'].sudo().create(barcode_fields)
-                    created += 1
-        
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': _('Hoàn thành'),
-                'message': _('Đã đồng bộ xong! Tạo mới: %d, Cập nhật: %d bản ghi chi tiết.') % (created, updated),
-                'type': 'success',
-                'sticky': False,
-            }
-        }
-
-    @api.model
     def action_generate_all(self):
         """Tạo phân quyền barcode cho tất cả user nội bộ × tất cả kho (mặc định bật hết)."""
         users = self.env['res.users'].search([
@@ -189,7 +136,6 @@ class HlvBarcodeUserPermission(models.Model):
                                 'can_edit': True,
                                 'can_delete': True,
                                 'can_confirm': True,
-                                'can_edit_packages': True,
                             }) for code, _label in PICKING_TYPE_CODES
                         ],
                     })
@@ -223,7 +169,6 @@ class HlvBarcodePickingPermission(models.Model):
     can_edit = fields.Boolean('Sửa / Quét hàng', default=True)
     can_delete = fields.Boolean('Xóa dòng', default=True)
     can_confirm = fields.Boolean('Xác nhận phiếu', default=True)
-    can_edit_packages = fields.Boolean('Gỡ / Chỉnh sửa kiện', default=True)
 
     _sql_constraints = [
         ('permission_type_uniq', 'unique(permission_id, picking_type_code)',

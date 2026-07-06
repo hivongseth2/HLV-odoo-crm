@@ -17,14 +17,9 @@
             <list>
                 <header>
                     <button name="%(action_generate_all_barcode_permissions)d" type="action"
-                            string="Tạo tự động"
-                            icon="fa-bolt"
-                            class="btn-primary" display="always"/>
-                    <button name="action_sync_from_common" type="object"
-                            string="Đồng bộ Quyền chung"
-                            icon="fa-refresh"
-                            class="btn-secondary" display="always"
-                            confirm="Bạn có chắc muốn đồng bộ? Dữ liệu phân quyền barcode hiện tại sẽ bị ghi đè bởi phân quyền chung."/>
+                            string="⚡ Tạo phân quyền cho tất cả"
+                            class="btn-primary"
+                            groups="hlv_mobile_barcode.group_barcode_permission_manager"/>
                 </header>
                 <field name="user_id"/>
                 <field name="warehouse_id"/>
@@ -55,7 +50,6 @@
                                     <field name="can_edit" widget="boolean_toggle"/>
                                     <field name="can_delete" widget="boolean_toggle"/>
                                     <field name="can_confirm" widget="boolean_toggle"/>
-                                    <field name="can_edit_packages" widget="boolean_toggle"/>
                                 </list>
                             </field>
                         </page>
