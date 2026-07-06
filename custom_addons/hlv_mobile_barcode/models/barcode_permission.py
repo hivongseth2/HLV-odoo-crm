@@ -112,7 +112,7 @@ class HlvBarcodeUserPermission(models.Model):
         return bool(line[0][operation_field])
 
     @api.model
-    def action_sync_from_common(self):
+    def action_sync_from_common(self, *args, **kwargs):
         """Đồng bộ cấu hình từ Phân quyền Kho Chung (warehouse.user.permission) 
         sang Phân quyền Barcode (hlv.barcode.user.permission)."""
         CommonPerm = self.env['warehouse.user.permission']

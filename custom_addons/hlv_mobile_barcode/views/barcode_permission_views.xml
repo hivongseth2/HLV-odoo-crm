@@ -16,13 +16,15 @@
         <field name="arch" type="xml">
             <list>
                 <header>
+                    <button name="%(action_generate_all_barcode_permissions)d" type="action"
+                            string="Tạo tự động"
+                            icon="fa-bolt"
+                            class="btn-primary" display="always"/>
                     <button name="action_sync_from_common" type="object"
-                            string="🔄 Đồng bộ từ phân quyền chung"
+                            string="Đồng bộ Quyền chung"
+                            icon="fa-refresh"
                             class="btn-secondary" display="always"
                             confirm="Bạn có chắc muốn đồng bộ? Dữ liệu phân quyền barcode hiện tại sẽ bị ghi đè bởi phân quyền chung."/>
-                    <button name="%(action_generate_all_barcode_permissions)d" type="action"
-                            string="⚡ Tạo phân quyền cho tất cả"
-                            class="btn-primary" display="always"/>
                 </header>
                 <field name="user_id"/>
                 <field name="warehouse_id"/>
