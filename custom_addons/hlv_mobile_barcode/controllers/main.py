@@ -59,12 +59,35 @@ def _uses_qty_scanned_progress(picking):
         return False
     return bool(picking.source_transfer_id) or _is_pick_picking(picking) or _is_putaway_picking(picking) or _is_return_picking(picking)
 
+def _check_package_permission(picking):
+    """Check if current user has can_edit_packages permission for this picking."""
+    if not picking or not picking.exists():
+        return False
+    user = request.env.user
+    if user._is_superuser():
+        return True
+    use_independent = request.env['ir.config_parameter'].sudo().get_param(
+        'hlv_mobile_barcode.hlv_barcode_use_independent_permissions'
+    ) == 'True'
+    if use_independent:
+        Permission = request.env.get('hlv.barcode.user.permission')
+    else:
+        Permission = request.env.get('warehouse.user.permission')
+    if not Permission:
+        return True
+    warehouse = picking.picking_type_id.warehouse_id
+    code = picking.picking_type_id.sequence_code
+    if not warehouse or not code:
+        return True
+    return Permission.check_picking_operation(user, warehouse, code, 'can_edit_packages')
+
 def _can_edit_packages(picking):
     return bool(
         picking
         and picking.exists()
         and picking.state not in ['done', 'cancel']
         and (not _is_putaway_picking(picking) or _is_return_picking(picking))
+        and _check_package_permission(picking)
     )
 
 def _line_package(line):

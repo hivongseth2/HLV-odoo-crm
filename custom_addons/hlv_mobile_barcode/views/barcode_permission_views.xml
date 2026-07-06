@@ -50,6 +50,7 @@
                                     <field name="can_edit" widget="boolean_toggle"/>
                                     <field name="can_delete" widget="boolean_toggle"/>
                                     <field name="can_confirm" widget="boolean_toggle"/>
+                                    <field name="can_edit_packages" widget="boolean_toggle"/>
                                 </list>
                             </field>
                         </page>

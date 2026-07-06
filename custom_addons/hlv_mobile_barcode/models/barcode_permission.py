@@ -136,6 +136,7 @@ class HlvBarcodeUserPermission(models.Model):
                                 'can_edit': True,
                                 'can_delete': True,
                                 'can_confirm': True,
+                                'can_edit_packages': True,
                             }) for code, _label in PICKING_TYPE_CODES
                         ],
                     })
@@ -169,6 +170,7 @@ class HlvBarcodePickingPermission(models.Model):
     can_edit = fields.Boolean('Sửa / Quét hàng', default=True)
     can_delete = fields.Boolean('Xóa dòng', default=True)
     can_confirm = fields.Boolean('Xác nhận phiếu', default=True)
+    can_edit_packages = fields.Boolean('Gỡ / Chỉnh sửa kiện', default=True)
 
     _sql_constraints = [
         ('permission_type_uniq', 'unique(permission_id, picking_type_code)',
