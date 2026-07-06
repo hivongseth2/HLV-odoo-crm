@@ -1,4 +1,4 @@
-from odoo import api, fields, models
+from odoo import api, fields, models, Command
 
 
 class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
@@ -120,11 +120,16 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
                 is_from_misa = hasattr(item.line_id.request_id, 'misa_id') and item.line_id.request_id.misa_id
                 if item.line_id.misa_tax_rate > 0 or is_from_misa:
                     tax_rate = item.line_id.misa_tax_rate
-                    matched_tax = False
                     
-                    # Dùng hàm có sẵn trong codebase (misa_po_fetch)
                     if 'misa.po.fetch' in po_line.env:
-                        matched_tax = po_line.env['misa.po.fetch'].with_company(po_line.company_id)._get_or_create_vn_vat(tax_rate, use='purchase')
+                        # Dùng hàm có sẵn trong codebase (misa_po_fetch)
+                        misa_po_fetch_obj = po_line.env['misa.po.fetch'].with_company(po_line.company_id)
+                        # Tạo dictionary mô phỏng dữ liệu API để gọi hàm _tax_ids_from_misa_line
+                        tax_ids = misa_po_fetch_obj._tax_ids_from_misa_line({'vat_rate': tax_rate})
+                        if tax_ids:
+                            po_line.write({'taxes_id': [Command.set(tax_ids)]})
+                        else:
+                            po_line.write({'taxes_id': [Command.clear()]})
                     else:
                         # Fallback tìm cơ bản
                         Tax = po_line.env['account.tax'].with_company(po_line.company_id)
@@ -134,7 +139,9 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
                             ('amount', '=', float(tax_rate)),
                             ('company_id', '=', po_line.company_id.id)
                         ], limit=1)
-                    
-                    if matched_tax:
-                        po_line.write({'taxes_id': [(6, 0, [matched_tax.id])]})
+                        
+                        if matched_tax:
+                            po_line.write({'taxes_id': [Command.set(matched_tax.ids)]})
+                        else:
+                            po_line.write({'taxes_id': [Command.clear()]})
             # Nếu không có misa_tax_rate, giữ nguyên taxes_id mặc định (từ product/company)
