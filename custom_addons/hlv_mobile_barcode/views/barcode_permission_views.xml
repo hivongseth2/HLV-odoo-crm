@@ -19,12 +19,10 @@
                     <button name="action_sync_from_common" type="object"
                             string="🔄 Đồng bộ từ phân quyền chung"
                             class="btn-secondary"
-                            confirm="Bạn có chắc muốn đồng bộ? Dữ liệu phân quyền barcode hiện tại sẽ bị ghi đè bởi phân quyền chung."
-                            groups="hlv_mobile_barcode.group_barcode_permission_manager"/>
+                            confirm="Bạn có chắc muốn đồng bộ? Dữ liệu phân quyền barcode hiện tại sẽ bị ghi đè bởi phân quyền chung."/>
                     <button name="%(action_generate_all_barcode_permissions)d" type="action"
                             string="⚡ Tạo phân quyền cho tất cả"
-                            class="btn-primary"
-                            groups="hlv_mobile_barcode.group_barcode_permission_manager"/>
+                            class="btn-primary"/>
                 </header>
                 <field name="user_id"/>
                 <field name="warehouse_id"/>
