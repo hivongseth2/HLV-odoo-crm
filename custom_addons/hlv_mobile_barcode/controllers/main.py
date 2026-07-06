@@ -380,22 +380,26 @@ def _move_package_quants_to_loose(package):
         qty = quant.quantity
         if float_compare(qty, 0.0, precision_rounding=quant.product_id.uom_id.rounding) <= 0:
             continue
-        Quant._update_available_quantity(
-            quant.product_id,
-            quant.location_id,
-            -qty,
-            lot_id=quant.lot_id,
-            package_id=package,
-            owner_id=quant.owner_id,
-        )
-        Quant._update_available_quantity(
-            quant.product_id,
-            quant.location_id,
-            qty,
-            lot_id=quant.lot_id,
-            package_id=False,
-            owner_id=quant.owner_id,
-        )
+            
+        if quant.location_id.should_bypass_reservation():
+            quant.sudo().write({'package_id': False})
+        else:
+            Quant._update_available_quantity(
+                quant.product_id,
+                quant.location_id,
+                -qty,
+                lot_id=quant.lot_id,
+                package_id=package,
+                owner_id=quant.owner_id,
+            )
+            Quant._update_available_quantity(
+                quant.product_id,
+                quant.location_id,
+                qty,
+                lot_id=quant.lot_id,
+                package_id=False,
+                owner_id=quant.owner_id,
+            )
         moved_qty += qty
     return moved_qty
 
@@ -3073,7 +3077,17 @@ class HLVMobileBarcodeController(http.Controller):
         if not move_lines:
             return {'error': _('Không tìm thấy sản phẩm nào trong kiện này.')}
             
-        move_lines.write(_loose_package_vals())
+        package = request.env['stock.quant.package'].browse(package_id)
+        package_quants = _package_positive_quants(package)
+        
+        try:
+            with request.env.cr.savepoint():
+                move_lines.write(_loose_package_vals())
+                if package_quants:
+                    _move_package_quants_to_loose(package)
+        except UserError as e:
+            return {'error': str(e)}
+            
         return {'success': True}
 
     @http.route('/hlv_mobile_barcode/validate_picking', type='json', auth='user')
