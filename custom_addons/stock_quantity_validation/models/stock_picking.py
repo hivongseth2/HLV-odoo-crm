@@ -2,7 +2,9 @@
 import logging
 from collections import defaultdict
 
-from odoo import models, fields, api, _
+from markupsafe import Markup, escape
+
+from odoo import SUPERUSER_ID, models, fields, api, _
 from odoo.exceptions import UserError
 from odoo.tools.float_utils import float_compare
 
@@ -252,6 +254,39 @@ class StockPicking(models.Model):
             )
         )
 
+    def _hlv_post_quant_guard_failure(self, errors):
+        picking_ids = self.ids
+        if not picking_ids:
+            return
+        error_items = ''.join('<li>%s</li>' % escape(error) for error in errors[:10])
+        body = Markup(
+            "<p><b>HLV_QUANT_GUARD - Lệch tồn sau validate</b></p>"
+            "<p>Hệ thống phát hiện tồn kho sau khi xác nhận phiếu không khớp với số lượng đã chuyển. "
+            "Giao dịch validate đã bị rollback để tránh lệch tồn.</p>"
+            "<ul>%s</ul>"
+        ) % Markup(error_items)
+
+        try:
+            with api.Environment.manage(), self.env.registry.cursor() as cr:
+                log_env = api.Environment(
+                    cr,
+                    SUPERUSER_ID,
+                    dict(
+                        self.env.context,
+                        tracking_disable=True,
+                        mail_create_nosubscribe=True,
+                    ),
+                )
+                pickings = log_env['stock.picking'].sudo().browse(picking_ids).exists()
+                for picking in pickings:
+                    picking.message_post(body=body, subtype_xmlid='mail.mt_note')
+                cr.commit()
+        except Exception:
+            _logger.exception(
+                '[HLV_QUANT_GUARD] failed to post mismatch note to pickings=%s',
+                self.mapped('name'),
+            )
+
     def _hlv_assert_quant_delta_after_validate(self, before_snapshot, expected_deltas, samples):
         if not expected_deltas:
             return
@@ -283,11 +318,13 @@ class StockPicking(models.Model):
             self.mapped('name'),
             errors,
         )
+        self._hlv_post_quant_guard_failure(errors)
         raise UserError(_(
-            "Ton kho sau khi xac nhan phieu khong khop voi so luong da chuyen.\n"
-            "He thong da huy giao dich validate nay de tranh lech ton.\n\n"
+            "Tồn kho sau khi xác nhận phiếu không khớp với số lượng đã chuyển.\n"
+            "Hệ thống đã hủy giao dịch validate này để tránh lệch tồn.\n\n"
             "%s\n\n"
-            "Vui long thu validate lai. Neu lap lai, bao ky thuat kiem tra log HLV_QUANT_GUARD."
+            "Chi tiết đã được ghi vào chatter của phiếu với tag HLV_QUANT_GUARD.\n"
+            "Vui lòng thử validate lại. Nếu lỗi lặp lại, báo kỹ thuật kiểm tra phiếu này."
         ) % "\n".join(errors[:10]))
 
     def button_validate(self):
