@@ -321,6 +321,62 @@ class MisaExtensionController(http.Controller):
         )
 
     # ============================================================
+    # POST /api/extension/so/revoke
+    # ============================================================
+    @http.route(
+        "/api/extension/so/revoke",
+        type="http",
+        auth="none",
+        methods=["POST", "OPTIONS"],
+        csrf=False,
+        cors="*",
+    )
+    def api_extension_so_revoke(self, **payload):
+        """
+        Thu hồi (xóa) Đơn bán hàng trên Odoo.
+        """
+        def json_response(payload, status=200):
+            return request.make_response(
+                json.dumps(payload), headers=[("Content-Type", "application/json")]
+            )
+
+        payload = self._parse_json_body(payload)
+        token = self._extract_token(payload)
+        ok, err = self._authenticate(token)
+        if not ok:
+            return json_response(err, 401)
+
+        so_name = (payload.get("name") or "").strip()
+        misa_id = (payload.get("misa_id") or "").strip()
+
+        if not so_name and not misa_id:
+            return json_response({"ok": False, "error": "missing_params", "message": "Thiếu tham số 'name' hoặc 'misa_id'."}, 400)
+
+        admin_user = request.env.ref("base.user_admin", raise_if_not_found=False)
+        env = request.env(user=admin_user) if admin_user else request.env
+
+        domain = []
+        if misa_id:
+            domain = [("misa_id", "=", misa_id)]
+        else:
+            domain = [("name", "=", so_name)]
+
+        so = env["sale.order"].sudo().search(domain, limit=1)
+        if not so:
+            return json_response({"ok": False, "error": "not_found", "message": "Không tìm thấy Đơn bán hàng trên Odoo."}, 404)
+
+        if so.state not in ['draft', 'sent']:
+            return json_response({"ok": False, "error": "invalid_state", "message": f"Không thể thu hồi Đơn bán hàng ở trạng thái '{so.state}' (chỉ thu hồi được Báo giá)."}, 400)
+
+        try:
+            if so.state != 'cancel':
+                so.action_cancel()
+            so.unlink()
+            return json_response({"ok": True, "message": "Đã thu hồi Đơn bán hàng thành công."})
+        except Exception as e:
+            return json_response({"ok": False, "error": "exception", "message": f"Lỗi từ Odoo: {str(e)}"}, 500)
+
+    # ============================================================
     # POST /api/extension/pr/revoke
     # ============================================================
     @http.route(

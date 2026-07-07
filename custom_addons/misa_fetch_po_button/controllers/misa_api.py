@@ -8,7 +8,7 @@ _logger = logging.getLogger(__name__)
 
 class MisaApiSaleOrder(http.Controller):
 
-    @http.route('/api/misa/sale_order/resync', type='json', auth='none', methods=['POST'], csrf=False)
+    @http.route('/api/misa/sale_order/resync', type='json', auth='none', methods=['POST', 'OPTIONS'], csrf=False, cors="*")
     def api_misa_sale_order_resync(self, **payload):
         """
         Public API: không yêu cầu login.
@@ -87,7 +87,7 @@ class MisaApiSaleOrder(http.Controller):
             return {"ok": False, "error": "exception", "message": str(e)}
 
 
-    @http.route('/api/misa/sale_order/resync_by_name', type='json', auth='none', methods=['POST'], csrf=False)
+    @http.route('/api/misa/sale_order/resync_by_name', type='json', auth='none', methods=['POST', 'OPTIONS'], csrf=False, cors="*")
     def api_misa_sale_order_resync_by_name(self, **payload):
         # ---- parse body y như bạn đang làm ở trên ----
         try:
@@ -158,7 +158,7 @@ class MisaApiSaleOrder(http.Controller):
         
         
         
-    @http.route('/api/misa/sale_order/cancel_by_name', type='json', auth='none', methods=['POST'], csrf=False)
+    @http.route('/api/misa/sale_order/cancel_by_name', type='json', auth='none', methods=['POST', 'OPTIONS'], csrf=False, cors="*")
     def api_misa_sale_order_cancel_by_name(self, **payload):
         """
         API Cancel SO theo Name (ví dụ: SO00123).
