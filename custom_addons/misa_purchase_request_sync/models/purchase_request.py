@@ -212,3 +212,162 @@ class PurchaseRequest(models.Model):
             for line in rec.line_ids:
                 total += line.misa_amount if line.misa_amount else line.estimated_cost
             rec.estimated_cost = total
+
+    @api.model
+    def api_create_from_misa_payload(self, payload):
+        """
+        Tạo PR từ JSON payload của MISA (đã trích xuất từ controller extension_api)
+        """
+        pr_name = (payload.get("PurchaseRequestName") or "").strip()
+        if not pr_name:
+            raise UserError(_("Thiếu trường 'PurchaseRequestName'."))
+            
+        lines_in = payload.get("lines") or []
+        if not lines_in:
+            raise UserError(_("Thiếu danh sách 'lines'."))
+
+        user_id, owner_message = self._prepare_misa_user(payload.get("OwnerIDText"))
+        
+        # Tìm Đơn bán hàng liên quan
+        so_name = (payload.get("SaleOrderIDText") or "").strip()
+        sale_order_id = False
+        if so_name:
+            so = self.env["sale.order"].search([("name", "=", so_name)], limit=1)
+            if so:
+                sale_order_id = so.id
+
+        raw_data = payload.get("rawData", {})
+        date_start = False
+        create_date = False
+        date_required = False
+        
+        from dateutil import parser
+        import pytz
+        
+        if raw_data.get("RequestDate"):
+            try:
+                dt = parser.parse(raw_data["RequestDate"])
+                date_start = dt.strftime("%Y-%m-%d")
+            except Exception:
+                pass
+                
+        if raw_data.get("CreatedDate"):
+            try:
+                dt = parser.parse(raw_data["CreatedDate"])
+                dt_utc = dt.astimezone(pytz.utc)
+                create_date = dt_utc.strftime("%Y-%m-%d %H:%M:%S")
+            except Exception:
+                pass
+                
+        if raw_data.get("DesiredDeliveryDeadline"):
+            try:
+                dt = parser.parse(raw_data["DesiredDeliveryDeadline"])
+                date_required = dt.strftime("%Y-%m-%d")
+            except Exception:
+                pass
+
+        pr = self.search([("name", "=", pr_name)], limit=1)
+        existing_lines_by_misa_id = {}
+        
+        if pr:
+            if pr.state not in ['draft', 'to_approve']:
+                raise UserError(_("YCMH %s đã tồn tại và ở trạng thái %s, không thể cập nhật.") % (pr_name, pr.state))
+            
+            for existing_line in pr.line_ids:
+                if existing_line.misa_line_id:
+                    existing_lines_by_misa_id[existing_line.misa_line_id] = existing_line
+            
+            write_vals = {
+                "requested_by": user_id,
+                "description": payload.get("description") or "",
+                "delivery_address": payload.get("DeliveryAddress") or "",
+                "sale_order_id": sale_order_id,
+            }
+            if date_start:
+                write_vals["date_start"] = date_start
+            pr.write(write_vals)
+            
+            if create_date:
+                self.env.cr.execute("UPDATE purchase_request SET create_date=%s WHERE id=%s", (create_date, pr.id))
+        else:
+            pr_vals = {
+                "name": pr_name,
+                "requested_by": user_id,
+                "assigned_to": self.env.ref("base.user_admin", raise_if_not_found=False).id if self.env.ref("base.user_admin", raise_if_not_found=False) else False,
+                "state": "to_approve",
+                "origin": "MISA CRM",
+                "description": payload.get("description") or "",
+                "delivery_address": payload.get("DeliveryAddress") or "",
+                "sale_order_id": sale_order_id,
+            }
+            if date_start:
+                pr_vals["date_start"] = date_start
+            if create_date:
+                pr_vals["create_date"] = create_date
+            pr = self.create(pr_vals)
+
+        # Xử lý lines
+        product_model = self.env["product.product"]
+        uom_model = self.env["uom.uom"]
+        line_model = self.env["purchase.request.line"]
+
+        def _resolve_product_and_uom(line_data):
+            pcode = (line_data.get("product_code") or "").strip()
+            product = False
+            if pcode:
+                product = product_model.search([("default_code", "=", pcode)], limit=1)
+            uom = False
+            if product:
+                uom = product.uom_id
+            uom_name = (line_data.get("uom") or "").strip()
+            if uom_name:
+                uom_match = uom_model.search([("name", "=ilike", uom_name)], limit=1)
+                if uom_match:
+                    uom = uom_match
+            return product, uom
+
+        for idx, line in enumerate(lines_in):
+            misa_line_id = (line.get("misa_line_id") or "").strip()
+            
+            product, uom = _resolve_product_and_uom(line)
+            product_id = product.id if product else False
+            uom_id = uom.id if uom else False
+
+            line_name = (line.get("name") or "Sản phẩm không tên").strip()
+            try:
+                qty = float(line.get("qty", 1.0))
+            except ValueError:
+                qty = 1.0
+
+            misa_supplier_id = None
+            if line.get("sale_proposed_supplier_id"):
+                misa_supplier_id = int(line.get("sale_proposed_supplier_id"))
+            
+            raw = line.get("rawData", {})
+
+            line_vals = {
+                "request_id": pr.id,
+                "name": line_name,
+                "product_id": product_id,
+                "product_uom_id": uom_id,
+                "product_qty": qty,
+                "misa_line_id": misa_line_id,
+                "sale_proposed_supplier_id": misa_supplier_id,
+                "misa_amount": float(raw.get("Amount") or line.get("misa_amount") or 0.0),
+            }
+            
+            if date_required:
+                line_vals["date_required"] = date_required
+                
+            if misa_line_id and misa_line_id in existing_lines_by_misa_id:
+                existing_line = existing_lines_by_misa_id[misa_line_id]
+                existing_line.write(line_vals)
+                del existing_lines_by_misa_id[misa_line_id]
+            else:
+                line_model.create(line_vals)
+
+        # Xóa các dòng cũ trên Odoo nhưng không có trên MISA (chỉ xoá những dòng có misa_line_id)
+        for old_line in existing_lines_by_misa_id.values():
+            old_line.unlink()
+
+        return pr
