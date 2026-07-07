@@ -316,8 +316,9 @@ class MisaExtensionController(http.Controller):
         so = env["sale.order"].sudo().search(domain, limit=1)
 
         if not so:
+            search_queue_name = misa_id or name
             queue = env["misa.sync.queue"].sudo().search([
-                ('name', '=', so_name),
+                ('name', '=', search_queue_name),
                 ('sync_type', '=', 'so'),
                 ('state', 'in', ['draft', 'processing'])
             ], limit=1)
@@ -345,12 +346,113 @@ class MisaExtensionController(http.Controller):
                 "name": so.name,
                 "status": so.state,
                 "status_label": state_label,
-                "can_revoke": so.state != 'cancel',
+                "can_revoke": True,  # Luôn cho phép thu hồi, backend sẽ cancel hoặc xóa tuỳ trạng thái
             }
 
         return request.make_response(
             json.dumps(payload), headers=[("Content-Type", "application/json")]
         )
+
+    # ============================================================
+    # POST /api/extension/so/revoke
+    # ============================================================
+    @http.route(
+        "/api/extension/so/revoke",
+        type="http",
+        auth="none",
+        methods=["POST", "OPTIONS"],
+        csrf=False,
+        cors="*",
+    )
+    def api_extension_so_revoke(self, **payload):
+        """
+        Thu hồi (hủy + xóa) Đơn bán hàng trên Odoo.
+        Hủy SO trước, sau đó xóa luôn record để có thể đồng bộ lại từ đầu.
+        """
+        def json_response(payload, status=200):
+            return request.make_response(
+                json.dumps(payload), headers=[("Content-Type", "application/json")]
+            )
+
+        payload = self._parse_json_body(payload)
+        token = self._extract_token(payload)
+        ok, err = self._authenticate(token)
+        if not ok:
+            return json_response(err, 401)
+
+        name = (payload.get("name") or "").strip()
+        if not name:
+            return json_response({"ok": False, "error": "missing_name", "message": "Thiếu tham số name."}, 400)
+
+        admin_user = request.env.ref("base.user_admin", raise_if_not_found=False)
+        if not admin_user:
+            return json_response({"ok": False, "error": "admin_not_found"}, 500)
+        env_admin = request.env(user=admin_user)
+
+        try:
+            SoModel = env_admin["sale.order"].sudo()
+            order = SoModel.search([("name", "=", name)], limit=1)
+            
+            if not order:
+                return json_response({"ok": False, "error": "not_found", "message": f"Không tìm thấy đơn {name}"}, 404)
+
+            # Bước 1: Nếu đã cancelled, xóa luôn
+            if order.state == 'cancel':
+                order.unlink()
+                return json_response({"ok": True, "message": f"Đã xoá đơn {name} đã huỷ để có thể đồng bộ lại."})
+
+            # Bước 2: Kiểm tra phiếu xuất kho
+            out_done = order.picking_ids.filtered(
+                lambda p: p.picking_type_id.code == 'outgoing' and p.state == 'done'
+            )
+            if out_done:
+                names = ', '.join(out_done.mapped('name'))
+                return json_response({
+                    "ok": False, "error": "out_picking_done",
+                    "message": f"Đơn {name} đã xuất kho hoàn thành (phiếu OUT: {names}). Phải trả hàng về kho trước."
+                }, 400)
+
+            # Bước 3: Kiểm tra hoá đơn
+            for invoice in order.invoice_ids:
+                if invoice.state == 'posted':
+                    return json_response({
+                        "ok": False, "error": "invoice_posted",
+                        "message": f"Đơn {name} đã vào sổ hoá đơn. Cần huỷ hoá đơn/làm Credit Note trước."
+                    }, 400)
+
+            # Bước 4: Hủy SO
+            if order.state == 'done':
+                order.action_unlock()
+            order.with_context(disable_cancel_warning=True).action_cancel()
+
+            # Bước 5: Force cancel nếu cần
+            if order.state != 'cancel':
+                still_open_picks = order.picking_ids.filtered(lambda p: p.state not in ('cancel', 'done'))
+                has_posted_inv = order.invoice_ids.filtered(lambda i: i.state == 'posted')
+                if not still_open_picks and not has_posted_inv:
+                    order.write({'state': 'cancel'})
+                else:
+                    return json_response({
+                        "ok": False, "error": "cancel_failed",
+                        "message": f"Không thể huỷ đơn {name}. Còn picking/invoice chưa huỷ hết."
+                    }, 400)
+
+            # Bước 6: Xóa record sau khi hủy để có thể tạo lại
+            if order.state == 'cancel':
+                try:
+                    order.unlink()
+                    return json_response({"ok": True, "message": f"Đã huỷ và xoá thành công đơn hàng {name}"})
+                except Exception as e:
+                    return json_response({
+                        "ok": True,
+                        "message": f"Đã huỷ thành công đơn hàng {name} (nhưng không xoá được record: {str(e)})"
+                    })
+
+            return json_response({"ok": False, "error": "cancel_failed", "message": f"Không thể huỷ đơn {name}"}, 400)
+
+        except Exception as e:
+            _logger.exception("MISA API /so/revoke exception: %s", e)
+            return json_response({"ok": False, "error": "exception", "message": str(e)}, 500)
 
     # ============================================================
     # POST /api/extension/pr/revoke
