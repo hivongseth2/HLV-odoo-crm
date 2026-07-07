@@ -94,10 +94,10 @@
               action="action_misa_sync_queue" 
               sequence="100"/>
               
-    <!-- Menu Item (Purchase -> Configuration -> MISA Sync Queue) -->
-    <menuitem id="menu_misa_sync_queue_purchase" 
+    <!-- Menu Item (Purchase Request -> MISA Sync Queue) -->
+    <menuitem id="menu_misa_sync_queue_purchase_request" 
               name="MISA Sync Queue" 
-              parent="purchase.menu_purchase_config" 
+              parent="purchase_request.menu_purchase_request" 
               action="action_misa_sync_queue" 
               sequence="100"/>
 </odoo>
