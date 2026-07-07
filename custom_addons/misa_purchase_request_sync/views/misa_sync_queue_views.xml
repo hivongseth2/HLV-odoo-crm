@@ -97,7 +97,7 @@
     <!-- Menu Item (Purchase Request -> MISA Sync Queue) -->
     <menuitem id="menu_misa_sync_queue_purchase_request" 
               name="MISA Sync Queue" 
-              parent="purchase_request.menu_purchase_request" 
+              parent="purchase_request.parent_menu_purchase_request" 
               action="action_misa_sync_queue" 
               sequence="100"/>
 </odoo>
