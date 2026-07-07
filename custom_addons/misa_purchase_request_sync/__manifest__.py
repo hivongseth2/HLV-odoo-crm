@@ -18,6 +18,7 @@ Module cung cấp:
         "purchase_stock",
         "mail",
         "sale",
+        "misa_fetch_po_button",
     ],
     "data": [
         "security/ir.model.access.csv",

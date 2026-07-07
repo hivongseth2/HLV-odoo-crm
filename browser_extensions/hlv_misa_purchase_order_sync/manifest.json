@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "HLV MISA Purchase Order Sync",
+  "version": "1.0.0",
+  "description": "Queue MISA purchase orders for Odoo sync from AMIS purchase order detail pages.",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://amisapp.misa.vn/*",
+    "http://*/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://amisapp.misa.vn/purchase/popup/purchaseorderdetail/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}

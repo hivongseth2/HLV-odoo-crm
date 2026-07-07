@@ -515,6 +515,156 @@ class MisaExtensionController(http.Controller):
             return json_response({"ok": False, "error": "exception", "message": str(e)}, 500)
 
     # ============================================================
+    # GET /api/extension/po/check?po_code=DMH00001
+    # ============================================================
+    @http.route(
+        "/api/extension/po/check",
+        type="http",
+        auth="none",
+        methods=["GET"],
+        csrf=False,
+        cors="*",
+    )
+    def api_extension_po_check(self, **kwargs):
+        token = _clean_token(kwargs.get("token")) or _clean_token(
+            request.httprequest.headers.get("X-MISA-Token")
+        )
+        ok, err = self._authenticate(token)
+        if not ok:
+            return request.make_response(
+                json.dumps(err), headers=[("Content-Type", "application/json")]
+            )
+
+        po_code = (kwargs.get("po_code") or kwargs.get("name") or "").strip()
+        if not po_code:
+            return request.make_response(
+                json.dumps({"ok": False, "error": "missing_po_code", "message": "Thiếu po_code."}),
+                headers=[("Content-Type", "application/json")],
+            )
+
+        admin_user = request.env.ref("base.user_admin", raise_if_not_found=False)
+        env = request.env(user=admin_user) if admin_user else request.env
+        po = env["purchase.order"].sudo().search([("name", "=", po_code)], limit=1)
+
+        if not po:
+            queue = env["misa.sync.queue"].sudo().search([
+                ("name", "=", po_code),
+                ("sync_type", "=", "po"),
+                ("state", "in", ["draft", "processing", "failed"]),
+            ], order="id desc", limit=1)
+            if queue:
+                status_labels = {
+                    "draft": "Đang chờ đồng bộ...",
+                    "processing": "Đang xử lý đồng bộ...",
+                    "failed": "Đồng bộ lỗi",
+                }
+                payload = {
+                    "ok": True,
+                    "exists": True,
+                    "name": po_code,
+                    "status": "queued" if queue.state in ("draft", "processing") else "failed",
+                    "status_label": status_labels.get(queue.state, queue.state),
+                    "queue_id": queue.id,
+                    "error_log": queue.error_log or "",
+                    "can_revoke": False,
+                }
+            else:
+                payload = {"ok": True, "exists": False, "name": po_code, "can_revoke": False}
+        else:
+            state_label = (
+                dict(po._fields["state"].selection).get(po.state, po.state)
+                if po.state
+                else ""
+            )
+            done_receipts = po.picking_ids.filtered(lambda p: p.state == "done")
+            posted_bills = po.invoice_ids.filtered(lambda inv: inv.state == "posted")
+            payload = {
+                "ok": True,
+                "exists": True,
+                "id": po.id,
+                "name": po.name,
+                "status": po.state,
+                "status_label": state_label,
+                "can_revoke": not bool(done_receipts or posted_bills),
+                "done_receipts": done_receipts.mapped("name"),
+                "posted_bills": posted_bills.mapped("name"),
+            }
+
+        return request.make_response(
+            json.dumps(payload), headers=[("Content-Type", "application/json")]
+        )
+
+    # ============================================================
+    # POST /api/extension/po/sync
+    # ============================================================
+    @http.route(
+        "/api/extension/po/sync",
+        type="http",
+        auth="none",
+        methods=["POST", "OPTIONS"],
+        csrf=False,
+        cors="*",
+    )
+    def api_extension_po_sync(self, **payload):
+        def json_response(data, status=200):
+            return request.make_response(
+                json.dumps(data), headers=[("Content-Type", "application/json")], status=status
+            )
+
+        if request.httprequest.method == "OPTIONS":
+            return json_response({"ok": True})
+
+        payload = self._parse_json_body(payload)
+        token = self._extract_token(payload)
+        ok, err = self._authenticate(token)
+        if not ok:
+            return json_response(err, 401)
+
+        po_code = (payload.get("po_code") or payload.get("name") or "").strip()
+        if not po_code:
+            return json_response({"ok": False, "error": "missing_po_code", "message": "Thiếu po_code."}, 400)
+
+        queue_payload = {
+            "po_code": po_code,
+            "create_when_missing": bool(payload.get("create_when_missing", True)),
+            "delete_when_missing": bool(payload.get("delete_when_missing", True)),
+            "source_url": payload.get("source_url") or "",
+            "source": "misa_purchase_order_extension",
+        }
+
+        admin_user = request.env.ref("base.user_admin", raise_if_not_found=False)
+        env_admin = request.env(user=admin_user) if admin_user else request.env
+        queue = env_admin["misa.sync.queue"].sudo().create({
+            "name": po_code,
+            "sync_type": "po",
+            "payload": json.dumps(queue_payload, ensure_ascii=False),
+        })
+        return json_response({
+            "ok": True,
+            "queued": True,
+            "queue_id": queue.id,
+            "name": po_code,
+            "message": "Đã đưa đơn mua hàng vào hàng đợi đồng bộ Odoo.",
+        })
+
+    # ============================================================
+    # POST /api/extension/po/revoke
+    # ============================================================
+    @http.route(
+        "/api/extension/po/revoke",
+        type="http",
+        auth="none",
+        methods=["POST", "OPTIONS"],
+        csrf=False,
+        cors="*",
+    )
+    def api_extension_po_revoke(self, **payload):
+        payload = self._parse_json_body(payload)
+        payload["create_when_missing"] = False
+        payload["delete_when_missing"] = True
+        return self.api_extension_po_sync(**payload)
+
+    # ============================================================
     # POST /api/extension/suppliers_and_stock
     # ============================================================
     @http.route(

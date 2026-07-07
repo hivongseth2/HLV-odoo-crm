@@ -1,0 +1,66 @@
+#hlv-misa-po-sync-root {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  margin: 0 8px;
+  padding: 4px 8px;
+  border: 1px solid rgba(0, 125, 255, 0.35);
+  border-radius: 6px;
+  background: #f7fbff;
+  color: #0b1d2d;
+  font: 13px Arial, sans-serif;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+#hlv-misa-po-sync-root .hlv-misa-po-code {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+#hlv-misa-po-sync-root .hlv-misa-po-status {
+  max-width: 260px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#hlv-misa-po-sync-root .hlv-misa-po-status[data-kind="ok"] {
+  color: #24820b;
+}
+
+#hlv-misa-po-sync-root .hlv-misa-po-status[data-kind="warn"] {
+  color: #a45f00;
+}
+
+#hlv-misa-po-sync-root .hlv-misa-po-status[data-kind="error"] {
+  color: #b3261e;
+}
+
+#hlv-misa-po-sync-root .hlv-misa-po-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+
+#hlv-misa-po-sync-root button {
+  height: 28px;
+  border: 1px solid #0b5cab;
+  border-radius: 4px;
+  background: #0b5cab;
+  color: #fff;
+  padding: 0 10px;
+  font: 600 12px Arial, sans-serif;
+  cursor: pointer;
+}
+
+#hlv-misa-po-sync-root button.hlv-misa-po-revoke-button {
+  border-color: #6c4b00;
+  background: #8a6100;
+}
+
+#hlv-misa-po-sync-root button:disabled {
+  border-color: #b8c0c8;
+  background: #d7dde3;
+  color: #6a737d;
+  cursor: not-allowed;
+}

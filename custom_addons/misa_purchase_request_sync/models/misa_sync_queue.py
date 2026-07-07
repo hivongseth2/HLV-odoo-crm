@@ -14,7 +14,8 @@ class MisaSyncQueue(models.Model):
     misa_id = fields.Char(string="MISA ID", index=True)
     sync_type = fields.Selection([
         ('pr', 'Purchase Request'),
-        ('so', 'Sale Order')
+        ('so', 'Sale Order'),
+        ('po', 'Purchase Order')
     ], string="Loại đồng bộ", required=True)
     
     payload = fields.Text(string="JSON Payload", required=True)
@@ -46,6 +47,8 @@ class MisaSyncQueue(models.Model):
                     self._process_pr(record, payload_dict)
                 elif record.sync_type == 'so':
                     self._process_so(record, payload_dict)
+                elif record.sync_type == 'po':
+                    self._process_po(record, payload_dict)
                 
                 # Nếu không exception tức là thành công
                 record.write({
@@ -94,3 +97,21 @@ class MisaSyncQueue(models.Model):
             warehouse_id=warehouse_id,
             create_when_missing=create_when_missing,
         )
+
+    def _process_po(self, queue_record, payload):
+        po_code = payload.get("po_code") or queue_record.name
+        create_when_missing = payload.get("create_when_missing", True)
+        delete_when_missing = payload.get("delete_when_missing", True)
+
+        result = self.env["purchase.order"].sudo().api_sync_po_by_code(
+            po_code=po_code,
+            create_when_missing=create_when_missing,
+            delete_when_missing=delete_when_missing,
+        )
+        if not result or not result.get("ok"):
+            raise Exception(
+                (result or {}).get("message")
+                or (result or {}).get("detail")
+                or str(result)
+            )
+        queue_record.write({"error_log": json.dumps(result, ensure_ascii=False)})
