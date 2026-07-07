@@ -250,6 +250,77 @@ class MisaExtensionController(http.Controller):
         )
 
     # ============================================================
+    # GET /api/extension/so/check?name=SO00001
+    # ============================================================
+    @http.route(
+        "/api/extension/so/check",
+        type="http",
+        auth="none",
+        methods=["GET"],
+        csrf=False,
+        cors="*",
+    )
+    def api_extension_so_check(self, **kwargs):
+        """
+        Kiểm tra Đơn bán hàng đã tồn tại trên Odoo hay chưa.
+        """
+        token = _clean_token(kwargs.get("token")) or _clean_token(
+            request.httprequest.headers.get("X-MISA-Token")
+        )
+        ok, err = self._authenticate(token)
+        if not ok:
+            return request.make_response(
+                json.dumps(err), headers=[("Content-Type", "application/json")]
+            )
+
+        name = (kwargs.get("name") or "").strip()
+        misa_id = (kwargs.get("misa_id") or "").strip()
+        
+        if not name and not misa_id:
+            return request.make_response(
+                json.dumps(
+                    {
+                        "ok": False,
+                        "error": "missing_params",
+                        "message": "Thiếu tham số 'name' hoặc 'misa_id'.",
+                    }
+                ),
+                headers=[("Content-Type", "application/json")],
+            )
+
+        admin_user = request.env.ref("base.user_admin", raise_if_not_found=False)
+        env = request.env(user=admin_user) if admin_user else request.env
+        
+        domain = []
+        if misa_id:
+            domain = [("misa_id", "=", misa_id)]
+        else:
+            domain = [("name", "=", name)]
+            
+        so = env["sale.order"].sudo().search(domain, limit=1)
+
+        if not so:
+            payload = {"ok": True, "exists": False}
+        else:
+            state_label = (
+                dict(so._fields["state"].selection).get(so.state, so.state)
+                if so.state
+                else ""
+            )
+            payload = {
+                "ok": True,
+                "exists": True,
+                "id": so.id,
+                "name": so.name,
+                "status": so.state,
+                "status_label": state_label,
+            }
+
+        return request.make_response(
+            json.dumps(payload), headers=[("Content-Type", "application/json")]
+        )
+
+    # ============================================================
     # POST /api/extension/pr/revoke
     # ============================================================
     @http.route(
