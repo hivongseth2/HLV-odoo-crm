@@ -41,12 +41,12 @@
         </field>
     </record>
 
-    <!-- Tree View -->
+    <!-- List View -->
     <record id="view_misa_sync_queue_tree" model="ir.ui.view">
-        <field name="name">misa.sync.queue.tree</field>
+        <field name="name">misa.sync.queue.list</field>
         <field name="model">misa.sync.queue</field>
         <field name="arch" type="xml">
-            <tree string="MISA Sync Queue" decoration-danger="state=='failed'" decoration-success="state=='done'" decoration-info="state=='processing'" decoration-muted="state=='draft'" default_order="sequence asc, id asc">
+            <list string="MISA Sync Queue" decoration-danger="state=='failed'" decoration-success="state=='done'" decoration-info="state=='processing'" decoration-muted="state=='draft'" default_order="sequence asc, id asc">
                 <field name="sequence" widget="handle"/>
                 <field name="name"/>
                 <field name="misa_id"/>
@@ -54,7 +54,7 @@
                 <field name="state"/>
                 <field name="retry_count"/>
                 <field name="create_date"/>
-            </tree>
+            </list>
         </field>
     </record>
 
@@ -82,7 +82,7 @@
     <record id="action_misa_sync_queue" model="ir.actions.act_window">
         <field name="name">MISA Sync Queue</field>
         <field name="res_model">misa.sync.queue</field>
-        <field name="view_mode">tree,form</field>
+        <field name="view_mode">list,form</field>
         <field name="search_view_id" ref="view_misa_sync_queue_search"/>
         <field name="context">{'search_default_failed': 1, 'search_default_draft': 1}</field>
     </record>
