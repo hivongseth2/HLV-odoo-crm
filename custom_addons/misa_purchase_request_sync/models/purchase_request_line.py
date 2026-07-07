@@ -4,6 +4,13 @@ from odoo import api, fields, models
 class PurchaseRequestLine(models.Model):
     _inherit = "purchase.request.line"
 
+    misa_line_id = fields.Char(
+        string="MISA Line ID",
+        index=True,
+        help="ID dòng từ MISA CRM Database, dùng làm khóa định danh duy nhất 1-1 giữa MISA và Odoo. "
+             "Mỗi dòng trong Yêu Cầu Mua Hàng trên MISA có một ID riêng, không phụ thuộc vào Mã Hàng.",
+    )
+
     history_po_line_id = fields.Many2one(
         comodel_name="purchase.order.line",
         string="Chọn giá từ lịch sử PO",
@@ -13,6 +20,7 @@ class PurchaseRequestLine(models.Model):
 
     # --- Các trường lấy từ MISA CRM (Sale tự điền) ---
     misa_supplier_id = fields.Many2one('res.partner', string="Mã/Tên NCC (MISA)")
+    sale_proposed_supplier_id = fields.Many2one('res.partner', string="NCC Sale Đề Xuất")
     misa_price_before_tax = fields.Float(string="Đơn giá trước thuế (MISA)")
     misa_price_after_tax = fields.Float(string="Đơn giá sau thuế (MISA)")
     misa_amount = fields.Float(string="Thành tiền (MISA)")

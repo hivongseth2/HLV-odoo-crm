@@ -7,6 +7,7 @@ Mở rộng `purchase.request` để:
 1. Cung cấp nút "Đẩy sang MISA CRM" trên form (stub TODO).
 2. Cung cấp helper `_prepare_misa_user(owner_text)` được controller dùng
    khi tạo PR từ Browser Extension.
+3. Cung cấp computed fields tiến độ mua hàng cho list view badge.
 """
 
 import logging
@@ -30,21 +31,112 @@ class PurchaseRequest(models.Model):
         default=lambda self: self._default_picking_type(),
     )
 
+    # ------------------------------------------------------------
+    # COMPUTED FIELDS: TIẾN ĐỘ MUA HÀNG (cho list view badge)
+    # ------------------------------------------------------------
+    progress_total = fields.Integer(
+        string="Tổng SL món",
+        compute="_compute_purchase_progress",
+        store=True,
+        help="Tổng số dòng yêu cầu (không tính dòng đã hủy).",
+    )
+    progress_purchased = fields.Integer(
+        string="SL đã tạo ĐH",
+        compute="_compute_purchase_progress",
+        store=True,
+        help="Số dòng đã có Đơn mua hàng (PO/RFQ).",
+    )
+    progress_received = fields.Integer(
+        string="SL đã nhận",
+        compute="_compute_purchase_progress",
+        store=True,
+        help="Số dòng đã nhận đủ hàng.",
+    )
+    progress_badge = fields.Char(
+        string="Tiến độ mua hàng",
+        compute="_compute_purchase_progress",
+        store=True,
+        help="Hiển thị: 'ĐH 4/5 • NK 3/5' = đã tạo ĐH 4/5, đã nhập kho 3/5.",
+    )
+    progress_status = fields.Selection(
+        selection=[
+            ("not_started", "Chưa mua"),
+            ("in_progress", "Đang mua"),
+            ("partial", "Nhận một phần"),
+            ("done", "Hoàn thành"),
+        ],
+        string="Trạng thái tiến độ",
+        compute="_compute_purchase_progress",
+        store=True,
+        help="Dùng cho decoration-* trong list view.",
+    )
+
+    @api.depends(
+        "line_ids",
+        "line_ids.cancelled",
+        "line_ids.purchase_lines",
+        "line_ids.purchase_lines.state",
+        "line_ids.qty_done",
+        "line_ids.product_qty",
+        "line_ids.purchase_state",
+    )
+    def _compute_purchase_progress(self):
+        for rec in self:
+            active_lines = rec.line_ids.filtered(lambda l: not l.cancelled)
+            total = len(active_lines)
+            if total == 0:
+                rec.progress_total = 0
+                rec.progress_purchased = 0
+                rec.progress_received = 0
+                rec.progress_badge = ""
+                rec.progress_status = "not_started"
+                continue
+
+            purchased = 0
+            received = 0
+            for line in active_lines:
+                # Đã tạo ĐH: có ít nhất 1 purchase_line không bị hủy
+                has_po = any(
+                    pl.state != "cancel" for pl in line.purchase_lines
+                )
+                if has_po:
+                    purchased += 1
+
+                # Đã nhận đủ: qty_done >= product_qty (và có qty_done > 0)
+                if line.product_qty > 0 and line.qty_done >= line.product_qty:
+                    received += 1
+                elif line.purchase_state == "done" and line.qty_done > 0:
+                    received += 1
+
+            rec.progress_total = total
+            rec.progress_purchased = purchased
+            rec.progress_received = received
+            rec.progress_badge = f"ĐH {purchased}/{total} • NK {received}/{total}"
+
+            if received >= total and total > 0:
+                rec.progress_status = "done"
+            elif received > 0:
+                rec.progress_status = "partial"
+            elif purchased > 0:
+                rec.progress_status = "in_progress"
+            else:
+                rec.progress_status = "not_started"
+
     @api.model
     def _default_picking_type(self):
         type_obj = self.env["stock.picking.type"]
         company_id = self.env.context.get("company_id") or self.env.company.id
-        
+
         # Cố gắng tìm Kho Bến Cam trước
         ben_cam = type_obj.search([
             ("code", "=", "incoming"),
             ("warehouse_id.company_id", "=", company_id),
             ("warehouse_id.name", "ilike", "Bến Cam")
         ], limit=1)
-        
+
         if ben_cam:
             return ben_cam
-            
+
         return super(PurchaseRequest, self)._default_picking_type()
 
     # ------------------------------------------------------------
@@ -120,4 +212,3 @@ class PurchaseRequest(models.Model):
             for line in rec.line_ids:
                 total += line.misa_amount if line.misa_amount else line.estimated_cost
             rec.estimated_cost = total
-

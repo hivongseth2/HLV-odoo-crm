@@ -65,7 +65,29 @@ Kế thừa để hỗ trợ điền tự động và cho phép chọn giá tr�
 - Hiển thị `history_po_line_id` trong danh sách (tree view) của `line_ids` (nằm cạnh `estimated_cost`).
 - Hiển thị trong form chi tiết của `purchase.request.line`.
 
-### 3.3. Thông số hệ thống (`ir.config_parameter`)
+### 3.3. Computed Fields: Tiến độ mua hàng (v1.1.0+)
+
+Module bổ sung các computed fields trên `purchase.request` để hiển thị tiến độ mua hàng trong list view:
+
+- **`progress_total`** (`Integer`, `store=True`): Tổng số dòng yêu cầu (không tính dòng đã hủy).
+- **`progress_purchased`** (`Integer`, `store=True`): Số dòng đã có Đơn mua hàng (PO/RFQ).
+- **`progress_received`** (`Integer`, `store=True`): Số dòng đã nhận đủ hàng.
+- **`progress_badge`** (`Char`, `store=True`): Hiển thị gọn dạng `ĐH 4/5 • NK 3/5` = đã tạo ĐH 4/5, đã nhận 3/5.
+- **`progress_status`** (`Selection`, `store=True`): Trạng thái tiến độ, dùng cho `decoration-*` trong list view:
+  - `not_started`: Chưa có PO nào (muted/xám)
+  - `in_progress`: Đang mua (info/xanh dương)
+  - `partial`: Nhận một phần (warning/vàng)
+  - `done`: Hoàn thành (success/xanh lá)
+
+**Logic computed (`_compute_purchase_progress`):**
+- Lọc `active_lines = line_ids.filtered(lambda l: not l.cancelled)`
+- `purchased`: Đếm dòng có `purchase_lines` với `state != 'cancel'`
+- `received`: Đếm dòng có `qty_done >= product_qty` (hoặc `purchase_state == 'done'` và `qty_done > 0`)
+
+**View XML:**
+- Kế thừa `view_purchase_request_tree` thêm cột `progress_badge` với `widget="badge"` và `decoration-*` dựa trên `progress_status`.
+
+### 3.4. Thông số hệ thống (`ir.config_parameter`)
 - **Key:** `misa_extension_token`
 - **Công dụng:** Chứa mã token dùng để xác thực các request đẩy từ Chrome Extension sang. 
 - **Đặc điểm:** 
