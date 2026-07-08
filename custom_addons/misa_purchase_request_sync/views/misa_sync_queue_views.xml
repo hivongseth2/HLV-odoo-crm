@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Form View -->
+    <record id="view_misa_sync_queue_form" model="ir.ui.view">
+        <field name="name">misa.sync.queue.form</field>
+        <field name="model">misa.sync.queue</field>
+        <field name="arch" type="xml">
+            <form string="MISA Sync Queue">
+                <header>
+                    <button name="process_queue" string="Chạy lại (Process)" type="object" invisible="state != 'failed'" class="oe_highlight"/>
+                    <field name="state" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" readonly="1"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="misa_id" readonly="1"/>
+                            <field name="sync_type" readonly="1"/>
+                            <field name="sequence"/>
+                        </group>
+                        <group>
+                            <field name="retry_count" readonly="1"/>
+                            <field name="create_date" readonly="1"/>
+                            <field name="write_date" readonly="1"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Payload JSON" name="payload">
+                            <field name="payload" widget="text" readonly="1"/>
+                        </page>
+                        <page string="Lỗi (Error Log)" name="error_log">
+                            <field name="error_log" widget="text" readonly="1"/>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- List View -->
+    <record id="view_misa_sync_queue_tree" model="ir.ui.view">
+        <field name="name">misa.sync.queue.list</field>
+        <field name="model">misa.sync.queue</field>
+        <field name="arch" type="xml">
+            <list string="MISA Sync Queue" decoration-danger="state=='failed'" decoration-success="state=='done'" decoration-info="state=='processing'" decoration-muted="state=='draft'" default_order="sequence asc, id asc">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="misa_id"/>
+                <field name="sync_type"/>
+                <field name="state"/>
+                <field name="retry_count"/>
+                <field name="create_date"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Search View -->
+    <record id="view_misa_sync_queue_search" model="ir.ui.view">
+        <field name="name">misa.sync.queue.search</field>
+        <field name="model">misa.sync.queue</field>
+        <field name="arch" type="xml">
+            <search string="Search Queue">
+                <field name="name"/>
+                <field name="misa_id"/>
+                <filter string="Đang chờ" name="draft" domain="[('state','=','draft')]"/>
+                <filter string="Đang xử lý" name="processing" domain="[('state','=','processing')]"/>
+                <filter string="Lỗi" name="failed" domain="[('state','=','failed')]"/>
+                <filter string="Thành công" name="done" domain="[('state','=','done')]"/>
+                <group expand="0" string="Group By">
+                    <filter string="Trạng thái" name="group_by_state" context="{'group_by':'state'}"/>
+                    <filter string="Loại đồng bộ" name="group_by_sync_type" context="{'group_by':'sync_type'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="action_misa_sync_queue" model="ir.actions.act_window">
+        <field name="name">MISA Sync Queue</field>
+        <field name="res_model">misa.sync.queue</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_misa_sync_queue_search"/>
+        <field name="context">{'search_default_failed': 1, 'search_default_draft': 1}</field>
+    </record>
+
+    <!-- Menu Item (Settings -> Technical -> Automation -> MISA Sync Queue) -->
+    <menuitem id="menu_misa_sync_queue" 
+              name="MISA Sync Queue" 
+              parent="base.menu_automation" 
+              action="action_misa_sync_queue" 
+              sequence="100"/>
+              
+    <!-- Menu Item (Purchase Request -> MISA Sync Queue) -->
+    <menuitem id="menu_misa_sync_queue_purchase_request" 
+              name="MISA Sync Queue" 
+              parent="purchase_request.parent_menu_purchase_request" 
+              action="action_misa_sync_queue" 
+              sequence="100"/>
+</odoo>

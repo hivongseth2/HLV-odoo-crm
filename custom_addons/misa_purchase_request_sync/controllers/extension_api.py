@@ -174,7 +174,23 @@ class MisaExtensionController(http.Controller):
         pr = env["purchase.request"].sudo().search([("name", "=", name)], limit=1)
 
         if not pr:
-            payload = {"ok": True, "exists": False, "name": name}
+            queue = env["misa.sync.queue"].sudo().search([
+                ('name', '=', name),
+                ('sync_type', '=', 'pr'),
+                ('state', 'in', ['draft', 'processing'])
+            ], limit=1)
+            
+            if queue:
+                payload = {
+                    "ok": True,
+                    "exists": True,
+                    "name": name,
+                    "status": "queued",
+                    "status_label": "Đang chờ đồng bộ...",
+                    "can_revoke": False
+                }
+            else:
+                payload = {"ok": True, "exists": False, "name": name}
         else:
             state_label = (
                 dict(pr._fields["state"].selection).get(pr.state, pr.state)
@@ -300,7 +316,23 @@ class MisaExtensionController(http.Controller):
         so = env["sale.order"].sudo().search(domain, limit=1)
 
         if not so:
-            payload = {"ok": True, "exists": False}
+            search_queue_name = misa_id or name
+            queue = env["misa.sync.queue"].sudo().search([
+                ('name', '=', search_queue_name),
+                ('sync_type', '=', 'so'),
+                ('state', 'in', ['draft', 'processing'])
+            ], limit=1)
+            
+            if queue:
+                payload = {
+                    "ok": True,
+                    "exists": True,
+                    "status": "queued",
+                    "status_label": "Đang chờ đồng bộ...",
+                    "can_revoke": False
+                }
+            else:
+                payload = {"ok": True, "exists": False}
         else:
             state_label = (
                 dict(so._fields["state"].selection).get(so.state, so.state)
@@ -314,11 +346,113 @@ class MisaExtensionController(http.Controller):
                 "name": so.name,
                 "status": so.state,
                 "status_label": state_label,
+                "can_revoke": True,  # Luôn cho phép thu hồi, backend sẽ cancel hoặc xóa tuỳ trạng thái
             }
 
         return request.make_response(
             json.dumps(payload), headers=[("Content-Type", "application/json")]
         )
+
+    # ============================================================
+    # POST /api/extension/so/revoke
+    # ============================================================
+    @http.route(
+        "/api/extension/so/revoke",
+        type="http",
+        auth="none",
+        methods=["POST", "OPTIONS"],
+        csrf=False,
+        cors="*",
+    )
+    def api_extension_so_revoke(self, **payload):
+        """
+        Thu hồi (hủy + xóa) Đơn bán hàng trên Odoo.
+        Hủy SO trước, sau đó xóa luôn record để có thể đồng bộ lại từ đầu.
+        """
+        def json_response(payload, status=200):
+            return request.make_response(
+                json.dumps(payload), headers=[("Content-Type", "application/json")]
+            )
+
+        payload = self._parse_json_body(payload)
+        token = self._extract_token(payload)
+        ok, err = self._authenticate(token)
+        if not ok:
+            return json_response(err, 401)
+
+        name = (payload.get("name") or "").strip()
+        if not name:
+            return json_response({"ok": False, "error": "missing_name", "message": "Thiếu tham số name."}, 400)
+
+        admin_user = request.env.ref("base.user_admin", raise_if_not_found=False)
+        if not admin_user:
+            return json_response({"ok": False, "error": "admin_not_found"}, 500)
+        env_admin = request.env(user=admin_user)
+
+        try:
+            SoModel = env_admin["sale.order"].sudo()
+            order = SoModel.search([("name", "=", name)], limit=1)
+            
+            if not order:
+                return json_response({"ok": False, "error": "not_found", "message": f"Không tìm thấy đơn {name}"}, 404)
+
+            # Bước 1: Nếu đã cancelled, xóa luôn
+            if order.state == 'cancel':
+                order.unlink()
+                return json_response({"ok": True, "message": f"Đã xoá đơn {name} đã huỷ để có thể đồng bộ lại."})
+
+            # Bước 2: Kiểm tra phiếu xuất kho
+            out_done = order.picking_ids.filtered(
+                lambda p: p.picking_type_id.code == 'outgoing' and p.state == 'done'
+            )
+            if out_done:
+                names = ', '.join(out_done.mapped('name'))
+                return json_response({
+                    "ok": False, "error": "out_picking_done",
+                    "message": f"Đơn {name} đã xuất kho hoàn thành (phiếu OUT: {names}). Phải trả hàng về kho trước."
+                }, 400)
+
+            # Bước 3: Kiểm tra hoá đơn
+            for invoice in order.invoice_ids:
+                if invoice.state == 'posted':
+                    return json_response({
+                        "ok": False, "error": "invoice_posted",
+                        "message": f"Đơn {name} đã vào sổ hoá đơn. Cần huỷ hoá đơn/làm Credit Note trước."
+                    }, 400)
+
+            # Bước 4: Hủy SO
+            if order.state == 'done':
+                order.action_unlock()
+            order.with_context(disable_cancel_warning=True).action_cancel()
+
+            # Bước 5: Force cancel nếu cần
+            if order.state != 'cancel':
+                still_open_picks = order.picking_ids.filtered(lambda p: p.state not in ('cancel', 'done'))
+                has_posted_inv = order.invoice_ids.filtered(lambda i: i.state == 'posted')
+                if not still_open_picks and not has_posted_inv:
+                    order.write({'state': 'cancel'})
+                else:
+                    return json_response({
+                        "ok": False, "error": "cancel_failed",
+                        "message": f"Không thể huỷ đơn {name}. Còn picking/invoice chưa huỷ hết."
+                    }, 400)
+
+            # Bước 6: Xóa record sau khi hủy để có thể tạo lại
+            if order.state == 'cancel':
+                try:
+                    order.unlink()
+                    return json_response({"ok": True, "message": f"Đã huỷ và xoá thành công đơn hàng {name}"})
+                except Exception as e:
+                    return json_response({
+                        "ok": True,
+                        "message": f"Đã huỷ thành công đơn hàng {name} (nhưng không xoá được record: {str(e)})"
+                    })
+
+            return json_response({"ok": False, "error": "cancel_failed", "message": f"Không thể huỷ đơn {name}"}, 400)
+
+        except Exception as e:
+            _logger.exception("MISA API /so/revoke exception: %s", e)
+            return json_response({"ok": False, "error": "exception", "message": str(e)}, 500)
 
     # ============================================================
     # POST /api/extension/pr/revoke
@@ -379,6 +513,156 @@ class MisaExtensionController(http.Controller):
             return json_response({"ok": True, "message": "Đã thu hồi YCMH thành công."})
         except Exception as e:
             return json_response({"ok": False, "error": "exception", "message": str(e)}, 500)
+
+    # ============================================================
+    # GET /api/extension/po/check?po_code=DMH00001
+    # ============================================================
+    @http.route(
+        "/api/extension/po/check",
+        type="http",
+        auth="none",
+        methods=["GET"],
+        csrf=False,
+        cors="*",
+    )
+    def api_extension_po_check(self, **kwargs):
+        token = _clean_token(kwargs.get("token")) or _clean_token(
+            request.httprequest.headers.get("X-MISA-Token")
+        )
+        ok, err = self._authenticate(token)
+        if not ok:
+            return request.make_response(
+                json.dumps(err), headers=[("Content-Type", "application/json")]
+            )
+
+        po_code = (kwargs.get("po_code") or kwargs.get("name") or "").strip()
+        if not po_code:
+            return request.make_response(
+                json.dumps({"ok": False, "error": "missing_po_code", "message": "Thiếu po_code."}),
+                headers=[("Content-Type", "application/json")],
+            )
+
+        admin_user = request.env.ref("base.user_admin", raise_if_not_found=False)
+        env = request.env(user=admin_user) if admin_user else request.env
+        po = env["purchase.order"].sudo().search([("name", "=", po_code)], limit=1)
+
+        if not po:
+            queue = env["misa.sync.queue"].sudo().search([
+                ("name", "=", po_code),
+                ("sync_type", "=", "po"),
+                ("state", "in", ["draft", "processing", "failed"]),
+            ], order="id desc", limit=1)
+            if queue:
+                status_labels = {
+                    "draft": "Đang chờ đồng bộ...",
+                    "processing": "Đang xử lý đồng bộ...",
+                    "failed": "Đồng bộ lỗi",
+                }
+                payload = {
+                    "ok": True,
+                    "exists": True,
+                    "name": po_code,
+                    "status": "queued" if queue.state in ("draft", "processing") else "failed",
+                    "status_label": status_labels.get(queue.state, queue.state),
+                    "queue_id": queue.id,
+                    "error_log": queue.error_log or "",
+                    "can_revoke": False,
+                }
+            else:
+                payload = {"ok": True, "exists": False, "name": po_code, "can_revoke": False}
+        else:
+            state_label = (
+                dict(po._fields["state"].selection).get(po.state, po.state)
+                if po.state
+                else ""
+            )
+            done_receipts = po.picking_ids.filtered(lambda p: p.state == "done")
+            posted_bills = po.invoice_ids.filtered(lambda inv: inv.state == "posted")
+            payload = {
+                "ok": True,
+                "exists": True,
+                "id": po.id,
+                "name": po.name,
+                "status": po.state,
+                "status_label": state_label,
+                "can_revoke": not bool(done_receipts or posted_bills),
+                "done_receipts": done_receipts.mapped("name"),
+                "posted_bills": posted_bills.mapped("name"),
+            }
+
+        return request.make_response(
+            json.dumps(payload), headers=[("Content-Type", "application/json")]
+        )
+
+    # ============================================================
+    # POST /api/extension/po/sync
+    # ============================================================
+    @http.route(
+        "/api/extension/po/sync",
+        type="http",
+        auth="none",
+        methods=["POST", "OPTIONS"],
+        csrf=False,
+        cors="*",
+    )
+    def api_extension_po_sync(self, **payload):
+        def json_response(data, status=200):
+            return request.make_response(
+                json.dumps(data), headers=[("Content-Type", "application/json")], status=status
+            )
+
+        if request.httprequest.method == "OPTIONS":
+            return json_response({"ok": True})
+
+        payload = self._parse_json_body(payload)
+        token = self._extract_token(payload)
+        ok, err = self._authenticate(token)
+        if not ok:
+            return json_response(err, 401)
+
+        po_code = (payload.get("po_code") or payload.get("name") or "").strip()
+        if not po_code:
+            return json_response({"ok": False, "error": "missing_po_code", "message": "Thiếu po_code."}, 400)
+
+        queue_payload = {
+            "po_code": po_code,
+            "create_when_missing": bool(payload.get("create_when_missing", True)),
+            "delete_when_missing": bool(payload.get("delete_when_missing", True)),
+            "source_url": payload.get("source_url") or "",
+            "source": "misa_purchase_order_extension",
+        }
+
+        admin_user = request.env.ref("base.user_admin", raise_if_not_found=False)
+        env_admin = request.env(user=admin_user) if admin_user else request.env
+        queue = env_admin["misa.sync.queue"].sudo().create({
+            "name": po_code,
+            "sync_type": "po",
+            "payload": json.dumps(queue_payload, ensure_ascii=False),
+        })
+        return json_response({
+            "ok": True,
+            "queued": True,
+            "queue_id": queue.id,
+            "name": po_code,
+            "message": "Đã đưa đơn mua hàng vào hàng đợi đồng bộ Odoo.",
+        })
+
+    # ============================================================
+    # POST /api/extension/po/revoke
+    # ============================================================
+    @http.route(
+        "/api/extension/po/revoke",
+        type="http",
+        auth="none",
+        methods=["POST", "OPTIONS"],
+        csrf=False,
+        cors="*",
+    )
+    def api_extension_po_revoke(self, **payload):
+        payload = self._parse_json_body(payload)
+        payload["create_when_missing"] = False
+        payload["delete_when_missing"] = True
+        return self.api_extension_po_sync(**payload)
 
     # ============================================================
     # POST /api/extension/suppliers_and_stock
@@ -509,290 +793,23 @@ class MisaExtensionController(http.Controller):
             return json_response({"ok": False, "error": "admin_not_found", "message": "Không tìm thấy user admin để sudo."}, 500)
         env_admin = request.env(user=admin_user)
 
+        # Đưa request vào queue thay vì xử lý đồng bộ
         try:
-            # --- Resolve user từ OwnerIDText ---
-            pr_model = env_admin["purchase.request"]
-            user_id, owner_message = pr_model._prepare_misa_user(
-                payload.get("OwnerIDText")
-            )
-
-            # --- Tìm Đơn bán hàng liên quan ---
-            so_name = (payload.get("SaleOrderIDText") or "").strip()
-            sale_order_id = False
-            if so_name:
-                so = env_admin["sale.order"].search([("name", "=", so_name)], limit=1)
-                if so:
-                    sale_order_id = so.id
-
-            raw_data = payload.get("rawData", {})
-            date_start = False
-            create_date = False
-            date_required = False
-            
-            from dateutil import parser
-            import pytz
-            
-            if raw_data.get("RequestDate"):
-                try:
-                    dt = parser.parse(raw_data["RequestDate"])
-                    date_start = dt.strftime("%Y-%m-%d")
-                except Exception:
-                    pass
-                    
-            if raw_data.get("CreatedDate"):
-                try:
-                    dt = parser.parse(raw_data["CreatedDate"])
-                    dt_utc = dt.astimezone(pytz.utc)
-                    create_date = dt_utc.strftime("%Y-%m-%d %H:%M:%S")
-                except Exception:
-                    pass
-                    
-            if raw_data.get("DesiredDeliveryDeadline"):
-                try:
-                    dt = parser.parse(raw_data["DesiredDeliveryDeadline"])
-                    date_required = dt.strftime("%Y-%m-%d")
-                except Exception:
-                    pass
-
-            # --- Kiểm tra PR đã tồn tại ---
-            # Lấy product_model và uom_model sớm để dùng trong resolve line
-            line_model = env_admin["purchase.request.line"]
-            product_model = env_admin["product.product"]
-            uom_model = env_admin["uom.uom"]
-            
-            pr = pr_model.search([("name", "=", pr_name)], limit=1)
-            is_new_pr = False
-            existing_lines_by_misa_id = {}  # misa_line_id → record
-            
-            if pr:
-                if pr.state not in ['draft', 'to_approve']:
-                    return json_response({
-                        "ok": False, 
-                        "error": "invalid_state", 
-                        "message": f"YCMH {pr_name} đã tồn tại và ở trạng thái {pr.state}, không thể cập nhật."
-                    }, 400)
-                
-                # Build map existing lines by misa_line_id (chỉ những line có misa_line_id)
-                for existing_line in pr.line_ids:
-                    if existing_line.misa_line_id:
-                        existing_lines_by_misa_id[existing_line.misa_line_id] = existing_line
-                
-                write_vals = {
-                    "requested_by": user_id,
-                    "description": payload.get("description") or "",
-                    "delivery_address": payload.get("DeliveryAddress") or "",
-                    "sale_order_id": sale_order_id,
-                }
-                if date_start:
-                    write_vals["date_start"] = date_start
-                    
-                pr.write(write_vals)
-                
-                # Cập nhật create_date bằng SQL vì ORM chặn write() lên create_date
-                if create_date:
-                    env_admin.cr.execute("UPDATE purchase_request SET create_date=%s WHERE id=%s", (create_date, pr.id))
-            else:
-                # --- Tạo PR ---
-                is_new_pr = True
-                pr_vals = {
-                    "name": pr_name,
-                    "requested_by": user_id,
-                    "assigned_to": admin_user.id if admin_user else False,
-                    "state": "to_approve",
-                    "origin": "MISA CRM",
-                    "description": payload.get("description") or "",
-                    "delivery_address": payload.get("DeliveryAddress") or "",
-                    "sale_order_id": sale_order_id,
-                }
-                if date_start:
-                    pr_vals["date_start"] = date_start
-                if create_date:
-                    pr_vals["create_date"] = create_date
-                    
-                pr = pr_model.create(pr_vals)
-
-            # ─── Helper: Resolve sản phẩm + UoM từ 1 line dict ───
-            def _resolve_product_and_uom(line):
-                pcode = (line.get("product_code") or "").strip()
-                product = False
-                if pcode:
-                    product = product_model.search(
-                        [("default_code", "=ilike", pcode)], limit=1
-                    )
-                if not product:
-                    pname = (line.get("name") or "").strip()
-                    if pname:
-                        product = product_model.search(
-                            [("name", "=ilike", pname)], limit=1
-                        )
-                # Fallback 2: Gọi API MISA để tạo sản phẩm nếu chưa có
-                if not product and pcode and "odoo.utils" in env_admin:
-                    odoo_utils = env_admin["odoo.utils"]
-                    try:
-                        OdooUtilsClass = type(odoo_utils)
-                        if hasattr(OdooUtilsClass, "_get_token_api_crm"):
-                            token_api = OdooUtilsClass._get_token_api_crm()
-                            product = odoo_utils.get_misa_product(token_api, pcode)
-                    except Exception as e:
-                        _logger.error("Lỗi khi fetch sản phẩm từ MISA: %s", str(e))
-
-                uom = False
-                uom_name = (line.get("uom") or "").strip()
-                if product and uom_name:
-                    if uom_name.lower() == product.uom_id.name.lower():
-                        uom = product.uom_id
-                    elif product.uom_po_id and uom_name.lower() == product.uom_po_id.name.lower():
-                        uom = product.uom_po_id
-                if not uom and uom_name:
-                    if product:
-                        uom = uom_model.search([("name", "=ilike", uom_name), ("category_id", "=", product.uom_id.category_id.id)], limit=1)
-                    if not uom:
-                        uom = uom_model.search([("name", "=ilike", uom_name)], limit=1)
-                if not uom and product:
-                    uom = product.uom_id
-                return product, uom
-
-            # ─── Build line_vals từ 1 line dict ───
-            def _build_line_vals(line, product, uom):
-                vals = {
-                    "request_id": pr.id,
-                    "name": line.get("name") or (product.display_name if product else ""),
-                    "product_id": product.id if product else False,
-                    "product_qty": float(line.get("qty") or 0.0),
-                    "product_uom_id": uom.id if uom else False,
-                    "estimated_cost": float(line.get("misa_price_before_tax") or 0.0),
-                    "misa_line_id": (line.get("misa_line_id") or "").strip() or False,
-                    "sale_proposed_supplier_id": int(line.get("misa_supplier_id")) if line.get("misa_supplier_id") else False,
-                    "misa_price_before_tax": float(line.get("misa_price_before_tax") or 0.0),
-                    "misa_price_after_tax": float(line.get("misa_price_after_tax") or 0.0),
-                    "misa_amount": float(line.get("misa_amount") or 0.0),
-                    "misa_tax_rate": float(line.get("misa_tax_rate") or 0.0),
-                    "misa_tax_amount": float(line.get("misa_tax_amount") or 0.0),
-                    "misa_discount_rate": float(line.get("misa_discount_rate") or 0.0),
-                    "misa_discount_amount": float(line.get("misa_discount_amount") or 0.0),
-                    "misa_stock_total": float(line.get("misa_stock_total") or 0.0),
-                    "misa_stock_selected": float(line.get("misa_stock_selected") or 0.0),
-                    "misa_stock_undelivered": float(line.get("misa_stock_undelivered") or 0.0),
-                }
-                if date_required:
-                    vals["date_required"] = date_required
-                return vals
-
-            # ─── Process từng line ───
-            incoming_misa_ids = set()
-            lines_created = 0
-            lines_updated = 0
-
-            for line in lines_in:
-                if not isinstance(line, dict):
-                    continue
-                misa_id = (line.get("misa_line_id") or "").strip()
-                if misa_id:
-                    incoming_misa_ids.add(misa_id)
-
-                product, uom = _resolve_product_and_uom(line)
-
-                # --- APPLY UoM CONVERSION ---
-                misa_uom_text = (line.get("uom") or "").strip()
-                default_uom_name = product.uom_id.name.strip() if product and product.uom_id else ""
-                misa_product_id = line.get("misa_product_id")
-                
-                if misa_product_id and product and misa_uom_text and default_uom_name and misa_uom_text.lower() != default_uom_name.lower():
-                    try:
-                        headers, _ = env_admin['sale.order']._misa_headers()
-                        orig_qty = float(line.get("qty") or 0.0)
-                        orig_price_before = float(line.get("misa_price_before_tax") or 0.0)
-                        qty_base, price_base, use_default = env_admin['sale.order']._convert_qty_price_to_default_uom(
-                            product=product,
-                            misa_uom_text=misa_uom_text,
-                            qty=orig_qty,
-                            price=orig_price_before,
-                            misa_product_id=misa_product_id,
-                            headers=headers
-                        )
-                        line["qty"] = qty_base
-                        line["misa_price_before_tax"] = price_base
-                        
-                        orig_price_after = float(line.get("misa_price_after_tax") or 0.0)
-                        if orig_price_before:
-                            rate_price = price_base / orig_price_before
-                            line["misa_price_after_tax"] = orig_price_after * rate_price
-                        
-                        uom = product.uom_id
-                    except Exception as e:
-                        _logger.error("Lỗi khi gọi API chuyển đổi ĐVT: %s", str(e))
-                # -----------------------------
-
-                line_vals = _build_line_vals(line, product, uom)
-
-                if misa_id and misa_id in existing_lines_by_misa_id:
-                    # ── UPDATE existing line ──
-                    existing_line = existing_lines_by_misa_id[misa_id]
-                    # Bỏ request_id khỏi vals khi write (không cần)
-                    write_vals = {k: v for k, v in line_vals.items() if k != "request_id"}
-                    existing_line.write(write_vals)
-                    lines_updated += 1
-                else:
-                    # ── CREATE new line (kể cả trường hợp misa_id rỗng hoặc PR mới) ──
-                    line_model.create(line_vals)
-                    lines_created += 1
-
-            # ── XÓA các line cũ không còn trong MISA (chỉ khi có misa_line_id để so sánh) ──
-            if not is_new_pr and incoming_misa_ids:
-                stale_lines = pr.line_ids.filtered(
-                    lambda l: l.misa_line_id and l.misa_line_id not in incoming_misa_ids
-                )
-                if stale_lines:
-                    stale_lines.unlink()
-                    _logger.info(
-                        "MISA PR Sync: Deleted %d stale lines from PR %s (IDs: %s)",
-                        len(stale_lines), pr.name,
-                        ", ".join(stale_lines.mapped("misa_line_id"))
-                    )
-
-            # --- Post Chatter nếu là Admin fallback ---
-            if owner_message:
-                pr.message_post(body=owner_message)
-                
-            # --- Post thông tin Nhà cung cấp mới vào Chatter (gắn với từng dòng sản phẩm) ---
-            new_supplier_lines = [l for l in lines_in if l.get("new_supplier_data")]
-            if new_supplier_lines:
-                from markupsafe import Markup
-                msg_body = "<p><b>[MISA Extension] Thêm Nhà cung cấp mới:</b></p><ul>"
-                for sl in new_supplier_lines:
-                    ns = sl.get("new_supplier_data", {})
-                    ns_name = ns.get("name", "")
-                    ns_address = ns.get("address", "")
-                    ns_phone = ns.get("phone", "")
-                    ns_vat = ns.get("vat", "")
-                    ns_note = ns.get("note", "")
-                    product_name = sl.get("name") or sl.get("product_code") or "Không xác định"
-                    
-                    msg_body += f"<li><b>Sản phẩm:</b> {product_name}<br/><b>Tên NCC:</b> {ns_name}"
-                    if ns_address:
-                        msg_body += f"<br/><b>Địa chỉ:</b> {ns_address}"
-                    if ns_phone:
-                        msg_body += f"<br/><b>SĐT:</b> {ns_phone}"
-                    if ns_vat:
-                        msg_body += f"<br/><b>Mã số thuế:</b> {ns_vat}"
-                    if ns_note:
-                        msg_body += f"<br/><b>Ghi chú:</b> {ns_note}"
-                    msg_body += "</li><br/>"
-                msg_body += "</ul>"
-                pr.message_post(body=Markup(msg_body))
-
-            return json_response({
-                "ok": True,
-                "id": pr.id,
-                "name": pr.name,
-                "state": pr.state,
-                "lines_created": len(pr.line_ids),
-                "owner_warning": owner_message or None,
+            env_admin["misa.sync.queue"].sudo().create({
+                "name": pr_name,
+                "sync_type": "pr",
+                "payload": json.dumps(payload, ensure_ascii=False)
             })
-
+            return json_response({
+                "ok": True, 
+                "message": "Đã đưa YCMH vào hàng chờ đồng bộ."
+            })
         except Exception as e:
-            _logger.exception("Extension API /pr/create exception: %s", e)
-            return json_response({"ok": False, "error": "exception", "message": str(e)}, 500)
+            return json_response({
+                "ok": False, 
+                "error": "queue_failed", 
+                "message": f"Lỗi khi đưa vào hàng chờ: {str(e)}"
+            }, 500)
 
     # ============================================================
     # PO RECONCILE - HELPERS
