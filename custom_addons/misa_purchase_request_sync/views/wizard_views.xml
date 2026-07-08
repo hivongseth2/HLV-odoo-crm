@@ -37,8 +37,8 @@
                 <field name="toggle_keep_description" invisible="1"/>
                 <field name="toggle_keep_estimated_cost" invisible="1"/>
 
-                <separator string="Tùy chọn hàng loạt" />
-                <div style="display: flex; gap: 40px; margin-bottom: 12px; padding-left: 8px;">
+                <separator string="Tùy chọn hàng loạt" invisible="1" />
+                <div style="display: flex; gap: 40px; margin-bottom: 12px; padding-left: 8px;" invisible="1">
                     <!-- Toggle Giữ Mô tả -->
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <button name="action_toggle_description_on" type="object"
@@ -75,9 +75,27 @@
                 </div>
             </xpath>
 
-            <!-- Thêm cột Đơn giá MISA vào danh sách sản phẩm -->
-            <xpath expr="//field[@name='item_ids']/list/field[@name='estimated_cost']" position="after">
-                <field name="misa_price_before_tax" optional="show" />
+            <!-- Sắp xếp lại danh sách sản phẩm và thêm cột thuế -->
+            <xpath expr="//field[@name='item_ids']" position="replace">
+                <field name="item_ids" nolabel="1" colspan="2">
+                    <list name="Chi tiết" create="false" editable="bottom">
+                        <field name="line_id" options="{'no_open': true}" column_invisible="1" />
+                        <field name="request_id" readonly="1" optional="show" />
+                        <field name="product_id" />
+                        <field name="name" />
+                        <field name="product_qty" />
+                        <field name="product_uom_id" column_invisible="1" groups="!uom.group_uom" />
+                        <field name="product_uom_id" groups="uom.group_uom" />
+                        <field name="misa_price_before_tax" />
+                        <field name="misa_tax_rate" />
+                        <field name="misa_tax_amount" />
+                        <field name="estimated_cost" column_invisible="1" />
+                        <field name="supplier_ref" />
+                        <field name="supplier_id" />
+                        <field name="keep_description" column_invisible="1" />
+                        <field name="keep_estimated_cost" column_invisible="1" />
+                    </list>
+                </field>
             </xpath>
         </field>
     </record>

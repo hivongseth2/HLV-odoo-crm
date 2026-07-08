@@ -143,6 +143,21 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
     keep_estimated_cost = fields.Boolean(default=True)
     misa_price_before_tax = fields.Float(
         related='line_id.misa_price_before_tax', 
-        string="Đơn giá MISA", 
+        string="Đơn giá sale đề xuất", 
+        readonly=True
+    )
+    misa_tax_rate = fields.Float(
+        related='line_id.misa_tax_rate',
+        string="Thuế %",
+        readonly=True
+    )
+    misa_tax_amount = fields.Float(
+        related='line_id.misa_tax_amount',
+        string="Thuế",
+        readonly=True
+    )
+    supplier_ref = fields.Char(
+        related='supplier_id.ref',
+        string="Mã NCC",
         readonly=True
     )
