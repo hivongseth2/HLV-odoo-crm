@@ -756,7 +756,62 @@ def _line_uom_resolution_transfer_quants(self, old_product, new_product):
     return moved_qty
 
 
-def _line_uom_resolution_post_log(self, new_product, old_product, old_code, old_barcode, old_uom, new_uom, moved_qty, note):
+def _line_uom_resolution_bom_signature(self, bom):
+    lines = []
+    for line in bom.bom_line_ids:
+        lines.append((
+            line.product_id.id if line.product_id else False,
+            float(line.product_qty or 0.0),
+            line.product_uom_id.id if line.product_uom_id else False,
+        ))
+    return (
+        bom.type if 'type' in bom._fields else '',
+        float(bom.product_qty or 0.0) if 'product_qty' in bom._fields else 0.0,
+        bom.product_uom_id.id if 'product_uom_id' in bom._fields and bom.product_uom_id else False,
+        tuple(sorted(lines)),
+    )
+
+
+def _line_uom_resolution_copy_boms(self, old_product, new_product):
+    try:
+        Bom = self.env['mrp.bom'].sudo().with_context(active_test=False)
+    except KeyError:
+        return 0
+    if not old_product.product_tmpl_id or not new_product.product_tmpl_id:
+        return 0
+
+    old_domain = [('product_tmpl_id', '=', old_product.product_tmpl_id.id)]
+    if 'product_id' in Bom._fields:
+        old_domain += ['|', ('product_id', '=', False), ('product_id', '=', old_product.id)]
+    old_boms = Bom.search(old_domain)
+    if not old_boms:
+        return 0
+
+    new_domain = [('product_tmpl_id', '=', new_product.product_tmpl_id.id)]
+    if 'product_id' in Bom._fields:
+        new_domain += ['|', ('product_id', '=', False), ('product_id', '=', new_product.id)]
+    new_boms = Bom.search(new_domain)
+    new_signatures = {self._uom_resolution_bom_signature(bom) for bom in new_boms}
+
+    copied_count = 0
+    for bom in old_boms:
+        signature = self._uom_resolution_bom_signature(bom)
+        if signature in new_signatures:
+            continue
+        default = {
+            'product_tmpl_id': new_product.product_tmpl_id.id,
+        }
+        if 'product_id' in Bom._fields:
+            default['product_id'] = new_product.id if bom.product_id else False
+        if 'active' in Bom._fields:
+            default['active'] = True
+        new_bom = bom.copy(default)
+        new_signatures.add(self._uom_resolution_bom_signature(new_bom))
+        copied_count += 1
+    return copied_count
+
+
+def _line_uom_resolution_post_log(self, new_product, old_product, old_code, old_barcode, old_uom, new_uom, moved_qty, note, bom_count=0):
     old_link = Markup('<a href="#" data-oe-model="product.product" data-oe-id="%s">%s</a>') % (
         old_product.id,
         old_product.display_name,
@@ -765,6 +820,7 @@ def _line_uom_resolution_post_log(self, new_product, old_product, old_code, old_
         'Đã xử lý ĐVT lệch MISA bằng cách tạo sản phẩm mới này từ sản phẩm cũ %(old_link)s.<br/>'
         'ĐVT cũ: %(old_uom)s; ĐVT mới theo MISA: %(new_uom)s.<br/>'
         'Đã chuyển mã tham chiếu: %(code)s; barcode: %(barcode)s; tồn kho chuyển: %(qty)s.<br/>'
+        'Đã sao chép định mức nguyên vật liệu: %(bom_count)s.<br/>'
         'Ghi chú: %(note)s'
     )) % {
         'old_link': old_link,
@@ -773,6 +829,7 @@ def _line_uom_resolution_post_log(self, new_product, old_product, old_code, old_
         'code': old_code or '',
         'barcode': old_barcode or '',
         'qty': moved_qty,
+        'bom_count': bom_count,
         'note': note or '',
     }
     target = new_product if hasattr(new_product, 'message_post') else new_product.product_tmpl_id
@@ -858,6 +915,7 @@ def _line_resolve_uom_mismatch_by_duplicate(self, note=''):
         ], limit=1)
         if cache:
             cache.write({'product_id': new_product.id})
+    bom_count = self._uom_resolution_copy_boms(product, new_product)
     moved_qty = self._uom_resolution_transfer_quants(product, new_product)
     self._uom_resolution_archive_old_product(product)
 
@@ -870,7 +928,7 @@ def _line_resolve_uom_mismatch_by_duplicate(self, note=''):
         },
     })
     self._uom_resolution_post_log(
-        new_product, product, old_code, old_barcode, old_uom, target_uom, moved_qty, note
+        new_product, product, old_code, old_barcode, old_uom, target_uom, moved_qty, note, bom_count=bom_count
     )
     return {
         'type': 'ir.actions.act_window',
@@ -891,6 +949,8 @@ AmisCatalogSyncJobLine._uom_resolution_blockers = _line_uom_resolution_blockers
 AmisCatalogSyncJobLine._uom_resolution_format_qty = _line_uom_resolution_format_qty
 AmisCatalogSyncJobLine._uom_resolution_copy_lot = _line_uom_resolution_copy_lot
 AmisCatalogSyncJobLine._uom_resolution_transfer_quants = _line_uom_resolution_transfer_quants
+AmisCatalogSyncJobLine._uom_resolution_bom_signature = _line_uom_resolution_bom_signature
+AmisCatalogSyncJobLine._uom_resolution_copy_boms = _line_uom_resolution_copy_boms
 AmisCatalogSyncJobLine._uom_resolution_post_log = _line_uom_resolution_post_log
 AmisCatalogSyncJobLine._uom_resolution_html_body = _line_uom_resolution_html_body
 AmisCatalogSyncJobLine._uom_resolution_clean_copy_name = _line_uom_resolution_clean_copy_name
