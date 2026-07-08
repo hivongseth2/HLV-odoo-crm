@@ -210,8 +210,9 @@ class PurchaseOrderAmisSync(models.Model):
             inventory_item_id = inventory_item.get('inventory_item_id') or ''
             inventory_item_code = inventory_item.get('inventory_item_code') or (product.default_code or str(product.id))
             inventory_item_name = inventory_item.get('inventory_item_name') or product.display_name
-            unit_id = unit.get('unit_id') or ''
-            unit_name = unit.get('unit_name') or line.product_uom.name
+            unit_values = self._misa_document_unit_values(
+                config, inventory_item, line.product_uom, unit, qty, unit_price
+            )
             ref_detail_id = (line.misa_purchase_order_org_ref_detail_id or '').strip()
             if not ref_detail_id:
                 ref_detail_id = self._misa_purchase_order_line_org_ref_detail_id(line)
@@ -226,18 +227,22 @@ class PurchaseOrderAmisSync(models.Model):
                 'inventory_item_code': inventory_item_code,
                 'inventory_item_name': inventory_item_name,
                 'description': line.name or inventory_item_name,
-                'unit_id': unit_id,
-                'main_unit_id': unit_id,
-                'unit_name': unit_name,
-                'main_unit_name': unit_name,
-                'main_convert_rate': 1.0,
+                'unit_id': unit_values['unit_id'],
+                'main_unit_id': unit_values['main_unit_id'],
+                'unit_name': unit_values['unit_name'],
+                'main_unit_name': unit_values['main_unit_name'],
+                'main_convert_rate': unit_values['main_convert_rate'],
                 'quantity': qty,
-                'main_quantity': qty,
+                'main_quantity': unit_values['main_quantity'],
                 'quantity_receipt': quantity_receipt,
-                'main_quantity_receipt': quantity_receipt,
+                'main_quantity_receipt': self._misa_convert_quantity(
+                    quantity_receipt,
+                    unit_values['main_convert_rate'],
+                    unit_values['exchange_rate_operator'],
+                ),
                 'quantity_receipt_last_year': 0.0,
                 'unit_price': unit_price,
-                'main_unit_price': unit_price,
+                'main_unit_price': unit_values['main_unit_price'],
                 'unit_price_after_tax': 0.0,
                 'amount_oc': amount,
                 'amount': amount,
@@ -247,7 +252,7 @@ class PurchaseOrderAmisSync(models.Model):
                 'vat_rate': vat_rate,
                 'vat_amount_oc': tax_amount,
                 'vat_amount': tax_amount,
-                'exchange_rate_operator': '*',
+                'exchange_rate_operator': unit_values['exchange_rate_operator'],
                 'stock_code': 'HLV',
                 'stock_name': 'HLV',
                 'inventory_item_type': 0,
@@ -480,6 +485,19 @@ class PurchaseOrderAmisSync(models.Model):
             found = self._find_misa_account_object_by_id(config, existing_id)
             if found:
                 return self._normalize_misa_account_object(found, partner)
+            stale = self.env['amis.misa.vendor.cache'].sudo().search([
+                ('config_id', '=', config.id),
+                ('account_object_id', '=', existing_id),
+                '|',
+                ('is_deleted', '=', True),
+                ('misa_inactive', '=', True),
+            ], limit=1)
+            if stale:
+                state = 'đã xóa' if stale.is_deleted else 'ngừng sử dụng'
+                raise UserError(
+                    'Nhà cung cấp "%s" đang map với NCC MISA %s (%s). Vui lòng xử lý cache NCC trước khi sync.'
+                    % (partner.display_name, state, existing_id)
+                )
             return {
                 'account_object_id': existing_id,
                 'account_object_code': self._misa_partner_code(partner),
@@ -555,13 +573,19 @@ class PurchaseOrderAmisSync(models.Model):
         if existing_id:
             return {'unit_id': existing_id, 'unit_name': name}
 
-        for item in config._get_all_dictionary(4):
-            if name and (item.get('unit_name') or '').strip().casefold() == name.casefold():
-                unit_id = (item.get('unit_id') or '').strip()
-                unit_name = (item.get('unit_name') or name).strip()
-                if unit_id:
-                    uom.sudo().write({'misa_unit_id': unit_id})
-                    return {'unit_id': unit_id, 'unit_name': unit_name}
+        cache, stale = self.env['amis.misa.unit.cache'].sudo().lookup_for_uom(config, uom)
+        if cache:
+            unit_id = (cache.unit_id or '').strip()
+            unit_name = (cache.unit_name or name).strip()
+            if unit_id:
+                uom.sudo().write({'misa_unit_id': unit_id})
+                return {'unit_id': unit_id, 'unit_name': unit_name}
+        if stale:
+            state = 'đã xóa' if stale.is_deleted else 'ngừng sử dụng'
+            raise UserError(
+                'ĐVT "%s" trùng với ĐVT MISA %s (%s). Vui lòng xử lý cache ĐVT trước khi sync.'
+                % (name, state, stale.unit_id)
+            )
 
         unit_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'misa_unit|%s' % name.casefold()))
         item = {
@@ -581,30 +605,72 @@ class PurchaseOrderAmisSync(models.Model):
         existing_id = (getattr(product, 'misa_inventory_item_id', '') or '').strip()
         code = self._misa_required_code(product.default_code or '', fallback_prefix='VT', fallback_id=product.id)
         name = (product.display_name or product.name or code).strip()
+        unit_id = (unit or {}).get('unit_id') or (getattr(uom, 'misa_unit_id', '') or '').strip()
+        unit_name = (unit or {}).get('unit_name') or (uom.name if uom else '')
+
+        if existing_id:
+            cache, stale = self.env['amis.misa.inventory.cache'].sudo().lookup_for_product(config, product)
+            if stale and stale.inventory_item_id == existing_id:
+                state = 'da xoa' if stale.is_deleted else 'ngung su dung'
+                raise UserError(
+                    'San pham "%s" dang map voi hang hoa MISA %s (%s). Vui long cap nhat cache/xu ly mapping truoc khi sync.'
+                    % (product.display_name, state, existing_id)
+                )
+            if cache and cache.inventory_item_id == existing_id:
+                return cache.to_misa_item()
+            return {
+                'inventory_item_id': existing_id,
+                'inventory_item_code': product.default_code or code,
+                'inventory_item_name': name,
+                'unit_id': unit_id,
+                'unit_name': unit_name,
+                'main_unit_id': unit_id,
+                'main_unit_name': unit_name,
+            }
+
+        lock_name = 'amis_callback:inventory_item:%s:%s' % (self.env.cr.dbname, code)
+        self.env.cr.execute("SELECT pg_advisory_xact_lock(hashtext(%s)::bigint)", [lock_name])
+
+        if hasattr(product, 'invalidate_recordset'):
+            product.invalidate_recordset(['misa_inventory_item_id'])
+        existing_id = (getattr(product, 'misa_inventory_item_id', '') or '').strip()
         if existing_id:
             return {
                 'inventory_item_id': existing_id,
                 'inventory_item_code': product.default_code or code,
                 'inventory_item_name': name,
+                'unit_id': unit_id,
+                'unit_name': unit_name,
+                'main_unit_id': unit_id,
+                'main_unit_name': unit_name,
             }
 
-        for item in config._get_all_dictionary(2):
-            if (item.get('inventory_item_code') or '').strip() == code:
-                item_id = (item.get('inventory_item_id') or '').strip()
-                unit_id = (item.get('unit_id') or '').strip()
-                if item_id:
-                    product.sudo().write({'misa_inventory_item_id': item_id})
-                if unit_id and uom and not (getattr(uom, 'misa_unit_id', '') or '').strip():
-                    uom.sudo().write({'misa_unit_id': unit_id})
-                return {
-                    'inventory_item_id': item_id,
-                    'inventory_item_code': item.get('inventory_item_code') or code,
-                    'inventory_item_name': item.get('inventory_item_name') or name,
-                }
+        cache, stale = self.env['amis.misa.inventory.cache'].sudo().lookup_for_product(config, product)
+        if cache:
+            product.sudo().write({'misa_inventory_item_id': cache.inventory_item_id})
+            if cache.product_id.id != product.id:
+                cache.sudo().write({'product_id': product.id})
+            cache_unit_name = (cache.unit_name or cache.main_unit_name or '').strip()
+            if (
+                cache.unit_id
+                and uom
+                and not (getattr(uom, 'misa_unit_id', '') or '').strip()
+                and cache_unit_name
+                and (uom.name or '').strip().casefold() == cache_unit_name.casefold()
+            ):
+                uom.sudo().write({'misa_unit_id': cache.unit_id})
+            _logger.info('Mapped product %s to MISA inventory cache %s (%s)', code, cache.inventory_item_id, cache.inventory_item_name)
+            return cache.to_misa_item()
+        if stale:
+            state = 'da xoa' if stale.is_deleted else 'ngung su dung'
+            raise UserError(
+                'San pham "%s" co ma "%s" trung voi hang hoa MISA %s (%s). Vui long xu ly cache truoc khi sync.'
+                % (product.display_name, code, state, stale.inventory_item_id)
+            )
 
         item_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'misa_inventory_item|%d' % product.id))
-        unit_id = unit.get('unit_id') or ''
-        unit_name = unit.get('unit_name') or (uom.name if uom else '')
+        unit_id = unit_id or ''
+        unit_name = unit_name or ''
         item = {
             'dictionary_type': 3,
             'inventory_item_id': item_id,
@@ -631,11 +697,11 @@ class PurchaseOrderAmisSync(models.Model):
         dictionary_items.append(item)
         product.sudo().write({'misa_inventory_item_id': item_id})
         _logger.info('Prepared MISA inventory dictionary item for %s (%s)', name, code)
-        return {
+        return dict(item, **{
             'inventory_item_id': item_id,
             'inventory_item_code': code,
             'inventory_item_name': name,
-        }
+        })
 
     def _find_pending_dictionary_item(self, dictionary_items, id_field, id_value):
         id_value = (id_value or '').strip().lower()
@@ -650,47 +716,175 @@ class PurchaseOrderAmisSync(models.Model):
         unit_id = (unit_id or '').strip().lower()
         if not unit_id:
             return None
-        for item in config._get_all_dictionary(4):
-            if (item.get('unit_id') or '').strip().lower() == unit_id:
-                return item
+        cache = self.env['amis.misa.unit.cache'].sudo().search([
+            ('config_id', '=', config.id),
+            ('unit_id', '=', unit_id),
+        ], limit=1)
+        if cache:
+            return cache.to_misa_item()
         return None
 
-    def _find_misa_inventory_item_by_id(self, config, inventory_item_id):
-        inventory_item_id = (inventory_item_id or '').strip().lower()
-        if not inventory_item_id:
-            return None
-        for item in config._get_all_dictionary(2):
-            if (item.get('inventory_item_id') or '').strip().lower() == inventory_item_id:
-                return item
-        return None
+    def _misa_parse_list(self, value):
+        if not value:
+            return []
+        parsed = value
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value) if value.strip() else []
+            except Exception:
+                parsed = []
+        if isinstance(parsed, dict):
+            return [parsed]
+        if isinstance(parsed, list):
+            return [item for item in parsed if isinstance(item, dict)]
+        return []
+
+    def _misa_float(self, value, default=0.0):
+        try:
+            if isinstance(value, str):
+                value = value.replace(',', '.')
+            return float(value)
+        except Exception:
+            return default
+
+    def _misa_inventory_unit_converts(self, inventory_item):
+        raw = (
+            inventory_item.get('inventory_item_unit_convert')
+            or inventory_item.get('inventory_item_unit_converts')
+            or inventory_item.get('unit_convert')
+            or inventory_item.get('unit_list')
+            or []
+        )
+        return self._misa_parse_list(raw)
+
+    def _misa_inventory_main_unit(self, config, inventory_item, fallback_unit=None):
+        main_unit_id = (
+            inventory_item.get('main_unit_id')
+            or inventory_item.get('unit_id')
+            or (fallback_unit or {}).get('unit_id')
+            or ''
+        )
+        main_unit_name = (
+            inventory_item.get('main_unit_name')
+            or inventory_item.get('unit_name')
+            or (fallback_unit or {}).get('unit_name')
+            or ''
+        )
+        if main_unit_id and not main_unit_name:
+            unit_item = self._find_misa_unit_by_id(config, main_unit_id)
+            main_unit_name = (unit_item or {}).get('unit_name') or ''
+        return main_unit_id, main_unit_name
+
+    def _misa_convert_quantity(self, quantity, rate, operator):
+        rate = self._misa_float(rate, 1.0) or 1.0
+        operator = (operator or '*').strip() or '*'
+        quantity = float(quantity or 0.0)
+        if operator == '/':
+            return quantity / rate
+        return quantity * rate
+
+    def _misa_convert_unit_price(self, unit_price, rate, operator):
+        rate = self._misa_float(rate, 1.0) or 1.0
+        operator = (operator or '*').strip() or '*'
+        unit_price = float(unit_price or 0.0)
+        if operator == '/':
+            return unit_price * rate
+        return unit_price / rate
+
+    def _misa_document_unit_values(self, config, inventory_item, odoo_uom, unit, quantity, unit_price):
+        unit_id = (unit or {}).get('unit_id') or (getattr(odoo_uom, 'misa_unit_id', '') or '').strip()
+        unit_name = (unit or {}).get('unit_name') or (odoo_uom.name if odoo_uom else '')
+        main_unit_id, main_unit_name = self._misa_inventory_main_unit(config, inventory_item, fallback_unit=unit)
+        unit_key = (unit_id or '').strip().lower()
+        unit_name_key = (unit_name or '').strip().casefold()
+        main_unit_key = (main_unit_id or '').strip().lower()
+        main_unit_name_key = (main_unit_name or '').strip().casefold()
+
+        rate = 1.0
+        operator = '*'
+        if unit_key and main_unit_key and unit_key == main_unit_key:
+            pass
+        elif unit_name_key and main_unit_name_key and unit_name_key == main_unit_name_key:
+            main_unit_id = main_unit_id or unit_id
+            main_unit_name = main_unit_name or unit_name
+        else:
+            for convert in self._misa_inventory_unit_converts(inventory_item):
+                convert_unit_id = (convert.get('unit_id') or '').strip()
+                convert_unit_name = (convert.get('unit_name') or convert.get('unit_name_convert') or '').strip()
+                if convert_unit_id and not convert_unit_name:
+                    unit_item = self._find_misa_unit_by_id(config, convert_unit_id)
+                    convert_unit_name = (unit_item or {}).get('unit_name') or ''
+                id_matches = bool(unit_key and convert_unit_id and unit_key == convert_unit_id.lower())
+                name_matches = bool(unit_name_key and convert_unit_name and unit_name_key == convert_unit_name.casefold())
+                if not id_matches and not name_matches:
+                    continue
+                unit_id = unit_id or convert_unit_id
+                unit_name = unit_name or convert_unit_name
+                rate = self._misa_float(convert.get('convert_rate'), 1.0) or 1.0
+                operator = (convert.get('exchange_rate_operator') or '*').strip() or '*'
+                break
+            else:
+                main_unit_id = main_unit_id or unit_id
+                main_unit_name = main_unit_name or unit_name
+                _logger.warning(
+                    'Chưa tìm thấy quy đổi ĐVT MISA cho hàng hóa %s: Odoo=%s, MISA chính=%s',
+                    inventory_item.get('inventory_item_code') or inventory_item.get('inventory_item_id') or '',
+                    unit_name,
+                    main_unit_name,
+                )
+
+        return {
+            'unit_id': unit_id,
+            'unit_name': unit_name,
+            'main_unit_id': main_unit_id or unit_id,
+            'main_unit_name': main_unit_name or unit_name,
+            'main_convert_rate': rate,
+            'exchange_rate_operator': operator,
+            'main_quantity': self._misa_convert_quantity(quantity, rate, operator),
+            'main_unit_price': self._misa_convert_unit_price(unit_price, rate, operator),
+        }
 
     def _find_misa_account_object_by_code_or_name(self, config, partner_ref, partner_name):
         partner_ref = (partner_ref or '').strip()
         partner_name = (partner_name or '').strip()
         partner_ref_upper = partner_ref.upper()
         partner_name_upper = partner_name.upper()
-        for item in config._get_all_dictionary(1):
-            code = (item.get('account_object_code') or '').strip()
-            name = (item.get('account_object_name') or '').strip()
-            if partner_ref_upper and partner_ref_upper == code.upper():
-                return item
-            if partner_name_upper and partner_name_upper == name.upper():
-                return item
-        for item in config._get_all_dictionary(1):
-            code = (item.get('account_object_code') or '').strip()
-            name = (item.get('account_object_name') or '').strip()
-            haystack = '%s %s' % (code.upper(), name.upper())
-            if partner_name_upper and partner_name_upper in haystack:
-                return item
+        Cache = self.env['amis.misa.vendor.cache'].sudo()
+        domain_base = [
+            ('config_id', '=', config.id),
+            ('is_deleted', '=', False),
+            ('misa_inactive', '=', False),
+        ]
+        if partner_ref:
+            cache = Cache.search(domain_base + [('account_object_code', '=', partner_ref)], limit=1)
+            if cache:
+                return cache.to_misa_item()
+        if partner_name:
+            cache = Cache.search(domain_base + [('account_object_name', '=ilike', partner_name)], limit=1)
+            if cache:
+                return cache.to_misa_item()
+        if partner_name_upper:
+            caches = Cache.search(domain_base + [('account_object_name', 'ilike', partner_name)], limit=5)
+            for cache in caches:
+                code = (cache.account_object_code or '').strip()
+                name = (cache.account_object_name or '').strip()
+                haystack = '%s %s' % (code.upper(), name.upper())
+                if partner_name_upper in haystack:
+                    return cache.to_misa_item()
         return None
 
     def _find_misa_account_object_by_id(self, config, account_object_id):
         account_object_id = (account_object_id or '').strip().lower()
         if not account_object_id:
             return None
-        for item in config._get_all_dictionary(1):
-            if (item.get('account_object_id') or '').strip().lower() == account_object_id:
-                return item
+        cache = self.env['amis.misa.vendor.cache'].sudo().search([
+            ('config_id', '=', config.id),
+            ('account_object_id', '=', account_object_id),
+            ('is_deleted', '=', False),
+            ('misa_inactive', '=', False),
+        ], limit=1)
+        if cache:
+            return cache.to_misa_item()
         return None
 
     def _normalize_misa_account_object(self, item, partner):
