@@ -5,7 +5,7 @@
         <field name="model">product.product</field>
         <field name="inherit_id" ref="product.product_normal_form_view"/>
         <field name="arch" type="xml">
-            <xpath expr="//notebook/page[1]" position="inside">
+            <xpath expr="//group[@name='inventory']" position="after">
                 <group name="zalo" string="Zalo Mini App">
                     <field name="x_active_zalo"/>
                     <field name="x_zalo_price"/>
@@ -14,14 +14,13 @@
         </field>
     </record>
 
-    <record id="view_product_product_zalo_tree_inherit" model="ir.ui.view">
-        <field name="name">product.product.zalo.tree.inherit</field>
+    <record id="view_product_product_zalo_search_inherit" model="ir.ui.view">
+        <field name="name">product.product.zalo.search.inherit</field>
         <field name="model">product.product</field>
-        <field name="inherit_id" ref="product.product_product_tree_view"/>
+        <field name="inherit_id" ref="product.product_product_search_view"/>
         <field name="arch" type="xml">
-            <field name="list_price" position="after">
-                <field name="x_zalo_price" optional="show"/>
-                <field name="x_active_zalo" optional="show"/>
+            <field name="name" position="after">
+                <field name="x_active_zalo"/>
             </field>
         </field>
     </record>
