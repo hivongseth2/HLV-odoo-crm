@@ -84,6 +84,7 @@ class ZaloCategoryAPI(http.Controller):
                     img_url = self._get_image_url("pos.category", cat.id, "image_128")
                 data.append({
                     "id": cat.id,
+                    "x_misa_id": cat.x_misa_id if hasattr(cat, "x_misa_id") else None,
                     "name": cat.name,
                     "sequence": cat.sequence,
                     "parent_id": cat.parent_id.id if cat.parent_id else None,
@@ -112,18 +113,24 @@ class ZaloCategoryAPI(http.Controller):
         csrf=False,
     )
     def category_products(self, category_id, **params):
-        """Lấy sản phẩm (variant) theo danh mục."""
+        """Lấy sản phẩm (variant) theo danh mục.
+        category_id có thể là x_misa_id hoặc ID nội bộ của Odoo."""
         try:
             limit = self._parse_int(params.get("limit"), 20)
             offset = self._parse_int(params.get("offset"), 0)
             limit = min(max(limit, 1), 100)
 
-            category = request.env["pos.category"].sudo().browse(category_id)
+            # Tìm category: ưu tiên x_misa_id, fallback internal ID
+            category = request.env["pos.category"].sudo().search(
+                [("x_misa_id", "=", category_id)], limit=1
+            )
+            if not category:
+                category = request.env["pos.category"].sudo().browse(category_id)
             if not category.exists():
                 return self._response_error("NOT_FOUND", "Danh mục không tồn tại", 404)
 
             domain = [
-                ("pos_categ_ids", "in", [category_id]),
+                ("pos_categ_ids", "in", [category.id]),
                 ("x_active_zalo", "=", True),
                 ("active", "=", True),
                 ("sale_ok", "=", True),
@@ -153,7 +160,7 @@ class ZaloCategoryAPI(http.Controller):
                 })
 
             return self._response_success({
-                "category_id": category_id,
+                "category_id": category.id,
                 "category_name": category.name,
                 "total": total,
                 "limit": limit,
