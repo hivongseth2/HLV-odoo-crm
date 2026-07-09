@@ -152,10 +152,10 @@ class ZaloProductAPI(http.Controller):
                     ("barcode", "ilike", query),
                 )
 
-            # Sort mapping
+            # Sort mapping (dùng name thay vì display_name vì display_name ko stored)
             sort_map = {
-                "name": "display_name",
-                "-name": "display_name desc",
+                "name": "name",
+                "-name": "name desc",
                 "x_zalo_price": "x_zalo_price",
                 "-x_zalo_price": "x_zalo_price desc",
                 "create_date": "create_date",
@@ -163,7 +163,7 @@ class ZaloProductAPI(http.Controller):
                 "list_price": "list_price",
                 "-list_price": "list_price desc",
             }
-            order = sort_map.get(sort, "display_name")
+            order = sort_map.get(sort, "name")
 
             products = request.env["product.product"].sudo().search(
                 domain, limit=limit, offset=offset, order=order
