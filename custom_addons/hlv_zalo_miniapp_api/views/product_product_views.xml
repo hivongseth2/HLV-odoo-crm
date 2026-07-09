@@ -17,7 +17,7 @@
     <record id="view_product_product_zalo_search_inherit" model="ir.ui.view">
         <field name="name">product.product.zalo.search.inherit</field>
         <field name="model">product.product</field>
-        <field name="inherit_id" ref="product.product_product_search_view"/>
+        <field name="inherit_id" ref="product.product_search_form_view"/>
         <field name="arch" type="xml">
             <field name="name" position="after">
                 <field name="x_active_zalo"/>
