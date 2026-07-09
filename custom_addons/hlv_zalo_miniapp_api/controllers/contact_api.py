@@ -61,6 +61,31 @@ class ZaloContactAPI(http.Controller):
         return digits
 
     @staticmethod
+    def _intl_phone(normalized):
+        """Chuyển SĐT normalize dạng 0901234567 sang format quốc tế +84 901 234 567."""
+        digits = re.sub(r"\D", "", normalized)
+        suffix = digits[1:] if digits.startswith("0") else digits  # "901234567"
+        parts = [suffix[i:i+3] for i in range(0, len(suffix), 3)]
+        return "+84 " + " ".join(parts)
+
+    @staticmethod
+    def _search_partner_by_phone(normalized):
+        """Tìm res.partner theo SĐT, hỗ trợ mọi format Odoo có thể lưu.
+        Giống tinh thần hlv_loyalty: normalize input rồi so sánh."""
+        Partner = request.env["res.partner"].sudo()
+        digits = re.sub(r"\D", "", normalized)
+        suffix = digits[1:] if digits.startswith("0") else digits  # "901234567"
+
+        formats = [
+            digits,                          # "0901234567"
+            "+84" + suffix,                  # "+84901234567"
+            "+84 " + suffix,                 # "+84 901234567"
+            "+84 " + " ".join(suffix[i:i+3] for i in range(0, len(suffix), 3)),  # "+84 901 234 567"
+        ]
+
+        return Partner.search(["|", ("phone", "in", formats), ("mobile", "in", formats)], limit=1)
+
+    @staticmethod
     def _get_secret_key():
         """Lấy secret key từ config parameter để tạo/xác thực token.
         Trong dev mode, nếu chưa config, trả về key mặc định."""
@@ -167,32 +192,19 @@ class ZaloContactAPI(http.Controller):
             if not normalized:
                 return self._response_error("INVALID_INPUT", "Số điện thoại không hợp lệ")
 
-            Partner = request.env["res.partner"].sudo()
             PortalAccount = request.env["hlv.loyalty.portal.account"].sudo()
 
-            # Find existing partner by phone/mobile
-            partner = Partner.search([
-                "|",
-                ("phone", "=", normalized),
-                ("mobile", "=", normalized),
-                ("x_is_zalo_account", "=", True),
-            ], limit=1)
+            # Find existing partner by phone/mobile (hỗ trợ mọi format)
+            partner = self._search_partner_by_phone(normalized)
 
             is_new = False
             if not partner:
-                # Try finding any partner with this phone
-                partner = Partner.search([
-                    "|",
-                    ("phone", "=", normalized),
-                    ("mobile", "=", normalized),
-                ], limit=1)
-
-            if not partner:
-                # Create new partner
-                partner = Partner.create({
+                # Create new partner with intl phone format
+                intl_phone = self._intl_phone(normalized)
+                partner = request.env["res.partner"].sudo().create({
                     "name": f"Zalo {normalized}",
-                    "phone": normalized,
-                    "mobile": normalized,
+                    "phone": intl_phone,
+                    "mobile": intl_phone,
                     "x_is_zalo_account": True,
                 })
                 is_new = True
@@ -201,13 +213,9 @@ class ZaloContactAPI(http.Controller):
                 if not partner.x_is_zalo_account:
                     partner.write({"x_is_zalo_account": True})
                 # Update phone if empty
-                vals = {}
-                if not partner.phone:
-                    vals["phone"] = normalized
-                if not partner.mobile:
-                    vals["mobile"] = normalized
-                if vals:
-                    partner.write(vals)
+                if not partner.phone and not partner.mobile:
+                    intl_phone = self._intl_phone(normalized)
+                    partner.write({"phone": intl_phone, "mobile": intl_phone})
 
             # Find/create portal account
             portal_account = PortalAccount.search([
@@ -388,8 +396,9 @@ class ZaloContactAPI(http.Controller):
             if "phone" in body and body["phone"]:
                 normalized = self._normalize_vn_phone(body["phone"])
                 if normalized:
-                    update_vals["phone"] = normalized
-                    update_vals["mobile"] = normalized
+                    intl_phone = self._intl_phone(normalized)
+                    update_vals["phone"] = intl_phone
+                    update_vals["mobile"] = intl_phone
 
             if update_vals:
                 partner.write(update_vals)
