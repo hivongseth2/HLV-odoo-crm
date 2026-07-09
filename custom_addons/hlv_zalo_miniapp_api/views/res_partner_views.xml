@@ -5,10 +5,12 @@
         <field name="model">res.partner</field>
         <field name="inherit_id" ref="base.view_partner_form"/>
         <field name="arch" type="xml">
-            <xpath expr="//group[@name='sale_wallet']" position="after">
-                <group name="zalo" string="Zalo Mini App">
-                    <field name="x_is_zalo_account"/>
-                </group>
+            <xpath expr="//notebook" position="inside">
+                <page name="zalo_mini_app" string="Zalo Mini App">
+                    <group>
+                        <field name="x_is_zalo_account"/>
+                    </group>
+                </page>
             </xpath>
         </field>
     </record>
