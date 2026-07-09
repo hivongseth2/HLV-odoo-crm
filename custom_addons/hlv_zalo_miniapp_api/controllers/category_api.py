@@ -74,8 +74,8 @@ class ZaloCategoryAPI(http.Controller):
         """Danh sách danh mục (pos.category) có phân trang."""
         try:
             body = self._request_json()
-            limit = self._parse_int(body.get("limit", params.get("limit")), 20)
-            offset = self._parse_int(body.get("offset", params.get("offset")), 0)
+            limit = self._parse_int(body.get("limit"), 20)
+            offset = self._parse_int(body.get("offset"), 0)
             limit = min(max(limit, 1), 100)
 
             categories = request.env["pos.category"].sudo().search(
@@ -112,23 +112,28 @@ class ZaloCategoryAPI(http.Controller):
             return self._response_error("SERVER_ERROR", str(e), 500)
 
     # =========================================================================
-    # POST /api/v1/zalo/categories/<id>/products
+    # POST /api/v1/zalo/categories/products
     # =========================================================================
     @http.route(
-        "/api/v1/zalo/categories/<int:category_id>/products",
+        "/api/v1/zalo/categories/products",
         type="http",
         auth="public",
         methods=["POST"],
         csrf=False,
     )
-    def category_products(self, category_id, **params):
+    def category_products(self, **params):
         """Lấy sản phẩm (variant) theo danh mục.
+        Body: {"category_id": 1, "limit": 10, "offset": 0}
         category_id có thể là x_misa_id hoặc ID nội bộ của Odoo."""
         try:
             body = self._request_json()
-            limit = self._parse_int(body.get("limit", params.get("limit")), 20)
-            offset = self._parse_int(body.get("offset", params.get("offset")), 0)
+            category_id = self._parse_int(body.get("category_id"), 0)
+            limit = self._parse_int(body.get("limit"), 20)
+            offset = self._parse_int(body.get("offset"), 0)
             limit = min(max(limit, 1), 100)
+
+            if not category_id:
+                return self._response_error("INVALID_INPUT", "Thiếu category_id")
 
             # Tìm category: ưu tiên x_misa_id, fallback internal ID
             category = request.env["pos.category"].sudo().search(

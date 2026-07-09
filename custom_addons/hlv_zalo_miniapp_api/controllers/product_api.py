@@ -61,7 +61,6 @@ class ZaloProductAPI(http.Controller):
 
     def _build_product_data(self, product):
         """Build standard product response dict from a product.product record."""
-        # Get attribute values
         attributes = []
         if hasattr(product, "product_template_attribute_value_ids"):
             for ptav in product.product_template_attribute_value_ids:
@@ -73,7 +72,6 @@ class ZaloProductAPI(http.Controller):
                     "value": val.name,
                 })
 
-        # Get category from template
         category = None
         if product.pos_categ_ids:
             cat = product.pos_categ_ids[0]
@@ -81,7 +79,6 @@ class ZaloProductAPI(http.Controller):
         elif product.categ_id:
             category = {"id": product.categ_id.id, "name": product.categ_id.name}
 
-        # Check promotional price from pricelist
         promotional_price = None
         try:
             pricelist = request.env["product.pricelist"].sudo().search([
@@ -129,29 +126,27 @@ class ZaloProductAPI(http.Controller):
         csrf=False,
     )
     def product_list(self, **params):
-        """Danh sách sản phẩm (variant) với sort/filter/query."""
+        """Danh sách sản phẩm (variant) với sort/filter/query.
+        Body: {"limit":10, "offset":0, "query":"áo", "sort":"name", "category_id":0}"""
         try:
             body = self._request_json()
-            limit = self._parse_int(body.get("limit", params.get("limit")), 20)
-            offset = self._parse_int(body.get("offset", params.get("offset")), 0)
+            limit = self._parse_int(body.get("limit"), 20)
+            offset = self._parse_int(body.get("offset"), 0)
             limit = min(max(limit, 1), 100)
 
             query = (body.get("query") or "").strip()
             sort = (body.get("sort") or "name").strip()
-            category_id = self._parse_int(body.get("category_id", params.get("category_id")), 0)
+            category_id = self._parse_int(body.get("category_id"), 0)
 
-            # Base domain
             domain = [
                 ("x_active_zalo", "=", True),
                 ("active", "=", True),
                 ("sale_ok", "=", True),
             ]
 
-            # Category filter
             if category_id:
                 domain.append(("pos_categ_ids", "in", [category_id]))
 
-            # Search query (dùng name thay vì display_name vì display_name ko stored)
             if query:
                 domain.append(
                     "|",
@@ -161,7 +156,6 @@ class ZaloProductAPI(http.Controller):
                     ("barcode", "ilike", query),
                 )
 
-            # Sort mapping (dùng name thay vì display_name vì display_name ko stored)
             sort_map = {
                 "name": "name",
                 "-name": "name desc",
@@ -192,18 +186,24 @@ class ZaloProductAPI(http.Controller):
             return self._response_error("SERVER_ERROR", str(e), 500)
 
     # =========================================================================
-    # GET /api/v1/zalo/products/<id>
+    # POST /api/v1/zalo/products/detail
     # =========================================================================
     @http.route(
-        "/api/v1/zalo/products/<int:product_id>",
+        "/api/v1/zalo/products/detail",
         type="http",
         auth="public",
-        methods=["GET"],
+        methods=["POST"],
         csrf=False,
     )
-    def product_detail(self, product_id, **params):
-        """Chi tiết sản phẩm (variant)."""
+    def product_detail(self, **params):
+        """Chi tiết sản phẩm (variant).
+        Body: {"product_id": 1}"""
         try:
+            body = self._request_json()
+            product_id = self._parse_int(body.get("product_id"), 0)
+            if not product_id:
+                return self._response_error("INVALID_INPUT", "Thiếu product_id")
+
             product = request.env["product.product"].sudo().browse(product_id)
             if not product.exists() or not product.active:
                 return self._response_error("NOT_FOUND", "Sản phẩm không tồn tại", 404)
@@ -213,30 +213,23 @@ class ZaloProductAPI(http.Controller):
 
             data = self._build_product_data(product)
 
-            # Add more details for detail view
             data["description_full"] = product.description or ""
-            data["standard_price"] = product.standard_price  # cost price
+            data["standard_price"] = product.standard_price
             data["volume"] = product.volume or 0.0
 
-            # Additional images
             images = []
             try:
                 if hasattr(product.product_tmpl_id, "product_multi_images"):
                     for img in product.product_tmpl_id.product_multi_images:
                         if img.image_1920:
                             images.append(
-                                self._get_image_url(
-                                    "product.multi.image", img.id, "image_1920"
-                                )
+                                self._get_image_url("product.multi.image", img.id, "image_1920")
                             )
             except Exception:
                 pass
-            # Fallback: try template image
             if not images and product.product_tmpl_id.image_1920:
                 images.append(
-                    self._get_image_url(
-                        "product.template", product.product_tmpl_id.id, "image_1920"
-                    )
+                    self._get_image_url("product.template", product.product_tmpl_id.id, "image_1920")
                 )
             data["images"] = images
 
