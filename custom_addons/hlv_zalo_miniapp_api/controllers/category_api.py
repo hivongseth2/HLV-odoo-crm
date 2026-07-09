@@ -70,14 +70,12 @@ class ZaloCategoryAPI(http.Controller):
             limit = min(max(limit, 1), 100)
 
             categories = request.env["pos.category"].sudo().search(
-                [("available_in_pos", "=", True)],
+                [],
                 limit=limit,
                 offset=offset,
                 order="sequence, name",
             )
-            total = request.env["pos.category"].sudo().search_count(
-                [("available_in_pos", "=", True)]
-            )
+            total = request.env["pos.category"].sudo().search_count([])
 
             data = []
             for cat in categories:
