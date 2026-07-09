@@ -51,6 +51,14 @@ class ZaloProductAPI(http.Controller):
             return None
         return f"/api/v1/zalo/image/{model}/{rec_id}/{field}"
 
+    @staticmethod
+    def _request_json():
+        raw = request.httprequest.data or b"{}"
+        try:
+            return json.loads(raw.decode("utf-8")) if raw else {}
+        except Exception:
+            return {}
+
     def _build_product_data(self, product):
         """Build standard product response dict from a product.product record."""
         # Get attribute values
@@ -111,25 +119,26 @@ class ZaloProductAPI(http.Controller):
         }
 
     # =========================================================================
-    # GET /api/v1/zalo/products/list
+    # POST /api/v1/zalo/products/list
     # =========================================================================
     @http.route(
         "/api/v1/zalo/products/list",
         type="http",
         auth="public",
-        methods=["GET"],
+        methods=["POST"],
         csrf=False,
     )
     def product_list(self, **params):
         """Danh sách sản phẩm (variant) với sort/filter/query."""
         try:
-            limit = self._parse_int(params.get("limit"), 20)
-            offset = self._parse_int(params.get("offset"), 0)
+            body = self._request_json()
+            limit = self._parse_int(body.get("limit", params.get("limit")), 20)
+            offset = self._parse_int(body.get("offset", params.get("offset")), 0)
             limit = min(max(limit, 1), 100)
 
-            query = (params.get("query") or "").strip()
-            sort = (params.get("sort") or "name").strip()
-            category_id = self._parse_int(params.get("category_id"), 0)
+            query = (body.get("query") or "").strip()
+            sort = (body.get("sort") or "name").strip()
+            category_id = self._parse_int(body.get("category_id", params.get("category_id")), 0)
 
             # Base domain
             domain = [
@@ -142,11 +151,11 @@ class ZaloProductAPI(http.Controller):
             if category_id:
                 domain.append(("pos_categ_ids", "in", [category_id]))
 
-            # Search query
+            # Search query (dùng name thay vì display_name vì display_name ko stored)
             if query:
                 domain.append(
                     "|",
-                    ("display_name", "ilike", query),
+                    ("name", "ilike", query),
                     "|",
                     ("default_code", "ilike", query),
                     ("barcode", "ilike", query),

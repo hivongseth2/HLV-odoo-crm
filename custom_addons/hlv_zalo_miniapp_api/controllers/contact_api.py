@@ -248,13 +248,13 @@ class ZaloContactAPI(http.Controller):
             return self._response_error("SERVER_ERROR", str(e), 500)
 
     # =========================================================================
-    # GET /api/v1/zalo/contacts/list
+    # POST /api/v1/zalo/contacts/list
     # =========================================================================
     @http.route(
         "/api/v1/zalo/contacts/list",
         type="http",
         auth="public",
-        methods=["GET"],
+        methods=["POST"],
         csrf=False,
     )
     def contact_list(self, **params):
@@ -264,8 +264,9 @@ class ZaloContactAPI(http.Controller):
             if isinstance(auth_result, Response):
                 return auth_result
 
-            limit = self._parse_int(params.get("limit"), 20)
-            offset = self._parse_int(params.get("offset"), 0)
+            body = self._request_json()
+            limit = self._parse_int(body.get("limit", params.get("limit")), 20)
+            offset = self._parse_int(body.get("offset", params.get("offset")), 0)
             limit = min(max(limit, 1), 100)
 
             domain = [("x_is_zalo_account", "=", True), ("active", "=", True)]

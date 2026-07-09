@@ -157,21 +157,22 @@ class ZaloOrderAPI(http.Controller):
             return {"valid": False, "error": "Không thể kiểm tra voucher"}
 
     # =========================================================================
-    # GET /api/v1/zalo/orders/<contact_id>/list
+    # POST /api/v1/zalo/orders/<contact_id>/list
     # =========================================================================
     @http.route(
         "/api/v1/zalo/orders/<int:contact_id>/list",
         type="http",
         auth="public",
-        methods=["GET"],
+        methods=["POST"],
         csrf=False,
     )
     def order_list(self, contact_id, **params):
         """Danh sách đơn hàng của contact."""
         try:
-            limit = self._parse_int(params.get("limit"), 20)
-            offset = self._parse_int(params.get("offset"), 0)
-            state_filter = (params.get("state") or "").strip()
+            body = self._request_json()
+            limit = self._parse_int(body.get("limit", params.get("limit")), 20)
+            offset = self._parse_int(body.get("offset", params.get("offset")), 0)
+            state_filter = (body.get("state") or "").strip()
             limit = min(max(limit, 1), 100)
 
             partner = request.env["res.partner"].sudo().browse(contact_id)

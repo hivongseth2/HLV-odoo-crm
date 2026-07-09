@@ -52,21 +52,30 @@ class ZaloCategoryAPI(http.Controller):
             return None
         return f"/api/v1/zalo/image/{model}/{rec_id}/{field}"
 
+    @staticmethod
+    def _request_json():
+        raw = request.httprequest.data or b"{}"
+        try:
+            return json.loads(raw.decode("utf-8")) if raw else {}
+        except Exception:
+            return {}
+
     # =========================================================================
-    # GET /api/v1/zalo/categories/list
+    # POST /api/v1/zalo/categories/list
     # =========================================================================
     @http.route(
         "/api/v1/zalo/categories/list",
         type="http",
         auth="public",
-        methods=["GET"],
+        methods=["POST"],
         csrf=False,
     )
     def category_list(self, **params):
         """Danh sách danh mục (pos.category) có phân trang."""
         try:
-            limit = self._parse_int(params.get("limit"), 20)
-            offset = self._parse_int(params.get("offset"), 0)
+            body = self._request_json()
+            limit = self._parse_int(body.get("limit", params.get("limit")), 20)
+            offset = self._parse_int(body.get("offset", params.get("offset")), 0)
             limit = min(max(limit, 1), 100)
 
             categories = request.env["pos.category"].sudo().search(
@@ -103,21 +112,22 @@ class ZaloCategoryAPI(http.Controller):
             return self._response_error("SERVER_ERROR", str(e), 500)
 
     # =========================================================================
-    # GET /api/v1/zalo/categories/<id>/products
+    # POST /api/v1/zalo/categories/<id>/products
     # =========================================================================
     @http.route(
         "/api/v1/zalo/categories/<int:category_id>/products",
         type="http",
         auth="public",
-        methods=["GET"],
+        methods=["POST"],
         csrf=False,
     )
     def category_products(self, category_id, **params):
         """Lấy sản phẩm (variant) theo danh mục.
         category_id có thể là x_misa_id hoặc ID nội bộ của Odoo."""
         try:
-            limit = self._parse_int(params.get("limit"), 20)
-            offset = self._parse_int(params.get("offset"), 0)
+            body = self._request_json()
+            limit = self._parse_int(body.get("limit", params.get("limit")), 20)
+            offset = self._parse_int(body.get("offset", params.get("offset")), 0)
             limit = min(max(limit, 1), 100)
 
             # Tìm category: ưu tiên x_misa_id, fallback internal ID
