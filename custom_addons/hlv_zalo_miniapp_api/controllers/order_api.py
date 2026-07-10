@@ -261,8 +261,8 @@ class ZaloOrderAPI(http.Controller):
             if order.partner_id.id != contact_id:
                 return self._response_error("FORBIDDEN", "Đơn hàng không thuộc về bạn", 403)
 
-            if order.state not in ("draft", "sent"):
-                return self._response_error("INVALID_STATE", "Chỉ có thể hủy đơn hàng chưa xác nhận", 400)
+            if order.state in ("done", "cancel"):
+                return self._response_error("INVALID_STATE", "Đơn hàng đã hoàn thành hoặc đã hủy", 400)
 
             if reason:
                 order.write({"note": (order.note or "") + f"\nLý do hủy: {reason}"})

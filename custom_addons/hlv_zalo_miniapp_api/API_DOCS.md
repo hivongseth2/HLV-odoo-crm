@@ -1369,7 +1369,7 @@ Giống cấu trúc order object trong **6.1. Danh sách Đơn hàng**, bổ sun
 
 > **POST** `/api/v1/zalo/orders/cancel`
 
-Hủy đơn hàng. Chỉ có thể hủy đơn ở trạng thái `draft` hoặc `sent`.
+Hủy đơn hàng. Có thể hủy đơn ở mọi trạng thái ngoại trừ `done` (hoàn thành) và `cancel` (đã hủy).
 
 #### Request Body
 
@@ -1405,7 +1405,7 @@ Hủy đơn hàng. Chỉ có thể hủy đơn ở trạng thái `draft` hoặc 
 | `INVALID_INPUT` | 400 | Thiếu `order_id` hoặc `contact_id` |
 | `NOT_FOUND` | 404 | Đơn hàng không tồn tại |
 | `FORBIDDEN` | 403 | Đơn hàng không thuộc về contact này |
-| `INVALID_STATE` | 400 | Chỉ có thể hủy đơn hàng ở trạng thái `draft` hoặc `sent` |
+| `INVALID_STATE` | 400 | Đơn hàng đã hoàn thành (`done`) hoặc đã hủy (`cancel`) |
 | `SERVER_ERROR` | 500 | Lỗi server không xác định |
 
 ---
