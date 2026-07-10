@@ -1675,6 +1675,13 @@ class AmisCallbackConfig(models.Model):
 
     def push_inward_voucher(self, voucher_payload, dictionary_items=None, reference_items=None):
         self.ensure_one()
+        voucher_payload = dict(voucher_payload or {})
+        if voucher_payload.get('is_get_new_id') is not False:
+            _logger.warning(
+                'Ep is_get_new_id=false cho phieu nhap MISA %s de giu lien ket so luong nhan tren don mua.',
+                voucher_payload.get('org_refno') or voucher_payload.get('refno') or '',
+            )
+        voucher_payload['is_get_new_id'] = False
         payload = {
             'app_id': self.app_id,
             'org_company_code': self.org_company_code,
@@ -1697,6 +1704,13 @@ class AmisCallbackConfig(models.Model):
     def push_purchase_order(self, voucher_payload, dictionary_items=None):
         """Push pu_order (Don mua hang, voucher_type=21) len MISA."""
         self.ensure_one()
+        voucher_payload = dict(voucher_payload or {})
+        if voucher_payload.get('is_get_new_id') is not False:
+            _logger.warning(
+                'Ep is_get_new_id=false cho don mua MISA %s de phieu nhap lien ket dung ve sau.',
+                voucher_payload.get('org_refno') or voucher_payload.get('refno') or '',
+            )
+        voucher_payload['is_get_new_id'] = False
         payload = {
             'app_id': self.app_id,
             'org_company_code': self.org_company_code,
