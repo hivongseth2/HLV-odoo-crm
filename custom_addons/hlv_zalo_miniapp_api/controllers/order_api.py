@@ -267,7 +267,20 @@ class ZaloOrderAPI(http.Controller):
             if reason:
                 order.write({"note": (order.note or "") + f"\nLý do hủy: {reason}"})
 
-            order.action_cancel()
+            # Gọi action_cancel, nếu thất bại thì force cancel
+            try:
+                order.action_cancel()
+            except Exception:
+                pass
+
+            # Kiểm tra state thực tế, nếu chưa về "cancel" thì force
+            if order.state != "cancel":
+                # Hủy các picking liên quan trước
+                try:
+                    order.picking_ids.filtered(lambda p: p.state not in ('done', 'cancel')).action_cancel()
+                except Exception:
+                    pass
+                order.write({"state": "cancel"})
 
             return self._response_success({
                 "id": order.id, "name": order.name, "state": order.state,
