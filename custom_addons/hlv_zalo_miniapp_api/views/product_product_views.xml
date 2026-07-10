@@ -1,22 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <record id="view_product_product_zalo_form_inherit" model="ir.ui.view">
-        <field name="name">product.product.zalo.form.inherit</field>
-        <field name="model">product.product</field>
-        <field name="inherit_id" ref="product.product_normal_form_view"/>
-        <field name="arch" type="xml">
-            <xpath expr="//div[@name='options']" position="inside">
-                <span class="d-inline-block">
-                    <field name="x_active_zalo"/>
-                    <label for="x_active_zalo"/>
-                </span>
-            </xpath>
-            <xpath expr="//group[@name='group_standard_price']" position="inside">
-                <field name="x_zalo_price"/>
-            </xpath>
-        </field>
-    </record>
-
     <record id="view_product_product_zalo_search_inherit" model="ir.ui.view">
         <field name="name">product.product.zalo.search.inherit</field>
         <field name="model">product.product</field>

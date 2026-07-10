@@ -5,15 +5,6 @@ from odoo import models, fields
 class ProductProduct(models.Model):
     _inherit = 'product.product'
 
-    x_zalo_price = fields.Float(
-        related='product_tmpl_id.x_zalo_price',
-        readonly=False,
-    )
-    x_active_zalo = fields.Boolean(
-        related='product_tmpl_id.x_active_zalo',
-        readonly=False,
-    )
-
     def action_sync_to_wordpress(self):
         """
         Dummy method để bypass lỗi ParseError khi Odoo compile view product.product_normal_form_view.
