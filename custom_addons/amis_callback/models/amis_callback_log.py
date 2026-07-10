@@ -198,6 +198,7 @@ class AmisCallbackLogLine(models.Model):
             item = line._misa_callback_item()
             voucher_type = line._misa_callback_voucher_type(item)
             item_refno = line._misa_callback_refno(item)
+            is_request_callback = line._misa_callback_is_request_callback(voucher_type, item_refno)
             voucher_data = line._misa_callback_voucher_data(item)
             actual_refid = (
                 voucher_data.get('refid') or item.get('refid') or item.get('misa_refid') or org_refid
@@ -225,11 +226,22 @@ class AmisCallbackLogLine(models.Model):
                         org_refid,
                     )
             if po:
-                vals = {'misa_purchase_order_synced': success}
+                vals = {}
                 if success and actual_refid:
                     vals['misa_purchase_order_refid'] = actual_refid
-                po.write(vals)
-                if success:
+                if not is_request_callback:
+                    vals['misa_purchase_order_synced'] = success
+                elif not success:
+                    vals['misa_purchase_order_synced'] = False
+                if vals:
+                    po.write(vals)
+                if is_request_callback and success:
+                    _logger.info(
+                        'MISA da nhan de nghi don mua %s (%s), cho callback sinh chung tu that su.',
+                        po.name,
+                        org_refid,
+                    )
+                if success and not is_request_callback:
                     line._apply_purchase_order_detail_ids(po, voucher_data)
             else:
                 payment_request = self.env['amis.payment.request'].sudo().search([
@@ -248,7 +260,14 @@ class AmisCallbackLogLine(models.Model):
                 if not picking:
                     picking = line._misa_callback_find_inward_picking(org_refid, item_refno, voucher_type)
                 if picking:
-                    picking.write({'misa_inward_synced': success})
+                    if is_request_callback and success:
+                        _logger.info(
+                            'MISA da nhan de nghi phieu nhap %s (%s), cho callback sinh chung tu that su.',
+                            picking.name,
+                            org_refid,
+                        )
+                    else:
+                        picking.write({'misa_inward_synced': success})
 
     def _misa_callback_voucher_type(self, item=None):
         self.ensure_one()
@@ -262,6 +281,9 @@ class AmisCallbackLogLine(models.Model):
     def _misa_callback_refno(self, item=None):
         item = item or {}
         return (item.get('org_refno') or item.get('refno') or '').strip()
+
+    def _misa_callback_is_request_callback(self, voucher_type, item_refno):
+        return bool(voucher_type) and not (item_refno or '').strip()
 
     def _misa_refno_looks_like_inward(self, refno):
         refno = (refno or '').strip().upper()
