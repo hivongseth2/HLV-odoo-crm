@@ -705,12 +705,16 @@ class StockPickingAmisSync(models.Model):
             return self.env['sale.order'].sudo().search([('name', '=', self.origin)], limit=1)
         return self.env['sale.order']
 
-    def _to_misa_date(self, value):
+    def _to_misa_datetime(self, value):
         if not value:
-            value = datetime.utcnow()
-        if hasattr(value, 'strftime'):
-            return value.strftime('%Y-%m-%d')
-        return str(value)[:10]
+            value = fields.Datetime.now()
+
+        if isinstance(value, str):
+            value = fields.Datetime.from_string(value)
+
+        local_dt = fields.Datetime.context_timestamp(self, value)
+
+        return local_dt.isoformat()
 
     def _prepare_misa_inward_payload(self, config, purchase_order):
         self.ensure_one()
