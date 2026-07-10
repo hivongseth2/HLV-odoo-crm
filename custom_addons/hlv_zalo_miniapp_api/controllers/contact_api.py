@@ -5,6 +5,7 @@ import json
 import logging
 import re
 import time
+import requests
 from datetime import timedelta, timezone
 
 from odoo import fields, http
@@ -148,6 +149,52 @@ class ZaloContactAPI(http.Controller):
     # =========================================================================
     # POST /api/v1/zalo/contacts/auth
     # =========================================================================
+    def _do_auth_for_phone(self, phone):
+        normalized = self._normalize_vn_phone(phone)
+        if not normalized:
+            return self._response_error("INVALID_INPUT", "Số điện thoại không hợp lệ")
+
+        PortalAccount = request.env["hlv.loyalty.portal.account"].sudo()
+        partner = self._search_partner_by_phone(normalized)
+
+        is_new = False
+        if not partner:
+            intl_phone = self._intl_phone(normalized)
+            partner = request.env["res.partner"].sudo().create({
+                "name": f"Zalo {normalized}",
+                "phone": intl_phone,
+                "mobile": intl_phone,
+                "x_is_zalo_account": True,
+            })
+            is_new = True
+        else:
+            if not partner.x_is_zalo_account:
+                partner.write({"x_is_zalo_account": True})
+            if not partner.phone and not partner.mobile:
+                intl_phone = self._intl_phone(normalized)
+                partner.write({"phone": intl_phone, "mobile": intl_phone})
+
+        portal_account = PortalAccount.search([("portal_phone", "=", normalized)], limit=1)
+        if not portal_account:
+            PortalAccount.create({
+                "partner_id": partner.id,
+                "username": f"zalo_{normalized}",
+                "portal_phone": normalized,
+            })
+        elif portal_account.partner_id.id != partner.id:
+            portal_account.write({"partner_id": partner.id})
+
+        token = self._generate_token(partner.id, normalized)
+
+        return self._response_success({
+            "contact_id": partner.id,
+            "name": partner.name,
+            "phone": normalized,
+            "email": partner.email or "",
+            "token": token,
+            "is_new": is_new,
+        })
+
     @http.route("/api/v1/zalo/contacts/auth", type="http", auth="public", methods=["POST"], csrf=False)
     def contact_auth(self, **params):
         """Body: {"phone": "090xxxxxxxx"}"""
@@ -156,53 +203,55 @@ class ZaloContactAPI(http.Controller):
             phone = (body.get("phone") or "").strip()
             if not phone:
                 return self._response_error("INVALID_INPUT", "Số điện thoại không được để trống")
-
-            normalized = self._normalize_vn_phone(phone)
-            if not normalized:
-                return self._response_error("INVALID_INPUT", "Số điện thoại không hợp lệ")
-
-            PortalAccount = request.env["hlv.loyalty.portal.account"].sudo()
-            partner = self._search_partner_by_phone(normalized)
-
-            is_new = False
-            if not partner:
-                intl_phone = self._intl_phone(normalized)
-                partner = request.env["res.partner"].sudo().create({
-                    "name": f"Zalo {normalized}",
-                    "phone": intl_phone,
-                    "mobile": intl_phone,
-                    "x_is_zalo_account": True,
-                })
-                is_new = True
-            else:
-                if not partner.x_is_zalo_account:
-                    partner.write({"x_is_zalo_account": True})
-                if not partner.phone and not partner.mobile:
-                    intl_phone = self._intl_phone(normalized)
-                    partner.write({"phone": intl_phone, "mobile": intl_phone})
-
-            portal_account = PortalAccount.search([("portal_phone", "=", normalized)], limit=1)
-            if not portal_account:
-                PortalAccount.create({
-                    "partner_id": partner.id,
-                    "username": f"zalo_{normalized}",
-                    "portal_phone": normalized,
-                })
-            elif portal_account.partner_id.id != partner.id:
-                portal_account.write({"partner_id": partner.id})
-
-            token = self._generate_token(partner.id, normalized)
-
-            return self._response_success({
-                "contact_id": partner.id,
-                "name": partner.name,
-                "phone": normalized,
-                "email": partner.email or "",
-                "token": token,
-                "is_new": is_new,
-            })
+            return self._do_auth_for_phone(phone)
         except Exception as e:
             _logger.exception("contact_auth error")
+            return self._response_error("SERVER_ERROR", str(e), 500)
+
+    # =========================================================================
+    # POST /api/v1/zalo/contacts/auth/zalo-phone
+    # =========================================================================
+    @http.route("/api/v1/zalo/contacts/auth/zalo-phone", type="http", auth="public", methods=["POST"], csrf=False)
+    def contact_auth_zalo_phone(self, **params):
+        """Body: {"token": "...", "access_token": "..."}"""
+        try:
+            body = self._request_json()
+            phone_token = (body.get("token") or "").strip()
+            access_token = (body.get("access_token") or "").strip()
+
+            if not phone_token or not access_token:
+                return self._response_error("INVALID_INPUT", "Thiếu token hoặc access_token")
+
+            Param = request.env["ir.config_parameter"].sudo()
+            secret_key = Param.get_param("hlv_loyalty.zalo_secret_key") or Param.get_param("zalo.secret_key", "").strip()
+            if not secret_key:
+                return self._response_error("CONFIG_ERROR", "Thiếu cấu hình Zalo Secret Key trên Odoo", 503)
+
+            zalo_res = requests.get(
+                "https://graph.zalo.me/v2.0/me/info",
+                headers={
+                    "access_token": access_token,
+                    "code": phone_token,
+                    "secret_key": secret_key,
+                },
+                timeout=10,
+            )
+            zalo_data = zalo_res.json()
+            if zalo_data.get("error") not in (0, "0", None):
+                return self._response_error("ZALO_ERROR", zalo_data.get("message") or "Zalo từ chối token")
+
+            raw_number = ((zalo_data.get("data") or {}).get("number") or zalo_data.get("number") or "")
+            normalized = self._normalize_vn_phone(raw_number)
+            if not normalized:
+                return self._response_error("ZALO_ERROR", "Zalo không trả về số điện thoại")
+
+            return self._do_auth_for_phone(normalized)
+
+        except requests.exceptions.RequestException as e:
+            _logger.exception("Zalo graph api error")
+            return self._response_error("SERVER_ERROR", "Lỗi kết nối Zalo", 502)
+        except Exception as e:
+            _logger.exception("contact_auth_zalo_phone error")
             return self._response_error("SERVER_ERROR", str(e), 500)
 
     # =========================================================================
@@ -257,8 +306,18 @@ class ZaloContactAPI(http.Controller):
                 return self._response_error("NOT_FOUND", "Khách hàng không tồn tại", 404)
 
             total_points = 0
+            exchange_points = 0
+            tier = None
             try:
                 total_points = partner.loyalty_total_points or 0
+                exchange_points = getattr(partner, 'loyalty_exchange_points', 0)
+                if hasattr(partner, 'loyalty_tier_id') and partner.loyalty_tier_id:
+                    tier_obj = partner.loyalty_tier_id
+                    tier = {
+                        "name": tier_obj.name,
+                        "icon": tier_obj.icon or "",
+                        "image_url": tier_obj.image_url or "",
+                    }
             except Exception:
                 pass
 
@@ -269,7 +328,10 @@ class ZaloContactAPI(http.Controller):
                 "city": partner.city or "",
                 "state": partner.state_id.name if partner.state_id else "",
                 "country": partner.country_id.name if partner.country_id else "",
-                "zip": partner.zip or "", "total_points": total_points,
+                "zip": partner.zip or "", 
+                "total_points": total_points,
+                "exchange_points": exchange_points,
+                "tier": tier,
             }
 
             addresses = partner.child_ids.filtered(lambda c: c.type in ("delivery", "other", "invoice"))

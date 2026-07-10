@@ -24,6 +24,7 @@
         "security/ir.model.access.csv",
         "views/product_product_views.xml",
         "views/res_partner_views.xml",
+        "views/banner_views.xml",
     ],
     "installable": True,
     "application": False,

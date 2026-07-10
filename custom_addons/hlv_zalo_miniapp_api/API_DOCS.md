@@ -19,6 +19,41 @@ Vào Settings > Technical > System Parameters:
 
 ---
 
+## Banners API
+
+### POST /api/v1/zalo/banners/list
+Danh sách banner hiển thị trang chủ.
+
+**Body**:
+```json
+{
+  "limit": 10,
+  "offset": 0
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "total": 5,
+    "limit": 10,
+    "offset": 0,
+    "banners": [
+      {
+        "id": 1,
+        "name": "Khuyến mãi Tết",
+        "link": "https://...",
+        "image_url": "/api/v1/zalo/image/zalo.miniapp.banner/1/image"
+      }
+    ]
+  }
+}
+```
+
+---
+
 ## Category API
 
 ### POST /api/v1/zalo/categories/list
@@ -204,6 +239,18 @@ Chi tiết sản phẩm.
 }
 ```
 
+### POST /api/v1/zalo/contacts/auth/zalo-phone
+Lấy SĐT thật từ Zalo token và đăng nhập.
+
+**Body**:
+```json
+{
+  "token": "...",
+  "access_token": "..."
+}
+```
+**Response**: Giống với `/auth` thường.
+
 ### POST /api/v1/zalo/contacts/list
 **Auth**: Bearer token required
 
@@ -215,8 +262,35 @@ Chi tiết sản phẩm.
 }
 ```
 
-### GET /api/v1/zalo/contacts/<id>
+### POST /api/v1/zalo/contacts/detail
+Lấy thông tin chi tiết khách hàng và điểm thưởng Loyalty.
 **Auth**: Bearer token required
+
+**Body**:
+```json
+{
+  "contact_id": 1
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "name": "Nguyễn Văn A",
+    "phone": "0901234567",
+    "total_points": 1500,
+    "exchange_points": 500,
+    "tier": {
+      "name": "Gold",
+      "icon": "gold_icon.png"
+    },
+    "addresses": [...]
+  }
+}
+```
 
 ### PUT /api/v1/zalo/contacts/<id>
 **Auth**: Bearer token required
