@@ -705,7 +705,7 @@ class StockPickingAmisSync(models.Model):
             return self.env['sale.order'].sudo().search([('name', '=', self.origin)], limit=1)
         return self.env['sale.order']
 
-    def _to_misa_datetime(self, value):
+    def _to_misa_date(self, value):
         if not value:
             value = fields.Datetime.now()
 
