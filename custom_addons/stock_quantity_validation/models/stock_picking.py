@@ -1,7 +1,12 @@
 # -*- coding: utf-8 -*-
 import logging
-from odoo import models, fields, api, _
+from collections import defaultdict
+
+from markupsafe import Markup, escape
+
+from odoo import SUPERUSER_ID, models, fields, api, _
 from odoo.exceptions import UserError
+from odoo.tools.float_utils import float_compare
 
 _logger = logging.getLogger(__name__)
 
@@ -81,18 +86,275 @@ class StockPicking(models.Model):
 
         _logger.info("✅ Picking %s: Tất cả qty_done đều hợp lệ", self.name)
 
+    def _hlv_quant_delta_guard_enabled(self):
+        if self.env.context.get('skip_quant_delta_guard') or self.env.context.get('hlv_skip_quant_delta_guard'):
+            return False
+        value = self.env['ir.config_parameter'].sudo().get_param(
+            'stock_quantity_validation.validate_quant_delta_guard',
+            'True',
+        )
+        return str(value).lower() not in ('0', 'false', 'no', 'off')
+
+    def _hlv_stock_quant_product(self, product):
+        if not product:
+            return False
+        if 'is_storable' in product._fields:
+            return bool(product.is_storable)
+        return (product.type or '') == 'product'
+
+    def _hlv_move_line_qty_for_quant_delta(self, move_line):
+        values = []
+        for field_name in ('quantity', 'qty_done'):
+            if field_name in move_line._fields:
+                values.append(float(getattr(move_line, field_name) or 0.0))
+        return max(values) if values else 0.0
+
+    def _hlv_quant_delta_key(self, move_line, location, package):
+        company = move_line.company_id or move_line.picking_id.company_id
+        return (
+            move_line.product_id.id,
+            location.id,
+            move_line.lot_id.id or False,
+            package.id if package else False,
+            move_line.owner_id.id or False,
+            company.id if company else False,
+        )
+
+    def _hlv_collect_validate_quant_deltas_by_picking(self):
+        deltas_by_picking = {}
+        samples = {}
+        quant_usages = ('internal', 'transit')
+        for picking in self:
+            if picking.state in ('done', 'cancel'):
+                continue
+            picking_deltas = defaultdict(float)
+            for move_line in picking.move_line_ids:
+                if move_line.state in ('done', 'cancel'):
+                    continue
+                if not self._hlv_stock_quant_product(move_line.product_id):
+                    continue
+                line_qty = self._hlv_move_line_qty_for_quant_delta(move_line)
+                if line_qty <= 0:
+                    continue
+
+                uom = move_line.product_uom_id or move_line.product_id.uom_id
+                product_qty = uom._compute_quantity(line_qty, move_line.product_id.uom_id)
+                if move_line.location_id.usage in quant_usages:
+                    key = self._hlv_quant_delta_key(move_line, move_line.location_id, move_line.package_id)
+                    picking_deltas[key] -= product_qty
+                    samples.setdefault(key, move_line)
+                if move_line.location_dest_id.usage in quant_usages:
+                    key = self._hlv_quant_delta_key(move_line, move_line.location_dest_id, move_line.result_package_id)
+                    picking_deltas[key] += product_qty
+                    samples.setdefault(key, move_line)
+            deltas_by_picking[picking.id] = dict(picking_deltas)
+        return deltas_by_picking, samples
+
+    def _hlv_merge_quant_deltas(self, deltas_by_picking, picking_ids=None):
+        merged = defaultdict(float)
+        picking_ids = set(picking_ids) if picking_ids is not None else None
+        for picking_id, picking_deltas in deltas_by_picking.items():
+            if picking_ids is not None and picking_id not in picking_ids:
+                continue
+            for key, delta in picking_deltas.items():
+                merged[key] += delta
+        return {key: delta for key, delta in merged.items() if abs(delta) > 1e-12}
+
+    def _hlv_quant_lock_name(self, key):
+        product_id, location_id, lot_id, package_id, owner_id, company_id = key
+        return 'hlv_validate_quant:%s:%s:%s:%s:%s:%s' % (
+            company_id or 0,
+            product_id or 0,
+            location_id or 0,
+            lot_id or 0,
+            package_id or 0,
+            owner_id or 0,
+        )
+
+    def _hlv_lock_validate_quant_flow(self, keys):
+        if not keys:
+            return
+
+        if self.ids:
+            self.env.cr.execute(
+                'SELECT id FROM stock_picking WHERE id IN %s ORDER BY id FOR UPDATE',
+                [tuple(self.ids)],
+            )
+
+        move_ids = self.move_ids.ids
+        if move_ids:
+            self.env.cr.execute(
+                'SELECT id FROM stock_move WHERE id IN %s ORDER BY id FOR UPDATE',
+                [tuple(move_ids)],
+            )
+
+        move_line_ids = self.move_line_ids.ids
+        if move_line_ids:
+            self.env.cr.execute(
+                'SELECT id FROM stock_move_line WHERE id IN %s ORDER BY id FOR UPDATE',
+                [tuple(move_line_ids)],
+            )
+
+        for key in sorted(keys):
+            self.env.cr.execute(
+                'SELECT pg_advisory_xact_lock(hashtext(%s)::bigint)',
+                [self._hlv_quant_lock_name(key)],
+            )
+
+        product_ids = sorted({key[0] for key in keys})
+        location_ids = sorted({key[1] for key in keys})
+        if product_ids and location_ids:
+            self.env.cr.execute(
+                '''
+                    SELECT id
+                      FROM stock_quant
+                     WHERE product_id IN %s
+                       AND location_id IN %s
+                     ORDER BY id
+                     FOR UPDATE
+                ''',
+                [tuple(product_ids), tuple(location_ids)],
+            )
+        self.env.invalidate_all()
+        _logger.info(
+            '[HLV_QUANT_GUARD] locked %s quant keys before validating pickings=%s',
+            len(keys),
+            self.mapped('name'),
+        )
+
+    def _hlv_quant_qty(self, key):
+        product_id, location_id, lot_id, package_id, owner_id, company_id = key
+        quants = self.env['stock.quant'].sudo().search([
+            ('product_id', '=', product_id),
+            ('location_id', '=', location_id),
+            ('lot_id', '=', lot_id or False),
+            ('package_id', '=', package_id or False),
+            ('owner_id', '=', owner_id or False),
+            ('company_id', '=', company_id or False),
+        ])
+        return sum(quants.mapped('quantity'))
+
+    def _hlv_snapshot_quant_qty(self, keys):
+        self.env.invalidate_all()
+        return {key: self._hlv_quant_qty(key) for key in keys}
+
+    def _hlv_quant_delta_label(self, key):
+        product_id, location_id, lot_id, package_id, owner_id, company_id = key
+        product = self.env['product.product'].sudo().browse(product_id)
+        location = self.env['stock.location'].sudo().browse(location_id)
+        return (
+            '%s | location=%s | lot=%s | package=%s | owner=%s | company=%s'
+            % (
+                product.display_name if product.exists() else product_id,
+                location.complete_name if location.exists() else location_id,
+                lot_id or '-',
+                package_id or '-',
+                owner_id or '-',
+                company_id or '-',
+            )
+        )
+
+    def _hlv_post_quant_guard_failure(self, errors):
+        picking_ids = self.ids
+        if not picking_ids:
+            return
+        error_items = ''.join('<li>%s</li>' % escape(error) for error in errors[:10])
+        body = Markup(
+            "<p><b>HLV_QUANT_GUARD - Lệch tồn sau validate</b></p>"
+            "<p>Hệ thống phát hiện tồn kho sau khi xác nhận phiếu không khớp với số lượng đã chuyển. "
+            "Giao dịch validate đã bị rollback để tránh lệch tồn.</p>"
+            "<ul>%s</ul>"
+        ) % Markup(error_items)
+
+        try:
+            with api.Environment.manage(), self.env.registry.cursor() as cr:
+                log_env = api.Environment(
+                    cr,
+                    SUPERUSER_ID,
+                    dict(
+                        self.env.context,
+                        tracking_disable=True,
+                        mail_create_nosubscribe=True,
+                    ),
+                )
+                pickings = log_env['stock.picking'].sudo().browse(picking_ids).exists()
+                for picking in pickings:
+                    picking.message_post(body=body, subtype_xmlid='mail.mt_note')
+                cr.commit()
+        except Exception:
+            _logger.exception(
+                '[HLV_QUANT_GUARD] failed to post mismatch note to pickings=%s',
+                self.mapped('name'),
+            )
+
+    def _hlv_assert_quant_delta_after_validate(self, before_snapshot, expected_deltas, samples):
+        if not expected_deltas:
+            return
+        after_snapshot = self._hlv_snapshot_quant_qty(expected_deltas.keys())
+        errors = []
+        for key, delta in sorted(expected_deltas.items()):
+            current_qty = after_snapshot.get(key, 0.0)
+            expected_qty = before_snapshot.get(key, 0.0) + delta
+            sample = samples.get(key)
+            rounding = sample.product_id.uom_id.rounding if sample else 0.01
+            if float_compare(current_qty, expected_qty, precision_rounding=rounding) == 0:
+                continue
+            errors.append(
+                '%s | before=%s delta=%s expected=%s current=%s'
+                % (
+                    self._hlv_quant_delta_label(key),
+                    before_snapshot.get(key, 0.0),
+                    delta,
+                    expected_qty,
+                    current_qty,
+                )
+            )
+
+        if not errors:
+            return
+
+        _logger.error(
+            '[HLV_QUANT_GUARD] quant mismatch after validate pickings=%s errors=%s',
+            self.mapped('name'),
+            errors,
+        )
+        self._hlv_post_quant_guard_failure(errors)
+        raise UserError(_(
+            "Tồn kho sau khi xác nhận phiếu không khớp với số lượng đã chuyển.\n"
+            "Hệ thống đã hủy giao dịch validate này để tránh lệch tồn.\n\n"
+            "%s\n\n"
+            "Chi tiết đã được ghi vào chatter của phiếu với tag HLV_QUANT_GUARD.\n"
+            "Vui lòng thử validate lại. Nếu lỗi lặp lại, báo kỹ thuật kiểm tra phiếu này."
+        ) % "\n".join(errors[:10]))
+
     def button_validate(self):
         """
-        Override button_validate để kiểm tra quantity không được vượt quá product_uom_qty
-        trên tất cả các stock.move trước khi xác nhận picking.
-        Hỗ trợ xác nhận nhiều picking cùng lúc.
+        Validate stock quantities before and after core validation.
+        The post-check runs on every backend caller of stock.picking.button_validate.
         """
-        # Kiểm tra từng picking trước khi validate
         for picking in self:
             picking._check_qty_validation_before_validate()
 
-        # Nếu không có vi phạm, tiếp tục xác nhận bình thường
-        return super(StockPicking, self).button_validate()
+        guard_enabled = self._hlv_quant_delta_guard_enabled()
+        deltas_by_picking = {}
+        samples = {}
+        before_snapshot = {}
+        if guard_enabled:
+            deltas_by_picking, samples = self._hlv_collect_validate_quant_deltas_by_picking()
+            all_expected_deltas = self._hlv_merge_quant_deltas(deltas_by_picking)
+            if all_expected_deltas:
+                self._hlv_lock_validate_quant_flow(all_expected_deltas.keys())
+                before_snapshot = self._hlv_snapshot_quant_qty(all_expected_deltas.keys())
+
+        res = super(StockPicking, self).button_validate()
+
+        if guard_enabled and before_snapshot:
+            self.env.invalidate_all()
+            done_picking_ids = set(self.filtered(lambda picking: picking.state == 'done').ids)
+            done_expected_deltas = self._hlv_merge_quant_deltas(deltas_by_picking, done_picking_ids)
+            self._hlv_assert_quant_delta_after_validate(before_snapshot, done_expected_deltas, samples)
+
+        return res
 
 
 class StockMove(models.Model):

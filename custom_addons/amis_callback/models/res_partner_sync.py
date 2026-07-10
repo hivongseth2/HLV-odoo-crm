@@ -42,6 +42,7 @@ class ResPartnerAmisSync(models.Model):
             'country_id',
             'supplier_rank',
             'customer_rank',
+            'hlv_business_role',
             'active',
             'is_company',
             'company_type',
@@ -75,7 +76,8 @@ class ResPartnerAmisSync(models.Model):
             return False
         if not partner.name:
             return False
-        return int(partner.supplier_rank or 0) > 0
+        business_role = getattr(partner, 'hlv_business_role', '') or ''
+        return int(partner.supplier_rank or 0) > 0 or business_role == 'supplier'
 
     def _push_misa_vendor_dictionary(self, config, job=None):
         self.ensure_one()
@@ -101,10 +103,10 @@ class ResPartnerAmisSync(models.Model):
                 misa_id=misa_id,
                 code=item.get('account_object_code') or '',
                 name=item.get('account_object_name') or '',
-                change_summary='pushed to MISA: account_object_code, account_object_name, tax, phone, email, address',
+                change_summary='Đã đẩy sang MISA: mã NCC, tên NCC, mã số thuế, điện thoại, email, địa chỉ',
             )
         _logger.info(
-            'Synced Odoo vendor %s to MISA account_object %s',
+            'Đã đồng bộ nhà cung cấp Odoo %s sang account_object MISA %s',
             self.display_name,
             item.get('account_object_code') or misa_id,
         )

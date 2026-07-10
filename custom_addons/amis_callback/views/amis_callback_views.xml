@@ -1,5 +1,24 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <odoo>
+    <record id="view_res_partner_form_misa_bank_accounts" model="ir.ui.view">
+        <field name="name">res.partner.form.misa.bank.accounts</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page string="Ngân hàng MISA" name="misa_bank_accounts">
+                    <field name="bank_ids" context="{'default_partner_id': id}">
+                        <list editable="bottom">
+                            <field name="acc_number"/>
+                            <field name="acc_holder_name"/>
+                            <field name="bank_id"/>
+                        </list>
+                    </field>
+                </page>
+            </xpath>
+        </field>
+    </record>
+
     <record id="view_amis_callback_log_tree" model="ir.ui.view">
         <field name="name">amis.callback.log.tree</field>
         <field name="model">amis.callback.log</field>
@@ -118,9 +137,13 @@
                     <button name="action_connect_misa" type="object" string="Kết nối MISA" class="btn-primary"/>
                     <button name="action_connect_meinvoice" type="object" string="Kết nối meInvoice" class="btn-secondary"/>
                     <button name="action_get_meinvoice_templates" type="object" string="Lấy mẫu HĐ" class="btn-secondary"/>
-                    <button name="action_sync_product_catalog_to_odoo" type="object" string="Đồng bộ sản phẩm MISA" class="btn-secondary"/>
-                    <button name="action_sync_vendor_catalog_to_odoo" type="object" string="Đồng bộ nhà cung cấp MISA" class="btn-secondary"/>
-                    <button name="action_sync_catalog_unmapped_only" type="object" string="Đồng bộ danh mục chưa map" class="btn-secondary"/>
+                    <button name="action_enqueue_misa_mirror_incremental" type="object" string="Cập nhật mirror MISA" class="btn-secondary"/>
+                    <button name="action_enqueue_misa_mirror_full" type="object" string="Full sync mirror MISA" class="btn-secondary"/>
+                    <button name="action_open_misa_mirror_jobs" type="object" string="Hàng đợi mirror MISA" class="btn-secondary"/>
+                    <!-- Compatibility anchors for old inherited views during module upgrade. -->
+                    <button name="action_sync_product_catalog_to_odoo" type="object" string="Đồng bộ sản phẩm MISA" invisible="1"/>
+                    <button name="action_sync_vendor_catalog_to_odoo" type="object" string="Đồng bộ nhà cung cấp MISA" invisible="1"/>
+                    <button name="action_sync_catalog_unmapped_only" type="object" string="Đồng bộ danh mục chưa map" invisible="1"/>
                     <button name="check_call_back_data" type="object" string="Kiểm tra Callback" class="btn-secondary"/>
                     <button name="delete_call_back_data" type="object" string="Xóa Callback" class="btn-secondary"/>
                 </header>
@@ -560,7 +583,7 @@
         <field name="name">amis.catalog.sync.job.list</field>
         <field name="model">amis.catalog.sync.job</field>
         <field name="arch" type="xml">
-            <list string="Hàng đợi đồng bộ danh mục MISA" default_order="create_date desc"
+            <list string="Hàng đợi mirror MISA" default_order="create_date desc"
                   decoration-danger="status == 'error'"
                   decoration-success="status == 'done'"
                   decoration-warning="status == 'running'">
@@ -568,17 +591,23 @@
                 <field name="create_date" string="Tạo lúc"/>
                 <field name="direction"/>
                 <field name="scope"/>
+                <field name="mirror_operation"/>
+                <field name="mirror_mode"/>
                 <field name="partner_id" optional="show"/>
                 <field name="trigger"/>
                 <field name="status"/>
                 <field name="total_count"/>
+                <field name="unit_skip" optional="hide"/>
                 <field name="product_skip" optional="show"/>
                 <field name="vendor_skip" optional="show"/>
                 <field name="batch_size" optional="hide"/>
+                <field name="request_cursor" optional="hide"/>
+                <field name="next_cursor" optional="hide"/>
                 <field name="created_count"/>
                 <field name="updated_count"/>
                 <field name="skipped_count"/>
                 <field name="error_count"/>
+                <field name="issue_count" optional="show"/>
                 <field name="retry_count"/>
                 <field name="processed_at"/>
                 <field name="error_msg" optional="show"/>
@@ -594,7 +623,7 @@
         <field name="name">amis.catalog.sync.job.form</field>
         <field name="model">amis.catalog.sync.job</field>
         <field name="arch" type="xml">
-            <form string="Hàng đợi đồng bộ danh mục MISA">
+            <form string="Hàng đợi mirror MISA">
                 <header>
                     <button name="action_run_now" type="object" string="Chạy ngay"
                             invisible="status not in ('pending','error')" class="btn-primary"/>
@@ -608,6 +637,8 @@
                             <field name="name" readonly="1"/>
                             <field name="direction"/>
                             <field name="scope"/>
+                            <field name="mirror_operation"/>
+                            <field name="mirror_mode"/>
                             <field name="partner_id"/>
                             <field name="trigger"/>
                             <field name="config_id"/>
@@ -615,9 +646,12 @@
                         <group>
                             <field name="unmapped_only"/>
                             <field name="create_missing"/>
+                            <field name="unit_skip"/>
                             <field name="product_skip"/>
                             <field name="vendor_skip"/>
                             <field name="batch_size"/>
+                            <field name="request_cursor"/>
+                            <field name="next_cursor"/>
                             <field name="unit_sync_done"/>
                             <field name="vendor_sync_done"/>
                             <field name="retry_count"/>
@@ -632,15 +666,18 @@
                             <field name="updated_count"/>
                             <field name="skipped_count"/>
                             <field name="error_count"/>
+                            <field name="issue_count"/>
                         </group>
                         <group string="Lỗi" invisible="not error_msg">
                             <field name="error_msg" nolabel="1"/>
                         </group>
                     </group>
                     <notebook>
-                        <page string="Thay đổi">
-                            <field name="line_ids" readonly="1">
-                                <list string="Chi tiết thay đổi" create="false" edit="false" delete="false">
+                        <page string="Cần xử lý" invisible="not issue_count">
+                            <field name="issue_line_ids" readonly="1">
+                                <list string="Danh sách cần xử lý" create="false" edit="false" delete="false"
+                                      decoration-warning="not resolved" decoration-muted="resolved">
+                                    <field name="issue_type"/>
                                     <field name="data_type"/>
                                     <field name="operation"/>
                                     <field name="odoo_model"/>
@@ -649,6 +686,29 @@
                                     <field name="code"/>
                                     <field name="name"/>
                                     <field name="change_summary"/>
+                                    <field name="resolved"/>
+                                    <button name="action_open_odoo_record" type="object" string="Mở Odoo"
+                                            icon="fa-external-link"/>
+                                    <button name="action_open_uom_resolution_wizard" type="object" string="Xử lý ĐVT"
+                                            icon="fa-random" invisible="resolved or issue_type != 'uom_mismatch'"/>
+                                    <button name="action_mark_resolved" type="object" string="Đã xử lý"
+                                            icon="fa-check" invisible="resolved"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Thay đổi">
+                            <field name="line_ids" readonly="1">
+                                <list string="Chi tiết thay đổi" create="false" edit="false" delete="false">
+                                    <field name="data_type"/>
+                                    <field name="operation"/>
+                                    <field name="issue_type" optional="show"/>
+                                    <field name="odoo_model"/>
+                                    <field name="res_id"/>
+                                    <field name="misa_id"/>
+                                    <field name="code"/>
+                                    <field name="name"/>
+                                    <field name="change_summary"/>
+                                    <field name="resolved" optional="hide"/>
                                 </list>
                             </field>
                         </page>
@@ -665,7 +725,7 @@
         <field name="name">amis.catalog.sync.job.search</field>
         <field name="model">amis.catalog.sync.job</field>
         <field name="arch" type="xml">
-            <search string="Tìm hàng đợi danh mục MISA">
+            <search string="Tìm hàng đợi mirror MISA">
                 <field name="name"/>
                 <field name="partner_id"/>
                 <field name="scope"/>
@@ -675,7 +735,10 @@
                 <filter name="error" string="Lỗi" domain="[('status', '=', 'error')]"/>
                 <separator/>
                 <filter name="scope_product" string="Sản phẩm" domain="[('scope', '=', 'product')]"/>
+                <filter name="scope_unit" string="Đơn vị tính" domain="[('scope', '=', 'unit')]"/>
                 <filter name="scope_vendor" string="Nhà cung cấp" domain="[('scope', '=', 'vendor')]"/>
+                <filter name="mirror_full" string="Full sync" domain="[('mirror_mode', '=', 'full')]"/>
+                <filter name="mirror_incremental" string="Tăng dần" domain="[('mirror_mode', '=', 'incremental')]"/>
                 <filter name="from_misa" string="MISA → Odoo" domain="[('direction', '=', 'from_misa')]"/>
                 <filter name="to_misa" string="Odoo → MISA" domain="[('direction', '=', 'to_misa')]"/>
                 <group expand="0" string="Nhóm theo">
@@ -688,11 +751,153 @@
     </record>
 
     <record id="action_amis_catalog_sync_job" model="ir.actions.act_window">
-        <field name="name">Hàng đợi danh mục MISA</field>
+        <field name="name">Hàng đợi mirror MISA</field>
         <field name="res_model">amis.catalog.sync.job</field>
         <field name="view_mode">list,form</field>
         <field name="search_view_id" ref="view_amis_catalog_sync_job_search"/>
         <field name="context">{'search_default_pending': 1}</field>
+    </record>
+
+    <record id="view_amis_catalog_sync_job_line_list" model="ir.ui.view">
+        <field name="name">amis.catalog.sync.job.line.list</field>
+        <field name="model">amis.catalog.sync.job.line</field>
+        <field name="arch" type="xml">
+            <list string="Mirror MISA cần xử lý" default_order="id desc"
+                  decoration-danger="issue_type and not resolved"
+                  decoration-muted="resolved">
+                <field name="job_id"/>
+                <field name="issue_type"/>
+                <field name="resolved"/>
+                <field name="data_type"/>
+                <field name="operation"/>
+                <field name="odoo_model"/>
+                <field name="res_id"/>
+                <field name="misa_id"/>
+                <field name="code"/>
+                <field name="name"/>
+                <field name="change_summary"/>
+                <field name="resolved_note" optional="hide"/>
+                <button name="action_open_odoo_record" type="object" string="Mở Odoo"
+                        icon="fa-external-link"/>
+                <button name="action_open_uom_resolution_wizard" type="object" string="Xử lý ĐVT"
+                        icon="fa-random" invisible="resolved or issue_type != 'uom_mismatch'"/>
+                <button name="action_mark_resolved" type="object" string="Đã xử lý"
+                        icon="fa-check" invisible="resolved"/>
+                <button name="action_mark_unresolved" type="object" string="Mở lại"
+                        icon="fa-undo" invisible="not resolved"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_amis_catalog_sync_job_line_form" model="ir.ui.view">
+        <field name="name">amis.catalog.sync.job.line.form</field>
+        <field name="model">amis.catalog.sync.job.line</field>
+        <field name="arch" type="xml">
+            <form string="Chi tiết mirror cần xử lý">
+                <header>
+                    <button name="action_open_odoo_record" type="object" string="Mở Odoo"
+                            class="btn-secondary"/>
+                    <button name="action_open_uom_resolution_wizard" type="object" string="Xử lý ĐVT"
+                            class="btn-primary" invisible="resolved or issue_type != 'uom_mismatch'"/>
+                    <button name="action_mark_resolved" type="object" string="Đã xử lý"
+                            class="btn-primary" invisible="resolved"/>
+                    <button name="action_mark_unresolved" type="object" string="Mở lại"
+                            class="btn-secondary" invisible="not resolved"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="job_id" readonly="1"/>
+                            <field name="issue_type" readonly="1"/>
+                            <field name="resolved"/>
+                            <field name="data_type" readonly="1"/>
+                            <field name="operation" readonly="1"/>
+                        </group>
+                        <group>
+                            <field name="odoo_model" readonly="1"/>
+                            <field name="res_id" readonly="1"/>
+                            <field name="misa_id" readonly="1"/>
+                            <field name="code" readonly="1"/>
+                            <field name="name" readonly="1"/>
+                        </group>
+                    </group>
+                    <group string="Nội dung">
+                        <field name="change_summary" nolabel="1" readonly="1"/>
+                    </group>
+                    <group string="Ghi chú xử lý">
+                        <field name="resolved_note" nolabel="1"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_amis_catalog_sync_job_line_search" model="ir.ui.view">
+        <field name="name">amis.catalog.sync.job.line.search</field>
+        <field name="model">amis.catalog.sync.job.line</field>
+        <field name="arch" type="xml">
+            <search string="Tìm mirror MISA cần xử lý">
+                <field name="job_id"/>
+                <field name="code"/>
+                <field name="name"/>
+                <field name="misa_id"/>
+                <field name="issue_type"/>
+                <filter name="unresolved" string="Chưa xử lý"
+                        domain="[('issue_type', '!=', False), ('resolved', '=', False)]"/>
+                <filter name="resolved" string="Đã xử lý"
+                        domain="[('issue_type', '!=', False), ('resolved', '=', True)]"/>
+                <filter name="uom_mismatch" string="ĐVT lệch thật"
+                        domain="[('issue_type', '=', 'uom_mismatch')]"/>
+                <separator/>
+                <filter name="product" string="Hàng hóa" domain="[('data_type', '=', 'product')]"/>
+                <group expand="0" string="Nhóm theo">
+                    <filter name="group_issue_type" string="Loại cần xử lý" context="{'group_by': 'issue_type'}"/>
+                    <filter name="group_job" string="Job" context="{'group_by': 'job_id'}"/>
+                    <filter name="group_resolved" string="Trạng thái xử lý" context="{'group_by': 'resolved'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="view_amis_catalog_uom_issue_resolve_wizard_form" model="ir.ui.view">
+        <field name="name">amis.catalog.uom.issue.resolve.wizard.form</field>
+        <field name="model">amis.catalog.uom.issue.resolve.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Xử lý ĐVT lệch thật">
+                <sheet>
+                    <group>
+                        <field name="issue_line_id"/>
+                        <field name="old_product_id"/>
+                        <field name="current_uom_id"/>
+                        <field name="target_uom_id"/>
+                        <field name="current_qty"/>
+                        <field name="transfer_code"/>
+                        <field name="transfer_barcode"/>
+                    </group>
+                    <group string="Cảnh báo">
+                        <field name="warning_text" nolabel="1"/>
+                    </group>
+                    <group>
+                        <field name="note" placeholder="Ghi chú thêm nếu cần"/>
+                        <field name="confirm"/>
+                    </group>
+                </sheet>
+                <footer>
+                    <button name="action_confirm" type="object" string="Xác nhận xử lý"
+                            class="btn-primary"/>
+                    <button string="Hủy" special="cancel" class="btn-secondary"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_amis_catalog_uom_issues" model="ir.actions.act_window">
+        <field name="name">ĐVT cần xử lý</field>
+        <field name="res_model">amis.catalog.sync.job.line</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_amis_catalog_sync_job_line_search"/>
+        <field name="domain">[('issue_type', '=', 'uom_mismatch')]</field>
+        <field name="context">{'search_default_unresolved': 1, 'search_default_uom_mismatch': 1}</field>
     </record>
 
     <!-- Danh sách hóa đơn meInvoice đã phát hành -->
@@ -730,7 +935,9 @@
               groups="amis_callback.group_meinvoice_manager"/>
     <menuitem id="menu_amis_sync_jobs" name="Hàng đợi đồng bộ MISA" parent="menu_amis_callback_root" action="action_amis_sync_job" sequence="15"
               groups="amis_callback.group_meinvoice_manager"/>
-    <menuitem id="menu_amis_catalog_sync_jobs" name="Hàng đợi danh mục MISA" parent="menu_amis_callback_root" action="action_amis_catalog_sync_job" sequence="16"
+    <menuitem id="menu_amis_catalog_sync_jobs" name="Hàng đợi mirror MISA" parent="menu_amis_callback_root" action="action_amis_catalog_sync_job" sequence="16"
+              groups="amis_callback.group_meinvoice_manager"/>
+    <menuitem id="menu_amis_catalog_uom_issues" name="ĐVT cần xử lý" parent="menu_amis_callback_root" action="action_amis_catalog_uom_issues" sequence="17"
               groups="amis_callback.group_meinvoice_manager"/>
     <menuitem id="menu_meinvoice_invoices" name="Hóa đơn điện tử" parent="menu_amis_callback_root" action="action_meinvoice_invoice" sequence="18"
               groups="amis_callback.group_meinvoice_user"/>
