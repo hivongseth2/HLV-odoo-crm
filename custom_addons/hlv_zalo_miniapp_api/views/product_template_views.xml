@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_product_template_zalo_form_inherit" model="ir.ui.view">
+        <field name="name">product.template.zalo.form.inherit</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//group[@name='inventory']" position="after">
+                <group name="zalo" string="Zalo Mini App">
+                    <field name="x_active_zalo"/>
+                    <field name="x_zalo_price"/>
+                </group>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_product_template_zalo_search_inherit" model="ir.ui.view">
+        <field name="name">product.template.zalo.search.inherit</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_search_view"/>
+        <field name="arch" type="xml">
+            <field name="name" position="after">
+                <field name="x_active_zalo"/>
+            </field>
+        </field>
+    </record>
+</odoo>
