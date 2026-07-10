@@ -452,10 +452,7 @@ class PurchaseOrderAmisSync(models.Model):
         return org_refid
 
     def _misa_purchase_order_lines_missing_ref_detail(self, lines):
-        return lines.filtered(
-            lambda line: not self._misa_purchase_order_line_ref_detail_id(line)
-            or not line.misa_purchase_order_ref_detail_synced
-        )
+        return lines.filtered(lambda line: not self._misa_purchase_order_line_ref_detail_id(line))
 
     def _misa_refresh_purchase_order_refs_from_logs(self):
         self.ensure_one()
