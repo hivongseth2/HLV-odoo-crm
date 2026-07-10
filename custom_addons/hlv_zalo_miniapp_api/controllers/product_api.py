@@ -148,13 +148,13 @@ class ZaloProductAPI(http.Controller):
                 domain.append(("pos_categ_ids", "in", [category_id]))
 
             if query:
-                domain.append(
+                domain += [
                     "|",
                     ("name", "ilike", query),
                     "|",
                     ("default_code", "ilike", query),
                     ("barcode", "ilike", query),
-                )
+                ]
 
             sort_map = {
                 "name": "name",
