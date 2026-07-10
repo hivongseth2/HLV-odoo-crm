@@ -7,13 +7,6 @@
         <field name="padding">5</field>
     </record>
 
-    <record id="seq_amis_payment_request" model="ir.sequence">
-        <field name="name">AMIS Payment Request</field>
-        <field name="code">amis.payment.request</field>
-        <field name="prefix">DNC/</field>
-        <field name="padding">5</field>
-    </record>
-
     <record id="amis_callback_config_singleton" model="amis.callback.config">
         <field name="name">AMIS Callback</field>
         <field name="app_id">cfd435c9-b5c9-484f-b86d-ddbba36dc0f4</field>

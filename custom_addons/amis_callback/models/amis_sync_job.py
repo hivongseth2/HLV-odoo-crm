@@ -22,12 +22,8 @@ class AmisSyncJob(models.Model):
     purchase_order_id = fields.Many2one(
         'purchase.order', string='Đơn mua hàng', required=False, ondelete='cascade', index=True,
     )
-    payment_request_id = fields.Many2one(
-        'amis.payment.request', string='Đề nghị chi MISA', required=False, ondelete='cascade', index=True,
-    )
     direction = fields.Selection([
         ('purchase_order', 'Đơn mua hàng (pu_order)'),
-        ('payment_request', 'Đề nghị chi tiền (ba_withdraw)'),
         ('incoming', 'Nhập kho (InwardVoucher)'),
         ('outgoing', 'Xuất kho / Bán hàng (SAVoucher)'),
         ('sa_invoice', 'Hóa đơn bán hàng (SAInvoice)'),
@@ -70,18 +66,12 @@ class AmisSyncJob(models.Model):
         pick = self.picking_id
         so = self.sale_order_id
         po = self.purchase_order_id
-        payment_request = self.payment_request_id
         try:
             if self.direction == 'purchase_order':
                 if po:
                     po._sync_purchase_order_to_misa()
                 else:
                     raise ValueError('purchase_order job thieu purchase_order_id')
-            elif self.direction == 'payment_request':
-                if payment_request:
-                    payment_request._sync_payment_request_to_misa()
-                else:
-                    raise ValueError('payment_request job thiếu payment_request_id')
             elif self.direction == 'incoming':
                 pick._sync_incoming_po_to_misa()
             elif self.direction == 'outgoing':
@@ -97,11 +87,6 @@ class AmisSyncJob(models.Model):
                 'processed_at': fields.Datetime.now(),
             })
         except Exception as e:
-            if self.direction == 'payment_request' and payment_request:
-                payment_request.sudo().write({
-                    'state': 'error',
-                    'error_msg': str(e)[:2000],
-                })
             self.write({
                 'retry_count': self.retry_count + 1,
                 'error_msg': str(e)[:2000],
