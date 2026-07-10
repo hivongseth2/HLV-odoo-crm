@@ -82,6 +82,8 @@ class PurchaseOrderAmisSync(models.Model):
 
     def _is_misa_imported_purchase_order(self):
         self.ensure_one()
+        if (self.misa_purchase_order_org_refid or self.misa_purchase_order_refid):
+            return False
         for field_name in ('x_studio_misa_date', 'x_studio_misa_purchase_status'):
             if field_name in self._fields and self[field_name]:
                 return True
