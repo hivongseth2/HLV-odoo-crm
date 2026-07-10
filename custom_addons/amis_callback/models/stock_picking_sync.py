@@ -189,10 +189,12 @@ class StockPickingAmisSync(models.Model):
         voucher_payload, dictionary_items, reference_items = self._prepare_misa_inward_payload(config, purchase_order)
         org_refid = voucher_payload.get('org_refid')
         _logger.info(
-            'Push MISA inward %s: org_refid=%s, po=%s, detail_po_refid=%s, detail_links=%s',
+            'Push MISA inward %s: org_refid=%s, po=%s, header_po_refid=%s, header_po_refno=%s, detail_po_refid=%s, detail_links=%s',
             self.name,
             org_refid,
             purchase_order.name,
+            voucher_payload.get('pu_order_refid') or '',
+            voucher_payload.get('pu_order_refno') or '',
             voucher_payload.get('detail') and voucher_payload['detail'][0].get('pu_order_refid') or '',
             ', '.join(
                 '%s qty=%s inward_detail=%s po_detail=%s' % (
@@ -812,6 +814,11 @@ class StockPickingAmisSync(models.Model):
             'act_voucher_type': 0,
             'reftype': 302,
             'reftype_name': 'Mua hang trong nuoc nhap kho chua thanh toan',
+            # Field public docs khong liet ke tren header, nhung MISA UI dung
+            # cap nay de fill "Lap tu don mua hang"; thieu no PO co the chi hien
+            # tham chieu, khong cap nhat so luong nhan on dinh.
+            'pu_order_refid': pu_order_refid,
+            'pu_order_refno': purchase_order.name,
             'branch_id': branch_id,
             'account_object_id': account_object_id,
             'display_on_book': 0,
@@ -819,9 +826,10 @@ class StockPickingAmisSync(models.Model):
             'reforder': int(datetime.utcnow().timestamp() * 1000),
             'refdate': self._to_misa_date(self.date_done),
             'posted_date': self._to_misa_date(self.date_done),
-            'is_posted_finance': False,
+            'inventory_posted_date': self._to_misa_date(self.date_done),
+            'is_posted_finance': True,
             'is_posted_management': False,
-            'is_posted_inventory_book_finance': False,
+            'is_posted_inventory_book_finance': True,
             'is_posted_inventory_book_management': False,
             'is_return_with_inward': False,
             'is_created_sa_return_last_year': False,

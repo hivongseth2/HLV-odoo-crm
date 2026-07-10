@@ -221,13 +221,16 @@ class AmisCatalogSyncJob(models.Model):
                 if not self.partner_id:
                     raise ValueError('Job đồng bộ NCC sang MISA thiếu partner_id.')
                 operation = self.partner_id.with_context(skip_misa_partner_sync=True)._push_misa_vendor_dictionary(config, job=self)
+                summary = 'Bỏ qua đồng bộ nhà cung cấp %s sang MISA theo cờ trên liên hệ.' % self.partner_id.display_name
+                if operation != 'skip':
+                    summary = 'Đã đồng bộ nhà cung cấp %s sang MISA.' % self.partner_id.display_name
                 self.write({
                     'status': 'done',
-                    'summary': 'Đã đồng bộ nhà cung cấp %s sang MISA.' % self.partner_id.display_name,
+                    'summary': summary,
                     'total_count': 1,
                     'created_count': 1 if operation == 'create' else 0,
-                    'updated_count': 1 if operation != 'create' else 0,
-                    'skipped_count': 0,
+                    'updated_count': 1 if operation == 'update' else 0,
+                    'skipped_count': 1 if operation == 'skip' else 0,
                     'error_count': 0,
                     'processed_at': fields.Datetime.now(),
                     'error_msg': False,

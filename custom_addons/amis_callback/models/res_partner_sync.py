@@ -2,7 +2,7 @@
 import logging
 import uuid
 
-from odoo import api, models
+from odoo import api, fields, models
 from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
@@ -10,6 +10,14 @@ _logger = logging.getLogger(__name__)
 
 class ResPartnerAmisSync(models.Model):
     _inherit = 'res.partner'
+
+    misa_skip_vendor_auto_sync = fields.Boolean(
+        string='Bỏ qua tự động đồng bộ MISA',
+        help=(
+            'Không tự động đẩy nhà cung cấp này lên MISA và không để cron mirror '
+            'MISA ghi đè thông tin, tài khoản ngân hàng của nhà cung cấp này.'
+        ),
+    )
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -46,6 +54,7 @@ class ResPartnerAmisSync(models.Model):
             'active',
             'is_company',
             'company_type',
+            'misa_skip_vendor_auto_sync',
         }
         return bool(watched_fields.intersection(vals))
 
@@ -76,11 +85,27 @@ class ResPartnerAmisSync(models.Model):
             return False
         if not partner.name:
             return False
+        if partner.misa_skip_vendor_auto_sync:
+            return False
         business_role = getattr(partner, 'hlv_business_role', '') or ''
         return int(partner.supplier_rank or 0) > 0 or business_role == 'supplier'
 
     def _push_misa_vendor_dictionary(self, config, job=None):
         self.ensure_one()
+        if self.misa_skip_vendor_auto_sync:
+            if job:
+                job.sudo().add_change_line(
+                    data_type='vendor',
+                    operation='skip',
+                    odoo_model='res.partner',
+                    res_id=self.id,
+                    misa_id=(self.misa_account_object_id or '').strip(),
+                    code=self._misa_vendor_code(),
+                    name=self.display_name or self.name or '',
+                    change_summary='Bỏ qua vì NCC được đánh dấu không tự động đồng bộ MISA',
+                )
+            _logger.info('Bỏ qua đồng bộ nhà cung cấp %s sang MISA theo cờ trên liên hệ.', self.display_name)
+            return 'skip'
         branch_id = (config.misa_branch_id or '').strip()
         if not branch_id:
             raise UserError('Chưa cấu hình MISA Branch ID để đồng bộ nhà cung cấp.')
