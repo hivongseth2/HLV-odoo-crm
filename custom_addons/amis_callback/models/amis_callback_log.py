@@ -75,6 +75,9 @@ class AmisCallbackLog(models.Model):
         if isinstance(data_value, list):
             return data_value
         if isinstance(data_value, dict):
+            voucher_items = self._parse_voucher_payload_items(data_value)
+            if voucher_items:
+                return voucher_items
             return [data_value]
         if isinstance(data_value, str):
             try:
@@ -87,8 +90,37 @@ class AmisCallbackLog(models.Model):
             if isinstance(parsed, list):
                 return parsed
             if isinstance(parsed, dict):
+                voucher_items = self._parse_voucher_payload_items(parsed)
+                if voucher_items:
+                    return voucher_items
                 return [parsed]
         return []
+
+    @api.model
+    def _parse_voucher_payload_items(self, payload):
+        vouchers = payload.get('voucher') if isinstance(payload, dict) else None
+        if not isinstance(vouchers, list):
+            return []
+        items = []
+        for voucher in vouchers:
+            if not isinstance(voucher, dict):
+                continue
+            item = dict(voucher)
+            item['org_refid'] = (
+                voucher.get('org_refid')
+                or voucher.get('refid')
+                or item.get('org_refid')
+            )
+            item['org_refno'] = (
+                voucher.get('org_refno')
+                or voucher.get('refno')
+                or item.get('org_refno')
+            )
+            item['voucher_type'] = voucher.get('voucher_type') or item.get('voucher_type')
+            item['success'] = voucher.get('success') if voucher.get('success') is not None else True
+            item['data'] = voucher
+            items.append(item)
+        return items
 
     @api.model
     def create_from_payload(self, payload, raw_body='', request_path='', remote_addr='', parse_error=''):

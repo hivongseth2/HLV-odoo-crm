@@ -452,13 +452,17 @@ class PurchaseOrderAmisSync(models.Model):
         return org_refid
 
     def _misa_purchase_order_lines_missing_ref_detail(self, lines):
-        return lines.filtered(lambda line: not self._misa_purchase_order_line_ref_detail_id(line))
+        return lines.filtered(
+            lambda line: not self._misa_purchase_order_line_ref_detail_id(line)
+            or not line.misa_purchase_order_ref_detail_synced
+        )
 
     def _misa_refresh_purchase_order_refs_from_logs(self):
         self.ensure_one()
         org_refid = (self.misa_purchase_order_org_refid or '').strip()
         if not org_refid:
             return
+        line_helper = self.env['amis.callback.log.line']
         log_lines = self.env['amis.callback.log.line'].sudo().search([
             ('org_refid', '=', org_refid),
             ('success', '=', True),
@@ -472,14 +476,44 @@ class PurchaseOrderAmisSync(models.Model):
             if log_line._misa_callback_is_request_callback(voucher_type, item_refno):
                 continue
             voucher_data = log_line._misa_callback_voucher_data(item)
-            actual_refid = (
-                voucher_data.get('refid') or item.get('refid') or item.get('misa_refid') or org_refid
-            )
-            vals = {'misa_purchase_order_synced': True}
-            if actual_refid:
-                vals['misa_purchase_order_refid'] = actual_refid
-            self.sudo().write(vals)
-            log_line._apply_purchase_order_detail_ids(self, voucher_data)
+            self._misa_apply_purchase_order_callback_item(line_helper, item, voucher_data)
+
+        callback_logs = self.env['amis.callback.log'].sudo().search([
+            ('data_type', '=', 22),
+            ('data_payload', 'ilike', org_refid),
+        ], order='received_at asc, id asc')
+        for callback_log in callback_logs:
+            for item in callback_log._parse_data_items(callback_log.data_payload):
+                if not isinstance(item, dict):
+                    continue
+                item_refid = (item.get('org_refid') or item.get('refid') or '').strip()
+                if item_refid != org_refid:
+                    continue
+                try:
+                    voucher_type = int(item.get('voucher_type') or 0)
+                except Exception:
+                    voucher_type = 0
+                item_refno = (item.get('org_refno') or item.get('refno') or '').strip()
+                if voucher_type not in (0, 21) or line_helper._misa_refno_looks_like_inward(item_refno):
+                    continue
+                if line_helper._misa_callback_is_request_callback(voucher_type, item_refno):
+                    continue
+                voucher_data = line_helper._misa_callback_voucher_data(item)
+                self._misa_apply_purchase_order_callback_item(line_helper, item, voucher_data)
+
+    def _misa_apply_purchase_order_callback_item(self, line_helper, item, voucher_data):
+        self.ensure_one()
+        item = item or {}
+        voucher_data = voucher_data or {}
+        actual_refid = (
+            voucher_data.get('refid') or item.get('refid') or item.get('misa_refid') or
+            (self.misa_purchase_order_org_refid or '').strip()
+        )
+        vals = {'misa_purchase_order_synced': True}
+        if actual_refid:
+            vals['misa_purchase_order_refid'] = actual_refid
+        self.sudo().write(vals)
+        line_helper._apply_purchase_order_detail_ids(self, voucher_data)
 
     def _misa_purchase_line_received_quantity(self, line):
         qty_received = float(getattr(line, 'qty_received', 0.0) or 0.0)
