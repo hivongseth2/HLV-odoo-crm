@@ -3121,6 +3121,8 @@ class AmisCallbackConfig(models.Model):
         return int(partner.supplier_rank or 0) > 0 or business_role == 'supplier'
 
     def _misa_vendor_match_skip_reason(self, partner, code, name, misa_id, tax_key, match_source):
+        if getattr(partner, 'misa_skip_vendor_auto_sync', False):
+            return 'Bỏ qua vì NCC được đánh dấu không tự động cập nhật từ MISA'
         if not self._misa_partner_is_supplier(partner):
             return 'Bỏ qua vì partner Odoo không phải nhà cung cấp'
 

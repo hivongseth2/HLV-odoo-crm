@@ -420,18 +420,18 @@ class PurchaseOrderAmisSync(models.Model):
     def _misa_purchase_order_line_ref_detail_id(self, line):
         org_ref_detail_id = (line.misa_purchase_order_org_ref_detail_id or '').strip()
         ref_detail_id = (line.misa_purchase_order_ref_detail_id or '').strip()
-        if org_ref_detail_id:
-            if ref_detail_id and ref_detail_id != org_ref_detail_id:
+        if ref_detail_id and line.misa_purchase_order_ref_detail_synced:
+            if org_ref_detail_id and ref_detail_id != org_ref_detail_id:
                 _logger.warning(
-                    'Don mua %s dong %s co MISA detail ID %s khac org detail ID %s; dung org ID de link phieu nhap.',
+                    'Don mua %s dong %s co MISA detail ID %s khac org detail ID %s; dung MISA detail ID de link phieu nhap.',
                     self.name,
                     line.display_name,
                     ref_detail_id,
                     org_ref_detail_id,
                 )
-            return org_ref_detail_id
-        if ref_detail_id and line.misa_purchase_order_ref_detail_synced:
             return ref_detail_id
+        if org_ref_detail_id:
+            return org_ref_detail_id
         org_ref_detail_id = self._misa_purchase_order_line_org_ref_detail_id(line)
         line.sudo().write({'misa_purchase_order_org_ref_detail_id': org_ref_detail_id})
         return org_ref_detail_id
@@ -440,16 +440,16 @@ class PurchaseOrderAmisSync(models.Model):
         self.ensure_one()
         org_refid = (self.misa_purchase_order_org_refid or '').strip()
         refid = (self.misa_purchase_order_refid or '').strip()
-        if org_refid:
-            if refid and refid != org_refid:
+        if refid:
+            if org_refid and refid != org_refid:
                 _logger.warning(
-                    'Don mua %s co MISA refid %s khac org_refid %s; dung org_refid de link phieu nhap.',
+                    'Don mua %s co MISA refid %s khac org_refid %s; dung MISA refid de link phieu nhap.',
                     self.name,
                     refid,
                     org_refid,
                 )
-            return org_refid
-        return refid
+            return refid
+        return org_refid
 
     def _misa_purchase_order_lines_missing_ref_detail(self, lines):
         return lines.filtered(lambda line: not self._misa_purchase_order_line_ref_detail_id(line))
@@ -465,6 +465,12 @@ class PurchaseOrderAmisSync(models.Model):
         ], order='create_date asc, id asc')
         for log_line in log_lines:
             item = log_line._misa_callback_item()
+            voucher_type = log_line._misa_callback_voucher_type(item)
+            item_refno = log_line._misa_callback_refno(item)
+            if voucher_type in (7, 18) or log_line._misa_refno_looks_like_inward(item_refno):
+                continue
+            if log_line._misa_callback_is_request_callback(voucher_type, item_refno):
+                continue
             voucher_data = log_line._misa_callback_voucher_data(item)
             actual_refid = (
                 voucher_data.get('refid') or item.get('refid') or item.get('misa_refid') or org_refid

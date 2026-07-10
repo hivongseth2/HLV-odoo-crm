@@ -163,13 +163,35 @@ class StockPickingAmisSync(models.Model):
         if self.state != 'done' or self.picking_type_code != 'incoming':
             return
 
-        if self.misa_inward_synced:
-            _logger.info('Skip incoming sync for %s: already synced to MISA.', self.name)
-            return
-
         purchase_order = self._get_related_purchase_order()
         if not purchase_order:
             return
+
+        inward_callback_state = self._misa_refresh_inward_status_from_logs()
+        if self.misa_inward_synced:
+            inward_refid = (self.misa_inward_org_refid or '').strip().lower()
+            purchase_refids = {
+                value.lower()
+                for value in (
+                    purchase_order.misa_purchase_order_org_refid,
+                    purchase_order.misa_purchase_order_refid,
+                )
+                if (value or '').strip()
+            }
+            if not inward_refid or inward_refid not in purchase_refids:
+                _logger.info('Skip incoming sync for %s: already synced to MISA.', self.name)
+                return
+            self.sudo().write({'misa_inward_synced': False})
+            _logger.warning(
+                'Phieu nhap %s da bi danh dau synced nhung org_refid trung don mua %s; sync lai voi refid moi.',
+                self.name,
+                purchase_order.name,
+            )
+        elif inward_callback_state == 'request':
+            raise UserError(
+                'Phieu nhap %s da gui de nghi sang MISA; cho callback sinh chung tu thuc te truoc khi sync lai.'
+                % self.name
+            )
 
         config = self.env['amis.callback.config'].sudo().ensure_singleton()
         if not config.sync_incoming_po_enabled:
@@ -179,22 +201,23 @@ class StockPickingAmisSync(models.Model):
             return
 
         purchase_order._misa_refresh_purchase_order_refs_from_logs()
-        purchase_lines = self.move_ids_without_package.mapped('purchase_line_id')
         purchase_order_refid = purchase_order._misa_purchase_order_link_refid()
         if config.sync_purchase_order_enabled and not purchase_order._is_misa_imported_purchase_order():
+            purchase_lines = self.move_ids_without_package.mapped('purchase_line_id')
             missing_detail_lines = purchase_order._misa_purchase_order_lines_missing_ref_detail(purchase_lines)
             purchase_order_refid = purchase_order._misa_purchase_order_link_refid()
-            if not purchase_order.misa_purchase_order_synced or not purchase_order_refid or missing_detail_lines:
-                purchase_order._enqueue_misa_purchase_order(raise_on_skip=False, force=True)
-                missing_names = ', '.join(missing_detail_lines.mapped('product_id.display_name'))
-                if not purchase_order.misa_purchase_order_synced:
-                    reason = 'callback thanh cong don mua'
-                elif not purchase_order_refid:
+            if not purchase_order_refid or not purchase_order.misa_purchase_order_synced or missing_detail_lines:
+                if not purchase_order_refid:
+                    purchase_order._enqueue_misa_purchase_order(raise_on_skip=False, force=True)
                     reason = 'refid/org_refid don mua'
+                elif not purchase_order.misa_purchase_order_synced:
+                    reason = 'callback sinh chung tu don mua tu MISA'
                 else:
-                    reason = 'ref_detail_id dong: %s' % missing_names
+                    reason = 'ref_detail_id dong: %s' % ', '.join(
+                        missing_detail_lines.mapped('product_id.display_name')
+                    )
                 raise UserError(
-                    'Don mua hang %s chua co %s MISA thuc te; da enqueue don mua, phieu nhap se retry sau callback.'
+                    'Don mua hang %s chua co %s; phieu nhap se retry sau khi MISA sinh chung tu don mua.'
                     % (purchase_order.name, reason)
                 )
 
@@ -207,12 +230,10 @@ class StockPickingAmisSync(models.Model):
         voucher_payload, dictionary_items, reference_items = self._prepare_misa_inward_payload(config, purchase_order)
         org_refid = voucher_payload.get('org_refid')
         _logger.info(
-            'Push MISA inward %s: org_refid=%s, po=%s, header_po_refid=%s, header_po_refno=%s, detail_po_refid=%s, detail_links=%s',
+            'Push MISA inward %s: org_refid=%s, po=%s, detail_po_refid=%s, detail_links=%s',
             self.name,
             org_refid,
             purchase_order.name,
-            voucher_payload.get('pu_order_refid') or '',
-            voucher_payload.get('pu_order_refno') or '',
             voucher_payload.get('detail') and voucher_payload['detail'][0].get('pu_order_refid') or '',
             ', '.join(
                 '%s qty=%s inward_detail=%s po_detail=%s' % (
@@ -236,6 +257,27 @@ class StockPickingAmisSync(models.Model):
         self.sudo().write({
             'misa_inward_org_refid': org_refid or '',
         })
+
+    def _misa_refresh_inward_status_from_logs(self):
+        self.ensure_one()
+        org_refid = (self.misa_inward_org_refid or '').strip()
+        if not org_refid:
+            return ''
+        log_lines = self.env['amis.callback.log.line'].sudo().search([
+            ('org_refid', '=', org_refid),
+            ('success', '=', True),
+        ], order='create_date asc, id asc')
+        has_request_callback = False
+        for log_line in log_lines:
+            item = log_line._misa_callback_item()
+            voucher_type = log_line._misa_callback_voucher_type(item)
+            item_refno = log_line._misa_callback_refno(item)
+            if log_line._misa_refno_looks_like_inward(item_refno):
+                self.sudo().write({'misa_inward_synced': True})
+                return 'done'
+            if voucher_type in (7, 18) and log_line._misa_callback_is_request_callback(voucher_type, item_refno):
+                has_request_callback = True
+        return 'request' if has_request_callback else ''
 
     def _get_related_purchase_order(self):
         self.ensure_one()
@@ -697,6 +739,31 @@ class StockPickingAmisSync(models.Model):
         pu_order_refid = purchase_order._misa_purchase_order_link_refid()
         if not pu_order_refid:
             raise UserError('Don mua hang %s chua co org_refid MISA de lien ket phieu nhap.' % purchase_order.name)
+        purchase_refids = {
+            value.lower()
+            for value in (
+                purchase_order.misa_purchase_order_org_refid,
+                purchase_order.misa_purchase_order_refid,
+                pu_order_refid,
+            )
+            if (value or '').strip()
+        }
+        if refid.lower() in purchase_refids:
+            old_refid = refid
+            refid = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'misa_inward_v2|%d|%s' % (self.id, self.name or '')))
+            if refid.lower() in purchase_refids:
+                refid = str(uuid.uuid4())
+            self.sudo().write({
+                'misa_inward_org_refid': refid,
+                'misa_inward_synced': False,
+            })
+            _logger.warning(
+                'Phieu nhap %s co org_refid trung don mua %s (%s); da doi sang %s truoc khi sync.',
+                self.name,
+                purchase_order.name,
+                old_refid,
+                refid,
+            )
 
         moves = self.move_ids_without_package.filtered(lambda m: m.quantity > 0)
         if not moves:
@@ -832,10 +899,6 @@ class StockPickingAmisSync(models.Model):
             'act_voucher_type': 0,
             'reftype': 302,
             'reftype_name': 'Mua hang trong nuoc nhap kho chua thanh toan',
-            # Feed the MISA header field "Nhap so don mua hang".
-            # Detail rows below still carry the line-level received-qty link.
-            'pu_order_refid': pu_order_refid,
-            'pu_order_refno': purchase_order.name,
             'branch_id': branch_id,
             'account_object_id': account_object_id,
             'display_on_book': 0,
@@ -843,10 +906,9 @@ class StockPickingAmisSync(models.Model):
             'reforder': int(datetime.utcnow().timestamp() * 1000),
             'refdate': self._to_misa_date(self.date_done),
             'posted_date': self._to_misa_date(self.date_done),
-            'inventory_posted_date': self._to_misa_date(self.date_done),
-            'is_posted_finance': True,
+            'is_posted_finance': False,
             'is_posted_management': False,
-            'is_posted_inventory_book_finance': True,
+            'is_posted_inventory_book_finance': False,
             'is_posted_inventory_book_management': False,
             'is_return_with_inward': False,
             'is_created_sa_return_last_year': False,

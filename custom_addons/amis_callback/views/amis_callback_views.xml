@@ -5,6 +5,9 @@
         <field name="model">res.partner</field>
         <field name="inherit_id" ref="base.view_partner_form"/>
         <field name="arch" type="xml">
+            <xpath expr="//field[@name='category_id']" position="after">
+                <field name="misa_skip_vendor_auto_sync"/>
+            </xpath>
             <xpath expr="//notebook" position="inside">
                 <page string="Ngân hàng MISA" name="misa_bank_accounts">
                     <field name="bank_ids" context="{'default_partner_id': id}">
