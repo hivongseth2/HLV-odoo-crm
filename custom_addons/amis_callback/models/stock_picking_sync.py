@@ -163,13 +163,29 @@ class StockPickingAmisSync(models.Model):
         if self.state != 'done' or self.picking_type_code != 'incoming':
             return
 
-        if self.misa_inward_synced:
-            _logger.info('Skip incoming sync for %s: already synced to MISA.', self.name)
-            return
-
         purchase_order = self._get_related_purchase_order()
         if not purchase_order:
             return
+
+        if self.misa_inward_synced:
+            inward_refid = (self.misa_inward_org_refid or '').strip().lower()
+            purchase_refids = {
+                value.lower()
+                for value in (
+                    purchase_order.misa_purchase_order_org_refid,
+                    purchase_order.misa_purchase_order_refid,
+                )
+                if (value or '').strip()
+            }
+            if not inward_refid or inward_refid not in purchase_refids:
+                _logger.info('Skip incoming sync for %s: already synced to MISA.', self.name)
+                return
+            self.sudo().write({'misa_inward_synced': False})
+            _logger.warning(
+                'Phieu nhap %s da bi danh dau synced nhung org_refid trung don mua %s; sync lai voi refid moi.',
+                self.name,
+                purchase_order.name,
+            )
 
         config = self.env['amis.callback.config'].sudo().ensure_singleton()
         if not config.sync_incoming_po_enabled:
@@ -677,6 +693,31 @@ class StockPickingAmisSync(models.Model):
         pu_order_refid = purchase_order._misa_purchase_order_link_refid()
         if not pu_order_refid:
             raise UserError('Don mua hang %s chua co org_refid MISA de lien ket phieu nhap.' % purchase_order.name)
+        purchase_refids = {
+            value.lower()
+            for value in (
+                purchase_order.misa_purchase_order_org_refid,
+                purchase_order.misa_purchase_order_refid,
+                pu_order_refid,
+            )
+            if (value or '').strip()
+        }
+        if refid.lower() in purchase_refids:
+            old_refid = refid
+            refid = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'misa_inward_v2|%d|%s' % (self.id, self.name or '')))
+            if refid.lower() in purchase_refids:
+                refid = str(uuid.uuid4())
+            self.sudo().write({
+                'misa_inward_org_refid': refid,
+                'misa_inward_synced': False,
+            })
+            _logger.warning(
+                'Phieu nhap %s co org_refid trung don mua %s (%s); da doi sang %s truoc khi sync.',
+                self.name,
+                purchase_order.name,
+                old_refid,
+                refid,
+            )
 
         moves = self.move_ids_without_package.filtered(lambda m: m.quantity > 0)
         if not moves:

@@ -465,6 +465,10 @@ class PurchaseOrderAmisSync(models.Model):
         ], order='create_date asc, id asc')
         for log_line in log_lines:
             item = log_line._misa_callback_item()
+            voucher_type = log_line._misa_callback_voucher_type(item)
+            item_refno = log_line._misa_callback_refno(item)
+            if voucher_type in (7, 18) or log_line._misa_refno_looks_like_inward(item_refno):
+                continue
             voucher_data = log_line._misa_callback_voucher_data(item)
             actual_refid = (
                 voucher_data.get('refid') or item.get('refid') or item.get('misa_refid') or org_refid
