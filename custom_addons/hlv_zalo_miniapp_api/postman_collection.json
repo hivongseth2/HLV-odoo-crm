@@ -1262,7 +1262,7 @@
       "name": "6. Image API",
       "item": [
         {
-          "name": "6.1 GET Product Image",
+          "name": "6.1 GET Product Variant Image (128px)",
           "event": [
             {
               "listen": "test",
@@ -1288,7 +1288,85 @@
           }
         },
         {
-          "name": "6.2 GET Image Not Found",
+          "name": "6.2 GET Product Template Image (1920px)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Content-Type is image/png', () => {",
+                  "    const ct = pm.response.headers.get('Content-Type');",
+                  "    pm.expect(ct).to.include('image/png');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/zalo/image/product.template/1/image_1920",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "zalo", "image", "product.template", "1", "image_1920"]
+            }
+          }
+        },
+        {
+          "name": "6.3 GET Category Image",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Content-Type is image/png', () => {",
+                  "    const ct = pm.response.headers.get('Content-Type');",
+                  "    pm.expect(ct).to.include('image/png');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/zalo/image/pos.category/1/image_128",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "zalo", "image", "pos.category", "1", "image_128"]
+            }
+          }
+        },
+        {
+          "name": "6.4 GET Banner Image",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Content-Type is image/png', () => {",
+                  "    const ct = pm.response.headers.get('Content-Type');",
+                  "    pm.expect(ct).to.include('image/png');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/zalo/image/zalo.miniapp.banner/1/image",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "zalo", "image", "zalo.miniapp.banner", "1", "image"]
+            }
+          }
+        },
+        {
+          "name": "6.5 GET Image Record Not Found",
           "event": [
             {
               "listen": "test",
@@ -1311,6 +1389,60 @@
               "raw": "{{base_url}}/api/v1/zalo/image/product.product/99999/image_128",
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "zalo", "image", "product.product", "99999", "image_128"]
+            }
+          }
+        },
+        {
+          "name": "6.6 GET Image Model Not Found",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Error response', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.false;",
+                  "    pm.expect(json.error.code).to.eql('NOT_FOUND');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/zalo/image/invalid.model/1/image_128",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "zalo", "image", "invalid.model", "1", "image_128"]
+            }
+          }
+        },
+        {
+          "name": "6.7 GET Image Field Not Found",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Error response', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.false;",
+                  "    pm.expect(json.error.code).to.eql('NOT_FOUND');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/zalo/image/product.product/1/nonexistent_field",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "zalo", "image", "product.product", "1", "nonexistent_field"]
             }
           }
         }

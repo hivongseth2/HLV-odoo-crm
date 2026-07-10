@@ -192,6 +192,19 @@ class MisaExtensionController(http.Controller):
             else:
                 payload = {"ok": True, "exists": False, "name": name}
         else:
+            # Nếu YCMH đã hủy, trả về exists=False để extension có thể đồng bộ lại
+            if pr.state == 'cancel':
+                payload = {
+                    "ok": True,
+                    "exists": False,
+                    "name": pr.name,
+                    "message": "YCMH đã hủy, có thể đồng bộ lại.",
+                    "previous_status": "cancel",
+                }
+                return request.make_response(
+                    json.dumps(payload), headers=[("Content-Type", "application/json")]
+                )
+
             state_label = (
                 dict(pr._fields["state"].selection).get(pr.state, pr.state)
                 if pr.state
@@ -339,15 +352,25 @@ class MisaExtensionController(http.Controller):
                 if so.state
                 else ""
             )
-            payload = {
-                "ok": True,
-                "exists": True,
-                "id": so.id,
-                "name": so.name,
-                "status": so.state,
-                "status_label": state_label,
-                "can_revoke": True,  # Luôn cho phép thu hồi, backend sẽ cancel hoặc xóa tuỳ trạng thái
-            }
+            # Nếu đơn đã hủy, trả về exists=False để extension có thể đồng bộ lại
+            if so.state == 'cancel':
+                payload = {
+                    "ok": True,
+                    "exists": False,
+                    "name": so.name,
+                    "message": "Đơn đã hủy, có thể đồng bộ lại.",
+                    "previous_status": "cancel",
+                }
+            else:
+                payload = {
+                    "ok": True,
+                    "exists": True,
+                    "id": so.id,
+                    "name": so.name,
+                    "status": so.state,
+                    "status_label": state_label,
+                    "can_revoke": True,
+                }
 
         return request.make_response(
             json.dumps(payload), headers=[("Content-Type", "application/json")]
@@ -366,8 +389,8 @@ class MisaExtensionController(http.Controller):
     )
     def api_extension_so_revoke(self, **payload):
         """
-        Thu hồi (hủy + xóa) Đơn bán hàng trên Odoo.
-        Hủy SO trước, sau đó xóa luôn record để có thể đồng bộ lại từ đầu.
+        Thu hồi (hủy) Đơn bán hàng trên Odoo.
+        Chỉ hủy, không xóa record để có thể đồng bộ lại từ đầu.
         """
         def json_response(payload, status=200):
             return request.make_response(
@@ -396,10 +419,9 @@ class MisaExtensionController(http.Controller):
             if not order:
                 return json_response({"ok": False, "error": "not_found", "message": f"Không tìm thấy đơn {name}"}, 404)
 
-            # Bước 1: Nếu đã cancelled, xóa luôn
+            # Bước 1: Nếu đã cancelled, chỉ cần báo thành công (không xóa)
             if order.state == 'cancel':
-                order.unlink()
-                return json_response({"ok": True, "message": f"Đã xoá đơn {name} đã huỷ để có thể đồng bộ lại."})
+                return json_response({"ok": True, "message": f"Đơn {name} đã ở trạng thái hủy, có thể đồng bộ lại."})
 
             # Bước 2: Kiểm tra phiếu xuất kho
             out_done = order.picking_ids.filtered(
@@ -437,16 +459,9 @@ class MisaExtensionController(http.Controller):
                         "message": f"Không thể huỷ đơn {name}. Còn picking/invoice chưa huỷ hết."
                     }, 400)
 
-            # Bước 6: Xóa record sau khi hủy để có thể tạo lại
+            # Bước 6: Trả về thành công (KHÔNG xóa record)
             if order.state == 'cancel':
-                try:
-                    order.unlink()
-                    return json_response({"ok": True, "message": f"Đã huỷ và xoá thành công đơn hàng {name}"})
-                except Exception as e:
-                    return json_response({
-                        "ok": True,
-                        "message": f"Đã huỷ thành công đơn hàng {name} (nhưng không xoá được record: {str(e)})"
-                    })
+                return json_response({"ok": True, "message": f"Đã huỷ thành công đơn hàng {name}, có thể đồng bộ lại."})
 
             return json_response({"ok": False, "error": "cancel_failed", "message": f"Không thể huỷ đơn {name}"}, 400)
 
@@ -467,7 +482,8 @@ class MisaExtensionController(http.Controller):
     )
     def api_extension_pr_revoke(self, **payload):
         """
-        Thu hồi (xóa) YCMH trên Odoo.
+        Thu hồi (hủy) YCMH trên Odoo.
+        Chỉ hủy, không xóa record để có thể đồng bộ lại.
         """
         def json_response(payload, status=200):
             return request.make_response(
@@ -509,8 +525,9 @@ class MisaExtensionController(http.Controller):
         try:
             if pr.state != 'draft':
                 pr.button_draft()
-            pr.unlink()
-            return json_response({"ok": True, "message": "Đã thu hồi YCMH thành công."})
+            # Chỉ hủy (chuyển về draft), không xóa
+            pr.write({'state': 'cancel'})
+            return json_response({"ok": True, "message": "Đã thu hồi YCMH thành công, có thể đồng bộ lại."})
         except Exception as e:
             return json_response({"ok": False, "error": "exception", "message": str(e)}, 500)
 
@@ -571,6 +588,19 @@ class MisaExtensionController(http.Controller):
             else:
                 payload = {"ok": True, "exists": False, "name": po_code, "can_revoke": False}
         else:
+            # Nếu PO đã hủy, trả về exists=False để extension có thể đồng bộ lại
+            if po.state == 'cancel':
+                payload = {
+                    "ok": True,
+                    "exists": False,
+                    "name": po.name,
+                    "message": "Đơn mua hàng đã hủy, có thể đồng bộ lại.",
+                    "previous_status": "cancel",
+                }
+                return request.make_response(
+                    json.dumps(payload), headers=[("Content-Type", "application/json")]
+                )
+
             state_label = (
                 dict(po._fields["state"].selection).get(po.state, po.state)
                 if po.state
@@ -659,10 +689,59 @@ class MisaExtensionController(http.Controller):
         cors="*",
     )
     def api_extension_po_revoke(self, **payload):
+        """
+        Thu hồi (hủy) Đơn mua hàng trên Odoo.
+        Chỉ hủy, không xóa record để có thể đồng bộ lại.
+        """
+        def json_response(data, status=200):
+            return request.make_response(
+                json.dumps(data), headers=[("Content-Type", "application/json")], status=status
+            )
+
+        if request.httprequest.method == "OPTIONS":
+            return json_response({"ok": True})
+
         payload = self._parse_json_body(payload)
-        payload["create_when_missing"] = False
-        payload["delete_when_missing"] = True
-        return self.api_extension_po_sync(**payload)
+        token = self._extract_token(payload)
+        ok, err = self._authenticate(token)
+        if not ok:
+            return json_response(err, 401)
+
+        po_code = (payload.get("po_code") or payload.get("name") or "").strip()
+        if not po_code:
+            return json_response({"ok": False, "error": "missing_po_code", "message": "Thiếu po_code."}, 400)
+
+        admin_user = request.env.ref("base.user_admin", raise_if_not_found=False)
+        env_admin = request.env(user=admin_user) if admin_user else request.env
+
+        po = env_admin["purchase.order"].sudo().search([("name", "=", po_code)], limit=1)
+        if not po:
+            return json_response({"ok": False, "error": "not_found", "message": f"Không tìm thấy PO {po_code}."}, 404)
+
+        # Kiểm tra trạng thái
+        if po.state == 'cancel':
+            return json_response({"ok": True, "message": f"PO {po_code} đã ở trạng thái hủy, có thể đồng bộ lại."})
+
+        if po.state not in ['draft', 'sent', 'to approve', 'purchase']:
+            return json_response({
+                "ok": False, "error": "invalid_state",
+                "message": f"Không thể thu hồi PO ở trạng thái {po.state}."
+            }, 400)
+
+        # Kiểm tra phiếu nhập kho / hóa đơn
+        done_receipts = po.picking_ids.filtered(lambda p: p.state == "done")
+        posted_bills = po.invoice_ids.filtered(lambda inv: inv.state == "posted")
+        if done_receipts or posted_bills:
+            return json_response({
+                "ok": False, "error": "has_receipts_or_bills",
+                "message": "Không thể thu hồi do PO đã có phiếu nhập kho/hoá đơn."
+            }, 400)
+
+        try:
+            po.button_cancel()
+            return json_response({"ok": True, "message": f"Đã huỷ PO {po_code} thành công, có thể đồng bộ lại."})
+        except Exception as e:
+            return json_response({"ok": False, "error": "exception", "message": str(e)}, 500)
 
     # ============================================================
     # POST /api/extension/suppliers_and_stock

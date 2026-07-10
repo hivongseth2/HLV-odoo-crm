@@ -166,12 +166,16 @@ class ZaloCartAPI(http.Controller):
             if not contact_id or not line_id:
                 return self._response_error("INVALID_INPUT", "Thiếu contact_id hoặc line_id")
 
-            cart, error = self._get_or_create_cart(contact_id)
-            if error:
-                return self._response_error("NOT_FOUND", error, 404)
+            # Browse trực tiếp sale.order.line để tránh race condition
+            # khi search giỏ hàng draft không chính xác
+            OrderLine = request.env["sale.order.line"].sudo()
+            line = OrderLine.browse(line_id)
+            if not line.exists():
+                return self._response_error("NOT_FOUND", "Dòng sản phẩm không tồn tại", 404)
 
-            line = cart.order_line.filtered(lambda l: l.id == line_id)
-            if not line:
+            # Kiểm tra line thuộc order draft của contact này
+            order = line.order_id
+            if not order or order.state != "draft" or order.partner_id.id != contact_id:
                 return self._response_error("NOT_FOUND", "Dòng sản phẩm không tồn tại", 404)
 
             if quantity <= 0:
@@ -179,7 +183,7 @@ class ZaloCartAPI(http.Controller):
             else:
                 line.write({"product_uom_qty": quantity})
 
-            return self._response_success(self._cart_to_dict(cart))
+            return self._response_success(self._cart_to_dict(order))
         except Exception as e:
             _logger.exception("cart_update error")
             return self._response_error("SERVER_ERROR", str(e), 500)
@@ -196,15 +200,19 @@ class ZaloCartAPI(http.Controller):
             if not contact_id or not line_id:
                 return self._response_error("INVALID_INPUT", "Thiếu contact_id hoặc line_id")
 
-            cart, error = self._get_or_create_cart(contact_id)
-            if error:
-                return self._response_error("NOT_FOUND", error, 404)
+            # Browse trực tiếp sale.order.line
+            OrderLine = request.env["sale.order.line"].sudo()
+            line = OrderLine.browse(line_id)
+            if not line.exists():
+                return self._response_success({"message": "Đã xóa"})
 
-            line = cart.order_line.filtered(lambda l: l.id == line_id)
-            if line:
-                line.unlink()
+            # Kiểm tra line thuộc order draft của contact này
+            order = line.order_id
+            if not order or order.state != "draft" or order.partner_id.id != contact_id:
+                return self._response_success({"message": "Đã xóa"})
 
-            return self._response_success(self._cart_to_dict(cart))
+            line.unlink()
+            return self._response_success(self._cart_to_dict(order))
         except Exception as e:
             _logger.exception("cart_remove error")
             return self._response_error("SERVER_ERROR", str(e), 500)
