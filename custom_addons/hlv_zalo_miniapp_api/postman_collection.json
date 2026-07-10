@@ -6,10 +6,481 @@
   },
   "item": [
     {
-      "name": "1. Category API",
+      "name": "0. Banner API",
       "item": [
         {
-          "name": "1.1 POST Categories List",
+          "name": "0.1 POST Banners List",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Response has success=true', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "    pm.expect(json.data).to.have.property('banners');",
+                  "    pm.expect(json.data).to.have.property('total');",
+                  "});",
+                  "pm.test('Banners have required fields', () => {",
+                  "    const banners = pm.response.json().data.banners;",
+                  "    if (banners.length > 0) {",
+                  "        pm.expect(banners[0]).to.have.all.keys('id', 'name', 'link', 'image_url');",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"limit\": 10,\n  \"offset\": 0\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/v1/zalo/banners/list",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "zalo", "banners", "list"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. Contact API",
+      "item": [
+        {
+          "name": "1.1 POST Auth (New User)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Auth success', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "    pm.expect(json.data).to.have.property('contact_id');",
+                  "    pm.expect(json.data).to.have.property('token');",
+                  "    pm.expect(json.data.token).to.match(/^\\d+\\.\\d+\\.[a-f0-9]+$/);",
+                  "    pm.collectionVariables.set('contact_id', json.data.contact_id);",
+                  "    pm.collectionVariables.set('auth_token', json.data.token);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"phone\": \"0901234567\"\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/v1/zalo/contacts/auth",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "zalo", "contacts", "auth"]
+            }
+          }
+        },
+        {
+          "name": "1.2 POST Auth (Existing User)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Auth success with is_new=false', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "    pm.expect(json.data.is_new).to.be.false;",
+                  "    pm.expect(json.data).to.have.property('contact_id');",
+                  "    pm.expect(json.data).to.have.property('token');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"phone\": \"0901234567\"\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/v1/zalo/contacts/auth",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "zalo", "contacts", "auth"]
+            }
+          }
+        },
+        {
+          "name": "1.3 POST Auth Invalid Phone",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Error response', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.false;",
+                  "    pm.expect(json.error.code).to.eql('INVALID_INPUT');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"phone\": \"\"\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/v1/zalo/contacts/auth",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "zalo", "contacts", "auth"]
+            }
+          }
+        },
+        {
+          "name": "1.4 POST Auth via Zalo Phone Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Check response', () => {",
+                  "    const json = pm.response.json();",
+                  "    if (pm.response.code === 200) {",
+                  "        pm.expect(json.success).to.be.true;",
+                  "        pm.expect(json.data).to.have.property('contact_id');",
+                  "        pm.expect(json.data).to.have.property('token');",
+                  "    } else if (pm.response.code === 503) {",
+                  "        pm.expect(json.error.code).to.eql('CONFIG_ERROR');",
+                  "    } else {",
+                  "        pm.expect(json.error.code).to.eql('ZALO_ERROR');",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"token\": \"test_zalo_phone_token\",\n  \"access_token\": \"test_zalo_access_token\"\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/v1/zalo/contacts/auth/zalo-phone",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "zalo", "contacts", "auth", "zalo-phone"]
+            }
+          }
+        },
+        {
+          "name": "1.5 POST Contact List (Auth Required)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Response has contacts', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "    pm.expect(json.data).to.have.property('contacts');",
+                  "    pm.expect(json.data).to.have.property('total');",
+                  "});",
+                  "pm.test('Contacts have basic fields', () => {",
+                  "    const contacts = pm.response.json().data.contacts;",
+                  "    if (contacts.length > 0) {",
+                  "        pm.expect(contacts[0]).to.have.all.keys('id', 'name', 'phone', 'mobile', 'email', 'street', 'city');",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"limit\": 10,\n  \"offset\": 0\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/v1/zalo/contacts/list",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "zalo", "contacts", "list"]
+            }
+          }
+        },
+        {
+          "name": "1.6 POST Contact List (No Auth)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Error response', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.false;",
+                  "    pm.expect(json.error.code).to.eql('AUTH_REQUIRED');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"limit\": 10,\n  \"offset\": 0\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/v1/zalo/contacts/list",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "zalo", "contacts", "list"]
+            }
+          }
+        },
+        {
+          "name": "1.7 POST Contact Detail",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Contact detail has full info', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "    const data = json.data;",
+                  "    pm.expect(data).to.have.property('id');",
+                  "    pm.expect(data).to.have.property('name');",
+                  "    pm.expect(data).to.have.property('total_points');",
+                  "    pm.expect(data).to.have.property('exchange_points');",
+                  "    pm.expect(data).to.have.property('addresses');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"contact_id\": {{contact_id}}\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/v1/zalo/contacts/detail",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "zalo", "contacts", "detail"]
+            }
+          }
+        },
+        {
+          "name": "1.8 PUT Update Contact",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Contact updated', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "    pm.expect(json.data).to.have.property('id');",
+                  "    pm.expect(json.data).to.have.property('message');",
+                  "    pm.expect(json.data.message).to.eql('Đã cập nhật');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"contact_id\": {{contact_id}},\n  \"name\": \"Nguyễn Văn A\",\n  \"email\": \"a@example.com\",\n  \"street\": \"123 Lê Lợi\"\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/v1/zalo/contacts/update",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "zalo", "contacts", "update"]
+            }
+          }
+        },
+        {
+          "name": "1.9 POST Create Address",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Address created', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "    pm.expect(json.data).to.have.property('id');",
+                  "    pm.expect(json.data).to.have.property('street');",
+                  "    pm.expect(json.data).to.have.property('city');",
+                  "    pm.collectionVariables.set('address_id', json.data.id);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"contact_id\": {{contact_id}},\n  \"name\": \"Nhà riêng\",\n  \"street\": \"456 Nguyễn Huệ\",\n  \"city\": \"Hồ Chí Minh\",\n  \"phone\": \"0901234567\",\n  \"type\": \"delivery\"\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/v1/zalo/contacts/addresses/create",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "zalo", "contacts", "addresses", "create"]
+            }
+          }
+        },
+        {
+          "name": "1.10 POST Addresses List",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Addresses list', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "    pm.expect(json.data).to.have.property('addresses');",
+                  "});",
+                  "pm.test('Address has required fields', () => {",
+                  "    const addrs = pm.response.json().data.addresses;",
+                  "    if (addrs.length > 0) {",
+                  "        pm.expect(addrs[0]).to.have.all.keys('id', 'name', 'street', 'street2', 'city', 'state', 'country', 'zip', 'phone', 'type');",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"contact_id\": {{contact_id}}\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/v1/zalo/contacts/addresses/list",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "zalo", "contacts", "addresses", "list"]
+            }
+          }
+        },
+        {
+          "name": "1.11 PUT Update Address",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Address updated', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "    pm.expect(json.data).to.have.property('id');",
+                  "    pm.expect(json.data).to.have.property('street');",
+                  "    pm.expect(json.data).to.have.property('city');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"address_id\": {{address_id}},\n  \"street\": \"789 Lê Duẩn\",\n  \"city\": \"Hồ Chí Minh\"\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/v1/zalo/contacts/addresses/update",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "zalo", "contacts", "addresses", "update"]
+            }
+          }
+        },
+        {
+          "name": "1.12 POST Delete Address",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Address deleted', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "    pm.expect(json.data).to.have.property('message');",
+                  "    pm.expect(json.data.message).to.eql('Đã xóa địa chỉ');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"address_id\": {{address_id}}\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/v1/zalo/contacts/addresses/delete",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "zalo", "contacts", "addresses", "delete"]
+            }
+          }
+        },
+        {
+          "name": "1.13 POST Address Not Found",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Error response', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.false;",
+                  "    pm.expect(json.error.code).to.eql('NOT_FOUND');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"address_id\": 99999\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/v1/zalo/contacts/addresses/delete",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "zalo", "contacts", "addresses", "delete"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Category API",
+      "item": [
+        {
+          "name": "2.1 POST Categories List",
           "event": [
             {
               "listen": "test",
@@ -44,7 +515,7 @@
           }
         },
         {
-          "name": "1.2 POST Products by Category",
+          "name": "2.2 POST Products by Category",
           "event": [
             {
               "listen": "test",
@@ -57,6 +528,12 @@
                   "    pm.expect(json.data).to.have.property('products');",
                   "    pm.expect(json.data).to.have.property('category_id');",
                   "    pm.expect(json.data).to.have.property('category_name');",
+                  "});",
+                  "pm.test('Products have required fields', () => {",
+                  "    const prods = pm.response.json().data.products;",
+                  "    if (prods.length > 0) {",
+                  "        pm.expect(prods[0]).to.have.all.keys('id', 'template_id', 'name', 'default_code', 'barcode', 'x_zalo_price', 'list_price', 'free_qty', 'uom', 'image_url');",
+                  "    }",
                   "});"
                 ]
               }
@@ -74,7 +551,7 @@
           }
         },
         {
-          "name": "1.3 POST Category Not Found",
+          "name": "2.3 POST Category Not Found",
           "event": [
             {
               "listen": "test",
@@ -100,14 +577,42 @@
               "path": ["api", "v1", "zalo", "categories", "products"]
             }
           }
+        },
+        {
+          "name": "2.4 POST Category Missing ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Error response', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.false;",
+                  "    pm.expect(json.error.code).to.eql('INVALID_INPUT');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"limit\": 10\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/v1/zalo/categories/products",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "zalo", "categories", "products"]
+            }
+          }
         }
       ]
     },
     {
-      "name": "2. Product API",
+      "name": "3. Product API",
       "item": [
         {
-          "name": "2.1 POST Products List (default)",
+          "name": "3.1 POST Products List (default)",
           "event": [
             {
               "listen": "test",
@@ -142,7 +647,23 @@
           }
         },
         {
-          "name": "2.2 POST Products with Search Query",
+          "name": "3.2 POST Products with Search Query",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Search results have products', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "    pm.expect(json.data).to.have.property('products');",
+                  "    pm.expect(json.data).to.have.property('total');",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
@@ -155,7 +676,7 @@
           }
         },
         {
-          "name": "2.3 POST Products Sorted by Price Desc",
+          "name": "3.3 POST Products Sorted by Price Desc",
           "event": [
             {
               "listen": "test",
@@ -186,7 +707,22 @@
           }
         },
         {
-          "name": "2.4 POST Products by Category",
+          "name": "3.4 POST Products by Category",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Filtered by category', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "    pm.expect(json.data).to.have.property('products');",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
@@ -199,7 +735,7 @@
           }
         },
         {
-          "name": "2.5 POST Product Detail",
+          "name": "3.5 POST Product Detail",
           "event": [
             {
               "listen": "test",
@@ -216,6 +752,8 @@
                   "    pm.expect(p).to.have.property('free_qty');",
                   "    pm.expect(p).to.have.property('images');",
                   "    pm.expect(p).to.have.property('attributes');",
+                  "    pm.expect(p).to.have.property('standard_price');",
+                  "    pm.expect(p).to.have.property('description_full');",
                   "});"
                 ]
               }
@@ -233,7 +771,7 @@
           }
         },
         {
-          "name": "2.6 POST Product Not Found",
+          "name": "3.6 POST Product Not Found",
           "event": [
             {
               "listen": "test",
@@ -259,28 +797,19 @@
               "path": ["api", "v1", "zalo", "products", "detail"]
             }
           }
-        }
-      ]
-    },
-    {
-      "name": "3. Contact API",
-      "item": [
+        },
         {
-          "name": "3.1 POST Auth (New User)",
+          "name": "3.7 POST Product Missing ID",
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "pm.test('Auth success', () => {",
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Error response', () => {",
                   "    const json = pm.response.json();",
-                  "    pm.expect(json.success).to.be.true;",
-                  "    pm.expect(json.data).to.have.property('contact_id');",
-                  "    pm.expect(json.data).to.have.property('token');",
-                  "    pm.expect(json.data.token).to.match(/^\\d+\\.\\d+\\.[a-f0-9]+$/);",
-                  "    pm.collectionVariables.set('contact_id', json.data.contact_id);",
-                  "    pm.collectionVariables.set('auth_token', json.data.token);",
+                  "    pm.expect(json.success).to.be.false;",
+                  "    pm.expect(json.error.code).to.eql('INVALID_INPUT');",
                   "});"
                 ]
               }
@@ -289,178 +818,11 @@
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"phone\": \"0901234567\"\n}" },
+            "body": { "mode": "raw", "raw": "{\n  \"product_id\": 0\n}" },
             "url": {
-              "raw": "{{base_url}}/api/v1/zalo/contacts/auth",
+              "raw": "{{base_url}}/api/v1/zalo/products/detail",
               "host": ["{{base_url}}"],
-              "path": ["api", "v1", "zalo", "contacts", "auth"]
-            }
-          }
-        },
-        {
-          "name": "3.2 POST Auth (Existing User)",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"phone\": \"0901234567\"\n}" },
-            "url": {
-              "raw": "{{base_url}}/api/v1/zalo/contacts/auth",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "zalo", "contacts", "auth"]
-            }
-          }
-        },
-        {
-          "name": "3.3 POST Auth Invalid Phone",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"phone\": \"\"\n}" },
-            "url": {
-              "raw": "{{base_url}}/api/v1/zalo/contacts/auth",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "zalo", "contacts", "auth"]
-            }
-          }
-        },
-        {
-          "name": "3.4 POST Contact List (Auth Required)",
-          "request": {
-            "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{auth_token}}" }
-            ],
-            "body": { "mode": "raw", "raw": "{\n  \"limit\": 10,\n  \"offset\": 0\n}" },
-            "url": {
-              "raw": "{{base_url}}/api/v1/zalo/contacts/list",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "zalo", "contacts", "list"]
-            }
-          }
-        },
-        {
-          "name": "3.5 POST Contact List (No Auth)",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"limit\": 10,\n  \"offset\": 0\n}" },
-            "url": {
-              "raw": "{{base_url}}/api/v1/zalo/contacts/list",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "zalo", "contacts", "list"]
-            }
-          }
-        },
-        {
-          "name": "3.6 POST Contact Detail",
-          "request": {
-            "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{auth_token}}" }
-            ],
-            "body": { "mode": "raw", "raw": "{\n  \"contact_id\": {{contact_id}}\n}" },
-            "url": {
-              "raw": "{{base_url}}/api/v1/zalo/contacts/detail",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "zalo", "contacts", "detail"]
-            }
-          }
-        },
-        {
-          "name": "3.7 PUT Update Contact",
-          "request": {
-            "method": "PUT",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{auth_token}}" }
-            ],
-            "body": { "mode": "raw", "raw": "{\n  \"contact_id\": {{contact_id}},\n  \"name\": \"Nguyễn Văn A\",\n  \"email\": \"a@example.com\",\n  \"street\": \"123 Lê Lợi\"\n}" },
-            "url": {
-              "raw": "{{base_url}}/api/v1/zalo/contacts/update",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "zalo", "contacts", "update"]
-            }
-          }
-        },
-        {
-          "name": "3.8 POST Create Address",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
-                  "pm.test('Address created', () => {",
-                  "    const json = pm.response.json();",
-                  "    pm.expect(json.success).to.be.true;",
-                  "    pm.expect(json.data).to.have.property('id');",
-                  "    pm.collectionVariables.set('address_id', json.data.id);",
-                  "});"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{auth_token}}" }
-            ],
-            "body": { "mode": "raw", "raw": "{\n  \"contact_id\": {{contact_id}},\n  \"name\": \"Nhà riêng\",\n  \"street\": \"456 Nguyễn Huệ\",\n  \"city\": \"Hồ Chí Minh\",\n  \"phone\": \"0901234567\",\n  \"type\": \"delivery\"\n}" },
-            "url": {
-              "raw": "{{base_url}}/api/v1/zalo/contacts/addresses/create",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "zalo", "contacts", "addresses", "create"]
-            }
-          }
-        },
-        {
-          "name": "3.9 POST Addresses List",
-          "request": {
-            "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{auth_token}}" }
-            ],
-            "body": { "mode": "raw", "raw": "{\n  \"contact_id\": {{contact_id}}\n}" },
-            "url": {
-              "raw": "{{base_url}}/api/v1/zalo/contacts/addresses/list",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "zalo", "contacts", "addresses", "list"]
-            }
-          }
-        },
-        {
-          "name": "3.10 PUT Update Address",
-          "request": {
-            "method": "PUT",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{auth_token}}" }
-            ],
-            "body": { "mode": "raw", "raw": "{\n  \"address_id\": {{address_id}},\n  \"street\": \"789 Lê Duẩn\",\n  \"city\": \"Hồ Chí Minh\"\n}" },
-            "url": {
-              "raw": "{{base_url}}/api/v1/zalo/contacts/addresses/update",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "zalo", "contacts", "addresses", "update"]
-            }
-          }
-        },
-        {
-          "name": "3.11 POST Delete Address",
-          "request": {
-            "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{auth_token}}" }
-            ],
-            "body": { "mode": "raw", "raw": "{\n  \"address_id\": {{address_id}}\n}" },
-            "url": {
-              "raw": "{{base_url}}/api/v1/zalo/contacts/addresses/delete",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "zalo", "contacts", "addresses", "delete"]
+              "path": ["api", "v1", "zalo", "products", "detail"]
             }
           }
         }
@@ -471,6 +833,27 @@
       "item": [
         {
           "name": "4.1 POST Cart Get",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Cart response', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "    const data = json.data;",
+                  "    pm.expect(data).to.have.property('id');",
+                  "    pm.expect(data).to.have.property('partner_id');",
+                  "    pm.expect(data).to.have.property('state');",
+                  "    pm.expect(data).to.have.property('lines');",
+                  "    pm.expect(data).to.have.property('total');",
+                  "    pm.expect(data).to.have.property('line_count');",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
@@ -512,7 +895,50 @@
           }
         },
         {
-          "name": "4.3 PUT Update Cart Line",
+          "name": "4.3 POST Add to Cart (Product not found)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Error response', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.false;",
+                  "    pm.expect(json.error.code).to.eql('NOT_FOUND');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"contact_id\": {{contact_id}},\n  \"product_id\": 99999,\n  \"quantity\": 1\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/v1/zalo/cart/add",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "zalo", "cart", "add"]
+            }
+          }
+        },
+        {
+          "name": "4.4 PUT Update Cart Line",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Cart line updated', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "    pm.expect(json.data).to.have.property('lines');",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "PUT",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
@@ -525,7 +951,22 @@
           }
         },
         {
-          "name": "4.4 POST Remove from Cart",
+          "name": "4.5 POST Remove from Cart",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Product removed', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "    pm.expect(json.data).to.have.property('lines');",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
@@ -538,7 +979,23 @@
           }
         },
         {
-          "name": "4.5 POST Clear Cart",
+          "name": "4.6 POST Clear Cart",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Cart cleared', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "    pm.expect(json.data).to.have.property('message');",
+                  "    pm.expect(json.data.message).to.eql('Đã xóa giỏ hàng');",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
@@ -547,6 +1004,34 @@
               "raw": "{{base_url}}/api/v1/zalo/cart/clear",
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "zalo", "cart", "clear"]
+            }
+          }
+        },
+        {
+          "name": "4.7 POST Cart Get Missing Contact",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Error response', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.false;",
+                  "    pm.expect(json.error.code).to.eql('INVALID_INPUT');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": {
+              "raw": "{{base_url}}/api/v1/zalo/cart/get",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "zalo", "cart", "get"]
             }
           }
         }
@@ -589,6 +1074,28 @@
         },
         {
           "name": "5.2 POST Order List",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Order list', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "    pm.expect(json.data).to.have.property('orders');",
+                  "    pm.expect(json.data).to.have.property('total');",
+                  "});",
+                  "pm.test('Orders have required fields', () => {",
+                  "    const orders = pm.response.json().data.orders;",
+                  "    if (orders.length > 0) {",
+                  "        pm.expect(orders[0]).to.have.all.keys('id', 'name', 'partner_id', 'partner_name', 'partner_phone', 'state', 'date_order', 'amount_untaxed', 'amount_tax', 'amount_total', 'note', 'lines', 'picking_info', 'shipping_address');",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
@@ -602,6 +1109,24 @@
         },
         {
           "name": "5.3 POST Order List (Filter by State)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Filtered order list', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "    pm.expect(json.data).to.have.property('orders');",
+                  "    if (json.data.orders.length > 0) {",
+                  "        pm.expect(json.data.orders[0].state).to.eql('sale');",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
@@ -615,6 +1140,26 @@
         },
         {
           "name": "5.4 POST Order Detail",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Order detail', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "    const data = json.data;",
+                  "    pm.expect(data).to.have.property('id');",
+                  "    pm.expect(data).to.have.property('name');",
+                  "    pm.expect(data).to.have.property('state');",
+                  "    pm.expect(data).to.have.property('amount_total');",
+                  "    pm.expect(data).to.have.property('lines');",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
@@ -628,6 +1173,22 @@
         },
         {
           "name": "5.5 POST Cancel Order",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Order cancelled', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "    pm.expect(json.data.state).to.eql('cancel');",
+                  "    pm.expect(json.data).to.have.property('message');",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
@@ -641,6 +1202,21 @@
         },
         {
           "name": "5.6 POST Cancel Order (Wrong Owner)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 403', () => pm.response.to.have.status(403));",
+                  "pm.test('Error response', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.false;",
+                  "    pm.expect(json.error.code).to.eql('FORBIDDEN');",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
@@ -651,6 +1227,34 @@
               "path": ["api", "v1", "zalo", "orders", "cancel"]
             }
           }
+        },
+        {
+          "name": "5.7 POST Order Not Found",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Error response', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.false;",
+                  "    pm.expect(json.error.code).to.eql('NOT_FOUND');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"order_id\": 99999\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/v1/zalo/orders/detail",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "zalo", "orders", "detail"]
+            }
+          }
         }
       ]
     },
@@ -659,6 +1263,20 @@
       "item": [
         {
           "name": "6.1 GET Product Image",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Content-Type is image/png', () => {",
+                  "    const ct = pm.response.headers.get('Content-Type');",
+                  "    pm.expect(ct).to.include('image/png');",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [],
@@ -671,6 +1289,21 @@
         },
         {
           "name": "6.2 GET Image Not Found",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Error response', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.false;",
+                  "    pm.expect(json.error.code).to.eql('NOT_FOUND');",
+                  "});"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [],
