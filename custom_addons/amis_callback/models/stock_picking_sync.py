@@ -188,9 +188,9 @@ class StockPickingAmisSync(models.Model):
                 purchase_order.name,
             )
         elif inward_callback_state == 'request':
-            raise UserError(
-                'Phieu nhap %s da gui de nghi sang MISA; cho callback sinh chung tu thuc te truoc khi sync lai.'
-                % self.name
+            _logger.info(
+                'Phieu nhap %s da co callback nhan de nghi MISA; tiep tuc gui lai cung org_refid de cap nhat de nghi.',
+                self.name,
             )
 
         config = self.env['amis.callback.config'].sudo().ensure_singleton()
@@ -206,19 +206,22 @@ class StockPickingAmisSync(models.Model):
             purchase_lines = self.move_ids_without_package.mapped('purchase_line_id')
             missing_detail_lines = purchase_order._misa_purchase_order_lines_missing_ref_detail(purchase_lines)
             purchase_order_refid = purchase_order._misa_purchase_order_link_refid()
-            if not purchase_order_refid or not purchase_order.misa_purchase_order_synced or missing_detail_lines:
+            if not purchase_order_refid or missing_detail_lines:
                 if not purchase_order_refid:
                     purchase_order._enqueue_misa_purchase_order(raise_on_skip=False, force=True)
                     reason = 'refid/org_refid don mua'
-                elif not purchase_order.misa_purchase_order_synced:
-                    reason = 'callback sinh chung tu don mua tu MISA'
                 else:
                     reason = 'ref_detail_id dong: %s' % ', '.join(
                         missing_detail_lines.mapped('product_id.display_name')
                     )
                 raise UserError(
-                    'Don mua hang %s chua co %s; phieu nhap se retry sau khi MISA sinh chung tu don mua.'
+                    'Don mua hang %s chua co %s; phieu nhap se retry sau khi co du lieu link don mua.'
                     % (purchase_order.name, reason)
+                )
+            if not purchase_order.misa_purchase_order_synced:
+                _logger.info(
+                    'Don mua %s chua co callback MISA; van tiep tuc link phieu nhap bang org_refid/ref_detail_id da gui.',
+                    purchase_order.name,
                 )
 
         if not purchase_order_refid:

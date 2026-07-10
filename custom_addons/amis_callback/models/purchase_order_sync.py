@@ -145,8 +145,14 @@ class PurchaseOrderAmisSync(models.Model):
             ),
         )
         config.push_purchase_order(voucher_payload, dictionary_items=[])
+        org_refid = voucher_payload.get('org_refid') or ''
         self.sudo().write({
-            'misa_purchase_order_org_refid': voucher_payload.get('org_refid') or '',
+            'misa_purchase_order_org_refid': org_refid,
+            'misa_purchase_order_refid': org_refid,
+            # With is_get_new_id=false, PO/ref_detail IDs are the IDs we send.
+            # Do not wait for MISA's async callback before allowing receipts to
+            # link back to this PO.
+            'misa_purchase_order_synced': True,
         })
 
     def _prepare_misa_purchase_order_payload(self, config):
