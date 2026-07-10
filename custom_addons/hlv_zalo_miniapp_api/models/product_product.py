@@ -25,3 +25,12 @@ class ProductProduct(models.Model):
             if hasattr(record.product_tmpl_id, 'action_sync_to_wordpress'):
                 return record.product_tmpl_id.action_sync_to_wordpress()
         return True
+
+    def action_sync_stock_to_wordpress(self):
+        """
+        Dummy method để bypass lỗi ParseError (tương tự như hàm trên).
+        """
+        for record in self:
+            if hasattr(record.product_tmpl_id, 'action_sync_stock_to_wordpress'):
+                return record.product_tmpl_id.action_sync_stock_to_wordpress()
+        return True
