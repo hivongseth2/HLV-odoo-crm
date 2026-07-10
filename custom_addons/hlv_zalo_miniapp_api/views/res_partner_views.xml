@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_res_partner_zalo_form_inherit" model="ir.ui.view">
+        <field name="name">res.partner.zalo.form.inherit</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page name="zalo_mini_app" string="Zalo Mini App">
+                    <group>
+                        <field name="x_is_zalo_account"/>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>

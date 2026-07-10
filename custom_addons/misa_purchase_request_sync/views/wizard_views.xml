@@ -12,33 +12,34 @@
             
             <!-- Thay thế group chứa supplier_id thành layout mới hoàn chỉnh -->
             <xpath expr="//group[field[@name='supplier_id']]" position="replace">
-                <group>
-                    <field name="supplier_id" string="Nhà cung cấp"
-                           domain="[('parent_id', '=', False), ('active', '=', True)]"
-                           options="{'no_create': True}"/>
-                </group>
-
-                <div class="alert alert-info" role="alert" style="margin-top: 10px; margin-bottom: 10px;">
-                    <i class="fa fa-info-circle me-1"/> <strong>Cập nhật vào RFQ đã có hoặc Tạo mới?</strong>
-                    <br/>
-                    - Chọn một <strong>RFQ có sẵn</strong> bên dưới để gộp/bổ sung các sản phẩm này vào đó.<br/>
-                    - <strong>Để trống</strong> nếu bạn muốn hệ thống tự động <strong>tạo RFQ mới</strong>.
+                <div class="alert alert-info" role="alert" style="margin-bottom: 20px;">
+                    <i class="fa fa-info-circle me-2"/> <strong>Hướng dẫn: Tạo mới hoặc gộp RFQ</strong><br/>
+                    - Chọn Nhà cung cấp và để trống ô <em>Đơn mua hàng có sẵn</em> để hệ thống tự động <strong>tạo RFQ mới</strong>.<br/>
+                    - Hoặc chọn một <em>Đơn mua hàng có sẵn</em> để <strong>gộp (thêm)</strong> các sản phẩm này vào đó.
                 </div>
-                
                 <group>
-                    <field name="purchase_order_id"
-                           domain="[('partner_id', '=', supplier_id)]"
-                           options="{'no_create': True}"
-                           placeholder="Để trống để tạo Đơn mua hàng mới..."/>
-                    <field name="sync_data_planned" />
+                    <group>
+                        <field name="supplier_id" string="Nhà cung cấp (Áp dụng tất cả)"
+                               domain="[('parent_id', '=', False), ('active', '=', True)]"
+                               options="{'no_create': True}"
+                               help="Chọn Nhà cung cấp ở đây sẽ lọc các đơn mua hàng có sẵn và áp dụng chung cho các sản phẩm bên dưới nếu bạn gộp đơn."/>
+                    </group>
+                    <group>
+                        <field name="purchase_order_id"
+                               string="Đơn mua hàng có sẵn"
+                               domain="[('partner_id', '=', supplier_id)]"
+                               options="{'no_create': True}"
+                               placeholder="Để trống để tạo mới..."/>
+                        <field name="sync_data_planned" />
+                    </group>
                 </group>
 
                 <!-- Ẩn field gốc để lưu state -->
                 <field name="toggle_keep_description" invisible="1"/>
                 <field name="toggle_keep_estimated_cost" invisible="1"/>
 
-                <separator string="Tùy chọn hàng loạt" />
-                <div style="display: flex; gap: 40px; margin-bottom: 12px; padding-left: 8px;">
+                <separator string="Tùy chọn hàng loạt" invisible="1" />
+                <div style="display: flex; gap: 40px; margin-bottom: 12px; padding-left: 8px;" invisible="1">
                     <!-- Toggle Giữ Mô tả -->
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <button name="action_toggle_description_on" type="object"
@@ -75,9 +76,27 @@
                 </div>
             </xpath>
 
-            <!-- Thêm cột Đơn giá MISA vào danh sách sản phẩm -->
-            <xpath expr="//field[@name='item_ids']/list/field[@name='estimated_cost']" position="after">
-                <field name="misa_price_before_tax" optional="show" />
+            <!-- Sắp xếp lại danh sách sản phẩm và đưa cột NCC lên đầu -->
+            <xpath expr="//field[@name='item_ids']" position="replace">
+                <field name="item_ids" nolabel="1" colspan="2">
+                    <list name="Chi tiết" create="false" editable="bottom">
+                        <field name="line_id" options="{'no_open': true}" column_invisible="1" />
+                        <field name="request_id" readonly="1" optional="show" />
+                        <field name="supplier_ref" width="120px" />
+                        <field name="supplier_id" width="180px" />
+                        <field name="product_id" width="200px" />
+                        <field name="name" width="250px" />
+                        <field name="product_qty" width="100px" />
+                        <field name="product_uom_id" column_invisible="1" groups="!uom.group_uom" />
+                        <field name="product_uom_id" groups="uom.group_uom" width="80px" />
+                        <field name="misa_price_before_tax" width="120px" />
+                        <field name="misa_tax_rate" width="80px" />
+                        <field name="misa_tax_amount" width="100px" />
+                        <field name="estimated_cost" column_invisible="1" />
+                        <field name="keep_description" column_invisible="1" />
+                        <field name="keep_estimated_cost" column_invisible="1" />
+                    </list>
+                </field>
             </xpath>
         </field>
     </record>
