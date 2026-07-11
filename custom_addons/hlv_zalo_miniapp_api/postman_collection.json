@@ -1041,7 +1041,7 @@
       "name": "5. Order API",
       "item": [
         {
-          "name": "5.1 POST Create Order",
+          "name": "5.1 POST Create Order (with items)",
           "event": [
             {
               "listen": "test",
@@ -1064,7 +1064,7 @@
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"contact_id\": {{contact_id}},\n  \"address_id\": {{contact_id}},\n  \"note\": \"Giao trước 18h\"\n}" },
+            "body": { "mode": "raw", "raw": "{\n  \"contact_id\": {{contact_id}},\n  \"items\": [\n    {\"product_id\": 1, \"quantity\": 2}\n  ],\n  \"address_id\": {{contact_id}},\n  \"note\": \"Giao trước 18h\"\n}" },
             "url": {
               "raw": "{{base_url}}/api/v1/zalo/orders/create",
               "host": ["{{base_url}}"],

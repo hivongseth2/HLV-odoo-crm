@@ -173,10 +173,14 @@ class ZaloOrderAPI(http.Controller):
     # POST /api/v1/zalo/orders/create
     @http.route("/api/v1/zalo/orders/create", type="http", auth="public", methods=["POST"], csrf=False)
     def order_create(self, **params):
-        """Body: {"contact_id":1, "address_id":2, "note":"...", "voucher_code":"VHQ-XXXXX"}"""
+        """Body: {"contact_id":1, "items":[{"product_id":42,"quantity":2}], "address_id":2, "note":"...", "voucher_code":"VHQ-XXXXX"}
+        
+        items: Danh sách sản phẩm từ frontend (frontend tự quản lý giỏ hàng)
+        """
         try:
             body = self._request_json()
             contact_id = self._parse_int(body.get("contact_id"))
+            items = body.get("items") or []
             address_id = self._parse_int(body.get("address_id"), 0)
             note = (body.get("note") or "").strip()
             voucher_code = (body.get("voucher_code") or "").strip()
@@ -184,55 +188,83 @@ class ZaloOrderAPI(http.Controller):
             if not contact_id:
                 return self._response_error("INVALID_INPUT", "Thiếu contact_id")
 
+            if not items or not isinstance(items, list):
+                return self._response_error("INVALID_INPUT", "Thiếu danh sách sản phẩm (items)", 400)
+
             partner = request.env["res.partner"].sudo().browse(contact_id)
             if not partner.exists():
                 return self._response_error("NOT_FOUND", "Khách hàng không tồn tại", 404)
 
-            SaleOrder = request.env["sale.order"].sudo()
-            cart = SaleOrder.search([("partner_id", "=", contact_id), ("state", "=", "draft")], limit=1, order="id desc")
-            if not cart or not cart.order_line:
-                return self._response_error("INVALID_INPUT", "Giỏ hàng trống", 400)
+            # Validate và build order line values
+            Product = request.env["product.product"].sudo()
+            order_line_vals = []
+            for item in items:
+                product_id = self._parse_int(item.get("product_id"), 0)
+                quantity = self._parse_float(item.get("quantity"), 0)
+                if not product_id or quantity <= 0:
+                    continue
+                product = Product.browse(product_id)
+                if not product.exists() or not product.active or not product.x_active_zalo:
+                    continue
+                price = product.x_zalo_price or product.list_price
+                order_line_vals.append((0, 0, {
+                    "product_id": product_id,
+                    "product_uom_qty": quantity,
+                    "price_unit": price,
+                    "name": product.display_name,
+                }))
 
-            cart_vals = {}
-            if address_id:
-                address = request.env["res.partner"].sudo().browse(address_id)
-                if address.exists():
-                    cart_vals["partner_shipping_id"] = address_id
-                    cart_vals["partner_invoice_id"] = address_id
+            if not order_line_vals:
+                return self._response_error("INVALID_INPUT", "Không có sản phẩm hợp lệ để tạo đơn", 400)
+
+            # Tạo sale.order mới
+            order_vals = {
+                "partner_id": contact_id,
+                "partner_invoice_id": address_id or contact_id,
+                "partner_shipping_id": address_id or contact_id,
+                "state": "draft",
+                "order_line": order_line_vals,
+            }
             if note:
-                cart_vals["note"] = note
-            if cart_vals:
-                cart.write(cart_vals)
+                order_vals["note"] = note
 
+            SaleOrder = request.env["sale.order"].sudo()
+            order = SaleOrder.create(order_vals)
+
+            # Tính tổng tiền cho voucher
             voucher_info = None
             if voucher_code:
-                order_total = sum(l.price_subtotal for l in cart.order_line)
+                order_total = sum(l.price_subtotal for l in order.order_line)
                 voucher_result = self._verify_voucher_code(voucher_code, contact_id, order_total)
                 if not voucher_result["valid"]:
+                    order.unlink()
                     return self._response_error("VOUCHER_ERROR", voucher_result["error"], 400)
                 voucher_info = voucher_result
                 try:
-                    cart.action_apply_loyalty_voucher(voucher_code)
+                    order.action_apply_loyalty_voucher(voucher_code)
                 except Exception as ve:
                     _logger.warning("Voucher apply error: %s", ve)
-                    cart.write({"note": (cart.note or "") + f"\nVoucher: {voucher_code}"})
+                    order.write({"note": (order.note or "") + f"\nVoucher: {voucher_code}"})
 
+            # Gán pricelist
             try:
                 pricelist = request.env["product.pricelist"].sudo().search([("active", "=", True)], limit=1, order="id")
                 if pricelist:
-                    cart.write({"pricelist_id": pricelist.id})
+                    order.write({"pricelist_id": pricelist.id})
             except Exception:
                 pass
 
+            # Confirm đơn hàng
             try:
-                cart.action_confirm()
+                order.action_confirm()
             except Exception as ce:
                 _logger.exception("Order confirm error")
+                order.unlink()
                 return self._response_error("ORDER_ERROR", f"Không thể xác nhận đơn: {str(ce)}", 400)
 
-            cart.write({"state": "sale", "date_order": fields.Datetime.now()})
+            order.write({"state": "sale", "date_order": fields.Datetime.now()})
 
-            result = self._order_to_dict(cart)
+            result = self._order_to_dict(order)
             if voucher_info:
                 result["voucher_applied"] = voucher_info
 

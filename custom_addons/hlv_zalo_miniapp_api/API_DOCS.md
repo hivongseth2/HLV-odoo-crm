@@ -1305,22 +1305,34 @@ Giống cấu trúc order object trong **6.1. Danh sách Đơn hàng**.
 
 > **POST** `/api/v1/zalo/orders/create`
 
-Tạo đơn hàng từ giỏ hàng draft hiện tại. Chuyển giỏ hàng thành đơn hàng `sale` (confirmed).
+Tạo đơn hàng từ danh sách sản phẩm do frontend gửi lên (frontend tự quản lý giỏ hàng). Backend sẽ tạo `sale.order` mới và confirm luôn.
 
 #### Request Body
 
 | Field | Type | Required | Default | Mô tả |
 |-------|------|----------|---------|-------|
 | `contact_id` | int | **Required** | — | ID của `res.partner` |
+| `items` | array[object] | **Required** | — | Danh sách sản phẩm từ giỏ hàng frontend |
 | `address_id` | int | Optional | — | ID địa chỉ giao hàng (nếu không gửi, dùng ID contact) |
 | `note` | string | Optional | "" | Ghi chú đơn hàng |
 | `voucher_code` | string | Optional | "" | Mã voucher giảm giá (từ `hlv.loyalty.voucher`) |
+
+**Mỗi item object**:
+
+| Field | Type | Required | Mô tả |
+|-------|------|----------|-------|
+| `product_id` | int | **Required** | ID của `product.product` |
+| `quantity` | float | **Required** | Số lượng (phải > 0) |
 
 #### Request Example
 
 ```json
 {
   "contact_id": 1,
+  "items": [
+    {"product_id": 42, "quantity": 2},
+    {"product_id": 56, "quantity": 1}
+  ],
   "address_id": 2,
   "note": "Giao trước 18h",
   "voucher_code": "VHQ-XXXXX"
