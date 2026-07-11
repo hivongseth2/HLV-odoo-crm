@@ -340,8 +340,13 @@ class PurchaseRequest(models.Model):
                 qty = 1.0
 
             misa_supplier_id = None
-            if line.get("sale_proposed_supplier_id"):
-                misa_supplier_id = int(line.get("sale_proposed_supplier_id"))
+            # Extension gửi key "misa_supplier_id", nhưng cũng hỗ trợ "sale_proposed_supplier_id"
+            supplier_key = line.get("misa_supplier_id") or line.get("sale_proposed_supplier_id")
+            if supplier_key:
+                try:
+                    misa_supplier_id = int(supplier_key)
+                except (ValueError, TypeError):
+                    misa_supplier_id = None
             
             raw = line.get("rawData", {})
 
@@ -353,6 +358,7 @@ class PurchaseRequest(models.Model):
                 "product_qty": qty,
                 "misa_line_id": misa_line_id,
                 "sale_proposed_supplier_id": misa_supplier_id,
+                "misa_supplier_id": misa_supplier_id,
                 "misa_amount": float(raw.get("Amount") or line.get("misa_amount") or 0.0),
             }
             
