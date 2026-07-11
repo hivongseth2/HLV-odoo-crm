@@ -28,9 +28,10 @@ class ZaloCategoryAPI(ZaloBaseAPI, http.Controller):
         """Danh sách danh mục (pos.category) có phân trang."""
         try:
             body = self._request_json()
-            limit = self._parse_int(body.get("limit"), 20)
-            offset = self._parse_int(body.get("offset"), 0)
-            limit = min(max(limit, 1), 100)
+            try:
+                limit, offset = self._parse_limit_offset(body, default_limit=20, max_limit=100)
+            except ValueError as e:
+                return self._response_error("INVALID_INPUT", str(e))
 
             categories = request.env["pos.category"].sudo().search(
                 [],
@@ -82,9 +83,10 @@ class ZaloCategoryAPI(ZaloBaseAPI, http.Controller):
         try:
             body = self._request_json()
             category_id = self._parse_int(body.get("category_id"), 0)
-            limit = self._parse_int(body.get("limit"), 20)
-            offset = self._parse_int(body.get("offset"), 0)
-            limit = min(max(limit, 1), 100)
+            try:
+                limit, offset = self._parse_limit_offset(body, default_limit=20, max_limit=100)
+            except ValueError as e:
+                return self._response_error("INVALID_INPUT", str(e))
 
             if not category_id:
                 return self._response_error("INVALID_INPUT", "Thiếu category_id")

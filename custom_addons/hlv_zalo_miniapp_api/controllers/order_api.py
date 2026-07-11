@@ -93,10 +93,11 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
         try:
             body = self._request_json()
             contact_id = self._parse_int(body.get("contact_id"), 0)
-            limit = self._parse_int(body.get("limit"), 20)
-            offset = self._parse_int(body.get("offset"), 0)
+            try:
+                limit, offset = self._parse_limit_offset(body, default_limit=20, max_limit=100)
+            except ValueError as e:
+                return self._response_error("INVALID_INPUT", str(e))
             state_filter = (body.get("state") or "").strip()
-            limit = min(max(limit, 1), 100)
 
             if not contact_id:
                 return self._response_error("INVALID_INPUT", "Thiếu contact_id")

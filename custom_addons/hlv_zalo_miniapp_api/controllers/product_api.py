@@ -85,9 +85,10 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
         Body: {"limit":10, "offset":0, "query":"áo", "sort":"name", "category_id":0}"""
         try:
             body = self._request_json()
-            limit = self._parse_int(body.get("limit"), 20)
-            offset = self._parse_int(body.get("offset"), 0)
-            limit = min(max(limit, 1), 100)
+            try:
+                limit, offset = self._parse_limit_offset(body, default_limit=20, max_limit=100)
+            except ValueError as e:
+                return self._response_error("INVALID_INPUT", str(e))
 
             query = (body.get("query") or "").strip()
             sort = (body.get("sort") or "name").strip()
