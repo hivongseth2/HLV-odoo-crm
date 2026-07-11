@@ -2,9 +2,12 @@
 import base64
 import io
 import logging
+import re
+from datetime import datetime
 
 from odoo import http
 from odoo.http import request
+from .message_export_helper import build_sale_plan_messages_xlsx
 
 _logger = logging.getLogger(__name__)
 
@@ -244,6 +247,52 @@ class DeliveryPlannerController(http.Controller):
         except Exception as e:
             _logger.error("Error reserving stock: %s", str(e), exc_info=True)
             return {'success': False, 'message': f'Lỗi khi giữ hàng: {str(e)}'}
+
+    @http.route('/hlv_sale_delivery_planning/export_messages_excel', type='http', auth='user', methods=['GET'])
+    def export_messages_excel(self, **kwargs):
+        date_from = (kwargs.get('date_from') or kwargs.get('message_date') or '').strip()
+        date_to = (kwargs.get('date_to') or date_from).strip()
+        if not re.match(r'^\d{4}-\d{2}-\d{2}$', date_from) or not re.match(r'^\d{4}-\d{2}-\d{2}$', date_to):
+            return request.make_response(
+                'Ngày xuất tin nhắn không hợp lệ. Định dạng đúng: YYYY-MM-DD.',
+                headers=[('Content-Type', 'text/plain; charset=utf-8')],
+            )
+        try:
+            date_from_dt = datetime.strptime(date_from, '%Y-%m-%d')
+            date_to_dt = datetime.strptime(date_to, '%Y-%m-%d')
+        except ValueError:
+            return request.make_response(
+                'Ngày xuất tin nhắn không hợp lệ. Định dạng đúng: YYYY-MM-DD.',
+                headers=[('Content-Type', 'text/plain; charset=utf-8')],
+            )
+        if date_to_dt < date_from_dt:
+            date_from, date_to = date_to, date_from
+
+        try:
+            service = request.env['hlv.delivery.planner.service']
+            groups = service.get_sale_plan_user_message_groups(
+                date_from,
+                date_to=date_to,
+                sale_order_ids=None,
+                tz_name='Asia/Ho_Chi_Minh',
+            )
+            xlsx_data = build_sale_plan_messages_xlsx(groups, date_from, date_to=date_to)
+            suffix = date_from if date_to == date_from else '%s_%s' % (date_from, date_to)
+            filename = 'Tin_nhan_sale_thu_kho_%s.xlsx' % suffix
+            return request.make_response(
+                xlsx_data,
+                headers=[
+                    ('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
+                    ('Content-Disposition', f'attachment; filename="{filename}"'),
+                    ('Content-Length', len(xlsx_data)),
+                ],
+            )
+        except Exception as e:
+            _logger.error("Error exporting sale plan messages Excel: %s", str(e), exc_info=True)
+            return request.make_response(
+                f'Lỗi khi xuất tin nhắn: {str(e)}',
+                headers=[('Content-Type', 'text/plain; charset=utf-8')],
+            )
 
     @http.route('/hlv_sale_delivery_planning/export_excel', type='http', auth='user', methods=['GET'])
     def export_excel(self, **kwargs):

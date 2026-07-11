@@ -278,6 +278,40 @@ export class DeliveryPlannerTransferMixin {
         this.fetchData();
     }
 
+    _defaultExportMessageDate() {
+        const d = new Date();
+        d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+        return d.toISOString().slice(0, 10);
+    }
+
+    exportMessagesExcel() {
+        const today = this._defaultExportMessageDate();
+        this.state.messageExportDateFrom = this.state.messageExportDateFrom || today;
+        this.state.messageExportDateTo = this.state.messageExportDateTo || this.state.messageExportDateFrom;
+        this.state.isMessageExportModalOpen = true;
+    }
+
+    closeMessageExportModal() {
+        this.state.isMessageExportModalOpen = false;
+    }
+
+    submitMessagesExcelExport() {
+        const dateFrom = (this.state.messageExportDateFrom || "").trim();
+        const dateTo = (this.state.messageExportDateTo || dateFrom).trim();
+        if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(dateFrom) || !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(dateTo)) {
+            this.notification.add("Vui lòng chọn ngày hợp lệ.", { type: "warning" });
+            return;
+        }
+
+        const params = new URLSearchParams({
+            date_from: dateFrom,
+            date_to: dateTo,
+        });
+
+        window.open(`/hlv_sale_delivery_planning/export_messages_excel?${params.toString()}`, '_blank');
+        this.closeMessageExportModal();
+    }
+
     exportExcel() {
         const params = new URLSearchParams({
             search_query: this.state.searchQuery.trim(),

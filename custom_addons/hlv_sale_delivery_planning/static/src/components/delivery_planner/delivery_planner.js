@@ -170,6 +170,11 @@ export class DeliveryPlannerDashboard extends Component {
             transferSelections: {},          // { [wh_id]: { selected, partner_id, products: {[prod_id]: {include, qty}} } }
             isCreatingTransfer: false,
 
+            // Message export modal
+            isMessageExportModalOpen: false,
+            messageExportDateFrom: today,
+            messageExportDateTo: today,
+
             // Relocation Modal (Chuyển vị trí)
             isRelocationModalOpen: false,
             relocationModalLoading: false,
