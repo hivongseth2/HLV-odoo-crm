@@ -295,6 +295,18 @@ export class DeliveryPlannerTransferMixin {
         this.state.isMessageExportModalOpen = false;
     }
 
+    onMessageExportDateFromChange(ev) {
+        const value = ev.target.value || "";
+        this.state.messageExportDateFrom = value;
+        if (!this.state.messageExportDateTo) {
+            this.state.messageExportDateTo = value;
+        }
+    }
+
+    onMessageExportDateToChange(ev) {
+        this.state.messageExportDateTo = ev.target.value || "";
+    }
+
     submitMessagesExcelExport() {
         const dateFrom = (this.state.messageExportDateFrom || "").trim();
         const dateTo = (this.state.messageExportDateTo || dateFrom).trim();
