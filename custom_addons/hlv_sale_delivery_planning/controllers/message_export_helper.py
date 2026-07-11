@@ -19,6 +19,14 @@ def _display_date(date_value):
         return date_value or ''
 
 
+def _display_date_range(date_from, date_to=None):
+    date_from = date_from or ''
+    date_to = date_to or date_from
+    if not date_to or date_to == date_from:
+        return _display_date(date_from)
+    return '%s - %s' % (_display_date(date_from), _display_date(date_to))
+
+
 def _write_group_cell(sheet, first_row, last_row, col, value, fmt):
     if first_row == last_row:
         sheet.write(first_row, col, value, fmt)
@@ -26,7 +34,7 @@ def _write_group_cell(sheet, first_row, last_row, col, value, fmt):
         sheet.merge_range(first_row, col, last_row, col, value, fmt)
 
 
-def build_sale_plan_messages_xlsx(groups, message_date):
+def build_sale_plan_messages_xlsx(groups, date_from, date_to=None):
     xlsxwriter = _get_xlsxwriter()
     output = io.BytesIO()
     workbook = xlsxwriter.Workbook(output, {'in_memory': True})
@@ -74,7 +82,7 @@ def build_sale_plan_messages_xlsx(groups, message_date):
     ]
 
     total_messages = sum(len(group.get('messages') or []) for group in groups)
-    sheet.merge_range(0, 0, 0, len(headers) - 1, 'Tin nhắn Sale - Thủ kho ngày %s' % _display_date(message_date), title_fmt)
+    sheet.merge_range(0, 0, 0, len(headers) - 1, 'Tin nhắn Sale - Thủ kho %s' % _display_date_range(date_from, date_to), title_fmt)
     sheet.merge_range(
         1, 0, 1, len(headers) - 1,
         'Tổng đơn: %s | Tổng tin nhắn: %s' % (len(groups), total_messages),

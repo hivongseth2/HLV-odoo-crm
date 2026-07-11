@@ -204,11 +204,12 @@ class DeliveryPlannerServiceMessages(models.AbstractModel):
         return result
 
     @api.model
-    def _sale_plan_message_date_bounds(self, message_date, tz_name='Asia/Ho_Chi_Minh'):
-        message_date = (message_date or '').strip()
+    def _sale_plan_message_date_bounds(self, date_from, date_to=None, tz_name='Asia/Ho_Chi_Minh'):
+        date_from = (date_from or '').strip()
+        date_to = (date_to or date_from or '').strip()
         user_tz = pytz.timezone(tz_name or 'Asia/Ho_Chi_Minh')
-        start_local = user_tz.localize(datetime.strptime(message_date, '%Y-%m-%d'))
-        end_local = start_local + timedelta(days=1)
+        start_local = user_tz.localize(datetime.strptime(date_from, '%Y-%m-%d'))
+        end_local = user_tz.localize(datetime.strptime(date_to, '%Y-%m-%d')) + timedelta(days=1)
         start_utc = start_local.astimezone(pytz.UTC).replace(tzinfo=None)
         end_utc = end_local.astimezone(pytz.UTC).replace(tzinfo=None)
         return start_utc, end_utc
@@ -237,9 +238,9 @@ class DeliveryPlannerServiceMessages(models.AbstractModel):
         return True
 
     @api.model
-    def get_sale_plan_user_message_groups(self, message_date, sale_order_ids=None, tz_name='Asia/Ho_Chi_Minh'):
-        """Return user-authored sale/picking messages in one local day, grouped by sale order."""
-        start_utc, end_utc = self._sale_plan_message_date_bounds(message_date, tz_name=tz_name)
+    def get_sale_plan_user_message_groups(self, date_from, date_to=None, sale_order_ids=None, tz_name='Asia/Ho_Chi_Minh'):
+        """Return user-authored sale/picking messages in a local date range, grouped by sale order."""
+        start_utc, end_utc = self._sale_plan_message_date_bounds(date_from, date_to=date_to, tz_name=tz_name)
         scoped = sale_order_ids is not None
         so_ids = []
         if scoped:
