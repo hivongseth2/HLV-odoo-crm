@@ -30,7 +30,9 @@ Hầu hết API yêu cầu `Authorization: Bearer <token>` header.
 **Hết hạn**:
 - 30 ngày (kể từ timestamp trong token)
 
-### Cài đặt Secret Key cho Production
+### BẮT BUỘC: Cài đặt Secret Key cho Production
+
+**Tham số này bắt buộc phải cấu hình** nếu không tất cả API yêu cầu Bearer token sẽ báo lỗi `INVALID_TOKEN`.
 
 Vào Settings > Technical > System Parameters:
 - **Key**: `zalo_api_secret`
