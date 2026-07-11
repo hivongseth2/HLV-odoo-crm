@@ -18,6 +18,13 @@ Tài liệu này ghi lại các điểm quan trọng của luồng đồng bộ 
    - `org_reftype = reftype = 302`
    - object MISA: `pu_voucher`
    - loại chứng từ: Mua hàng trong nước nhập kho chưa thanh toán
+   - `include_invoice = 0` khi nhập kho không kèm hóa đơn mua hàng
+
+Lưu ý: mẫu tài liệu MISA cho `pu_voucher` có thể dùng `reftype = 307` và
+`pu_invoice_refid` khi gửi kèm object `pu_invoice` (`voucher_type = 15`). `307` là
+case mua hàng trong nước nhập kho thanh toán ngay bằng tiền mặt, còn `pu_invoice_refid`
+là ID hóa đơn mua hàng, không phải ID đơn mua hàng. Với luồng nhập kho từ PO chưa kèm
+hóa đơn, không tự sinh hoặc gán giả `pu_invoice_refid`.
 
 ## Link phiếu nhập về đơn mua
 
@@ -47,6 +54,7 @@ Có 2 lớp liên kết cần phân biệt:
      "pu_order_refid": "<refid don mua>",
      "pu_order_ref_detail_id": "<ref_detail_id dong don mua>",
      "pu_order_refno": "<so don mua>",
+     "purchase_purpose_id": "<nhom HHDV mua vao neu co>",
      "quantity": 30
    }
    ```
@@ -89,8 +97,9 @@ Kết luận đã test:
 
 - `models/stock_picking_sync.py`
   - Chuẩn bị payload `pu_voucher`.
-  - Gửi `reference` header.
+  - Gửi `reference` header với `org_reftype=302`.
   - Gửi `pu_order_refid`, `pu_order_ref_detail_id` ở từng dòng phiếu nhập.
+  - Gửi `purchase_purpose_id`/`purchase_purpose_code` nếu cache hàng hóa MISA có dữ liệu.
   - Bắt buộc `is_get_new_id=false`.
 
 - `models/amis_callback_config.py`

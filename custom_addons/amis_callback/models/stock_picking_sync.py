@@ -11,6 +11,8 @@ _logger = logging.getLogger(__name__)
 
 ZERO_UUID = '00000000-0000-0000-0000-000000000000'
 MISA_PO_REQUEST_SETTLE_SECONDS = 90
+MISA_DEFAULT_PURCHASE_PURPOSE_ID = 'ed4bd91d-83ac-4a26-b4c1-4bce85faecb8'
+MISA_DEFAULT_PURCHASE_PURPOSE_CODE = '1'
 
 
 class StockPickingAmisSync(models.Model):
@@ -257,12 +259,11 @@ class StockPickingAmisSync(models.Model):
         voucher_payload, dictionary_items, reference_items = self._prepare_misa_inward_payload(config, purchase_order)
         org_refid = voucher_payload.get('org_refid')
         _logger.info(
-            'Push MISA inward %s: org_refid=%s, po=%s, header_po_refid=%s, header_po_refno=%s, detail_po_refid=%s, detail_links=%s',
+            'Push MISA inward %s: org_refid=%s, po=%s, reftype=%s, detail_po_refid=%s, detail_links=%s',
             self.name,
             org_refid,
             purchase_order.name,
-            voucher_payload.get('pu_order_refid') or '',
-            voucher_payload.get('pu_order_refno') or '',
+            voucher_payload.get('reftype') or '',
             voucher_payload.get('detail') and voucher_payload['detail'][0].get('pu_order_refid') or '',
             ', '.join(
                 '%s qty=%s unit=%s main=%s rate=%s inward_detail=%s po_detail=%s' % (
@@ -851,8 +852,17 @@ class StockPickingAmisSync(models.Model):
             # Tai khoan co dinh theo yeu cau: Kho 1561, Cong no 331.
             debit_account = '1561'
             credit_account = '331'
+            purchase_purpose_id = (
+                inventory_item.get('purchase_purpose_id')
+                or inventory_item.get('purchase_purpose_refid')
+                or MISA_DEFAULT_PURCHASE_PURPOSE_ID
+            )
+            purchase_purpose_code = (
+                inventory_item.get('purchase_purpose_code')
+                or MISA_DEFAULT_PURCHASE_PURPOSE_CODE
+            ).strip()
 
-            detail.append({
+            detail_vals = {
                 'ref_detail_id': ref_detail_id,
                 'refid': refid,
                 'inventory_item_id': inventory_item_id,
@@ -893,6 +903,8 @@ class StockPickingAmisSync(models.Model):
                 'debit_account': debit_account,
                 'credit_account': credit_account,
                 'exchange_rate_operator': unit_values['exchange_rate_operator'],
+                'vat_account': '1331',
+                'vat_description': 'Thue GTGT - %s' % (inventory_item_name or move.name or ''),
                 'account_object_name': account_object_name,
                 'account_object_code': account_object_code,
                 'inventory_item_code': inventory_item_code,
@@ -913,7 +925,12 @@ class StockPickingAmisSync(models.Model):
                 'pu_order_ref_detail_id': pu_order_ref_detail_id,
                 'pu_order_refno': purchase_order.name,
                 'state': 0,
-            })
+            }
+            if purchase_purpose_id:
+                detail_vals['purchase_purpose_id'] = purchase_purpose_id
+            if purchase_purpose_code:
+                detail_vals['purchase_purpose_code'] = purchase_purpose_code
+            detail.append(detail_vals)
 
         total_payment_amount = total_amount + total_vat_amount
         reference_items = self._prepare_misa_inward_references(
@@ -935,12 +952,11 @@ class StockPickingAmisSync(models.Model):
             'act_voucher_type': 0,
             'reftype': 302,
             'reftype_name': 'Mua hang trong nuoc nhap kho chua thanh toan',
-            # Field header "Nhap so don mua hang" tren MISA. Detail rows below
-            # carry the line-level links used to update received quantity.
-            'pu_order_refid': pu_order_refid,
-            'pu_order_refno': purchase_order.name,
             'branch_id': branch_id,
             'account_object_id': account_object_id,
+            'include_invoice': 0,
+            'due_time': 0,
+            'discount_type': 0,
             'display_on_book': 0,
             'unit_price_method': 0,
             'reforder': int(datetime.utcnow().timestamp() * 1000),
