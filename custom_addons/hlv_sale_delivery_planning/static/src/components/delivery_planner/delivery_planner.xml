@@ -72,6 +72,11 @@
                                     (<t t-esc="this.selectedCount"/>)
                                 </t>
                             </button>
+                            <button class="btn btn-outline-success shadow-sm"
+                                    t-on-click="exportMessagesExcel"
+                                    title="Xuất toàn bộ tin nhắn người dùng trong ngày đã chọn">
+                                <i class="fa fa-comments-o me-1"></i> Xuất tin nhắn
+                            </button>
                             <button class="btn btn-outline-danger shadow-sm position-relative ms-2"
                                     t-on-click="() => { this.state.isMessageDrawerOpen = true; }">
                                 <i class="fa fa-bell" ></i> Tin nhắn

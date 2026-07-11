@@ -1,11 +1,9 @@
 import logging
 import os
+from collections import OrderedDict
+from datetime import datetime, timedelta
 
-from odoo import models, api
-from markupsafe import Markup
-import re
-import pytz
-
+from odoo import models, api, fields, tools
 from markupsafe import Markup
 import re
 import pytz
@@ -60,6 +58,35 @@ _MAX_CHAT_ATTACHMENT_BYTES = 20 * 1024 * 1024
 
 
 _MENTION_RE = re.compile(r'@([^\s@,;:!?()\[\]{}<>]+)')
+_PUBLIC_AUTHOR_RE = re.compile(r'^\[([^\]]{1,80})\]\s*(.*)$', re.S)
+_PUBLIC_AUTHOR_HTML_RE = re.compile(r'<strong[^>]*>\s*\[([^\]]{1,80})\]\s*</strong>\s*', re.I)
+_SYSTEM_AUTHOR_RE = re.compile(r'\b(odoobot|odoo\s*bot|odoo\s*system)\b', re.I)
+
+
+def _message_plain_text(body):
+    try:
+        plain = tools.html2plaintext(body or '')
+    except Exception:
+        plain = re.sub(r'<[^>]+>', ' ', body or '')
+    plain = plain.replace('\xa0', ' ')
+    return re.sub(r'[ \t\r\f\v]+', ' ', plain).strip()
+
+
+def _split_public_author_prefix(body, plain):
+    html_match = _PUBLIC_AUTHOR_HTML_RE.search(body or '')
+    if html_match:
+        author = (html_match.group(1) or '').strip()
+        clean_body = re.sub(
+            r'^[\s*_`]*\[' + re.escape(author) + r'\][\s*_`]*',
+            '',
+            plain or '',
+            count=1,
+        ).strip()
+        return author, clean_body
+    match = _PUBLIC_AUTHOR_RE.match(plain or '')
+    if not match:
+        return '', plain or ''
+    return (match.group(1) or '').strip(), (match.group(2) or '').strip()
 
 
 def _normalize_mention_alias(value):
@@ -175,6 +202,133 @@ class DeliveryPlannerServiceMessages(models.AbstractModel):
                 'attachments': attachments,
             })
         return result
+
+    @api.model
+    def _sale_plan_message_date_bounds(self, message_date, tz_name='Asia/Ho_Chi_Minh'):
+        message_date = (message_date or '').strip()
+        user_tz = pytz.timezone(tz_name or 'Asia/Ho_Chi_Minh')
+        start_local = user_tz.localize(datetime.strptime(message_date, '%Y-%m-%d'))
+        end_local = start_local + timedelta(days=1)
+        start_utc = start_local.astimezone(pytz.UTC).replace(tzinfo=None)
+        end_utc = end_local.astimezone(pytz.UTC).replace(tzinfo=None)
+        return start_utc, end_utc
+
+    @api.model
+    def _is_system_message_author(self, message):
+        author = message.author_id
+        author_text = ' '.join(filter(None, [
+            author.name if author else '',
+            author.email if author else '',
+            message.email_from or '',
+        ])).strip()
+        return bool(author_text and _SYSTEM_AUTHOR_RE.search(author_text))
+
+    @api.model
+    def _is_user_sale_plan_message(self, message, plain):
+        if message.message_type != 'comment':
+            return False
+        has_att = bool(message.attachment_ids)
+        if not plain and not has_att:
+            return False
+        if plain and _SKIP_MSG_RE.search(plain):
+            return False
+        if self._is_system_message_author(message):
+            return False
+        return True
+
+    @api.model
+    def get_sale_plan_user_message_groups(self, message_date, sale_order_ids=None, tz_name='Asia/Ho_Chi_Minh'):
+        """Return user-authored sale/picking messages in one local day, grouped by sale order."""
+        start_utc, end_utc = self._sale_plan_message_date_bounds(message_date, tz_name=tz_name)
+        scoped = sale_order_ids is not None
+        so_ids = []
+        if scoped:
+            so_ids = [int(so_id) for so_id in (sale_order_ids or []) if so_id]
+            if not so_ids:
+                return []
+
+        Message = self.env['mail.message'].sudo()
+        Picking = self.env['stock.picking'].sudo()
+
+        domain = [
+            ('date', '>=', fields.Datetime.to_string(start_utc)),
+            ('date', '<', fields.Datetime.to_string(end_utc)),
+            ('message_type', '=', 'comment'),
+        ]
+        if scoped:
+            picking_ids = Picking.search([('sale_id', 'in', so_ids)]).ids
+            if picking_ids:
+                domain += [
+                    '|',
+                    '&', ('model', '=', 'sale.order'), ('res_id', 'in', so_ids),
+                    '&', ('model', '=', 'stock.picking'), ('res_id', 'in', picking_ids),
+                ]
+            else:
+                domain += [('model', '=', 'sale.order'), ('res_id', 'in', so_ids)]
+        else:
+            domain += [('model', 'in', ['sale.order', 'stock.picking'])]
+
+        messages = Message.search(domain, order='date asc, id asc')
+        if not messages:
+            return []
+
+        direct_so_ids = [msg.res_id for msg in messages if msg.model == 'sale.order' and msg.res_id]
+        msg_picking_ids = [msg.res_id for msg in messages if msg.model == 'stock.picking' and msg.res_id]
+        pickings = Picking.browse(msg_picking_ids).exists()
+        picking_by_id = {picking.id: picking for picking in pickings}
+        all_so_ids = set(direct_so_ids) | set(pickings.mapped('sale_id').ids)
+        if scoped:
+            all_so_ids &= set(so_ids)
+        sale_orders = self.env['sale.order'].sudo().browse(list(all_so_ids)).exists()
+        sale_by_id = {so.id: so for so in sale_orders}
+
+        try:
+            user_tz = pytz.timezone(tz_name or 'Asia/Ho_Chi_Minh')
+        except Exception:
+            user_tz = pytz.timezone('Asia/Ho_Chi_Minh')
+
+        groups = OrderedDict()
+        for msg in messages:
+            if msg.model == 'sale.order':
+                so = sale_by_id.get(msg.res_id)
+                origin = 'SO'
+            elif msg.model == 'stock.picking':
+                picking = picking_by_id.get(msg.res_id)
+                so = sale_by_id.get(picking.sale_id.id) if picking and picking.sale_id else None
+                origin = picking.name if picking else ''
+            else:
+                continue
+            if not so:
+                continue
+
+            plain = _message_plain_text(msg.body or '')
+            if not self._is_user_sale_plan_message(msg, plain):
+                continue
+
+            public_author, clean_body = _split_public_author_prefix(msg.body or '', plain)
+            author_name = public_author or (msg.author_id.name if msg.author_id else (msg.email_from or ''))
+            attachments = ', '.join(att.name or '' for att in msg.attachment_ids if att.name)
+            local_dt = msg.date.replace(tzinfo=pytz.UTC).astimezone(user_tz) if msg.date else None
+
+            if so.id not in groups:
+                groups[so.id] = {
+                    'sale_order_id': so.id,
+                    'order_name': so.name or '',
+                    'customer_name': so.partner_id.name or '',
+                    'warehouse_name': so.warehouse_id.name or '',
+                    'saler_code': getattr(so, 'x_studio_misa_saler_code', '') or '',
+                    'messages': [],
+                }
+            groups[so.id]['messages'].append({
+                'message_id': msg.id,
+                'date': local_dt.strftime('%d/%m/%Y %H:%M') if local_dt else '',
+                'origin': origin or '',
+                'author': author_name or '',
+                'body': clean_body or plain,
+                'attachments': attachments,
+            })
+
+        return sorted(groups.values(), key=lambda group: (group.get('order_name') or '', group.get('sale_order_id') or 0))
 
     @api.model
     def get_sale_plan_mention_aliases(self):

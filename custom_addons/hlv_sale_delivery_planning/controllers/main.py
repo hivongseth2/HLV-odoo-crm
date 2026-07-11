@@ -2,9 +2,12 @@
 import base64
 import io
 import logging
+import re
+from datetime import datetime
 
 from odoo import http
 from odoo.http import request
+from .message_export_helper import build_sale_plan_messages_xlsx
 
 _logger = logging.getLogger(__name__)
 
@@ -244,6 +247,46 @@ class DeliveryPlannerController(http.Controller):
         except Exception as e:
             _logger.error("Error reserving stock: %s", str(e), exc_info=True)
             return {'success': False, 'message': f'Lỗi khi giữ hàng: {str(e)}'}
+
+    @http.route('/hlv_sale_delivery_planning/export_messages_excel', type='http', auth='user', methods=['GET'])
+    def export_messages_excel(self, **kwargs):
+        message_date = (kwargs.get('message_date') or '').strip()
+        if not re.match(r'^\d{4}-\d{2}-\d{2}$', message_date):
+            return request.make_response(
+                'Ngày xuất tin nhắn không hợp lệ. Định dạng đúng: YYYY-MM-DD.',
+                headers=[('Content-Type', 'text/plain; charset=utf-8')],
+            )
+        try:
+            datetime.strptime(message_date, '%Y-%m-%d')
+        except ValueError:
+            return request.make_response(
+                'Ngày xuất tin nhắn không hợp lệ. Định dạng đúng: YYYY-MM-DD.',
+                headers=[('Content-Type', 'text/plain; charset=utf-8')],
+            )
+
+        try:
+            service = request.env['hlv.delivery.planner.service']
+            groups = service.get_sale_plan_user_message_groups(
+                message_date,
+                sale_order_ids=None,
+                tz_name='Asia/Ho_Chi_Minh',
+            )
+            xlsx_data = build_sale_plan_messages_xlsx(groups, message_date)
+            filename = 'Tin_nhan_sale_thu_kho_%s.xlsx' % message_date
+            return request.make_response(
+                xlsx_data,
+                headers=[
+                    ('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
+                    ('Content-Disposition', f'attachment; filename="{filename}"'),
+                    ('Content-Length', len(xlsx_data)),
+                ],
+            )
+        except Exception as e:
+            _logger.error("Error exporting sale plan messages Excel: %s", str(e), exc_info=True)
+            return request.make_response(
+                f'Lỗi khi xuất tin nhắn: {str(e)}',
+                headers=[('Content-Type', 'text/plain; charset=utf-8')],
+            )
 
     @http.route('/hlv_sale_delivery_planning/export_excel', type='http', auth='user', methods=['GET'])
     def export_excel(self, **kwargs):

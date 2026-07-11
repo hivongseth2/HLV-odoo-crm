@@ -278,6 +278,26 @@ export class DeliveryPlannerTransferMixin {
         this.fetchData();
     }
 
+    _defaultExportMessageDate() {
+        const d = new Date();
+        d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+        return d.toISOString().slice(0, 10);
+    }
+
+    exportMessagesExcel() {
+        let messageDate = window.prompt("Chọn ngày xuất tin nhắn (YYYY-MM-DD):", this._defaultExportMessageDate());
+        if (messageDate === null) return;
+        messageDate = (messageDate || "").trim();
+        if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(messageDate)) {
+            window.alert("Ngày không hợp lệ. Nhập theo định dạng YYYY-MM-DD.");
+            return;
+        }
+
+        const params = new URLSearchParams({ message_date: messageDate });
+
+        window.open(`/hlv_sale_delivery_planning/export_messages_excel?${params.toString()}`, '_blank');
+    }
+
     exportExcel() {
         const params = new URLSearchParams({
             search_query: this.state.searchQuery.trim(),
