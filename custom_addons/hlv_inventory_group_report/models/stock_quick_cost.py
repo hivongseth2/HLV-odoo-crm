@@ -83,6 +83,7 @@ class HlvStockQuick(models.TransientModel):
                 ("product_id", "=", product_id),
                 ("state", "in", ["purchase", "done"]),
                 ("product_qty", ">", 0),
+                ("qty_received", ">", 0),
             ],
             order="date_planned desc, id desc",
         )
@@ -91,13 +92,14 @@ class HlvStockQuick(models.TransientModel):
         remaining = on_hand_qty
         from datetime import timedelta
         for po_line in po_lines:
-            line_qty = float(po_line.product_qty or 0.0)
-            if line_qty <= 0:
+            ordered_qty = float(po_line.product_qty or 0.0)
+            received_qty = float(po_line.qty_received or 0.0)
+            if ordered_qty <= 0 or received_qty <= 0:
                 continue
             if remaining <= 0.001:
                 break
 
-            qty_take = min(line_qty, remaining)
+            qty_take = min(received_qty, remaining)
             remaining -= qty_take
 
             subtotal = float(po_line.price_subtotal or 0.0)
@@ -108,20 +110,20 @@ class HlvStockQuick(models.TransientModel):
             if not tax_amount and line_total:
                 tax_amount = line_total - subtotal
 
-            allocated_subtotal = subtotal * qty_take / line_qty if line_qty else 0.0
-            allocated_tax = tax_amount * qty_take / line_qty if line_qty else 0.0
-            allocated_value = line_total * qty_take / line_qty if line_qty else 0.0
-            unit_cost = line_total / line_qty if line_qty else 0.0
-            unit_cost_before_tax = subtotal / line_qty if line_qty else 0.0
-            tax_per_unit = tax_amount / line_qty if line_qty else 0.0
+            allocated_subtotal = subtotal * qty_take / ordered_qty if ordered_qty else 0.0
+            allocated_tax = tax_amount * qty_take / ordered_qty if ordered_qty else 0.0
+            allocated_value = line_total * qty_take / ordered_qty if ordered_qty else 0.0
+            unit_cost = line_total / ordered_qty if ordered_qty else 0.0
+            unit_cost_before_tax = subtotal / ordered_qty if ordered_qty else 0.0
+            tax_per_unit = tax_amount / ordered_qty if ordered_qty else 0.0
 
             manual_amount = manual_layer_amounts.get(po_line.id)
             if manual_amount is not None:
                 line_total = float(manual_amount)
                 tax_amount = max(line_total - allocated_subtotal, 0.0)
-                allocated_tax = tax_amount * qty_take / line_qty if line_qty else 0.0
-                allocated_value = line_total * qty_take / line_qty if line_qty else 0.0
-                unit_cost = line_total / line_qty if line_qty else 0.0
+                allocated_tax = tax_amount * qty_take / received_qty if received_qty else 0.0
+                allocated_value = line_total * qty_take / received_qty if received_qty else 0.0
+                unit_cost = line_total / received_qty if received_qty else 0.0
                 is_manual = True
                 stored_manual_amount = round(line_total, 2)
             else:
@@ -138,7 +140,9 @@ class HlvStockQuick(models.TransientModel):
                 "reference": po_line.order_id.name or "",
                 "po_name": po_line.order_id.partner_id.display_name if po_line.order_id.partner_id else "",
                 "qty": round(qty_take, 2),
-                "line_qty": round(line_qty, 2),
+                "line_qty": round(received_qty, 2),
+                "ordered_qty": round(ordered_qty, 2),
+                "received_qty": round(received_qty, 2),
                 "unit_cost_before_tax": round(unit_cost_before_tax, 2),
                 "unit_cost": round(unit_cost, 2),
                 "value": round(allocated_value, 2),
