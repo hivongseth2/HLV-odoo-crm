@@ -541,7 +541,7 @@ class StockPickingAmisSync(models.Model):
                 'inventory_resale_type_id': 0,
                 'return_quantity': 0.0,
                 'is_un_update_outward_price': False,
-                # 'state': 0,
+                'state': 0,
             })
 
         total_sale = round(total_sale, 2)
@@ -614,7 +614,7 @@ class StockPickingAmisSync(models.Model):
                 'inventory_resale_type_id': 0,
                 'un_resonable_cost': False,
                 'is_description': False,
-                # 'state': 0,
+                'state': 0,
             })
 
         total_cost = sum(d.get('amount_finance', 0.0) for d in outward_detail)
@@ -657,7 +657,7 @@ class StockPickingAmisSync(models.Model):
             'is_invoice_receipted': False,
             'is_reject_handler': False,
             'auto_refno': False,
-            # 'state': 0,
+            'state': 0,
             'detail': outward_detail,
         }
 
@@ -718,7 +718,7 @@ class StockPickingAmisSync(models.Model):
             'sa_invoice_refid': sa_invoice_refid_link,
             'reftype': 3530,
             'auto_refno': False,
-            # 'state': 0,
+            'state': 0,
             'detail': detail,
             'in_outward': in_outward,
         }
@@ -936,7 +936,7 @@ class StockPickingAmisSync(models.Model):
                 'pu_order_refid': pu_order_refid,
                 'pu_order_ref_detail_id': pu_order_ref_detail_id,
                 'pu_order_refno': purchase_order.name,
-                # 'state': 0,
+                'state': 0,
             }
             if purchase_purpose_id:
                 detail_vals['purchase_purpose_id'] = purchase_purpose_id
@@ -957,22 +957,21 @@ class StockPickingAmisSync(models.Model):
             'is_get_new_id': False,
             'org_refid': refid,
             'is_allow_group': False,
-            "has_pu_order": True,
             'org_refno': self.name,
             'org_reftype': 302,
             'org_reftype_name': 'Mua hang trong nuoc nhap kho chua thanh toan',
-            'refno': '',
+            # 'refno': '',
             'refid': refid,
             'act_voucher_type': 0,
             'reftype': 302,
             'reftype_name': 'Mua hang trong nuoc nhap kho chua thanh toan',
-            'pu_order_refid': pu_order_refid,
-            'pu_order_refno': purchase_order.name,
+            # 'pu_order_refid': pu_order_refid,
+            # 'pu_order_refno': purchase_order.name,
             'branch_id': branch_id,
             'account_object_id': account_object_id,
-            'include_invoice': 0,
-            'due_time': 0,
-            'discount_type': 0,
+            # 'include_invoice': 0,
+            # 'due_time': 0,
+            # 'discount_type': 0,
             'display_on_book': 0,
             'unit_price_method': 0,
             'reforder': int(datetime.utcnow().timestamp() * 1000),
@@ -1008,7 +1007,7 @@ class StockPickingAmisSync(models.Model):
             'is_paid': False,
             'is_executed': False,
             'is_adjust_value': False,
-            # 'state': 0,
+            'state': 0,
             'detail': detail,
         }
         return voucher, dictionary_items, reference_items
