@@ -178,7 +178,25 @@ class StockPickingAmisSync(models.Model):
         if not config.ensure_sync_ready():
             return
 
+        purchase_order._misa_refresh_purchase_order_refs_from_logs()
+        purchase_lines = self.move_ids_without_package.mapped('purchase_line_id')
         purchase_order_refid = purchase_order._misa_purchase_order_link_refid()
+        if config.sync_purchase_order_enabled and not purchase_order._is_misa_imported_purchase_order():
+            missing_detail_lines = purchase_order._misa_purchase_order_lines_missing_ref_detail(purchase_lines)
+            purchase_order_refid = purchase_order._misa_purchase_order_link_refid()
+            if not purchase_order.misa_purchase_order_synced or not purchase_order_refid or missing_detail_lines:
+                purchase_order._enqueue_misa_purchase_order(raise_on_skip=False, force=True)
+                missing_names = ', '.join(missing_detail_lines.mapped('product_id.display_name'))
+                if not purchase_order.misa_purchase_order_synced:
+                    reason = 'callback thanh cong don mua'
+                elif not purchase_order_refid:
+                    reason = 'refid/org_refid don mua'
+                else:
+                    reason = 'ref_detail_id dong: %s' % missing_names
+                raise UserError(
+                    'Don mua hang %s chua co %s MISA thuc te; da enqueue don mua, phieu nhap se retry sau callback.'
+                    % (purchase_order.name, reason)
+                )
 
         if not purchase_order_refid:
             raise UserError(
@@ -189,7 +207,7 @@ class StockPickingAmisSync(models.Model):
         voucher_payload, dictionary_items, reference_items = self._prepare_misa_inward_payload(config, purchase_order)
         org_refid = voucher_payload.get('org_refid')
         _logger.info(
-            'Push MISA inward %s: org_refid=%s, po=%s, detail_po_refid=%s, detail_links=%s',
+            'Push MISA inward %s: org_refid=%s, po=%s, po_refid=%s, detail_links=%s',
             self.name,
             org_refid,
             purchase_order.name,
@@ -666,7 +684,7 @@ class StockPickingAmisSync(models.Model):
         dictionary_items = []
         account_object = purchase_order._ensure_misa_account_object(config, partner, dictionary_items)
         account_object_id = account_object.get('account_object_id') or ''
-        account_object_code = account_object.get('account_object_code') or purchase_order._misa_partner_code(partner)
+        account_object_code = account_object.get('account_object_code') or partner.ref or partner.name or ''
         account_object_name = account_object.get('account_object_name') or partner.display_name or partner.name or ''
         if not account_object_id:
             raise UserError('Khong tao/tim duoc MISA Account Object cho nha cung cap: %s' % partner.display_name)
@@ -715,9 +733,6 @@ class StockPickingAmisSync(models.Model):
             inventory_item_name = inventory_item.get('inventory_item_name') or product.display_name
             unit_id = unit.get('unit_id') or ''
             unit_name = unit.get('unit_name') or move.product_uom.name
-            unit_values = purchase_order._misa_document_unit_values(
-                config, inventory_item, move.product_uom, unit, qty_done, price_unit
-            )
             if not inventory_item_id:
                 raise UserError('Khong tao/tim duoc MISA Inventory Item cho san pham: %s' % product.display_name)
             if not unit_id:
@@ -734,8 +749,8 @@ class StockPickingAmisSync(models.Model):
                 'refid': refid,
                 'inventory_item_id': inventory_item_id,
                 'stock_id': stock_id,
-                'unit_id': unit_values['unit_id'],
-                'main_unit_id': unit_values['main_unit_id'],
+                'unit_id': unit_id,
+                'main_unit_id': unit_id,
                 'account_object_id': account_object_id,
                 'sort_order': idx,
                 'inventory_resale_type_id': 0,
@@ -743,7 +758,7 @@ class StockPickingAmisSync(models.Model):
                 'is_promotion': False,
                 'quantity': qty_done,
                 'unit_price': price_unit,
-                'main_unit_price': unit_values['main_unit_price'],
+                'main_unit_price': price_unit,
                 'unit_price_after_tax': price_unit * (1.0 + vat_rate / 100.0),
                 'unit_price_finance': price_unit,
                 'amount_finance': amount,
@@ -760,23 +775,23 @@ class StockPickingAmisSync(models.Model):
                 'discount_amount_oc': 0.0,
                 'unit_price_management': price_unit,
                 'amount_management': amount,
-                'main_unit_price_finance': unit_values['main_unit_price'],
-                'main_unit_price_management': unit_values['main_unit_price'],
-                'main_convert_rate': unit_values['main_convert_rate'],
-                'main_quantity': unit_values['main_quantity'],
+                'main_unit_price_finance': price_unit,
+                'main_unit_price_management': price_unit,
+                'main_convert_rate': 1.0,
+                'main_quantity': qty_done,
                 'amount_finance_oc': amount,
                 'amount_management_oc': amount,
                 'description': move.name or inventory_item_name,
                 'debit_account': debit_account,
                 'credit_account': credit_account,
-                'exchange_rate_operator': unit_values['exchange_rate_operator'],
+                'exchange_rate_operator': '*',
                 'account_object_name': account_object_name,
                 'account_object_code': account_object_code,
                 'inventory_item_code': inventory_item_code,
                 'inventory_item_type': 0,
-                'unit_name': unit_values['unit_name'],
+                'unit_name': unit_name,
                 'stock_code': misa_warehouse_code,
-                'main_unit_name': unit_values['main_unit_name'],
+                'main_unit_name': unit_name,
                 'inventory_item_name': inventory_item_name,
                 'stock_name': misa_warehouse_code,
                 'account_name': debit_account,
@@ -886,36 +901,31 @@ class StockPickingAmisSync(models.Model):
         if not account_object_id:
             return None
         uid_lower = account_object_id.lower()
-        cache = self.env['amis.misa.vendor.cache'].sudo().search([
-            ('config_id', '=', config.id),
-            ('account_object_id', '=', uid_lower),
-            ('is_deleted', '=', False),
-            ('misa_inactive', '=', False),
-        ], limit=1)
-        if cache:
-            return cache.to_misa_item()
+        for a in config._get_all_dictionary(1):
+            if (a.get('account_object_id') or '').lower() == uid_lower:
+                return a
         return None
 
     def _misa_lookup_account_object(self, config, partner):
         """Tìm account_object_id MISA theo tên partner, lưu vào partner."""
         if not partner:
             return ''
-        cache, stale = self.env['amis.misa.vendor.cache'].sudo().lookup_for_partner(config, partner)
-        if cache:
-            misa_id = cache.account_object_id or ''
-            if misa_id:
-                partner.sudo().write({'misa_account_object_id': misa_id})
-                if cache.partner_id.id != partner.id:
-                    cache.sudo().write({'partner_id': partner.id})
-                _logger.info('Auto-mapped partner %s → account_object_id=%s from MISA vendor cache', partner.name, misa_id)
-            return misa_id
-        if stale:
-            _logger.warning('MISA vendor cache for partner %s is inactive/deleted: %s', partner.name, stale.account_object_id)
-        else:
-            _logger.warning('MISA vendor cache not found for partner: %s', partner.name)
+        search_name = (partner.name or '').upper()
+        for a in config._get_all_dictionary(1):
+            aname = (a.get('account_object_name') or '').upper()
+            acode = (a.get('account_object_code') or '').upper()
+            if search_name and (search_name in aname or search_name in acode):
+                misa_id = a.get('account_object_id') or ''
+                if misa_id:
+                    partner.sudo().write({'misa_account_object_id': misa_id})
+                    _logger.info('Auto-mapped partner %s → account_object_id=%s', partner.name, misa_id)
+                return misa_id
+        _logger.warning('MISA account_object not found for partner: %s', partner.name)
         return ''
 
     def _misa_lookup_inventory_item(self, config, product, uom):
+        """Tìm inventory_item_id MISA theo default_code, lưu vào product + uom."""
+        # Nếu đã có sẵn trên product, trả về ngay không gọi API
         existing_item_id = (product.misa_inventory_item_id or '').strip()
         existing_unit_id = (uom.misa_unit_id or '').strip() if uom else ''
         if existing_item_id:
@@ -924,29 +934,18 @@ class StockPickingAmisSync(models.Model):
         code = (product.default_code or '').strip()
         if not code:
             return '', ''
-        cache, stale = self.env['amis.misa.inventory.cache'].sudo().lookup_for_product(config, product)
-        if cache:
-            product.sudo().write({'misa_inventory_item_id': cache.inventory_item_id})
-            if cache.product_id.id != product.id:
-                cache.sudo().write({'product_id': product.id})
-            cache_unit_name = (cache.unit_name or cache.main_unit_name or '').strip()
-            if (
-                cache.unit_id
-                and uom
-                and not (uom.misa_unit_id or '').strip()
-                and cache_unit_name
-                and (uom.name or '').strip().casefold() == cache_unit_name.casefold()
-            ):
-                uom.sudo().write({'misa_unit_id': cache.unit_id})
-            _logger.info('Auto-mapped product %s from MISA inventory cache %s', code, cache.inventory_item_id)
-            return cache.inventory_item_id, (uom.misa_unit_id or cache.unit_id or '')
-        if stale:
-            _logger.warning(
-                'Skip MISA inventory cache for product %s: item %s is inactive/deleted.',
-                code, stale.inventory_item_id,
-            )
-        else:
-            _logger.warning('MISA inventory cache not found for product code: %s', code)
+        for p in config._get_all_dictionary(2):
+            if (p.get('inventory_item_code') or '').strip() == code:
+                item_id = p.get('inventory_item_id') or ''
+                unit_id = p.get('unit_id') or ''
+                if item_id:
+                    product.sudo().write({'misa_inventory_item_id': item_id})
+                    _logger.info('Auto-mapped product %s → inventory_item_id=%s', code, item_id)
+                if unit_id and uom and not uom.misa_unit_id:
+                    uom.sudo().write({'misa_unit_id': unit_id})
+                    _logger.info('Auto-mapped uom %s → unit_id=%s', uom.name, unit_id)
+                return item_id, unit_id
+        _logger.warning('MISA inventory_item not found for product code: %s', code)
         return '', ''
 
     def _misa_lookup_unit(self, config, uom):
@@ -954,17 +953,14 @@ class StockPickingAmisSync(models.Model):
         if not uom:
             return ''
         name = (uom.name or '').strip()
-        cache, stale = self.env['amis.misa.unit.cache'].sudo().lookup_for_uom(config, uom)
-        if cache:
-            unit_id = cache.unit_id or ''
-            if unit_id:
-                uom.sudo().write({'misa_unit_id': unit_id})
-                _logger.info('Auto-mapped uom %s → unit_id=%s from MISA unit cache', name, unit_id)
-            return unit_id
-        if stale:
-            _logger.warning('MISA unit cache for uom %s is inactive/deleted: %s', name, stale.unit_id)
-        else:
-            _logger.warning('MISA unit cache not found for uom: %s', name)
+        for u in config._get_all_dictionary(4):
+            if (u.get('unit_name') or '').strip() == name:
+                unit_id = u.get('unit_id') or ''
+                if unit_id:
+                    uom.sudo().write({'misa_unit_id': unit_id})
+                    _logger.info('Auto-mapped uom %s → unit_id=%s', name, unit_id)
+                return unit_id
+        _logger.warning('MISA unit not found for uom: %s', name)
         return ''
 
 

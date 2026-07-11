@@ -562,12 +562,6 @@ class SaleOrderAmisSync(models.Model):
         # Tính invoice_data từ SO
         invoice_data = self._build_meinvoice_invoice_data(config)
 
-        # Mỗi lần tạo draft mới → sinh RefID mới để tránh DuplicateInvoiceRefID
-        # (trường hợp SO đã có invoice cũ bị hủy/điều chỉnh và muốn gửi lại)
-        new_ref_id = str(uuid.uuid4())
-        invoice_data['RefID'] = new_ref_id
-        self.sudo().write({'misa_meinvoice_ref_id': new_ref_id})
-
         is_shopee = bool(getattr(self, 'shopee_order_ref', None))
 
         if is_shopee:
