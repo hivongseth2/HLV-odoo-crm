@@ -957,6 +957,7 @@ class StockPickingAmisSync(models.Model):
             'is_get_new_id': False,
             'org_refid': refid,
             'is_allow_group': False,
+            "has_pu_order": True,
             'org_refno': self.name,
             'org_reftype': 302,
             'org_reftype_name': 'Mua hang trong nuoc nhap kho chua thanh toan',
