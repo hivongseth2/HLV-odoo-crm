@@ -224,6 +224,52 @@
             <!-- Assign packer before printing picking slips -->
             <t t-call="hlv_sale_delivery_planning.PackerAssignModal"/>
 
+            <div t-if="state.isMessageExportModalOpen"
+                 class="modal show d-block"
+                 tabindex="-1"
+                 style="background: rgba(0,0,0,0.45); z-index: 2060;">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content shadow-lg border-0">
+                        <div class="modal-header bg-light border-bottom">
+                            <h5 class="modal-title m-0 fw-bold text-primary">
+                                <i class="fa fa-comments-o me-2"></i>Xuất tin nhắn
+                            </h5>
+                            <button type="button"
+                                    class="btn-close"
+                                    t-on-click="closeMessageExportModal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="row g-3">
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label small fw-semibold text-muted mb-1">Từ ngày</label>
+                                    <input type="date"
+                                           class="form-control"
+                                           t-att-value="state.messageExportDateFrom"
+                                           t-on-change="(ev) => { state.messageExportDateFrom = ev.target.value; if (!state.messageExportDateTo) state.messageExportDateTo = ev.target.value; }"/>
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label small fw-semibold text-muted mb-1">Đến ngày</label>
+                                    <input type="date"
+                                           class="form-control"
+                                           t-att-value="state.messageExportDateTo"
+                                           t-on-change="(ev) => { state.messageExportDateTo = ev.target.value; }"/>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer bg-light border-top">
+                            <button type="button"
+                                    class="btn btn-outline-secondary"
+                                    t-on-click="closeMessageExportModal">Hủy</button>
+                            <button type="button"
+                                    class="btn btn-success"
+                                    t-on-click="submitMessagesExcelExport">
+                                <i class="fa fa-file-excel-o me-1"></i>Xuất Excel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div t-if="state.isPackingProgressDrawerOpen"
                  class="position-fixed start-0 end-0 bottom-0 bg-white border-top shadow-lg"
                  style="z-index: 2050; max-height: 45vh; overflow:auto;">

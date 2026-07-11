@@ -250,29 +250,35 @@ class DeliveryPlannerController(http.Controller):
 
     @http.route('/hlv_sale_delivery_planning/export_messages_excel', type='http', auth='user', methods=['GET'])
     def export_messages_excel(self, **kwargs):
-        message_date = (kwargs.get('message_date') or '').strip()
-        if not re.match(r'^\d{4}-\d{2}-\d{2}$', message_date):
+        date_from = (kwargs.get('date_from') or kwargs.get('message_date') or '').strip()
+        date_to = (kwargs.get('date_to') or date_from).strip()
+        if not re.match(r'^\d{4}-\d{2}-\d{2}$', date_from) or not re.match(r'^\d{4}-\d{2}-\d{2}$', date_to):
             return request.make_response(
                 'Ngày xuất tin nhắn không hợp lệ. Định dạng đúng: YYYY-MM-DD.',
                 headers=[('Content-Type', 'text/plain; charset=utf-8')],
             )
         try:
-            datetime.strptime(message_date, '%Y-%m-%d')
+            date_from_dt = datetime.strptime(date_from, '%Y-%m-%d')
+            date_to_dt = datetime.strptime(date_to, '%Y-%m-%d')
         except ValueError:
             return request.make_response(
                 'Ngày xuất tin nhắn không hợp lệ. Định dạng đúng: YYYY-MM-DD.',
                 headers=[('Content-Type', 'text/plain; charset=utf-8')],
             )
+        if date_to_dt < date_from_dt:
+            date_from, date_to = date_to, date_from
 
         try:
             service = request.env['hlv.delivery.planner.service']
             groups = service.get_sale_plan_user_message_groups(
-                message_date,
+                date_from,
+                date_to=date_to,
                 sale_order_ids=None,
                 tz_name='Asia/Ho_Chi_Minh',
             )
-            xlsx_data = build_sale_plan_messages_xlsx(groups, message_date)
-            filename = 'Tin_nhan_sale_thu_kho_%s.xlsx' % message_date
+            xlsx_data = build_sale_plan_messages_xlsx(groups, date_from, date_to=date_to)
+            suffix = date_from if date_to == date_from else '%s_%s' % (date_from, date_to)
+            filename = 'Tin_nhan_sale_thu_kho_%s.xlsx' % suffix
             return request.make_response(
                 xlsx_data,
                 headers=[
