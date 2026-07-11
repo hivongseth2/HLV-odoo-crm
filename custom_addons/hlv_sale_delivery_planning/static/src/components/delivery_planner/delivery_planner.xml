@@ -245,14 +245,14 @@
                                     <input type="date"
                                            class="form-control"
                                            t-att-value="state.messageExportDateFrom"
-                                           t-on-change="(ev) => { state.messageExportDateFrom = ev.target.value; if (!state.messageExportDateTo) state.messageExportDateTo = ev.target.value; }"/>
+                                           t-on-change="onMessageExportDateFromChange"/>
                                 </div>
                                 <div class="col-12 col-md-6">
                                     <label class="form-label small fw-semibold text-muted mb-1">Đến ngày</label>
                                     <input type="date"
                                            class="form-control"
                                            t-att-value="state.messageExportDateTo"
-                                           t-on-change="(ev) => { state.messageExportDateTo = ev.target.value; }"/>
+                                           t-on-change="onMessageExportDateToChange"/>
                                 </div>
                             </div>
                         </div>
