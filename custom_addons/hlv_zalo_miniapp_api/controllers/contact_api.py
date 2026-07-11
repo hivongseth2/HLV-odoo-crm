@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import hashlib
 import hmac
-import json
 import logging
 import re
 import time
@@ -11,43 +10,13 @@ from datetime import timedelta, timezone
 from odoo import fields, http
 from odoo.http import request, Response
 
+from .base_api import ZaloBaseAPI
+
 _logger = logging.getLogger(__name__)
 
 
-class ZaloContactAPI(http.Controller):
+class ZaloContactAPI(ZaloBaseAPI, http.Controller):
     """API Contact (res.partner) cho Zalo Mini App"""
-
-    # =========================================================================
-    # Helpers
-    # =========================================================================
-
-    @staticmethod
-    def _response_success(data=None, status=200):
-        payload = {"success": True, "data": data or {}}
-        return Response(
-            json.dumps(payload, default=str),
-            status=status,
-            content_type="application/json",
-        )
-
-    @staticmethod
-    def _response_error(code, message, status=400):
-        payload = {
-            "success": False,
-            "error": {"code": code, "message": message},
-        }
-        return Response(
-            json.dumps(payload, default=str),
-            status=status,
-            content_type="application/json",
-        )
-
-    @staticmethod
-    def _parse_int(value, default=0):
-        try:
-            return int(value)
-        except (ValueError, TypeError):
-            return default
 
     @staticmethod
     def _normalize_vn_phone(phone):
@@ -85,7 +54,8 @@ class ZaloContactAPI(http.Controller):
         Param = request.env["ir.config_parameter"].sudo()
         key = Param.get_param("zalo_api_secret", "")
         if not key:
-            return "hlv_zalo_dev_secret_2026"
+            _logger.warning("zalo_api_secret not configured! Auth will fail.")
+            return ""
         return key
 
     @staticmethod
@@ -107,6 +77,9 @@ class ZaloContactAPI(http.Controller):
             signature = parts[2]
 
             secret = ZaloContactAPI._get_secret_key()
+            if not secret:
+                return None
+
             partner = request.env["res.partner"].sudo().browse(partner_id)
             if not partner.exists():
                 return None
@@ -120,9 +93,9 @@ class ZaloContactAPI(http.Controller):
             if not hmac.compare_digest(signature, expected_sig):
                 return None
 
-            if secret != "hlv_zalo_dev_secret_2026":
-                if time.time() - timestamp > 30 * 24 * 3600:
-                    return None
+            # Kiểm tra hết hạn: 30 ngày
+            if time.time() - timestamp > 30 * 24 * 3600:
+                return None
 
             return partner_id
         except (ValueError, IndexError, Exception):
@@ -137,14 +110,6 @@ class ZaloContactAPI(http.Controller):
         if not pid:
             return self._response_error("INVALID_TOKEN", "Token không hợp lệ hoặc đã hết hạn", 401)
         return pid
-
-    @staticmethod
-    def _request_json():
-        raw = request.httprequest.data or b"{}"
-        try:
-            return json.loads(raw.decode("utf-8")) if raw else {}
-        except Exception:
-            return {}
 
     # =========================================================================
     # POST /api/v1/zalo/contacts/auth

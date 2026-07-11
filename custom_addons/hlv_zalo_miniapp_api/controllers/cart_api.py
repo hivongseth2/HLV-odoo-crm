@@ -1,47 +1,16 @@
 # -*- coding: utf-8 -*-
-import json
 import logging
 
 from odoo import http
-from odoo.http import request, Response
+from odoo.http import request
+
+from .base_api import ZaloBaseAPI
 
 _logger = logging.getLogger(__name__)
 
 
-class ZaloCartAPI(http.Controller):
+class ZaloCartAPI(ZaloBaseAPI, http.Controller):
     """API Giỏ hàng cho Zalo Mini App — dùng sale.order draft"""
-
-    @staticmethod
-    def _response_success(data=None, status=200):
-        payload = {"success": True, "data": data or {}}
-        return Response(json.dumps(payload, default=str), status=status, content_type="application/json")
-
-    @staticmethod
-    def _response_error(code, message, status=400):
-        payload = {"success": False, "error": {"code": code, "message": message}}
-        return Response(json.dumps(payload, default=str), status=status, content_type="application/json")
-
-    @staticmethod
-    def _parse_int(value, default=0):
-        try:
-            return int(value)
-        except (ValueError, TypeError):
-            return default
-
-    @staticmethod
-    def _parse_float(value, default=0.0):
-        try:
-            return float(value)
-        except (ValueError, TypeError):
-            return default
-
-    @staticmethod
-    def _request_json():
-        raw = request.httprequest.data or b"{}"
-        try:
-            return json.loads(raw.decode("utf-8")) if raw else {}
-        except Exception:
-            return {}
 
     def _get_or_create_cart(self, contact_id):
         Partner = request.env["res.partner"].sudo()

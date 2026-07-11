@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from . import base_api
 from . import category_api
 from . import product_api
 from . import contact_api

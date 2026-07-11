@@ -28,8 +28,7 @@ Hầu hết API yêu cầu `Authorization: Bearer <token>` header.
 - `signature`: HMAC-SHA256 hex digest của chuỗi `"{partner_id}:{phone}:{timestamp}"`
 
 **Hết hạn**:
-- Production: 30 ngày (kể từ timestamp trong token)
-- Dev mode (secret mặc định `hlv_zalo_dev_secret_2026`): không kiểm tra hết hạn
+- 30 ngày (kể từ timestamp trong token)
 
 ### Cài đặt Secret Key cho Production
 

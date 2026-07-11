@@ -1,63 +1,18 @@
 # -*- coding: utf-8 -*-
 import base64
-import json
 import logging
 from datetime import timedelta, timezone
 
 from odoo import fields, http
-from odoo.http import request, Response
+from odoo.http import request
+
+from .base_api import ZaloBaseAPI
 
 _logger = logging.getLogger(__name__)
 
 
-class ZaloProductAPI(http.Controller):
+class ZaloProductAPI(ZaloBaseAPI, http.Controller):
     """API Sản phẩm (product.product variant) cho Zalo Mini App"""
-
-    # =========================================================================
-    # Helpers
-    # =========================================================================
-
-    @staticmethod
-    def _response_success(data=None, status=200):
-        payload = {"success": True, "data": data or {}}
-        return Response(
-            json.dumps(payload, default=str),
-            status=status,
-            content_type="application/json",
-        )
-
-    @staticmethod
-    def _response_error(code, message, status=400):
-        payload = {
-            "success": False,
-            "error": {"code": code, "message": message},
-        }
-        return Response(
-            json.dumps(payload, default=str),
-            status=status,
-            content_type="application/json",
-        )
-
-    @staticmethod
-    def _parse_int(value, default=0):
-        try:
-            return int(value)
-        except (ValueError, TypeError):
-            return default
-
-    @staticmethod
-    def _get_image_url(model, rec_id, field="image_128"):
-        if not rec_id:
-            return None
-        return f"/api/v1/zalo/image/{model}/{rec_id}/{field}"
-
-    @staticmethod
-    def _request_json():
-        raw = request.httprequest.data or b"{}"
-        try:
-            return json.loads(raw.decode("utf-8")) if raw else {}
-        except Exception:
-            return {}
 
     def _build_product_data(self, product):
         """Build standard product response dict from a product.product record."""

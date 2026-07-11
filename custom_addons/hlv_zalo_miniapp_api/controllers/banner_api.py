@@ -1,32 +1,16 @@
 # -*- coding: utf-8 -*-
+import json
+import logging
+
 from odoo import http
 from odoo.http import request
-import json
 
-class ZaloMiniAppBannerAPI(http.Controller):
-    
-    def _response_success(self, data=None):
-        res = {"success": True}
-        if data is not None:
-            res["data"] = data
-        return request.make_response(
-            json.dumps(res, default=str),
-            headers=[("Content-Type", "application/json")]
-        )
+from .base_api import ZaloBaseAPI
 
-    def _response_error(self, code, message, status=400):
-        res = {
-            "success": False,
-            "error": {
-                "code": code,
-                "message": message
-            }
-        }
-        return request.make_response(
-            json.dumps(res, default=str),
-            headers=[("Content-Type", "application/json")],
-            status=status
-        )
+_logger = logging.getLogger(__name__)
+
+
+class ZaloMiniAppBannerAPI(ZaloBaseAPI, http.Controller):
 
     @http.route("/api/v1/zalo/banners/list", type="http", auth="public", methods=["POST"], csrf=False)
     def list_banners(self, **kwargs):
