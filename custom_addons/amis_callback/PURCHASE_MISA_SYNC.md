@@ -15,16 +15,19 @@ Tài liệu này ghi lại các điểm quan trọng của luồng đồng bộ 
 5. Job đẩy Chứng từ mua hàng nhập kho sang MISA bằng cùng endpoint `save`.
 6. Payload phiếu nhập dùng:
    - `voucher_type = 18`
-   - `org_reftype = reftype = 302`
+   - `org_reftype = reftype = 307`
    - object MISA: `pu_voucher`
-   - loại chứng từ: Mua hàng trong nước nhập kho chưa thanh toán
+   - loại chứng từ: Chứng từ mua hàng / Mua hàng trong nước nhập kho
    - `include_invoice = 0` khi nhập kho không kèm hóa đơn mua hàng
 
-Lưu ý: mẫu tài liệu MISA cho `pu_voucher` có thể dùng `reftype = 307` và
-`pu_invoice_refid` khi gửi kèm object `pu_invoice` (`voucher_type = 15`). `307` là
-case mua hàng trong nước nhập kho thanh toán ngay bằng tiền mặt, còn `pu_invoice_refid`
-là ID hóa đơn mua hàng, không phải ID đơn mua hàng. Với luồng nhập kho từ PO chưa kèm
-hóa đơn, không tự sinh hoặc gán giả `pu_invoice_refid`.
+Lưu ý: mẫu tài liệu MISA cho `pu_voucher` có `pu_invoice_refid` khi gửi kèm object
+`pu_invoice` (`voucher_type = 15`). Trường này là ID hóa đơn mua hàng, không phải ID
+đơn mua hàng. Với luồng nhập kho từ PO chưa kèm hóa đơn, không tự sinh hoặc gán giả
+`pu_invoice_refid`.
+
+`purchase_purpose_id` là Nhóm HHDV mua vào. Nếu cache hàng hóa MISA không có giá trị
+riêng, module dùng mặc định mã 1 theo tài liệu MISA:
+`ed4bd91d-83ac-4a26-b4c1-4bce85faecb8`.
 
 ## Link phiếu nhập về đơn mua
 
@@ -38,7 +41,7 @@ Có 2 lớp liên kết cần phân biệt:
    {
      "org_refid": "<org_refid phieu nhap>",
      "org_refno": "<so phieu nhap>",
-     "org_reftype": 302,
+     "org_reftype": 307,
      "org_refer_refid": "<org_refid don mua>",
      "org_refer_refno": "<so don mua>",
      "org_refer_reftype": 301
@@ -97,9 +100,10 @@ Kết luận đã test:
 
 - `models/stock_picking_sync.py`
   - Chuẩn bị payload `pu_voucher`.
-  - Gửi `reference` header với `org_reftype=302`.
+  - Gửi `reference` header với `org_reftype=307`.
   - Gửi `pu_order_refid`, `pu_order_ref_detail_id` ở từng dòng phiếu nhập.
-  - Gửi `purchase_purpose_id`/`purchase_purpose_code` nếu cache hàng hóa MISA có dữ liệu.
+  - Gửi `pu_order_refid`, `pu_order_refno` ở header để MISA có ngữ cảnh đơn mua gốc.
+  - Gửi `purchase_purpose_id`/`purchase_purpose_code` từ cache hàng hóa MISA hoặc fallback mã 1.
   - Bắt buộc `is_get_new_id=false`.
 
 - `models/amis_callback_config.py`
