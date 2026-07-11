@@ -5,6 +5,7 @@ class HlvProductReportGroupLine(models.Model):
     _name = 'hlv.product.report.group.line'
     _description = 'Sản phẩm trong nhóm báo cáo tồn kho'
     _order = 'created_at desc, id desc'
+    _legacy_m2m_migration_param = 'hlv_inventory_group_report.legacy_many2many_migrated'
 
     group_id = fields.Many2one(
         'hlv.product.report.group',
@@ -60,9 +61,39 @@ class HlvProductReportGroupLine(models.Model):
     def init(self):
         self._migrate_legacy_many2many()
 
+    def _legacy_m2m_migration_done(self):
+        self.env.cr.execute(
+            "SELECT value FROM ir_config_parameter WHERE key = %s",
+            (self._legacy_m2m_migration_param,),
+        )
+        return bool(self.env.cr.fetchone())
+
+    def _mark_legacy_m2m_migration_done(self):
+        self.env.cr.execute(
+            """
+            INSERT INTO ir_config_parameter
+                (key, value, create_uid, create_date, write_uid, write_date)
+            VALUES
+                (%s, '1', 1, NOW() AT TIME ZONE 'UTC', 1, NOW() AT TIME ZONE 'UTC')
+            ON CONFLICT (key) DO UPDATE
+                SET value = EXCLUDED.value,
+                    write_uid = EXCLUDED.write_uid,
+                    write_date = EXCLUDED.write_date
+            """,
+            (self._legacy_m2m_migration_param,),
+        )
+
     def _migrate_legacy_many2many(self):
+        if self._legacy_m2m_migration_done():
+            return
         self.env.cr.execute("SELECT to_regclass('hlv_report_group_product_rel')")
         if not self.env.cr.fetchone()[0]:
+            self._mark_legacy_m2m_migration_done()
+            return
+        self.env.cr.execute("SELECT 1 FROM hlv_product_report_group_line LIMIT 1")
+        if self.env.cr.fetchone():
+            # init() runs on module updates; do not replay stale legacy M2M rows.
+            self._mark_legacy_m2m_migration_done()
             return
         self.env.cr.execute(
             """
@@ -100,6 +131,7 @@ class HlvProductReportGroupLine(models.Model):
             WHERE counts.group_id = grp.id
             """
         )
+        self._mark_legacy_m2m_migration_done()
 
 
 class HlvProductReportGroup(models.Model):
