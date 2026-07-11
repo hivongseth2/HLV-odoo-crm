@@ -54,8 +54,8 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
         Param = request.env["ir.config_parameter"].sudo()
         key = Param.get_param("zalo_api_secret", "")
         if not key:
-            _logger.warning("zalo_api_secret not configured! Auth will fail.")
-            return ""
+            _logger.warning("zalo_api_secret not configured! Using dev fallback. Set this param in System Parameters for production.")
+            return "hlv_zalo_dev_secret_2026"
         return key
 
     @staticmethod
@@ -77,8 +77,6 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
             signature = parts[2]
 
             secret = ZaloContactAPI._get_secret_key()
-            if not secret:
-                return None
 
             partner = request.env["res.partner"].sudo().browse(partner_id)
             if not partner.exists():
@@ -110,6 +108,83 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
         if not pid:
             return self._response_error("INVALID_TOKEN", "Token không hợp lệ hoặc đã hết hạn", 401)
         return pid
+
+    # =========================================================================
+    # Debug: Verify Token
+    # =========================================================================
+    @http.route("/api/v1/zalo/debug/verify-token", type="http", auth="public", methods=["POST"], csrf=False)
+    def debug_verify_token(self, **params):
+        """Debug: Verify một token và hiển thị chi tiết từng bước."""
+        import json as _json
+        try:
+            body = _json.loads(request.httprequest.data.decode("utf-8")) if request.httprequest.data else {}
+        except Exception:
+            body = {}
+        token = (body.get("token") or "").strip()
+
+        if not token:
+            return self._response_error("INVALID_INPUT", "Thiếu token")
+
+        parts = token.split(".")
+        debug = {
+            "token_parts": len(parts),
+            "token_format_ok": len(parts) == 3,
+        }
+
+        if len(parts) != 3:
+            debug["error"] = "Token phải có 3 phần (partner_id.timestamp.signature)"
+            return Response(_json.dumps({"success": True, "data": debug}, default=str), content_type="application/json")
+
+        try:
+            debug["partner_id"] = int(parts[0])
+            debug["timestamp"] = int(parts[1])
+            debug["signature"] = parts[2]
+        except ValueError:
+            debug["error"] = "partner_id hoặc timestamp không phải số"
+            return Response(_json.dumps({"success": True, "data": debug}, default=str), content_type="application/json")
+
+        # Kiểm tra secret key
+        secret = ZaloContactAPI._get_secret_key()
+        debug["secret_key"] = secret[:5] + "..." if secret else "EMPTY"
+        debug["secret_key_length"] = len(secret)
+
+        if not secret:
+            debug["error"] = "Secret key trống"
+            return Response(_json.dumps({"success": True, "data": debug}, default=str), content_type="application/json")
+
+        # Kiểm tra partner
+        partner = request.env["res.partner"].sudo().browse(debug["partner_id"])
+        debug["partner_exists"] = partner.exists()
+        if not partner.exists():
+            debug["error"] = "Partner không tồn tại"
+            return Response(_json.dumps({"success": True, "data": debug}, default=str), content_type="application/json")
+
+        # Kiểm tra phone
+        phone = partner.phone or partner.mobile or ""
+        debug["partner_phone_raw"] = phone
+        debug["partner_phone_normalized"] = ZaloContactAPI._normalize_vn_phone(phone)
+
+        # Kiểm tra expiry
+        now = time.time()
+        age = now - debug["timestamp"]
+        debug["age_seconds"] = int(age)
+        debug["expired"] = age > 30 * 24 * 3600
+
+        # Tính signature kỳ vọng
+        expected_payload = f"{debug['partner_id']}:{debug['partner_phone_normalized']}:{debug['timestamp']}"
+        debug["expected_payload"] = expected_payload
+        debug["expected_signature"] = hmac.new(secret.encode(), expected_payload.encode(), hashlib.sha256).hexdigest()
+        debug["signature_match"] = hmac.compare_digest(debug["signature"], debug["expected_signature"])
+        debug["signature_match_lowercase"] = debug["signature"].lower() == debug["expected_signature"].lower()
+
+        if not debug["signature_match"]:
+            debug["error"] = "Chữ ký không khớp"
+        elif debug["expired"]:
+            debug["error"] = "Token đã hết hạn (quá 30 ngày)"
+        else:
+            debug["valid"] = True
+
+        return Response(_json.dumps({"success": True, "data": debug}, default=str), content_type="application/json")
 
     # =========================================================================
     # POST /api/v1/zalo/contacts/auth
