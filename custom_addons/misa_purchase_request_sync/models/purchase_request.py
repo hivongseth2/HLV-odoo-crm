@@ -350,6 +350,18 @@ class PurchaseRequest(models.Model):
             
             raw = line.get("rawData", {})
 
+            def _float_val(key, default=0.0):
+                """Helper lấy float từ line hoặc raw, ưu tiên line."""
+                val = line.get(key)
+                if val is None:
+                    val = raw.get(key)
+                if val is None:
+                    return default
+                try:
+                    return float(val)
+                except (ValueError, TypeError):
+                    return default
+
             line_vals = {
                 "request_id": pr.id,
                 "name": line_name,
@@ -359,7 +371,17 @@ class PurchaseRequest(models.Model):
                 "misa_line_id": misa_line_id,
                 "sale_proposed_supplier_id": misa_supplier_id,
                 "misa_supplier_id": misa_supplier_id,
-                "misa_amount": float(raw.get("Amount") or line.get("misa_amount") or 0.0),
+                # Các trường giá trị từ MISA
+                "misa_amount": _float_val("misa_amount"),
+                "misa_price_before_tax": _float_val("misa_price_before_tax"),
+                "misa_price_after_tax": _float_val("misa_price_after_tax"),
+                "misa_tax_rate": _float_val("misa_tax_rate"),
+                "misa_tax_amount": _float_val("misa_tax_amount"),
+                "misa_discount_rate": _float_val("misa_discount_rate"),
+                "misa_discount_amount": _float_val("misa_discount_amount"),
+                "misa_stock_total": _float_val("misa_stock_total"),
+                "misa_stock_selected": _float_val("misa_stock_selected"),
+                "misa_stock_undelivered": _float_val("misa_stock_undelivered"),
             }
             
             if date_required:
