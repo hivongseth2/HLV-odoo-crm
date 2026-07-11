@@ -541,7 +541,7 @@ class StockPickingAmisSync(models.Model):
                 'inventory_resale_type_id': 0,
                 'return_quantity': 0.0,
                 'is_un_update_outward_price': False,
-                'state': 0,
+                # 'state': 0,
             })
 
         total_sale = round(total_sale, 2)
@@ -614,7 +614,7 @@ class StockPickingAmisSync(models.Model):
                 'inventory_resale_type_id': 0,
                 'un_resonable_cost': False,
                 'is_description': False,
-                'state': 0,
+                # 'state': 0,
             })
 
         total_cost = sum(d.get('amount_finance', 0.0) for d in outward_detail)
@@ -657,7 +657,7 @@ class StockPickingAmisSync(models.Model):
             'is_invoice_receipted': False,
             'is_reject_handler': False,
             'auto_refno': False,
-            'state': 0,
+            # 'state': 0,
             'detail': outward_detail,
         }
 
@@ -718,7 +718,7 @@ class StockPickingAmisSync(models.Model):
             'sa_invoice_refid': sa_invoice_refid_link,
             'reftype': 3530,
             'auto_refno': False,
-            'state': 0,
+            # 'state': 0,
             'detail': detail,
             'in_outward': in_outward,
         }
@@ -936,7 +936,7 @@ class StockPickingAmisSync(models.Model):
                 'pu_order_refid': pu_order_refid,
                 'pu_order_ref_detail_id': pu_order_ref_detail_id,
                 'pu_order_refno': purchase_order.name,
-                'state': 0,
+                # 'state': 0,
             }
             if purchase_purpose_id:
                 detail_vals['purchase_purpose_id'] = purchase_purpose_id
@@ -1008,7 +1008,7 @@ class StockPickingAmisSync(models.Model):
             'is_paid': False,
             'is_executed': False,
             'is_adjust_value': False,
-            'state': 0,
+            # 'state': 0,
             'detail': detail,
         }
         return voucher, dictionary_items, reference_items
