@@ -265,9 +265,12 @@ class StockPickingAmisSync(models.Model):
             voucher_payload.get('pu_order_refno') or '',
             voucher_payload.get('detail') and voucher_payload['detail'][0].get('pu_order_refid') or '',
             ', '.join(
-                '%s qty=%s inward_detail=%s po_detail=%s' % (
+                '%s qty=%s unit=%s main=%s rate=%s inward_detail=%s po_detail=%s' % (
                     detail.get('inventory_item_code') or detail.get('inventory_item_name') or '',
                     detail.get('quantity') or 0.0,
+                    detail.get('unit_id') or '',
+                    detail.get('main_unit_id') or '',
+                    detail.get('main_convert_rate') or 0.0,
                     detail.get('ref_detail_id') or '',
                     detail.get('pu_order_ref_detail_id') or '',
                 )

@@ -136,10 +136,13 @@ class PurchaseOrderAmisSync(models.Model):
             self.name,
             voucher_payload.get('status'),
             ', '.join(
-                '%s:%s/%s' % (
+                '%s:%s/%s unit=%s main=%s rate=%s' % (
                     detail.get('inventory_item_code') or detail.get('inventory_item_name') or '',
                     detail.get('quantity_receipt') or 0.0,
                     detail.get('quantity') or 0.0,
+                    detail.get('unit_id') or '',
+                    detail.get('main_unit_id') or '',
+                    detail.get('main_convert_rate') or 0.0,
                 )
                 for detail in voucher_payload.get('detail') or []
             ),
@@ -849,22 +852,52 @@ class PurchaseOrderAmisSync(models.Model):
             return unit_price * rate
         return unit_price / rate
 
+    def _misa_unit_name_key(self, name):
+        return (name or '').strip().casefold()
+
     def _misa_document_unit_values(self, config, inventory_item, odoo_uom, unit, quantity, unit_price):
-        unit_id = (unit or {}).get('unit_id') or (getattr(odoo_uom, 'misa_unit_id', '') or '').strip()
-        unit_name = (unit or {}).get('unit_name') or (odoo_uom.name if odoo_uom else '')
+        fallback_unit_id = ((unit or {}).get('unit_id') or (getattr(odoo_uom, 'misa_unit_id', '') or '')).strip()
+        fallback_unit_name = ((unit or {}).get('unit_name') or (odoo_uom.name if odoo_uom else '') or '').strip()
+        requested_unit_name = ((odoo_uom.name if odoo_uom else '') or fallback_unit_name).strip()
+        requested_unit_name_key = self._misa_unit_name_key(requested_unit_name)
         main_unit_id, main_unit_name = self._misa_inventory_main_unit(config, inventory_item, fallback_unit=unit)
-        unit_key = (unit_id or '').strip().lower()
-        unit_name_key = (unit_name or '').strip().casefold()
-        main_unit_key = (main_unit_id or '').strip().lower()
-        main_unit_name_key = (main_unit_name or '').strip().casefold()
+        item_unit_id = (inventory_item.get('unit_id') or '').strip()
+        item_unit_name = (inventory_item.get('unit_name') or '').strip()
+
+        unit_id = fallback_unit_id
+        unit_name = fallback_unit_name
+
+        def same_unit(candidate_id='', candidate_name=''):
+            candidate_key = (candidate_id or '').strip().lower()
+            candidate_name_key = self._misa_unit_name_key(candidate_name)
+            fallback_key = (fallback_unit_id or '').strip().lower()
+            return bool(
+                candidate_key and fallback_key and candidate_key == fallback_key
+            ) or bool(
+                requested_unit_name_key and candidate_name_key
+                and requested_unit_name_key == candidate_name_key
+            )
+
+        if item_unit_id and same_unit(item_unit_id, item_unit_name):
+            unit_id = item_unit_id
+            unit_name = item_unit_name or unit_name
+        elif main_unit_id and same_unit(main_unit_id, main_unit_name):
+            unit_id = main_unit_id
+            unit_name = main_unit_name or unit_name
 
         rate = 1.0
         operator = '*'
+        unit_key = (unit_id or '').strip().lower()
+        unit_name_key = self._misa_unit_name_key(unit_name)
+        main_unit_key = (main_unit_id or '').strip().lower()
+        main_unit_name_key = self._misa_unit_name_key(main_unit_name)
         if unit_key and main_unit_key and unit_key == main_unit_key:
             pass
         elif unit_name_key and main_unit_name_key and unit_name_key == main_unit_name_key:
-            main_unit_id = main_unit_id or unit_id
-            main_unit_name = main_unit_name or unit_name
+            if main_unit_id and not unit_id:
+                unit_id = main_unit_id
+            if main_unit_name and not unit_name:
+                unit_name = main_unit_name
         else:
             for convert in self._misa_inventory_unit_converts(inventory_item):
                 convert_unit_id = (convert.get('unit_id') or '').strip()
@@ -873,11 +906,15 @@ class PurchaseOrderAmisSync(models.Model):
                     unit_item = self._find_misa_unit_by_id(config, convert_unit_id)
                     convert_unit_name = (unit_item or {}).get('unit_name') or ''
                 id_matches = bool(unit_key and convert_unit_id and unit_key == convert_unit_id.lower())
-                name_matches = bool(unit_name_key and convert_unit_name and unit_name_key == convert_unit_name.casefold())
+                name_matches = bool(
+                    requested_unit_name_key
+                    and convert_unit_name
+                    and requested_unit_name_key == self._misa_unit_name_key(convert_unit_name)
+                )
                 if not id_matches and not name_matches:
                     continue
-                unit_id = unit_id or convert_unit_id
-                unit_name = unit_name or convert_unit_name
+                unit_id = convert_unit_id or unit_id
+                unit_name = convert_unit_name or unit_name
                 rate = self._misa_float(convert.get('convert_rate'), 1.0) or 1.0
                 operator = (convert.get('exchange_rate_operator') or '*').strip() or '*'
                 break
