@@ -144,7 +144,14 @@ class ProductTemplate(models.Model):
     def write(self, vals):
         """Override write để auto-sync khi giá thay đổi và cập nhật combo cha"""
         # Các field giá cần theo dõi
-        price_fields = ['x_studio_ga_web', 'x_studio_gi_bn_thng_mi', 'x_wp_combo_price', 'list_price', 'x_studio_ga_hng_nim_yt']
+        price_fields = [
+            'x_studio_ga_web',
+            'x_studio_gi_bn_thng_mi',
+            'x_studio_gia_san_tmdt',
+            'x_wp_combo_price',
+            'list_price',
+            'x_studio_ga_hng_nim_yt',
+        ]
         has_price_change = any(field in vals for field in price_fields)
 
         result = super().write(vals)
