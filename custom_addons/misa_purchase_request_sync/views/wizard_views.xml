@@ -1,4 +1,4 @@
-cô<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <record id="view_purchase_request_line_make_purchase_order_inherit_misa" model="ir.ui.view">
         <field name="name">purchase.request.line.make.purchase.order.inherit.misa</field>
