@@ -48,6 +48,9 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
         # Sửa lại số lượng cần mua = SL yêu cầu - SL đã lên PO (kể cả nháp)
         remaining_qty = line.product_qty - line.purchased_qty
         res['product_qty'] = max(0.0, remaining_qty)
+        
+        # Số lượng thực mua mặc định = số lượng cần mua
+        res['actual_qty'] = max(0.0, remaining_qty)
 
         # Cập nhật estimated_cost (OCA dùng để tính price_unit = estimated_cost / product_qty)
         if hasattr(line, 'misa_price_before_tax') and line.misa_price_before_tax:
@@ -55,6 +58,14 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
             res['estimated_cost'] = line.misa_price_before_tax * res['product_qty']
         elif line.estimated_cost:
             res['estimated_cost'] = line.estimated_cost
+
+        # Copy các trường MISA từ line vào item (để có thể chỉnh sửa trong wizard)
+        if hasattr(line, 'misa_price_before_tax') and line.misa_price_before_tax:
+            res['misa_price_before_tax'] = line.misa_price_before_tax
+        if hasattr(line, 'misa_tax_rate') and line.misa_tax_rate:
+            res['misa_tax_rate'] = line.misa_tax_rate
+        if hasattr(line, 'misa_tax_amount') and line.misa_tax_amount:
+            res['misa_tax_amount'] = line.misa_tax_amount
 
         # NCC: ưu tiên sale_proposed_supplier_id, fallback misa_supplier_id
         supplier = line.sale_proposed_supplier_id if hasattr(line, 'sale_proposed_supplier_id') and line.sale_proposed_supplier_id else False
@@ -67,15 +78,24 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
     @api.model
     def _prepare_purchase_order_line(self, po, item):
         res = super()._prepare_purchase_order_line(po, item)
-        # ── Cập nhật thuế trong lúc prepare (an toàn hơn là write sau khi create) ──
-        if hasattr(item.line_id, 'misa_tax_rate') and item.line_id.misa_tax_rate is not False:
-            is_from_misa = hasattr(item.line_id.request_id, 'misa_id') and item.line_id.request_id.misa_id
-            if item.line_id.misa_tax_rate > 0 or is_from_misa:
+        
+        # Nếu có actual_qty, dùng nó thay vì product_qty
+        if item.actual_qty and item.actual_qty > 0:
+            res['product_qty'] = item.actual_qty
+        
+        # ── Cập nhật thuế từ item (nếu có) ──
+        tax_rate = item.misa_tax_rate if item.misa_tax_rate else False
+        if not tax_rate:
+            # Fallback về line_id
+            if hasattr(item.line_id, 'misa_tax_rate') and item.line_id.misa_tax_rate is not False:
                 tax_rate = item.line_id.misa_tax_rate
-                
+        
+        if tax_rate is not False:
+            is_from_misa = hasattr(item.line_id.request_id, 'misa_id') and item.line_id.request_id.misa_id
+            if float(tax_rate) > 0 or is_from_misa:
                 if 'misa.po.fetch' in self.env:
                     misa_po_fetch_obj = self.env['misa.po.fetch'].with_company(po.company_id)
-                    tax_ids = misa_po_fetch_obj._tax_ids_from_misa_line({'vat_rate': tax_rate})
+                    tax_ids = misa_po_fetch_obj._tax_ids_from_misa_line({'vat_rate': float(tax_rate)})
                     if tax_ids:
                         res['taxes_id'] = [Command.set(tax_ids)]
                     else:
@@ -141,21 +161,24 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
 
     keep_description = fields.Boolean(default=True)
     keep_estimated_cost = fields.Boolean(default=True)
+    
+    # Cho phép chỉnh sửa giá trị MISA trực tiếp trên wizard
     misa_price_before_tax = fields.Float(
-        related='line_id.misa_price_before_tax', 
-        string="Đơn giá sale đề xuất", 
-        readonly=True
+        string="Đơn giá sale đề xuất",
     )
     misa_tax_rate = fields.Float(
-        related='line_id.misa_tax_rate',
         string="Thuế %",
-        readonly=True
     )
     misa_tax_amount = fields.Float(
-        related='line_id.misa_tax_amount',
         string="Thuế",
-        readonly=True
     )
+    
+    # Số lượng thực mua (cho phép nhập khác với số lượng đề xuất)
+    actual_qty = fields.Float(
+        string="SL thực mua",
+        help="Số lượng thực tế cần mua. Để trống sẽ dùng số lượng đề xuất.",
+    )
+    
     supplier_ref = fields.Char(
         related='supplier_id.ref',
         string="Mã NCC",

@@ -87,6 +87,7 @@
                         <field name="product_id" width="200px" />
                         <field name="name" width="250px" />
                         <field name="product_qty" width="100px" />
+                        <field name="actual_qty" width="100px" />
                         <field name="product_uom_id" column_invisible="1" groups="!uom.group_uom" />
                         <field name="product_uom_id" groups="uom.group_uom" width="80px" />
                         <field name="misa_price_before_tax" width="120px" />
