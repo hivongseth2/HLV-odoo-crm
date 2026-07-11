@@ -10,6 +10,7 @@ from odoo.exceptions import UserError
 _logger = logging.getLogger(__name__)
 
 ZERO_UUID = '00000000-0000-0000-0000-000000000000'
+MISA_PO_REQUEST_SETTLE_SECONDS = 90
 
 
 class StockPickingAmisSync(models.Model):
@@ -158,6 +159,14 @@ class StockPickingAmisSync(models.Model):
         self._enqueue_misa_sync('outgoing')
         return True
 
+    def _misa_latest_done_purchase_order_job(self, purchase_order):
+        self.ensure_one()
+        return self.env['amis.sync.job'].sudo().search([
+            ('purchase_order_id', '=', purchase_order.id),
+            ('direction', '=', 'purchase_order'),
+            ('status', '=', 'done'),
+        ], order='processed_at desc, id desc', limit=1)
+
     def _sync_incoming_po_to_misa(self):
         self.ensure_one()
         if self.state != 'done' or self.picking_type_code != 'incoming':
@@ -219,9 +228,24 @@ class StockPickingAmisSync(models.Model):
                     % (purchase_order.name, reason)
                 )
             if not purchase_order.misa_purchase_order_synced:
-                _logger.info(
-                    'Don mua %s chua co callback MISA; van tiep tuc link phieu nhap bang org_refid/ref_detail_id da gui.',
+                po_job = self._misa_latest_done_purchase_order_job(purchase_order)
+                if not po_job:
+                    purchase_order._enqueue_misa_purchase_order(raise_on_skip=False, force=True)
+                    raise UserError(
+                        'Don mua hang %s chua co job dong bo MISA thanh cong; da enqueue don mua, phieu nhap se retry sau.'
+                        % purchase_order.name
+                    )
+                processed_at = po_job.processed_at or po_job.create_date
+                elapsed = (fields.Datetime.now() - processed_at).total_seconds() if processed_at else 0.0
+                if elapsed < MISA_PO_REQUEST_SETTLE_SECONDS:
+                    raise UserError(
+                        'Don mua hang %s moi gui de nghi MISA %.0f giay truoc; phieu nhap se retry sau de tranh gui truoc khi MISA sinh xong don mua.'
+                        % (purchase_order.name, elapsed)
+                    )
+                _logger.warning(
+                    'Don mua %s chua co callback sinh chung tu that sau %.0f giay; tiep tuc link phieu nhap bang org_refid/ref_detail_id da gui.',
                     purchase_order.name,
+                    elapsed,
                 )
 
         if not purchase_order_refid:
