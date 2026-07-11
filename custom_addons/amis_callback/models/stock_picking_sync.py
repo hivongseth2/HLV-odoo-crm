@@ -849,7 +849,9 @@ class StockPickingAmisSync(models.Model):
             if not unit_id:
                 raise UserError('Khong tao/tim duoc MISA Unit cho don vi tinh: %s' % move.product_uom.name)
 
-            ref_detail_id = self._misa_move_ref_detail_id(move, 'misa_inward_detail')
+            ref_detail_id = self._misa_move_ref_detail_id(
+                move, 'misa_inward_detail', field_name='misa_inward_ref_detail_id'
+            )
 
             # Tai khoan co dinh theo yeu cau: Kho 1561, Cong no 331.
             debit_account = '1561'
@@ -863,6 +865,14 @@ class StockPickingAmisSync(models.Model):
                 inventory_item.get('purchase_purpose_code')
                 or MISA_DEFAULT_PURCHASE_PURPOSE_CODE
             ).strip()
+            self._misa_store_inward_move_link_values(
+                move,
+                ref_detail_id,
+                pu_order_refid,
+                pu_order_ref_detail_id,
+                purchase_purpose_id,
+                purchase_purpose_code,
+            )
 
             detail_vals = {
                 'ref_detail_id': ref_detail_id,
@@ -948,13 +958,13 @@ class StockPickingAmisSync(models.Model):
             'org_refid': refid,
             'is_allow_group': False,
             'org_refno': self.name,
-            'org_reftype': 307,
-            'org_reftype_name': 'Chung tu mua hang',
+            'org_reftype': 302,
+            'org_reftype_name': 'Mua hang trong nuoc nhap kho chua thanh toan',
             'refno': '',
             'refid': refid,
             'act_voucher_type': 0,
-            'reftype': 307,
-            'reftype_name': 'Chung tu mua hang',
+            'reftype': 302,
+            'reftype_name': 'Mua hang trong nuoc nhap kho chua thanh toan',
             'pu_order_refid': pu_order_refid,
             'pu_order_refno': purchase_order.name,
             'branch_id': branch_id,
@@ -1010,8 +1020,8 @@ class StockPickingAmisSync(models.Model):
         return [{
             'org_refid': inward_refid,
             'org_refno': inward_refno,
-            'org_reftype': 307,
-            'org_reftype_name': 'Chung tu mua hang',
+            'org_reftype': 302,
+            'org_reftype_name': 'Mua hang trong nuoc nhap kho chua thanh toan',
             'org_refer_refid': refer_refid,
             'org_refer_refno': purchase_order.name,
             'org_refer_reftype': 301,
@@ -1019,13 +1029,38 @@ class StockPickingAmisSync(models.Model):
             'sort_order': 1,
         }]
 
-    def _misa_move_ref_detail_id(self, move, prefix):
+    def _misa_store_inward_move_link_values(
+        self,
+        move,
+        ref_detail_id,
+        pu_order_refid,
+        pu_order_ref_detail_id,
+        purchase_purpose_id,
+        purchase_purpose_code,
+    ):
+        vals = {
+            'misa_ref_detail_id': ref_detail_id,
+            'misa_inward_ref_detail_id': ref_detail_id,
+            'misa_inward_po_refid': pu_order_refid,
+            'misa_inward_po_ref_detail_id': pu_order_ref_detail_id,
+            'misa_purchase_purpose_id': purchase_purpose_id or False,
+            'misa_purchase_purpose_code': purchase_purpose_code or False,
+        }
+        vals = {
+            key: value
+            for key, value in vals.items()
+            if (move[key] or False) != (value or False)
+        }
+        if vals:
+            move.sudo().write(vals)
+
+    def _misa_move_ref_detail_id(self, move, prefix, field_name='misa_ref_detail_id'):
         ref_detail_id = str(uuid.uuid5(
             uuid.NAMESPACE_DNS,
             '%s|%d|%d' % (prefix, self.id, move.id)
         ))
-        if (move.misa_ref_detail_id or '').strip() != ref_detail_id:
-            move.sudo().write({'misa_ref_detail_id': ref_detail_id})
+        if (move[field_name] or '').strip() != ref_detail_id:
+            move.sudo().write({field_name: ref_detail_id})
         return ref_detail_id
 
     def _misa_lookup_account_object_by_id(self, config, account_object_id):
@@ -1150,4 +1185,29 @@ class StockMoveAmisMapping(models.Model):
         string='MISA Ref Detail ID',
         copy=False,
         help='ID thật của dòng chi tiết chứng từ trên MISA.',
+    )
+    misa_inward_ref_detail_id = fields.Char(
+        string='MISA Ref Detail ID phieu nhap',
+        copy=False,
+        help='ref_detail_id gui cho dong pu_voucher_detail khi sync phieu nhap MISA.',
+    )
+    misa_inward_po_refid = fields.Char(
+        string='MISA PO RefID lien ket phieu nhap',
+        copy=False,
+        help='pu_order_refid gui tren dong pu_voucher_detail de lien ket ve don mua MISA.',
+    )
+    misa_inward_po_ref_detail_id = fields.Char(
+        string='MISA PO Ref Detail ID lien ket phieu nhap',
+        copy=False,
+        help='pu_order_ref_detail_id gui tren dong pu_voucher_detail de cap nhat so luong nhan.',
+    )
+    misa_purchase_purpose_id = fields.Char(
+        string='MISA Purchase Purpose ID',
+        copy=False,
+        help='purchase_purpose_id gui tren dong pu_voucher_detail.',
+    )
+    misa_purchase_purpose_code = fields.Char(
+        string='MISA Purchase Purpose Code',
+        copy=False,
+        help='purchase_purpose_code gui tren dong pu_voucher_detail.',
     )
