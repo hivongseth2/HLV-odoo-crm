@@ -339,9 +339,46 @@ class AmisCallbackLogLine(models.Model):
                     ('org_refid', '=', org_refid),
                 ], limit=1)
                 if payment_request:
+                    error_message = line.error_message or line.error_call_back_message or ''
+                    session_id = (line.session_id or '').strip()
+                    if data_type == 2:
+                        is_created_voucher = (
+                            (line.error_code or '').strip() == 'IsCreatedVoucher'
+                            or 'Đã sinh chứng từ' in error_message
+                        )
+                        payment_request.write({
+                            'state': (
+                                'deleted' if success
+                                else 'manual_delete_required' if is_created_voucher
+                                else 'error'
+                            ),
+                            'error_msg': False if success else error_message,
+                            'callback_session_id': session_id or False,
+                            'state_updated_at': fields.Datetime.now(),
+                        })
+                        continue
+                    if data_type == 22:
+                        try:
+                            model_state = int(item.get('_misa_model_state') or 0)
+                        except (TypeError, ValueError):
+                            model_state = 0
+                        if model_state == 3:
+                            payment_request.write({
+                                'state': 'deleted',
+                                'error_msg': False,
+                                'state_updated_at': fields.Datetime.now(),
+                            })
+                            continue
                     vals = {
-                        'state': 'synced' if success else 'error',
-                        'error_msg': False if success else (line.error_message or line.error_call_back_message or ''),
+                        'state': (
+                            'request_accepted'
+                            if success and data_type in (1, 3) and is_request_callback
+                            else 'synced' if success
+                            else 'error'
+                        ),
+                        'error_msg': False if success else error_message,
+                        'callback_session_id': session_id or False,
+                        'state_updated_at': fields.Datetime.now(),
                     }
                     if success and actual_refid:
                         vals['misa_refid'] = actual_refid
