@@ -87,7 +87,7 @@
                         <field name="product_id" width="200px" />
                         <field name="name" optional="hide" />
                         <field name="product_qty" width="100px" readonly="1" />
-                        <field name="actual_qty" width="100px" />
+                        <field name="actual_qty" width="100px" decoration-success="1" />
                         <field name="product_uom_id" optional="hide" groups="!uom.group_uom" />
                         <field name="product_uom_id" groups="uom.group_uom" width="80px" />
                         
