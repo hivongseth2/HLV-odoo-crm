@@ -76,23 +76,56 @@
                 </div>
             </xpath>
 
-            <!-- Sắp xếp lại danh sách sản phẩm và đưa cột NCC lên đầu -->
+            <!-- Sắp xếp lại danh sách sản phẩm -->
             <xpath expr="//field[@name='item_ids']" position="replace">
                 <field name="item_ids" nolabel="1" colspan="2">
                     <list name="Chi tiết" create="false" editable="bottom">
                         <field name="line_id" options="{'no_open': true}" column_invisible="1" />
-                        <field name="request_id" readonly="1" optional="show" />
-                        <field name="supplier_ref" width="120px" />
+                        <field name="request_id" column_invisible="1" />
+                        <field name="supplier_ref" column_invisible="1" />
                         <field name="supplier_id" width="180px" />
                         <field name="product_id" width="200px" />
-                        <field name="name" width="250px" />
+                        <field name="name" column_invisible="1" />
                         <field name="product_qty" width="100px" />
                         <field name="actual_qty" width="100px" />
                         <field name="product_uom_id" column_invisible="1" groups="!uom.group_uom" />
                         <field name="product_uom_id" groups="uom.group_uom" width="80px" />
-                        <field name="misa_price_before_tax" width="120px" />
-                        <field name="misa_tax_rate" width="80px" />
-                        <field name="misa_tax_amount" width="100px" />
+                        
+                        <!-- Đơn giá: Sale đề xuất (xám) + Thực mua (xanh) -->
+                        <field name="misa_price_before_tax" string="ĐG sale đề xuất" 
+                               readonly="1" 
+                               decoration-muted="1" 
+                               width="120px" />
+                        <field name="actual_price_unit" string="Đơn giá thực mua" 
+                               width="120px" 
+                               decoration-success="1" />
+                        
+                        <!-- Thuế: Sale yêu cầu (xám) + Thu mua (xanh) -->
+                        <field name="misa_tax_rate" string="Thuế sale yêu cầu (%)" 
+                               readonly="1" 
+                               decoration-muted="1" 
+                               width="100px" />
+                        <field name="actual_tax_id" string="Thuế (%) thu mua" 
+                               width="140px" 
+                               decoration-success="1" />
+                        <field name="actual_tax_rate" column_invisible="1" />
+                        
+                        <!-- Chiết khấu: Sale đề xuất (xám) + Thực mua (xanh) -->
+                        <field name="misa_discount_rate" string="CK sale (%)" 
+                               readonly="1" 
+                               decoration-muted="1" 
+                               width="80px" />
+                        <field name="misa_discount_amount" string="Tiền CK sale" 
+                               readonly="1" 
+                               decoration-muted="1" 
+                               width="100px" />
+                        <field name="actual_discount_rate" string="CK thu mua (%)" 
+                               width="100px" 
+                               decoration-success="1" />
+                        <field name="actual_discount_amount" string="Tiền CK thu mua" 
+                               width="100px" 
+                               decoration-success="1" />
+                        
                         <field name="estimated_cost" column_invisible="1" />
                         <field name="keep_description" column_invisible="1" />
                         <field name="keep_estimated_cost" column_invisible="1" />
