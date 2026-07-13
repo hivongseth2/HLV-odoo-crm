@@ -343,10 +343,13 @@ class PurchaseRequest(models.Model):
 
             misa_supplier_id = None
             # Extension gửi key "misa_supplier_id", nhưng cũng hỗ trợ "sale_proposed_supplier_id"
+            # CHỈ gán nếu partner ID tồn tại trong Odoo, tránh lỗi FK violation
             supplier_key = line.get("misa_supplier_id") or line.get("sale_proposed_supplier_id")
             if supplier_key:
                 try:
-                    misa_supplier_id = int(supplier_key)
+                    partner_id = int(supplier_key)
+                    if self.env['res.partner'].sudo().browse(partner_id).exists():
+                        misa_supplier_id = partner_id
                 except (ValueError, TypeError):
                     misa_supplier_id = None
             
