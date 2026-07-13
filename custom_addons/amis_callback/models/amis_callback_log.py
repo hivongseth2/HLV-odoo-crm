@@ -268,8 +268,14 @@ class AmisCallbackLogLine(models.Model):
                     if success:
                         po._misa_complete_purchase_order_deletion()
                     else:
+                        is_created_voucher = (
+                            (line.error_code or '').strip() == 'IsCreatedVoucher'
+                            or 'Đã sinh chứng từ' in error_message
+                        )
                         po.with_context(skip_misa_purchase_order_lifecycle=True).sudo().write({
-                            'misa_purchase_order_state': 'error',
+                            'misa_purchase_order_state': (
+                                'manual_delete_required' if is_created_voucher else 'error'
+                            ),
                             'misa_purchase_order_last_error': error_message,
                             'misa_purchase_order_session_id': session_id or False,
                             'misa_purchase_order_state_updated_at': fields.Datetime.now(),
