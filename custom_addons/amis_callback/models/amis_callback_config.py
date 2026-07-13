@@ -1681,7 +1681,7 @@ class AmisCallbackConfig(models.Model):
                 'Ep is_get_new_id=false cho phieu nhap MISA %s de giu lien ket so luong nhan tren don mua.',
                 voucher_payload.get('org_refno') or voucher_payload.get('refno') or '',
             )
-        voucher_payload['is_get_new_id'] = True
+        voucher_payload['is_get_new_id'] = False
         payload = {
             'app_id': self.app_id,
             'org_company_code': self.org_company_code,
@@ -1710,7 +1710,7 @@ class AmisCallbackConfig(models.Model):
                 'Ep is_get_new_id=false cho don mua MISA %s de phieu nhap lien ket dung ve sau.',
                 voucher_payload.get('org_refno') or voucher_payload.get('refno') or '',
             )
-        voucher_payload['is_get_new_id'] = True
+        voucher_payload['is_get_new_id'] = False
         payload = {
             'app_id': self.app_id,
             'org_company_code': self.org_company_code,
