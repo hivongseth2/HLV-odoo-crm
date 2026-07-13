@@ -277,6 +277,7 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
         compute="_compute_item_has_new_supplier",
     )
 
+    @api.depends('misa_new_supplier_json')
     def _compute_item_has_new_supplier(self):
         for item in self:
             if item.misa_new_supplier_json:

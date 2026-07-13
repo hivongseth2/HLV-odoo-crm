@@ -46,6 +46,7 @@ class PurchaseRequestLine(models.Model):
         compute="_compute_line_has_new_supplier",
     )
 
+    @api.depends('misa_new_supplier_json')
     def _compute_line_has_new_supplier(self):
         for line in self:
             if line.misa_new_supplier_json:
