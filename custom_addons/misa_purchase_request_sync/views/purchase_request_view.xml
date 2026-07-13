@@ -16,7 +16,7 @@
                     string="Đẩy sang MISA CRM"
                     type="object"
                     class="btn-secondary"
-                    invisible="state != 'draft'"
+                    invisible="1"
                     groups="purchase_request.group_purchase_request_manager"
                 />
             </xpath>
@@ -46,6 +46,13 @@
                 <field name="misa_tax_amount" optional="hide"/>
                 <field name="misa_price_after_tax" optional="hide"/>
                 <field name="misa_amount" optional="show" sum="Tổng tiền"/>
+            </xpath>
+            <xpath expr="//field[@name='line_ids']/list" position="inside">
+                <button name="action_view_price_history" type="object"
+                        string="Lịch sử giá"
+                        icon="fa-history"
+                        class="btn-secondary"
+                        invisible="not product_id"/>
             </xpath>
         </field>
     </record>
@@ -111,10 +118,6 @@
                     <group name="right_col">
                         <field name="estimated_cost" widget="monetary" readonly="is_editable == False" />
                         <field name="history_po_line_id" readonly="is_editable == False" options="{'no_create': True}"/>
-                        <button name="action_view_price_history" type="object"
-                                string="Lịch sử giá mua"
-                                class="btn-secondary"
-                                invisible="product_id == False"/>
                         <field name="cancelled" widget="boolean" />
                         
                         <!-- Hidden fields required by original logic -->

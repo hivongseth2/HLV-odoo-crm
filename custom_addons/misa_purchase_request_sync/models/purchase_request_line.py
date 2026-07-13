@@ -72,4 +72,5 @@ class PurchaseRequestLine(models.Model):
             'view_mode': 'list,form',
             'domain': [('product_tmpl_id', '=', self.product_id.product_tmpl_id.id)],
             'context': dict(self.env.context, create=False),
+            'target': 'new',
         }
