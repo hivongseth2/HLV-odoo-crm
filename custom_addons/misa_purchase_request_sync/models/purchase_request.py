@@ -233,60 +233,6 @@ class PurchaseRequest(models.Model):
                 total += line.misa_amount if line.misa_amount else line.estimated_cost
             rec.estimated_cost = total
 
-    def action_open_create_supplier_wizard(self):
-        self.ensure_one()
-        suppliers = []
-        if self.misa_new_supplier_json:
-            try:
-                suppliers = json.loads(self.misa_new_supplier_json)
-            except:
-                pass
-        
-        if not suppliers:
-            # Fallback: parse chatter
-            messages = self.env['mail.message'].search([
-                ('res_id', '=', self.id),
-                ('model', '=', 'purchase.request'),
-                ('body', 'ilike', 'NCC mới từ MISA cần kiểm tra:')
-            ], order='id desc', limit=1)
-            
-            if messages:
-                import re
-                body = messages.body
-                names = re.findall(r'<b>Tên NCC:</b>\s*([^<]+)', body)
-                phones = re.findall(r'<b>Điện thoại:</b>\s*([^<]+)', body)
-                addresses = re.findall(r'<b>Địa chỉ:</b>\s*([^<]+)', body)
-                vats = re.findall(r'<b>Mã số thuế:</b>\s*([^<]+)', body)
-                if names:
-                    suppliers.append({
-                        'name': names[0].strip(),
-                        'phone': phones[0].strip() if phones else '',
-                        'address': addresses[0].strip() if addresses else '',
-                        'vat': vats[0].strip() if vats else '',
-                    })
-
-        if not suppliers:
-            raise UserError(_("Không tìm thấy thông tin Nhà cung cấp mới nào từ MISA."))
-            
-        data = suppliers[0]
-        context = {
-            'default_name': data.get('name'),
-            'default_phone': data.get('phone'),
-            'default_street': data.get('address'),
-            'default_vat': data.get('vat'),
-            'default_supplier_rank': 1,
-            'default_is_company': True,
-            'default_company_type': 'company',
-        }
-        
-        return {
-            'name': _('Xác nhận & Tạo NCC'),
-            'type': 'ir.actions.act_window',
-            'res_model': 'res.partner',
-            'view_mode': 'form',
-            'target': 'new',
-            'context': context,
-        }
 
     @api.model
     def api_create_from_misa_payload(self, payload):

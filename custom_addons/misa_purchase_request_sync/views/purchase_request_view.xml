@@ -19,13 +19,6 @@
                     invisible="1"
                     groups="purchase_request.group_purchase_request_manager"
                 />
-                <button
-                    name="action_open_create_supplier_wizard"
-                    string="Tạo NCC từ MISA"
-                    type="object"
-                    class="btn-primary"
-                    invisible="not misa_has_new_supplier"
-                />
             </xpath>
             <xpath expr="//field[@name='requested_by']" position="after">
                 <field name="sale_order_id" readonly="state in ('done', 'rejected')"/>
@@ -78,6 +71,13 @@
                 <field name="misa_amount" optional="show" sum="Thành tiền"/>
             </xpath>
             <xpath expr="//field[@name='line_ids']/list" position="inside">
+                <field name="misa_new_supplier_json" column_invisible="1" force_save="1" />
+                <field name="misa_has_new_supplier" column_invisible="1" />
+                <button name="action_create_line_supplier" type="object"
+                        string="Tạo NCC"
+                        icon="fa-plus-circle"
+                        class="btn-warning btn-sm"
+                        invisible="not misa_has_new_supplier"/>
                 <button name="action_view_price_history" type="object"
                         string="Lịch sử giá"
                         icon="fa-history"
