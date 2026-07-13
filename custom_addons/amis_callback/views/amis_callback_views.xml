@@ -176,6 +176,21 @@
                             <field name="sync_shopee_only"/>
                         </group>
                     </group>
+                    <group string="Tài khoản chi mặc định theo mục đích">
+                        <field name="payment_bank_config_ids" colspan="2" nolabel="1">
+                            <list editable="bottom">
+                                <field name="active"/>
+                                <field name="purpose"/>
+                                <field name="company_id"/>
+                                <field name="company_partner_id" column_invisible="True"/>
+                                <field name="company_bank_id"
+                                       domain="[('partner_id', '=', company_partner_id)]"
+                                       options="{'no_create': True, 'no_open': True}"/>
+                                <field name="debit_account"/>
+                                <field name="credit_account"/>
+                            </list>
+                        </field>
+                    </group>
                     <group string="Mapping khách hàng Shopee → MISA">
                         <group>
                             <field name="misa_shopee_milwaukee_account_object_id"/>

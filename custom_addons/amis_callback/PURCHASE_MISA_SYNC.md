@@ -153,6 +153,8 @@ Khi PO Odoo đã gửi MISA bị sửa:
    `ref_detail_id` mới rồi enqueue PO mới.
 3. Nếu MISA đã lập chứng từ thật (`data_type=18`), API công khai không cam kết xóa
    chứng từ thật. Odoo chuyển trạng thái sang `Chờ xóa chứng từ trên MISA`.
+   Trường hợp callback xóa `data_type=2` trả `error_code=IsCreatedVoucher` cũng được
+   chuyển sang trạng thái này và không retry xóa đề nghị.
 4. Khi người dùng xóa trên MISA và callback `data_type=22`, `ModelState=3` về Odoo,
    hệ thống tự sinh identity mới và enqueue PO thay thế.
 
