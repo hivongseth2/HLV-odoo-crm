@@ -94,11 +94,10 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
     def _prepare_purchase_order_line(self, po, item):
         res = super()._prepare_purchase_order_line(po, item)
 
-        # Dùng actual_qty và actual_price_unit nếu có
-        if item.actual_qty:
-            res['product_qty'] = item.actual_qty
-        if item.actual_price_unit:
-            res['price_unit'] = item.actual_price_unit
+        # Dùng actual_qty (ưu tiên) hoặc product_qty (fallback, đã sync bởi onchange)
+        res['product_qty'] = item.actual_qty or item.product_qty or 0.0
+        # Dùng actual_price_unit (ưu tiên) hoặc misa_price_before_tax (fallback)
+        res['price_unit'] = item.actual_price_unit or item.misa_price_before_tax or 0.0
 
         # Thuế
         if item.actual_tax_id:
@@ -147,6 +146,21 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
         self.toggle_keep_estimated_cost = False
         self.item_ids.write({'keep_estimated_cost': False})
         return self._reload_wizard()
+
+    def action_create_new_supplier(self):
+        self.ensure_one()
+        return {
+            'name': 'Tạo Nhà cung cấp mới',
+            'type': 'ir.actions.act_window',
+            'res_model': 'res.partner',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {
+                'default_supplier_rank': 1,
+                'default_is_company': True,
+                'default_company_type': 'company',
+            },
+        }
 
 
 class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
