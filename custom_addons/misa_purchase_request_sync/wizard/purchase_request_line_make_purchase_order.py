@@ -132,13 +132,31 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
         return super().make_purchase_order()
 
     def _post_process_po_line(self, item, po_line, new_pr_line):
-        """Override: ưu tiên actual_price_unit thay vì estimated_cost/product_qty."""
+        """Override: ưu tiên actual_qty và actual_price_unit.
+
+        OCA base gọi _calc_new_qty() → tính qty từ PR line gốc (product_qty)
+        → ghi đè po_line.product_qty. Ta cần re-apply actual_qty sau super().
+        """
         super()._post_process_po_line(item, po_line, new_pr_line)
-        # OCA base tính price_unit = estimated_cost / product_qty,
-        # nhưng ta override lại với actual_price_unit trực tiếp
+
+        # --- Quantity: OCA base vừa ghi đè po_line.product_qty bằng
+        # _calc_new_qty (tính từ PR line gốc). Ta override lại bằng actual_qty.
+        actual_qty = item.actual_qty or item.product_qty or 0.0
+        if actual_qty:
+            # Convert UoM nếu cần (giống logic trong _prepare_purchase_order_line)
+            product = item.product_id
+            target_uom = product.uom_po_id or product.uom_id
+            qty = item.product_uom_id._compute_quantity(actual_qty, target_uom)
+            # Áp dụng supplier min qty
+            min_qty = item.line_id._get_supplier_min_qty(product, po_line.order_id.partner_id)
+            po_line.product_qty = max(qty, min_qty)
+
+        # --- Price: OCA base tính price_unit = estimated_cost / product_qty,
+        # ta override lại với actual_price_unit trực tiếp
         if item.actual_price_unit and item.keep_estimated_cost:
             po_line.price_unit = item.actual_price_unit
-            po_line._compute_amount()
+
+        po_line._compute_amount()
 
     def _reload_wizard(self):
         return {
