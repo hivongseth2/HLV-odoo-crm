@@ -107,7 +107,7 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
             'product_id': item.product_id.id,
             'name': item.line_id.name if item.keep_description and item.line_id else item.product_id.display_name,
             'product_qty': qty,
-            'product_uom_id': item.product_uom_id.id or item.product_id.uom_id.id,
+            'product_uom': item.product_uom_id.id or item.product_id.uom_id.id,
             'price_unit': price,
             'account_id': item.product_id.property_account_expense_id.id or item.product_id.categ_id.property_account_expense_categ_id.id,
         }
