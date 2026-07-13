@@ -111,6 +111,10 @@
                     <group name="right_col">
                         <field name="estimated_cost" widget="monetary" readonly="is_editable == False" />
                         <field name="history_po_line_id" readonly="is_editable == False" options="{'no_create': True}"/>
+                        <button name="action_view_price_history" type="object"
+                                string="Lịch sử giá mua"
+                                class="btn-secondary"
+                                attrs="{'invisible': [('product_id', '=', False)]}"/>
                         <field name="cancelled" widget="boolean" />
                         
                         <!-- Hidden fields required by original logic -->

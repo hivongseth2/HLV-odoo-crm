@@ -59,3 +59,17 @@ class PurchaseRequestLine(models.Model):
     def _onchange_history_po_line_id(self):
         if self.history_po_line_id:
             self.estimated_cost = self.history_po_line_id.price_unit
+
+    def action_view_price_history(self):
+        """Hiển thị lịch sử giá mua từ product.supplierinfo."""
+        self.ensure_one()
+        if not self.product_id:
+            return
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Lịch sử giá mua - %s' % self.product_id.display_name,
+            'res_model': 'product.supplierinfo',
+            'view_mode': 'list,form',
+            'domain': [('product_tmpl_id', '=', self.product_id.product_tmpl_id.id)],
+            'context': dict(self.env.context, create=False),
+        }
