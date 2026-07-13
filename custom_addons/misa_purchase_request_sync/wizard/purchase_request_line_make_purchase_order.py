@@ -115,7 +115,13 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
         return res
 
     def make_purchase_order(self):
-        """Ghi tất cả dữ liệu item xuống database trước khi tạo PO."""
+        """Ghi actual_* xuống DB trước khi gọi super() tạo PO.
+
+        OCA base `_prepare_purchase_order_line` lấy `product_qty` và `estimated_cost`
+        từ item, và `_post_process_po_line` tính lại `price_unit = estimated_cost / product_qty`.
+        Ta persist actual_qty → product_qty, actual_price_unit → estimated_cost để
+        đảm bảo price_unit cuối cùng đúng với actual_price_unit.
+        """
         for item in self.item_ids:
             qty = item.actual_qty or item.product_qty or 0.0
             price = item.actual_price_unit or item.misa_price_before_tax or 0.0
@@ -124,6 +130,15 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
                 'estimated_cost': price * qty,
             })
         return super().make_purchase_order()
+
+    def _post_process_po_line(self, item, po_line, new_pr_line):
+        """Override: ưu tiên actual_price_unit thay vì estimated_cost/product_qty."""
+        super()._post_process_po_line(item, po_line, new_pr_line)
+        # OCA base tính price_unit = estimated_cost / product_qty,
+        # nhưng ta override lại với actual_price_unit trực tiếp
+        if item.actual_price_unit and item.keep_estimated_cost:
+            po_line.price_unit = item.actual_price_unit
+            po_line._compute_amount()
 
     def _reload_wizard(self):
         return {
@@ -274,14 +289,7 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
             item.misa_tax_amount_total = tax_total
             item.misa_amount = before_tax_total - discount + tax_total
 
-    # ── Onchange: sync actual → product_qty & estimated_cost ──
-    @api.onchange('actual_qty', 'actual_price_unit')
-    def _onchange_actual_sync(self):
-        if self.actual_qty:
-            self.product_qty = self.actual_qty
-        if self.actual_price_unit:
-            self.estimated_cost = self.actual_price_unit * (self.actual_qty or self.product_qty or 0.0)
-
+    # ── Onchange: discount & tax (giữ nguyên, hữu ích cho hiển thị) ──
     @api.onchange('actual_discount_rate')
     def _onchange_actual_discount_rate(self):
         qty = self.actual_qty or self.product_qty or 0.0
