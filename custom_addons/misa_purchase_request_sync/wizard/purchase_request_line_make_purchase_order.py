@@ -170,6 +170,23 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
         string="Thuế sale yêu cầu (%)",
         readonly=True,
     )
+    misa_tax_amount = fields.Float(
+        string="Thuế",
+        readonly=True,
+    )
+    misa_discount_rate = fields.Float(
+        string="CK sale đề xuất (%)",
+        readonly=True,
+    )
+    misa_discount_amount = fields.Float(
+        string="Tiền CK sale đề xuất",
+        readonly=True,
+    )
+    supplier_ref = fields.Char(
+        related='supplier_id.ref',
+        string="Mã NCC",
+        readonly=True
+    )
 
     # === Thực tế (editable, dùng để lên PO) ===
     actual_qty = fields.Float(
