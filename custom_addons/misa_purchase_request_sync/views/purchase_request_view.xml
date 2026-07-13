@@ -73,16 +73,16 @@
             <xpath expr="//field[@name='line_ids']/list" position="inside">
                 <field name="misa_new_supplier_json" column_invisible="1" force_save="1" />
                 <field name="misa_has_new_supplier" column_invisible="1" />
-                <button name="action_create_line_supplier" type="object"
-                        string="Tạo NCC"
-                        icon="fa-plus-circle"
-                        class="btn-warning btn-sm"
-                        invisible="not misa_has_new_supplier"/>
                 <button name="action_view_price_history" type="object"
                         string="Lịch sử giá"
                         icon="fa-history"
                         class="btn-secondary"
                         invisible="not product_id"/>
+                <button name="action_create_line_supplier" type="object"
+                        string="Tạo NCC"
+                        icon="fa-user-plus"
+                        class="btn-outline-primary"
+                        invisible="not misa_has_new_supplier"/>
             </xpath>
         </field>
     </record>
