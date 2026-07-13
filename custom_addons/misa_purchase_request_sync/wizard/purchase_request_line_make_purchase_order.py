@@ -1,4 +1,8 @@
+import json
+
 from odoo import api, fields, models, Command
+from odoo.exceptions import UserError
+from odoo.tools.translate import _
 
 
 class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
@@ -89,6 +93,11 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
             supplier = line.misa_supplier_id if hasattr(line, 'misa_supplier_id') and line.misa_supplier_id else False
         if supplier:
             res['supplier_id'] = supplier.id
+
+        # Copy dữ liệu NCC mới per-line
+        if hasattr(line, 'misa_new_supplier_json') and line.misa_new_supplier_json:
+            res['misa_new_supplier_json'] = line.misa_new_supplier_json
+
         return res
 
     def _prepare_purchase_order_line(self, po, item):
@@ -191,21 +200,6 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
         self.item_ids.write({'keep_estimated_cost': False})
         return self._reload_wizard()
 
-    def action_create_new_supplier(self):
-        self.ensure_one()
-        return {
-            'name': 'Tạo Nhà cung cấp mới',
-            'type': 'ir.actions.act_window',
-            'res_model': 'res.partner',
-            'view_mode': 'form',
-            'target': 'new',
-            'context': {
-                'default_supplier_rank': 1,
-                'default_is_company': True,
-                'default_company_type': 'company',
-            },
-        }
-
 
 class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
     _inherit = "purchase.request.line.make.purchase.order.item"
@@ -273,6 +267,54 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
         string="Tiền CK thu mua",
         help="Chiết khấu thực tế (tiền). Nhập tiền → tự tính %. Nhập % → tự tính tiền.",
     )
+
+    # === Dữ liệu NCC mới (per-line, từ PR line) ===
+    misa_new_supplier_json = fields.Text(
+        string="Dữ liệu NCC mới (JSON)",
+    )
+    misa_has_new_supplier = fields.Boolean(
+        string="Có NCC mới",
+        compute="_compute_item_has_new_supplier",
+    )
+
+    def _compute_item_has_new_supplier(self):
+        for item in self:
+            if item.misa_new_supplier_json:
+                try:
+                    data = json.loads(item.misa_new_supplier_json)
+                    item.misa_has_new_supplier = bool(data and data.get('name'))
+                except (json.JSONDecodeError, TypeError, AttributeError):
+                    item.misa_has_new_supplier = False
+            else:
+                item.misa_has_new_supplier = False
+
+    def action_create_item_supplier(self):
+        """Mở form tạo NCC mới với dữ liệu pre-fill từ MISA cho dòng wizard này."""
+        self.ensure_one()
+        if not self.misa_new_supplier_json:
+            raise UserError(_("Dòng này không có thông tin Nhà cung cấp mới từ MISA."))
+        try:
+            data = json.loads(self.misa_new_supplier_json)
+        except (json.JSONDecodeError, TypeError):
+            raise UserError(_("Dữ liệu NCC mới không hợp lệ."))
+
+        context = {
+            'default_name': data.get('name'),
+            'default_phone': data.get('phone'),
+            'default_street': data.get('address'),
+            'default_vat': data.get('vat'),
+            'default_supplier_rank': 1,
+            'default_is_company': True,
+            'default_company_type': 'company',
+        }
+        return {
+            'name': _('Tạo NCC – %s') % (data.get('name') or ''),
+            'type': 'ir.actions.act_window',
+            'res_model': 'res.partner',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': context,
+        }
 
     # === Computed fields (readonly, hiển thị tổng tiền) ===
     misa_price_before_tax_total = fields.Float(

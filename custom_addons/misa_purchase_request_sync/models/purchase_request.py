@@ -461,6 +461,13 @@ class PurchaseRequest(models.Model):
                 "misa_stock_selected": _float_val("misa_stock_selected"),
                 "misa_stock_undelivered": _float_val("misa_stock_undelivered"),
             }
+
+            # Lưu dữ liệu NCC mới per-line (nếu có)
+            nsd = line.get("new_supplier_data")
+            if nsd and nsd.get("name"):
+                line_vals["misa_new_supplier_json"] = json.dumps(nsd)
+            else:
+                line_vals["misa_new_supplier_json"] = False
             
             if date_required:
                 line_vals["date_required"] = date_required
