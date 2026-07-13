@@ -69,7 +69,7 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
         res['actual_discount_rate'] = line.misa_discount_rate if (hasattr(line, 'misa_discount_rate') and line.misa_discount_rate) else 0.0
         res['actual_discount_amount'] = line.misa_discount_amount if (hasattr(line, 'misa_discount_amount') and line.misa_discount_amount) else 0.0
 
-        # Tìm account.tax mặc định
+        # Tìm account.tax cho misa_tax_id (sale đề xuất) và actual_tax_id (thực tế)
         company = line.company_id or self.env.company
         tax_rate = line.misa_tax_rate if (hasattr(line, 'misa_tax_rate') and line.misa_tax_rate) else 0.0
         if float(tax_rate) > 0:
@@ -79,7 +79,9 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
                 ('amount', '=', float(tax_rate)),
                 ('company_id', '=', company.id)
             ], limit=1)
-            res['actual_tax_id'] = matched_tax.id if matched_tax else False
+            if matched_tax:
+                res['misa_tax_id'] = matched_tax.id
+                res['actual_tax_id'] = matched_tax.id
 
         # NCC: ưu tiên sale_proposed_supplier_id, fallback misa_supplier_id
         supplier = line.sale_proposed_supplier_id if hasattr(line, 'sale_proposed_supplier_id') and line.sale_proposed_supplier_id else False
@@ -174,6 +176,12 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
     misa_price_before_tax = fields.Float(
         string="Đơn giá sale đề xuất",
         readonly=True,
+    )
+    misa_tax_id = fields.Many2one(
+        'account.tax',
+        string="Thuế sale yêu cầu",
+        readonly=True,
+        domain="[('type_tax_use', '=', 'purchase'), ('amount_type', '=', 'percent')]",
     )
     misa_tax_rate = fields.Float(
         string="Thuế sale yêu cầu (%)",

@@ -100,23 +100,25 @@
                                width="120px" 
                                decoration-success="1" />
                         
+                        <!-- Tổng tiền trước thuế (đưa lên trước các cột thuế) -->
+                        <field name="misa_price_before_tax_total" string="Tổng tiền trước thuế" 
+                               readonly="1" width="120px" />
+                        
                         <!-- Thuế: Sale yêu cầu (xám) + Thu mua (xanh) -->
-                        <field name="misa_tax_rate" string="Thuế sale yêu cầu (%)" 
+                        <field name="misa_tax_id" string="Thuế sale yêu cầu" 
                                readonly="1" 
                                decoration-muted="1" 
-                               width="100px" />
+                               width="140px" />
                         <field name="actual_tax_id" string="Thuế (%) thu mua" 
                                width="140px" 
                                decoration-success="1" />
                         <field name="actual_tax_rate" optional="hide" />
                         
                         <!-- Tổng tiền: computed readonly -->
-                        <field name="misa_price_before_tax_total" string="Tổng tiền trước thuế" 
-                               readonly="1" width="120px" />
                         <field name="misa_tax_amount_total" string="Tổng tiền thuế" 
                                readonly="1" width="120px" />
                         <field name="misa_amount" string="Thành tiền" 
-                               readonly="1" width="120px" decoration-success="1" />
+                               readonly="1" width="120px" decoration-info="1" />
                         
                         <!-- Chiết khấu: mặc định hide -->
                         <field name="misa_discount_rate" string="CK sale (%)" 
