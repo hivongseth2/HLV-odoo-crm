@@ -92,58 +92,27 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
         return res
 
     def _prepare_purchase_order_line(self, po, item):
-        # Gọi super() để giữ nguyên tất cả logic OCA (link PR-PO, date_planned, ...)
         res = super()._prepare_purchase_order_line(po, item)
 
-        # Override: Số lượng thực mua
-        if item.actual_qty and item.actual_qty > 0:
+        # Dùng actual_qty và actual_price_unit nếu có
+        if item.actual_qty:
             res['product_qty'] = item.actual_qty
+        if item.actual_price_unit:
+            res['price_unit'] = item.actual_price_unit
 
-        # Override: Đơn giá thực mua (ưu tiên actual_price_unit)
-        price = item.actual_price_unit or item.misa_price_before_tax or 0.0
-        if price > 0:
-            res['price_unit'] = price
-
-        # Override: Thuế thực tế (ưu tiên actual_tax_id)
+        # Thuế
         if item.actual_tax_id:
             res['taxes_id'] = [Command.set(item.actual_tax_id.ids)]
-        else:
-            # Fallback: tìm theo actual_tax_rate
-            tax_rate = item.actual_tax_rate
-            if not tax_rate and hasattr(item.line_id.request_id, 'misa_id') and item.line_id.request_id.misa_id:
-                tax_rate = 0
-            if tax_rate:
-                if 'misa.po.fetch' in self.env:
-                    misa_po_fetch_obj = self.env['misa.po.fetch'].with_company(po.company_id)
-                    tax_ids = misa_po_fetch_obj._tax_ids_from_misa_line({'vat_rate': float(tax_rate)})
-                    if tax_ids:
-                        res['taxes_id'] = [Command.set(tax_ids)]
-                    else:
-                        res['taxes_id'] = [Command.clear()]
-                else:
-                    Tax = self.env['account.tax'].with_company(po.company_id)
-                    matched_tax = Tax.search([
-                        ('type_tax_use', '=', 'purchase'),
-                        ('amount_type', '=', 'percent'),
-                        ('amount', '=', float(tax_rate)),
-                        ('company_id', '=', po.company_id.id)
-                    ], limit=1)
-                    if matched_tax:
-                        res['taxes_id'] = [Command.set(matched_tax.ids)]
-                    else:
-                        res['taxes_id'] = [Command.clear()]
-        return res
-
-    def make_purchase_order(self):
-        """Override để ghi actual values vào PR line sau khi tạo PO."""
-        res = super().make_purchase_order()
-        # Sau khi super() tạo PO, các item_ids đã được xóa (wizard đã clear)
-        # Nên cần đọc lại từ purchase order vừa tạo
-        purchase = self.env['purchase.order'].browse(res.get('res_id'))
-        if purchase:
-            for po_line in purchase.order_line:
-                # Có thể ghi lại actual values vào PR line nếu cần
-                pass
+        elif item.actual_tax_rate:
+            Tax = self.env['account.tax'].with_company(po.company_id)
+            matched = Tax.search([
+                ('type_tax_use', '=', 'purchase'),
+                ('amount_type', '=', 'percent'),
+                ('amount', '=', float(item.actual_tax_rate)),
+                ('company_id', '=', po.company_id.id)
+            ], limit=1)
+            if matched:
+                res['taxes_id'] = [Command.set(matched.ids)]
         return res
 
     def _reload_wizard(self):
@@ -201,18 +170,6 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
         string="Thuế sale yêu cầu (%)",
         readonly=True,
     )
-    misa_tax_amount = fields.Float(
-        string="Thuế",
-        readonly=True,
-    )
-    misa_discount_rate = fields.Float(
-        string="CK sale đề xuất (%)",
-        readonly=True,
-    )
-    misa_discount_amount = fields.Float(
-        string="Tiền CK sale đề xuất",
-        readonly=True,
-    )
 
     # === Thực tế (editable, dùng để lên PO) ===
     actual_qty = fields.Float(
@@ -242,54 +199,19 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
         help="Chiết khấu thực tế (tiền). Nhập tiền → tự tính %. Nhập % → tự tính tiền.",
     )
 
-    # === Computed fields (readonly) ===
-    misa_price_before_tax_total = fields.Float(
-        string="Tổng tiền trước thuế",
-        compute="_compute_wizard_financials",
-        readonly=True,
-        digits='Product Price',
-    )
-    misa_tax_amount_total = fields.Float(
-        string="Tổng tiền thuế",
-        compute="_compute_wizard_financials",
-        readonly=True,
-        digits='Product Price',
-    )
-    misa_amount = fields.Float(
-        string="Thành tiền",
-        compute="_compute_wizard_financials",
-        readonly=True,
-        digits='Product Price',
-    )
+    # ── Onchange: sync actual → product_qty & estimated_cost ──
+    @api.onchange('actual_qty', 'actual_price_unit')
+    def _onchange_actual_sync(self):
+        if self.actual_qty:
+            self.product_qty = self.actual_qty
+        if self.actual_price_unit:
+            self.estimated_cost = self.actual_price_unit * (self.actual_qty or self.product_qty or 0.0)
 
-    supplier_ref = fields.Char(
-        related='supplier_id.ref',
-        string="Mã NCC",
-        readonly=True
-    )
-
-    @api.depends('actual_qty', 'actual_price_unit', 'actual_tax_rate', 'actual_discount_amount')
-    def _compute_wizard_financials(self):
-        for item in self:
-            qty = item.actual_qty or item.product_qty or 0.0
-            price = item.actual_price_unit or 0.0
-            tax_rate = item.actual_tax_rate or 0.0
-            discount = item.actual_discount_amount or 0.0
-
-            before_tax_total = qty * price
-            tax_total = qty * price * tax_rate / 100.0
-            item.misa_price_before_tax_total = before_tax_total
-            item.misa_tax_amount_total = tax_total
-            item.misa_amount = before_tax_total - discount + tax_total
-
-    # --- Onchange: tự động tính chiết khấu 2 chiều ---
     @api.onchange('actual_discount_rate')
     def _onchange_actual_discount_rate(self):
         qty = self.actual_qty or self.product_qty or 0.0
         if self.actual_discount_rate and self.actual_price_unit and qty:
             self.actual_discount_amount = qty * self.actual_price_unit * self.actual_discount_rate / 100.0
-        elif self.actual_discount_rate == 0 and not self.actual_discount_amount:
-            self.actual_discount_amount = 0.0
 
     @api.onchange('actual_discount_amount')
     def _onchange_actual_discount_amount(self):
@@ -297,16 +219,8 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
         base = (self.actual_price_unit or 0.0) * qty
         if self.actual_discount_amount and base:
             self.actual_discount_rate = self.actual_discount_amount / base * 100.0
-        elif self.actual_discount_amount == 0 and not self.actual_discount_rate:
-            self.actual_discount_rate = 0.0
 
     @api.onchange('actual_tax_id')
     def _onchange_actual_tax_id(self):
-        """Khi chọn thuế từ danh sách, tự động cập nhật actual_tax_rate."""
         if self.actual_tax_id and self.actual_tax_id.amount_type == 'percent':
             self.actual_tax_rate = self.actual_tax_id.amount
-
-    @api.onchange('actual_qty', 'actual_price_unit', 'actual_tax_rate')
-    def _onchange_actual_qty_price_tax(self):
-        """Kích hoạt tính toán lại cho các trường phụ thuộc."""
-        pass
