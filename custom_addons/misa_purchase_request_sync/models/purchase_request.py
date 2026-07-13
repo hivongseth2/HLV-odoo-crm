@@ -10,9 +10,11 @@ Mở rộng `purchase.request` để:
 3. Cung cấp computed fields tiến độ mua hàng cho list view badge.
 """
 
+import json
 import logging
 import re
 
+from markupsafe import Markup
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
@@ -341,10 +343,13 @@ class PurchaseRequest(models.Model):
 
             misa_supplier_id = None
             # Extension gửi key "misa_supplier_id", nhưng cũng hỗ trợ "sale_proposed_supplier_id"
+            # CHỈ gán nếu partner ID tồn tại trong Odoo, tránh lỗi FK violation
             supplier_key = line.get("misa_supplier_id") or line.get("sale_proposed_supplier_id")
             if supplier_key:
                 try:
-                    misa_supplier_id = int(supplier_key)
+                    partner_id = int(supplier_key)
+                    if self.env['res.partner'].sudo().browse(partner_id).exists():
+                        misa_supplier_id = partner_id
                 except (ValueError, TypeError):
                     misa_supplier_id = None
             
@@ -397,5 +402,43 @@ class PurchaseRequest(models.Model):
         # Xóa các dòng cũ trên Odoo nhưng không có trên MISA (chỉ xoá những dòng có misa_line_id)
         for old_line in existing_lines_by_misa_id.values():
             old_line.unlink()
+
+        # ============================================================
+        # POST CHATTER MESSAGES
+        # ============================================================
+
+        # 1. Post message "Người thực hiện" nếu không tìm thấy user
+        if owner_message:
+            pr.message_post(body=Markup("<b>%s</b>") % owner_message)
+
+        # 2. Xử lý new_supplier_data - chỉ hiển thị thông tin, không tự động tạo
+        new_supplier_msgs = []
+        for line_data in lines_in:
+            nsd = line_data.get("new_supplier_data")
+            if nsd and nsd.get("name"):
+                pcode = (line_data.get("product_code") or "").strip()
+                info = []
+                info.append("Tên: %s" % nsd['name'])
+                if nsd.get('address'): info.append("ĐC: %s" % nsd['address'])
+                if nsd.get('phone'): info.append("ĐT: %s" % nsd['phone'])
+                if nsd.get('vat'): info.append("MST: %s" % nsd['vat'])
+                if nsd.get('note'): info.append("GHI CHÚ: %s" % nsd['note'])
+                line_ref = "SP [%s]" % pcode if pcode else "Dòng %s" % (lines_in.index(line_data) + 1)
+                new_supplier_msgs.append("%s: %s" % (line_ref, " | ".join(info)))
+
+        if new_supplier_msgs:
+            msg = Markup("<b>NCC mới từ MISA cần kiểm tra:</b><br/>%s") % "<br/>".join(new_supplier_msgs)
+            pr.message_post(body=msg)
+
+        # 3. Post message tổng kết đồng bộ
+        summary_parts = []
+        if pr.create_date:
+            create_dt = fields.Datetime.to_string(pr.create_date)[:16]
+            summary_parts.append(_("Ngày tạo: %s") % create_dt)
+        summary_parts.append(_("Số dòng: %s") % len(lines_in))
+        if new_supplier_msgs:
+            summary_parts.append(_("NCC mới cần kiểm tra: %s") % len(new_supplier_msgs))
+        summary_msg = _("Đồng bộ YCMH từ MISA CRM thành công. %s") % " | ".join(summary_parts)
+        pr.message_post(body=Markup("<i>%s</i>") % summary_msg)
 
         return pr
