@@ -279,6 +279,14 @@ class WordPressProductPriceAPI(http.Controller):
                     status_found = True
                     break
 
+        prices = item.get("prices")
+        if not status_found and isinstance(prices, dict):
+            for key in self.STOCK_STATUS_ALIASES:
+                if key in prices:
+                    raw_value = prices.get(key)
+                    status_found = True
+                    break
+
         if not status_found:
             return None, None
 
