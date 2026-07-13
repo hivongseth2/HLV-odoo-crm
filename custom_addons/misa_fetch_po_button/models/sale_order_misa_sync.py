@@ -848,23 +848,15 @@ class SaleOrder(models.Model):
                 
             env['sale.order.line'].create(vals_line)
 
-        # ===== 9) Confirm & đặt tên picking theo MISA =====
+        # ===== 9) Confirm & cập nhật thông tin picking =====
         if new_so.state in ('draft', 'sent'):
             env.flush_all()
             # Invalidate ORM cache để mrp thấy được phantom BOM vừa tạo trong cùng transaction
             env.invalidate_all()
             new_so.action_confirm()
         if new_so.picking_ids:
-            picking = new_so.picking_ids[0]
-            desired = delivery_no or order_no
-            exists = env['stock.picking'].sudo().with_context(active_test=False).search([
-                ('name', '=', desired), 
-                ('id', '!=', picking.id)
-            ], limit=1)
-            picking.name = f"{desired}-{picking.id}" if exists else desired
-            picking.partner_id = new_so.partner_id.id
-            for extra_picking in (new_so.picking_ids - picking):
-                extra_picking.partner_id = new_so.partner_id.id
+            for picking in new_so.picking_ids:
+                picking.partner_id = new_so.partner_id.id
 
         # Toast + log
         # new_so.message_post(body=_("Đồng bộ (xoá & tạo lại) thành công: %s") % (delivery_no or order_no))
