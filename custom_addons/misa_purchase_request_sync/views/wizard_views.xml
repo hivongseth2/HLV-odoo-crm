@@ -80,15 +80,15 @@
             <xpath expr="//field[@name='item_ids']" position="replace">
                 <field name="item_ids" nolabel="1" colspan="2">
                     <list name="Chi tiết" create="false" editable="bottom">
-                        <field name="line_id" options="{'no_open': true}" column_invisible="1" />
-                        <field name="request_id" column_invisible="1" />
-                        <field name="supplier_ref" column_invisible="1" />
+                        <field name="line_id" options="{'no_open': true}" optional="hide" />
+                        <field name="request_id" optional="hide" />
+                        <field name="supplier_ref" optional="hide" />
                         <field name="supplier_id" width="180px" />
                         <field name="product_id" width="200px" />
-                        <field name="name" column_invisible="1" />
-                        <field name="product_qty" width="100px" />
+                        <field name="name" optional="hide" />
+                        <field name="product_qty" width="100px" readonly="1" />
                         <field name="actual_qty" width="100px" />
-                        <field name="product_uom_id" column_invisible="1" groups="!uom.group_uom" />
+                        <field name="product_uom_id" optional="hide" groups="!uom.group_uom" />
                         <field name="product_uom_id" groups="uom.group_uom" width="80px" />
                         
                         <!-- Đơn giá: Sale đề xuất (xám) + Thực mua (xanh) -->
@@ -108,27 +108,31 @@
                         <field name="actual_tax_id" string="Thuế (%) thu mua" 
                                width="140px" 
                                decoration-success="1" />
-                        <field name="actual_tax_rate" column_invisible="1" />
+                        <field name="actual_tax_rate" optional="hide" />
                         
-                        <!-- Chiết khấu: Sale đề xuất (xám) + Thực mua (xanh) -->
+                        <!-- Tổng tiền: computed readonly -->
+                        <field name="misa_price_before_tax_total" string="Tổng tiền trước thuế" 
+                               readonly="1" width="120px" />
+                        <field name="misa_tax_amount_total" string="Tổng tiền thuế" 
+                               readonly="1" width="120px" />
+                        <field name="misa_amount" string="Thành tiền" 
+                               readonly="1" width="120px" decoration-success="1" />
+                        
+                        <!-- Chiết khấu: mặc định hide -->
                         <field name="misa_discount_rate" string="CK sale (%)" 
-                               readonly="1" 
-                               decoration-muted="1" 
-                               width="80px" />
+                               readonly="1" decoration-muted="1" 
+                               width="80px" optional="hide" />
                         <field name="misa_discount_amount" string="Tiền CK sale" 
-                               readonly="1" 
-                               decoration-muted="1" 
-                               width="100px" />
+                               readonly="1" decoration-muted="1" 
+                               width="100px" optional="hide" />
                         <field name="actual_discount_rate" string="CK thu mua (%)" 
-                               width="100px" 
-                               decoration-success="1" />
+                               width="100px" decoration-success="1" optional="hide" />
                         <field name="actual_discount_amount" string="Tiền CK thu mua" 
-                               width="100px" 
-                               decoration-success="1" />
+                               width="100px" decoration-success="1" optional="hide" />
                         
-                        <field name="estimated_cost" column_invisible="1" />
-                        <field name="keep_description" column_invisible="1" />
-                        <field name="keep_estimated_cost" column_invisible="1" />
+                        <field name="estimated_cost" optional="hide" />
+                        <field name="keep_description" optional="hide" />
+                        <field name="keep_estimated_cost" optional="hide" />
                     </list>
                 </field>
             </xpath>

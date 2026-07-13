@@ -220,23 +220,59 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
         help="Chiết khấu thực tế (tiền). Nhập tiền → tự tính %. Nhập % → tự tính tiền.",
     )
 
+    # === Computed fields (readonly) ===
+    misa_price_before_tax_total = fields.Float(
+        string="Tổng tiền trước thuế",
+        compute="_compute_wizard_financials",
+        readonly=True,
+        digits='Product Price',
+    )
+    misa_tax_amount_total = fields.Float(
+        string="Tổng tiền thuế",
+        compute="_compute_wizard_financials",
+        readonly=True,
+        digits='Product Price',
+    )
+    misa_amount = fields.Float(
+        string="Thành tiền",
+        compute="_compute_wizard_financials",
+        readonly=True,
+        digits='Product Price',
+    )
+
     supplier_ref = fields.Char(
         related='supplier_id.ref',
         string="Mã NCC",
         readonly=True
     )
 
+    @api.depends('actual_qty', 'actual_price_unit', 'actual_tax_rate', 'actual_discount_amount')
+    def _compute_wizard_financials(self):
+        for item in self:
+            qty = item.actual_qty or item.product_qty or 0.0
+            price = item.actual_price_unit or 0.0
+            tax_rate = item.actual_tax_rate or 0.0
+            discount = item.actual_discount_amount or 0.0
+
+            before_tax_total = qty * price
+            tax_total = qty * price * tax_rate / 100.0
+            item.misa_price_before_tax_total = before_tax_total
+            item.misa_tax_amount_total = tax_total
+            item.misa_amount = before_tax_total - discount + tax_total
+
     # --- Onchange: tự động tính chiết khấu 2 chiều ---
     @api.onchange('actual_discount_rate')
     def _onchange_actual_discount_rate(self):
-        if self.actual_discount_rate and self.actual_price_unit and self.product_qty:
-            self.actual_discount_amount = self.product_qty * self.actual_price_unit * self.actual_discount_rate / 100.0
+        qty = self.actual_qty or self.product_qty or 0.0
+        if self.actual_discount_rate and self.actual_price_unit and qty:
+            self.actual_discount_amount = qty * self.actual_price_unit * self.actual_discount_rate / 100.0
         elif self.actual_discount_rate == 0 and not self.actual_discount_amount:
             self.actual_discount_amount = 0.0
 
     @api.onchange('actual_discount_amount')
     def _onchange_actual_discount_amount(self):
-        base = (self.actual_price_unit or 0.0) * (self.product_qty or 0.0)
+        qty = self.actual_qty or self.product_qty or 0.0
+        base = (self.actual_price_unit or 0.0) * qty
         if self.actual_discount_amount and base:
             self.actual_discount_rate = self.actual_discount_amount / base * 100.0
         elif self.actual_discount_amount == 0 and not self.actual_discount_rate:
@@ -247,3 +283,9 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
         """Khi chọn thuế từ danh sách, tự động cập nhật actual_tax_rate."""
         if self.actual_tax_id and self.actual_tax_id.amount_type == 'percent':
             self.actual_tax_rate = self.actual_tax_id.amount
+
+    @api.onchange('actual_qty', 'actual_price_unit', 'actual_tax_rate')
+    def _onchange_actual_qty_price_tax(self):
+        """Kích hoạt tính toán lại cho các trường phụ thuộc."""
+        # Gọi hàm tương tự vì Odoo sẽ tự động update UI
+        pass
