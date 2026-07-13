@@ -32,13 +32,16 @@
             <xpath expr="//button[@name='action_view_stock_picking']/field[@name='move_count']" position="attributes">
                 <attribute name="string">Phiếu nhập kho</attribute>
             </xpath>
+            <xpath expr="//field[@name='line_ids']/list/field[@name='estimated_cost']" position="attributes">
+                <attribute name="optional">hide</attribute>
+            </xpath>
             <xpath expr="//field[@name='line_ids']/list/field[@name='estimated_cost']" position="after">
                 <field name="history_po_line_id" optional="hide"/>
                 <field name="sale_proposed_supplier_id" optional="show"/>
                 <field name="misa_supplier_id" optional="hide"/>
                 <field name="misa_stock_total" optional="hide"/>
-                <field name="misa_stock_selected" optional="show"/>
-                <field name="misa_stock_undelivered" optional="show"/>
+                <field name="misa_stock_selected" optional="hide"/>
+                <field name="misa_stock_undelivered" optional="hide"/>
                 <field name="misa_price_before_tax" optional="hide"/>
                 <field name="misa_discount_rate" optional="hide"/>
                 <field name="misa_discount_amount" optional="hide"/>
