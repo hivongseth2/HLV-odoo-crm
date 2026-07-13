@@ -190,7 +190,7 @@ class ProductTemplate(models.Model):
         if has_price_change and not self.env.context.get('skip_wordpress_sync'):
             if self._is_auto_sync_enabled():
                 _logger.info(f"Auto-sync enabled. Queuing sync for {self.name}...")
-                self._auto_sync_to_wordpress()
+                self._auto_sync_to_wordpress(price_queue_values=price_queue_values)
             else:
                  _logger.info(f"Auto-sync disabled or config missing.")
                 
@@ -408,7 +408,43 @@ class ProductTemplate(models.Model):
         # Fallback: lấy config active đầu tiên
         return self.env['wordpress.config'].search([('active', '=', True)], limit=1)
 
-    def _auto_sync_to_wordpress(self):
+    def _get_price_queue_values(self, changed_price_fields, old_price_values):
+        """Build old/new price summaries for wordpress.sync.queue display."""
+        price_queue_values = {}
+
+        for product in self:
+            old_parts = []
+            new_parts = []
+            for field in changed_price_fields:
+                if field not in product._fields:
+                    continue
+
+                old_value = old_price_values.get(product.id, {}).get(field)
+                new_value = product[field]
+                if old_value == new_value:
+                    continue
+
+                label = product._fields[field].string or field
+                old_parts.append(f"{label}: {self._format_price_queue_value(old_value)}")
+                new_parts.append(f"{label}: {self._format_price_queue_value(new_value)}")
+
+            if old_parts or new_parts:
+                price_queue_values[product.id] = {
+                    'old_value': '; '.join(old_parts),
+                    'new_value': '; '.join(new_parts),
+                }
+
+        return price_queue_values
+
+    def _format_price_queue_value(self, value):
+        if value in (False, None, ''):
+            value = 0.0
+        try:
+            return f"{float(value):,.0f}"
+        except (TypeError, ValueError):
+            return str(value)
+
+    def _auto_sync_to_wordpress(self, price_queue_values=None):
         """Tự động đồng bộ giá lên WordPress: Create Queue Jobs"""
         config = self._get_wordpress_config()
         if not config:
@@ -422,8 +458,15 @@ class ProductTemplate(models.Model):
             # Check SKU
             if not product.default_code:
                 continue
-                
-            QueueModel.create_job(product, sync_type='price', priority=10)
+
+            queue_values = (price_queue_values or {}).get(product.id, {})
+            QueueModel.create_job(
+                product,
+                sync_type='price',
+                priority=10,
+                old_value=queue_values.get('old_value'),
+                new_value=queue_values.get('new_value'),
+            )
             _logger.info(f"Queued sync for product {product.name} (SKU: {product.default_code})")
             
             # Post internal note about queued status? 
