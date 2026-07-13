@@ -12,10 +12,12 @@
                 <field name="purchase_order_id"/>
                 <field name="partner_id"/>
                 <field name="payment_date"/>
+                <field name="payment_method"/>
                 <field name="amount" widget="monetary"/>
                 <field name="currency_id" optional="hide"/>
                 <field name="vendor_bank_account_number" optional="show"/>
                 <field name="vendor_bank_name" optional="show"/>
+                <field name="beneficiary_account_type" optional="show"/>
                 <field name="state"/>
                 <field name="job_id" optional="show"/>
                 <field name="error_msg" optional="show"/>
@@ -45,6 +47,7 @@
                             <field name="partner_id" readonly="1"/>
                             <field name="company_id" readonly="1"/>
                             <field name="payment_date" readonly="state not in ('draft','error')"/>
+                            <field name="payment_method" readonly="state not in ('draft','error')"/>
                             <field name="amount" readonly="state not in ('draft','error')"/>
                             <field name="currency_id" readonly="1"/>
                         </group>
@@ -55,13 +58,14 @@
                             <field name="error_msg" readonly="1" invisible="not error_msg"/>
                         </group>
                     </group>
-                    <group string="Tài khoản chi">
+                    <group string="Tài khoản chi" invisible="payment_method != 'bank'">
                         <field name="company_bank_id" readonly="state not in ('draft','error')"/>
                         <field name="company_bank_account_number" readonly="state not in ('draft','error')"/>
                         <field name="company_bank_name" readonly="state not in ('draft','error')"/>
                     </group>
-                    <group string="Tài khoản nhận của nhà cung cấp">
-                        <field name="vendor_bank_id" readonly="state not in ('draft','error')"/>
+                    <group string="Tài khoản nhận của nhà cung cấp" invisible="payment_method != 'bank'">
+                        <field name="beneficiary_account_type" readonly="state not in ('draft','error')"/>
+                        <field name="vendor_bank_id" readonly="1" options="{'no_open': True}"/>
                         <field name="vendor_account_holder" readonly="state not in ('draft','error')"/>
                         <field name="vendor_bank_account_number" readonly="state not in ('draft','error')"/>
                         <field name="vendor_bank_name" readonly="state not in ('draft','error')"/>
@@ -91,6 +95,7 @@
                             <field name="partner_id"/>
                             <field name="company_id"/>
                             <field name="payment_date"/>
+                            <field name="payment_method" widget="radio" options="{'horizontal': true}"/>
                             <field name="amount"/>
                             <field name="currency_id"/>
                         </group>
@@ -99,13 +104,17 @@
                             <field name="credit_account"/>
                         </group>
                     </group>
-                    <group string="Tài khoản chi">
-                        <field name="company_bank_id"/>
-                        <field name="company_bank_account_number"/>
-                        <field name="company_bank_name"/>
+                    <field name="company_partner_id" invisible="1"/>
+                    <group string="Tài khoản chi" invisible="payment_method != 'bank'">
+                        <field name="company_bank_id"
+                               domain="[('partner_id', '=', company_partner_id)]"
+                               options="{'no_create': True, 'no_open': True}"/>
+                        <field name="company_bank_account_number" readonly="1"/>
+                        <field name="company_bank_name" readonly="1"/>
                     </group>
-                    <group string="Tài khoản nhận của nhà cung cấp">
-                        <field name="vendor_bank_id"/>
+                    <group string="Tài khoản nhận của nhà cung cấp" invisible="payment_method != 'bank'">
+                        <field name="beneficiary_account_type" required="payment_method == 'bank'"/>
+                        <field name="vendor_bank_id" readonly="1" options="{'no_open': True}"/>
                         <field name="vendor_account_holder"/>
                         <field name="vendor_bank_account_number"/>
                         <field name="vendor_bank_name"/>
@@ -157,10 +166,12 @@
                         <list string="Đề nghị chi MISA" create="false" edit="false" delete="false">
                             <field name="name"/>
                             <field name="payment_date"/>
+                            <field name="payment_method"/>
                             <field name="amount" widget="monetary"/>
                             <field name="currency_id" optional="hide"/>
                             <field name="vendor_bank_account_number"/>
                             <field name="vendor_bank_name"/>
+                            <field name="beneficiary_account_type"/>
                             <field name="state"/>
                             <field name="error_msg" optional="show"/>
                         </list>
