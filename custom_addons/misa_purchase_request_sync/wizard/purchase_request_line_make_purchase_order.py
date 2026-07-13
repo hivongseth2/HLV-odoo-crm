@@ -109,7 +109,6 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
             'product_qty': qty,
             'product_uom': item.product_uom_id.id or item.product_id.uom_id.id,
             'price_unit': price,
-            'account_id': item.product_id.property_account_expense_id.id or item.product_id.categ_id.property_account_expense_categ_id.id,
         }
 
         # Thuế thực tế (ưu tiên actual_tax_id)
