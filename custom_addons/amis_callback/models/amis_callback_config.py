@@ -1816,7 +1816,7 @@ class AmisCallbackConfig(models.Model):
         )
         return body
 
-    def push_payment_request(self, voucher_payload):
+    def push_payment_request(self, voucher_payload, reference_items=None):
         """Push bank/cash supplier payment request (voucher_type 3 or 4) to MISA."""
         self.ensure_one()
         payload = {
@@ -1825,6 +1825,8 @@ class AmisCallbackConfig(models.Model):
             'voucher': [voucher_payload],
             'dictionary': [],
         }
+        if reference_items:
+            payload['reference'] = reference_items
         _logger.info(
             'AMIS save payment request payload:\n%s',
             json.dumps(payload, ensure_ascii=False, default=str, indent=2),
