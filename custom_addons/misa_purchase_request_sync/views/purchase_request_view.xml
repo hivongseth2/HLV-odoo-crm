@@ -19,6 +19,13 @@
                     invisible="1"
                     groups="purchase_request.group_purchase_request_manager"
                 />
+                <button
+                    name="action_open_create_supplier_wizard"
+                    string="Tạo NCC từ MISA"
+                    type="object"
+                    class="btn-primary"
+                    invisible="not misa_has_new_supplier"
+                />
             </xpath>
             <xpath expr="//field[@name='requested_by']" position="after">
                 <field name="sale_order_id" readonly="state in ('done', 'rejected')"/>

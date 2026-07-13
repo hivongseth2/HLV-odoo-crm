@@ -94,7 +94,7 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
     def _prepare_purchase_order_line(self, po, item):
         res = super()._prepare_purchase_order_line(po, item)
 
-        # Dùng actual_qty (ưu tiên) hoặc product_qty (fallback, đã sync bởi onchange)
+        # Dùng actual_qty (ưu tiên) hoặc product_qty (fallback)
         res['product_qty'] = item.actual_qty or item.product_qty or 0.0
         # Dùng actual_price_unit (ưu tiên) hoặc misa_price_before_tax (fallback)
         res['price_unit'] = item.actual_price_unit or item.misa_price_before_tax or 0.0
@@ -113,6 +113,17 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
             if matched:
                 res['taxes_id'] = [Command.set(matched.ids)]
         return res
+
+    def make_purchase_order(self):
+        """Ghi tất cả dữ liệu item xuống database trước khi tạo PO."""
+        for item in self.item_ids:
+            qty = item.actual_qty or item.product_qty or 0.0
+            price = item.actual_price_unit or item.misa_price_before_tax or 0.0
+            item.write({
+                'product_qty': qty,
+                'estimated_cost': price * qty,
+            })
+        return super().make_purchase_order()
 
     def _reload_wizard(self):
         return {

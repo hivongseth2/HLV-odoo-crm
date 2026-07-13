@@ -32,6 +32,24 @@ class PurchaseRequest(models.Model):
     picking_type_id = fields.Many2one(
         default=lambda self: self._default_picking_type(),
     )
+    misa_new_supplier_json = fields.Text(string="Dữ liệu NCC mới (JSON)")
+    misa_has_new_supplier = fields.Boolean(
+        string="Có NCC mới", 
+        compute="_compute_misa_has_new_supplier"
+    )
+
+    def _compute_misa_has_new_supplier(self):
+        for rec in self:
+            if rec.misa_new_supplier_json:
+                rec.misa_has_new_supplier = True
+            else:
+                # Fallback check qua chatter messages
+                has_msg = self.env['mail.message'].search_count([
+                    ('res_id', '=', rec.id),
+                    ('model', '=', 'purchase.request'),
+                    ('body', 'ilike', 'NCC mới từ MISA cần kiểm tra:')
+                ]) > 0
+                rec.misa_has_new_supplier = has_msg
 
     # ------------------------------------------------------------
     # COMPUTED FIELDS: TIẾN ĐỘ MUA HÀNG (cho list view badge)
@@ -214,6 +232,61 @@ class PurchaseRequest(models.Model):
             for line in rec.line_ids:
                 total += line.misa_amount if line.misa_amount else line.estimated_cost
             rec.estimated_cost = total
+
+    def action_open_create_supplier_wizard(self):
+        self.ensure_one()
+        suppliers = []
+        if self.misa_new_supplier_json:
+            try:
+                suppliers = json.loads(self.misa_new_supplier_json)
+            except:
+                pass
+        
+        if not suppliers:
+            # Fallback: parse chatter
+            messages = self.env['mail.message'].search([
+                ('res_id', '=', self.id),
+                ('model', '=', 'purchase.request'),
+                ('body', 'ilike', 'NCC mới từ MISA cần kiểm tra:')
+            ], order='id desc', limit=1)
+            
+            if messages:
+                import re
+                body = messages.body
+                names = re.findall(r'<b>Tên NCC:</b>\s*([^<]+)', body)
+                phones = re.findall(r'<b>Điện thoại:</b>\s*([^<]+)', body)
+                addresses = re.findall(r'<b>Địa chỉ:</b>\s*([^<]+)', body)
+                vats = re.findall(r'<b>Mã số thuế:</b>\s*([^<]+)', body)
+                if names:
+                    suppliers.append({
+                        'name': names[0].strip(),
+                        'phone': phones[0].strip() if phones else '',
+                        'address': addresses[0].strip() if addresses else '',
+                        'vat': vats[0].strip() if vats else '',
+                    })
+
+        if not suppliers:
+            raise UserError(_("Không tìm thấy thông tin Nhà cung cấp mới nào từ MISA."))
+            
+        data = suppliers[0]
+        context = {
+            'default_name': data.get('name'),
+            'default_phone': data.get('phone'),
+            'default_street': data.get('address'),
+            'default_vat': data.get('vat'),
+            'default_supplier_rank': 1,
+            'default_is_company': True,
+            'default_company_type': 'company',
+        }
+        
+        return {
+            'name': _('Xác nhận & Tạo NCC'),
+            'type': 'ir.actions.act_window',
+            'res_model': 'res.partner',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': context,
+        }
 
     @api.model
     def api_create_from_misa_payload(self, payload):
@@ -413,9 +486,11 @@ class PurchaseRequest(models.Model):
 
         # 2. Xử lý new_supplier_data - chỉ hiển thị thông tin, không tự động tạo
         new_supplier_msgs = []
+        new_supplier_list = []
         for line_data in lines_in:
             nsd = line_data.get("new_supplier_data")
             if nsd and nsd.get("name"):
+                new_supplier_list.append(nsd)
                 pcode = (line_data.get("product_code") or "").strip()
                 line_ref = "SP [%s]" % pcode if pcode else "Dòng %s" % (lines_in.index(line_data) + 1)
                 items = []
@@ -433,6 +508,11 @@ class PurchaseRequest(models.Model):
         if new_supplier_msgs:
             msg = Markup("<b>NCC mới từ MISA cần kiểm tra:</b><br/>%s") % Markup("<br/>").join(new_supplier_msgs)
             pr.message_post(body=msg)
+            
+        if new_supplier_list:
+            pr.write({
+                'misa_new_supplier_json': json.dumps(new_supplier_list)
+            })
 
         # 3. Post message tổng kết đồng bộ
         summary_parts = []
