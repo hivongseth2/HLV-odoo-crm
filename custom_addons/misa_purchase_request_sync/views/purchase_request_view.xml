@@ -114,7 +114,7 @@
                         <button name="action_view_price_history" type="object"
                                 string="Lịch sử giá mua"
                                 class="btn-secondary"
-                                attrs="{'invisible': [('product_id', '=', False)]}"/>
+                                invisible="product_id == False"/>
                         <field name="cancelled" widget="boolean" />
                         
                         <!-- Hidden fields required by original logic -->
