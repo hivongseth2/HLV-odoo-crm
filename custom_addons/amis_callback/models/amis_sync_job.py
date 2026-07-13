@@ -29,6 +29,7 @@ class AmisSyncJob(models.Model):
         ('purchase_order', 'Đơn mua hàng (pu_order)'),
         ('purchase_order_revoke', 'Thu hồi Đơn mua hàng MISA'),
         ('payment_request', 'Đề nghị chi tiền (ba_withdraw)'),
+        ('payment_request_revoke', 'Thu hồi đề nghị chi tiền'),
         ('incoming', 'Nhập kho (InwardVoucher)'),
         ('outgoing', 'Xuất kho / Bán hàng (SAVoucher)'),
         ('sa_invoice', 'Hóa đơn bán hàng (SAInvoice)'),
@@ -88,6 +89,11 @@ class AmisSyncJob(models.Model):
                     payment_request._sync_payment_request_to_misa()
                 else:
                     raise ValueError('payment_request job thiếu payment_request_id')
+            elif self.direction == 'payment_request_revoke':
+                if payment_request:
+                    payment_request._revoke_misa_payment_request()
+                else:
+                    raise ValueError('payment_request_revoke job thiếu payment_request_id')
             elif self.direction == 'incoming':
                 pick._sync_incoming_po_to_misa()
             elif self.direction == 'outgoing':
@@ -115,10 +121,17 @@ class AmisSyncJob(models.Model):
                     'misa_purchase_order_last_error': error_text,
                     'misa_purchase_order_state_updated_at': fields.Datetime.now(),
                 })
-            if self.direction == 'payment_request' and payment_request:
+            if self.direction in ('payment_request', 'payment_request_revoke') and payment_request:
+                error_text = str(e)[:2000]
+                payment_state = 'error'
+                if self.direction == 'payment_request_revoke' and (
+                    'IsCreatedVoucher' in error_text or 'Đã sinh chứng từ' in error_text
+                ):
+                    payment_state = 'manual_delete_required'
                 payment_request.sudo().write({
-                    'state': 'error',
-                    'error_msg': str(e)[:2000],
+                    'state': payment_state,
+                    'error_msg': error_text,
+                    'state_updated_at': fields.Datetime.now(),
                 })
             self.write({
                 'retry_count': self.retry_count + 1,
