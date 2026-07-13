@@ -419,19 +419,19 @@ class PurchaseRequest(models.Model):
                 pcode = (line_data.get("product_code") or "").strip()
                 line_ref = "SP [%s]" % pcode if pcode else "Dòng %s" % (lines_in.index(line_data) + 1)
                 items = []
-                items.append("<b>Tên NCC:</b> %s" % nsd['name'])
-                if nsd.get('address'): items.append("<b>Địa chỉ:</b> %s" % nsd['address'])
-                if nsd.get('phone'): items.append("<b>Điện thoại:</b> %s" % nsd['phone'])
-                if nsd.get('vat'): items.append("<b>Mã số thuế:</b> %s" % nsd['vat'])
-                if nsd.get('note'): items.append("<b>Ghi chú:</b> %s" % nsd['note'])
-                html = '<div style="margin: 4px 0; padding: 6px 10px; border-left: 3px solid #ffc107; background: #fffdf0;">'
-                html += '<div style="font-weight: 600; color: #856404; margin-bottom: 4px;">%s</div>' % line_ref
-                html += '<div style="padding-left: 8px;">%s</div>' % "<br/>".join(items)
-                html += '</div>'
+                items.append(Markup("<b>Tên NCC:</b> %s") % nsd['name'])
+                if nsd.get('address'): items.append(Markup("<b>Địa chỉ:</b> %s") % nsd['address'])
+                if nsd.get('phone'): items.append(Markup("<b>Điện thoại:</b> %s") % nsd['phone'])
+                if nsd.get('vat'): items.append(Markup("<b>Mã số thuế:</b> %s") % nsd['vat'])
+                if nsd.get('note'): items.append(Markup("<b>Ghi chú:</b> %s") % nsd['note'])
+                html = Markup('<div style="margin: 4px 0; padding: 6px 10px; border-left: 3px solid #ffc107; background: #fffdf0;">')
+                html += Markup('<div style="font-weight: 600; color: #856404; margin-bottom: 4px;">%s</div>') % line_ref
+                html += Markup('<div style="padding-left: 8px;">%s</div>') % Markup("<br/>").join(items)
+                html += Markup('</div>')
                 new_supplier_msgs.append(html)
 
         if new_supplier_msgs:
-            msg = Markup("<b>NCC mới từ MISA cần kiểm tra:</b><br/>%s") % "<br/>".join(new_supplier_msgs)
+            msg = Markup("<b>NCC mới từ MISA cần kiểm tra:</b><br/>%s") % Markup("<br/>").join(new_supplier_msgs)
             pr.message_post(body=msg)
 
         # 3. Post message tổng kết đồng bộ
