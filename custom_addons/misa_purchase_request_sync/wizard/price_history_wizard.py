@@ -90,9 +90,11 @@ class PriceHistoryWizardLine(models.TransientModel):
     )
 
     def action_apply_price(self):
-        """Áp dụng giá từ dòng này vào misa_price_before_tax của PR line."""
+        """Áp dụng giá và NCC từ dòng này vào PR line."""
         self.ensure_one()
         self.wizard_id.line_id.write({
             'misa_price_before_tax': self.price,
+            'misa_supplier_id': self.partner_id.id,
+            'sale_proposed_supplier_id': self.partner_id.id,
         })
         return {'type': 'ir.actions.act_window_close'}

@@ -118,7 +118,7 @@
                     <group name="right_col">
                         <field name="estimated_cost" widget="monetary" readonly="is_editable == False" />
                         <field name="history_po_line_id" readonly="is_editable == False" options="{'no_create': True}"/>
-                        <field name="cancelled" widget="boolean" />
+                        <field name="cancelled" widget="boolean" string="Đã hủy?"/>
                         
                         <!-- Hidden fields required by original logic -->
                         <field name="is_editable" invisible="1" />
