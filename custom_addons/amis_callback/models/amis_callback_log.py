@@ -2,9 +2,13 @@
 import hashlib
 import hmac
 import json
+import logging
 from ast import literal_eval
 
 from odoo import api, fields, models
+
+
+_logger = logging.getLogger(__name__)
 
 
 class AmisCallbackLog(models.Model):
@@ -71,6 +75,9 @@ class AmisCallbackLog(models.Model):
         if isinstance(data_value, list):
             return data_value
         if isinstance(data_value, dict):
+            voucher_items = self._parse_voucher_payload_items(data_value)
+            if voucher_items:
+                return voucher_items
             return [data_value]
         if isinstance(data_value, str):
             try:
@@ -83,8 +90,37 @@ class AmisCallbackLog(models.Model):
             if isinstance(parsed, list):
                 return parsed
             if isinstance(parsed, dict):
+                voucher_items = self._parse_voucher_payload_items(parsed)
+                if voucher_items:
+                    return voucher_items
                 return [parsed]
         return []
+
+    @api.model
+    def _parse_voucher_payload_items(self, payload):
+        vouchers = payload.get('voucher') if isinstance(payload, dict) else None
+        if not isinstance(vouchers, list):
+            return []
+        items = []
+        for voucher in vouchers:
+            if not isinstance(voucher, dict):
+                continue
+            item = dict(voucher)
+            item['org_refid'] = (
+                voucher.get('org_refid')
+                or voucher.get('refid')
+                or item.get('org_refid')
+            )
+            item['org_refno'] = (
+                voucher.get('org_refno')
+                or voucher.get('refno')
+                or item.get('org_refno')
+            )
+            item['voucher_type'] = voucher.get('voucher_type') or item.get('voucher_type')
+            item['success'] = voucher.get('success') if voucher.get('success') is not None else True
+            item['data'] = voucher
+            items.append(item)
+        return items
 
     @api.model
     def create_from_payload(self, payload, raw_body='', request_path='', remote_addr='', parse_error=''):
@@ -191,28 +227,114 @@ class AmisCallbackLogLine(models.Model):
             if not org_refid:
                 continue
             success = bool(line.success)
-            voucher_type = int(line.voucher_type or 0)
             item = line._misa_callback_item()
+            voucher_type = line._misa_callback_voucher_type(item)
+            item_refno = line._misa_callback_refno(item)
+            is_request_callback = line._misa_callback_is_request_callback(voucher_type, item_refno)
             voucher_data = line._misa_callback_voucher_data(item)
             actual_refid = (
                 voucher_data.get('refid') or item.get('refid') or item.get('misa_refid') or org_refid
             )
-            po = self.env['purchase.order'].sudo().search([
-                ('misa_purchase_order_org_refid', '=', org_refid),
-            ], limit=1)
+            picking = line._misa_callback_find_inward_picking(org_refid, item_refno, voucher_type)
+            is_inward_callback = voucher_type in (7, 18) or bool(picking) or line._misa_refno_looks_like_inward(item_refno)
+            po = self.env['purchase.order'].sudo()
+            if voucher_type in (0, 21) and not is_inward_callback:
+                po_domain = [('misa_purchase_order_org_refid', '=', org_refid)]
+                if item_refno:
+                    po_domain.append(('name', '=', item_refno))
+                po = self.env['purchase.order'].sudo().search(po_domain, limit=1)
+                if not po and not item_refno:
+                    po = self.env['purchase.order'].sudo().search([
+                        ('misa_purchase_order_org_refid', '=', org_refid),
+                    ], limit=1)
+            elif is_inward_callback:
+                collided_po = self.env['purchase.order'].sudo().search([
+                    ('misa_purchase_order_org_refid', '=', org_refid),
+                ], limit=1)
+                if collided_po:
+                    _logger.warning(
+                        'Bo qua apply callback phieu nhap vao don mua %s vi org_refid bi trung: %s.',
+                        collided_po.name,
+                        org_refid,
+                    )
             if po:
-                vals = {'misa_purchase_order_synced': success}
+                vals = {}
                 if success and actual_refid:
                     vals['misa_purchase_order_refid'] = actual_refid
-                po.write(vals)
-                if success:
+                if not is_request_callback:
+                    vals['misa_purchase_order_synced'] = success
+                elif not success:
+                    vals['misa_purchase_order_synced'] = False
+                if vals:
+                    po.write(vals)
+                if is_request_callback and success:
+                    _logger.info(
+                        'MISA da nhan de nghi don mua %s (%s), cho callback sinh chung tu that su.',
+                        po.name,
+                        org_refid,
+                    )
+                if success and not is_request_callback:
                     line._apply_purchase_order_detail_ids(po, voucher_data)
-            elif voucher_type in (0, 7, 18):
-                picking = self.env['stock.picking'].sudo().search([
-                    ('misa_inward_org_refid', '=', org_refid),
+            else:
+                payment_request = self.env['amis.payment.request'].sudo().search([
+                    ('org_refid', '=', org_refid),
                 ], limit=1)
+                if payment_request:
+                    vals = {
+                        'state': 'synced' if success else 'error',
+                        'error_msg': False if success else (line.error_message or line.error_call_back_message or ''),
+                    }
+                    if success and actual_refid:
+                        vals['misa_refid'] = actual_refid
+                    payment_request.write(vals)
+                    continue
+            if voucher_type in (0, 7, 18):
+                if not picking:
+                    picking = line._misa_callback_find_inward_picking(org_refid, item_refno, voucher_type)
                 if picking:
-                    picking.write({'misa_inward_synced': success})
+                    if is_request_callback and success:
+                        _logger.info(
+                            'MISA da nhan de nghi phieu nhap %s (%s), cho callback sinh chung tu that su.',
+                            picking.name,
+                            org_refid,
+                        )
+                    else:
+                        picking.write({'misa_inward_synced': success})
+
+    def _misa_callback_voucher_type(self, item=None):
+        self.ensure_one()
+        item = item or {}
+        raw_value = self.voucher_type or item.get('voucher_type') or 0
+        try:
+            return int(raw_value or 0)
+        except Exception:
+            return 0
+
+    def _misa_callback_refno(self, item=None):
+        item = item or {}
+        return (item.get('org_refno') or item.get('refno') or '').strip()
+
+    def _misa_callback_is_request_callback(self, voucher_type, item_refno):
+        return bool(voucher_type) and not (item_refno or '').strip()
+
+    def _misa_refno_looks_like_inward(self, refno):
+        refno = (refno or '').strip().upper()
+        if not refno:
+            return False
+        return '/IN/' in refno or refno.startswith(('KBC/', 'NK'))
+
+    def _misa_callback_find_inward_picking(self, org_refid, item_refno='', voucher_type=0):
+        self.ensure_one()
+        StockPicking = self.env['stock.picking'].sudo()
+        picking = StockPicking
+        item_refno = (item_refno or '').strip()
+        if item_refno:
+            picking = StockPicking.search([('name', '=', item_refno)], limit=1)
+        if not picking and voucher_type in (0, 7, 18):
+            picking = StockPicking.search([
+                ('misa_inward_org_refid', '=', org_refid),
+            ], limit=1)
+        return picking
 
     def _misa_callback_item(self):
         self.ensure_one()

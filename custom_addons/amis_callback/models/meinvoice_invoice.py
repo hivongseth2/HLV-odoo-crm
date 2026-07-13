@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import json
 import logging
+import uuid
 
 from markupsafe import Markup, escape
 
@@ -129,11 +130,114 @@ class MeinvoiceInvoice(models.Model):
             _logger.exception('meInvoice: auto-send draft email thất bại (bỏ qua).')
         return records
 
+    def _sync_invoice_data_from_lines(self):
+        """Rebuild meInvoice payload line details from editable invoice lines."""
+        for rec in self.filtered(lambda inv: inv.state == 'draft'):
+            try:
+                invoice_data = json.loads(rec.invoice_data_json or '{}')
+            except Exception:
+                invoice_data = {}
+
+            detail = []
+            tax_groups = {}
+            total_sale_oc = 0.0
+            total_discount_oc = 0.0
+            total_net_oc = 0.0
+            total_vat_oc = 0.0
+
+            lines = rec.line_ids.sorted(lambda line: (line.sort_order or 0, line.id or 0))
+            for idx, line in enumerate(lines, start=1):
+                sort_order = line.sort_order or idx
+                amount_oc = float(line.amount_oc or 0.0)
+                discount_amount_oc = float(line.discount_amount_oc or 0.0)
+                amount_without_vat_oc = float(line.amount_without_vat_oc or 0.0)
+                vat_amount_oc = float(line.vat_amount_oc or 0.0)
+                vat_rate_name = (line.vat_rate_name or '').strip()
+
+                detail.append({
+                    'ItemType': 1,
+                    'SortOrder': sort_order,
+                    'LineNumber': sort_order,
+                    'ItemCode': line.item_code or '',
+                    'ItemName': line.item_name or '',
+                    'UnitName': line.unit_name or '',
+                    'Quantity': float(line.quantity or 0.0),
+                    'UnitPrice': float(line.unit_price or 0.0),
+                    'AmountOC': amount_oc,
+                    'Amount': amount_oc,
+                    'DiscountRate': float(line.discount_rate or 0.0),
+                    'DiscountAmountOC': discount_amount_oc,
+                    'DiscountAmount': discount_amount_oc,
+                    'AmountWithoutVATOC': amount_without_vat_oc,
+                    'AmountWithoutVAT': amount_without_vat_oc,
+                    'VATRateName': vat_rate_name,
+                    'VATAmountOC': vat_amount_oc,
+                    'VATAmount': vat_amount_oc,
+                })
+
+                total_sale_oc += amount_oc
+                total_discount_oc += discount_amount_oc
+                total_net_oc += amount_without_vat_oc
+                total_vat_oc += vat_amount_oc
+                if vat_rate_name:
+                    group = tax_groups.setdefault(
+                        vat_rate_name,
+                        {'AmountWithoutVATOC': 0.0, 'VATAmountOC': 0.0},
+                    )
+                    group['AmountWithoutVATOC'] += amount_without_vat_oc
+                    group['VATAmountOC'] += vat_amount_oc
+
+            total_sale_oc = round(total_sale_oc, 2)
+            total_discount_oc = round(total_discount_oc, 2)
+            total_net_oc = round(total_net_oc, 2)
+            total_vat_oc = round(total_vat_oc, 2)
+            total_amount_oc = round(total_net_oc + total_vat_oc, 2)
+            tax_rate_info = [
+                {
+                    'VATRateName': rate_name,
+                    'AmountWithoutVATOC': round(vals['AmountWithoutVATOC'], 2),
+                    'VATAmountOC': round(vals['VATAmountOC'], 2),
+                }
+                for rate_name, vals in tax_groups.items()
+            ]
+
+            invoice_data.update({
+                'TotalSaleAmountOC': total_sale_oc,
+                'TotalSaleAmount': total_sale_oc,
+                'TotalDiscountAmountOC': total_discount_oc,
+                'TotalDiscountAmount': total_discount_oc,
+                'TotalAmountWithoutVATOC': total_net_oc,
+                'TotalAmountWithoutVAT': total_net_oc,
+                'TotalVATAmountOC': total_vat_oc,
+                'TotalVATAmount': total_vat_oc,
+                'TotalAmountOC': total_amount_oc,
+                'TotalAmount': total_amount_oc,
+                'OriginalInvoiceDetail': detail,
+                'TaxRateInfo': tax_rate_info,
+            })
+            try:
+                invoice_data['TotalAmountInWords'] = rec.sale_order_id._amount_in_words_vi(total_amount_oc)
+            except Exception:
+                pass
+
+            rec.write({
+                'total_sale_oc': total_sale_oc,
+                'total_discount_oc': total_discount_oc,
+                'total_net_oc': total_net_oc,
+                'total_vat_oc': total_vat_oc,
+                'total_amount_oc': total_amount_oc,
+                'total_amount_in_words': invoice_data.get('TotalAmountInWords') or rec.total_amount_in_words,
+                'invoice_data_json': json.dumps(invoice_data, ensure_ascii=False),
+            })
+        return True
+
     def action_publish(self):
         """Gửi hóa đơn lên Cơ quan Thuế qua meInvoice API."""
         self.ensure_one()
         if self.state != 'draft':
             raise UserError('Chỉ hóa đơn ở trạng thái Nháp mới có thể phát hành.')
+
+        self._sync_invoice_data_from_lines()
 
         try:
             invoice_data = json.loads(self.invoice_data_json or '{}')
@@ -158,8 +262,26 @@ class MeinvoiceInvoice(models.Model):
             len(new_series) >= 5 and new_series[4].upper() == 'M'
         )
 
+        # Lưu lại invoice_data đã patched để invoice_data_json luôn phản ánh đúng
+        # những gì thực sự được gửi lên meInvoice
+        self.write({'invoice_data_json': json.dumps(invoice_data, ensure_ascii=False)})
+
         config = self.env['amis.callback.config'].sudo().ensure_singleton()
         results = config.push_meinvoice_invoice([invoice_data])
+
+        # Nếu DuplicateInvoiceRefID → tự sinh RefID mới và retry 1 lần
+        if results and isinstance(results, list):
+            first_check = results[0] if results else {}
+            if (first_check.get('ErrorCode') or '') == 'DuplicateInvoiceRefID':
+                new_ref_id = str(uuid.uuid4())
+                invoice_data['RefID'] = new_ref_id
+                self.write({'invoice_data_json': json.dumps(invoice_data, ensure_ascii=False)})
+                if self.sale_order_id:
+                    self.sale_order_id.sudo().write({'misa_meinvoice_ref_id': new_ref_id})
+                _logger.info(
+                    'meInvoice DuplicateInvoiceRefID — auto-retry với RefID mới: %s', new_ref_id,
+                )
+                results = config.push_meinvoice_invoice([invoice_data])
 
         transaction_id = ''
         inv_no = ''
@@ -180,10 +302,13 @@ class MeinvoiceInvoice(models.Model):
                     pass
             err_code = first.get('ErrorCode') or ''
             if err_code:
-                raise UserError('meInvoice phát hành lỗi: %s' % err_code)
+                err_desc = first.get('DescriptionErrorCode') or ''
+                raise UserError('meInvoice phát hành lỗi: %s — %s' % (err_code, err_desc))
 
+        # Nếu InvCode trả về ngay → CQT đã cấp mã, không cần chờ
+        new_state = 'accepted' if inv_code else 'submitted'
         self.write({
-            'state': 'submitted',
+            'state': new_state,
             'transaction_id': transaction_id,
             'inv_no': inv_no,
             'inv_code': inv_code,
@@ -191,7 +316,7 @@ class MeinvoiceInvoice(models.Model):
             'inv_date_result': inv_date_result or (
                 inv_date.strftime('%Y-%m-%d') if inv_date else False
             ),
-            'cqt_check_queued': True,  # đưa vào queue cron check CQT
+            'cqt_check_queued': new_state == 'submitted',  # chỉ queue nếu chưa có InvCode
         })
 
         # Cập nhật SO để backward compat với các field kết quả trên đơn hàng
@@ -208,10 +333,18 @@ class MeinvoiceInvoice(models.Model):
         })
 
         _logger.info(
-            'meInvoice submitted for SO %s: TransactionID=%s InvNo=%s — chờ CQT xác nhận.',
-            order.name, transaction_id, inv_no,
+            'meInvoice submitted for SO %s: TransactionID=%s InvNo=%s InvCode=%s state=%s',
+            order.name, transaction_id, inv_no, inv_code, new_state,
         )
 
+        if new_state == 'accepted':
+            msg = 'Hóa đơn %s %s đã được Cơ quan Thuế cấp mã: %s' % (
+                inv_series_result or new_series, inv_no, inv_code,
+            )
+        else:
+            msg = 'Hóa đơn %s %s đã được gửi. TransactionID: %s — Hệ thống sẽ tự kiểm tra kết quả CQT.' % (
+                inv_series_result or new_series, inv_no, transaction_id,
+            )
         # Auto-send email cho khách hàng (mẫu "Đã cấp mã") nếu được cấu hình
         try:
             if (config.meinvoice_mail_enabled
@@ -228,9 +361,7 @@ class MeinvoiceInvoice(models.Model):
             'tag': 'display_notification',
             'params': {
                 'title': 'Đã gửi lên Cơ quan Thuế',
-                'message': 'Hóa đơn %s %s đã được gửi. TransactionID: %s — Hệ thống sẽ tự kiểm tra kết quả CQT.' % (
-                    inv_series_result or new_series, inv_no, transaction_id,
-                ),
+                'message': msg,
                 'type': 'success',
                 'sticky': False,
             },
@@ -241,6 +372,7 @@ class MeinvoiceInvoice(models.Model):
         self.ensure_one()
         if self.state != 'draft':
             raise UserError('Chỉ hóa đơn ở trạng thái Nháp mới có thể xem trước.')
+        self._sync_invoice_data_from_lines()
         if not self.invoice_data_json:
             raise UserError('Chưa có dữ liệu hóa đơn. Vui lòng xóa và tạo lại từ đơn hàng.')
 
@@ -288,14 +420,26 @@ class MeinvoiceInvoice(models.Model):
         from datetime import datetime as _dt
         now = _dt.utcnow()
         if not status_list:
+            # Nếu InvCode đã có → CQT đã cấp mã trước đó (từ POST /invoice response)
+            if self.inv_code:
+                self.write({'state': 'accepted', 'cqt_check_queued': False, 'cqt_checked_at': now})
+                return {
+                    'type': 'ir.actions.client',
+                    'tag': 'display_notification',
+                    'params': {
+                        'title': 'Kiểm tra CQT',
+                        'message': 'Hóa đơn đã được Cơ quan Thuế cấp mã: %s' % self.inv_code,
+                        'type': 'success', 'sticky': False,
+                    },
+                }
             self.write({'cqt_checked_at': now})
             return {
                 'type': 'ir.actions.client',
                 'tag': 'display_notification',
                 'params': {
                     'title': 'Kiểm tra CQT',
-                    'message': 'meInvoice không trả về trạng thái cho hóa đơn này.',
-                    'type': 'warning', 'sticky': False,
+                    'message': 'Hóa đơn đã được cấp số trên meInvoice và đang chờ chuyển tiếp lên Cơ quan Thuế. Vui lòng kiểm tra lại sau.',
+                    'type': 'info', 'sticky': False,
                 },
             }
 
@@ -360,9 +504,11 @@ class MeinvoiceInvoice(models.Model):
         if self.state not in ('submitted', 'accepted', 'rejected') or not self.transaction_id:
             raise UserError('Chỉ hóa đơn đã gửi CQT mới có thể tải xuống.')
         config = self.env['amis.callback.config'].sudo().ensure_singleton()
-        url = config.get_meinvoice_download_url(self.transaction_id, file_type='PDF')
+        # /invoice/publishview trả về URL viewer PDF — đổi Viewer=1 sang Viewer=0 để force download
+        url = config.get_meinvoice_publishview_url([self.transaction_id])
         if not url:
             raise UserError('meInvoice không trả về link tải PDF.')
+        url = url.replace('Viewer=1', 'Viewer=0')
         return {'type': 'ir.actions.act_url', 'url': url, 'target': 'new'}
 
     def action_download_xml(self):
@@ -371,9 +517,11 @@ class MeinvoiceInvoice(models.Model):
         if self.state not in ('submitted', 'accepted', 'rejected') or not self.transaction_id:
             raise UserError('Chỉ hóa đơn đã gửi CQT mới có thể tải xuống.')
         config = self.env['amis.callback.config'].sudo().ensure_singleton()
-        url = config.get_meinvoice_download_url(self.transaction_id, file_type='XML')
+        # Dùng publishview URL, đổi type=pdf → type=xml
+        url = config.get_meinvoice_publishview_url([self.transaction_id])
         if not url:
             raise UserError('meInvoice không trả về link tải XML.')
+        url = url.replace('type=pdf', 'type=xml').replace('Viewer=1', 'Viewer=0')
         return {'type': 'ir.actions.act_url', 'url': url, 'target': 'new'}
 
     def action_view_invoice(self):
@@ -394,6 +542,51 @@ class MeinvoiceInvoice(models.Model):
             rec.write({'state': 'cancelled', 'cqt_check_queued': False})
         return True
 
+    def action_reset_to_draft(self):
+        """Đặt lại hóa đơn về Nháp với RefID mới để gửi lại sau khi điều chỉnh/hủy.
+
+        - Sinh UUID mới cho RefID trong invoice_data_json
+        - Xóa misa_meinvoice_ref_id trên SO để lần gửi tiếp theo cũng dùng RefID mới
+        - Xóa các kết quả cũ (transaction_id, inv_no, inv_code, ...)
+        """
+        for rec in self:
+            # Sinh RefID mới
+            new_ref_id = str(uuid.uuid4())
+
+            # Cập nhật RefID trong invoice_data_json
+            try:
+                inv_data = json.loads(rec.invoice_data_json or '{}')
+            except Exception:
+                inv_data = {}
+            inv_data['RefID'] = new_ref_id
+            new_json = json.dumps(inv_data, ensure_ascii=False)
+
+            rec.write({
+                'state': 'draft',
+                'invoice_data_json': new_json,
+                'transaction_id': False,
+                'inv_no': False,
+                'inv_code': False,
+                'inv_series_result': False,
+                'inv_date_result': False,
+                'cqt_status_code': False,
+                'cqt_status_desc': False,
+                'cqt_checked_at': False,
+                'cqt_check_queued': False,
+            })
+
+            # Xóa misa_meinvoice_ref_id trên SO để SO-level sync cũng dùng RefID mới
+            if rec.sale_order_id:
+                rec.sale_order_id.sudo().write({
+                    'misa_meinvoice_ref_id': new_ref_id,
+                })
+
+            _logger.info(
+                'meInvoice reset to draft for SO %s: new RefID=%s',
+                rec.sale_order_id.name if rec.sale_order_id else '?',
+                new_ref_id,
+            )
+        return True
     # ── Mail compose: gợi ý người nhận ─────────────────────────────────────
 
     def message_get_suggested_recipients(self):
@@ -900,3 +1093,27 @@ class MeinvoiceInvoiceLine(models.Model):
     amount_without_vat_oc = fields.Float(string='Tiền trước thuế', digits=(16, 0))
     vat_rate_name = fields.Char(string='Thuế suất')
     vat_amount_oc = fields.Float(string='Tiền thuế', digits=(16, 0))
+
+    def _sync_parent_invoice_data(self, invoices):
+        if self.env.context.get('skip_meinvoice_line_json_sync'):
+            return True
+        invoices.filtered(lambda inv: inv.state == 'draft')._sync_invoice_data_from_lines()
+        return True
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        records = super().create(vals_list)
+        records._sync_parent_invoice_data(records.mapped('invoice_id'))
+        return records
+
+    def write(self, vals):
+        invoices = self.mapped('invoice_id')
+        result = super().write(vals)
+        self._sync_parent_invoice_data(invoices | self.mapped('invoice_id'))
+        return result
+
+    def unlink(self):
+        invoices = self.mapped('invoice_id')
+        result = super().unlink()
+        self._sync_parent_invoice_data(invoices)
+        return result
