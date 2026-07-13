@@ -417,14 +417,18 @@ class PurchaseRequest(models.Model):
             nsd = line_data.get("new_supplier_data")
             if nsd and nsd.get("name"):
                 pcode = (line_data.get("product_code") or "").strip()
-                info = []
-                info.append("Tên: %s" % nsd['name'])
-                if nsd.get('address'): info.append("ĐC: %s" % nsd['address'])
-                if nsd.get('phone'): info.append("ĐT: %s" % nsd['phone'])
-                if nsd.get('vat'): info.append("MST: %s" % nsd['vat'])
-                if nsd.get('note'): info.append("GHI CHÚ: %s" % nsd['note'])
                 line_ref = "SP [%s]" % pcode if pcode else "Dòng %s" % (lines_in.index(line_data) + 1)
-                new_supplier_msgs.append("%s: %s" % (line_ref, " | ".join(info)))
+                items = []
+                items.append("<b>Tên NCC:</b> %s" % nsd['name'])
+                if nsd.get('address'): items.append("<b>Địa chỉ:</b> %s" % nsd['address'])
+                if nsd.get('phone'): items.append("<b>Điện thoại:</b> %s" % nsd['phone'])
+                if nsd.get('vat'): items.append("<b>Mã số thuế:</b> %s" % nsd['vat'])
+                if nsd.get('note'): items.append("<b>Ghi chú:</b> %s" % nsd['note'])
+                html = '<div style="margin: 4px 0; padding: 6px 10px; border-left: 3px solid #ffc107; background: #fffdf0;">'
+                html += '<div style="font-weight: 600; color: #856404; margin-bottom: 4px;">%s</div>' % line_ref
+                html += '<div style="padding-left: 8px;">%s</div>' % "<br/>".join(items)
+                html += '</div>'
+                new_supplier_msgs.append(html)
 
         if new_supplier_msgs:
             msg = Markup("<b>NCC mới từ MISA cần kiểm tra:</b><br/>%s") % "<br/>".join(new_supplier_msgs)

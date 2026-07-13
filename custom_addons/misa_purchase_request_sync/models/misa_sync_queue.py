@@ -42,13 +42,16 @@ class MisaSyncQueue(models.Model):
             self.env.cr.commit()  # Tránh lock row quá lâu, cẩn thận với transaction
 
             try:
-                payload_dict = json.loads(record.payload)
-                if record.sync_type == 'pr':
-                    self._process_pr(record, payload_dict)
-                elif record.sync_type == 'so':
-                    self._process_so(record, payload_dict)
-                elif record.sync_type == 'po':
-                    self._process_po(record, payload_dict)
+                # Dùng savepoint để cô lập lỗi DB (FK violation, ...)
+                # Nếu lỗi xảy ra, savepoint rollback nhưng transaction chính vẫn sống
+                with self.env.cr.savepoint():
+                    payload_dict = json.loads(record.payload)
+                    if record.sync_type == 'pr':
+                        self._process_pr(record, payload_dict)
+                    elif record.sync_type == 'so':
+                        self._process_so(record, payload_dict)
+                    elif record.sync_type == 'po':
+                        self._process_po(record, payload_dict)
                 
                 # Nếu không exception tức là thành công
                 record.write({
@@ -59,6 +62,7 @@ class MisaSyncQueue(models.Model):
 
             except Exception as e:
                 _logger.exception("Lỗi khi xử lý queue %s (ID: %s)", record.name, record.id)
+                # Transaction vẫn sống vì savepoint đã rollback lỗi DB
                 record.retry_count += 1
                 if record.retry_count >= 3:
                     record.write({
