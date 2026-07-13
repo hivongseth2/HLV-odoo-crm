@@ -212,7 +212,8 @@ class AmisPaymentRequest(models.Model):
         config = self.env['amis.callback.config'].sudo().ensure_singleton()
         config.ensure_sync_ready()
         voucher_payload = self._prepare_misa_payment_request_payload(config)
-        config.push_payment_request(voucher_payload)
+        reference_items = self._prepare_misa_payment_request_references(voucher_payload)
+        config.push_payment_request(voucher_payload, reference_items=reference_items)
         self.sudo().write({
             'org_refid': voucher_payload.get('org_refid') or '',
             'state': 'sent',
@@ -304,7 +305,7 @@ class AmisPaymentRequest(models.Model):
             'currency_id': currency,
             'exchange_rate': exchange_rate,
             'journal_memo': memo,
-            'custom_field10': account_type_label if is_bank else 'Tiền mặt',
+            'custom_field5': account_type_label if is_bank else 'Tiền mặt',
             'total_amount_oc': amount,
             'total_amount': amount,
             'total_amount_finance': amount,
@@ -338,6 +339,24 @@ class AmisPaymentRequest(models.Model):
             ):
                 voucher.pop(field_name, None)
         return voucher
+
+    def _prepare_misa_payment_request_references(self, voucher_payload):
+        self.ensure_one()
+        po = self.purchase_order_id
+        if not po:
+            return []
+        po_org_refid = (po.misa_purchase_order_org_refid or '').strip()
+        return [{
+            'org_refid': voucher_payload.get('org_refid') or '',
+            'org_refno': voucher_payload.get('org_refno') or self.name,
+            'org_reftype': int(voucher_payload.get('org_reftype') or voucher_payload.get('reftype') or 0),
+            'org_reftype_name': voucher_payload.get('org_reftype_name') or '',
+            'org_refer_refid': po_org_refid or None,
+            'org_refer_refno': po.name or '',
+            'org_refer_reftype': 301,
+            'org_refer_reftype_name': 'Đơn mua hàng',
+            'sort_order': 1,
+        }]
 
     def _misa_datetime(self, value):
         if not value:
