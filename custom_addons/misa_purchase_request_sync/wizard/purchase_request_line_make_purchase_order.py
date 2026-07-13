@@ -216,6 +216,39 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
         help="Chiết khấu thực tế (tiền). Nhập tiền → tự tính %. Nhập % → tự tính tiền.",
     )
 
+    # === Computed fields (readonly, hiển thị tổng tiền) ===
+    misa_price_before_tax_total = fields.Float(
+        string="Tổng tiền trước thuế",
+        compute="_compute_wizard_financials",
+        readonly=True,
+        digits='Product Price',
+    )
+    misa_tax_amount_total = fields.Float(
+        string="Tổng tiền thuế",
+        compute="_compute_wizard_financials",
+        readonly=True,
+        digits='Product Price',
+    )
+    misa_amount = fields.Float(
+        string="Thành tiền",
+        compute="_compute_wizard_financials",
+        readonly=True,
+        digits='Product Price',
+    )
+
+    @api.depends('actual_qty', 'actual_price_unit', 'actual_tax_rate', 'actual_discount_amount')
+    def _compute_wizard_financials(self):
+        for item in self:
+            qty = item.actual_qty or item.product_qty or 0.0
+            price = item.actual_price_unit or 0.0
+            tax_rate = item.actual_tax_rate or 0.0
+            discount = item.actual_discount_amount or 0.0
+            before_tax_total = qty * price
+            tax_total = qty * price * tax_rate / 100.0
+            item.misa_price_before_tax_total = before_tax_total
+            item.misa_tax_amount_total = tax_total
+            item.misa_amount = before_tax_total - discount + tax_total
+
     # ── Onchange: sync actual → product_qty & estimated_cost ──
     @api.onchange('actual_qty', 'actual_price_unit')
     def _onchange_actual_sync(self):
