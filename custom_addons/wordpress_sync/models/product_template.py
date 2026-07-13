@@ -153,8 +153,33 @@ class ProductTemplate(models.Model):
             'x_studio_ga_hng_nim_yt',
         ]
         has_price_change = any(field in vals for field in price_fields)
+        changed_price_fields = [field for field in price_fields if field in vals]
+        old_price_values = {}
+        if has_price_change:
+            for product in self:
+                old_price_values[product.id] = {
+                    field: product[field]
+                    for field in changed_price_fields
+                    if field in product._fields
+                }
+        old_stock_values = {}
+        if 'x_wp_stock_status' in vals:
+            old_stock_values = {
+                product.id: product.x_wp_stock_status
+                for product in self
+            }
 
         result = super().write(vals)
+        price_queue_values = (
+            self._get_price_queue_values(changed_price_fields, old_price_values)
+            if has_price_change
+            else {}
+        )
+        stock_queue_values = (
+            self._get_stock_queue_values(old_stock_values)
+            if 'x_wp_stock_status' in vals
+            else {}
+        )
 
         # 1. Update Parent Combos if I am a child and my price changed
         if has_price_change:
@@ -172,10 +197,7 @@ class ProductTemplate(models.Model):
         # 3. Check for manual stock status change
         if 'x_wp_stock_status' in vals and not self.env.context.get('skip_wordpress_sync'):
              _logger.info(f"Manual Stock Status change detected for {self.name}. Queuing sync...")
-             # Capture old value? Usually lost in write.
-             # But we can assume it was different.
-             # For direct writes, we might not know old value.
-             self._auto_sync_stock_to_wordpress(new_value=vals.get('x_wp_stock_status')) # Reuse queue mechanism
+             self._auto_sync_stock_to_wordpress(stock_queue_values=stock_queue_values) # Reuse queue mechanism
              self._update_parent_combos_stock()
 
         return result
@@ -253,19 +275,37 @@ class ProductTemplate(models.Model):
                 # If the overall status is same, usually no need to push status update.
                 pass
 
-    def _auto_sync_stock_to_wordpress(self, old_value=None, new_value=None):
+    def _get_stock_queue_values(self, old_stock_values):
+        """Build old/new stock status summaries for wordpress.sync.queue display."""
+        stock_queue_values = {}
+
+        for product in self:
+            old_value = old_stock_values.get(product.id)
+            new_value = product.x_wp_stock_status
+            if old_value == new_value:
+                continue
+
+            stock_queue_values[product.id] = {
+                'old_value': old_value or '',
+                'new_value': new_value or '',
+            }
+
+        return stock_queue_values
+
+    def _auto_sync_stock_to_wordpress(self, old_value=None, new_value=None, stock_queue_values=None):
         """Queue stock sync job"""
         Queue = self.env['wordpress.sync.queue']
         for product in self:
             if not product.default_code: continue
             _logger.error(f"[Sync-DEBUG] Auto-Syncing Stock for {product.name} (ID: {product.id})")
+            queue_values = (stock_queue_values or {}).get(product.id, {})
             
             Queue.create_job(
                 product, 
                 sync_type='stock', 
                 priority=50,
-                old_value=old_value,
-                new_value=new_value
+                old_value=queue_values.get('old_value', old_value),
+                new_value=queue_values.get('new_value', new_value)
             ) # Manual change = High priority
 
     def _update_parent_combo_prices(self):
