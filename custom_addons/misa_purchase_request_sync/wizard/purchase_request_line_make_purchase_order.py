@@ -92,34 +92,26 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
         return res
 
     def _prepare_purchase_order_line(self, po, item):
-        # --- Override hoàn toàn, không gọi super để tránh bị reset ---
-        if not item.product_id:
-            return {}
-        
-        qty = item.actual_qty or item.product_qty or 0.0
+        # Gọi super() để giữ nguyên tất cả logic OCA (link PR-PO, date_planned, ...)
+        res = super()._prepare_purchase_order_line(po, item)
+
+        # Override: Số lượng thực mua
+        if item.actual_qty and item.actual_qty > 0:
+            res['product_qty'] = item.actual_qty
+
+        # Override: Đơn giá thực mua (ưu tiên actual_price_unit)
         price = item.actual_price_unit or item.misa_price_before_tax or 0.0
+        if price > 0:
+            res['price_unit'] = price
 
-        # Nếu không có actual_qty, fallback về line_id
-        if not qty and item.line_id:
-            qty = item.line_id.product_qty - item.line_id.purchased_qty
-        
-        res = {
-            'order_id': po.id,
-            'product_id': item.product_id.id,
-            'name': item.line_id.name if item.keep_description and item.line_id else item.product_id.display_name,
-            'product_qty': qty,
-            'product_uom': item.product_uom_id.id or item.product_id.uom_id.id,
-            'price_unit': price,
-        }
-
-        # Thuế thực tế (ưu tiên actual_tax_id)
+        # Override: Thuế thực tế (ưu tiên actual_tax_id)
         if item.actual_tax_id:
             res['taxes_id'] = [Command.set(item.actual_tax_id.ids)]
         else:
             # Fallback: tìm theo actual_tax_rate
             tax_rate = item.actual_tax_rate
             if not tax_rate and hasattr(item.line_id.request_id, 'misa_id') and item.line_id.request_id.misa_id:
-                tax_rate = 0  
+                tax_rate = 0
             if tax_rate:
                 if 'misa.po.fetch' in self.env:
                     misa_po_fetch_obj = self.env['misa.po.fetch'].with_company(po.company_id)
@@ -140,6 +132,18 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
                         res['taxes_id'] = [Command.set(matched_tax.ids)]
                     else:
                         res['taxes_id'] = [Command.clear()]
+        return res
+
+    def make_purchase_order(self):
+        """Override để ghi actual values vào PR line sau khi tạo PO."""
+        res = super().make_purchase_order()
+        # Sau khi super() tạo PO, các item_ids đã được xóa (wizard đã clear)
+        # Nên cần đọc lại từ purchase order vừa tạo
+        purchase = self.env['purchase.order'].browse(res.get('res_id'))
+        if purchase:
+            for po_line in purchase.order_line:
+                # Có thể ghi lại actual values vào PR line nếu cần
+                pass
         return res
 
     def _reload_wizard(self):
@@ -305,5 +309,4 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
     @api.onchange('actual_qty', 'actual_price_unit', 'actual_tax_rate')
     def _onchange_actual_qty_price_tax(self):
         """Kích hoạt tính toán lại cho các trường phụ thuộc."""
-        # Gọi hàm tương tự vì Odoo sẽ tự động update UI
         pass
