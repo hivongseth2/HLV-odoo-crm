@@ -1728,6 +1728,50 @@ class AmisCallbackConfig(models.Model):
         )
         return result
 
+    def delete_purchase_order_request(self, org_refid):
+        """Delete a pending MISA purchase-order generation request."""
+        self.ensure_one()
+        org_refid = (org_refid or '').strip()
+        if not org_refid:
+            raise UserError('Thiếu org_refid của Đơn mua hàng cần thu hồi trên MISA.')
+
+        self.ensure_sync_ready()
+        self._ensure_token_valid()
+        api_url = (self.api_url or '').rstrip('/')
+        if not api_url:
+            raise UserError('Thiếu API URL MISA.')
+        path = '/apir/sync/actopen/delete'
+        url = '%s%s' % (api_url, path)
+        payload = {
+            'app_id': self.app_id,
+            'org_company_code': self.org_company_code,
+            'voucher': [{
+                'voucher_type': 21,
+                'org_refid': org_refid,
+            }],
+        }
+        headers = self._build_headers(include_token=True)
+        _logger.info(
+            'AMIS delete purchase order request payload:\n%s',
+            json.dumps(payload, ensure_ascii=False, default=str, indent=2),
+        )
+        response = requests.delete(url, json=payload, headers=headers, timeout=60)
+        if response.status_code in (401, 403) and self.access_code:
+            self.sudo().action_connect_misa()
+            headers = self._build_headers(include_token=True)
+            response = requests.delete(url, json=payload, headers=headers, timeout=60)
+        response.raise_for_status()
+        body = response.json()
+        if not body.get('Success'):
+            error = body.get('ErrorMessage') or body.get('ErrorCode') or 'Không rõ lỗi'
+            error_code = body.get('ErrorCode') or ''
+            raise UserError('MISA trả về lỗi khi thu hồi Đơn mua hàng [%s]: %s' % (error_code, error))
+        _logger.info(
+            'AMIS delete purchase order request response: %s',
+            json.dumps(body, ensure_ascii=False, default=str),
+        )
+        return body
+
     def push_payment_request(self, voucher_payload):
         """Push ba_withdraw (de nghi chi tien nha cung cap, voucher_type=3) len MISA."""
         self.ensure_one()

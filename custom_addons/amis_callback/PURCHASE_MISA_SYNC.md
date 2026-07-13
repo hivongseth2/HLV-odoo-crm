@@ -131,3 +131,31 @@ Cần xác nhận:
 - Payload `AMIS save purchase order payload` có `is_get_new_id=false`.
 - Payload `AMIS save inward payload` có `is_get_new_id=false`.
 
+## Vòng đời callback và tạo lại Đơn mua hàng
+
+`POST /apir/sync/actopen/save` là API thêm/sửa **đề nghị sinh chứng từ**, không phải
+phản hồi xác nhận chứng từ kế toán thật đã được tạo.
+
+- `data_type = 1`: MISA đã xử lý yêu cầu gọi hàm `save`. Nếu thành công, trạng thái
+  Odoo là `MISA đã nhận đề nghị`.
+- `data_type = 18`: quan sát thực tế từ MISA khi người dùng sinh chứng từ thật từ đề
+  nghị. Nếu thành công, trạng thái Odoo là `MISA đã lập chứng từ`.
+- `data_type = 2`: callback của `DELETE /apir/sync/actopen/delete`, dùng để xác nhận
+  xóa đề nghị sinh chứng từ.
+- `data_type = 22`: dữ liệu chứng từ MISA đẩy ngược về Odoo. Đọc
+  `custom_param.ModelState`: `1=Thêm`, `2=Sửa`, `3=Xóa`, `7=Ghi sổ`, `8=Bỏ ghi sổ`.
+
+Khi PO Odoo đã gửi MISA bị sửa:
+
+1. Nếu MISA mới nhận đề nghị, Odoo gọi `DELETE /apir/sync/actopen/delete` với
+   `voucher_type=21` và `org_refid` cũ.
+2. Sau callback xóa thành công, Odoo tăng revision, sinh bộ `org_refid` và
+   `ref_detail_id` mới rồi enqueue PO mới.
+3. Nếu MISA đã lập chứng từ thật (`data_type=18`), API công khai không cam kết xóa
+   chứng từ thật. Odoo chuyển trạng thái sang `Chờ xóa chứng từ trên MISA`.
+4. Khi người dùng xóa trên MISA và callback `data_type=22`, `ModelState=3` về Odoo,
+   hệ thống tự sinh identity mới và enqueue PO thay thế.
+
+Không tái sử dụng `org_refid/ref_detail_id` cũ cho PO thay thế để callback cũ không
+lẫn với chứng từ mới.
+

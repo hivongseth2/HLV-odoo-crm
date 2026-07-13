@@ -27,6 +27,7 @@ class AmisSyncJob(models.Model):
     )
     direction = fields.Selection([
         ('purchase_order', 'Đơn mua hàng (pu_order)'),
+        ('purchase_order_revoke', 'Thu hồi Đơn mua hàng MISA'),
         ('payment_request', 'Đề nghị chi tiền (ba_withdraw)'),
         ('incoming', 'Nhập kho (InwardVoucher)'),
         ('outgoing', 'Xuất kho / Bán hàng (SAVoucher)'),
@@ -77,6 +78,11 @@ class AmisSyncJob(models.Model):
                     po._sync_purchase_order_to_misa()
                 else:
                     raise ValueError('purchase_order job thieu purchase_order_id')
+            elif self.direction == 'purchase_order_revoke':
+                if po:
+                    po._revoke_misa_purchase_order_for_replacement()
+                else:
+                    raise ValueError('purchase_order_revoke job thiếu purchase_order_id')
             elif self.direction == 'payment_request':
                 if payment_request:
                     payment_request._sync_payment_request_to_misa()
@@ -97,6 +103,18 @@ class AmisSyncJob(models.Model):
                 'processed_at': fields.Datetime.now(),
             })
         except Exception as e:
+            if self.direction in ('purchase_order', 'purchase_order_revoke') and po:
+                error_text = str(e)[:2000]
+                po_state = 'error'
+                if self.direction == 'purchase_order_revoke' and (
+                    'IsCreatedVoucher' in error_text or 'Đã sinh chứng từ' in error_text
+                ):
+                    po_state = 'manual_delete_required'
+                po.with_context(skip_misa_purchase_order_lifecycle=True).sudo().write({
+                    'misa_purchase_order_state': po_state,
+                    'misa_purchase_order_last_error': error_text,
+                    'misa_purchase_order_state_updated_at': fields.Datetime.now(),
+                })
             if self.direction == 'payment_request' and payment_request:
                 payment_request.sudo().write({
                     'state': 'error',
