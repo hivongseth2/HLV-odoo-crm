@@ -49,14 +49,6 @@ class PurchaseRequestLine(models.Model):
         help="Số lượng * (Đơn giá trước thuế * Thuế suất / 100)"
     )
 
-    misa_discount_amount_total = fields.Float(
-        string="Tổng tiền chiết khấu",
-        compute="_compute_misa_financial_totals",
-        store=True,
-        digits='Product Price',
-        help="Số lượng * (Đơn giá trước thuế * TL chiết khấu / 100)"
-    )
-
     misa_price_after_tax_total = fields.Float(
         string="Tổng tiền sau thuế",
         compute="_compute_misa_financial_totals",
@@ -70,7 +62,15 @@ class PurchaseRequestLine(models.Model):
         compute="_compute_misa_financial_totals",
         store=True,
         digits='Product Price',
-        help="Tổng trước thuế - Tổng chiết khấu + Tổng thuế"
+        help="Tổng trước thuế - Tiền chiết khấu + Tổng thuế"
+    )
+
+    misa_discount_amount = fields.Float(
+        string="Tiền chiết khấu (MISA)",
+        compute="_compute_misa_financial_totals",
+        store=True,
+        digits='Product Price',
+        help="Số lượng * (Đơn giá trước thuế * TL chiết khấu / 100)"
     )
 
     @api.depends('product_qty', 'misa_price_before_tax', 'misa_tax_rate',
@@ -86,9 +86,9 @@ class PurchaseRequestLine(models.Model):
             before_tax_total = qty * before_tax
             line.misa_price_before_tax_total = before_tax_total
             line.misa_tax_amount_total = qty * (before_tax * tax_rate / 100.0)
-            line.misa_discount_amount_total = qty * (before_tax * discount_rate / 100.0)
+            line.misa_discount_amount = qty * (before_tax * discount_rate / 100.0)
             line.misa_price_after_tax_total = qty * after_tax
-            line.misa_amount = before_tax_total - line.misa_discount_amount_total + line.misa_tax_amount_total
+            line.misa_amount = before_tax_total - line.misa_discount_amount + line.misa_tax_amount_total
 
     @api.onchange("product_id")
     def onchange_product_id(self):

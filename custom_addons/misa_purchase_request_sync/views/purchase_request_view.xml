@@ -61,8 +61,7 @@
                 <field name="misa_stock_undelivered" optional="hide"/>
                 <field name="misa_price_before_tax" optional="hide"/>
                 <field name="misa_price_before_tax_total" optional="show" sum="Tổng tiền trước thuế"/>
-                <field name="misa_discount_rate" optional="show"/>
-                <field name="misa_discount_amount_total" optional="show" sum="Tổng chiết khấu"/>
+                <field name="misa_discount_rate" optional="hide"/>
                 <field name="misa_discount_amount" optional="hide"/>
                 <field name="misa_tax_rate" optional="show"/>
                 <field name="misa_tax_amount_total" optional="show" sum="Tổng tiền thuế"/>
@@ -163,7 +162,6 @@
                             <field name="misa_price_before_tax" readonly="is_editable == False" widget="monetary" options="{'currency_field': 'currency_id'}"/>
                             <field name="misa_price_before_tax_total" readonly="is_editable == False" widget="monetary" options="{'currency_field': 'currency_id'}"/>
                             <field name="misa_discount_rate" readonly="is_editable == False"/>
-                            <field name="misa_discount_amount_total" readonly="is_editable == False" widget="monetary" options="{'currency_field': 'currency_id'}"/>
                             <field name="misa_discount_amount" readonly="is_editable == False" widget="monetary" options="{'currency_field': 'currency_id'}"/>
                             <field name="misa_tax_rate" readonly="is_editable == False"/>
                             <field name="misa_tax_amount_total" readonly="is_editable == False" widget="monetary" options="{'currency_field': 'currency_id'}"/>
