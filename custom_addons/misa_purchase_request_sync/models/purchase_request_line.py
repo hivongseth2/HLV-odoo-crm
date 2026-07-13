@@ -59,3 +59,13 @@ class PurchaseRequestLine(models.Model):
     def _onchange_history_po_line_id(self):
         if self.history_po_line_id:
             self.estimated_cost = self.history_po_line_id.price_unit
+
+    def action_view_price_history(self):
+        """Mở wizard chọn giá từ lịch sử mua hàng."""
+        self.ensure_one()
+        if not self.product_id:
+            return
+        wizard = self.env['price.history.wizard'].create({
+            'line_id': self.id,
+        })
+        return wizard.action_load()
