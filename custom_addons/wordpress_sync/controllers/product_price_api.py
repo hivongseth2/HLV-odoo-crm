@@ -11,6 +11,33 @@ _logger = logging.getLogger(__name__)
 
 
 class WordPressProductPriceAPI(http.Controller):
+    STOCK_STATUS_FIELD = "x_wp_stock_status"
+    STOCK_STATUS_ALIASES = (
+        "stock_status",
+        "wp_stock_status",
+        "wordpress_stock_status",
+        "x_wp_stock_status",
+    )
+    NESTED_STOCK_STATUS_ALIASES = STOCK_STATUS_ALIASES + ("status",)
+    STOCK_STATUS_VALUES = {
+        "instock": "instock",
+        "in_stock": "instock",
+        "in stock": "instock",
+        "available": "instock",
+        "true": "instock",
+        "1": "instock",
+        "con hang": "instock",
+        "outofstock": "outofstock",
+        "out_of_stock": "outofstock",
+        "out of stock": "outofstock",
+        "unavailable": "outofstock",
+        "false": "outofstock",
+        "0": "outofstock",
+        "het hang": "outofstock",
+        "discontinued": "discontinued",
+        "ngung kinh doanh": "discontinued",
+    }
+
     PRICE_FIELDS = {
         "list_price",
         "x_studio_ga_hng_nim_yt",
@@ -34,6 +61,15 @@ class WordPressProductPriceAPI(http.Controller):
         "combo_price": "x_wp_combo_price",
         "wp_combo_price": "x_wp_combo_price",
     }
+
+    COMBO_PRICE_RESPONSE_FIELDS = (
+        "list_price",
+        "x_studio_ga_hng_nim_yt",
+        "x_studio_ga_web",
+        "x_studio_gia_san_tmdt",
+        "x_studio_gi_bn_thng_mi",
+        "x_wp_combo_price",
+    )
 
     TOKEN_PARAM = "wordpress_sync.price_update_api_token"
 
@@ -85,17 +121,23 @@ class WordPressProductPriceAPI(http.Controller):
         if error:
             return error
 
-        vals, invalid = self._price_vals(Product, item)
+        vals, invalid = self._write_vals(Product, item)
         if invalid:
             return self._item_error(product, invalid["error"], invalid["message"])
 
         if not vals:
-            return self._item_error(product, "missing_price_fields", "No supported price fields found.")
+            return self._item_error(product, "missing_update_fields", "No supported price or stock fields found.")
 
         changed_vals = {
             field: value
             for field, value in vals.items()
-            if self._normalize_existing(product[field]) != value
+            if not self._same_value(product, field, value)
+        }
+
+        affected_combos = self._affected_combos(product)
+        combo_before = {
+            combo.id: self._combo_state(combo)
+            for combo in affected_combos
         }
 
         if changed_vals:
@@ -108,16 +150,18 @@ class WordPressProductPriceAPI(http.Controller):
         else:
             before = {}
 
-        queue = request.env["wordpress.sync.queue"].sudo().search(
-            [
-                ("product_id", "=", product.id),
-                ("sync_type", "=", "price"),
-                ("status", "in", ["pending", "failed"]),
-            ],
-            order="write_date desc, create_date desc",
-            limit=1,
-        )
+        # Re-evaluate parent stock even when the child already has the requested
+        # status. This also repairs a stale combo status without creating a
+        # duplicate queue job for the unchanged child.
+        if self.STOCK_STATUS_FIELD in vals and self.STOCK_STATUS_FIELD not in changed_vals:
+            product._update_parent_combos_stock()
+
+        queues = self._queue_snapshot(product)
         config = product._get_wordpress_config()
+        combo_results = [
+            self._combo_result(combo, combo_before[combo.id])
+            for combo in affected_combos
+        ]
 
         return {
             "ok": True,
@@ -129,9 +173,13 @@ class WordPressProductPriceAPI(http.Controller):
             "before": before,
             "after": {field: product[field] for field in vals},
             "auto_sync_price": bool(config and config.auto_sync_price),
-            "queued": bool(queue),
-            "queue_id": queue.id or False,
-            "queue_status": queue.status or False,
+            "queued": bool(queues["price"] or queues["stock"]),
+            "price_queue_id": queues["price"].id or False,
+            "price_queue_status": queues["price"].status or False,
+            "stock_queue_id": queues["stock"].id or False,
+            "stock_queue_status": queues["stock"].status or False,
+            "affected_combo_count": len(combo_results),
+            "affected_combos": combo_results,
         }
 
     def _find_product(self, Product, item):
@@ -172,6 +220,19 @@ class WordPressProductPriceAPI(http.Controller):
             return None, self._item_error(None, "product_not_found", "Product not found.", {key_name: key_value})
         return None, self._item_error(None, "ambiguous_product", "More than one product matched.", {key_name: key_value})
 
+    def _write_vals(self, Product, item):
+        vals, invalid = self._price_vals(Product, item)
+        if invalid:
+            return vals, invalid
+
+        stock_status, stock_error = self._stock_status_value(Product, item)
+        if stock_error:
+            return {}, stock_error
+        if stock_status:
+            vals[self.STOCK_STATUS_FIELD] = stock_status
+
+        return vals, None
+
     def _price_vals(self, Product, item):
         raw_values = {}
         prices = item.get("prices")
@@ -197,6 +258,42 @@ class WordPressProductPriceAPI(http.Controller):
                 }
             vals[target] = parsed
         return vals, None
+
+    def _stock_status_value(self, Product, item):
+        if self.STOCK_STATUS_FIELD not in Product._fields:
+            return None, None
+
+        raw_value = None
+        status_found = False
+        for key in self.STOCK_STATUS_ALIASES:
+            if key in item:
+                raw_value = item.get(key)
+                status_found = True
+                break
+
+        stock = item.get("stock")
+        if not status_found and isinstance(stock, dict):
+            for key in self.NESTED_STOCK_STATUS_ALIASES:
+                if key in stock:
+                    raw_value = stock.get(key)
+                    status_found = True
+                    break
+
+        if not status_found:
+            return None, None
+
+        if isinstance(raw_value, bool):
+            return ("instock" if raw_value else "outofstock"), None
+
+        normalized = self._clean_text(raw_value)
+        value = self.STOCK_STATUS_VALUES.get(normalized)
+        if value:
+            return value, None
+
+        return None, {
+            "error": "invalid_stock_status",
+            "message": "Invalid stock status. Use instock, outofstock, or discontinued.",
+        }
 
     def _parse_price(self, value):
         if isinstance(value, bool) or value is None:
@@ -233,6 +330,106 @@ class WordPressProductPriceAPI(http.Controller):
         if value is False or value is None:
             return 0.0
         return float(value)
+
+    def _same_value(self, product, field, value):
+        if field == self.STOCK_STATUS_FIELD:
+            return (product[field] or "") == (value or "")
+        return self._normalize_existing(product[field]) == value
+
+    def _queue_snapshot(self, product):
+        Queue = request.env["wordpress.sync.queue"].sudo()
+        return {
+            "price": Queue.search(
+                [
+                    ("product_id", "=", product.id),
+                    ("sync_type", "=", "price"),
+                    ("status", "in", ["pending", "failed"]),
+                ],
+                order="write_date desc, create_date desc",
+                limit=1,
+            ),
+            "stock": Queue.search(
+                [
+                    ("product_id", "=", product.id),
+                    ("sync_type", "=", "stock"),
+                    ("status", "in", ["pending", "failed"]),
+                ],
+                order="write_date desc, create_date desc",
+                limit=1,
+            ),
+        }
+
+    def _affected_combos(self, product):
+        """Return every active phantom combo containing the product, recursively."""
+        Product = product.env["product.template"]
+        BomLine = product.env["mrp.bom.line"]
+        affected = Product.browse()
+        frontier = product
+        seen_ids = set(product.ids)
+
+        while frontier:
+            variant_ids = frontier.mapped("product_variant_ids").ids
+            if not variant_ids:
+                break
+
+            bom_lines = BomLine.search([("product_id", "in", variant_ids)])
+            parent_combos = (
+                bom_lines.mapped("bom_id")
+                .filtered(lambda bom: bom.type == "phantom" and bom.active)
+                .mapped("product_tmpl_id")
+            )
+            new_parent_ids = [
+                parent_id
+                for parent_id in parent_combos.ids
+                if parent_id not in seen_ids
+            ]
+            if not new_parent_ids:
+                break
+
+            frontier = Product.browse(new_parent_ids)
+            affected |= frontier
+            seen_ids.update(new_parent_ids)
+
+        return affected.sorted(lambda combo: combo.id)
+
+    def _combo_state(self, combo):
+        prices = {
+            field: combo[field]
+            for field in self.COMBO_PRICE_RESPONSE_FIELDS
+            if field in combo._fields
+        }
+        return {
+            "prices": prices,
+            "stock_status": combo[self.STOCK_STATUS_FIELD]
+            if self.STOCK_STATUS_FIELD in combo._fields
+            else False,
+        }
+
+    def _combo_result(self, combo, before):
+        after = self._combo_state(combo)
+        before_prices = before["prices"]
+        after_prices = after["prices"]
+        changed_price_fields = [
+            field
+            for field, value in after_prices.items()
+            if before_prices.get(field) != value
+        ]
+        queues = self._queue_snapshot(combo)
+
+        return {
+            "product_id": combo.id,
+            "name": combo.display_name,
+            "sku": combo.default_code or "",
+            "price_changed": bool(changed_price_fields),
+            "changed_price_fields": changed_price_fields,
+            "stock_changed": before["stock_status"] != after["stock_status"],
+            "before": before,
+            "after": after,
+            "price_queue_id": queues["price"].id or False,
+            "price_queue_status": queues["price"].status or False,
+            "stock_queue_id": queues["stock"].id or False,
+            "stock_queue_status": queues["stock"].status or False,
+        }
 
     def _payload_items(self, payload):
         if isinstance(payload, list):
@@ -288,6 +485,9 @@ class WordPressProductPriceAPI(http.Controller):
 
     def _clean_token(self, token):
         return re.sub(r"[\u200B-\u200D\uFEFF]", "", (token or "").strip())
+
+    def _clean_text(self, value):
+        return re.sub(r"\s+", " ", str(value or "").strip().lower())
 
     def _item_error(self, product, error, message, extra=None):
         data = {
