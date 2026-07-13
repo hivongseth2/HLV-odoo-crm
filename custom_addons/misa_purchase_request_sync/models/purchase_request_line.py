@@ -32,6 +32,32 @@ class PurchaseRequestLine(models.Model):
     misa_stock_selected = fields.Float(string="SL tồn kho đã chọn (MISA)")
     misa_stock_undelivered = fields.Float(string="SL tồn kho chưa giao (MISA)")
 
+    # --- Computed fields để tự tính tổng khi người dùng thay đổi số lượng ---
+    misa_price_before_tax_total = fields.Float(
+        string="Tổng tiền trước thuế",
+        compute="_compute_misa_financial_totals",
+        store=True,
+        digits='Product Price',
+        help="Số lượng * Đơn giá trước thuế"
+    )
+
+    misa_tax_amount_total = fields.Float(
+        string="Tổng tiền thuế",
+        compute="_compute_misa_financial_totals",
+        store=True,
+        digits='Product Price',
+        help="Số lượng * (Đơn giá trước thuế * Thuế suất / 100)"
+    )
+
+    @api.depends('product_qty', 'misa_price_before_tax', 'misa_tax_rate')
+    def _compute_misa_financial_totals(self):
+        for line in self:
+            before_tax = line.misa_price_before_tax or 0.0
+            qty = line.product_qty or 0.0
+            tax_rate = line.misa_tax_rate or 0.0
+            line.misa_price_before_tax_total = qty * before_tax
+            line.misa_tax_amount_total = qty * (before_tax * tax_rate / 100.0)
+
     @api.onchange("product_id")
     def onchange_product_id(self):
         res = super(PurchaseRequestLine, self).onchange_product_id()
