@@ -104,6 +104,7 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
             qty = item.line_id.product_qty - item.line_id.purchased_qty
         
         res = {
+            'order_id': po.id,
             'product_id': item.product_id.id,
             'name': item.line_id.name if item.keep_description and item.line_id else item.product_id.display_name,
             'product_qty': qty,
