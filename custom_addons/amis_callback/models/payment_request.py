@@ -104,10 +104,16 @@ class AmisPaymentRequest(models.Model):
         ('draft', 'Nháp'),
         ('pending', 'Chờ đồng bộ'),
         ('sent', 'Đã gửi MISA'),
+        ('request_accepted', 'MISA đã nhận đề nghị'),
         ('synced', 'MISA thành công'),
+        ('delete_pending', 'Đang thu hồi'),
+        ('manual_delete_required', 'Chờ xóa chứng từ trên MISA'),
+        ('deleted', 'Đã thu hồi'),
         ('error', 'Lỗi'),
     ], string='Trạng thái', default='draft', index=True)
     error_msg = fields.Text(string='Lỗi MISA')
+    callback_session_id = fields.Char(string='MISA Session ID', copy=False)
+    state_updated_at = fields.Datetime(string='Cập nhật trạng thái MISA lúc', copy=False)
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -126,6 +132,11 @@ class AmisPaymentRequest(models.Model):
             request._enqueue_sync_job()
             if request.job_id:
                 request.job_id.action_run_now()
+        return True
+
+    def action_revoke_misa_payment_request(self):
+        for request in self:
+            request._enqueue_revoke_job()
         return True
 
     def action_open_purchase_order(self):
@@ -156,6 +167,45 @@ class AmisPaymentRequest(models.Model):
         })
         self.write({'job_id': job.id, 'state': 'pending', 'error_msg': False})
         return job
+
+    def _enqueue_revoke_job(self):
+        self.ensure_one()
+        if not self.org_refid:
+            raise UserError('Đề nghị chi chưa được gửi MISA nên không có dữ liệu để thu hồi.')
+        if self.state == 'deleted':
+            raise UserError('Đề nghị chi này đã được thu hồi trên MISA.')
+        existing = self.env['amis.sync.job'].sudo().search([
+            ('payment_request_id', '=', self.id),
+            ('direction', '=', 'payment_request_revoke'),
+            ('status', 'in', ('pending', 'error')),
+        ], limit=1)
+        if existing:
+            existing.write({'status': 'pending', 'retry_count': 0, 'error_msg': False})
+            self.write({'job_id': existing.id, 'state': 'delete_pending', 'error_msg': False})
+            return existing
+        job = self.env['amis.sync.job'].sudo().create({
+            'payment_request_id': self.id,
+            'purchase_order_id': self.purchase_order_id.id,
+            'direction': 'payment_request_revoke',
+        })
+        self.write({
+            'job_id': job.id,
+            'state': 'delete_pending',
+            'error_msg': False,
+            'state_updated_at': fields.Datetime.now(),
+        })
+        return job
+
+    def _revoke_misa_payment_request(self):
+        self.ensure_one()
+        voucher_type = 3 if self.payment_method == 'bank' else 4
+        config = self.env['amis.callback.config'].sudo().ensure_singleton()
+        config.delete_payment_request(self.org_refid, voucher_type)
+        self.sudo().write({
+            'state': 'delete_pending',
+            'error_msg': False,
+            'state_updated_at': fields.Datetime.now(),
+        })
 
     def _sync_payment_request_to_misa(self):
         self.ensure_one()

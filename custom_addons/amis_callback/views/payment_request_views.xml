@@ -7,7 +7,8 @@
             <list string="Đề nghị chi tiền MISA" default_order="create_date desc"
                   decoration-danger="state == 'error'"
                   decoration-success="state == 'synced'"
-                  decoration-warning="state in ('pending','sent')">
+                  decoration-muted="state == 'deleted'"
+                  decoration-warning="state in ('pending','sent','request_accepted','delete_pending','manual_delete_required')">
                 <field name="name"/>
                 <field name="purchase_order_id"/>
                 <field name="partner_id"/>
@@ -35,9 +36,14 @@
                             invisible="state not in ('draft','error')" class="btn-secondary"/>
                     <button name="action_run_sync" type="object" string="Đồng bộ ngay"
                             invisible="state not in ('draft','pending','error')" class="btn-primary"/>
+                    <button name="action_revoke_misa_payment_request" type="object" string="Thu hồi đề nghị"
+                            invisible="not org_refid or state not in ('sent','request_accepted','synced','error')"
+                            confirm="Nếu MISA đã sinh phiếu chi/ủy nhiệm chi thật, cần xóa chứng từ đó trên MISA. Tiếp tục?"
+                            class="btn-secondary"/>
                     <button name="action_open_purchase_order" type="object" string="Mở đơn mua"
                             class="btn-secondary"/>
-                    <field name="state" widget="statusbar" statusbar_visible="draft,pending,sent,synced,error"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="draft,pending,sent,request_accepted,synced,delete_pending,manual_delete_required,deleted,error"/>
                 </header>
                 <sheet>
                     <group>
@@ -55,6 +61,8 @@
                             <field name="org_refid" readonly="1"/>
                             <field name="misa_refid" readonly="1"/>
                             <field name="job_id" readonly="1"/>
+                            <field name="callback_session_id" readonly="1"/>
+                            <field name="state_updated_at" readonly="1"/>
                             <field name="error_msg" readonly="1" invisible="not error_msg"/>
                         </group>
                     </group>
