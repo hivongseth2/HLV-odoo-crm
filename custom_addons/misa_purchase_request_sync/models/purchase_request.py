@@ -10,9 +10,11 @@ Mở rộng `purchase.request` để:
 3. Cung cấp computed fields tiến độ mua hàng cho list view badge.
 """
 
+import json
 import logging
 import re
 
+from markupsafe import Markup
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
@@ -397,5 +399,67 @@ class PurchaseRequest(models.Model):
         # Xóa các dòng cũ trên Odoo nhưng không có trên MISA (chỉ xoá những dòng có misa_line_id)
         for old_line in existing_lines_by_misa_id.values():
             old_line.unlink()
+
+        # ============================================================
+        # POST CHATTER MESSAGES
+        # ============================================================
+
+        # 1. Post message "Người thực hiện" nếu không tìm thấy user
+        if owner_message:
+            pr.message_post(body=Markup("<b>%s</b>") % owner_message)
+
+        # 2. Xử lý new_supplier_data từ extension
+        new_suppliers_created = []
+        for line_data in lines_in:
+            nsd = line_data.get("new_supplier_data")
+            if nsd and nsd.get("name"):
+                # Kiểm tra trùng tránh tạo duplicate
+                existing_partner = self.env['res.partner'].sudo().search([
+                    ('name', '=ilike', nsd['name'].strip()),
+                    ('phone', '=', nsd.get('phone', '')),
+                ], limit=1)
+                if existing_partner:
+                    partner = existing_partner
+                else:
+                    partner = self.env['res.partner'].sudo().create({
+                        'name': nsd['name'].strip(),
+                        'street': nsd.get('address', '').strip(),
+                        'phone': nsd.get('phone', '').strip(),
+                        'vat': nsd.get('vat', '').strip(),
+                        'comment': nsd.get('note', '').strip(),
+                        'company_type': 'company',
+                        'hlv_business_role': 'supplier',
+                    })
+                new_suppliers_created.append(partner)
+                # Gán partner vào dòng PR có cùng misa_supplier_id (nếu có)
+                pcode = (line_data.get("product_code") or "").strip()
+                if pcode:
+                    pr_lines = pr.line_ids.filtered(
+                        lambda l: l.product_id.default_code == pcode and not l.misa_supplier_id
+                    )
+                    for prl in pr_lines[:1]:
+                        prl.write({
+                            'misa_supplier_id': partner.id,
+                            'sale_proposed_supplier_id': partner.id,
+                        })
+
+        if new_suppliers_created:
+            partner_links = ', '.join(
+                Markup('<a href=# data-oe-model=res.partner data-oe-id=%s>%s</a>') % (p.id, p.name)
+                for p in new_suppliers_created
+            )
+            msg = Markup(_("Đã tạo NCC mới từ MISA: %s")) % partner_links
+            pr.message_post(body=msg)
+
+        # 3. Post message tổng kết đồng bộ
+        summary_parts = []
+        if pr.create_date:
+            create_dt = fields.Datetime.to_string(pr.create_date)[:16]
+            summary_parts.append(_("Ngày tạo: %s") % create_dt)
+        summary_parts.append(_("Số dòng: %s") % len(lines_in))
+        if new_suppliers_created:
+            summary_parts.append(_("NCC mới: %s") % len(new_suppliers_created))
+        summary_msg = _("Đồng bộ YCMH từ MISA CRM thành công. %s") % " | ".join(summary_parts)
+        pr.message_post(body=Markup("<i>%s</i>") % summary_msg)
 
         return pr
