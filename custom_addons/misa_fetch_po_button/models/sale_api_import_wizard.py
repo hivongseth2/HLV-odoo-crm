@@ -1340,21 +1340,12 @@ class SaleApiImportWizard(models.TransientModel):
                     self.env.invalidate_all()
                     sale_order.action_confirm()
 
-                    # Đặt tên picking giữ nguyên logic cũ
+                    # Cập nhật thông tin picking, giữ nguyên tên do Odoo sequence cấp.
                     pickings = sale_order.picking_ids
                     if pickings:
-                        picking = pickings[0]
-                        desired = base_pick_name
-                        if not desired:
-                            desired = order_ref_base
-                        exists = self.env['stock.picking'].search([('name', '=', desired)], limit=1)
-                        if exists:
-                            _logger.warning("⚠️ Mã phiếu pick %s đã tồn tại, NEXT tạo mã mới: %s", desired, f"{desired}_{picking.id}")
-                            # picking.name = f"{desired}_{picking.id}"
-                        else:
-                            picking.name = desired
-                        picking.partner_id = sale_order.partner_id.id
-                        _logger.info("📦 Đã gán mã phiếu pick: %s cho SO %s", picking.name, order_ref)
+                        for picking in pickings:
+                            picking.partner_id = sale_order.partner_id.id
+                            _logger.info("📦 Giữ mã phiếu pick Odoo: %s cho SO %s", picking.name, order_ref)
 
                 # ========== CASE 2: NHIỀU KHO -> TÁCH NHIỀU SO, THÊM HẬU TỐ ==========
                 else:
@@ -1593,16 +1584,10 @@ class SaleApiImportWizard(models.TransientModel):
                         self.env.invalidate_all()
                         sale_order.action_confirm()
 
-                        # Đặt tên picking: base_pick + hậu tố kho để unique
-                        pick_base = base_pick_name or order_ref_base
-                        desired_pick_name = f"{pick_base}-{stock_id}"
+                        # Giữ nguyên tên picking do Odoo sequence cấp.
                         for picking in sale_order.picking_ids:
-                            exists = self.env['stock.picking'].search([('name', '=', desired_pick_name)], limit=1)
-                            new_name = f"{desired_pick_name}-{picking.id}" if exists else desired_pick_name
-                            if picking.name != new_name:
-                                picking.name = new_name
                             picking.partner_id = sale_order.partner_id.id
-                            _logger.info("📦 Đã gán mã phiếu pick: %s cho SO %s", picking.name, order_ref)
+                            _logger.info("📦 Giữ mã phiếu pick Odoo: %s cho SO %s", picking.name, order_ref)
 
             # --- phân trang ---
             if len(orders) < 20:
