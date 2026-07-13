@@ -49,14 +49,46 @@ class PurchaseRequestLine(models.Model):
         help="Số lượng * (Đơn giá trước thuế * Thuế suất / 100)"
     )
 
-    @api.depends('product_qty', 'misa_price_before_tax', 'misa_tax_rate')
+    misa_discount_amount_total = fields.Float(
+        string="Tổng tiền chiết khấu",
+        compute="_compute_misa_financial_totals",
+        store=True,
+        digits='Product Price',
+        help="Số lượng * (Đơn giá trước thuế * TL chiết khấu / 100)"
+    )
+
+    misa_price_after_tax_total = fields.Float(
+        string="Tổng tiền sau thuế",
+        compute="_compute_misa_financial_totals",
+        store=True,
+        digits='Product Price',
+        help="Số lượng * Đơn giá sau thuế"
+    )
+
+    misa_amount = fields.Float(
+        string="Thành tiền (MISA)",
+        compute="_compute_misa_financial_totals",
+        store=True,
+        digits='Product Price',
+        help="Tổng trước thuế - Tổng chiết khấu + Tổng thuế"
+    )
+
+    @api.depends('product_qty', 'misa_price_before_tax', 'misa_tax_rate',
+                 'misa_discount_rate', 'misa_price_after_tax')
     def _compute_misa_financial_totals(self):
         for line in self:
             before_tax = line.misa_price_before_tax or 0.0
             qty = line.product_qty or 0.0
             tax_rate = line.misa_tax_rate or 0.0
-            line.misa_price_before_tax_total = qty * before_tax
+            discount_rate = line.misa_discount_rate or 0.0
+            after_tax = line.misa_price_after_tax or 0.0
+
+            before_tax_total = qty * before_tax
+            line.misa_price_before_tax_total = before_tax_total
             line.misa_tax_amount_total = qty * (before_tax * tax_rate / 100.0)
+            line.misa_discount_amount_total = qty * (before_tax * discount_rate / 100.0)
+            line.misa_price_after_tax_total = qty * after_tax
+            line.misa_amount = before_tax_total - line.misa_discount_amount_total + line.misa_tax_amount_total
 
     @api.onchange("product_id")
     def onchange_product_id(self):
