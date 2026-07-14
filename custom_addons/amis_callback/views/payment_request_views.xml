@@ -6,7 +6,7 @@
         <field name="arch" type="xml">
             <list string="Đề nghị chi tiền MISA" default_order="create_date desc"
                   decoration-danger="state == 'error'"
-                  decoration-success="state == 'synced'"
+                  decoration-success="state in ('approved','synced')"
                   decoration-muted="state == 'deleted'"
                   decoration-warning="state in ('pending','sent','request_accepted','delete_pending','manual_delete_required')">
                 <field name="name"/>
@@ -38,7 +38,7 @@
                     <button name="action_run_sync" type="object" string="Đồng bộ ngay"
                             invisible="state not in ('draft','pending','error')" class="btn-primary"/>
                     <button name="action_revoke_misa_payment_request" type="object" string="Thu hồi đề nghị"
-                            invisible="not org_refid or state not in ('sent','request_accepted','synced','error')"
+                            invisible="not org_refid or state not in ('sent','request_accepted','approved','synced','error')"
                             confirm="Nếu MISA đã sinh phiếu chi/ủy nhiệm chi thật, cần xóa chứng từ đó trên MISA. Tiếp tục?"
                             class="btn-secondary"/>
                     <button name="action_open_purchase_order" type="object" string="Mở đơn mua"
@@ -47,7 +47,7 @@
                             string="Mở yêu cầu đổi điểm"
                             invisible="not loyalty_reward_request_id" class="btn-secondary"/>
                     <field name="state" widget="statusbar"
-                           statusbar_visible="draft,pending,sent,request_accepted,synced,delete_pending,manual_delete_required,deleted,error"/>
+                           statusbar_visible="draft,pending,sent,request_accepted,approved,synced,delete_pending,manual_delete_required,deleted,error"/>
                 </header>
                 <sheet>
                     <group>
@@ -68,6 +68,7 @@
                             <field name="misa_refid" readonly="1"/>
                             <field name="job_id" readonly="1"/>
                             <field name="callback_session_id" readonly="1"/>
+                            <field name="callback_data_type" readonly="1"/>
                             <field name="state_updated_at" readonly="1"/>
                             <field name="error_msg" readonly="1" invisible="not error_msg"/>
                         </group>
@@ -94,6 +95,90 @@
                     </group>
                 </sheet>
             </form>
+        </field>
+    </record>
+
+    <record id="view_amis_payment_request_loyalty_readonly_form" model="ir.ui.view">
+        <field name="name">amis.payment.request.loyalty.readonly.form</field>
+        <field name="model">amis.payment.request</field>
+        <field name="arch" type="xml">
+            <form string="Đề nghị chi MISA" create="false" edit="false" delete="false">
+                <header>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="pending,sent,request_accepted,approved,synced,delete_pending,manual_delete_required,deleted,error"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group string="Đề nghị chi">
+                            <field name="name"/>
+                            <field name="loyalty_reward_request_id"/>
+                            <field name="partner_id"/>
+                            <field name="amount"/>
+                            <field name="currency_id"/>
+                            <field name="payment_date"/>
+                        </group>
+                        <group string="Đồng bộ MISA">
+                            <field name="job_status" widget="badge"/>
+                            <field name="org_refid"/>
+                            <field name="misa_refid"/>
+                            <field name="callback_data_type"/>
+                            <field name="callback_session_id"/>
+                            <field name="state_updated_at"/>
+                            <field name="error_msg" invisible="not error_msg"/>
+                        </group>
+                    </group>
+                    <group string="Tài khoản nhận">
+                        <field name="beneficiary_account_type"/>
+                        <field name="vendor_account_holder"/>
+                        <field name="vendor_bank_account_number"/>
+                        <field name="vendor_bank_name"/>
+                    </group>
+                    <group string="Diễn giải">
+                        <field name="memo" nolabel="1"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_loyalty_reward_request_form_amis_payment_status_inherit" model="ir.ui.view">
+        <field name="name">hlv.loyalty.reward.request.form.amis.payment.status.inherit</field>
+        <field name="model">hlv.loyalty.reward.request</field>
+        <field name="inherit_id" ref="hlv_loyalty.view_loyalty_reward_request_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header/field[@name='state']" position="before">
+                <field name="misa_payment_request_can_revoke" invisible="1"/>
+                <button name="action_revoke_loyalty_payment_request" type="object"
+                        string="Thu hồi / xóa đề nghị MISA" class="btn-secondary"
+                        groups="hlv_loyalty.group_loyalty_operator"
+                        invisible="not misa_payment_request_can_revoke"
+                        confirm="Chỉ thu hồi/xóa đề nghị chi trên MISA; điểm Loyalty đã trừ sẽ không được hoàn. Tiếp tục?"/>
+            </xpath>
+            <xpath expr="//group[@string='Chi tiết đổi tiền']" position="after">
+                <group string="Đề nghị chi MISA"
+                       invisible="request_type != 'cash' or not misa_payment_request_id">
+                    <group>
+                        <field name="misa_payment_request_id" readonly="1"
+                               options="{'no_open': True}"/>
+                        <field name="misa_payment_request_state" widget="badge"
+                               decoration-success="misa_payment_request_state in ('approved','synced')"
+                               decoration-info="misa_payment_request_state in ('sent','request_accepted')"
+                               decoration-warning="misa_payment_request_state in ('pending','delete_pending','manual_delete_required')"
+                               decoration-danger="misa_payment_request_state == 'error'"/>
+                        <field name="misa_payment_request_job_status" widget="badge"/>
+                        <button name="action_view_loyalty_payment_request" type="object"
+                                string="Xem chi tiết đề nghị chi" class="btn-secondary"
+                                groups="hlv_loyalty.group_loyalty_user"/>
+                    </group>
+                    <group string="Đối chiếu callback">
+                        <field name="misa_payment_request_callback_data_type"/>
+                        <field name="misa_payment_request_org_refid"/>
+                        <field name="misa_payment_request_state_updated_at"/>
+                        <field name="misa_payment_request_error"
+                               invisible="not misa_payment_request_error"/>
+                    </group>
+                </group>
+            </xpath>
         </field>
     </record>
 

@@ -3,7 +3,7 @@ import logging
 import uuid
 
 from odoo import api, fields, models
-from odoo.exceptions import UserError, ValidationError
+from odoo.exceptions import AccessError, UserError, ValidationError
 
 _logger = logging.getLogger(__name__)
 
@@ -105,11 +105,15 @@ class AmisPaymentRequest(models.Model):
     org_refid = fields.Char(string='MISA org_refid', copy=False, index=True)
     misa_refid = fields.Char(string='MISA refid', copy=False, index=True)
     job_id = fields.Many2one('amis.sync.job', string='Job đồng bộ MISA', readonly=True, copy=False)
+    job_status = fields.Selection(
+        related='job_id.status', string='Trạng thái hàng đợi', readonly=True,
+    )
     state = fields.Selection([
         ('draft', 'Nháp'),
         ('pending', 'Chờ đồng bộ'),
         ('sent', 'Đã gửi MISA'),
-        ('request_accepted', 'MISA đã nhận đề nghị'),
+        ('request_accepted', 'Đã gửi - MISA đã nhận'),
+        ('approved', 'Kế toán đã duyệt'),
         ('synced', 'MISA thành công'),
         ('delete_pending', 'Đang thu hồi'),
         ('manual_delete_required', 'Chờ xóa chứng từ trên MISA'),
@@ -118,6 +122,7 @@ class AmisPaymentRequest(models.Model):
     ], string='Trạng thái', default='draft', index=True)
     error_msg = fields.Text(string='Lỗi MISA')
     callback_session_id = fields.Char(string='MISA Session ID', copy=False)
+    callback_data_type = fields.Integer(string='MISA data_type cuối', copy=False, readonly=True)
     state_updated_at = fields.Datetime(string='Cập nhật trạng thái MISA lúc', copy=False)
 
     _sql_constraints = [
@@ -250,6 +255,7 @@ class AmisPaymentRequest(models.Model):
             'org_refid': voucher_payload.get('org_refid') or '',
             'state': 'sent',
             'error_msg': False,
+            'state_updated_at': fields.Datetime.now(),
         })
 
     def _prepare_misa_payment_request_payload(self, config):
@@ -459,6 +465,52 @@ class PurchaseOrderAmisPaymentRequest(models.Model):
 class HlvLoyaltyRewardRequestAmisPayment(models.Model):
     _inherit = 'hlv.loyalty.reward.request'
 
+    misa_payment_request_ids = fields.One2many(
+        'amis.payment.request', 'loyalty_reward_request_id',
+        string='Đề nghị chi MISA', readonly=True,
+    )
+    misa_payment_request_id = fields.Many2one(
+        'amis.payment.request', string='Mã đề nghị chi MISA',
+        compute='_compute_misa_payment_request_id', compute_sudo=True,
+    )
+    misa_payment_request_state = fields.Selection(
+        related='misa_payment_request_id.state', string='Trạng thái đề nghị chi', readonly=True,
+    )
+    misa_payment_request_job_status = fields.Selection(
+        related='misa_payment_request_id.job_status', string='Trạng thái hàng đợi', readonly=True,
+    )
+    misa_payment_request_org_refid = fields.Char(
+        related='misa_payment_request_id.org_refid', string='MISA org_refid', readonly=True,
+    )
+    misa_payment_request_callback_data_type = fields.Integer(
+        related='misa_payment_request_id.callback_data_type',
+        string='MISA data_type cuối', readonly=True,
+    )
+    misa_payment_request_state_updated_at = fields.Datetime(
+        related='misa_payment_request_id.state_updated_at',
+        string='Cập nhật trạng thái lúc', readonly=True,
+    )
+    misa_payment_request_error = fields.Text(
+        related='misa_payment_request_id.error_msg', string='Lỗi MISA', readonly=True,
+    )
+    misa_payment_request_can_revoke = fields.Boolean(
+        compute='_compute_misa_payment_request_can_revoke', compute_sudo=True,
+    )
+
+    @api.depends('misa_payment_request_ids')
+    def _compute_misa_payment_request_id(self):
+        for request in self:
+            request.misa_payment_request_id = request.misa_payment_request_ids[:1]
+
+    @api.depends('misa_payment_request_id.state', 'misa_payment_request_id.org_refid')
+    def _compute_misa_payment_request_can_revoke(self):
+        allowed_states = {'sent', 'request_accepted', 'approved', 'synced', 'error'}
+        for request in self:
+            payment_request = request.misa_payment_request_id
+            request.misa_payment_request_can_revoke = bool(
+                payment_request.org_refid and payment_request.state in allowed_states
+            )
+
     def action_done(self):
         cash_requests = self.filtered(
             lambda request: request.state == 'pending' and request.request_type == 'cash'
@@ -524,3 +576,40 @@ class HlvLoyaltyRewardRequestAmisPayment(models.Model):
             payment_request.job_id.id,
         )
         return payment_request
+
+    def action_view_loyalty_payment_request(self):
+        self.ensure_one()
+        payment_request = self.misa_payment_request_id
+        if not payment_request:
+            raise UserError('Yêu cầu Loyalty này chưa có đề nghị chi MISA.')
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Đề nghị chi MISA',
+            'res_model': 'amis.payment.request',
+            'res_id': payment_request.id,
+            'views': [[
+                self.env.ref('amis_callback.view_amis_payment_request_loyalty_readonly_form').id,
+                'form',
+            ]],
+            'target': 'current',
+        }
+
+    def action_revoke_loyalty_payment_request(self):
+        self.ensure_one()
+        if not self.env.user.has_group('hlv_loyalty.group_loyalty_operator'):
+            raise AccessError('Bạn không có quyền thu hồi đề nghị chi Loyalty trên MISA.')
+        payment_request = self.misa_payment_request_id.sudo()
+        if not payment_request:
+            raise UserError('Yêu cầu Loyalty này chưa có đề nghị chi MISA để thu hồi.')
+        payment_request.action_revoke_misa_payment_request()
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': 'Đã đưa vào hàng đợi',
+                'message': 'Đề nghị chi %s đang chờ thu hồi/xóa trên MISA.' % payment_request.name,
+                'type': 'warning',
+                'sticky': False,
+                'next': {'type': 'ir.actions.client', 'tag': 'soft_reload'},
+            },
+        }

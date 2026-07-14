@@ -338,6 +338,16 @@ class AmisCallbackLogLine(models.Model):
                 payment_request = self.env['amis.payment.request'].sudo().search([
                     ('org_refid', '=', org_refid),
                 ], limit=1)
+                if not payment_request and item_refno:
+                    payment_request = self.env['amis.payment.request'].sudo().search([
+                        ('name', '=', item_refno),
+                    ], limit=1)
+                    if payment_request:
+                        _logger.info(
+                            'Matched MISA payment callback by refno %s because callback org_refid %s differs.',
+                            item_refno,
+                            org_refid,
+                        )
                 if payment_request:
                     error_message = line.error_message or line.error_call_back_message or ''
                     session_id = (line.session_id or '').strip()
@@ -354,6 +364,7 @@ class AmisCallbackLogLine(models.Model):
                             ),
                             'error_msg': False if success else error_message,
                             'callback_session_id': session_id or False,
+                            'callback_data_type': data_type,
                             'state_updated_at': fields.Datetime.now(),
                         })
                         continue
@@ -366,18 +377,28 @@ class AmisCallbackLogLine(models.Model):
                             payment_request.write({
                                 'state': 'deleted',
                                 'error_msg': False,
+                                'callback_data_type': data_type,
                                 'state_updated_at': fields.Datetime.now(),
                             })
                             continue
                     vals = {
                         'state': (
-                            'request_accepted'
+                            payment_request.state
+                            if payment_request.state in (
+                                'delete_pending', 'manual_delete_required', 'deleted'
+                            )
+                            else 'approved'
+                            if success and (
+                                data_type == 18 or payment_request.state == 'approved'
+                            )
+                            else 'request_accepted'
                             if success and data_type in (1, 3) and is_request_callback
                             else 'synced' if success
                             else 'error'
                         ),
                         'error_msg': False if success else error_message,
                         'callback_session_id': session_id or False,
+                        'callback_data_type': data_type,
                         'state_updated_at': fields.Datetime.now(),
                     }
                     if success and actual_refid:

@@ -29,4 +29,29 @@
         <field name="implied_ids" eval="[(4, ref('group_meinvoice_accountant'))]"/>
         <field name="comment">Toàn quyền: cấu hình API, xóa hóa đơn, chạy đồng bộ danh mục.</field>
     </record>
+
+    <record id="amis_payment_request_rule_loyalty_user" model="ir.rule">
+        <field name="name">Đề nghị chi MISA: Loyalty chỉ xem đề nghị đổi điểm</field>
+        <field name="model_id" ref="model_amis_payment_request"/>
+        <field name="domain_force">[('loyalty_reward_request_id', '!=', False)]</field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+        <field name="groups" eval="[(4, ref('hlv_loyalty.group_loyalty_user'))]"/>
+    </record>
+
+    <record id="amis_payment_request_rule_amis_user_all" model="ir.rule">
+        <field name="name">Đề nghị chi MISA: Người dùng AMIS xem tất cả</field>
+        <field name="model_id" ref="model_amis_payment_request"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('group_meinvoice_user'))]"/>
+    </record>
+
+    <record id="amis_payment_request_rule_purchase_user_all" model="ir.rule">
+        <field name="name">Đề nghị chi MISA: Người dùng mua hàng xem tất cả</field>
+        <field name="model_id" ref="model_amis_payment_request"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('purchase.group_purchase_user'))]"/>
+    </record>
 </odoo>
