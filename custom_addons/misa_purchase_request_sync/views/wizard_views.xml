@@ -87,7 +87,8 @@
                         <field name="line_id" options="{'no_open': true}" optional="hide" force_save="1" />
                         <field name="request_id" optional="hide" force_save="1" />
                         <field name="supplier_ref" optional="hide" force_save="1" />
-                        <field name="supplier_id" width="180px" force_save="1" />
+                        <field name="misa_supplier_name" column_invisible="1" force_save="1" />
+                        <field name="supplier_id" width="180px" widget="many2one_with_proposed" options="{'proposed_field': 'misa_supplier_name'}" force_save="1" />
                         <field name="product_id" width="200px" force_save="1" />
                         <field name="name" optional="hide" force_save="1" />
                         <field name="product_qty" column_invisible="1" force_save="1" />
@@ -103,8 +104,9 @@
                         
                         <!-- Thuế: Sale yêu cầu (ẩn) + Thu mua (widget) -->
                         <field name="misa_tax_id" column_invisible="1" force_save="1" />
+                        <field name="misa_tax_name" column_invisible="1" force_save="1" />
                         <field name="actual_tax_id" string="Thuế (%) thu mua" 
-                               width="160px" widget="many2one_with_proposed" options="{'proposed_field': 'misa_tax_id'}"
+                               width="160px" widget="many2one_with_proposed" options="{'proposed_field': 'misa_tax_name'}"
                                force_save="1" decoration-success="1" />
                         <field name="actual_tax_rate" optional="hide" force_save="1" />
                         
@@ -116,30 +118,23 @@
                         <field name="misa_amount" string="Thành tiền" 
                                readonly="1" force_save="1" width="120px" decoration-info="1" />
                         
-                        <!-- Chiết khấu: mặc định hide -->
-                        <field name="misa_discount_rate" string="CK sale (%)" 
-                               readonly="1" force_save="1" decoration-muted="1" 
-                               width="80px" optional="hide" />
-                        <field name="misa_discount_amount" string="Tiền CK sale" 
-                               readonly="1" force_save="1" decoration-muted="1" 
-                               width="100px" optional="hide" />
+                        <!-- Chiết khấu: ẩn đề xuất gốc + hiển thị thực tế kèm widget đề xuất -->
+                        <field name="misa_discount_rate" column_invisible="1" force_save="1" />
+                        <field name="misa_discount_amount" column_invisible="1" force_save="1" />
                         <field name="actual_discount_rate" string="CK thu mua (%)" 
-                               width="100px" decoration-success="1" optional="hide" force_save="1" />
+                               width="100px" widget="float_with_proposed" options="{'proposed_field': 'misa_discount_rate'}"
+                               decoration-success="1" optional="hide" force_save="1" />
                         <field name="actual_discount_amount" string="Tiền CK thu mua" 
-                               width="100px" decoration-success="1" optional="hide" force_save="1" />
+                               width="110px" widget="float_with_proposed" options="{'proposed_field': 'misa_discount_amount'}"
+                               decoration-success="1" optional="hide" force_save="1" />
                         
                         <field name="estimated_cost" optional="hide" force_save="1" />
                         <field name="keep_description" optional="hide" force_save="1" />
                         <field name="keep_estimated_cost" optional="hide" force_save="1" />
                         
-                        <!-- NCC mới per-line -->
+                        <!-- NCC mới per-line (ẩn nút ở cột cuối, chuyển sang tích hợp trực tiếp vào cột NCC) -->
                         <field name="misa_new_supplier_json" column_invisible="1" force_save="1" />
                         <field name="misa_has_new_supplier" column_invisible="1" />
-                        <button name="action_create_item_supplier" type="object"
-                                string="Tạo NCC" class="btn-warning btn-sm"
-                                icon="fa-plus-circle"
-                                title="Tạo Nhà cung cấp mới từ dữ liệu MISA cho dòng này"
-                                invisible="not misa_has_new_supplier" />
                     </list>
                 </field>
             </xpath>

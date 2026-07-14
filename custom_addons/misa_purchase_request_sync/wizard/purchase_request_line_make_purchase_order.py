@@ -84,6 +84,7 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
         # Tìm account.tax cho misa_tax_id (sale đề xuất) và actual_tax_id (thực tế)
         company = line.company_id or self.env.company
         tax_rate = line.misa_tax_rate if (hasattr(line, 'misa_tax_rate') and line.misa_tax_rate) else 0.0
+        res['misa_tax_name'] = ""
         if float(tax_rate) > 0:
             matched_tax = self.env['account.tax'].with_company(company).search([
                 ('type_tax_use', '=', 'purchase'),
@@ -94,16 +95,18 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
             if matched_tax:
                 res['misa_tax_id'] = matched_tax.id
                 res['actual_tax_id'] = matched_tax.id
+                res['misa_tax_name'] = matched_tax.name
 
         if line.actual_tax_id:
             res['actual_tax_id'] = line.actual_tax_id.id
 
         # NCC: ưu tiên actual_supplier_id, sau đó là sale_proposed_supplier_id, fallback misa_supplier_id
-        supplier = line.actual_supplier_id if line.actual_supplier_id else False
-        if not supplier:
-            supplier = line.sale_proposed_supplier_id if hasattr(line, 'sale_proposed_supplier_id') and line.sale_proposed_supplier_id else False
-        if not supplier:
-            supplier = line.misa_supplier_id if hasattr(line, 'misa_supplier_id') and line.misa_supplier_id else False
+        proposed_supplier = line.sale_proposed_supplier_id if hasattr(line, 'sale_proposed_supplier_id') and line.sale_proposed_supplier_id else False
+        if not proposed_supplier:
+            proposed_supplier = line.misa_supplier_id if hasattr(line, 'misa_supplier_id') and line.misa_supplier_id else False
+        res['misa_supplier_name'] = proposed_supplier.name if proposed_supplier else ""
+
+        supplier = line.actual_supplier_id if line.actual_supplier_id else proposed_supplier
         if supplier:
             res['supplier_id'] = supplier.id
 
@@ -252,6 +255,14 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
         readonly=True,
         domain="[('type_tax_use', '=', 'purchase'), ('amount_type', '=', 'percent')]",
     )
+    misa_tax_name = fields.Char(
+        string="Thuế sale đề xuất name",
+        readonly=True,
+    )
+    misa_supplier_name = fields.Char(
+        string="NCC đề xuất name",
+        readonly=True,
+    )
     misa_tax_rate = fields.Float(
         string="Thuế sale yêu cầu (%)",
         readonly=True,
@@ -352,6 +363,20 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
             'target': 'new',
             'context': context,
         }
+
+    def action_view_price_history(self):
+        """Mở wizard chọn giá từ lịch sử mua hàng cho wizard item line."""
+        self.ensure_one()
+        if not self.product_id or not self.line_id:
+            return
+        wizard = self.env['price.history.wizard'].create({
+            'line_id': self.line_id.id,
+        })
+        action = wizard.action_load()
+        ctx = dict(action.get('context', {}))
+        ctx['active_make_order_item_id'] = self.id
+        action['context'] = ctx
+        return action
 
     # === Computed fields (readonly, hiển thị tổng tiền) ===
     misa_price_before_tax_total = fields.Float(
