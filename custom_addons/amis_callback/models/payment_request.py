@@ -18,6 +18,7 @@ class AmisPaymentBankConfig(models.Model):
     )
     purpose = fields.Selection([
         ('purchase', 'Chi mua hàng'),
+        ('loyalty', 'Chi đổi điểm Loyalty'),
     ], string='Mục đích chi', required=True, default='purchase', index=True)
     company_id = fields.Many2one(
         'res.company', string='Công ty', required=True, default=lambda self: self.env.company,
@@ -60,14 +61,18 @@ class AmisCallbackConfigPaymentBank(models.Model):
 
 class AmisPaymentRequest(models.Model):
     _name = 'amis.payment.request'
-    _description = 'Đề nghị chi tiền nhà cung cấp MISA'
+    _description = 'Đề nghị chi tiền MISA'
     _order = 'create_date desc, id desc'
 
     name = fields.Char(string='Số đề nghị', default='/', required=True, copy=False, index=True)
     purchase_order_id = fields.Many2one(
-        'purchase.order', string='Đơn mua hàng', required=True, ondelete='cascade', index=True,
+        'purchase.order', string='Đơn mua hàng', ondelete='cascade', index=True,
     )
-    partner_id = fields.Many2one('res.partner', string='Nhà cung cấp', required=True, index=True)
+    loyalty_reward_request_id = fields.Many2one(
+        'hlv.loyalty.reward.request', string='Yêu cầu đổi điểm',
+        ondelete='cascade', index=True, copy=False,
+    )
+    partner_id = fields.Many2one('res.partner', string='Người nhận', required=True, index=True)
     company_id = fields.Many2one('res.company', string='Công ty', required=True, default=lambda self: self.env.company)
     currency_id = fields.Many2one('res.currency', string='Tiền tệ', required=True)
     amount = fields.Monetary(string='Số tiền đề nghị chi', required=True)
@@ -83,7 +88,7 @@ class AmisPaymentRequest(models.Model):
     company_bank_account_number = fields.Char(string='Số tài khoản chi')
     company_bank_name = fields.Char(string='Ngân hàng chi')
 
-    vendor_bank_id = fields.Many2one('res.partner.bank', string='Tài khoản nhận của NCC')
+    vendor_bank_id = fields.Many2one('res.partner.bank', string='Tài khoản nhận')
     vendor_bank_account_number = fields.Char(string='Số tài khoản nhận')
     vendor_bank_name = fields.Char(string='Ngân hàng nhận')
     vendor_bank_branch = fields.Char(string='Chi nhánh ngân hàng nhận')
@@ -114,6 +119,22 @@ class AmisPaymentRequest(models.Model):
     error_msg = fields.Text(string='Lỗi MISA')
     callback_session_id = fields.Char(string='MISA Session ID', copy=False)
     state_updated_at = fields.Datetime(string='Cập nhật trạng thái MISA lúc', copy=False)
+
+    _sql_constraints = [
+        (
+            'loyalty_reward_request_unique',
+            'unique(loyalty_reward_request_id)',
+            'Mỗi yêu cầu đổi điểm chỉ được tạo một đề nghị chi MISA.',
+        ),
+    ]
+
+    @api.constrains('purchase_order_id', 'loyalty_reward_request_id')
+    def _check_source_document(self):
+        for request in self:
+            if bool(request.purchase_order_id) == bool(request.loyalty_reward_request_id):
+                raise ValidationError(
+                    'Đề nghị chi phải gắn với đúng một chứng từ nguồn: đơn mua hàng hoặc yêu cầu đổi điểm.'
+                )
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -150,6 +171,17 @@ class AmisPaymentRequest(models.Model):
             'target': 'current',
         }
 
+    def action_open_loyalty_reward_request(self):
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Yêu cầu đổi điểm',
+            'res_model': 'hlv.loyalty.reward.request',
+            'view_mode': 'form',
+            'res_id': self.loyalty_reward_request_id.id,
+            'target': 'current',
+        }
+
     def _enqueue_sync_job(self):
         self.ensure_one()
         existing = self.env['amis.sync.job'].sudo().search([
@@ -162,7 +194,7 @@ class AmisPaymentRequest(models.Model):
             return existing
         job = self.env['amis.sync.job'].sudo().create({
             'payment_request_id': self.id,
-            'purchase_order_id': self.purchase_order_id.id,
+            'purchase_order_id': self.purchase_order_id.id or False,
             'direction': 'payment_request',
         })
         self.write({'job_id': job.id, 'state': 'pending', 'error_msg': False})
@@ -185,7 +217,7 @@ class AmisPaymentRequest(models.Model):
             return existing
         job = self.env['amis.sync.job'].sudo().create({
             'payment_request_id': self.id,
-            'purchase_order_id': self.purchase_order_id.id,
+            'purchase_order_id': self.purchase_order_id.id or False,
             'direction': 'payment_request_revoke',
         })
         self.write({
@@ -223,7 +255,7 @@ class AmisPaymentRequest(models.Model):
     def _prepare_misa_payment_request_payload(self, config):
         self.ensure_one()
         if not self.partner_id:
-            raise UserError('Đề nghị chi thiếu nhà cung cấp.')
+            raise UserError('Đề nghị chi thiếu người nhận.')
         if not self.amount or self.amount <= 0:
             raise UserError('Số tiền đề nghị chi phải lớn hơn 0.')
         is_bank = self.payment_method == 'bank'
@@ -243,7 +275,9 @@ class AmisPaymentRequest(models.Model):
 
         po = self.purchase_order_id
         dictionary_items = []
-        account_object = po._ensure_misa_account_object(config, self.partner_id, dictionary_items)
+        account_object = self._ensure_misa_payment_account_object(
+            config, self.partner_id, dictionary_items,
+        )
         if dictionary_items:
             config.push_dictionary(dictionary_items)
             config.clear_dictionary_cache([1])
@@ -255,10 +289,17 @@ class AmisPaymentRequest(models.Model):
 
         refdate = self._misa_datetime(self.payment_date)
         amount = float(self.amount or 0.0)
-        memo = (self.memo or '').strip() or 'Đề nghị chi tiền nhà cung cấp %s theo đơn mua %s' % (
-            self.partner_id.display_name,
-            po.name,
-        )
+        if self.loyalty_reward_request_id:
+            default_memo = 'Chi đổi điểm Loyalty %s cho %s' % (
+                self.loyalty_reward_request_id.name,
+                self.partner_id.display_name,
+            )
+        else:
+            default_memo = 'Đề nghị chi tiền nhà cung cấp %s theo đơn mua %s' % (
+                self.partner_id.display_name,
+                po.name,
+            )
+        memo = (self.memo or '').strip() or default_memo
         account_type_label = dict(self._fields['beneficiary_account_type'].selection).get(
             self.beneficiary_account_type, ''
         )
@@ -269,7 +310,7 @@ class AmisPaymentRequest(models.Model):
                 memo,
             )
         currency = self.currency_id.name or 'VND'
-        exchange_rate = float(getattr(po, 'currency_rate', 1.0) or 1.0)
+        exchange_rate = float(getattr(po, 'currency_rate', 1.0) or 1.0) if po else 1.0
         account_object_id = account_object.get('account_object_id') or ''
         account_object_code = account_object.get('account_object_code') or ''
         account_object_name = account_object.get('account_object_name') or self.partner_id.display_name
@@ -340,6 +381,12 @@ class AmisPaymentRequest(models.Model):
                 voucher.pop(field_name, None)
         return voucher
 
+    def _ensure_misa_payment_account_object(self, config, partner, dictionary_items):
+        """Reuse the purchase flow's account-object lookup/create contract."""
+        self.ensure_one()
+        purchase_helper = self.purchase_order_id or self.env['purchase.order']
+        return purchase_helper._ensure_misa_account_object(config, partner, dictionary_items)
+
     def _prepare_misa_payment_request_references(self, voucher_payload):
         self.ensure_one()
         po = self.purchase_order_id
@@ -407,3 +454,73 @@ class PurchaseOrderAmisPaymentRequest(models.Model):
                 'default_currency_id': self.currency_id.id,
             },
         }
+
+
+class HlvLoyaltyRewardRequestAmisPayment(models.Model):
+    _inherit = 'hlv.loyalty.reward.request'
+
+    def action_done(self):
+        cash_requests = self.filtered(
+            lambda request: request.state == 'pending' and request.request_type == 'cash'
+        )
+        result = super().action_done()
+        for request in cash_requests:
+            request._enqueue_loyalty_payment_request()
+        return result
+
+    def _enqueue_loyalty_payment_request(self):
+        self.ensure_one()
+        existing = self.env['amis.payment.request'].sudo().search([
+            ('loyalty_reward_request_id', '=', self.id),
+        ], limit=1)
+        if existing:
+            existing.action_enqueue_sync()
+            return existing
+
+        config = self.env['amis.callback.config'].sudo().ensure_singleton()
+        bank_config = config.payment_bank_config_ids.filtered(
+            lambda line: line.active
+            and line.purpose == 'loyalty'
+            and line.company_id == self.company_id
+        )[:1]
+        if not bank_config:
+            bank_config = config.payment_bank_config_ids.filtered(
+                lambda line: line.active
+                and line.purpose == 'purchase'
+                and line.company_id == self.company_id
+            )[:1]
+        company_bank = bank_config.company_bank_id if bank_config else self.company_id.partner_id.bank_ids[:1]
+        partner = self.partner_id
+        payment_request = self.env['amis.payment.request'].sudo().create({
+            'loyalty_reward_request_id': self.id,
+            'partner_id': partner.id,
+            'company_id': self.company_id.id,
+            'currency_id': self.company_id.currency_id.id,
+            'amount': self.cash_value,
+            'payment_date': fields.Date.context_today(self),
+            'memo': 'Chi đổi điểm Loyalty %s - %s điểm cho %s' % (
+                self.name,
+                self.points_required,
+                partner.display_name,
+            ),
+            'payment_method': 'bank',
+            'company_bank_id': company_bank.id or False,
+            'company_bank_account_number': company_bank.acc_number if company_bank else '',
+            'company_bank_name': (
+                company_bank.bank_id.name if company_bank and company_bank.bank_id else ''
+            ),
+            'vendor_bank_account_number': self.account_number or '',
+            'vendor_bank_name': self.bank_name or '',
+            'vendor_account_holder': self.account_name or partner.display_name,
+            'beneficiary_account_type': 'company' if partner.is_company else 'personal',
+            'debit_account': bank_config.debit_account if bank_config else '331',
+            'credit_account': bank_config.credit_account if bank_config else '1121',
+        })
+        payment_request.action_enqueue_sync()
+        _logger.info(
+            'Loyalty reward request %s enqueued AMIS payment request %s (job %s).',
+            self.name,
+            payment_request.name,
+            payment_request.job_id.id,
+        )
+        return payment_request
