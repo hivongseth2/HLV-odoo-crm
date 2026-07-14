@@ -12,3 +12,4 @@ CLAUDE.md
 ~$*.xlsx
 # Extension folder for MISA CRM sync
 custom_addons/misa_purchase_request_sync/misa-odoo-extension/
+custom_addons/hlv_sale_delivery_planning/controllers/save.py
