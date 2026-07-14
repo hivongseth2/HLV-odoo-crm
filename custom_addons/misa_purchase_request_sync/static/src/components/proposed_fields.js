@@ -45,9 +45,9 @@ Many2oneWithProposedField.props = {
 registry.category("fields").add("float_with_proposed", {
     ...floatField,
     component: FloatWithProposedField,
-    extractProps: ({ attrs, field }, activeActions) => {
-        const props = floatField.extractProps ? floatField.extractProps({ attrs, field }, activeActions) : {};
-        props.options = attrs.options;
+    extractProps: (fieldInfo, activeActions) => {
+        const props = floatField.extractProps ? floatField.extractProps(fieldInfo, activeActions) : {};
+        props.options = fieldInfo.attrs.options;
         return props;
     },
 });
@@ -55,9 +55,9 @@ registry.category("fields").add("float_with_proposed", {
 registry.category("fields").add("many2one_with_proposed", {
     ...many2OneField,
     component: Many2oneWithProposedField,
-    extractProps: ({ attrs, field }, activeActions) => {
-        const props = many2OneField.extractProps ? many2OneField.extractProps({ attrs, field }, activeActions) : {};
-        props.options = attrs.options;
+    extractProps: (fieldInfo, activeActions) => {
+        const props = many2OneField.extractProps ? many2OneField.extractProps(fieldInfo, activeActions) : {};
+        props.options = fieldInfo.attrs.options;
         return props;
     },
 });
