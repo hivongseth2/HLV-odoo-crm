@@ -68,7 +68,7 @@ Kế thừa để hỗ trợ điền tự động và cho phép chọn giá tr�
   - Nhóm trường HTML: `display_qty_html`, `display_price_unit_html`, `display_tax_rate_html`, `display_discount_rate_html`, `display_supplier_html`.
   - **Công dụng:** Tự động tính toán để hiển thị 2 dòng trong một ô của list view khi PR không còn ở trạng thái `draft`.
     - Dòng trên: Giá trị đề xuất ban đầu (màu đen thường).
-    - Dòng dưới: Giá trị thực mua thực tế (màu xanh dương đậm, in nghiêng, bắt đầu bằng chữ `thực: `). Chỉ hiển thị khi có dữ liệu thực tế (sau khi đã chạy wizard Tạo RFQ và lưu lại), nếu chưa tạo RFQ thì không hiển thị dòng `thực:` này.
+    - Dòng dưới: Giá trị thực mua thực tế (màu xanh lá đậm, in đậm nghiêng, bắt đầu bằng chữ `PO: `). Chỉ hiển thị khi có dữ liệu thực tế (sau khi đã chạy wizard Tạo RFQ và lưu lại), nếu chưa tạo RFQ thì không hiển thị dòng `PO:` này.
   - **Giao diện XML:**
     - Ở list view của Form Yêu cầu mua hàng (`view_purchase_request_form_inherit_misa_sync`), các trường nhập liệu gốc chỉ hiển thị ở trạng thái `draft` (`column_invisible="parent.state != 'draft'"`).
     - Khi ở các trạng thái khác, các trường HTML so sánh được hiển thị thay thế (`column_invisible="parent.state == 'draft'"`), giúp quản lý và đối chiếu dễ dàng mà không làm hỏng tính năng edit của Odoo.
