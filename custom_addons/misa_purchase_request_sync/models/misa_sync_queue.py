@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
-from odoo import api, fields, models, _
 import json
 import logging
+
+from odoo import api, fields, models, _
 
 _logger = logging.getLogger(__name__)
 
@@ -30,17 +31,76 @@ class MisaSyncQueue(models.Model):
     retry_count = fields.Integer(string="Số lần thử lại", default=0)
     error_log = fields.Text(string="Chi tiết lỗi")
     sequence = fields.Integer(string="Ưu tiên", default=10, index=True)
+    processing_started_at = fields.Datetime(string="Bắt đầu xử lý lúc", index=True)
+
+    def _recover_zombie_records(self):
+        """
+        Recover records that have been in 'processing' state for too long (e.g. > 10 minutes).
+        This can happen if the Odoo worker is killed or crashes without updating the state.
+        """
+        timeout_minutes = 10
+        cutoff = fields.Datetime.subtract(fields.Datetime.now(), minutes=timeout_minutes)
+        zombies = self.search([
+            ('state', '=', 'processing'),
+            ('processing_started_at', '<', cutoff)
+        ])
+        if zombies:
+            _logger.warning("MISA Sync Queue: Found %d zombie processing records: %s", len(zombies), zombies.mapped('name'))
+            for z in zombies:
+                z.retry_count += 1
+                if z.retry_count >= 3:
+                    z.write({
+                        'state': 'failed',
+                        'error_log': _("Timeout: Kẹt ở trạng thái processing quá %s phút.") % timeout_minutes
+                    })
+                else:
+                    z.write({
+                        'state': 'draft',
+                        'error_log': _("Auto-recovered: Kẹt ở trạng thái processing quá %s phút. Đang chờ thử lại (lần thứ %s).") % (timeout_minutes, z.retry_count),
+                        'sequence': z.sequence + 10  # Đẩy xuống cuối hàng
+                    })
+            self.env.cr.commit()
 
     @api.model
     def process_queue(self, limit=20):
         """
         Cron job processing
         """
-        records = self.search([('state', '=', 'draft')], limit=limit)
-        for record in records:
-            record.write({'state': 'processing'})
-            self.env.cr.commit()  # Tránh lock row quá lâu, cẩn thận với transaction
+        # Determine records to process
+        if self:
+            # Called on a specific recordset (e.g. retry button from form view)
+            records = self.filtered(lambda r: r.state in ('draft', 'failed'))
+            if records:
+                records.write({
+                    'state': 'processing',
+                    'processing_started_at': fields.Datetime.now(),
+                    'error_log': False
+                })
+                self.env.cr.commit()
+        else:
+            # Auto-recovery for stuck records
+            self._recover_zombie_records()
 
+            # Find draft records using SELECT FOR UPDATE SKIP LOCKED to prevent race conditions
+            self.env.cr.execute("""
+                SELECT id FROM misa_sync_queue
+                WHERE state = 'draft'
+                ORDER BY sequence ASC, id ASC
+                LIMIT %s
+                FOR UPDATE SKIP LOCKED
+            """, [limit])
+            ids = [row[0] for row in self.env.cr.fetchall()]
+            records = self.browse(ids)
+            
+            if records:
+                records.write({
+                    'state': 'processing',
+                    'processing_started_at': fields.Datetime.now()
+                })
+                self.env.cr.commit()
+
+        # Process each record
+        for record in records:
             try:
                 # Dùng savepoint để cô lập lỗi DB (FK violation, ...)
                 # Nếu lỗi xảy ra, savepoint rollback nhưng transaction chính vẫn sống

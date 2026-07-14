@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <!-- Widget Float với giá trị đề xuất hiển thị ở dưới -->
+    <t t-name="misa_purchase_request_sync.FloatWithProposedField" owl="1">
+        <div class="d-flex flex-column align-items-end justify-content-center w-100">
+            <t t-call="web.FloatField"/>
+            <div t-if="proposedValue" class="text-muted fst-italic mt-1" style="font-size: 0.85rem; color: #888888 !important; text-align: right; display: block;">
+                đề xuất: <t t-esc="proposedValue"/>
+            </div>
+        </div>
+    </t>
+
+    <!-- Widget Many2one với giá trị đề xuất hiển thị ở dưới -->
+    <t t-name="misa_purchase_request_sync.Many2oneWithProposedField" owl="1">
+        <div class="d-flex flex-column align-items-start justify-content-center w-100">
+            <t t-call="web.Many2OneField"/>
+            <div t-if="proposedValue" class="text-muted fst-italic mt-1" style="font-size: 0.85rem; color: #888888 !important; text-align: left; display: block;">
+                đề xuất: <t t-esc="proposedValue"/>
+            </div>
+        </div>
+    </t>
+</templates>

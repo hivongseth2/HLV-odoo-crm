@@ -21,6 +21,7 @@
                 />
             </xpath>
             <xpath expr="//field[@name='requested_by']" position="after">
+                <field name="state" invisible="1"/>
                 <field name="sale_order_id" readonly="state in ('done', 'rejected')"/>
                 <field name="delivery_address" readonly="state in ('done', 'rejected')"/>
                 <field name="create_date" readonly="1"/>
@@ -45,25 +46,39 @@
             <xpath expr="//field[@name='line_ids']/list/field[@name='date_required']" position="attributes">
                 <attribute name="optional">hide</attribute>
             </xpath>
-            <!-- Đổi tên cột số lượng và RFQ/PO -->
+            <!-- Đổi tên cột số lượng và RFQ/PO, và ẩn hiện thông minh theo trạng thái -->
             <xpath expr="//field[@name='line_ids']/list/field[@name='product_qty']" position="attributes">
                 <attribute name="string">Số lượng yêu cầu</attribute>
+                <attribute name="column_invisible">parent.state != 'draft'</attribute>
+            </xpath>
+            <xpath expr="//field[@name='line_ids']/list/field[@name='product_qty']" position="after">
+                <field name="display_qty_html" string="Số lượng" widget="html" column_invisible="parent.state == 'draft'"/>
             </xpath>
             <xpath expr="//field[@name='line_ids']/list/field[@name='purchased_qty']" position="attributes">
                 <attribute name="string">Số lượng đã lên RFQ/PO</attribute>
             </xpath>
             <xpath expr="//field[@name='line_ids']/list/field[@name='estimated_cost']" position="after">
                 <field name="history_po_line_id" optional="hide"/>
-                <field name="sale_proposed_supplier_id" optional="show" width="200"/>
+                <field name="sale_proposed_supplier_id" column_invisible="parent.state != 'draft'" optional="show" width="200"/>
+                <field name="display_supplier_html" string="NCC" widget="html" column_invisible="parent.state == 'draft'" optional="show" width="200"/>
                 <field name="misa_supplier_id" optional="hide"/>
                 <field name="misa_stock_total" optional="hide"/>
                 <field name="misa_stock_selected" optional="hide"/>
                 <field name="misa_stock_undelivered" optional="hide"/>
-                <field name="misa_price_before_tax" optional="hide"/>
+                
+                <field name="misa_price_before_tax" column_invisible="parent.state != 'draft'" optional="hide"/>
+                <field name="display_price_unit_html" string="Đơn giá trước thuế" widget="html" column_invisible="parent.state == 'draft'" optional="show"/>
+                
                 <field name="misa_price_before_tax_total" optional="show" sum="Tổng tiền trước thuế"/>
-                <field name="misa_discount_rate" optional="hide"/>
+                
+                <field name="misa_discount_rate" column_invisible="parent.state != 'draft'" optional="hide"/>
+                <field name="display_discount_rate_html" string="TL chiết khấu (MISA)" widget="html" column_invisible="parent.state == 'draft'" optional="hide"/>
+                
                 <field name="misa_discount_amount" optional="hide"/>
-                <field name="misa_tax_rate" optional="show"/>
+                
+                <field name="misa_tax_rate" column_invisible="parent.state != 'draft'" optional="show"/>
+                <field name="display_tax_rate_html" string="% Thuế (MISA)" widget="html" column_invisible="parent.state == 'draft'" optional="show"/>
+                
                 <field name="misa_tax_amount_total" optional="show" sum="Tổng tiền thuế"/>
                 <field name="misa_tax_amount" optional="hide"/>
                 <field name="misa_price_after_tax_total" optional="show" sum="Tổng sau thuế"/>

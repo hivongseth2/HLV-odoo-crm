@@ -334,14 +334,38 @@ class PurchaseRequest(models.Model):
 
         def _resolve_product_and_uom(line_data):
             pcode = (line_data.get("product_code") or "").strip()
+            uom_name = (line_data.get("uom") or "").strip()
             product = False
             if pcode:
                 product = product_model.search([("default_code", "=", pcode)], limit=1)
+                
+            if pcode and not product:
+                # Gọi odoo.utils của module misa_fetch_po_button để tạo/lấy sản phẩm
+                unit_name = uom_name or "Cái"
+                product_name = (line_data.get("name") or line_data.get("product_name") or pcode).strip()
+                
+                price_unit = 0.0
+                try:
+                    price_unit = float(line_data.get("misa_price_before_tax") or 0.0)
+                except (ValueError, TypeError):
+                    pass
+                
+                odoo_utils = self.env["odoo.utils"].sudo()
+                product = odoo_utils._get_or_create_product(
+                    code=pcode,
+                    name=product_name,
+                    unit_name=unit_name,
+                    cost=price_unit,
+                    product_type="consu",
+                    purchase_ok=True,
+                    sale_ok=True,
+                )
+                _logger.info("MISA Sync PR: Gọi odoo.utils tạo sản phẩm mới %s (%s)", product_name, pcode)
+
             uom = False
             if product:
                 uom = product.uom_id
-            uom_name = (line_data.get("uom") or "").strip()
-            if uom_name:
+            elif uom_name:
                 uom_match = uom_model.search([("name", "=ilike", uom_name)], limit=1)
                 if uom_match:
                     uom = uom_match

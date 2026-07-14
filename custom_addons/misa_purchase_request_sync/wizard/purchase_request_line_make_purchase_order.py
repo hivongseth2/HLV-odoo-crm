@@ -47,7 +47,7 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
 
         remaining_qty = line.product_qty - line.purchased_qty
         res['product_qty'] = max(0.0, remaining_qty)
-        res['actual_qty'] = max(0.0, remaining_qty)
+        res['actual_qty'] = line.actual_qty if line.actual_qty else max(0.0, remaining_qty)
 
         # --- Giá từ MISA / estimated_cost ---
         if hasattr(line, 'misa_price_before_tax') and line.misa_price_before_tax:
@@ -67,11 +67,19 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
         if hasattr(line, 'misa_discount_amount') and line.misa_discount_amount:
             res['misa_discount_amount'] = line.misa_discount_amount
 
-        # --- Actual fields (editable, mặc định = giá trị sale đề xuất) ---
-        res['actual_price_unit'] = line.misa_price_before_tax if (hasattr(line, 'misa_price_before_tax') and line.misa_price_before_tax) else (line.estimated_cost / res['product_qty'] if line.estimated_cost and res['product_qty'] else 0.0)
-        res['actual_tax_rate'] = line.misa_tax_rate if (hasattr(line, 'misa_tax_rate') and line.misa_tax_rate) else 0.0
-        res['actual_discount_rate'] = line.misa_discount_rate if (hasattr(line, 'misa_discount_rate') and line.misa_discount_rate) else 0.0
-        res['actual_discount_amount'] = line.misa_discount_amount if (hasattr(line, 'misa_discount_amount') and line.misa_discount_amount) else 0.0
+        # --- Actual fields (editable, mặc định = giá trị sale đề xuất / giá trị đã lưu trước đó) ---
+        res['actual_price_unit'] = line.actual_price_unit if line.actual_price_unit else (
+            line.misa_price_before_tax if (hasattr(line, 'misa_price_before_tax') and line.misa_price_before_tax) else (line.estimated_cost / res['product_qty'] if line.estimated_cost and res['product_qty'] else 0.0)
+        )
+        res['actual_tax_rate'] = line.actual_tax_rate if line.actual_tax_rate else (
+            line.misa_tax_rate if (hasattr(line, 'misa_tax_rate') and line.misa_tax_rate) else 0.0
+        )
+        res['actual_discount_rate'] = line.actual_discount_rate if line.actual_discount_rate else (
+            line.misa_discount_rate if (hasattr(line, 'misa_discount_rate') and line.misa_discount_rate) else 0.0
+        )
+        res['actual_discount_amount'] = line.actual_discount_amount if line.actual_discount_amount else (
+            line.misa_discount_amount if (hasattr(line, 'misa_discount_amount') and line.misa_discount_amount) else 0.0
+        )
 
         # Tìm account.tax cho misa_tax_id (sale đề xuất) và actual_tax_id (thực tế)
         company = line.company_id or self.env.company
@@ -87,8 +95,13 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
                 res['misa_tax_id'] = matched_tax.id
                 res['actual_tax_id'] = matched_tax.id
 
-        # NCC: ưu tiên sale_proposed_supplier_id, fallback misa_supplier_id
-        supplier = line.sale_proposed_supplier_id if hasattr(line, 'sale_proposed_supplier_id') and line.sale_proposed_supplier_id else False
+        if line.actual_tax_id:
+            res['actual_tax_id'] = line.actual_tax_id.id
+
+        # NCC: ưu tiên actual_supplier_id, sau đó là sale_proposed_supplier_id, fallback misa_supplier_id
+        supplier = line.actual_supplier_id if line.actual_supplier_id else False
+        if not supplier:
+            supplier = line.sale_proposed_supplier_id if hasattr(line, 'sale_proposed_supplier_id') and line.sale_proposed_supplier_id else False
         if not supplier:
             supplier = line.misa_supplier_id if hasattr(line, 'misa_supplier_id') and line.misa_supplier_id else False
         if supplier:
@@ -121,6 +134,11 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
             ], limit=1)
             if matched:
                 res['taxes_id'] = [Command.set(matched.ids)]
+
+        # Chiết khấu
+        if 'discount' in self.env['purchase.order.line']._fields:
+            res['discount'] = item.actual_discount_rate or 0.0
+
         return res
 
     def make_purchase_order(self):
@@ -138,6 +156,18 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
                 'product_qty': qty,
                 'estimated_cost': price * qty,
             })
+            
+            # Persist các giá trị actual vào purchase.request.line để lưu trữ lịch sử
+            if item.line_id:
+                item.line_id.write({
+                    'actual_qty': item.actual_qty,
+                    'actual_price_unit': item.actual_price_unit,
+                    'actual_tax_id': item.actual_tax_id.id if item.actual_tax_id else False,
+                    'actual_tax_rate': item.actual_tax_rate,
+                    'actual_discount_rate': item.actual_discount_rate,
+                    'actual_discount_amount': item.actual_discount_amount,
+                    'actual_supplier_id': item.supplier_id.id if item.supplier_id else False,
+                })
         return super().make_purchase_order()
 
     def _post_process_po_line(self, item, po_line, new_pr_line):
@@ -164,6 +194,10 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
         # ta override lại với actual_price_unit trực tiếp
         if item.actual_price_unit and item.keep_estimated_cost:
             po_line.price_unit = item.actual_price_unit
+
+        # --- Chiết khấu: re-apply chiết khấu
+        if 'discount' in po_line._fields:
+            po_line.discount = item.actual_discount_rate or 0.0
 
         po_line._compute_amount()
 
