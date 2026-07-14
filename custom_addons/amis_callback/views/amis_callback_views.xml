@@ -588,6 +588,7 @@
                         <group>
                             <field name="retry_count"/>
                             <field name="processed_at"/>
+                            <field name="next_attempt_at"/>
                         </group>
                     </group>
                     <group string="Lỗi" invisible="not error_msg">
@@ -636,6 +637,7 @@
                 <field name="issue_count" optional="show"/>
                 <field name="retry_count"/>
                 <field name="processed_at"/>
+                <field name="next_attempt_at" optional="show"/>
                 <field name="error_msg" optional="show"/>
                 <button name="action_retry" type="object" string="Thử lại"
                         invisible="status not in ('error',)" icon="fa-refresh"/>

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from datetime import timedelta
 import logging
 import re
 
@@ -12,6 +13,7 @@ from odoo.tools.float_utils import float_compare
 _logger = logging.getLogger(__name__)
 
 MAX_RETRY = 3
+VENDOR_MIRROR_WAIT_MINUTES = 2
 
 
 class AmisCatalogSyncJob(models.Model):
@@ -67,6 +69,14 @@ class AmisCatalogSyncJob(models.Model):
     retry_count = fields.Integer(string='Số lần thử', default=0)
     started_at = fields.Datetime(string='Bắt đầu lúc')
     processed_at = fields.Datetime(string='Xử lý lúc')
+    next_attempt_at = fields.Datetime(
+        string='Chờ mirror đến',
+        index=True,
+        help=(
+            'Với NCC Odoo chưa có ID MISA, job chờ mirror MISA trong 2 phút. '
+            'Sau thời điểm này, nếu vẫn không map được thì mới tạo NCC trên MISA.'
+        ),
+    )
     error_msg = fields.Text(string='Lỗi cuối')
     summary = fields.Text(string='Tóm tắt')
     total_count = fields.Integer(string='Tổng item MISA')
@@ -163,7 +173,12 @@ class AmisCatalogSyncJob(models.Model):
             ('status', 'in', ('pending', 'running')),
         ], limit=1)
         if existing:
+            if (partner.misa_account_object_id or '').strip() and existing.next_attempt_at:
+                existing.sudo().write({'next_attempt_at': False})
             return existing
+        next_attempt_at = False
+        if not (partner.misa_account_object_id or '').strip():
+            next_attempt_at = fields.Datetime.now() + timedelta(minutes=VENDOR_MIRROR_WAIT_MINUTES)
         return self.sudo().create({
             'config_id': config.id if config else False,
             'partner_id': partner.id,
@@ -172,14 +187,19 @@ class AmisCatalogSyncJob(models.Model):
             'trigger': trigger,
             'unmapped_only': False,
             'create_missing': True,
+            'next_attempt_at': next_attempt_at,
         })
 
     @api.model
     def _process_pending(self):
+        now = fields.Datetime.now()
         job_ids = self.search([
             ('status', '=', 'pending'),
             ('retry_count', '<', MAX_RETRY),
-        ], order='create_date asc').ids
+            '|',
+            ('next_attempt_at', '=', False),
+            ('next_attempt_at', '<=', now),
+        ], order='direction asc, create_date asc').ids
         _logger.info('AMIS mirror queue: xu ly %d jobs', len(job_ids))
         for job_id in job_ids:
             try:
@@ -220,7 +240,34 @@ class AmisCatalogSyncJob(models.Model):
             elif self.direction == 'to_misa' and self.scope == 'vendor':
                 if not self.partner_id:
                     raise ValueError('Job đồng bộ NCC sang MISA thiếu partner_id.')
-                operation = self.partner_id.with_context(skip_misa_partner_sync=True)._push_misa_vendor_dictionary(config, job=self)
+                partner = self.partner_id.with_context(skip_misa_partner_sync=True)
+                if not (partner.misa_account_object_id or '').strip() and not partner.misa_skip_vendor_auto_sync:
+                    partner._map_misa_vendor_from_mirror(config, job=self)
+                if not (partner.misa_account_object_id or '').strip():
+                    now = fields.Datetime.now()
+                    if not self.next_attempt_at:
+                        wait_until = now + timedelta(minutes=VENDOR_MIRROR_WAIT_MINUTES)
+                        self.write({
+                            'status': 'pending',
+                            'next_attempt_at': wait_until,
+                            'summary': (
+                                'Chờ mirror MISA đến %s trước khi tạo mới nhà cung cấp.'
+                                % fields.Datetime.to_string(wait_until)
+                            ),
+                            'processed_at': False,
+                        })
+                        return
+                    if self.next_attempt_at > now:
+                        self.write({
+                            'status': 'pending',
+                            'summary': (
+                                'Chờ mirror MISA đến %s trước khi tạo mới nhà cung cấp.'
+                                % fields.Datetime.to_string(self.next_attempt_at)
+                            ),
+                            'processed_at': False,
+                        })
+                        return
+                operation = partner._push_misa_vendor_dictionary(config, job=self)
                 summary = 'Bỏ qua đồng bộ nhà cung cấp %s sang MISA theo cờ trên liên hệ.' % self.partner_id.display_name
                 if operation != 'skip':
                     summary = 'Đã đồng bộ nhà cung cấp %s sang MISA.' % self.partner_id.display_name
