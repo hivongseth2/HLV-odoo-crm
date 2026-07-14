@@ -35,11 +35,11 @@ export class Many2oneWithProposedField extends Many2OneField {
 Many2oneWithProposedField.template = "misa_purchase_request_sync.Many2oneWithProposedField";
 
 registry.category("fields").add("float_with_proposed", {
-    ...floatField,
     component: FloatWithProposedField,
+    supportedTypes: ["float"],
 });
 
 registry.category("fields").add("many2one_with_proposed", {
-    ...many2OneField,
     component: Many2oneWithProposedField,
+    supportedTypes: ["many2one"],
 });
