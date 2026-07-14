@@ -32,7 +32,7 @@ export class FloatWithProposedField extends FloatField {
         const action = await this.orm.call(
             resModel,
             "action_view_price_history",
-            [resId]
+            [[resId]]
         );
         if (action) {
             this.action.doAction(action);
@@ -76,7 +76,7 @@ export class Many2oneWithProposedField extends Many2OneField {
         const resId = this.props.record.resId;
         const resModel = this.props.record.resModel;
         const methodName = resModel === 'purchase.request.line' ? "action_create_line_supplier" : "action_create_item_supplier";
-        const action = await this.orm.call(resModel, methodName, [resId]);
+        const action = await this.orm.call(resModel, methodName, [[resId]]);
         if (action) {
             this.action.doAction(action);
         }
