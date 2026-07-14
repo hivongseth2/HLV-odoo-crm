@@ -17,6 +17,10 @@ export class FloatWithProposedField extends FloatField {
     }
 }
 FloatWithProposedField.template = "misa_purchase_request_sync.FloatWithProposedField";
+FloatWithProposedField.props = {
+    ...FloatField.props,
+    options: { type: Object, optional: true },
+};
 
 export class Many2oneWithProposedField extends Many2OneField {
     get proposedValue() {
@@ -33,13 +37,27 @@ export class Many2oneWithProposedField extends Many2OneField {
     }
 }
 Many2oneWithProposedField.template = "misa_purchase_request_sync.Many2oneWithProposedField";
+Many2oneWithProposedField.props = {
+    ...Many2OneField.props,
+    options: { type: Object, optional: true },
+};
 
 registry.category("fields").add("float_with_proposed", {
+    ...floatField,
     component: FloatWithProposedField,
-    supportedTypes: ["float"],
+    extractProps: ({ attrs, field }, activeActions) => {
+        const props = floatField.extractProps ? floatField.extractProps({ attrs, field }, activeActions) : {};
+        props.options = attrs.options;
+        return props;
+    },
 });
 
 registry.category("fields").add("many2one_with_proposed", {
+    ...many2OneField,
     component: Many2oneWithProposedField,
-    supportedTypes: ["many2one"],
+    extractProps: ({ attrs, field }, activeActions) => {
+        const props = many2OneField.extractProps ? many2OneField.extractProps({ attrs, field }, activeActions) : {};
+        props.options = attrs.options;
+        return props;
+    },
 });
