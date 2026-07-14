@@ -27,7 +27,7 @@ class ResPartner(models.Model):
                 item = self.env['purchase.request.line.make.purchase.order.item'].sudo().browse(pr_item_id)
                 if item.exists():
                     item.sudo().write({
-                        'sale_proposed_supplier_id': partners.id,
+                        'supplier_id': partners.id,
                         'misa_new_supplier_json': False,
                     })
 

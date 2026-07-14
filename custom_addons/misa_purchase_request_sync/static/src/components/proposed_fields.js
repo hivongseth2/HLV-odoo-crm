@@ -35,6 +35,9 @@ export class FloatWithProposedField extends FloatField {
             [[resId]]
         );
         if (action) {
+            if (!action.views && action.view_mode) {
+                action.views = action.view_mode.split(',').map(mode => [false, mode.trim()]);
+            }
             this.action.doAction(action);
         }
     }
@@ -78,6 +81,9 @@ export class Many2oneWithProposedField extends Many2OneField {
         const methodName = resModel === 'purchase.request.line' ? "action_create_line_supplier" : "action_create_item_supplier";
         const action = await this.orm.call(resModel, methodName, [[resId]]);
         if (action) {
+            if (!action.views && action.view_mode) {
+                action.views = action.view_mode.split(',').map(mode => [false, mode.trim()]);
+            }
             this.action.doAction(action);
         }
     }

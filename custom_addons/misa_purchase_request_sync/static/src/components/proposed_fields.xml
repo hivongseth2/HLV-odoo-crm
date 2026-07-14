@@ -7,8 +7,11 @@
             <div t-if="proposedValue" class="text-muted fst-italic mt-1" style="font-size: 0.85rem; color: #888888 !important; text-align: right; display: block;">
                 đề xuất: <t t-esc="proposedValue"/>
             </div>
-            <button t-if="showPriceHistoryButton" t-on-click.stop.prevent="onViewPriceHistory" class="btn btn-secondary btn-sm mt-1 py-0 px-2" style="font-size: 0.75rem;">
-                <i class="fa fa-history mr-1"/>Lịch sử giá
+            <button t-if="showPriceHistoryButton" 
+                    t-on-click.stop.prevent="onViewPriceHistory" 
+                    class="btn btn-sm mt-1 py-0 px-2 d-inline-flex align-items-center" 
+                    style="font-size: 0.72rem; font-weight: 500; border-radius: 12px; background-color: #f1f3f5; color: #495057; border: 1px solid #ced4da; transition: all 0.2s ease;">
+                <i class="fa fa-history" style="font-size: 0.72rem; margin-right: 3px;"/>Lịch sử giá
             </button>
         </div>
     </t>
@@ -20,8 +23,11 @@
             <div t-if="proposedValue" class="text-muted fst-italic mt-1" style="font-size: 0.85rem; color: #888888 !important; text-align: left; display: block;">
                 đề xuất: <t t-esc="proposedValue"/>
             </div>
-            <button t-if="showCreateSupplierButton" t-on-click.stop.prevent="onCreateSupplier" class="btn btn-warning btn-sm mt-1 py-0 px-2" style="font-size: 0.75rem;">
-                <i class="fa fa-plus-circle mr-1"/>Tạo NCC
+            <button t-if="showCreateSupplierButton" 
+                    t-on-click.stop.prevent="onCreateSupplier" 
+                    class="btn btn-sm mt-1 py-0 px-2 d-inline-flex align-items-center" 
+                    style="font-size: 0.72rem; font-weight: 500; border-radius: 12px; background-color: #fff9db; color: #f08c00; border: 1px solid #ffe066; transition: all 0.2s ease;">
+                <i class="fa fa-user-plus" style="font-size: 0.72rem; margin-right: 3px;"/>Tạo NCC
             </button>
         </div>
     </t>
