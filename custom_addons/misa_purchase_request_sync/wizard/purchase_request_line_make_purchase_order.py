@@ -308,6 +308,7 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
             'default_is_company': True,
             'default_company_type': 'company',
             'default_hlv_business_role': 'supplier',
+            'link_to_pr_wizard_item_id': self.id,
         }
         return {
             'name': _('Tạo NCC – %s') % (data.get('name') or ''),
