@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import json
+from markupsafe import Markup
 
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
@@ -35,6 +36,22 @@ class PurchaseRequestLine(models.Model):
     misa_stock_total = fields.Float(string="Tổng SL tồn kho (MISA)")
     misa_stock_selected = fields.Float(string="SL tồn kho đã chọn (MISA)")
     misa_stock_undelivered = fields.Float(string="SL tồn kho chưa giao (MISA)")
+    
+    # --- Các trường lưu thực tế mua hàng (từ Wizard chuyển qua) ---
+    actual_qty = fields.Float(string="SL thực mua")
+    actual_price_unit = fields.Float(string="Đơn giá thực mua")
+    actual_tax_id = fields.Many2one('account.tax', string="Thuế (%) thu mua")
+    actual_tax_rate = fields.Float(string="Thuế thu mua (%)")
+    actual_discount_rate = fields.Float(string="CK thu mua (%)")
+    actual_discount_amount = fields.Float(string="Tiền CK thu mua")
+    actual_supplier_id = fields.Many2one('res.partner', string="NCC thực mua")
+
+    # --- Các trường HTML hiển thị so sánh ở list view ---
+    display_qty_html = fields.Html(string="Số lượng", compute="_compute_display_qty_html")
+    display_price_unit_html = fields.Html(string="Đơn giá trước thuế (MISA)", compute="_compute_display_price_unit_html")
+    display_tax_rate_html = fields.Html(string="% Thuế (MISA)", compute="_compute_display_tax_rate_html")
+    display_discount_rate_html = fields.Html(string="TL chiết khấu (MISA)", compute="_compute_display_discount_rate_html")
+    display_supplier_html = fields.Html(string="NCC", compute="_compute_display_supplier_html")
 
     # --- Dữ liệu NCC mới từ MISA (per-line) ---
     misa_new_supplier_json = fields.Text(
@@ -206,3 +223,62 @@ class PurchaseRequestLine(models.Model):
             'line_id': self.id,
         })
         return wizard.action_load()
+
+    def _format_misa_float(self, val):
+        if not val:
+            return "0"
+        s = f"{val:,.2f}"
+        s = s.replace(',', 'tmp').replace('.', ',').replace('tmp', '.')
+        if ',' in s:
+            s = s.rstrip('0').rstrip(',')
+        return s
+
+    @api.depends('product_qty', 'actual_qty')
+    def _compute_display_qty_html(self):
+        for line in self:
+            qty_str = line._format_misa_float(line.product_qty)
+            if line.actual_qty:
+                act_qty_str = line._format_misa_float(line.actual_qty)
+                line.display_qty_html = Markup(f"<div>{qty_str}</div><div style='font-size: 0.85rem; color: #007bff; font-style: italic; font-weight: bold;'>thực: {act_qty_str}</div>")
+            else:
+                line.display_qty_html = Markup(f"<div>{qty_str}</div>")
+
+    @api.depends('misa_price_before_tax', 'actual_price_unit', 'actual_qty')
+    def _compute_display_price_unit_html(self):
+        for line in self:
+            price_str = line._format_misa_float(line.misa_price_before_tax)
+            if line.actual_qty:
+                act_price_str = line._format_misa_float(line.actual_price_unit)
+                line.display_price_unit_html = Markup(f"<div>{price_str}</div><div style='font-size: 0.85rem; color: #007bff; font-style: italic; font-weight: bold;'>thực: {act_price_str}</div>")
+            else:
+                line.display_price_unit_html = Markup(f"<div>{price_str}</div>")
+
+    @api.depends('misa_tax_rate', 'actual_tax_rate', 'actual_qty')
+    def _compute_display_tax_rate_html(self):
+        for line in self:
+            tax_str = line._format_misa_float(line.misa_tax_rate)
+            if line.actual_qty:
+                act_tax_str = line._format_misa_float(line.actual_tax_rate)
+                line.display_tax_rate_html = Markup(f"<div>{tax_str}%</div><div style='font-size: 0.85rem; color: #007bff; font-style: italic; font-weight: bold;'>thực: {act_tax_str}%</div>")
+            else:
+                line.display_tax_rate_html = Markup(f"<div>{tax_str}%</div>")
+
+    @api.depends('misa_discount_rate', 'actual_discount_rate', 'actual_qty')
+    def _compute_display_discount_rate_html(self):
+        for line in self:
+            discount_str = line._format_misa_float(line.misa_discount_rate)
+            if line.actual_qty:
+                act_discount_str = line._format_misa_float(line.actual_discount_rate)
+                line.display_discount_rate_html = Markup(f"<div>{discount_str}%</div><div style='font-size: 0.85rem; color: #007bff; font-style: italic; font-weight: bold;'>thực: {act_discount_str}%</div>")
+            else:
+                line.display_discount_rate_html = Markup(f"<div>{discount_str}%</div>")
+
+    @api.depends('sale_proposed_supplier_id', 'actual_supplier_id', 'actual_qty')
+    def _compute_display_supplier_html(self):
+        for line in self:
+            supplier_name = line.sale_proposed_supplier_id.name or ''
+            if line.actual_qty:
+                act_supplier_name = line.actual_supplier_id.name or ''
+                line.display_supplier_html = Markup(f"<div>{supplier_name}</div><div style='font-size: 0.85rem; color: #007bff; font-style: italic; font-weight: bold;'>thực: {act_supplier_name}</div>")
+            else:
+                line.display_supplier_html = Markup(f"<div>{supplier_name}</div>")

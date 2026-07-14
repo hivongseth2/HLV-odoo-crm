@@ -60,6 +60,18 @@ Kế thừa để hỗ trợ điền tự động và cho phép chọn giá tr�
   - **Logic (`onchange`):**
     - `onchange("product_id")`: Tự động tìm giá mua ưu tiên từ Nhà cung cấp (`product.supplierinfo`), nếu không có thì lấy giá vốn chuẩn (`standard_price`), gán vào `estimated_cost`.
     - `onchange("history_po_line_id")`: Lấy `price_unit` của dòng PO lịch sử đã chọn gán vào `estimated_cost`.
+- **Lưu trữ dữ liệu thực mua thực tế (`actual_*`):**
+  - Nhóm trường: `actual_qty`, `actual_price_unit`, `actual_tax_id`, `actual_tax_rate`, `actual_discount_rate`, `actual_discount_amount`, `actual_supplier_id`.
+  - **Công dụng:** Lưu trữ lại dữ liệu thực tế mà phòng mua hàng đã chỉnh sửa trên Wizard "Tạo RFQ". Khi Wizard chạy (`make_purchase_order`), các giá trị này sẽ được ghi ngược lại `purchase.request.line` tương ứng.
+  - **Mục đích:** Khi người dùng mở lại Wizard cho dòng này (ví dụ để tạo lại RFQ bị hủy), Wizard sẽ tự động load lại dữ liệu thực tế đã lưu trước đó thay vì hiển thị dữ liệu sale đề xuất ban đầu.
+- **Cột so sánh dữ liệu đề xuất vs thực tế (`display_*_html`):**
+  - Nhóm trường HTML: `display_qty_html`, `display_price_unit_html`, `display_tax_rate_html`, `display_discount_rate_html`, `display_supplier_html`.
+  - **Công dụng:** Tự động tính toán để hiển thị 2 dòng trong một ô của list view khi PR không còn ở trạng thái `draft`.
+    - Dòng trên: Giá trị đề xuất ban đầu (màu đen thường).
+    - Dòng dưới: Giá trị thực mua thực tế (màu xanh dương đậm, in nghiêng, bắt đầu bằng chữ `thực: `). Chỉ hiển thị khi có dữ liệu thực tế (sau khi đã chạy wizard Tạo RFQ và lưu lại), nếu chưa tạo RFQ thì không hiển thị dòng `thực:` này.
+  - **Giao diện XML:**
+    - Ở list view của Form Yêu cầu mua hàng (`view_purchase_request_form_inherit_misa_sync`), các trường nhập liệu gốc chỉ hiển thị ở trạng thái `draft` (`column_invisible="parent.state != 'draft'"`).
+    - Khi ở các trạng thái khác, các trường HTML so sánh được hiển thị thay thế (`column_invisible="parent.state == 'draft'"`), giúp quản lý và đối chiếu dễ dàng mà không làm hỏng tính năng edit của Odoo.
 
 **Cập nhật trên Form View Odoo:**
 - Hiển thị `history_po_line_id` trong danh sách (tree view) của `line_ids` (nằm cạnh `estimated_cost`).
