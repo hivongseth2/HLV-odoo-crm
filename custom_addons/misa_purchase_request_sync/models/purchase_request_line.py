@@ -76,6 +76,7 @@ class PurchaseRequestLine(models.Model):
             'default_supplier_rank': 1,
             'default_is_company': True,
             'default_company_type': 'company',
+            'default_hlv_business_role': 'supplier',
         }
         return {
             'name': _('Xác nhận & Tạo NCC – %s') % (data.get('name') or ''),
