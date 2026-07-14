@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
-from odoo import api, fields, models
+import json
+
+from odoo import _, api, fields, models
+from odoo.exceptions import UserError
 
 
 class PurchaseRequestLine(models.Model):
@@ -32,6 +35,57 @@ class PurchaseRequestLine(models.Model):
     misa_stock_total = fields.Float(string="Tổng SL tồn kho (MISA)")
     misa_stock_selected = fields.Float(string="SL tồn kho đã chọn (MISA)")
     misa_stock_undelivered = fields.Float(string="SL tồn kho chưa giao (MISA)")
+
+    # --- Dữ liệu NCC mới từ MISA (per-line) ---
+    misa_new_supplier_json = fields.Text(
+        string="Dữ liệu NCC mới (JSON)",
+        help="Lưu thông tin NCC mới từ MISA cho riêng dòng này.",
+    )
+    misa_has_new_supplier = fields.Boolean(
+        string="Có NCC mới",
+        compute="_compute_line_has_new_supplier",
+    )
+
+    @api.depends('misa_new_supplier_json')
+    def _compute_line_has_new_supplier(self):
+        for line in self:
+            if line.misa_new_supplier_json:
+                try:
+                    data = json.loads(line.misa_new_supplier_json)
+                    line.misa_has_new_supplier = bool(data and data.get('name'))
+                except (json.JSONDecodeError, TypeError, AttributeError):
+                    line.misa_has_new_supplier = False
+            else:
+                line.misa_has_new_supplier = False
+
+    def action_create_line_supplier(self):
+        """Mở form tạo NCC mới với dữ liệu pre-fill từ MISA cho dòng này."""
+        self.ensure_one()
+        if not self.misa_new_supplier_json:
+            raise UserError(_("Dòng này không có thông tin Nhà cung cấp mới từ MISA."))
+        try:
+            data = json.loads(self.misa_new_supplier_json)
+        except (json.JSONDecodeError, TypeError):
+            raise UserError(_("Dữ liệu NCC mới không hợp lệ."))
+
+        context = {
+            'default_name': data.get('name'),
+            'default_phone': data.get('phone'),
+            'default_street': data.get('address'),
+            'default_vat': data.get('vat'),
+            'default_supplier_rank': 1,
+            'default_is_company': True,
+            'default_company_type': 'company',
+            'default_hlv_business_role': 'supplier',
+        }
+        return {
+            'name': _('Xác nhận & Tạo NCC – %s') % (data.get('name') or ''),
+            'type': 'ir.actions.act_window',
+            'res_model': 'res.partner',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': context,
+        }
 
     # --- Computed fields để tự tính tổng khi người dùng thay đổi số lượng ---
     misa_price_before_tax_total = fields.Float(

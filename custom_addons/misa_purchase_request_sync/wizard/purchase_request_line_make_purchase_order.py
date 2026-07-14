@@ -1,4 +1,8 @@
+import json
+
 from odoo import api, fields, models, Command
+from odoo.exceptions import UserError
+from odoo.tools.translate import _
 
 
 class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
@@ -89,57 +93,79 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
             supplier = line.misa_supplier_id if hasattr(line, 'misa_supplier_id') and line.misa_supplier_id else False
         if supplier:
             res['supplier_id'] = supplier.id
+
+        # Copy dữ liệu NCC mới per-line
+        if hasattr(line, 'misa_new_supplier_json') and line.misa_new_supplier_json:
+            res['misa_new_supplier_json'] = line.misa_new_supplier_json
+
         return res
 
     def _prepare_purchase_order_line(self, po, item):
-        # --- Override hoàn toàn, không gọi super để tránh bị reset ---
-        if not item.product_id:
-            return {}
-        
-        qty = item.actual_qty or item.product_qty or 0.0
-        price = item.actual_price_unit or item.misa_price_before_tax or 0.0
+        res = super()._prepare_purchase_order_line(po, item)
 
-        # Nếu không có actual_qty, fallback về line_id
-        if not qty and item.line_id:
-            qty = item.line_id.product_qty - item.line_id.purchased_qty
-        
-        res = {
-            'product_id': item.product_id.id,
-            'name': item.line_id.name if item.keep_description and item.line_id else item.product_id.display_name,
-            'product_qty': qty,
-            'product_uom': item.product_uom_id.id or item.product_id.uom_id.id,
-            'price_unit': price,
-        }
+        # Dùng actual_qty (ưu tiên) hoặc product_qty (fallback)
+        res['product_qty'] = item.actual_qty or item.product_qty or 0.0
+        # Dùng actual_price_unit (ưu tiên) hoặc misa_price_before_tax (fallback)
+        res['price_unit'] = item.actual_price_unit or item.misa_price_before_tax or 0.0
 
-        # Thuế thực tế (ưu tiên actual_tax_id)
+        # Thuế
         if item.actual_tax_id:
             res['taxes_id'] = [Command.set(item.actual_tax_id.ids)]
-        else:
-            # Fallback: tìm theo actual_tax_rate
-            tax_rate = item.actual_tax_rate
-            if not tax_rate and hasattr(item.line_id.request_id, 'misa_id') and item.line_id.request_id.misa_id:
-                tax_rate = 0  
-            if tax_rate:
-                if 'misa.po.fetch' in self.env:
-                    misa_po_fetch_obj = self.env['misa.po.fetch'].with_company(po.company_id)
-                    tax_ids = misa_po_fetch_obj._tax_ids_from_misa_line({'vat_rate': float(tax_rate)})
-                    if tax_ids:
-                        res['taxes_id'] = [Command.set(tax_ids)]
-                    else:
-                        res['taxes_id'] = [Command.clear()]
-                else:
-                    Tax = self.env['account.tax'].with_company(po.company_id)
-                    matched_tax = Tax.search([
-                        ('type_tax_use', '=', 'purchase'),
-                        ('amount_type', '=', 'percent'),
-                        ('amount', '=', float(tax_rate)),
-                        ('company_id', '=', po.company_id.id)
-                    ], limit=1)
-                    if matched_tax:
-                        res['taxes_id'] = [Command.set(matched_tax.ids)]
-                    else:
-                        res['taxes_id'] = [Command.clear()]
+        elif item.actual_tax_rate:
+            Tax = self.env['account.tax'].with_company(po.company_id)
+            matched = Tax.search([
+                ('type_tax_use', '=', 'purchase'),
+                ('amount_type', '=', 'percent'),
+                ('amount', '=', float(item.actual_tax_rate)),
+                ('company_id', '=', po.company_id.id)
+            ], limit=1)
+            if matched:
+                res['taxes_id'] = [Command.set(matched.ids)]
         return res
+
+    def make_purchase_order(self):
+        """Ghi actual_* xuống DB trước khi gọi super() tạo PO.
+
+        OCA base `_prepare_purchase_order_line` lấy `product_qty` và `estimated_cost`
+        từ item, và `_post_process_po_line` tính lại `price_unit = estimated_cost / product_qty`.
+        Ta persist actual_qty → product_qty, actual_price_unit → estimated_cost để
+        đảm bảo price_unit cuối cùng đúng với actual_price_unit.
+        """
+        for item in self.item_ids:
+            qty = item.actual_qty or item.product_qty or 0.0
+            price = item.actual_price_unit or item.misa_price_before_tax or 0.0
+            item.write({
+                'product_qty': qty,
+                'estimated_cost': price * qty,
+            })
+        return super().make_purchase_order()
+
+    def _post_process_po_line(self, item, po_line, new_pr_line):
+        """Override: ưu tiên actual_qty và actual_price_unit.
+
+        OCA base gọi _calc_new_qty() → tính qty từ PR line gốc (product_qty)
+        → ghi đè po_line.product_qty. Ta cần re-apply actual_qty sau super().
+        """
+        super()._post_process_po_line(item, po_line, new_pr_line)
+
+        # --- Quantity: OCA base vừa ghi đè po_line.product_qty bằng
+        # _calc_new_qty (tính từ PR line gốc). Ta override lại bằng actual_qty.
+        actual_qty = item.actual_qty or item.product_qty or 0.0
+        if actual_qty:
+            # Convert UoM nếu cần (giống logic trong _prepare_purchase_order_line)
+            product = item.product_id
+            target_uom = product.uom_po_id or product.uom_id
+            qty = item.product_uom_id._compute_quantity(actual_qty, target_uom)
+            # Áp dụng supplier min qty
+            min_qty = item.line_id._get_supplier_min_qty(product, po_line.order_id.partner_id)
+            po_line.product_qty = max(qty, min_qty)
+
+        # --- Price: OCA base tính price_unit = estimated_cost / product_qty,
+        # ta override lại với actual_price_unit trực tiếp
+        if item.actual_price_unit and item.keep_estimated_cost:
+            po_line.price_unit = item.actual_price_unit
+
+        po_line._compute_amount()
 
     def _reload_wizard(self):
         return {
@@ -208,6 +234,11 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
         string="Tiền CK sale đề xuất",
         readonly=True,
     )
+    supplier_ref = fields.Char(
+        related='supplier_id.ref',
+        string="Mã NCC",
+        readonly=True
+    )
 
     # === Thực tế (editable, dùng để lên PO) ===
     actual_qty = fields.Float(
@@ -237,7 +268,57 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
         help="Chiết khấu thực tế (tiền). Nhập tiền → tự tính %. Nhập % → tự tính tiền.",
     )
 
-    # === Computed fields (readonly) ===
+    # === Dữ liệu NCC mới (per-line, từ PR line) ===
+    misa_new_supplier_json = fields.Text(
+        string="Dữ liệu NCC mới (JSON)",
+    )
+    misa_has_new_supplier = fields.Boolean(
+        string="Có NCC mới",
+        compute="_compute_item_has_new_supplier",
+    )
+
+    @api.depends('misa_new_supplier_json')
+    def _compute_item_has_new_supplier(self):
+        for item in self:
+            if item.misa_new_supplier_json:
+                try:
+                    data = json.loads(item.misa_new_supplier_json)
+                    item.misa_has_new_supplier = bool(data and data.get('name'))
+                except (json.JSONDecodeError, TypeError, AttributeError):
+                    item.misa_has_new_supplier = False
+            else:
+                item.misa_has_new_supplier = False
+
+    def action_create_item_supplier(self):
+        """Mở form tạo NCC mới với dữ liệu pre-fill từ MISA cho dòng wizard này."""
+        self.ensure_one()
+        if not self.misa_new_supplier_json:
+            raise UserError(_("Dòng này không có thông tin Nhà cung cấp mới từ MISA."))
+        try:
+            data = json.loads(self.misa_new_supplier_json)
+        except (json.JSONDecodeError, TypeError):
+            raise UserError(_("Dữ liệu NCC mới không hợp lệ."))
+
+        context = {
+            'default_name': data.get('name'),
+            'default_phone': data.get('phone'),
+            'default_street': data.get('address'),
+            'default_vat': data.get('vat'),
+            'default_supplier_rank': 1,
+            'default_is_company': True,
+            'default_company_type': 'company',
+            'default_hlv_business_role': 'supplier',
+        }
+        return {
+            'name': _('Tạo NCC – %s') % (data.get('name') or ''),
+            'type': 'ir.actions.act_window',
+            'res_model': 'res.partner',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': context,
+        }
+
+    # === Computed fields (readonly, hiển thị tổng tiền) ===
     misa_price_before_tax_total = fields.Float(
         string="Tổng tiền trước thuế",
         compute="_compute_wizard_financials",
@@ -257,12 +338,6 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
         digits='Product Price',
     )
 
-    supplier_ref = fields.Char(
-        related='supplier_id.ref',
-        string="Mã NCC",
-        readonly=True
-    )
-
     @api.depends('actual_qty', 'actual_price_unit', 'actual_tax_rate', 'actual_discount_amount')
     def _compute_wizard_financials(self):
         for item in self:
@@ -270,21 +345,18 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
             price = item.actual_price_unit or 0.0
             tax_rate = item.actual_tax_rate or 0.0
             discount = item.actual_discount_amount or 0.0
-
             before_tax_total = qty * price
             tax_total = qty * price * tax_rate / 100.0
             item.misa_price_before_tax_total = before_tax_total
             item.misa_tax_amount_total = tax_total
             item.misa_amount = before_tax_total - discount + tax_total
 
-    # --- Onchange: tự động tính chiết khấu 2 chiều ---
+    # ── Onchange: discount & tax (giữ nguyên, hữu ích cho hiển thị) ──
     @api.onchange('actual_discount_rate')
     def _onchange_actual_discount_rate(self):
         qty = self.actual_qty or self.product_qty or 0.0
         if self.actual_discount_rate and self.actual_price_unit and qty:
             self.actual_discount_amount = qty * self.actual_price_unit * self.actual_discount_rate / 100.0
-        elif self.actual_discount_rate == 0 and not self.actual_discount_amount:
-            self.actual_discount_amount = 0.0
 
     @api.onchange('actual_discount_amount')
     def _onchange_actual_discount_amount(self):
@@ -292,17 +364,8 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
         base = (self.actual_price_unit or 0.0) * qty
         if self.actual_discount_amount and base:
             self.actual_discount_rate = self.actual_discount_amount / base * 100.0
-        elif self.actual_discount_amount == 0 and not self.actual_discount_rate:
-            self.actual_discount_rate = 0.0
 
     @api.onchange('actual_tax_id')
     def _onchange_actual_tax_id(self):
-        """Khi chọn thuế từ danh sách, tự động cập nhật actual_tax_rate."""
         if self.actual_tax_id and self.actual_tax_id.amount_type == 'percent':
             self.actual_tax_rate = self.actual_tax_id.amount
-
-    @api.onchange('actual_qty', 'actual_price_unit', 'actual_tax_rate')
-    def _onchange_actual_qty_price_tax(self):
-        """Kích hoạt tính toán lại cho các trường phụ thuộc."""
-        # Gọi hàm tương tự vì Odoo sẽ tự động update UI
-        pass
