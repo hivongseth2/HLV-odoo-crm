@@ -29,19 +29,32 @@ export class FloatWithProposedField extends FloatField {
     }
 
     async onViewPriceHistory() {
-        const lineData = this.props.record.data.line_id;
+        const resModel = this.props.record.resModel;
+        const resId = this.props.record.resId;
         const productData = this.props.record.data.product_id;
-        if (!lineData || !productData) return;
+        if (!productData) return;
 
         let lineIdInt = false;
-        if (Array.isArray(lineData)) {
-            lineIdInt = lineData[0];
-        } else if (lineData && typeof lineData === 'object') {
-            lineIdInt = lineData.resId || lineData.id || false;
-        } else if (typeof lineData === 'number') {
-            lineIdInt = lineData;
+        if (resModel === 'purchase.request.line') {
+            if (typeof resId === 'number' && resId > 0) {
+                lineIdInt = resId;
+            }
+        } else {
+            const lineData = this.props.record.data.line_id;
+            if (lineData) {
+                if (Array.isArray(lineData)) {
+                    lineIdInt = lineData[0];
+                } else if (lineData && typeof lineData === 'object') {
+                    lineIdInt = lineData.resId || lineData.id || false;
+                } else if (typeof lineData === 'number') {
+                    lineIdInt = lineData;
+                }
+            }
         }
-        if (!lineIdInt) return;
+
+        if (!lineIdInt || (typeof lineIdInt === 'string' && lineIdInt.startsWith('virtual_'))) {
+            return;
+        }
 
         const action = await this.orm.call(
             "purchase.request.line",
@@ -52,8 +65,7 @@ export class FloatWithProposedField extends FloatField {
             if (!action.views && action.view_mode) {
                 action.views = action.view_mode.split(',').map(mode => [false, mode.trim()]);
             }
-            const resId = this.props.record.resId;
-            if (typeof resId === 'number' && resId > 0) {
+            if (resModel === 'purchase.request.line.make.purchase.order.item' && typeof resId === 'number' && resId > 0) {
                 action.context = { ...(action.context || {}), active_make_order_item_id: resId };
             }
             this.action.doAction(action);
@@ -120,24 +132,31 @@ export class Many2oneWithProposedField extends Many2OneField {
             default_hlv_business_role: 'supplier',
         };
 
-        const lineData = this.props.record.data.line_id;
-        if (lineData) {
-            let lineIdInt = false;
-            if (Array.isArray(lineData)) {
-                lineIdInt = lineData[0];
-            } else if (lineData && typeof lineData === 'object') {
-                lineIdInt = lineData.resId || lineData.id || false;
-            } else if (typeof lineData === 'number') {
-                lineIdInt = lineData;
-            }
-            if (lineIdInt) {
-                context.link_to_pr_line_id = lineIdInt;
-            }
-        }
-
+        const resModel = this.props.record.resModel;
         const resId = this.props.record.resId;
-        if (typeof resId === 'number' && resId > 0) {
-            context.link_to_pr_wizard_item_id = resId;
+
+        if (resModel === 'purchase.request.line') {
+            if (typeof resId === 'number' && resId > 0) {
+                context.link_to_pr_line_id = resId;
+            }
+        } else {
+            const lineData = this.props.record.data.line_id;
+            if (lineData) {
+                let lineIdInt = false;
+                if (Array.isArray(lineData)) {
+                    lineIdInt = lineData[0];
+                } else if (lineData && typeof lineData === 'object') {
+                    lineIdInt = lineData.resId || lineData.id || false;
+                } else if (typeof lineData === 'number') {
+                    lineIdInt = lineData;
+                }
+                if (lineIdInt && !(typeof lineIdInt === 'string' && lineIdInt.startsWith('virtual_'))) {
+                    context.link_to_pr_line_id = lineIdInt;
+                }
+            }
+            if (typeof resId === 'number' && resId > 0) {
+                context.link_to_pr_wizard_item_id = resId;
+            }
         }
 
         await this.action.doAction({
