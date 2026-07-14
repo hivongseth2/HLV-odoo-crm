@@ -23,7 +23,6 @@ export class FloatWithProposedField extends FloatField {
     }
 
     get showPriceHistoryButton() {
-        if (this.props.readonly) return false;
         return (this.props.name === 'actual_price_unit' || this.props.name === 'misa_price_before_tax') && !!this.props.record.data.product_id;
     }
 
@@ -67,7 +66,6 @@ export class Many2oneWithProposedField extends Many2OneField {
     }
 
     get showCreateSupplierButton() {
-        if (this.props.readonly) return false;
         if (this.props.name !== 'supplier_id' && this.props.name !== 'sale_proposed_supplier_id') return false;
         const val = this.props.record.data[this.props.name];
         if (val) return false;
