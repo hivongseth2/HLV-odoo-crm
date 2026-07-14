@@ -93,3 +93,15 @@ Module bổ sung các computed fields trên `purchase.request` để hiển th�
 - **Đặc điểm:** 
   - Được khai báo trong XML với `noupdate="1"` và `eval="''"`. 
   - Nghĩa là khi cài module, nó sẽ tạo ra record trống. Quản trị viên phải vào *Settings > Technical > System Parameters* để nhập token thật. Khi upgrade module, giá trị này **không bị ghi đè**.
+
+### 3.5. Hàng chờ đồng bộ (`misa.sync.queue`)
+Để tránh tắc nghẽn và xung đột khi đồng bộ dữ liệu real-time từ Extension, hệ thống sử dụng một queue trung gian.
+
+- **Cơ chế chống Race Condition (Tranh chấp ghi dữ liệu)**:
+  - Khi Cron Job quét các bản ghi `draft`, hệ thống sử dụng câu lệnh SQL atomic `SELECT ... FOR UPDATE SKIP LOCKED` thay vì ORM `search()`.
+  - Giúp nhiều worker (Cron hoặc bấm nút tay thủ công) xử lý song song các bản ghi khác nhau mà không bao giờ bị trùng lặp hoặc khóa lẫn nhau (Deadlock).
+- **Cơ chế phục hồi bản ghi bị kẹt (Zombie Recovery)**:
+  - Trường hợp Worker/Odoo crash hoặc restart đột ngột khi đang xử lý bản ghi (`state='processing'`).
+  - Trường `processing_started_at` lưu thời điểm bắt đầu xử lý.
+  - Khi Cron chạy, nó tự động tìm các bản ghi kẹt ở trạng thái `processing` quá 10 phút, cộng `retry_count`.
+  - Nếu `retry_count < 3`, đưa về `draft` và đẩy xuống cuối hàng (`sequence += 10`) để xử lý lại. Nếu `>= 3` lần bị timeout/lỗi liên tiếp, đánh dấu là `failed` và ghi nhận nhật ký lỗi.
