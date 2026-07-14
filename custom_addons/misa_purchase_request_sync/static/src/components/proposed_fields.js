@@ -5,14 +5,10 @@ import { Many2OneField, many2OneField } from "@web/views/fields/many2one/many2on
 
 export class FloatWithProposedField extends FloatField {
     get proposedValue() {
-        console.log("DEBUG FloatWithProposedField name:", this.props.name);
-        console.log("DEBUG FloatWithProposedField options:", this.props.options);
-        console.log("DEBUG FloatWithProposedField record data:", this.props.record?.data);
         const proposedField = this.props.options?.proposed_field;
         if (!proposedField) return null;
         
         const val = this.props.record.data[proposedField];
-        console.log("DEBUG FloatWithProposedField val for " + proposedField + ":", val);
         if (typeof val === 'number') {
             return val.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         }
@@ -27,14 +23,10 @@ FloatWithProposedField.props = {
 
 export class Many2oneWithProposedField extends Many2OneField {
     get proposedValue() {
-        console.log("DEBUG Many2oneWithProposedField name:", this.props.name);
-        console.log("DEBUG Many2oneWithProposedField options:", this.props.options);
-        console.log("DEBUG Many2oneWithProposedField record data:", this.props.record?.data);
         const proposedField = this.props.options?.proposed_field;
         if (!proposedField) return null;
         
         const val = this.props.record.data[proposedField];
-        console.log("DEBUG Many2oneWithProposedField val for " + proposedField + ":", val);
         if (Array.isArray(val)) {
             return val[1];
         } else if (val && typeof val === 'object') {
@@ -54,7 +46,7 @@ registry.category("fields").add("float_with_proposed", {
     component: FloatWithProposedField,
     extractProps: (fieldInfo, activeActions) => {
         const props = floatField.extractProps ? floatField.extractProps(fieldInfo, activeActions) : {};
-        props.options = fieldInfo.attrs.options;
+        props.options = fieldInfo.options || fieldInfo.attrs?.options;
         return props;
     },
 });
@@ -64,7 +56,7 @@ registry.category("fields").add("many2one_with_proposed", {
     component: Many2oneWithProposedField,
     extractProps: (fieldInfo, activeActions) => {
         const props = many2OneField.extractProps ? many2OneField.extractProps(fieldInfo, activeActions) : {};
-        props.options = fieldInfo.attrs.options;
+        props.options = fieldInfo.options || fieldInfo.attrs?.options;
         return props;
     },
 });
