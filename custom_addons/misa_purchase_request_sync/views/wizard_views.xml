@@ -99,8 +99,12 @@
                         <!-- Đơn giá: Sale đề xuất (ẩn) + Thực mua (widget) -->
                         <field name="misa_price_before_tax" column_invisible="1" force_save="1" />
                         <field name="actual_price_unit" string="Đơn giá thực mua" 
-                               width="140px" widget="float_with_proposed" options="{'proposed_field': 'misa_price_before_tax'}"
+                               width="140px" widget="float_with_proposed" options="{'proposed_field': 'misa_price_before_tax', 'hide_history_button': true}"
                                force_save="1" decoration-success="1" />
+                        <button name="action_view_price_history" type="object"
+                                string="Lịch sử giá" class="btn-secondary btn-sm"
+                                icon="fa-history"
+                                invisible="not product_id" />
                         
                         <!-- Thuế: Sale yêu cầu (ẩn) + Thu mua (widget) -->
                         <field name="misa_tax_id" column_invisible="1" force_save="1" />

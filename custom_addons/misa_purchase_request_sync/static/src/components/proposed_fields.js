@@ -23,6 +23,9 @@ export class FloatWithProposedField extends FloatField {
     }
 
     get showPriceHistoryButton() {
+        if (this.props.options?.hide_history_button) {
+            return false;
+        }
         return (this.props.name === 'actual_price_unit' || this.props.name === 'misa_price_before_tax') && !!this.props.record.data.product_id;
     }
 
