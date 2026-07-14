@@ -36,8 +36,7 @@ export class DeliveryPlannerRealtimeMixin {
 
             this.state.globalUnreadOrders = merged;
 
-            const shouldNotifyFromPolling = !isInitial;
-            if (shouldNotifyFromPolling) {
+            if (!isInitial) {
                 for (const notification of notifications.filter((n) => !n.is_read)) {
                     const orderId = notification.sale_order_id ? notification.sale_order_id[0] : false;
                     if (!orderId) {
@@ -47,21 +46,6 @@ export class DeliveryPlannerRealtimeMixin {
                     if (!prev || prev._isRead) {
                         const so = this.state.saleOrders.find(o => o.id === orderId);
                         if (so) so.has_unread_message = true;
-
-                        this.notification.add(
-                            `Đơn hàng ${notification.sale_order_id ? notification.sale_order_id[1] : ''} vừa có tin nhắn mới.`,
-                            {
-                                type: "info",
-                                title: `Tin nhắn chưa đọc`,
-                                buttons: [
-                                    {
-                                        name: "Xem thông báo",
-                                        onClick: () => this.openDrawerFromMessageList(orderId),
-                                        primary: true,
-                                    }
-                                ]
-                            }
-                        );
                     }
                 }
             }
@@ -167,7 +151,6 @@ export class DeliveryPlannerRealtimeMixin {
         this._seenPortalMessageKeys.set(messageKey, now);
 
         // Cập nhật danh sách drawer realtime: có tin mới thì đưa lên đầu và bật trạng thái chưa đọc.
-        const existing = this.state.globalUnreadOrders.find(o => (o.sale_order_id && o.sale_order_id[0] === payload.so_id) || o.id === payload.so_id);
         const headItem = {
             id: payload.so_id,
             sale_order_id: [payload.so_id, payload.so_name],
@@ -181,28 +164,10 @@ export class DeliveryPlannerRealtimeMixin {
             ...this.state.globalUnreadOrders.filter(o => !((o.sale_order_id && o.sale_order_id[0] === payload.so_id) || o.id === payload.so_id)),
         ].slice(0, 100);
 
-        // Show toaster notification
-        const rawBody = (payload.body || '').replace(/<[^>]+>/g, '').substring(0, 80);
         const so = this.state.saleOrders.find(o => o.id === payload.so_id);
         if (so) {
             so.has_unread_message = true;
         }
-        this._playMessageSound();
-        this._showDesktopMessageNotification(payload, rawBody);
-        this.notification.add(
-            `Đơn hàng ${payload.so_name}: ${rawBody}...`,
-            {
-                type: "info",
-                title: `Có tin nhắn mới ${payload.author_name || ''}`,
-                buttons: [
-                    {
-                        name: "Xem chi tiết",
-                        onClick: () => this.openDrawerFromMessageList(payload.so_id),
-                        primary: true,
-                    }
-                ]
-            }
-        );
     }
 
     _browserNotificationsSupported() {
@@ -295,62 +260,12 @@ export class DeliveryPlannerRealtimeMixin {
         }
     }
 
-    _showDesktopMessageNotification(payload, rawBody) {
-        try {
-            if (!this._browserNotificationsSupported() || Notification.permission !== "granted" || !payload) return;
-            const title = `Có tin nhắn mới ${payload.author_name || ""}`;
-            const body = `Đơn hàng ${payload.so_name || ""}: ${rawBody || ""}`;
-            const noti = new Notification(title, {
-                body,
-                icon: "/web/static/img/favicon.ico",
-                tag: `delivery-planner-message-${payload.message_id || payload.so_id || Date.now()}`,
-                renotify: true,
-            });
-            noti.onclick = () => {
-                window.focus();
-                this.openDrawerFromMessageList(payload.so_id);
-                noti.close();
-            };
-            setTimeout(() => noti.close(), 9000);
-        } catch (e) {}
-    }
-
-    _playMessageSound() {
-        try {
-            const AudioContext = window.AudioContext || window.webkitAudioContext;
-            if (!AudioContext) return;
-            const ctx = this._messageAudioCtx || (this._messageAudioCtx = new AudioContext());
-            if (ctx.state === "suspended") ctx.resume();
-            const now = ctx.currentTime;
-            [660, 880].forEach((freq, i) => {
-                const osc = ctx.createOscillator();
-                const gain = ctx.createGain();
-                osc.type = "sine";
-                osc.frequency.value = freq;
-                gain.gain.setValueAtTime(0.0001, now + i * 0.1);
-                gain.gain.exponentialRampToValueAtTime(0.055, now + i * 0.1 + 0.02);
-                gain.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.1 + 0.12);
-                osc.connect(gain);
-                gain.connect(ctx.destination);
-                osc.start(now + i * 0.1);
-                osc.stop(now + i * 0.1 + 0.14);
-            });
-        } catch (e) {}
-    }
-
     // --- Real-time data refresh via bus ---
     _dataChangedDebounce = null;
     _pendingChangedSoIds = null;
     _pendingFallbackFull = false;
 
     _onDataChanged(payload) {
-        // Only show toast on the FIRST event in a burst (not every bus message)
-        if (!this._dataChangedDebounce) {
-            this.notification.add(
-                "Đang cập nhật dữ liệu...",
-                { type: "warning", title: "Thay đổi phát hiện", sticky: false }
-            );
-        }
         // Accumulate affected SO ids across the burst (ids come from sale_order/picking/move triggers).
         // If a payload has no ids, mark fallback so we do a full refresh.
         if (!this._pendingChangedSoIds) {
@@ -381,24 +296,10 @@ export class DeliveryPlannerRealtimeMixin {
             if (!fallback && ids.length > 0 && subsetIds.length + offscreenIds.length === ids.length) {
                 // Auto-load: refresh visible + auto-pull offscreen vào danh sách (không hỏi user)
                 await this._refreshSubset(ids);
-                if (offscreenIds.length) {
-                    // Sau khi backend lọc theo filter hiện tại, chỉ những offscreen
-                    // ids thật sự được thêm vào state mới đáng thông báo (tránh
-                    // báo nhầm đơn kho khác / không khớp filter).
-                    const visibleAfter = new Set(this.state.saleOrders.map(o => o.id));
-                    const addedOffscreen = offscreenIds.filter(i => visibleAfter.has(i));
-                    if (addedOffscreen.length) {
-                        await this._notifyOffscreenAutoLoaded(addedOffscreen);
-                    }
-                }
             } else {
                 // Fallback: full silent refresh (filters may have caused new matches)
                 await this._silentRefresh();
             }
-            this.notification.add(
-                "Dữ liệu đã được cập nhật tự động",
-                { type: "info", title: "Cập nhật xong" }
-            );
             if (this.state.isPackingProgressDrawerOpen) {
                 this.loadPackingProgress();
             }
@@ -411,28 +312,6 @@ export class DeliveryPlannerRealtimeMixin {
         const consolidate = Array.isArray(payload.consolidate_so_ids) ? payload.consolidate_so_ids : [];
         this.state.archivedSOIds = new Set(archived);
         this.state.consolidateSOIds = new Set(consolidate);
-    }
-
-    /**
-     * Off-screen auto-loaded notification — đã tự động merge vào state, chỉ thông báo cho user biết.
-     * Toast nhẹ (info, không sticky) kèm tên SO để user thấy rõ đơn nào vừa xuất hiện.
-     */
-    async _notifyOffscreenAutoLoaded(soIds) {
-        if (!soIds || !soIds.length) return;
-        let names = [];
-        try {
-            const recs = await this.orm.read("sale.order", soIds, ["name"]);
-            names = (recs || []).map(r => r.name).filter(Boolean);
-        } catch (e) {
-            console.warn("read SO names failed:", e);
-        }
-        const previewNames = names.slice(0, 3).join(", ");
-        const moreCount = names.length > 3 ? ` (+${names.length - 3})` : "";
-        const label = names.length ? `${previewNames}${moreCount}` : `${soIds.length} đơn`;
-        this.notification.add(
-            `Đã tự động tải ${label} vào danh sách.`,
-            { type: "info", title: "Cập nhật ngoài danh sách" }
-        );
     }
 
     /**

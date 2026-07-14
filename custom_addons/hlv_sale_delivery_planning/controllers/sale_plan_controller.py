@@ -1971,12 +1971,6 @@ function pollChanges(){
     if(fp!==_lastFingerprint){
       _lastFingerprint=fp;
       load(false,true);
-      // Show a brief toast notification
-      var t=document.createElement('div');
-      t.style.cssText='position:fixed;bottom:24px;left:24px;z-index:3000;background:#3182ce;color:#fff;padding:10px 18px;border-radius:4px;box-shadow:0 4px 12px rgba(0,0,0,.2);font-size:.85rem;font-weight:600;transition:opacity .3s';
-      t.innerHTML='<i class="fa fa-refresh me-1"></i>Dữ liệu đã được cập nhật tự động';
-      document.body.appendChild(t);
-      setTimeout(function(){t.style.opacity='0';setTimeout(function(){t.remove();},400);},3000);
     }
   })
   .catch(function(){/* silent */});
