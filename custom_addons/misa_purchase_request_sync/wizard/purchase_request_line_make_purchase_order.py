@@ -364,6 +364,20 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
             'context': context,
         }
 
+    def action_view_price_history(self):
+        """Mở wizard chọn giá từ lịch sử mua hàng cho wizard item line."""
+        self.ensure_one()
+        if not self.product_id or not self.line_id:
+            return
+        wizard = self.env['price.history.wizard'].create({
+            'line_id': self.line_id.id,
+        })
+        action = wizard.action_load()
+        ctx = dict(action.get('context', {}))
+        ctx['active_make_order_item_id'] = self.id
+        action['context'] = ctx
+        return action
+
     # === Computed fields (readonly, hiển thị tổng tiền) ===
     misa_price_before_tax_total = fields.Float(
         string="Tổng tiền trước thuế",

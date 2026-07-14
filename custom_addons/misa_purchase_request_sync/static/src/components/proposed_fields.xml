@@ -7,6 +7,9 @@
             <div t-if="proposedValue" class="text-muted fst-italic mt-1" style="font-size: 0.85rem; color: #888888 !important; text-align: right; display: block;">
                 đề xuất: <t t-esc="proposedValue"/>
             </div>
+            <button t-if="showPriceHistoryButton" t-on-click.stop.prevent="onViewPriceHistory" class="btn btn-secondary btn-sm mt-1 py-0 px-2" style="font-size: 0.75rem;">
+                <i class="fa fa-history mr-1"/>Lịch sử giá
+            </button>
         </div>
     </t>
 

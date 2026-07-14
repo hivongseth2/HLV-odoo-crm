@@ -5,6 +5,12 @@ import { Many2OneField, many2OneField } from "@web/views/fields/many2one/many2on
 import { useService } from "@web/core/utils/hooks";
 
 export class FloatWithProposedField extends FloatField {
+    setup() {
+        super.setup();
+        this.orm = useService("orm");
+        this.action = useService("action");
+    }
+
     get proposedValue() {
         const proposedField = this.props.options?.proposed_field;
         if (!proposedField) return null;
@@ -14,6 +20,23 @@ export class FloatWithProposedField extends FloatField {
             return val.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         }
         return val || "";
+    }
+
+    get showPriceHistoryButton() {
+        return (this.props.name === 'actual_price_unit' || this.props.name === 'misa_price_before_tax') && !!this.props.record.data.product_id;
+    }
+
+    async onViewPriceHistory() {
+        const resId = this.props.record.resId;
+        const resModel = this.props.record.resModel;
+        const action = await this.orm.call(
+            resModel,
+            "action_view_price_history",
+            [resId]
+        );
+        if (action) {
+            this.action.doAction(action);
+        }
     }
 }
 FloatWithProposedField.template = "misa_purchase_request_sync.FloatWithProposedField";
@@ -43,7 +66,7 @@ export class Many2oneWithProposedField extends Many2OneField {
     }
 
     get showCreateSupplierButton() {
-        if (this.props.name !== 'supplier_id') return false;
+        if (this.props.name !== 'supplier_id' && this.props.name !== 'sale_proposed_supplier_id') return false;
         const val = this.props.record.data[this.props.name];
         if (val) return false;
         return !!this.props.record.data.misa_new_supplier_json;
@@ -52,7 +75,8 @@ export class Many2oneWithProposedField extends Many2OneField {
     async onCreateSupplier() {
         const resId = this.props.record.resId;
         const resModel = this.props.record.resModel;
-        const action = await this.orm.call(resModel, "action_create_item_supplier", [resId]);
+        const methodName = resModel === 'purchase.request.line' ? "action_create_line_supplier" : "action_create_item_supplier";
+        const action = await this.orm.call(resModel, methodName, [resId]);
         if (action) {
             this.action.doAction(action);
         }

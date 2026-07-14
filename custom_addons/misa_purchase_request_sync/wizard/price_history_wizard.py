@@ -97,4 +97,14 @@ class PriceHistoryWizardLine(models.TransientModel):
             'misa_supplier_id': self.partner_id.id,
             'sale_proposed_supplier_id': self.partner_id.id,
         })
+        
+        # Ghi nhận giá trị vào Make Purchase Order Item tương ứng nếu có trong context
+        item_id = self.env.context.get('active_make_order_item_id')
+        if item_id:
+            item = self.env['purchase.request.line.make.purchase.order.item'].sudo().browse(item_id)
+            if item.exists():
+                item.sudo().write({
+                    'actual_price_unit': self.price,
+                    'supplier_id': self.partner_id.id,
+                })
         return {'type': 'ir.actions.act_window_close'}
