@@ -154,7 +154,7 @@
                         invisible="not misa_payment_request_can_revoke"
                         confirm="Chỉ thu hồi/xóa đề nghị chi trên MISA; điểm Loyalty đã trừ sẽ không được hoàn. Tiếp tục?"/>
             </xpath>
-            <xpath expr="//group[@string='Chi tiết đổi tiền']" position="after">
+            <xpath expr="//field[@name='points_to_redeem']/../.." position="after">
                 <group string="Đề nghị chi MISA"
                        invisible="request_type != 'cash' or not misa_payment_request_id">
                     <group>
