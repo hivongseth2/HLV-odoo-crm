@@ -42,9 +42,6 @@ export class FloatWithProposedField extends FloatField {
         }
     }
 
-    onMousedown(event) {
-        event.stopPropagation();
-    }
 }
 FloatWithProposedField.template = "misa_purchase_request_sync.FloatWithProposedField";
 FloatWithProposedField.props = {
@@ -92,9 +89,6 @@ export class Many2oneWithProposedField extends Many2OneField {
         }
     }
 
-    onMousedown(event) {
-        event.stopPropagation();
-    }
 }
 Many2oneWithProposedField.template = "misa_purchase_request_sync.Many2oneWithProposedField";
 Many2oneWithProposedField.props = {

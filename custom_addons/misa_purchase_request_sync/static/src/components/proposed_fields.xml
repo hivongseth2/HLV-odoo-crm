@@ -8,8 +8,7 @@
                 đề xuất: <t t-esc="proposedValue"/>
             </div>
             <button t-if="showPriceHistoryButton" 
-                    t-on-mousedown="onMousedown"
-                    t-on-click.stop.prevent="onViewPriceHistory" 
+                    t-on-mousedown.stop.prevent="onViewPriceHistory" 
                     class="btn btn-sm mt-1 py-0 px-2 d-inline-flex align-items-center" 
                     style="font-size: 0.72rem; font-weight: 500; border-radius: 12px; background-color: #f1f3f5; color: #495057; border: 1px solid #ced4da; transition: all 0.2s ease;">
                 <i class="fa fa-history" style="font-size: 0.72rem; margin-right: 3px;"/>Lịch sử giá
@@ -25,8 +24,7 @@
                 đề xuất: <t t-esc="proposedValue"/>
             </div>
             <button t-if="showCreateSupplierButton" 
-                    t-on-mousedown="onMousedown"
-                    t-on-click.stop.prevent="onCreateSupplier" 
+                    t-on-mousedown.stop.prevent="onCreateSupplier" 
                     class="btn btn-sm mt-1 py-0 px-2 d-inline-flex align-items-center" 
                     style="font-size: 0.72rem; font-weight: 500; border-radius: 12px; background-color: #fff9db; color: #f08c00; border: 1px solid #ffe066; transition: all 0.2s ease;">
                 <i class="fa fa-user-plus" style="font-size: 0.72rem; margin-right: 3px;"/>Tạo NCC
