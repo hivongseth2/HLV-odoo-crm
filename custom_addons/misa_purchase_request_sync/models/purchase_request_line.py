@@ -239,7 +239,7 @@ class PurchaseRequestLine(models.Model):
             qty_str = line._format_misa_float(line.product_qty)
             if line.actual_qty:
                 act_qty_str = line._format_misa_float(line.actual_qty)
-                line.display_qty_html = Markup(f"<div>{qty_str}</div><div style='font-size: 0.85rem; color: #007bff; font-style: italic;'>thực: {act_qty_str}</div>")
+                line.display_qty_html = Markup(f"<div>{qty_str}</div><div style='font-size: 0.85rem; color: #002244; font-style: italic;'>thực: {act_qty_str}</div>")
             else:
                 line.display_qty_html = Markup(f"<div>{qty_str}</div>")
 
@@ -249,7 +249,7 @@ class PurchaseRequestLine(models.Model):
             price_str = line._format_misa_float(line.misa_price_before_tax)
             if line.actual_qty:
                 act_price_str = line._format_misa_float(line.actual_price_unit)
-                line.display_price_unit_html = Markup(f"<div>{price_str}</div><div style='font-size: 0.85rem; color: #007bff; font-style: italic;'>thực: {act_price_str}</div>")
+                line.display_price_unit_html = Markup(f"<div>{price_str}</div><div style='font-size: 0.85rem; color: #002244; font-style: italic;'>thực: {act_price_str}</div>")
             else:
                 line.display_price_unit_html = Markup(f"<div>{price_str}</div>")
 
@@ -259,7 +259,7 @@ class PurchaseRequestLine(models.Model):
             tax_str = line._format_misa_float(line.misa_tax_rate)
             if line.actual_qty:
                 act_tax_str = line._format_misa_float(line.actual_tax_rate)
-                line.display_tax_rate_html = Markup(f"<div>{tax_str}%</div><div style='font-size: 0.85rem; color: #007bff; font-style: italic;'>thực: {act_tax_str}%</div>")
+                line.display_tax_rate_html = Markup(f"<div>{tax_str}%</div><div style='font-size: 0.85rem; color: #002244; font-style: italic;'>thực: {act_tax_str}%</div>")
             else:
                 line.display_tax_rate_html = Markup(f"<div>{tax_str}%</div>")
 
@@ -269,7 +269,7 @@ class PurchaseRequestLine(models.Model):
             discount_str = line._format_misa_float(line.misa_discount_rate)
             if line.actual_qty:
                 act_discount_str = line._format_misa_float(line.actual_discount_rate)
-                line.display_discount_rate_html = Markup(f"<div>{discount_str}%</div><div style='font-size: 0.85rem; color: #007bff; font-style: italic;'>thực: {act_discount_str}%</div>")
+                line.display_discount_rate_html = Markup(f"<div>{discount_str}%</div><div style='font-size: 0.85rem; color: #002244; font-style: italic;'>thực: {act_discount_str}%</div>")
             else:
                 line.display_discount_rate_html = Markup(f"<div>{discount_str}%</div>")
 
@@ -279,6 +279,6 @@ class PurchaseRequestLine(models.Model):
             supplier_name = line.sale_proposed_supplier_id.name or ''
             if line.actual_qty:
                 act_supplier_name = line.actual_supplier_id.name or ''
-                line.display_supplier_html = Markup(f"<div>{supplier_name}</div><div style='font-size: 0.85rem; color: #007bff; font-style: italic;'>thực: {act_supplier_name}</div>")
+                line.display_supplier_html = Markup(f"<div>{supplier_name}</div><div style='font-size: 0.85rem; color: #002244; font-style: italic;'>thực: {act_supplier_name}</div>")
             else:
                 line.display_supplier_html = Markup(f"<div>{supplier_name}</div>")
