@@ -484,6 +484,12 @@ class SaleOrder(models.Model):
                 pass
         if not partner:
             partner = odoo_utils._get_or_create_partner(partner_name, misa_code=misa_code, tax_code=tax_code)
+        partner_created = bool(partner and partner.env.context.get('misa_partner_created'))
+        if partner_created:
+            _logger.info(
+                "Hard Resync: new partner %s; skip phone/address on delivery contact",
+                partner.id,
+            )
         partner = partner.commercial_partner_id or partner
 
         # Địa chỉ/phone KHÔNG cập nhật vào liên hệ cha — ghi vào liên hệ con (delivery contact) bên dưới
@@ -529,9 +535,11 @@ class SaleOrder(models.Model):
             }
             delivery_contact = env['sale.api.import.wizard']._get_or_create_delivery_contact(
                 parent_partner=partner,
-                addr_str=shipping_addr,
-                phone=data.get("Phone"),
-                province_text=data.get("ShippingProvinceIDText") or data.get("BillingProvinceIDText") ,
+                addr_str='' if partner_created else shipping_addr,
+                phone=False if partner_created else data.get("Phone"),
+                province_text=False if partner_created else (
+                    data.get("ShippingProvinceIDText") or data.get("BillingProvinceIDText")
+                ),
                 contact_name=shipping_contact_name.strip() if shipping_contact_name else None,
                 is_e_account=(partner_name in e_accounts)
             )
@@ -1211,13 +1219,21 @@ class SaleOrder(models.Model):
                     misa_code=misa_code,
                     tax_code=tax_code,
                 )
+            partner_created = bool(partner and partner.env.context.get('misa_partner_created'))
+            if partner_created:
+                _logger.info(
+                    "Partial Resync: new partner %s; skip phone/address on delivery contact",
+                    partner.id,
+                )
             partner = partner.commercial_partner_id or partner
 
             delivery_contact = env['sale.api.import.wizard']._get_or_create_delivery_contact(
                 parent_partner=partner,
-                addr_str=shipping_addr,
-                phone=data.get("Phone"),
-                province_text=data.get("ShippingProvinceIDText") or data.get("BillingProvinceIDText"),
+                addr_str='' if partner_created else shipping_addr,
+                phone=False if partner_created else data.get("Phone"),
+                province_text=False if partner_created else (
+                    data.get("ShippingProvinceIDText") or data.get("BillingProvinceIDText")
+                ),
                 contact_name=shipping_contact_name.strip() if shipping_contact_name else None,
                 is_e_account=(partner_name in e_accounts)
             )

@@ -62,7 +62,10 @@ class MisaApiUtils(models.AbstractModel):
                 misa_code=account_number,
                 tax_code=tax_code,
             )
+            partner_created = bool(partner and partner.env.context.get('misa_partner_created'))
             partner = partner.commercial_partner_id or partner
+            if partner_created:
+                partner = partner.with_context(misa_partner_created=True)
 
             vals = {}
             # Always update name if provided? Or only if different?

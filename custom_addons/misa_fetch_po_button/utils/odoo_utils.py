@@ -30,7 +30,6 @@ class OdooUtils(models.AbstractModel):
         if misa_code:
             candidates = Partner.search([
                 ("parent_id", "=", False),
-                ("is_company", "=", True),
                 "|",
                 ("ref", "=", misa_code),
                 ("company_registry", "=", misa_code),
@@ -100,7 +99,7 @@ class OdooUtils(models.AbstractModel):
                 vals["vat"] = tax_code
             partner = Partner.create(vals)
             _logger.info("Created partner by MISA key %s-%s: %s", tax_code or "-", misa_code, name)
-            return partner
+            return partner.with_context(misa_partner_created=True)
 
         partner = Partner.search([
             ("name", "=", name),
@@ -124,7 +123,7 @@ class OdooUtils(models.AbstractModel):
         vals = {"name": name, "customer_rank": 1, "is_company": True}
         partner = Partner.create(vals)
         _logger.info("Created partner without MISA code: %s", name)
-        return partner
+        return partner.with_context(misa_partner_created=True)
 
     def _get_or_create_uom(self, name):
         """Tìm hoặc tạo mới đơn vị tính (UoM) dựa trên tên."""
