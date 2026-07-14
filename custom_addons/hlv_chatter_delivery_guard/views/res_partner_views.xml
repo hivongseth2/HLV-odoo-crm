@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_res_partner_form_hlv_delivery_guard" model="ir.ui.view">
+        <field name="name">res.partner.form.hlv.delivery.guard</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='category_id']" position="after">
+                <field name="hlv_block_outbound_delivery"/>
+                <field name="hlv_outbound_delivery_blocked" readonly="1"/>
+                <div class="alert alert-danger mb-2" role="alert"
+                     invisible="not hlv_outbound_delivery_blocked">
+                    Liên hệ này đang bị chặn PICK, PACK, OUT và các hoạt động xuất hàng.
+                    Nếu ô phía trên chưa được bật thì lệnh chặn đang kế thừa từ liên hệ cha.
+                </div>
+            </xpath>
+        </field>
+    </record>
+</odoo>
