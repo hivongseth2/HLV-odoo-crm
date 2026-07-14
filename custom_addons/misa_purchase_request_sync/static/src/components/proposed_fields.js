@@ -3,6 +3,7 @@ import { Component } from "@odoo/owl";
 import { registry } from "@web/core/registry";
 import { FloatField, floatField } from "@web/views/fields/float/float_field";
 import { Many2OneField, many2OneField } from "@web/views/fields/many2one/many2one_field";
+import { CharField, charField } from "@web/views/fields/char/char_field";
 import { useService } from "@web/core/utils/hooks";
 
 export class FloatWithProposedField extends FloatField {
@@ -157,8 +158,9 @@ registry.category("fields").add("product_two_lines", {
     component: ProductTwoLinesField,
 });
 
-export class PriceHistoryButtonField extends Component {
+export class PriceHistoryButtonField extends CharField {
     setup() {
+        super.setup();
         this.orm = useService("orm");
         this.action = useService("action");
     }
@@ -190,11 +192,10 @@ export class PriceHistoryButtonField extends Component {
 }
 PriceHistoryButtonField.template = "misa_purchase_request_sync.PriceHistoryButtonField";
 PriceHistoryButtonField.props = {
-    record: { type: Object },
-    name: { type: String },
-    readonly: { type: Boolean, optional: true },
+    ...CharField.props,
 };
 
 registry.category("fields").add("price_history_button", {
+    ...charField,
     component: PriceHistoryButtonField,
 });
