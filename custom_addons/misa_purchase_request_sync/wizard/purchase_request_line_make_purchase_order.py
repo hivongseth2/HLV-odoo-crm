@@ -101,11 +101,12 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
             res['actual_tax_id'] = line.actual_tax_id.id
 
         # NCC: ưu tiên actual_supplier_id, sau đó là sale_proposed_supplier_id, fallback misa_supplier_id
-        supplier = line.actual_supplier_id if line.actual_supplier_id else False
-        if not supplier:
-            supplier = line.sale_proposed_supplier_id if hasattr(line, 'sale_proposed_supplier_id') and line.sale_proposed_supplier_id else False
-        if not supplier:
-            supplier = line.misa_supplier_id if hasattr(line, 'misa_supplier_id') and line.misa_supplier_id else False
+        proposed_supplier = line.sale_proposed_supplier_id if hasattr(line, 'sale_proposed_supplier_id') and line.sale_proposed_supplier_id else False
+        if not proposed_supplier:
+            proposed_supplier = line.misa_supplier_id if hasattr(line, 'misa_supplier_id') and line.misa_supplier_id else False
+        res['misa_supplier_name'] = proposed_supplier.name if proposed_supplier else ""
+
+        supplier = line.actual_supplier_id if line.actual_supplier_id else proposed_supplier
         if supplier:
             res['supplier_id'] = supplier.id
 
@@ -256,6 +257,10 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
     )
     misa_tax_name = fields.Char(
         string="Thuế sale đề xuất name",
+        readonly=True,
+    )
+    misa_supplier_name = fields.Char(
+        string="NCC đề xuất name",
         readonly=True,
     )
     misa_tax_rate = fields.Float(
