@@ -90,28 +90,22 @@
                         <field name="supplier_id" width="180px" force_save="1" />
                         <field name="product_id" width="200px" force_save="1" />
                         <field name="name" optional="hide" force_save="1" />
-                        <field name="product_qty" width="100px" readonly="1" force_save="1" />
-                        <field name="actual_qty" width="100px" decoration-success="1" force_save="1" />
+                        <field name="product_qty" column_invisible="1" force_save="1" />
+                        <field name="actual_qty" width="120px" widget="float_with_proposed" options="{'proposed_field': 'product_qty'}" decoration-success="1" force_save="1" />
                         <field name="product_uom_id" optional="hide" groups="!uom.group_uom" force_save="1" />
                         <field name="product_uom_id" groups="uom.group_uom" width="80px" force_save="1" />
                         
-                        <!-- Đơn giá: Sale đề xuất (xám) + Thực mua (xanh) -->
-                        <field name="misa_price_before_tax" string="ĐG sale đề xuất" 
-                               readonly="1" force_save="1"
-                               decoration-muted="1" 
-                               width="120px" />
+                        <!-- Đơn giá: Sale đề xuất (ẩn) + Thực mua (widget) -->
+                        <field name="misa_price_before_tax" column_invisible="1" force_save="1" />
                         <field name="actual_price_unit" string="Đơn giá thực mua" 
-                               width="120px" force_save="1"
-                               decoration-success="1" />
+                               width="140px" widget="float_with_proposed" options="{'proposed_field': 'misa_price_before_tax'}"
+                               force_save="1" decoration-success="1" />
                         
-                        <!-- Thuế: Sale yêu cầu (xám) + Thu mua (xanh) -->
-                        <field name="misa_tax_id" string="Thuế sale yêu cầu" 
-                               readonly="1" force_save="1"
-                               decoration-muted="1" 
-                               width="140px" />
+                        <!-- Thuế: Sale yêu cầu (ẩn) + Thu mua (widget) -->
+                        <field name="misa_tax_id" column_invisible="1" force_save="1" />
                         <field name="actual_tax_id" string="Thuế (%) thu mua" 
-                               width="140px" force_save="1"
-                               decoration-success="1" />
+                               width="160px" widget="many2one_with_proposed" options="{'proposed_field': 'misa_tax_id'}"
+                               force_save="1" decoration-success="1" />
                         <field name="actual_tax_rate" optional="hide" force_save="1" />
                         
                         <!-- Tổng tiền: computed readonly -->

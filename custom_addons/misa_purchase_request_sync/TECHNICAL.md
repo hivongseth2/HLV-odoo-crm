@@ -117,3 +117,16 @@ Module bổ sung các computed fields trên `purchase.request` để hiển th�
   - Trường `processing_started_at` lưu thời điểm bắt đầu xử lý.
   - Khi Cron chạy, nó tự động tìm các bản ghi kẹt ở trạng thái `processing` quá 10 phút, cộng `retry_count`.
   - Nếu `retry_count < 3`, đưa về `draft` và đẩy xuống cuối hàng (`sequence += 10`) để xử lý lại. Nếu `>= 3` lần bị timeout/lỗi liên tiếp, đánh dấu là `failed` và ghi nhận nhật ký lỗi.
+
+### 3.6. Custom OWL Field Components (v1.2.0+)
+Để tối ưu chiều ngang và thu gọn các cột trong list view của Wizard tạo RFQ (`purchase.request.line.make.purchase.order`):
+- **`float_with_proposed`** (Kế thừa từ `web.FloatField`):
+  - Nhận tùy chọn `options="{'proposed_field': 'product_qty'}"`.
+  - Hiển thị ô nhập liệu float thực tế (`actual_qty`), đồng thời tự động render một nhãn nhỏ màu xám nhạt (`#888888`) ở ngay bên dưới hiển thị giá trị đề xuất tương ứng (ví dụ: `đề xuất: 1,00`).
+- **`many2one_with_proposed`** (Kế thừa từ `web.Many2OneField`):
+  - Nhận tùy chọn `options="{'proposed_field': 'misa_tax_id'}"`.
+  - Hiển thị combobox Many2one thực tế (`actual_tax_id`), đồng thời tự động render nhãn hiển thị tên bản ghi đề xuất (ví dụ: `đề xuất: 10%`).
+
+**Đăng ký Assets:**
+- Các components được viết bằng OWL 2.0+ tại `static/src/components/proposed_fields.js` và `static/src/components/proposed_fields.xml`.
+- Đăng ký qua `web.assets_backend` trong `__manifest__.py`.

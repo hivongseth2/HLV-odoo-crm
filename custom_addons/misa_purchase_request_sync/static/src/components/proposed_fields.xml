@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="misa_purchase_request_sync.FloatWithProposedField" t-inherit="web.FloatField" t-inherit-mode="primary">
+        <!-- Chế độ xem: Hiển thị giá trị thực tế ở trên, giá trị đề xuất ở dưới -->
+        <xpath expr="//span" position="replace">
+            <div class="d-flex flex-column align-items-end justify-content-center">
+                <span t-esc="formattedValue"/>
+                <span t-if="proposedValue" class="text-muted fst-italic" style="font-size: 0.85rem; color: #888888 !important;">
+                    đề xuất: <t t-esc="proposedValue"/>
+                </span>
+            </div>
+        </xpath>
+        <!-- Chế độ sửa: Hiển thị input ở trên, giá trị đề xuất ở dưới -->
+        <xpath expr="//input" position="after">
+            <div t-if="proposedValue" class="text-muted fst-italic mt-1" style="font-size: 0.85rem; color: #888888 !important; text-align: right;">
+                đề xuất: <t t-esc="proposedValue"/>
+            </div>
+        </xpath>
+    </t>
+
+    <t t-name="misa_purchase_request_sync.Many2oneWithProposedField" t-inherit="web.Many2OneField" t-inherit-mode="primary">
+        <!-- Chế độ xem -->
+        <xpath expr="//t[@t-if='props.readonly']" position="replace">
+            <t t-if="props.readonly">
+                <div class="d-flex flex-column align-items-start justify-content-center">
+                    <a t-if="props.relation and props.canOpen" href="#" t-on-click.prevent="openRecord" class="o_form_uri" t-esc="displayName"/>
+                    <span t-else="" t-esc="displayName"/>
+                    <span t-if="proposedValue" class="text-muted fst-italic" style="font-size: 0.85rem; color: #888888 !important;">
+                        đề xuất: <t t-esc="proposedValue"/>
+                    </span>
+                </div>
+            </t>
+        </xpath>
+        <!-- Chế độ sửa -->
+        <xpath expr="//t[@t-else='']" position="inside">
+            <div t-if="proposedValue" class="text-muted fst-italic mt-1" style="font-size: 0.85rem; color: #888888 !important; text-align: left;">
+                đề xuất: <t t-esc="proposedValue"/>
+            </div>
+        </xpath>
+    </t>
+</templates>
