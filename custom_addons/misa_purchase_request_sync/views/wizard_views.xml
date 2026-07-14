@@ -103,8 +103,9 @@
                         
                         <!-- Thuế: Sale yêu cầu (ẩn) + Thu mua (widget) -->
                         <field name="misa_tax_id" column_invisible="1" force_save="1" />
+                        <field name="misa_tax_name" column_invisible="1" force_save="1" />
                         <field name="actual_tax_id" string="Thuế (%) thu mua" 
-                               width="160px" widget="many2one_with_proposed" options="{'proposed_field': 'misa_tax_id'}"
+                               width="160px" widget="many2one_with_proposed" options="{'proposed_field': 'misa_tax_name'}"
                                force_save="1" decoration-success="1" />
                         <field name="actual_tax_rate" optional="hide" force_save="1" />
                         
@@ -116,17 +117,15 @@
                         <field name="misa_amount" string="Thành tiền" 
                                readonly="1" force_save="1" width="120px" decoration-info="1" />
                         
-                        <!-- Chiết khấu: mặc định hide -->
-                        <field name="misa_discount_rate" string="CK sale (%)" 
-                               readonly="1" force_save="1" decoration-muted="1" 
-                               width="80px" optional="hide" />
-                        <field name="misa_discount_amount" string="Tiền CK sale" 
-                               readonly="1" force_save="1" decoration-muted="1" 
-                               width="100px" optional="hide" />
+                        <!-- Chiết khấu: ẩn đề xuất gốc + hiển thị thực tế kèm widget đề xuất -->
+                        <field name="misa_discount_rate" column_invisible="1" force_save="1" />
+                        <field name="misa_discount_amount" column_invisible="1" force_save="1" />
                         <field name="actual_discount_rate" string="CK thu mua (%)" 
-                               width="100px" decoration-success="1" optional="hide" force_save="1" />
+                               width="100px" widget="float_with_proposed" options="{'proposed_field': 'misa_discount_rate'}"
+                               decoration-success="1" optional="hide" force_save="1" />
                         <field name="actual_discount_amount" string="Tiền CK thu mua" 
-                               width="100px" decoration-success="1" optional="hide" force_save="1" />
+                               width="110px" widget="float_with_proposed" options="{'proposed_field': 'misa_discount_amount'}"
+                               decoration-success="1" optional="hide" force_save="1" />
                         
                         <field name="estimated_cost" optional="hide" force_save="1" />
                         <field name="keep_description" optional="hide" force_save="1" />

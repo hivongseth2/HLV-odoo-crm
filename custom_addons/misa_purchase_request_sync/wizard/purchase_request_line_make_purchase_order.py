@@ -84,6 +84,7 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
         # Tìm account.tax cho misa_tax_id (sale đề xuất) và actual_tax_id (thực tế)
         company = line.company_id or self.env.company
         tax_rate = line.misa_tax_rate if (hasattr(line, 'misa_tax_rate') and line.misa_tax_rate) else 0.0
+        res['misa_tax_name'] = ""
         if float(tax_rate) > 0:
             matched_tax = self.env['account.tax'].with_company(company).search([
                 ('type_tax_use', '=', 'purchase'),
@@ -94,6 +95,7 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
             if matched_tax:
                 res['misa_tax_id'] = matched_tax.id
                 res['actual_tax_id'] = matched_tax.id
+                res['misa_tax_name'] = matched_tax.name
 
         if line.actual_tax_id:
             res['actual_tax_id'] = line.actual_tax_id.id
@@ -251,6 +253,10 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
         string="Thuế sale yêu cầu",
         readonly=True,
         domain="[('type_tax_use', '=', 'purchase'), ('amount_type', '=', 'percent')]",
+    )
+    misa_tax_name = fields.Char(
+        string="Thuế sale đề xuất name",
+        readonly=True,
     )
     misa_tax_rate = fields.Float(
         string="Thuế sale yêu cầu (%)",
