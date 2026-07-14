@@ -121,6 +121,11 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
             ], limit=1)
             if matched:
                 res['taxes_id'] = [Command.set(matched.ids)]
+
+        # Chiết khấu
+        if 'discount' in self.env['purchase.order.line']._fields:
+            res['discount'] = item.actual_discount_rate or 0.0
+
         return res
 
     def make_purchase_order(self):
@@ -164,6 +169,10 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
         # ta override lại với actual_price_unit trực tiếp
         if item.actual_price_unit and item.keep_estimated_cost:
             po_line.price_unit = item.actual_price_unit
+
+        # --- Chiết khấu: re-apply chiết khấu
+        if 'discount' in po_line._fields:
+            po_line.discount = item.actual_discount_rate or 0.0
 
         po_line._compute_amount()
 
