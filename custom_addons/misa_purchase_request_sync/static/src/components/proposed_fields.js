@@ -41,6 +41,11 @@ export class FloatWithProposedField extends FloatField {
             this.action.doAction(action);
         }
     }
+
+    onMousedown(event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
 }
 FloatWithProposedField.template = "misa_purchase_request_sync.FloatWithProposedField";
 FloatWithProposedField.props = {
@@ -86,6 +91,11 @@ export class Many2oneWithProposedField extends Many2OneField {
             }
             this.action.doAction(action);
         }
+    }
+
+    onMousedown(event) {
+        event.stopPropagation();
+        event.preventDefault();
     }
 }
 Many2oneWithProposedField.template = "misa_purchase_request_sync.Many2oneWithProposedField";

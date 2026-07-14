@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from odoo import models, api
+from odoo import models, api, fields
 
 class ResPartner(models.Model):
     _inherit = 'res.partner'
@@ -12,6 +12,17 @@ class ResPartner(models.Model):
         # Lấy context truyền từ hành động "Tạo NCC"
         pr_line_id = self.env.context.get('link_to_pr_line_id')
         pr_item_id = self.env.context.get('link_to_pr_wizard_item_id')
+
+        # Thêm tag "Nhà cung cấp" vào hlv_filter_tag_ids nếu được tạo từ PR hoặc Wizard
+        if pr_line_id or pr_item_id:
+            tag_supplier = self.env['hlv.contact.filter.tag'].sudo().search([('name', '=', 'Nhà cung cấp')], limit=1)
+            if not tag_supplier:
+                tag_supplier = self.env['hlv.contact.filter.tag'].sudo().create({'name': 'Nhà cung cấp'})
+            for partner in partners:
+                if 'hlv_filter_tag_ids' in partner._fields:
+                    partner.sudo().write({
+                        'hlv_filter_tag_ids': [fields.Command.link(tag_supplier.id)]
+                    })
 
         # Nếu chỉ tạo 1 đối tác và có ID dòng PR cần liên kết
         if len(partners) == 1:

@@ -23,6 +23,18 @@ class PriceHistoryWizard(models.TransientModel):
         'wizard_id',
         string="Lịch sử giá",
     )
+    can_apply_price = fields.Boolean(
+        string="Có thể áp dụng giá",
+        compute="_compute_can_apply_price"
+    )
+
+    @api.depends('line_id.request_id.state')
+    def _compute_can_apply_price(self):
+        for wizard in self:
+            if wizard.env.context.get('active_make_order_item_id'):
+                wizard.can_apply_price = True
+            else:
+                wizard.can_apply_price = wizard.line_id.request_id.state == 'draft'
 
     def action_load(self):
         """Load supplierinfo records vào wizard."""
