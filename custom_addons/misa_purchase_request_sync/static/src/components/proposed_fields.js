@@ -1,4 +1,5 @@
 /** @odoo-module **/
+import { Component } from "@odoo/owl";
 import { registry } from "@web/core/registry";
 import { FloatField, floatField } from "@web/views/fields/float/float_field";
 import { Many2OneField, many2OneField } from "@web/views/fields/many2one/many2one_field";
@@ -154,4 +155,46 @@ registry.category("fields").add("many2one_with_proposed", {
 registry.category("fields").add("product_two_lines", {
     ...many2OneField,
     component: ProductTwoLinesField,
+});
+
+export class PriceHistoryButtonField extends Component {
+    setup() {
+        this.orm = useService("orm");
+        this.action = useService("action");
+    }
+
+    get showButton() {
+        return !!this.props.record.data.product_id;
+    }
+
+    async onViewPriceHistory() {
+        const resId = this.props.record.resId;
+        const resModel = this.props.record.resModel;
+        const action = await this.orm.call(
+            resModel,
+            "action_view_price_history",
+            [[resId]]
+        );
+        if (action) {
+            if (!action.views && action.view_mode) {
+                action.views = action.view_mode.split(',').map(mode => [false, mode.trim()]);
+            }
+            this.action.doAction(action);
+        }
+    }
+
+    onDummy(event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
+}
+PriceHistoryButtonField.template = "misa_purchase_request_sync.PriceHistoryButtonField";
+PriceHistoryButtonField.props = {
+    record: { type: Object },
+    name: { type: String },
+    readonly: { type: Boolean, optional: true },
+};
+
+registry.category("fields").add("price_history_button", {
+    component: PriceHistoryButtonField,
 });

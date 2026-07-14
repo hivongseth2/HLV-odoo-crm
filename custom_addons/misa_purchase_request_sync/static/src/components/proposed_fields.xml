@@ -45,4 +45,17 @@
             </span>
         </div>
     </t>
+
+    <!-- Widget Nút lịch sử giá ở cột riêng -->
+    <t t-name="misa_purchase_request_sync.PriceHistoryButtonField" owl="1">
+        <div class="d-flex align-items-center justify-content-center w-100 py-1">
+            <button t-if="showButton" 
+                    t-on-mousedown.stop.prevent="onViewPriceHistory" 
+                    t-on-click.stop.prevent="onDummy"
+                    class="btn btn-sm py-0 px-2 d-inline-flex align-items-center" 
+                    style="font-size: 0.72rem; font-weight: 500; border-radius: 12px; background-color: #f1f3f5; color: #495057; border: 1px solid #ced4da; transition: all 0.2s ease; height: 22px;">
+                <i class="fa fa-history" style="font-size: 0.72rem; margin-right: 3px;"/>Lịch sử giá
+            </button>
+        </div>
+    </t>
 </templates>

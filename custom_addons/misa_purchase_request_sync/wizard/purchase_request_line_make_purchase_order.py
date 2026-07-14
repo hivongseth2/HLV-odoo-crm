@@ -243,6 +243,7 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
 
     keep_description = fields.Boolean(default=True)
     keep_estimated_cost = fields.Boolean(default=True)
+    price_history_btn = fields.Char(string=" ", readonly=True)
 
     # === Sale đề xuất (từ PR, readonly) ===
     misa_price_before_tax = fields.Float(
