@@ -42,6 +42,10 @@ export class FloatWithProposedField extends FloatField {
         }
     }
 
+    onDummy(event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
 }
 FloatWithProposedField.template = "misa_purchase_request_sync.FloatWithProposedField";
 FloatWithProposedField.props = {
@@ -89,6 +93,10 @@ export class Many2oneWithProposedField extends Many2OneField {
         }
     }
 
+    onDummy(event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
 }
 Many2oneWithProposedField.template = "misa_purchase_request_sync.Many2oneWithProposedField";
 Many2oneWithProposedField.props = {
