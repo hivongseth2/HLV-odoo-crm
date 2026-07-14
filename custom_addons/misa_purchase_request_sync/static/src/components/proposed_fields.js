@@ -25,23 +25,36 @@ export class FloatWithProposedField extends FloatField {
     }
 
     get showPriceHistoryButton() {
-        if (this.props.options?.hide_history_button) {
-            return false;
-        }
         return (this.props.name === 'actual_price_unit' || this.props.name === 'misa_price_before_tax') && !!this.props.record.data.product_id;
     }
 
     async onViewPriceHistory() {
-        const resId = this.props.record.resId;
-        const resModel = this.props.record.resModel;
+        const lineData = this.props.record.data.line_id;
+        const productData = this.props.record.data.product_id;
+        if (!lineData || !productData) return;
+
+        let lineIdInt = false;
+        if (Array.isArray(lineData)) {
+            lineIdInt = lineData[0];
+        } else if (lineData && typeof lineData === 'object') {
+            lineIdInt = lineData.resId || lineData.id || false;
+        } else if (typeof lineData === 'number') {
+            lineIdInt = lineData;
+        }
+        if (!lineIdInt) return;
+
         const action = await this.orm.call(
-            resModel,
+            "purchase.request.line",
             "action_view_price_history",
-            [[resId]]
+            [[lineIdInt]]
         );
         if (action) {
             if (!action.views && action.view_mode) {
                 action.views = action.view_mode.split(',').map(mode => [false, mode.trim()]);
+            }
+            const resId = this.props.record.resId;
+            if (typeof resId === 'number' && resId > 0) {
+                action.context = { ...(action.context || {}), active_make_order_item_id: resId };
             }
             this.action.doAction(action);
         }
@@ -86,16 +99,56 @@ export class Many2oneWithProposedField extends Many2OneField {
     }
 
     async onCreateSupplier() {
-        const resId = this.props.record.resId;
-        const resModel = this.props.record.resModel;
-        const methodName = resModel === 'purchase.request.line' ? "action_create_line_supplier" : "action_create_item_supplier";
-        const action = await this.orm.call(resModel, methodName, [[resId]]);
-        if (action) {
-            if (!action.views && action.view_mode) {
-                action.views = action.view_mode.split(',').map(mode => [false, mode.trim()]);
-            }
-            this.action.doAction(action);
+        const jsonStr = this.props.record.data.misa_new_supplier_json;
+        if (!jsonStr) return;
+
+        let data;
+        try {
+            data = JSON.parse(jsonStr);
+        } catch (e) {
+            return;
         }
+
+        const context = {
+            default_name: data.name || '',
+            default_phone: data.phone || '',
+            default_street: data.address || '',
+            default_vat: data.vat || '',
+            default_supplier_rank: 1,
+            default_is_company: true,
+            default_company_type: 'company',
+            default_hlv_business_role: 'supplier',
+        };
+
+        const lineData = this.props.record.data.line_id;
+        if (lineData) {
+            let lineIdInt = false;
+            if (Array.isArray(lineData)) {
+                lineIdInt = lineData[0];
+            } else if (lineData && typeof lineData === 'object') {
+                lineIdInt = lineData.resId || lineData.id || false;
+            } else if (typeof lineData === 'number') {
+                lineIdInt = lineData;
+            }
+            if (lineIdInt) {
+                context.link_to_pr_line_id = lineIdInt;
+            }
+        }
+
+        const resId = this.props.record.resId;
+        if (typeof resId === 'number' && resId > 0) {
+            context.link_to_pr_wizard_item_id = resId;
+        }
+
+        await this.action.doAction({
+            type: 'ir.actions.act_window',
+            name: `Tạo NCC – ${data.name || ''}`,
+            res_model: 'res.partner',
+            view_mode: 'form',
+            views: [[false, 'form']],
+            target: 'new',
+            context: context,
+        });
     }
 
     onDummy(event) {
@@ -158,44 +211,4 @@ registry.category("fields").add("product_two_lines", {
     component: ProductTwoLinesField,
 });
 
-export class PriceHistoryButtonField extends CharField {
-    setup() {
-        super.setup();
-        this.orm = useService("orm");
-        this.action = useService("action");
-    }
 
-    get showButton() {
-        return !!this.props.record.data.product_id;
-    }
-
-    async onViewPriceHistory() {
-        const resId = this.props.record.resId;
-        const resModel = this.props.record.resModel;
-        const action = await this.orm.call(
-            resModel,
-            "action_view_price_history",
-            [[resId]]
-        );
-        if (action) {
-            if (!action.views && action.view_mode) {
-                action.views = action.view_mode.split(',').map(mode => [false, mode.trim()]);
-            }
-            this.action.doAction(action);
-        }
-    }
-
-    onDummy(event) {
-        event.stopPropagation();
-        event.preventDefault();
-    }
-}
-PriceHistoryButtonField.template = "misa_purchase_request_sync.PriceHistoryButtonField";
-PriceHistoryButtonField.props = {
-    ...CharField.props,
-};
-
-registry.category("fields").add("price_history_button", {
-    ...charField,
-    component: PriceHistoryButtonField,
-});
