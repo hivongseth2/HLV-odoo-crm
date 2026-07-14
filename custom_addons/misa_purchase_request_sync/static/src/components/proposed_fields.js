@@ -23,6 +23,7 @@ export class FloatWithProposedField extends FloatField {
     }
 
     get showPriceHistoryButton() {
+        if (this.props.readonly) return false;
         return (this.props.name === 'actual_price_unit' || this.props.name === 'misa_price_before_tax') && !!this.props.record.data.product_id;
     }
 
@@ -66,6 +67,7 @@ export class Many2oneWithProposedField extends Many2OneField {
     }
 
     get showCreateSupplierButton() {
+        if (this.props.readonly) return false;
         if (this.props.name !== 'supplier_id' && this.props.name !== 'sale_proposed_supplier_id') return false;
         const val = this.props.record.data[this.props.name];
         if (val) return false;
@@ -88,6 +90,30 @@ Many2oneWithProposedField.props = {
     options: { type: Object, optional: true },
 };
 
+export class ProductTwoLinesField extends Many2OneField {
+    get codeAndName() {
+        const val = this.props.record.data[this.props.name];
+        if (!val) return { code: "", name: "" };
+        
+        const displayName = Array.isArray(val) ? val[1] : (val.displayName || val.name || "");
+        const match = displayName.match(/^\[(.*?)\]\s*(.*)$/);
+        if (match) {
+            return {
+                code: `[${match[1]}]`,
+                name: match[2]
+            };
+        }
+        return {
+            code: "",
+            name: displayName
+        };
+    }
+}
+ProductTwoLinesField.template = "misa_purchase_request_sync.ProductTwoLinesField";
+ProductTwoLinesField.props = {
+    ...Many2OneField.props,
+};
+
 registry.category("fields").add("float_with_proposed", {
     ...floatField,
     component: FloatWithProposedField,
@@ -106,4 +132,9 @@ registry.category("fields").add("many2one_with_proposed", {
         props.options = fieldInfo.options || fieldInfo.attrs?.options;
         return props;
     },
+});
+
+registry.category("fields").add("product_two_lines", {
+    ...many2OneField,
+    component: ProductTwoLinesField,
 });

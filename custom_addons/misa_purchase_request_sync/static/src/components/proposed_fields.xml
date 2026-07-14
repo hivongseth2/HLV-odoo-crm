@@ -25,4 +25,16 @@
             </button>
         </div>
     </t>
+
+    <!-- Widget hiển thị sản phẩm làm 2 dòng: [mã] ở trên, tên ở dưới -->
+    <t t-name="misa_purchase_request_sync.ProductTwoLinesField" owl="1">
+        <div class="d-flex flex-column align-items-start justify-content-center w-100 py-1">
+            <span t-if="codeAndName.code" class="fw-bold text-primary" style="font-size: 0.85rem; display: block;">
+                <t t-esc="codeAndName.code"/>
+            </span>
+            <span class="text-wrap" style="font-size: 0.9rem; line-height: 1.2; display: block; word-break: break-all;">
+                <t t-esc="codeAndName.name"/>
+            </span>
+        </div>
+    </t>
 </templates>

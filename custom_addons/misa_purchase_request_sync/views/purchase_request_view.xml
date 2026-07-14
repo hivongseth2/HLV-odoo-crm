@@ -58,15 +58,15 @@
                 <attribute name="string">Số lượng đã lên RFQ/PO</attribute>
             </xpath>
             <xpath expr="//field[@name='line_ids']/list/field[@name='estimated_cost']" position="after">
-                <field name="sale_proposed_supplier_id" widget="many2one_with_proposed" column_invisible="parent.state != 'draft'" optional="show" width="200"/>
-                <field name="display_supplier_html" string="NCC" widget="html" column_invisible="parent.state == 'draft'" optional="show" width="200"/>
+                <field name="sale_proposed_supplier_id" widget="many2one_with_proposed" optional="show" width="200" readonly="parent.state != 'draft'"/>
+                <field name="display_supplier_html" string="NCC" widget="html" column_invisible="1" optional="hide" width="200"/>
                 <field name="misa_supplier_id" optional="hide"/>
                 <field name="misa_stock_total" optional="hide"/>
                 <field name="misa_stock_selected" optional="hide"/>
                 <field name="misa_stock_undelivered" optional="hide"/>
                 
-                <field name="misa_price_before_tax" widget="float_with_proposed" column_invisible="parent.state != 'draft'" optional="show"/>
-                <field name="display_price_unit_html" string="Đơn giá trước thuế" widget="html" column_invisible="parent.state == 'draft'" optional="show"/>
+                <field name="misa_price_before_tax" widget="float_with_proposed" optional="show" readonly="parent.state != 'draft'"/>
+                <field name="display_price_unit_html" string="Đơn giá trước thuế" widget="html" column_invisible="1" optional="hide"/>
                 
                 <field name="misa_price_before_tax_total" optional="show" sum="Tổng tiền trước thuế"/>
                 
