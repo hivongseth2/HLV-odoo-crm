@@ -2,6 +2,7 @@
 import { registry } from "@web/core/registry";
 import { FloatField, floatField } from "@web/views/fields/float/float_field";
 import { Many2OneField, many2OneField } from "@web/views/fields/many2one/many2one_field";
+import { useService } from "@web/core/utils/hooks";
 
 export class FloatWithProposedField extends FloatField {
     get proposedValue() {
@@ -22,6 +23,12 @@ FloatWithProposedField.props = {
 };
 
 export class Many2oneWithProposedField extends Many2OneField {
+    setup() {
+        super.setup();
+        this.orm = useService("orm");
+        this.action = useService("action");
+    }
+
     get proposedValue() {
         const proposedField = this.props.options?.proposed_field;
         if (!proposedField) return null;
@@ -33,6 +40,22 @@ export class Many2oneWithProposedField extends Many2OneField {
             return val.displayName || val.name || "";
         }
         return val || "";
+    }
+
+    get showCreateSupplierButton() {
+        if (this.props.name !== 'supplier_id') return false;
+        const val = this.props.record.data[this.props.name];
+        if (val) return false;
+        return !!this.props.record.data.misa_new_supplier_json;
+    }
+
+    async onCreateSupplier() {
+        const resId = this.props.record.resId;
+        const resModel = this.props.record.resModel;
+        const action = await this.orm.call(resModel, "action_create_item_supplier", [resId]);
+        if (action) {
+            this.action.doAction(action);
+        }
     }
 }
 Many2oneWithProposedField.template = "misa_purchase_request_sync.Many2oneWithProposedField";

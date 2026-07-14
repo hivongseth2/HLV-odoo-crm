@@ -17,6 +17,9 @@
             <div t-if="proposedValue" class="text-muted fst-italic mt-1" style="font-size: 0.85rem; color: #888888 !important; text-align: left; display: block;">
                 đề xuất: <t t-esc="proposedValue"/>
             </div>
+            <button t-if="showCreateSupplierButton" t-on-click.stop.prevent="onCreateSupplier" class="btn btn-warning btn-sm mt-1 py-0 px-2" style="font-size: 0.75rem;">
+                <i class="fa fa-plus-circle mr-1"/>Tạo NCC
+            </button>
         </div>
     </t>
 </templates>

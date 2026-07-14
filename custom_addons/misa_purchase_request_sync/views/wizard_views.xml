@@ -132,14 +132,9 @@
                         <field name="keep_description" optional="hide" force_save="1" />
                         <field name="keep_estimated_cost" optional="hide" force_save="1" />
                         
-                        <!-- NCC mới per-line -->
+                        <!-- NCC mới per-line (ẩn nút ở cột cuối, chuyển sang tích hợp trực tiếp vào cột NCC) -->
                         <field name="misa_new_supplier_json" column_invisible="1" force_save="1" />
                         <field name="misa_has_new_supplier" column_invisible="1" />
-                        <button name="action_create_item_supplier" type="object"
-                                string="Tạo NCC" class="btn-warning btn-sm"
-                                icon="fa-plus-circle"
-                                title="Tạo Nhà cung cấp mới từ dữ liệu MISA cho dòng này"
-                                invisible="not misa_has_new_supplier" />
                     </list>
                 </field>
             </xpath>
