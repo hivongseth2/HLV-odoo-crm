@@ -110,6 +110,22 @@ export class Many2oneWithProposedField extends Many2OneField {
         return !!this.props.record.data.misa_new_supplier_json;
     }
 
+    get newSupplierSummary() {
+        const jsonStr = this.props.record.data.misa_new_supplier_json;
+        if (!jsonStr) return "";
+        try {
+            const data = JSON.parse(jsonStr);
+            if (data && data.name) {
+                const parts = [];
+                parts.push(data.name);
+                if (data.phone) parts.push(data.phone);
+                if (data.vat) parts.push(`MST: ${data.vat}`);
+                return parts.join(" - ");
+            }
+        } catch(e) {}
+        return "";
+    }
+
     async onCreateSupplier() {
         const jsonStr = this.props.record.data.misa_new_supplier_json;
         if (!jsonStr) return;
