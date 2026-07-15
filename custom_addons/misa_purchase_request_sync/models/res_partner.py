@@ -6,7 +6,7 @@ class ResPartner(models.Model):
 
     x_partner_source = fields.Selection([
         ('manual', 'Thủ công')
-    ], string="Nguồn", tracking=True)
+    ], string="Nguồn tạo", tracking=True)
 
     @api.model
     def default_get(self, fields_list):

@@ -39,12 +39,12 @@ class ZaloMiniAppBannerAPI(ZaloBaseAPI, http.Controller):
                     "image_url": self._get_image_url("zalo.miniapp.banner", b.id, "image"),
                 })
 
-            return self._response_success({
+            return self._response_success_cached({
                 "banners": data,
                 "total": total,
                 "limit": limit,
                 "offset": offset,
-            })
+            }, max_age=300)
         except Exception as e:
             _logger.exception("list_banners error")
             return self._response_error("SERVER_ERROR", str(e), 500)
