@@ -342,6 +342,13 @@ class PurchaseRequest(models.Model):
             if pcode and not product:
                 # Gọi odoo.utils của module misa_fetch_po_button để tạo/lấy sản phẩm
                 unit_name = uom_name or "Cái"
+                if unit_name:
+                    uom_exist = uom_model.search([("name", "=ilike", unit_name.strip())], limit=1)
+                    if uom_exist and uom_exist.name != unit_name.strip().title():
+                        try:
+                            uom_exist.write({'name': unit_name.strip().title()})
+                        except Exception:
+                            pass
                 product_name = (line_data.get("name") or line_data.get("product_name") or pcode).strip()
                 
                 price_unit = 0.0

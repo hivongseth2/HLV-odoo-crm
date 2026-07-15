@@ -141,3 +141,12 @@ Module bổ sung các computed fields trên `purchase.request` để hiển th�
 **Đăng ký Assets:**
 - Các components được viết bằng OWL 2.0+ tại `static/src/components/proposed_fields.js` và `static/src/components/proposed_fields.xml`.
 - Đăng ký qua `web.assets_backend` trong `__manifest__.py`.
+
+### 3.8. Xử lý tương thích đơn vị tính (UoM Compatibility)
+Để giải quyết tình trạng lỗi không tương thích đơn vị tính (UoM) do sai lệch viết hoa/thường (ví dụ: "bộ" trong Odoo vs "Bộ" trong MISA) khi tạo RFQ, module áp dụng các cơ chế tự động sau:
+- **Chuẩn hóa ĐVT hiện tại khi đồng bộ YCMH (`models/purchase_request.py`)**:
+  - Khi đồng bộ YCMH mới, nếu ĐVT của dòng chưa được tạo trong Odoo, hệ thống tìm kiếm ĐVT hiện có trong Odoo không phân biệt hoa thường (`=ilike`).
+  - Nếu tìm thấy ĐVT (ví dụ: `"bộ"` chữ thường) nhưng tên của nó chưa được viết hoa chữ đầu (`"Bộ"`), hệ thống sẽ cập nhật tên của ĐVT đó thành Title Case (`"Bộ"`). Điều này đảm bảo thư viện dùng chung `odoo.utils._get_or_create_product` sẽ tìm thấy chính xác bản ghi ĐVT cũ này (vì `_get_or_create_uom` tìm bằng `=` và Title Case), ngăn chặn việc sinh ra ĐVT mới trùng tên khác nhóm (category).
+- **Tự động map ĐVT trong Wizard tạo RFQ (`wizard/purchase_request_line_make_purchase_order.py`)**:
+  - Khi người dùng bấm nút "Tạo RFQ" từ YCMH, hệ thống kiểm tra ĐVT được chọn trên dòng Wizard so với ĐVT mặc định của sản phẩm (`product.uom_po_id` hoặc `product.uom_id`).
+  - Nếu tên của hai ĐVT này giống hệt nhau khi loại bỏ khoảng trắng và viết thường (`.lower()`), nhưng khác ID bản ghi (do lịch sử database có sẵn các ĐVT trùng tên khác nhóm), hệ thống tự động gán `product_uom_id` của dòng Wizard và `product_uom_id` của dòng YCMH (`line_id`) về đúng ĐVT của sản phẩm. Việc này giúp loại bỏ hoàn toàn lỗi `"đơn vị tính không tương thích"` của OCA khi tính toán số lượng.
