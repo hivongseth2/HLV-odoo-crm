@@ -54,7 +54,7 @@ class AmisSyncJob(models.Model):
         ]).ids
         _logger.info('AMIS sync queue: xử lý %d jobs', len(job_ids))
         for job_id in job_ids:
-            # Mỗi job dùng cursor riêng để tránh 1 HTTP timeout làm block cả batch
+            # Mỗi job dùng cursor riêng để tránh 1 HTTP timeout làm block cả batch OK
             try:
                 import odoo
                 with odoo.registry(self.env.cr.dbname).cursor() as cr:
