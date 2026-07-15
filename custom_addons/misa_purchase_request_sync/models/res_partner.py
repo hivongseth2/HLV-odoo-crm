@@ -4,6 +4,25 @@ from odoo import models, api, fields
 class ResPartner(models.Model):
     _inherit = 'res.partner'
 
+    x_partner_source = fields.Selection([
+        ('manual', 'Thủ công')
+    ], string="Nguồn", tracking=True)
+
+    @api.model
+    def default_get(self, fields_list):
+        res = super(ResPartner, self).default_get(fields_list)
+        if 'x_partner_source' in fields_list:
+            res['x_partner_source'] = 'manual'
+        return res
+
+    @api.model
+    def name_create(self, name):
+        partner_id, partner_name = super(ResPartner, self).name_create(name)
+        partner = self.browse(partner_id)
+        if not partner.x_partner_source:
+            partner.write({'x_partner_source': 'manual'})
+        return partner_id, partner_name
+
     @api.model_create_multi
     def create(self, vals_list):
         # Tạo đối tác bình thường

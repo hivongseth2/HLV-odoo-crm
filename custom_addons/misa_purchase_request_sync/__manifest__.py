@@ -19,6 +19,7 @@ Module cung cấp:
         "mail",
         "sale",
         "misa_fetch_po_button",
+        "hlv_contact_refine",
     ],
     "data": [
         "security/ir.model.access.csv",
@@ -28,6 +29,7 @@ Module cung cấp:
         "views/wizard_views.xml",
         "views/price_history_wizard_views.xml",
         "views/misa_sync_queue_views.xml",
+        "views/res_partner_views.xml",
     ],
     "assets": {
         "web.assets_backend": [

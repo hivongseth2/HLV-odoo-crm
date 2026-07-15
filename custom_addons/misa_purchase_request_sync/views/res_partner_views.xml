@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Inherit standard base form view -->
+    <record id="view_partner_form_inherit_misa_pr_sync" model="ir.ui.view">
+        <field name="name">res.partner.form.inherit.misa.pr.sync</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='category_id']" position="after">
+                <field name="x_partner_source" readonly="1"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Inherit standard base tree view -->
+    <record id="view_partner_tree_inherit_misa_pr_sync" model="ir.ui.view">
+        <field name="name">res.partner.list.inherit.misa.pr.sync</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='email']" position="after">
+                <field name="x_partner_source" optional="show" readonly="1"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Inherit standard base search view -->
+    <record id="view_res_partner_filter_inherit_misa_pr_sync" model="ir.ui.view">
+        <field name="name">res.partner.select.inherit.misa.pr.sync</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_res_partner_filter"/>
+        <field name="arch" type="xml">
+            <xpath expr="//filter[@name='inactive']" position="before">
+                <filter string="Nguồn: Thủ công" name="source_manual" domain="[('x_partner_source', '=', 'manual')]"/>
+                <separator/>
+            </xpath>
+            <xpath expr="//group" position="inside">
+                <filter string="Nguồn" name="group_by_x_partner_source" context="{'group_by': 'x_partner_source'}"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Inherit custom refined tree view from hlv_contact_refine -->
+    <record id="view_res_partner_list_refine_inherit_misa_pr_sync" model="ir.ui.view">
+        <field name="name">res.partner.list.refine.inherit.misa.pr.sync</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="hlv_contact_refine.view_res_partner_list_refine"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='email']" position="after">
+                <field name="x_partner_source" optional="show" readonly="1"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Inherit custom refined search view from hlv_contact_refine -->
+    <record id="view_res_partner_search_refine_inherit_misa_pr_sync" model="ir.ui.view">
+        <field name="name">res.partner.search.refine.inherit.misa.pr.sync</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="hlv_contact_refine.view_res_partner_search_refine"/>
+        <field name="arch" type="xml">
+            <xpath expr="//filter[@name='root_person']" position="before">
+                <filter string="Nguồn: Thủ công" name="source_manual" domain="[('x_partner_source', '=', 'manual')]"/>
+                <separator/>
+            </xpath>
+            <xpath expr="//group" position="inside">
+                <filter string="Nguồn" name="group_by_x_partner_source" context="{'group_by': 'x_partner_source'}"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>
