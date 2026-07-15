@@ -77,20 +77,26 @@ class ShopeeWebhookController(http.Controller):
         matched_pickings = request.env['stock.picking'].sudo()
 
         for order in orders:
+            pick_pickings = order.picking_ids.sudo().filtered(
+                lambda picking: 'PICK' in (
+                    picking.picking_type_id.sequence_code or ''
+                ).upper() and picking.state != 'cancel'
+            )
             outgoing_pickings = order.picking_ids.sudo().filtered(
                 lambda picking: picking.picking_type_code == 'outgoing'
                 and picking.state != 'cancel'
             )
-            active_pickings = outgoing_pickings.filtered(
+            preferred_pickings = pick_pickings or outgoing_pickings
+            active_pickings = preferred_pickings.filtered(
                 lambda picking: picking.state != 'done'
             )
-            candidate_pickings = active_pickings or outgoing_pickings
+            candidate_pickings = active_pickings or preferred_pickings
             target_pickings = candidate_pickings.sorted('id')[:1]
             matched_pickings |= target_pickings
 
             if not target_pickings:
                 _logger.warning(
-                    "Shopee Webhook: Order %s has no delivery picking for tracking number %s.",
+                    "Shopee Webhook: Order %s has no PICK/outgoing picking for tracking number %s.",
                     order.name,
                     tracking_no,
                 )
