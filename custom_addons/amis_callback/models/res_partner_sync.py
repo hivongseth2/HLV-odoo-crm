@@ -75,7 +75,14 @@ class ResPartnerAmisSync(models.Model):
                 trigger='partner_save',
             )
             _logger.info('Enqueued MISA vendor sync job %s for partner %s', job.id, vendor.display_name)
-            if job.status in ('pending', 'error'):
+            if (
+                job.status in ('pending', 'error')
+                and (
+                    not job.next_attempt_at
+                    or job.next_attempt_at <= fields.Datetime.now()
+                    or bool((vendor.misa_account_object_id or '').strip())
+                )
+            ):
                 job._execute()
 
     def _misa_should_sync_vendor(self):
@@ -89,6 +96,41 @@ class ResPartnerAmisSync(models.Model):
             return False
         business_role = getattr(partner, 'hlv_business_role', '') or ''
         return int(partner.supplier_rank or 0) > 0 or business_role == 'supplier'
+
+    def _map_misa_vendor_from_mirror(self, config, job=None):
+        self.ensure_one()
+        if (self.misa_account_object_id or '').strip():
+            return self.env['amis.misa.vendor.cache']
+        cache = self.env['amis.misa.vendor.cache'].sudo().find_active_vendor_for_partner(
+            config, self,
+        )
+        if not cache:
+            return cache
+        misa_id = (cache.account_object_id or '').strip()
+        if not misa_id:
+            return self.env['amis.misa.vendor.cache']
+        self.with_context(skip_misa_partner_sync=True).sudo().write({
+            'misa_account_object_id': misa_id,
+        })
+        if cache.partner_id.id != self.id:
+            cache.sudo().write({'partner_id': self.id})
+        if job:
+            job.sudo().add_change_line(
+                data_type='vendor',
+                operation='map',
+                odoo_model='res.partner',
+                res_id=self.id,
+                misa_id=misa_id,
+                code=cache.account_object_code or '',
+                name=cache.account_object_name or '',
+                change_summary='Map ID MISA từ cache mirror trước khi đồng bộ NCC',
+            )
+        _logger.info(
+            'Mapped Odoo vendor %s to MISA account_object_id=%s from mirror cache.',
+            self.display_name,
+            misa_id,
+        )
+        return cache
 
     def _push_misa_vendor_dictionary(self, config, job=None):
         self.ensure_one()
