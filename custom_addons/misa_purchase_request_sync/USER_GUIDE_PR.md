@@ -92,36 +92,17 @@ YCMH được đồng bộ tự động từ MISA CRM về Odoo thông qua tiệ
 
 #### Các thông tin trên giao diện MISA CRM
 
-##### 1. Các thông tin chung (Phần đầu phiếu)
-- **Mục đích mua sắm**: Nhập lý do/mục đích mua sắm.
-- **Địa điểm giao**: Nơi nhận hàng (sẽ đồng bộ sang trường **Địa điểm giao** trên Odoo).
-- **Cơ hội**: Cơ hội bán hàng liên quan trên MISA CRM.
-- **Hạn giao hàng mong muốn**: Hạn giao hàng mong muốn của phiếu.
-- **Đơn hàng**: Số đơn bán hàng liên quan trên Odoo (sẽ đồng bộ sang trường **Đơn bán hàng liên quan**).
-- **ID Quy trình**: Mã/ID của quy trình liên quan.
+<!-- ![Hình ảnh 3: Giao diện tạo Yêu cầu mua sắm trên MISA CRM] -->
 
-##### 2. Chi tiết hàng hóa (Tab "Thông tin hàng hóa")
-Bảng thông tin hàng hóa bao gồm các thông tin mặc định của MISA CRM và các cột mở rộng do **Odoo Extension** tự động bổ sung từ Odoo (tính từ cột **Nhà cung cấp** trở đi):
+Khi lập Yêu cầu mua sắm trên MISA CRM, người dùng lưu ý điền các thông tin sau để đồng bộ chính xác sang Odoo:
 
-| Cột trên MISA CRM | Loại cột | Ghi chú / Ý nghĩa |
-|-------------------|-----------|-------------------|
-| **STT** | Mặc định | Số thứ tự dòng hàng. |
-| **Mã hàng hóa** | Mặc định | Mã sản phẩm (SKU). Nếu sản phẩm chưa có trên Odoo, hệ thống sẽ tự động tạo mới khi đồng bộ. |
-| **Nhà cung cấp** | Extension tạo | Nhà cung cấp đề xuất cho sản phẩm này. Nếu là NCC mới, hệ thống sẽ tạo ghi chú cảnh báo trong Chatter trên Odoo. |
-| **Tồn kho** | Extension tạo | Số lượng tồn kho thực tế hiện tại của sản phẩm này được lấy trực tiếp từ Odoo. |
-| **SL đã chọn** | Extension tạo | Số lượng sản phẩm đã được chọn để thực hiện mua/giao. |
-| **SL chưa giao** | Extension tạo | Số lượng sản phẩm chưa được giao từ các đơn hàng liên quan trên Odoo. |
-| **Đơn giá trước thuế** | Extension tạo | Đơn giá của hàng hóa trước thuế (đồng bộ từ Odoo hoặc lấy từ MISA). |
-| **% Chiết khấu** | Extension tạo | Tỷ lệ chiết khấu được áp dụng cho dòng sản phẩm. |
-| **Tiền chiết khấu** | Extension tạo | Số tiền chiết khấu được tính tự động dựa trên số lượng, đơn giá và % chiết khấu. |
-| **% Thuế** | Extension tạo | Thuế suất VAT của mặt hàng (10%, 8%, 5%...). |
-| **Tiền... (Tiền thuế)** | Extension tạo | Số tiền thuế GTGT tương ứng của dòng hàng. |
-
-> 💡 **Mẹo:** Các cột do Extension tạo giúp người dùng theo dõi nhanh tồn kho, trạng thái giao hàng, đơn giá đề xuất và các thông tin thuế/chiết khấu trực tiếp trên giao diện MISA CRM mà không cần phải mở Odoo.
+- **Thông tin chung (Phần đầu phiếu):** Điền các thông tin bao gồm **Mục đích mua sắm**, **Địa điểm giao**, **Cơ hội**, **Hạn giao hàng mong muốn**, **Đơn hàng** (Số đơn bán hàng liên quan trên Odoo) và **ID Quy trình**.
+- **Chi tiết hàng hóa:** 
+  > ⚠️ **Lưu ý:** Các cột trong bảng chi tiết hàng hóa tính từ cột **Nhà cung cấp** trở đi (*Nhà cung cấp, Tồn kho, SL đã chọn, SL chưa giao, Đơn giá trước thuế, % Chiết khấu, Tiền chiết khấu, % Thuế, Tiền thuế*) là các cột do **Odoo Extension** tự động tạo ra để lấy dữ liệu từ Odoo; người dùng chỉ cần điền/chỉnh sửa các giá trị ở các cột này cho phù hợp trước khi đồng bộ.
 
 #### Thao tác đồng bộ
 
-1. Nhấp vào liên kết **Cập nhật hàng hóa** ở góc phải phần "Thông tin hàng hóa" để làm mới dữ liệu từ Odoo sang CRM.
+1. Nhấp vào liên kết **Cập nhật hàng hóa** (ở góc phải bảng thông tin hàng hóa) để tải các dữ liệu tồn kho, đơn giá mới nhất từ Odoo.
 2. Nhấn nút **Tạo YCMH Odoo** ở góc trên cùng bên phải giao diện MISA CRM để bắt đầu đồng bộ.
 
 Hệ thống sẽ kiểm tra trùng, tạo mới hoặc cập nhật YCMH, tự động tạo sản phẩm mới (nếu chưa có) và ghi nhận NCC mới vào Chatter. Sau khi đồng bộ thành công, YCMH sẽ được tạo ở trạng thái **Chờ phê duyệt** trên Odoo.
