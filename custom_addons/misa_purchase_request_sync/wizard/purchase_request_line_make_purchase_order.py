@@ -153,6 +153,15 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
         đảm bảo price_unit cuối cùng đúng với actual_price_unit.
         """
         for item in self.item_ids:
+            # Khắc phục sai lệch chữ hoa/thường của ĐVT giữa YCMH và Sản phẩm
+            if item.product_id and item.product_uom_id:
+                target_uom = item.product_id.uom_po_id or item.product_id.uom_id
+                if target_uom and item.product_uom_id.name.strip().lower() == target_uom.name.strip().lower():
+                    if item.product_uom_id != target_uom:
+                        item.product_uom_id = target_uom
+                        if item.line_id:
+                            item.line_id.product_uom_id = target_uom
+
             qty = item.actual_qty or item.product_qty or 0.0
             price = item.actual_price_unit or item.misa_price_before_tax or 0.0
             item.write({
@@ -355,6 +364,7 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
             'default_company_type': 'company',
             'default_hlv_business_role': 'supplier',
             'link_to_pr_wizard_item_id': self.id,
+            'default_x_partner_source': 'manual',
         }
         return {
             'name': _('Tạo NCC – %s') % (data.get('name') or ''),
