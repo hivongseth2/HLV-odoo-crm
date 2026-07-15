@@ -26,8 +26,15 @@ Module cung cấp:
         "data/ir_cron.xml",
         "views/purchase_request_view.xml",
         "views/wizard_views.xml",
+        "views/price_history_wizard_views.xml",
         "views/misa_sync_queue_views.xml",
     ],
+    "assets": {
+        "web.assets_backend": [
+            "misa_purchase_request_sync/static/src/components/proposed_fields.js",
+            "misa_purchase_request_sync/static/src/components/proposed_fields.xml",
+        ],
+    },
     "license": "LGPL-3",
     "installable": True,
     "application": False,

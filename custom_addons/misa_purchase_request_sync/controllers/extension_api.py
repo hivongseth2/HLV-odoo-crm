@@ -339,15 +339,25 @@ class MisaExtensionController(http.Controller):
                 if so.state
                 else ""
             )
-            payload = {
-                "ok": True,
-                "exists": True,
-                "id": so.id,
-                "name": so.name,
-                "status": so.state,
-                "status_label": state_label,
-                "can_revoke": True,  # Luôn cho phép thu hồi, backend sẽ cancel hoặc xóa tuỳ trạng thái
-            }
+            # Nếu đơn đã hủy, trả về exists=False để extension có thể đồng bộ lại
+            if so.state == 'cancel':
+                payload = {
+                    "ok": True,
+                    "exists": False,
+                    "name": so.name,
+                    "message": "Đơn đã hủy, có thể đồng bộ lại.",
+                    "previous_status": "cancel",
+                }
+            else:
+                payload = {
+                    "ok": True,
+                    "exists": True,
+                    "id": so.id,
+                    "name": so.name,
+                    "status": so.state,
+                    "status_label": state_label,
+                    "can_revoke": True,
+                }
 
         return request.make_response(
             json.dumps(payload), headers=[("Content-Type", "application/json")]
@@ -366,8 +376,8 @@ class MisaExtensionController(http.Controller):
     )
     def api_extension_so_revoke(self, **payload):
         """
-        Thu hồi (hủy + xóa) Đơn bán hàng trên Odoo.
-        Hủy SO trước, sau đó xóa luôn record để có thể đồng bộ lại từ đầu.
+        Thu hồi (hủy) Đơn bán hàng trên Odoo.
+        Chỉ hủy, không xóa record để có thể đồng bộ lại từ đầu.
         """
         def json_response(payload, status=200):
             return request.make_response(
@@ -396,10 +406,9 @@ class MisaExtensionController(http.Controller):
             if not order:
                 return json_response({"ok": False, "error": "not_found", "message": f"Không tìm thấy đơn {name}"}, 404)
 
-            # Bước 1: Nếu đã cancelled, xóa luôn
+            # Bước 1: Nếu đã cancelled, chỉ cần báo thành công (không xóa)
             if order.state == 'cancel':
-                order.unlink()
-                return json_response({"ok": True, "message": f"Đã xoá đơn {name} đã huỷ để có thể đồng bộ lại."})
+                return json_response({"ok": True, "message": f"Đơn {name} đã ở trạng thái hủy, có thể đồng bộ lại."})
 
             # Bước 2: Kiểm tra phiếu xuất kho
             out_done = order.picking_ids.filtered(
@@ -437,16 +446,9 @@ class MisaExtensionController(http.Controller):
                         "message": f"Không thể huỷ đơn {name}. Còn picking/invoice chưa huỷ hết."
                     }, 400)
 
-            # Bước 6: Xóa record sau khi hủy để có thể tạo lại
+            # Bước 6: Trả về thành công (KHÔNG xóa record)
             if order.state == 'cancel':
-                try:
-                    order.unlink()
-                    return json_response({"ok": True, "message": f"Đã huỷ và xoá thành công đơn hàng {name}"})
-                except Exception as e:
-                    return json_response({
-                        "ok": True,
-                        "message": f"Đã huỷ thành công đơn hàng {name} (nhưng không xoá được record: {str(e)})"
-                    })
+                return json_response({"ok": True, "message": f"Đã huỷ thành công đơn hàng {name}, có thể đồng bộ lại."})
 
             return json_response({"ok": False, "error": "cancel_failed", "message": f"Không thể huỷ đơn {name}"}, 400)
 

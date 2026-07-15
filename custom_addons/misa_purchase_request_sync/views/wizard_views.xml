@@ -19,10 +19,14 @@
                 </div>
                 <group>
                     <group>
-                        <field name="supplier_id" string="Nhà cung cấp (Áp dụng tất cả)"
-                               domain="[('parent_id', '=', False), ('active', '=', True)]"
-                               options="{'no_create': True}"
-                               help="Chọn Nhà cung cấp ở đây sẽ lọc các đơn mua hàng có sẵn và áp dụng chung cho các sản phẩm bên dưới nếu bạn gộp đơn."/>
+                        <label for="supplier_id" string="Nhà cung cấp (Áp dụng tất cả)"/>
+                        <div class="o_row">
+                            <field name="supplier_id" nolabel="1"
+                                   domain="[('parent_id', '=', False), ('active', '=', True)]"
+                                   options="{'no_create': False, 'no_quick_create': True}"
+                                   context="{'default_supplier_rank': 1, 'default_is_company': True, 'default_company_type': 'company'}"
+                                   help="Chọn Nhà cung cấp ở đây sẽ lọc các đơn mua hàng có sẵn và áp dụng chung cho các sản phẩm bên dưới nếu bạn gộp đơn."/>
+                        </div>
                     </group>
                     <group>
                         <field name="purchase_order_id"
@@ -76,25 +80,61 @@
                 </div>
             </xpath>
 
-            <!-- Sắp xếp lại danh sách sản phẩm và đưa cột NCC lên đầu -->
+            <!-- Sắp xếp lại danh sách sản phẩm -->
             <xpath expr="//field[@name='item_ids']" position="replace">
                 <field name="item_ids" nolabel="1" colspan="2">
                     <list name="Chi tiết" create="false" editable="bottom">
-                        <field name="line_id" options="{'no_open': true}" column_invisible="1" />
-                        <field name="request_id" readonly="1" optional="show" />
-                        <field name="supplier_ref" width="120px" />
-                        <field name="supplier_id" width="180px" />
-                        <field name="product_id" width="200px" />
-                        <field name="name" width="250px" />
-                        <field name="product_qty" width="100px" />
-                        <field name="product_uom_id" column_invisible="1" groups="!uom.group_uom" />
-                        <field name="product_uom_id" groups="uom.group_uom" width="80px" />
-                        <field name="misa_price_before_tax" width="120px" />
-                        <field name="misa_tax_rate" width="80px" />
-                        <field name="misa_tax_amount" width="100px" />
-                        <field name="estimated_cost" column_invisible="1" />
-                        <field name="keep_description" column_invisible="1" />
-                        <field name="keep_estimated_cost" column_invisible="1" />
+                        <field name="line_id" options="{'no_open': true}" optional="hide" force_save="1" />
+                        <field name="request_id" optional="hide" force_save="1" />
+                        <field name="supplier_ref" optional="hide" force_save="1" />
+                        <field name="misa_supplier_name" column_invisible="1" force_save="1" />
+                        <field name="supplier_id" width="180px" widget="many2one_with_proposed" options="{'proposed_field': 'misa_supplier_name'}" force_save="1" />
+                        <field name="product_id" width="200px" widget="product_two_lines" force_save="1" />
+                        <field name="name" optional="hide" force_save="1" />
+                        <field name="product_qty" column_invisible="1" force_save="1" />
+                        <field name="actual_qty" width="120px" widget="float_with_proposed" options="{'proposed_field': 'product_qty'}" decoration-success="1" force_save="1" />
+                        <field name="product_uom_id" optional="hide" groups="!uom.group_uom" force_save="1" />
+                        <field name="product_uom_id" groups="uom.group_uom" width="80px" force_save="1" />
+                        
+                        <!-- Đơn giá: Sale đề xuất (ẩn) + Thực mua (widget) -->
+                        <field name="misa_price_before_tax" column_invisible="1" force_save="1" />
+                        <field name="actual_price_unit" string="Đơn giá thực mua" 
+                               width="140px" widget="float_with_proposed" options="{'proposed_field': 'misa_price_before_tax'}"
+                               force_save="1" decoration-success="1" />
+                        
+                        <!-- Thuế: Sale yêu cầu (ẩn) + Thu mua (widget) -->
+                        <field name="misa_tax_id" column_invisible="1" force_save="1" />
+                        <field name="misa_tax_name" column_invisible="1" force_save="1" />
+                        <field name="actual_tax_id" string="Thuế (%) thu mua" 
+                               width="160px" widget="many2one_with_proposed" options="{'proposed_field': 'misa_tax_name'}"
+                               force_save="1" decoration-success="1" />
+                        <field name="actual_tax_rate" optional="hide" force_save="1" />
+                        
+                        <!-- Tổng tiền: computed readonly -->
+                        <field name="misa_price_before_tax_total" string="Tổng tiền trước thuế" 
+                               readonly="1" force_save="1" width="120px" />
+                        <field name="misa_tax_amount_total" string="Tổng tiền thuế" 
+                               readonly="1" force_save="1" width="120px" />
+                        <field name="misa_amount" string="Thành tiền" 
+                               readonly="1" force_save="1" width="120px" decoration-info="1" />
+                        
+                        <!-- Chiết khấu: ẩn đề xuất gốc + hiển thị thực tế kèm widget đề xuất -->
+                        <field name="misa_discount_rate" column_invisible="1" force_save="1" />
+                        <field name="misa_discount_amount" column_invisible="1" force_save="1" />
+                        <field name="actual_discount_rate" string="CK thu mua (%)" 
+                               width="100px" widget="float_with_proposed" options="{'proposed_field': 'misa_discount_rate'}"
+                               decoration-success="1" optional="hide" force_save="1" />
+                        <field name="actual_discount_amount" string="Tiền CK thu mua" 
+                               width="110px" widget="float_with_proposed" options="{'proposed_field': 'misa_discount_amount'}"
+                               decoration-success="1" optional="hide" force_save="1" />
+                        
+                        <field name="estimated_cost" optional="hide" force_save="1" />
+                        <field name="keep_description" optional="hide" force_save="1" />
+                        <field name="keep_estimated_cost" optional="hide" force_save="1" />
+                        
+                        <!-- NCC mới per-line (ẩn nút ở cột cuối, chuyển sang tích hợp trực tiếp vào cột NCC) -->
+                        <field name="misa_new_supplier_json" column_invisible="1" force_save="1" />
+                        <field name="misa_has_new_supplier" column_invisible="1" />
                     </list>
                 </field>
             </xpath>
