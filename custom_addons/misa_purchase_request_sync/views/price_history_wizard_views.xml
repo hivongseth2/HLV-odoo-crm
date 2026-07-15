@@ -8,6 +8,7 @@
                 <sheet>
                     <group>
                         <field name="product_id" string="Sản phẩm"/>
+                        <field name="can_apply_price" invisible="1"/>
                     </group>
                     <separator string="Lịch sử giá mua"/>
                     <field name="supplierinfo_ids" nolabel="1">
@@ -20,7 +21,8 @@
                             <button name="action_apply_price" type="object"
                                     string="Chọn giá"
                                     icon="fa-check"
-                                    class="btn-primary"/>
+                                    class="btn-primary"
+                                    column_invisible="not parent.can_apply_price"/>
                         </list>
                     </field>
                 </sheet>

@@ -24,9 +24,13 @@ misa_purchase_request_sync/
 ├── models/                   ← Tầng Model (Kế thừa và mở rộng database)
 │   ├── __init__.py
 │   ├── purchase_request.py   ← Mở rộng model `purchase.request` của OCA
-│   └── purchase_request_line.py ← Mở rộng model `purchase.request.line` của OCA
+│   ├── purchase_request_line.py ← Mở rộng model `purchase.request.line` của OCA
+│   └── res_partner.py        ← Mở rộng model `res.partner` để liên kết và theo dõi nguồn
 ├── views/                    ← Tầng Giao diện UI Odoo
-│   └── purchase_request_view.xml ← Kế thừa form view, thêm field mới
+│   ├── purchase_request_view.xml ← Kế thừa form view, thêm field mới
+│   └── res_partner_views.xml  ← Kế thừa giao diện của res.partner
+├── wizard/                   ← Tầng Wizard thao tác (Ví dụ: Tạo RFQ)
+│   └── purchase_request_line_make_purchase_order.py
 ├── __init__.py
 ├── __manifest__.py           ← Cấu hình module, depends
 └── TECHNICAL.md              ← (File này) Tài liệu kỹ thuật chi tiết
@@ -36,7 +40,17 @@ misa_purchase_request_sync/
 
 ## 3. Data Models & Fields (Kiến trúc Database)
 
-### 3.1. Kế thừa `purchase.request` (OCA)
+### 3.1. Kế thừa `res.partner` (Contact)
+Thêm các trường phục vụ phân loại và truy vết nguồn gốc đối tác:
+- **`x_partner_source`** (`Selection`):
+  - **Công dụng:** Lưu vết nguồn gốc tạo đối tác (hiện tại có giá trị `'manual'`: Thủ công).
+  - **Cơ chế hoạt động:**
+    - Không đặt `default` trực tiếp trong khai báo Python để tránh việc các tiến trình API/Import tự động (không truyền `x_partner_source` trong vals) bị ghi đè thành `'manual'`.
+    - Override `default_get` để tự động trả về `'manual'` khi người dùng bấm Tạo mới từ giao diện Web Client (Odoo UI).
+    - Override `name_create` để gán `'manual'` khi đối tác được tạo nhanh từ giao diện Many2one.
+    - Truyền tham số `'default_x_partner_source': 'manual'` vào `context` của các hành động mở form tạo NCC từ PR và wizard.
+
+### 3.2. Kế thừa `purchase.request` (OCA)
 Module không tự tạo model YCMH mới mà kế thừa trực tiếp từ model `purchase.request` thuộc thư viện của OCA.
 
 **Các trường (Fields) được bổ sung thêm:**
@@ -51,7 +65,7 @@ Module không tự tạo model YCMH mới mà kế thừa trực tiếp từ mod
 - Hiển thị `sale_order_id` và `delivery_address` ngay dưới trường Người yêu cầu (`requested_by`). Cả 2 trường sẽ bị khóa (readonly) nếu YCMH đã ở trạng thái `done` hoặc `rejected`.
 - Lôi thêm `create_date` (Ngày tạo) và `write_date` (Ngày sửa) - đây là 2 trường mặc định của Odoo - ra giao diện form để người dùng tiện theo dõi lịch sử.
 
-### 3.2. Kế thừa `purchase.request.line` (OCA)
+### 3.3. Kế thừa `purchase.request.line` (OCA)
 Kế thừa để hỗ trợ điền tự động và cho phép chọn giá trị tham khảo từ lịch sử mua hàng.
 
 **Các trường (Fields) được bổ sung thêm:**
@@ -77,10 +91,8 @@ Kế thừa để hỗ trợ điền tự động và cho phép chọn giá tr�
 - Hiển thị `history_po_line_id` trong danh sách (tree view) của `line_ids` (nằm cạnh `estimated_cost`).
 - Hiển thị trong form chi tiết của `purchase.request.line`.
 
-### 3.3. Computed Fields: Tiến độ mua hàng (v1.1.0+)
-
+### 3.4. Computed Fields: Tiến độ mua hàng (v1.1.0+)
 Module bổ sung các computed fields trên `purchase.request` để hiển thị tiến độ mua hàng trong list view:
-
 - **`progress_total`** (`Integer`, `store=True`): Tổng số dòng yêu cầu (không tính dòng đã hủy).
 - **`progress_purchased`** (`Integer`, `store=True`): Số dòng đã có Đơn mua hàng (PO/RFQ).
 - **`progress_received`** (`Integer`, `store=True`): Số dòng đã nhận đủ hàng.
@@ -99,16 +111,15 @@ Module bổ sung các computed fields trên `purchase.request` để hiển th�
 **View XML:**
 - Kế thừa `view_purchase_request_tree` thêm cột `progress_badge` với `widget="badge"` và `decoration-*` dựa trên `progress_status`.
 
-### 3.4. Thông số hệ thống (`ir.config_parameter`)
+### 3.5. Thông số hệ thống (`ir.config_parameter`)
 - **Key:** `misa_extension_token`
 - **Công dụng:** Chứa mã token dùng để xác thực các request đẩy từ Chrome Extension sang. 
 - **Đặc điểm:** 
   - Được khai báo trong XML với `noupdate="1"` và `eval="''"`. 
   - Nghĩa là khi cài module, nó sẽ tạo ra record trống. Quản trị viên phải vào *Settings > Technical > System Parameters* để nhập token thật. Khi upgrade module, giá trị này **không bị ghi đè**.
 
-### 3.5. Hàng chờ đồng bộ (`misa.sync.queue`)
+### 3.6. Hàng chờ đồng bộ (`misa.sync.queue`)
 Để tránh tắc nghẽn và xung đột khi đồng bộ dữ liệu real-time từ Extension, hệ thống sử dụng một queue trung gian.
-
 - **Cơ chế chống Race Condition (Tranh chấp ghi dữ liệu)**:
   - Khi Cron Job quét các bản ghi `draft`, hệ thống sử dụng câu lệnh SQL atomic `SELECT ... FOR UPDATE SKIP LOCKED` thay vì ORM `search()`.
   - Giúp nhiều worker (Cron hoặc bấm nút tay thủ công) xử lý song song các bản ghi khác nhau mà không bao giờ bị trùng lặp hoặc khóa lẫn nhau (Deadlock).
@@ -118,7 +129,7 @@ Module bổ sung các computed fields trên `purchase.request` để hiển th�
   - Khi Cron chạy, nó tự động tìm các bản ghi kẹt ở trạng thái `processing` quá 10 phút, cộng `retry_count`.
   - Nếu `retry_count < 3`, đưa về `draft` và đẩy xuống cuối hàng (`sequence += 10`) để xử lý lại. Nếu `>= 3` lần bị timeout/lỗi liên tiếp, đánh dấu là `failed` và ghi nhận nhật ký lỗi.
 
-### 3.6. Custom OWL Field Components (v1.2.0+)
+### 3.7. Custom OWL Field Components (v1.2.0+)
 Để tối ưu chiều ngang và thu gọn các cột trong list view của Wizard tạo RFQ (`purchase.request.line.make.purchase.order`):
 - **`float_with_proposed`** (Kế thừa từ `web.FloatField`):
   - Nhận tùy chọn `options="{'proposed_field': 'product_qty'}"`.

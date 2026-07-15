@@ -95,6 +95,7 @@ class PurchaseRequestLine(models.Model):
             'default_company_type': 'company',
             'default_hlv_business_role': 'supplier',
             'link_to_pr_line_id': self.id,
+            'default_x_partner_source': 'manual',
         }
         return {
             'name': _('Xác nhận & Tạo NCC – %s') % (data.get('name') or ''),

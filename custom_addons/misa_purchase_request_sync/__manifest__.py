@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "MISA Purchase Request Sync",
-    "version": "18.0.1.1.0",
+    "version": "18.0.1.2.0",
     "summary": "API endpoints + button to sync Purchase Request from MISA CRM Browser Extension",
     "description": """
 Module cung cấp:
@@ -19,6 +19,7 @@ Module cung cấp:
         "mail",
         "sale",
         "misa_fetch_po_button",
+        "hlv_contact_refine",
     ],
     "data": [
         "security/ir.model.access.csv",
@@ -28,6 +29,7 @@ Module cung cấp:
         "views/wizard_views.xml",
         "views/price_history_wizard_views.xml",
         "views/misa_sync_queue_views.xml",
+        "views/res_partner_views.xml",
     ],
     "assets": {
         "web.assets_backend": [

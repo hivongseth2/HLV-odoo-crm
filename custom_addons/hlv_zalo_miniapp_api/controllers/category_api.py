@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
+import base64
 import logging
-import re
-from datetime import timedelta, timezone
 
 from odoo import fields, http
-from odoo.http import request
+from odoo.http import request, Response
 
 from .base_api import ZaloBaseAPI
 
@@ -153,8 +152,14 @@ class ZaloCategoryAPI(ZaloBaseAPI, http.Controller):
         csrf=False,
     )
     def get_image(self, model, rec_id, field="image_128"):
-        """Trả ảnh dạng binary."""
+        """Trả ảnh dạng binary.
+        Security: Chỉ cho phép các model trong ALLOWED_IMAGE_MODELS."""
         try:
+            # Whitelist model check
+            if model not in self.ALLOWED_IMAGE_MODELS:
+                _logger.warning("Rejected image access for unauthorized model: %s", model)
+                return self._response_error("FORBIDDEN", "Model không được phép", 403)
+
             Model = request.env.get(model)
             if not Model:
                 return self._response_error("NOT_FOUND", "Model không tồn tại", 404)
@@ -167,7 +172,6 @@ class ZaloCategoryAPI(ZaloBaseAPI, http.Controller):
             if not image_data:
                 return self._response_error("NOT_FOUND", "Không có ảnh", 404)
 
-            import base64
             return Response(
                 base64.b64decode(image_data),
                 content_type="image/png",

@@ -3,7 +3,7 @@ import logging
 from datetime import timedelta, timezone
 
 from odoo import fields, http
-from odoo.http import request
+from odoo.http import request, Response
 
 from .base_api import ZaloBaseAPI
 
@@ -102,6 +102,11 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             if not contact_id:
                 return self._response_error("INVALID_INPUT", "Thiếu contact_id")
 
+            # Auth + ownership check
+            auth_result = self._auth_and_verify_owner(contact_id)
+            if isinstance(auth_result, Response):
+                return auth_result
+
             partner = request.env["res.partner"].sudo().browse(contact_id)
             if not partner.exists():
                 return self._response_error("NOT_FOUND", "Khách hàng không tồn tại", 404)
@@ -135,6 +140,14 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             if not order.exists():
                 return self._response_error("NOT_FOUND", "Đơn hàng không tồn tại", 404)
 
+            # Auth + ownership check: order phải thuộc về contact trong token
+            contact_id = order.partner_id.id
+            if not contact_id:
+                return self._response_error("FORBIDDEN", "Đơn hàng không hợp lệ", 403)
+            auth_result = self._auth_and_verify_owner(contact_id)
+            if isinstance(auth_result, Response):
+                return auth_result
+
             return self._response_success(self._order_to_dict(order))
         except Exception as e:
             _logger.exception("order_detail error")
@@ -161,6 +174,11 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             if not items or not isinstance(items, list):
                 return self._response_error("INVALID_INPUT", "Thiếu danh sách sản phẩm (items)", 400)
 
+            # Auth + ownership check
+            auth_result = self._auth_and_verify_owner(contact_id)
+            if isinstance(auth_result, Response):
+                return auth_result
+
             partner = request.env["res.partner"].sudo().browse(contact_id)
             if not partner.exists():
                 return self._response_error("NOT_FOUND", "Khách hàng không tồn tại", 404)
@@ -176,6 +194,12 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
                 product = Product.browse(product_id)
                 if not product.exists() or not product.active or not product.x_active_zalo:
                     continue
+
+                # Validate tồn kho
+                if product.free_qty < quantity:
+                    return self._response_error("OUT_OF_STOCK",
+                        f"Sản phẩm '{product.display_name}' chỉ còn {product.free_qty} {product.uom_id.name}", 400)
+
                 price = product.x_zalo_price or product.list_price
                 order_line_vals.append((0, 0, {
                     "product_id": product_id,
@@ -187,6 +211,15 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             if not order_line_vals:
                 return self._response_error("INVALID_INPUT", "Không có sản phẩm hợp lệ để tạo đơn", 400)
 
+            # Gán pricelist trước khi tạo order
+            pricelist_id = False
+            try:
+                pricelist = request.env["product.pricelist"].sudo().search([("active", "=", True)], limit=1, order="id")
+                if pricelist:
+                    pricelist_id = pricelist.id
+            except Exception:
+                pass
+
             # Tạo sale.order mới
             order_vals = {
                 "partner_id": contact_id,
@@ -195,6 +228,8 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
                 "state": "draft",
                 "order_line": order_line_vals,
             }
+            if pricelist_id:
+                order_vals["pricelist_id"] = pricelist_id
             if note:
                 order_vals["note"] = note
 
@@ -216,14 +251,6 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
                     _logger.warning("Voucher apply error: %s", ve)
                     order.write({"note": (order.note or "") + f"\nVoucher: {voucher_code}"})
 
-            # Gán pricelist
-            try:
-                pricelist = request.env["product.pricelist"].sudo().search([("active", "=", True)], limit=1, order="id")
-                if pricelist:
-                    order.write({"pricelist_id": pricelist.id})
-            except Exception:
-                pass
-
             # Confirm đơn hàng
             try:
                 order.action_confirm()
@@ -232,7 +259,8 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
                 order.unlink()
                 return self._response_error("ORDER_ERROR", f"Không thể xác nhận đơn: {str(ce)}", 400)
 
-            order.write({"state": "sale", "date_order": fields.Datetime.now()})
+            # Không cần write state="sale" vì action_confirm() đã chuyển state
+            order.write({"date_order": fields.Datetime.now()})
 
             result = self._order_to_dict(order)
             if voucher_info:
@@ -255,6 +283,11 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
 
             if not order_id or not contact_id:
                 return self._response_error("INVALID_INPUT", "Thiếu order_id hoặc contact_id")
+
+            # Auth + ownership check
+            auth_result = self._auth_and_verify_owner(contact_id)
+            if isinstance(auth_result, Response):
+                return auth_result
 
             order = request.env["sale.order"].sudo().browse(order_id)
             if not order.exists():

@@ -2,7 +2,7 @@
 import logging
 
 from odoo import http
-from odoo.http import request
+from odoo.http import request, Response
 
 from .base_api import ZaloBaseAPI
 
@@ -72,6 +72,12 @@ class ZaloCartAPI(ZaloBaseAPI, http.Controller):
             contact_id = self._parse_int(body.get("contact_id"), 0)
             if not contact_id:
                 return self._response_error("INVALID_INPUT", "Thiếu contact_id")
+
+            # Auth + ownership check
+            auth_result = self._auth_and_verify_owner(contact_id)
+            if isinstance(auth_result, Response):
+                return auth_result
+
             cart, error = self._get_or_create_cart(contact_id)
             if error:
                 return self._response_error("NOT_FOUND", error, 404)
@@ -94,6 +100,11 @@ class ZaloCartAPI(ZaloBaseAPI, http.Controller):
                 return self._response_error("INVALID_INPUT", "Thiếu contact_id hoặc product_id")
             if quantity <= 0:
                 return self._response_error("INVALID_INPUT", "Số lượng phải > 0")
+
+            # Auth + ownership check
+            auth_result = self._auth_and_verify_owner(contact_id)
+            if isinstance(auth_result, Response):
+                return auth_result
 
             Product = request.env["product.product"].sudo()
             product = Product.browse(product_id)
@@ -135,6 +146,11 @@ class ZaloCartAPI(ZaloBaseAPI, http.Controller):
             if not contact_id or not line_id:
                 return self._response_error("INVALID_INPUT", "Thiếu contact_id hoặc line_id")
 
+            # Auth + ownership check
+            auth_result = self._auth_and_verify_owner(contact_id)
+            if isinstance(auth_result, Response):
+                return auth_result
+
             # Browse trực tiếp sale.order.line để tránh race condition
             # khi search giỏ hàng draft không chính xác
             OrderLine = request.env["sale.order.line"].sudo()
@@ -169,6 +185,11 @@ class ZaloCartAPI(ZaloBaseAPI, http.Controller):
             if not contact_id or not line_id:
                 return self._response_error("INVALID_INPUT", "Thiếu contact_id hoặc line_id")
 
+            # Auth + ownership check
+            auth_result = self._auth_and_verify_owner(contact_id)
+            if isinstance(auth_result, Response):
+                return auth_result
+
             # Browse trực tiếp sale.order.line
             OrderLine = request.env["sale.order.line"].sudo()
             line = OrderLine.browse(line_id)
@@ -195,6 +216,11 @@ class ZaloCartAPI(ZaloBaseAPI, http.Controller):
             contact_id = self._parse_int(body.get("contact_id"), 0)
             if not contact_id:
                 return self._response_error("INVALID_INPUT", "Thiếu contact_id")
+
+            # Auth + ownership check
+            auth_result = self._auth_and_verify_owner(contact_id)
+            if isinstance(auth_result, Response):
+                return auth_result
 
             cart, error = self._get_or_create_cart(contact_id)
             if error:
