@@ -2,3 +2,5 @@ id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_purchase_request_purchase_request,purchase.request,purchase_request.model_purchase_request,base.group_user,1,0,0,0
 access_purchase_request_purchase_request_line,purchase.request.line,purchase_request.model_purchase_request_line,base.group_user,1,0,0,0
 access_misa_sync_queue_user,misa.sync.queue,model_misa_sync_queue,base.group_user,1,1,1,1
+access_price_history_wizard,price.history.wizard,model_price_history_wizard,base.group_user,1,1,1,1
+access_price_history_wizard_line,price.history.wizard.line,model_price_history_wizard_line,base.group_user,1,1,1,1

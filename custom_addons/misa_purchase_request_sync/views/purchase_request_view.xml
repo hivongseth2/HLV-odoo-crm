@@ -16,11 +16,12 @@
                     string="Đẩy sang MISA CRM"
                     type="object"
                     class="btn-secondary"
-                    invisible="state != 'draft'"
+                    invisible="1"
                     groups="purchase_request.group_purchase_request_manager"
                 />
             </xpath>
             <xpath expr="//field[@name='requested_by']" position="after">
+                <field name="state" invisible="1"/>
                 <field name="sale_order_id" readonly="state in ('done', 'rejected')"/>
                 <field name="delivery_address" readonly="state in ('done', 'rejected')"/>
                 <field name="create_date" readonly="1"/>
@@ -32,20 +33,61 @@
             <xpath expr="//button[@name='action_view_stock_picking']/field[@name='move_count']" position="attributes">
                 <attribute name="string">Phiếu nhập kho</attribute>
             </xpath>
+            <xpath expr="//field[@name='line_ids']/list/field[@name='product_id']" position="attributes">
+                <attribute name="width">250</attribute>
+                <attribute name="widget">product_two_lines</attribute>
+            </xpath>
+            <xpath expr="//field[@name='line_ids']/list/field[@name='estimated_cost']" position="attributes">
+                <attribute name="optional">hide</attribute>
+            </xpath>
+            <!-- Ẩn cột mô tả và ngày yêu cầu (vẫn có thể hiện lại qua optional) -->
+            <xpath expr="//field[@name='line_ids']/list/field[@name='name']" position="attributes">
+                <attribute name="optional">hide</attribute>
+            </xpath>
+            <xpath expr="//field[@name='line_ids']/list/field[@name='date_required']" position="attributes">
+                <attribute name="optional">hide</attribute>
+            </xpath>
+            <!-- Đổi tên cột số lượng và RFQ/PO, và ẩn hiện thông minh theo trạng thái -->
+            <xpath expr="//field[@name='line_ids']/list/field[@name='product_qty']" position="attributes">
+                <attribute name="string">Số lượng yêu cầu</attribute>
+                <attribute name="column_invisible">parent.state != 'draft'</attribute>
+            </xpath>
+            <xpath expr="//field[@name='line_ids']/list/field[@name='product_qty']" position="after">
+                <field name="display_qty_html" string="Số lượng" widget="html" column_invisible="parent.state == 'draft'"/>
+            </xpath>
+            <xpath expr="//field[@name='line_ids']/list/field[@name='purchased_qty']" position="attributes">
+                <attribute name="string">Số lượng đã lên RFQ/PO</attribute>
+            </xpath>
             <xpath expr="//field[@name='line_ids']/list/field[@name='estimated_cost']" position="after">
-                <field name="history_po_line_id" optional="hide"/>
-                <field name="sale_proposed_supplier_id" optional="show"/>
+                <field name="sale_proposed_supplier_id" widget="many2one_with_proposed" optional="show" width="200" readonly="parent.state != 'draft'"/>
+                <field name="display_supplier_html" string="NCC" widget="html" column_invisible="1" optional="hide" width="200"/>
                 <field name="misa_supplier_id" optional="hide"/>
                 <field name="misa_stock_total" optional="hide"/>
-                <field name="misa_stock_selected" optional="show"/>
-                <field name="misa_stock_undelivered" optional="show"/>
-                <field name="misa_price_before_tax" optional="hide"/>
-                <field name="misa_discount_rate" optional="hide"/>
+                <field name="misa_stock_selected" optional="hide"/>
+                <field name="misa_stock_undelivered" optional="hide"/>
+                
+                <field name="misa_price_before_tax" widget="float_with_proposed" optional="show" readonly="parent.state != 'draft'"/>
+                <field name="display_price_unit_html" string="Đơn giá trước thuế" widget="html" column_invisible="1" optional="hide"/>
+                
+                <field name="misa_price_before_tax_total" optional="show" sum="Tổng tiền trước thuế"/>
+                
+                <field name="misa_discount_rate" column_invisible="parent.state != 'draft'" optional="hide"/>
+                <field name="display_discount_rate_html" string="TL chiết khấu (MISA)" widget="html" column_invisible="parent.state == 'draft'" optional="hide"/>
+                
                 <field name="misa_discount_amount" optional="hide"/>
-                <field name="misa_tax_rate" optional="hide"/>
+                
+                <field name="misa_tax_rate" column_invisible="parent.state != 'draft'" optional="show"/>
+                <field name="display_tax_rate_html" string="% Thuế (MISA)" widget="html" column_invisible="parent.state == 'draft'" optional="show"/>
+                
+                <field name="misa_tax_amount_total" optional="show" sum="Tổng tiền thuế"/>
                 <field name="misa_tax_amount" optional="hide"/>
+                <field name="misa_price_after_tax_total" optional="show" sum="Tổng sau thuế"/>
                 <field name="misa_price_after_tax" optional="hide"/>
-                <field name="misa_amount" optional="show" sum="Tổng tiền"/>
+                <field name="misa_amount" optional="show" sum="Thành tiền"/>
+            </xpath>
+            <xpath expr="//field[@name='line_ids']/list" position="inside">
+                <field name="misa_new_supplier_json" column_invisible="1" force_save="1" />
+                <field name="misa_has_new_supplier" column_invisible="1" />
             </xpath>
         </field>
     </record>
@@ -111,7 +153,7 @@
                     <group name="right_col">
                         <field name="estimated_cost" widget="monetary" readonly="is_editable == False" />
                         <field name="history_po_line_id" readonly="is_editable == False" options="{'no_create': True}"/>
-                        <field name="cancelled" widget="boolean" />
+                        <field name="cancelled" widget="boolean" string="Đã hủy?"/>
                         
                         <!-- Hidden fields required by original logic -->
                         <field name="is_editable" invisible="1" />
@@ -130,10 +172,13 @@
                     <group>
                         <group string="Tài chính &amp; Thuế">
                             <field name="misa_price_before_tax" readonly="is_editable == False" widget="monetary" options="{'currency_field': 'currency_id'}"/>
-                            <field name="misa_tax_rate" readonly="is_editable == False"/>
-                            <field name="misa_tax_amount" readonly="is_editable == False" widget="monetary" options="{'currency_field': 'currency_id'}"/>
+                            <field name="misa_price_before_tax_total" readonly="is_editable == False" widget="monetary" options="{'currency_field': 'currency_id'}"/>
                             <field name="misa_discount_rate" readonly="is_editable == False"/>
                             <field name="misa_discount_amount" readonly="is_editable == False" widget="monetary" options="{'currency_field': 'currency_id'}"/>
+                            <field name="misa_tax_rate" readonly="is_editable == False"/>
+                            <field name="misa_tax_amount_total" readonly="is_editable == False" widget="monetary" options="{'currency_field': 'currency_id'}"/>
+                            <field name="misa_tax_amount" readonly="is_editable == False" widget="monetary" options="{'currency_field': 'currency_id'}"/>
+                            <field name="misa_price_after_tax_total" readonly="is_editable == False" widget="monetary" options="{'currency_field': 'currency_id'}"/>
                             <field name="misa_price_after_tax" readonly="is_editable == False" widget="monetary" options="{'currency_field': 'currency_id'}"/>
                             <field name="misa_amount" readonly="is_editable == False" widget="monetary" options="{'currency_field': 'currency_id'}"/>
                         </group>

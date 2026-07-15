@@ -60,6 +60,18 @@ Kế thừa để hỗ trợ điền tự động và cho phép chọn giá tr�
   - **Logic (`onchange`):**
     - `onchange("product_id")`: Tự động tìm giá mua ưu tiên từ Nhà cung cấp (`product.supplierinfo`), nếu không có thì lấy giá vốn chuẩn (`standard_price`), gán vào `estimated_cost`.
     - `onchange("history_po_line_id")`: Lấy `price_unit` của dòng PO lịch sử đã chọn gán vào `estimated_cost`.
+- **Lưu trữ dữ liệu thực mua thực tế (`actual_*`):**
+  - Nhóm trường: `actual_qty`, `actual_price_unit`, `actual_tax_id`, `actual_tax_rate`, `actual_discount_rate`, `actual_discount_amount`, `actual_supplier_id`.
+  - **Công dụng:** Lưu trữ lại dữ liệu thực tế mà phòng mua hàng đã chỉnh sửa trên Wizard "Tạo RFQ". Khi Wizard chạy (`make_purchase_order`), các giá trị này sẽ được ghi ngược lại `purchase.request.line` tương ứng.
+  - **Mục đích:** Khi người dùng mở lại Wizard cho dòng này (ví dụ để tạo lại RFQ bị hủy), Wizard sẽ tự động load lại dữ liệu thực tế đã lưu trước đó thay vì hiển thị dữ liệu sale đề xuất ban đầu.
+- **Cột so sánh dữ liệu đề xuất vs thực tế (`display_*_html`):**
+  - Nhóm trường HTML: `display_qty_html`, `display_price_unit_html`, `display_tax_rate_html`, `display_discount_rate_html`, `display_supplier_html`.
+  - **Công dụng:** Tự động tính toán để hiển thị 2 dòng trong một ô của list view khi PR không còn ở trạng thái `draft`.
+    - Dòng trên: Giá trị đề xuất ban đầu (màu đen thường).
+    - Dòng dưới: Giá trị thực mua thực tế (màu xanh lá đậm, in đậm nghiêng, bắt đầu bằng chữ `PO: `). Chỉ hiển thị khi có dữ liệu thực tế (sau khi đã chạy wizard Tạo RFQ và lưu lại), nếu chưa tạo RFQ thì không hiển thị dòng `PO:` này.
+  - **Giao diện XML:**
+    - Ở list view của Form Yêu cầu mua hàng (`view_purchase_request_form_inherit_misa_sync`), các trường nhập liệu gốc chỉ hiển thị ở trạng thái `draft` (`column_invisible="parent.state != 'draft'"`).
+    - Khi ở các trạng thái khác, các trường HTML so sánh được hiển thị thay thế (`column_invisible="parent.state == 'draft'"`), giúp quản lý và đối chiếu dễ dàng mà không làm hỏng tính năng edit của Odoo.
 
 **Cập nhật trên Form View Odoo:**
 - Hiển thị `history_po_line_id` trong danh sách (tree view) của `line_ids` (nằm cạnh `estimated_cost`).
@@ -93,3 +105,28 @@ Module bổ sung các computed fields trên `purchase.request` để hiển th�
 - **Đặc điểm:** 
   - Được khai báo trong XML với `noupdate="1"` và `eval="''"`. 
   - Nghĩa là khi cài module, nó sẽ tạo ra record trống. Quản trị viên phải vào *Settings > Technical > System Parameters* để nhập token thật. Khi upgrade module, giá trị này **không bị ghi đè**.
+
+### 3.5. Hàng chờ đồng bộ (`misa.sync.queue`)
+Để tránh tắc nghẽn và xung đột khi đồng bộ dữ liệu real-time từ Extension, hệ thống sử dụng một queue trung gian.
+
+- **Cơ chế chống Race Condition (Tranh chấp ghi dữ liệu)**:
+  - Khi Cron Job quét các bản ghi `draft`, hệ thống sử dụng câu lệnh SQL atomic `SELECT ... FOR UPDATE SKIP LOCKED` thay vì ORM `search()`.
+  - Giúp nhiều worker (Cron hoặc bấm nút tay thủ công) xử lý song song các bản ghi khác nhau mà không bao giờ bị trùng lặp hoặc khóa lẫn nhau (Deadlock).
+- **Cơ chế phục hồi bản ghi bị kẹt (Zombie Recovery)**:
+  - Trường hợp Worker/Odoo crash hoặc restart đột ngột khi đang xử lý bản ghi (`state='processing'`).
+  - Trường `processing_started_at` lưu thời điểm bắt đầu xử lý.
+  - Khi Cron chạy, nó tự động tìm các bản ghi kẹt ở trạng thái `processing` quá 10 phút, cộng `retry_count`.
+  - Nếu `retry_count < 3`, đưa về `draft` và đẩy xuống cuối hàng (`sequence += 10`) để xử lý lại. Nếu `>= 3` lần bị timeout/lỗi liên tiếp, đánh dấu là `failed` và ghi nhận nhật ký lỗi.
+
+### 3.6. Custom OWL Field Components (v1.2.0+)
+Để tối ưu chiều ngang và thu gọn các cột trong list view của Wizard tạo RFQ (`purchase.request.line.make.purchase.order`):
+- **`float_with_proposed`** (Kế thừa từ `web.FloatField`):
+  - Nhận tùy chọn `options="{'proposed_field': 'product_qty'}"`.
+  - Hiển thị ô nhập liệu float thực tế (`actual_qty`), đồng thời tự động render một nhãn nhỏ màu xám nhạt (`#888888`) ở ngay bên dưới hiển thị giá trị đề xuất tương ứng (ví dụ: `đề xuất: 1,00`).
+- **`many2one_with_proposed`** (Kế thừa từ `web.Many2OneField`):
+  - Nhận tùy chọn `options="{'proposed_field': 'misa_tax_id'}"`.
+  - Hiển thị combobox Many2one thực tế (`actual_tax_id`), đồng thời tự động render nhãn hiển thị tên bản ghi đề xuất (ví dụ: `đề xuất: 10%`).
+
+**Đăng ký Assets:**
+- Các components được viết bằng OWL 2.0+ tại `static/src/components/proposed_fields.js` và `static/src/components/proposed_fields.xml`.
+- Đăng ký qua `web.assets_backend` trong `__manifest__.py`.

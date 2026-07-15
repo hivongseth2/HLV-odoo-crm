@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <!-- Widget Float với giá trị đề xuất hiển thị ở dưới -->
+    <t t-name="misa_purchase_request_sync.FloatWithProposedField" owl="1">
+        <div class="d-flex flex-column align-items-end justify-content-center w-100">
+            <t t-call="web.FloatField"/>
+            <div t-if="proposedValue" class="text-muted fst-italic mt-1" style="font-size: 0.85rem; color: #888888 !important; text-align: right; display: block;">
+                đề xuất: <t t-esc="proposedValue"/>
+            </div>
+            <button t-if="showPriceHistoryButton" 
+                    t-on-mousedown.stop.prevent="onViewPriceHistory" 
+                    t-on-click.stop.prevent="onDummy"
+                    class="btn btn-sm mt-1 py-0 px-2 d-inline-flex align-items-center" 
+                    style="font-size: 0.72rem; font-weight: 500; border-radius: 12px; background-color: #f1f3f5; color: #495057; border: 1px solid #ced4da; transition: all 0.2s ease;">
+                <i class="fa fa-history" style="font-size: 0.72rem; margin-right: 3px;"/>Lịch sử giá
+            </button>
+        </div>
+    </t>
+
+    <!-- Widget Many2one với giá trị đề xuất hiển thị ở dưới -->
+    <t t-name="misa_purchase_request_sync.Many2oneWithProposedField" owl="1">
+        <div class="d-flex flex-column align-items-start justify-content-center w-100">
+            <t t-call="web.Many2OneField"/>
+            <div t-if="proposedValue" class="text-muted fst-italic mt-1" style="font-size: 0.85rem; color: #888888 !important; text-align: left; display: block;">
+                đề xuất: <t t-esc="proposedValue"/>
+            </div>
+            <button t-if="showCreateSupplierButton" 
+                    t-on-mousedown.stop.prevent="onCreateSupplier" 
+                    t-on-click.stop.prevent="onDummy"
+                    class="btn btn-sm mt-1 py-0 px-2 d-inline-flex align-items-center" 
+                    style="font-size: 0.72rem; font-weight: 500; border-radius: 12px; background-color: #fff9db; color: #f08c00; border: 1px solid #ffe066; transition: all 0.2s ease;">
+                <i class="fa fa-user-plus" style="font-size: 0.72rem; margin-right: 3px;"/>Tạo NCC
+            </button>
+            <div t-if="showCreateSupplierButton and newSupplierSummary" class="text-muted fst-italic mt-1" style="font-size: 0.8rem; color: #777777 !important; text-align: left; display: block; line-height: 1.2;">
+                Đề xuất: <t t-esc="newSupplierSummary"/>
+            </div>
+        </div>
+    </t>
+
+    <!-- Widget hiển thị sản phẩm làm 2 dòng: [mã] ở trên, tên ở dưới -->
+    <t t-name="misa_purchase_request_sync.ProductTwoLinesField" owl="1">
+        <div class="d-flex flex-column align-items-start justify-content-center w-100 py-1">
+            <span t-if="codeAndName.code" class="fw-bold text-primary" style="font-size: 0.85rem; display: block;">
+                <t t-esc="codeAndName.code"/>
+            </span>
+            <span class="text-wrap" style="font-size: 0.9rem; line-height: 1.2; display: block; word-break: break-all;">
+                <t t-esc="codeAndName.name"/>
+            </span>
+        </div>
+    </t>
+
+</templates>

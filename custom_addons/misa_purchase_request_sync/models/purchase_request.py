@@ -10,9 +10,11 @@ Mở rộng `purchase.request` để:
 3. Cung cấp computed fields tiến độ mua hàng cho list view badge.
 """
 
+import json
 import logging
 import re
 
+from markupsafe import Markup
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
@@ -30,6 +32,24 @@ class PurchaseRequest(models.Model):
     picking_type_id = fields.Many2one(
         default=lambda self: self._default_picking_type(),
     )
+    misa_new_supplier_json = fields.Text(string="Dữ liệu NCC mới (JSON)")
+    misa_has_new_supplier = fields.Boolean(
+        string="Có NCC mới", 
+        compute="_compute_misa_has_new_supplier"
+    )
+
+    def _compute_misa_has_new_supplier(self):
+        for rec in self:
+            if rec.misa_new_supplier_json:
+                rec.misa_has_new_supplier = True
+            else:
+                # Fallback check qua chatter messages
+                has_msg = self.env['mail.message'].search_count([
+                    ('res_id', '=', rec.id),
+                    ('model', '=', 'purchase.request'),
+                    ('body', 'ilike', 'NCC mới từ MISA cần kiểm tra:')
+                ]) > 0
+                rec.misa_has_new_supplier = has_msg
 
     # ------------------------------------------------------------
     # COMPUTED FIELDS: TIẾN ĐỘ MUA HÀNG (cho list view badge)
@@ -213,6 +233,7 @@ class PurchaseRequest(models.Model):
                 total += line.misa_amount if line.misa_amount else line.estimated_cost
             rec.estimated_cost = total
 
+
     @api.model
     def api_create_from_misa_payload(self, payload):
         """
@@ -313,14 +334,38 @@ class PurchaseRequest(models.Model):
 
         def _resolve_product_and_uom(line_data):
             pcode = (line_data.get("product_code") or "").strip()
+            uom_name = (line_data.get("uom") or "").strip()
             product = False
             if pcode:
                 product = product_model.search([("default_code", "=", pcode)], limit=1)
+                
+            if pcode and not product:
+                # Gọi odoo.utils của module misa_fetch_po_button để tạo/lấy sản phẩm
+                unit_name = uom_name or "Cái"
+                product_name = (line_data.get("name") or line_data.get("product_name") or pcode).strip()
+                
+                price_unit = 0.0
+                try:
+                    price_unit = float(line_data.get("misa_price_before_tax") or 0.0)
+                except (ValueError, TypeError):
+                    pass
+                
+                odoo_utils = self.env["odoo.utils"].sudo()
+                product = odoo_utils._get_or_create_product(
+                    code=pcode,
+                    name=product_name,
+                    unit_name=unit_name,
+                    cost=price_unit,
+                    product_type="consu",
+                    purchase_ok=True,
+                    sale_ok=True,
+                )
+                _logger.info("MISA Sync PR: Gọi odoo.utils tạo sản phẩm mới %s (%s)", product_name, pcode)
+
             uom = False
             if product:
                 uom = product.uom_id
-            uom_name = (line_data.get("uom") or "").strip()
-            if uom_name:
+            elif uom_name:
                 uom_match = uom_model.search([("name", "=ilike", uom_name)], limit=1)
                 if uom_match:
                     uom = uom_match
@@ -340,10 +385,30 @@ class PurchaseRequest(models.Model):
                 qty = 1.0
 
             misa_supplier_id = None
-            if line.get("sale_proposed_supplier_id"):
-                misa_supplier_id = int(line.get("sale_proposed_supplier_id"))
+            # Extension gửi key "misa_supplier_id", nhưng cũng hỗ trợ "sale_proposed_supplier_id"
+            # CHỈ gán nếu partner ID tồn tại trong Odoo, tránh lỗi FK violation
+            supplier_key = line.get("misa_supplier_id") or line.get("sale_proposed_supplier_id")
+            if supplier_key:
+                try:
+                    partner_id = int(supplier_key)
+                    if self.env['res.partner'].sudo().browse(partner_id).exists():
+                        misa_supplier_id = partner_id
+                except (ValueError, TypeError):
+                    misa_supplier_id = None
             
             raw = line.get("rawData", {})
+
+            def _float_val(key, default=0.0):
+                """Helper lấy float từ line hoặc raw, ưu tiên line."""
+                val = line.get(key)
+                if val is None:
+                    val = raw.get(key)
+                if val is None:
+                    return default
+                try:
+                    return float(val)
+                except (ValueError, TypeError):
+                    return default
 
             line_vals = {
                 "request_id": pr.id,
@@ -353,8 +418,26 @@ class PurchaseRequest(models.Model):
                 "product_qty": qty,
                 "misa_line_id": misa_line_id,
                 "sale_proposed_supplier_id": misa_supplier_id,
-                "misa_amount": float(raw.get("Amount") or line.get("misa_amount") or 0.0),
+                "misa_supplier_id": misa_supplier_id,
+                # Các trường giá trị từ MISA
+                "misa_amount": _float_val("misa_amount"),
+                "misa_price_before_tax": _float_val("misa_price_before_tax"),
+                "misa_price_after_tax": _float_val("misa_price_after_tax"),
+                "misa_tax_rate": _float_val("misa_tax_rate"),
+                "misa_tax_amount": _float_val("misa_tax_amount"),
+                "misa_discount_rate": _float_val("misa_discount_rate"),
+                "misa_discount_amount": _float_val("misa_discount_amount"),
+                "misa_stock_total": _float_val("misa_stock_total"),
+                "misa_stock_selected": _float_val("misa_stock_selected"),
+                "misa_stock_undelivered": _float_val("misa_stock_undelivered"),
             }
+
+            # Lưu dữ liệu NCC mới per-line (nếu có)
+            nsd = line.get("new_supplier_data")
+            if nsd and nsd.get("name"):
+                line_vals["misa_new_supplier_json"] = json.dumps(nsd)
+            else:
+                line_vals["misa_new_supplier_json"] = False
             
             if date_required:
                 line_vals["date_required"] = date_required
@@ -369,5 +452,54 @@ class PurchaseRequest(models.Model):
         # Xóa các dòng cũ trên Odoo nhưng không có trên MISA (chỉ xoá những dòng có misa_line_id)
         for old_line in existing_lines_by_misa_id.values():
             old_line.unlink()
+
+        # ============================================================
+        # POST CHATTER MESSAGES
+        # ============================================================
+
+        # 1. Post message "Người thực hiện" nếu không tìm thấy user
+        if owner_message:
+            pr.message_post(body=Markup("<b>%s</b>") % owner_message)
+
+        # 2. Xử lý new_supplier_data - chỉ hiển thị thông tin, không tự động tạo
+        new_supplier_msgs = []
+        new_supplier_list = []
+        for line_data in lines_in:
+            nsd = line_data.get("new_supplier_data")
+            if nsd and nsd.get("name"):
+                new_supplier_list.append(nsd)
+                pcode = (line_data.get("product_code") or "").strip()
+                line_ref = "SP [%s]" % pcode if pcode else "Dòng %s" % (lines_in.index(line_data) + 1)
+                items = []
+                items.append(Markup("<b>Tên NCC:</b> %s") % nsd['name'])
+                if nsd.get('address'): items.append(Markup("<b>Địa chỉ:</b> %s") % nsd['address'])
+                if nsd.get('phone'): items.append(Markup("<b>Điện thoại:</b> %s") % nsd['phone'])
+                if nsd.get('vat'): items.append(Markup("<b>Mã số thuế:</b> %s") % nsd['vat'])
+                if nsd.get('note'): items.append(Markup("<b>Ghi chú:</b> %s") % nsd['note'])
+                html = Markup('<div style="margin: 4px 0; padding: 6px 10px; border-left: 3px solid #ffc107; background: #fffdf0;">')
+                html += Markup('<div style="font-weight: 600; color: #856404; margin-bottom: 4px;">%s</div>') % line_ref
+                html += Markup('<div style="padding-left: 8px;">%s</div>') % Markup("<br/>").join(items)
+                html += Markup('</div>')
+                new_supplier_msgs.append(html)
+
+        if new_supplier_msgs:
+            msg = Markup("<b>NCC mới từ MISA cần kiểm tra:</b><br/>%s") % Markup("<br/>").join(new_supplier_msgs)
+            pr.message_post(body=msg)
+            
+        if new_supplier_list:
+            pr.write({
+                'misa_new_supplier_json': json.dumps(new_supplier_list)
+            })
+
+        # 3. Post message tổng kết đồng bộ
+        summary_parts = []
+        if pr.create_date:
+            create_dt = fields.Datetime.to_string(pr.create_date)[:16]
+            summary_parts.append(_("Ngày tạo: %s") % create_dt)
+        summary_parts.append(_("Số dòng: %s") % len(lines_in))
+        if new_supplier_msgs:
+            summary_parts.append(_("NCC mới cần kiểm tra: %s") % len(new_supplier_msgs))
+        summary_msg = _("Đồng bộ YCMH từ MISA CRM thành công. %s") % " | ".join(summary_parts)
+        pr.message_post(body=Markup("<i>%s</i>") % summary_msg)
 
         return pr
