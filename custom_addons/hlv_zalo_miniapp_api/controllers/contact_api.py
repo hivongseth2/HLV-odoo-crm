@@ -5,7 +5,6 @@ import logging
 import re
 import time
 import requests
-from datetime import timedelta, timezone
 
 from odoo import fields, http
 from odoo.http import request, Response
@@ -66,8 +65,8 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
         signature = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
         return f"{partner_id}.{timestamp}.{signature}"
 
-    @staticmethod
-    def _verify_token(token):
+    def _verify_token(self, token):
+        """Override từ ZaloBaseAPI — verify HMAC token với secret key."""
         try:
             parts = token.split(".")
             if len(parts) != 3:
@@ -99,23 +98,21 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
         except (ValueError, IndexError, Exception):
             return None
 
-    def _auth_required(self):
-        auth_header = request.httprequest.headers.get("Authorization", "")
-        if not auth_header.startswith("Bearer "):
-            return self._response_error("AUTH_REQUIRED", "Thiếu token xác thực", 401)
-        token = auth_header[7:]
-        pid = self._verify_token(token)
-        if not pid:
-            return self._response_error("INVALID_TOKEN", "Token không hợp lệ hoặc đã hết hạn", 401)
-        return pid
-
     # =========================================================================
-    # Debug: Verify Token
+    # Debug: Verify Token (GUARDED by config)
     # =========================================================================
     @http.route("/api/v1/zalo/debug/verify-token", type="http", auth="public", methods=["POST"], csrf=False)
     def debug_verify_token(self, **params):
-        """Debug: Verify một token và hiển thị chi tiết từng bước."""
+        """Debug: Verify một token và hiển thị chi tiết từng bước.
+        Chỉ hoạt động khi config parameter 'zalo_api_debug_enabled' = True."""
         import json as _json
+
+        # Guard: chỉ cho phép khi debug mode được bật
+        Param = request.env["ir.config_parameter"].sudo()
+        debug_enabled = Param.get_param("zalo_api_debug_enabled", "False").lower() in ("true", "1", "yes")
+        if not debug_enabled:
+            return self._response_error("FORBIDDEN", "Debug endpoint không được kích hoạt", 403)
+
         try:
             body = _json.loads(request.httprequest.data.decode("utf-8")) if request.httprequest.data else {}
         except Exception:
@@ -332,14 +329,15 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
     def contact_detail(self, **params):
         """Body: {"contact_id": 1}"""
         try:
-            auth_result = self._auth_required()
-            if isinstance(auth_result, Response):
-                return auth_result
-
             body = self._request_json()
             contact_id = self._parse_int(body.get("contact_id"), 0)
             if not contact_id:
                 return self._response_error("INVALID_INPUT", "Thiếu contact_id")
+
+            # Ownership check
+            auth_result = self._auth_and_verify_owner(contact_id)
+            if isinstance(auth_result, Response):
+                return auth_result
 
             partner = request.env["res.partner"].sudo().browse(contact_id)
             if not partner.exists() or not partner.active:
@@ -396,14 +394,15 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
     def contact_update(self, **params):
         """Body: {"contact_id": 1, "name": "...", "email": "...", "phone": "...", "street": "...", "city": "..."}"""
         try:
-            auth_result = self._auth_required()
-            if isinstance(auth_result, Response):
-                return auth_result
-
             body = self._request_json()
             contact_id = self._parse_int(body.get("contact_id"), 0)
             if not contact_id:
                 return self._response_error("INVALID_INPUT", "Thiếu contact_id")
+
+            # Ownership check
+            auth_result = self._auth_and_verify_owner(contact_id)
+            if isinstance(auth_result, Response):
+                return auth_result
 
             partner = request.env["res.partner"].sudo().browse(contact_id)
             if not partner.exists() or not partner.active:
@@ -438,14 +437,15 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
     def address_list(self, **params):
         """Body: {"contact_id": 1}"""
         try:
-            auth_result = self._auth_required()
-            if isinstance(auth_result, Response):
-                return auth_result
-
             body = self._request_json()
             contact_id = self._parse_int(body.get("contact_id"), 0)
             if not contact_id:
                 return self._response_error("INVALID_INPUT", "Thiếu contact_id")
+
+            # Ownership check
+            auth_result = self._auth_and_verify_owner(contact_id)
+            if isinstance(auth_result, Response):
+                return auth_result
 
             partner = request.env["res.partner"].sudo().browse(contact_id)
             if not partner.exists():
@@ -471,14 +471,15 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
     def address_create(self, **params):
         """Body: {"contact_id": 1, "name":"...", "street":"...", "city":"...", "phone":"...", "type":"delivery"}"""
         try:
-            auth_result = self._auth_required()
-            if isinstance(auth_result, Response):
-                return auth_result
-
             body = self._request_json()
             contact_id = self._parse_int(body.get("contact_id"), 0)
             if not contact_id:
                 return self._response_error("INVALID_INPUT", "Thiếu contact_id")
+
+            # Ownership check
+            auth_result = self._auth_and_verify_owner(contact_id)
+            if isinstance(auth_result, Response):
+                return auth_result
 
             partner = request.env["res.partner"].sudo().browse(contact_id)
             if not partner.exists():
@@ -523,10 +524,6 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
     def address_update(self, **params):
         """Body: {"address_id": 12, "street":"...", "city":"..."}"""
         try:
-            auth_result = self._auth_required()
-            if isinstance(auth_result, Response):
-                return auth_result
-
             body = self._request_json()
             addr_id = self._parse_int(body.get("address_id"), 0)
             if not addr_id:
@@ -535,6 +532,14 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
             address = request.env["res.partner"].sudo().browse(addr_id)
             if not address.exists():
                 return self._response_error("NOT_FOUND", "Địa chỉ không tồn tại", 404)
+
+            # Ownership check: address phải thuộc về contact trong token
+            contact_id = address.parent_id.id
+            if not contact_id:
+                return self._response_error("FORBIDDEN", "Địa chỉ không hợp lệ", 403)
+            auth_result = self._auth_and_verify_owner(contact_id)
+            if isinstance(auth_result, Response):
+                return auth_result
 
             update_vals = {}
             for field in ["name", "street", "street2", "city", "zip", "phone", "type"]:
@@ -565,10 +570,6 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
     def address_delete(self, **params):
         """Body: {"address_id": 12}"""
         try:
-            auth_result = self._auth_required()
-            if isinstance(auth_result, Response):
-                return auth_result
-
             body = self._request_json()
             addr_id = self._parse_int(body.get("address_id"), 0)
             if not addr_id:
@@ -577,6 +578,14 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
             address = request.env["res.partner"].sudo().browse(addr_id)
             if not address.exists():
                 return self._response_error("NOT_FOUND", "Địa chỉ không tồn tại", 404)
+
+            # Ownership check: address phải thuộc về contact trong token
+            contact_id = address.parent_id.id
+            if not contact_id:
+                return self._response_error("FORBIDDEN", "Địa chỉ không hợp lệ", 403)
+            auth_result = self._auth_and_verify_owner(contact_id)
+            if isinstance(auth_result, Response):
+                return auth_result
 
             address.unlink()
             return self._response_success({"message": "Đã xóa địa chỉ"})
