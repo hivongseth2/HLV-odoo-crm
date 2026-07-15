@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+import hashlib
+import hmac
 import json
 import os
 import logging
@@ -40,11 +42,98 @@ def _log_to_file(data, result=None):
 
 class ShopeeWebhookController(http.Controller):
 
-    @http.route('/shopee/webhook/delivery', type='json', auth='public', methods=['POST'], csrf=False)
+    @staticmethod
+    def _empty_push_response(status=204):
+        return request.make_response('', status=status)
+
+    @staticmethod
+    def _verify_push_authorization(shop):
+        """Verify Shopee's HMAC-SHA256 Authorization header against the raw body."""
+        authorization = request.httprequest.headers.get('Authorization', '').strip()
+        partner_key = getattr(shop.account_id.sudo(), 'partner_key', False)
+        if not authorization or not partner_key:
+            _logger.warning(
+                "Shopee Webhook: Missing Authorization header or partner_key for shop %s.",
+                shop.display_name,
+            )
+            return False
+
+        callback_url = request.env['ir.config_parameter'].sudo().get_param(
+            'shopee_webhook.callback_url'
+        ) or request.httprequest.url
+        raw_body = request.httprequest.get_data(cache=True, as_text=True)
+        base_string = '%s|%s' % (callback_url, raw_body)
+        expected = hmac.new(
+            str(partner_key).encode('utf-8'),
+            base_string.encode('utf-8'),
+            hashlib.sha256,
+        ).hexdigest()
+        return hmac.compare_digest(expected, authorization)
+
+    @staticmethod
+    def _update_tracking_number(orders, tracking_no, package_number=None):
+        """Apply an order_trackingno_push value to related delivery pickings."""
+        updated_pickings = request.env['stock.picking'].sudo()
+        matched_pickings = request.env['stock.picking'].sudo()
+
+        for order in orders:
+            outgoing_pickings = order.picking_ids.sudo().filtered(
+                lambda picking: picking.picking_type_code == 'outgoing'
+                and picking.state != 'cancel'
+            )
+            active_pickings = outgoing_pickings.filtered(
+                lambda picking: picking.state != 'done'
+            )
+            candidate_pickings = active_pickings or outgoing_pickings
+            target_pickings = candidate_pickings.sorted('id')[:1]
+            matched_pickings |= target_pickings
+
+            if not target_pickings:
+                _logger.warning(
+                    "Shopee Webhook: Order %s has no delivery picking for tracking number %s.",
+                    order.name,
+                    tracking_no,
+                )
+                continue
+
+            if len(candidate_pickings) > 1:
+                _logger.warning(
+                    "Shopee Webhook: Order %s has %s delivery pickings; applying tracking "
+                    "number %s to oldest picking %s (package_number=%s).",
+                    order.name,
+                    len(candidate_pickings),
+                    tracking_no,
+                    target_pickings.name,
+                    package_number or '',
+                )
+
+            changed_pickings = target_pickings.filtered(
+                lambda picking: picking.carrier_tracking_ref != tracking_no
+                or picking.name != tracking_no
+            )
+            if changed_pickings:
+                old_picking_names = ', '.join(changed_pickings.mapped('name'))
+                changed_pickings.write({
+                    'carrier_tracking_ref': tracking_no,
+                    'name': tracking_no,
+                })
+                updated_pickings |= changed_pickings
+                _logger.info(
+                    "Shopee Webhook: Updated order %s pickings %s -> %s "
+                    "(package_number=%s).",
+                    order.name,
+                    old_picking_names,
+                    tracking_no,
+                    package_number or '',
+                )
+
+        return updated_pickings, matched_pickings
+
+    @http.route('/shopee/webhook/delivery', type='http', auth='public', methods=['POST'], csrf=False)
     def shopee_delivery_webhook(self, **kwargs):
         """
         Endpoint to receive Shopee delivery status updates.
-        Expected payload format (based on common Shopee pushes - Subject to verification):
+        Shopee Push Mechanism payload format:
         {
             "data": {
                 "ordersn": "ORDER_ID",
@@ -63,7 +152,7 @@ class ShopeeWebhookController(http.Controller):
             _log_to_file(data)
 
             if not data:
-                 return {'code': 1, 'msg': 'Empty payload'}
+                 return self._empty_push_response(status=400)
             
             
             # pass bài test
@@ -72,9 +161,9 @@ class ShopeeWebhookController(http.Controller):
             if shopee_data and 'verify_info' in shopee_data:
                 _logger.info("Shopee Webhook: Processing Verification Message")
                 # Trả về đúng format Shopee yêu cầu để pass bài test
-                return {
+                return request.make_json_response({
                     "verify_info": shopee_data['verify_info']
-                }
+                })
 
             # The payload structure usually has a 'data' key or matches generic format.
             # Adjust these keys based on actual Shopee documentation if needed.
@@ -118,20 +207,71 @@ class ShopeeWebhookController(http.Controller):
                 }
                 status = status_mapping.get(str(status).upper(), status)
 
-            # Possible keys for tracking number: 'tracking_no', 'tracking_number'
-            tracking_no = find_value(data, 'tracking_no') or find_value(data, 'tracking_number')
+            # code=4 is Shopee's documented order_trackingno_push payload.
+            package_number = None
+            if str(push_code) == '4':
+                ordersn = shopee_data.get('ordersn')
+                tracking_no = shopee_data.get('tracking_no')
+                package_number = shopee_data.get('package_number')
+                if not ordersn or not tracking_no:
+                    _logger.warning(
+                        "Shopee Webhook: Invalid code=4 payload; ordersn=%s tracking_no=%s.",
+                        ordersn,
+                        tracking_no,
+                    )
+                    return self._empty_push_response()
+            else:
+                tracking_no = find_value(data, 'tracking_no') or find_value(data, 'tracking_number')
 
             if not ordersn and not tracking_no:
                 _logger.warning("Shopee Webhook: Could not find 'ordersn' or 'tracking_no' in payload.")
-                return {'code': 0, 'msg': 'Ignored: No identifier'}
+                return self._empty_push_response()
 
             # Find the Sale Order
             orders = request.env['sale.order'].sudo()
             if ordersn:
                 # 1. Try finding by Shopee Order Ref (Mã đơn hàng)
-                orders = request.env['sale.order'].sudo().search([('shopee_order_ref', '=', ordersn)])
+                candidate_orders = request.env['sale.order'].sudo().search(
+                    [('shopee_order_ref', '=', ordersn)]
+                )
+                if str(push_code) == '4':
+                    shop_id_raw = data.get('shop_id')
+                    shop = request.env['shopee.shop'].sudo().search(
+                        [('shop_identifier', '=', str(shop_id_raw))], limit=1
+                    ) if shop_id_raw else request.env['shopee.shop'].sudo()
+                    if not shop:
+                        _logger.warning(
+                            "Shopee Webhook: Cannot apply tracking number for order %s; "
+                            "shop_id=%s is missing or unknown.",
+                            ordersn,
+                            shop_id_raw,
+                        )
+                        return self._empty_push_response(status=500)
+                    if not self._verify_push_authorization(shop):
+                        _logger.warning(
+                            "Shopee Webhook: Invalid push Authorization for shop_id=%s, order=%s.",
+                            shop_id_raw,
+                            ordersn,
+                        )
+                        return self._empty_push_response(status=403)
+                    same_shop_orders = candidate_orders.filtered(
+                        lambda order: order.shopee_shop_id == shop
+                    )
+                    unassigned_shop_orders = candidate_orders.filtered(
+                        lambda order: not order.shopee_shop_id
+                    )
+                    orders = same_shop_orders or unassigned_shop_orders
+                    if candidate_orders and not orders:
+                        _logger.warning(
+                            "Shopee Webhook: Shop mismatch for order %s; payload shop_id=%s.",
+                            ordersn,
+                            shop_id_raw,
+                        )
+                        return self._empty_push_response()
+                else:
+                    orders = candidate_orders
             
-            if not orders and tracking_no:
+            if str(push_code) != '4' and not orders and tracking_no:
                 # 2. If not found by Order Ref, try finding by Tracking Number (Mã vận đơn) in Stock Picking
                 # Note: carrier_tracking_ref is on stock.picking
                 pickings = request.env['stock.picking'].sudo().search([('carrier_tracking_ref', '=', tracking_no)])
@@ -175,7 +315,25 @@ class ShopeeWebhookController(http.Controller):
 
             if not orders:
                 _logger.warning("Shopee Webhook: Order not found for identifier: %s / %s", ordersn, tracking_no)
-                return {'code': 0, 'msg': 'Order not found, even after auto-fetch attempt'}
+                return self._empty_push_response(status=500)
+
+            if str(push_code) == '4':
+                updated_pickings, matched_pickings = self._update_tracking_number(
+                    orders, tracking_no, package_number=package_number
+                )
+                if not matched_pickings:
+                    _log_to_file(
+                        data,
+                        result="Tracking %s pending: no delivery picking" % tracking_no,
+                    )
+                    return self._empty_push_response(status=500)
+                result = (
+                    "Tracking %s applied to %s"
+                    % (tracking_no, ', '.join(updated_pickings.mapped('name')))
+                    if updated_pickings
+                    else "Tracking %s already current" % tracking_no
+                )
+                _log_to_file(data, result=result)
 
             for order in orders:
                 if status:
@@ -204,12 +362,12 @@ class ShopeeWebhookController(http.Controller):
                 else:
                     _logger.info("Shopee Webhook: No status update found in payload for Order %s", order.name)
 
-            return {'code': 0, 'msg': 'success'}
+            return self._empty_push_response()
 
         except Exception as e:
             _logger.error("Error processing Shopee Webhook: %s", str(e), exc_info=True)
             _log_to_file(data if 'data' in dir() else {}, result=f"ERROR: {str(e)}")
-            return {'code': 3, 'msg': str(e)}
+            return self._empty_push_response(status=500)
 
     @http.route('/shopee/webhook/logs', type='http', auth='user', methods=['GET'])
     def shopee_webhook_logs(self, lines=100, **kwargs):

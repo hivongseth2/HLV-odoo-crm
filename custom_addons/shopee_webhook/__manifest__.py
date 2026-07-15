@@ -10,7 +10,7 @@
     'author': "HLV",
     'website': "https://www.hlv.vn",
     'category': 'Sales',
-    'version': '0.1',
+    'version': '0.2',
     'depends': ['sale', 'hlv_zalo_zns', 'shopee_order_fetch'],
     'data': [
         'security/ir.model.access.csv',
