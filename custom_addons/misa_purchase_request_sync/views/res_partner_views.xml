@@ -31,11 +31,11 @@
         <field name="inherit_id" ref="base.view_res_partner_filter"/>
         <field name="arch" type="xml">
             <xpath expr="//filter[@name='inactive']" position="before">
-                <filter string="Nguồn: Thủ công" name="source_manual" domain="[('x_partner_source', '=', 'manual')]"/>
+                <filter string="Nguồn tạo: Thủ công" name="source_manual" domain="[('x_partner_source', '=', 'manual')]"/>
                 <separator/>
             </xpath>
             <xpath expr="//group" position="inside">
-                <filter string="Nguồn" name="group_by_x_partner_source" context="{'group_by': 'x_partner_source'}"/>
+                <filter string="Nguồn tạo" name="group_by_x_partner_source" context="{'group_by': 'x_partner_source'}"/>
             </xpath>
         </field>
     </record>
@@ -59,11 +59,11 @@
         <field name="inherit_id" ref="hlv_contact_refine.view_res_partner_search_refine"/>
         <field name="arch" type="xml">
             <xpath expr="//filter[@name='root_person']" position="before">
-                <filter string="Nguồn: Thủ công" name="source_manual" domain="[('x_partner_source', '=', 'manual')]"/>
+                <filter string="Nguồn tạo: Thủ công" name="source_manual" domain="[('x_partner_source', '=', 'manual')]"/>
                 <separator/>
             </xpath>
             <xpath expr="//group" position="inside">
-                <filter string="Nguồn" name="group_by_x_partner_source" context="{'group_by': 'x_partner_source'}"/>
+                <filter string="Nguồn tạo" name="group_by_x_partner_source" context="{'group_by': 'x_partner_source'}"/>
             </xpath>
         </field>
     </record>
