@@ -3,7 +3,7 @@ import json
 import logging
 import uuid
 
-from odoo import fields, models
+from odoo import api, fields, models
 from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
@@ -30,6 +30,53 @@ class PurchaseOrderAmisSync(models.Model):
         copy=False,
         help='refid thuc te cua Don mua hang sau khi MISA xu ly callback.',
     )
+    misa_purchase_order_state = fields.Selection([
+        ('not_sent', 'Chưa gửi'),
+        ('queued', 'Chờ gửi MISA'),
+        ('request_accepted', 'MISA đã nhận đề nghị'),
+        ('created', 'MISA đã lập chứng từ'),
+        ('changed_on_misa', 'Đã sửa trên MISA'),
+        ('posted', 'Đã ghi sổ trên MISA'),
+        ('unposted', 'Đã bỏ ghi sổ trên MISA'),
+        ('delete_pending', 'Đang thu hồi đề nghị'),
+        ('manual_delete_required', 'Chờ xóa chứng từ trên MISA'),
+        ('deleted', 'Đã xóa trên MISA'),
+        ('error', 'Lỗi MISA'),
+    ], string='Trạng thái Đơn mua MISA', default='not_sent', copy=False, index=True)
+    misa_purchase_order_replacement_pending = fields.Boolean(
+        string='Chờ tạo lại Đơn mua MISA', default=False, copy=False,
+    )
+    misa_purchase_order_last_error = fields.Text(string='Lỗi Đơn mua MISA', copy=False)
+    misa_purchase_order_session_id = fields.Char(string='MISA Session ID', copy=False)
+    misa_purchase_order_state_updated_at = fields.Datetime(
+        string='Cập nhật trạng thái MISA lúc', copy=False,
+    )
+    misa_purchase_order_revision = fields.Integer(
+        string='Lần tạo Đơn mua MISA', default=0, copy=False,
+    )
+    misa_purchase_order_previous_org_refids = fields.Text(
+        string='org_refid MISA đã thu hồi', copy=False,
+    )
+
+    _MISA_PURCHASE_HEADER_FIELDS = {
+        'partner_id', 'partner_ref', 'currency_id', 'date_order', 'date_planned',
+        'origin', 'notes', 'payment_term_id', 'picking_type_id', 'dest_address_id',
+        'user_id', 'x_studio_delivery_term', 'x_studio_iu_kin_thanh_ton',
+        'x_studio_ddgh', 'x_studio_misa_purchase_stock_code',
+    }
+
+    def write(self, vals):
+        tracked_change = bool(self._MISA_PURCHASE_HEADER_FIELDS.intersection(vals))
+        orders_to_replace = self.filtered(
+            lambda order: tracked_change
+            and bool(order.misa_purchase_order_org_refid)
+            and order.state in ('purchase', 'done')
+        )
+        result = super().write(vals)
+        if not self.env.context.get('skip_misa_purchase_order_lifecycle'):
+            for order in orders_to_replace:
+                order._mark_misa_purchase_order_for_replacement()
+        return result
 
     def button_confirm(self):
         res = super().button_confirm()
@@ -58,17 +105,130 @@ class PurchaseOrderAmisSync(models.Model):
 
     def action_reset_misa_purchase_order(self):
         for order in self:
-            order.sudo().write({
+            order.with_context(skip_misa_purchase_order_lifecycle=True).sudo().write({
                 'misa_purchase_order_synced': False,
                 'misa_purchase_order_org_refid': False,
                 'misa_purchase_order_refid': False,
+                'misa_purchase_order_state': 'not_sent',
+                'misa_purchase_order_replacement_pending': False,
+                'misa_purchase_order_last_error': False,
+                'misa_purchase_order_revision': order.misa_purchase_order_revision + 1,
             })
-            order.order_line.sudo().write({
+            order.order_line.with_context(skip_misa_purchase_order_lifecycle=True).sudo().write({
                 'misa_purchase_order_org_ref_detail_id': False,
                 'misa_purchase_order_ref_detail_id': False,
                 'misa_purchase_order_ref_detail_synced': False,
             })
         return True
+
+    def action_revoke_and_resync_misa_purchase_order(self):
+        for order in self:
+            order._mark_misa_purchase_order_for_replacement(force=True)
+        return True
+
+    def _mark_misa_purchase_order_for_replacement(self, force=False):
+        self.ensure_one()
+        if not self.misa_purchase_order_org_refid:
+            if force:
+                self._enqueue_misa_purchase_order(raise_on_skip=True, force=True)
+            return
+        if self.misa_purchase_order_replacement_pending and not force:
+            return
+        self.with_context(skip_misa_purchase_order_lifecycle=True).sudo().write({
+            'misa_purchase_order_replacement_pending': True,
+            'misa_purchase_order_last_error': False,
+        })
+        if self.misa_purchase_order_state == 'deleted':
+            self._misa_prepare_new_purchase_order_identity()
+            self.with_context(skip_misa_purchase_order_lifecycle=True).sudo().write({
+                'misa_purchase_order_replacement_pending': False,
+            })
+            self._enqueue_misa_purchase_order(force=True)
+            return
+        actual_voucher_exists = self.misa_purchase_order_synced or self.misa_purchase_order_state in (
+            'created', 'changed_on_misa', 'posted', 'unposted',
+        )
+        if actual_voucher_exists:
+            self.with_context(skip_misa_purchase_order_lifecycle=True).sudo().write({
+                'misa_purchase_order_state': 'manual_delete_required',
+                'misa_purchase_order_state_updated_at': fields.Datetime.now(),
+            })
+            return
+        existing = self.env['amis.sync.job'].sudo().search([
+            ('purchase_order_id', '=', self.id),
+            ('direction', '=', 'purchase_order_revoke'),
+            ('status', '=', 'pending'),
+        ], limit=1)
+        if not existing:
+            self.env['amis.sync.job'].sudo().create({
+                'purchase_order_id': self.id,
+                'direction': 'purchase_order_revoke',
+                'status': 'pending',
+            })
+
+    def _revoke_misa_purchase_order_for_replacement(self):
+        self.ensure_one()
+        org_refid = (self.misa_purchase_order_org_refid or '').strip()
+        if not org_refid:
+            self._misa_prepare_new_purchase_order_identity()
+            self._enqueue_misa_purchase_order(force=True)
+            return
+        actual_voucher_exists = self.misa_purchase_order_synced or self.misa_purchase_order_state in (
+            'created', 'changed_on_misa', 'posted', 'unposted',
+        )
+        if actual_voucher_exists:
+            self.with_context(skip_misa_purchase_order_lifecycle=True).sudo().write({
+                'misa_purchase_order_state': 'manual_delete_required',
+                'misa_purchase_order_state_updated_at': fields.Datetime.now(),
+            })
+            return
+        config = self.env['amis.callback.config'].sudo().ensure_singleton()
+        config.delete_purchase_order_request(org_refid)
+        self.with_context(skip_misa_purchase_order_lifecycle=True).sudo().write({
+            'misa_purchase_order_state': 'delete_pending',
+            'misa_purchase_order_state_updated_at': fields.Datetime.now(),
+        })
+
+    def _misa_prepare_new_purchase_order_identity(self):
+        self.ensure_one()
+        old_org_refid = (self.misa_purchase_order_org_refid or '').strip()
+        previous_ids = [
+            value.strip()
+            for value in (self.misa_purchase_order_previous_org_refids or '').splitlines()
+            if value.strip()
+        ]
+        if old_org_refid and old_org_refid not in previous_ids:
+            previous_ids.append(old_org_refid)
+        self.with_context(skip_misa_purchase_order_lifecycle=True).sudo().write({
+            'misa_purchase_order_synced': False,
+            'misa_purchase_order_org_refid': False,
+            'misa_purchase_order_refid': False,
+            'misa_purchase_order_state': 'not_sent',
+            'misa_purchase_order_last_error': False,
+            'misa_purchase_order_session_id': False,
+            'misa_purchase_order_revision': self.misa_purchase_order_revision + 1,
+            'misa_purchase_order_previous_org_refids': '\n'.join(previous_ids),
+        })
+        self.order_line.with_context(skip_misa_purchase_order_lifecycle=True).sudo().write({
+            'misa_purchase_order_org_ref_detail_id': False,
+            'misa_purchase_order_ref_detail_id': False,
+            'misa_purchase_order_ref_detail_synced': False,
+        })
+
+    def _misa_complete_purchase_order_deletion(self):
+        self.ensure_one()
+        replacement_pending = self.misa_purchase_order_replacement_pending
+        self.with_context(skip_misa_purchase_order_lifecycle=True).sudo().write({
+            'misa_purchase_order_synced': False,
+            'misa_purchase_order_state': 'deleted',
+            'misa_purchase_order_state_updated_at': fields.Datetime.now(),
+        })
+        if replacement_pending:
+            self._misa_prepare_new_purchase_order_identity()
+            self.with_context(skip_misa_purchase_order_lifecycle=True).sudo().write({
+                'misa_purchase_order_replacement_pending': False,
+            })
+            self._enqueue_misa_purchase_order(force=True)
 
     def _maybe_enqueue_misa_purchase_order(self):
         self.ensure_one()
@@ -121,6 +281,10 @@ class PurchaseOrderAmisSync(models.Model):
             'direction': 'purchase_order',
             'status': 'pending',
         })
+        self.with_context(skip_misa_purchase_order_lifecycle=True).sudo().write({
+            'misa_purchase_order_state': 'queued',
+            'misa_purchase_order_state_updated_at': fields.Datetime.now(),
+        })
         _logger.info('AMIS purchase order job enqueued for PO %s', self.name)
 
     def _sync_purchase_order_to_misa(self):
@@ -136,10 +300,13 @@ class PurchaseOrderAmisSync(models.Model):
             self.name,
             voucher_payload.get('status'),
             ', '.join(
-                '%s:%s/%s' % (
+                '%s:%s/%s unit=%s main=%s rate=%s' % (
                     detail.get('inventory_item_code') or detail.get('inventory_item_name') or '',
                     detail.get('quantity_receipt') or 0.0,
                     detail.get('quantity') or 0.0,
+                    detail.get('unit_id') or '',
+                    detail.get('main_unit_id') or '',
+                    detail.get('main_convert_rate') or 0.0,
                 )
                 for detail in voucher_payload.get('detail') or []
             ),
@@ -149,10 +316,6 @@ class PurchaseOrderAmisSync(models.Model):
         self.sudo().write({
             'misa_purchase_order_org_refid': org_refid,
             'misa_purchase_order_refid': org_refid,
-            # With is_get_new_id=false, PO/ref_detail IDs are the IDs we send.
-            # Do not wait for MISA's async callback before allowing receipts to
-            # link back to this PO.
-            'misa_purchase_order_synced': True,
         })
 
     def _prepare_misa_purchase_order_payload(self, config):
@@ -168,7 +331,10 @@ class PurchaseOrderAmisSync(models.Model):
         missing_dictionary_items = []
         org_refid = (self.misa_purchase_order_org_refid or '').strip()
         if not org_refid:
-            org_refid = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'misa_purchase_order|%d' % self.id))
+            org_refid = str(uuid.uuid5(
+                uuid.NAMESPACE_DNS,
+                'misa_purchase_order|%d|%d' % (self.id, self.misa_purchase_order_revision),
+            ))
             self.sudo().write({'misa_purchase_order_org_refid': org_refid})
 
         account_object = self._ensure_misa_account_object(config, partner, missing_dictionary_items)
@@ -243,12 +409,12 @@ class PurchaseOrderAmisSync(models.Model):
                 'quantity': qty,
                 'main_quantity': unit_values['main_quantity'],
                 'quantity_receipt': quantity_receipt,
-                'main_quantity_receipt': self._misa_convert_quantity(
-                    quantity_receipt,
-                    unit_values['main_convert_rate'],
-                    unit_values['exchange_rate_operator'],
-                ),
-                'quantity_receipt_last_year': 0.0,
+                # 'main_quantity_receipt': self._misa_convert_quantity(
+                #     quantity_receipt,
+                #     unit_values['main_convert_rate'],
+                #     unit_values['exchange_rate_operator'],
+                # ),
+                # 'quantity_receipt_last_year': 0.0,
                 'unit_price': unit_price,
                 'main_unit_price': unit_values['main_unit_price'],
                 'unit_price_after_tax': 0.0,
@@ -420,7 +586,9 @@ class PurchaseOrderAmisSync(models.Model):
     def _misa_purchase_order_line_org_ref_detail_id(self, line):
         return str(uuid.uuid5(
             uuid.NAMESPACE_DNS,
-            'misa_purchase_order_detail|%d|%d' % (self.id, line.id)
+            'misa_purchase_order_detail|%d|%d|%d' % (
+                self.id, self.misa_purchase_order_revision, line.id,
+            )
         ))
 
     def _misa_purchase_order_line_ref_detail_id(self, line):
@@ -853,22 +1021,52 @@ class PurchaseOrderAmisSync(models.Model):
             return unit_price * rate
         return unit_price / rate
 
+    def _misa_unit_name_key(self, name):
+        return (name or '').strip().casefold()
+
     def _misa_document_unit_values(self, config, inventory_item, odoo_uom, unit, quantity, unit_price):
-        unit_id = (unit or {}).get('unit_id') or (getattr(odoo_uom, 'misa_unit_id', '') or '').strip()
-        unit_name = (unit or {}).get('unit_name') or (odoo_uom.name if odoo_uom else '')
+        fallback_unit_id = ((unit or {}).get('unit_id') or (getattr(odoo_uom, 'misa_unit_id', '') or '')).strip()
+        fallback_unit_name = ((unit or {}).get('unit_name') or (odoo_uom.name if odoo_uom else '') or '').strip()
+        requested_unit_name = ((odoo_uom.name if odoo_uom else '') or fallback_unit_name).strip()
+        requested_unit_name_key = self._misa_unit_name_key(requested_unit_name)
         main_unit_id, main_unit_name = self._misa_inventory_main_unit(config, inventory_item, fallback_unit=unit)
-        unit_key = (unit_id or '').strip().lower()
-        unit_name_key = (unit_name or '').strip().casefold()
-        main_unit_key = (main_unit_id or '').strip().lower()
-        main_unit_name_key = (main_unit_name or '').strip().casefold()
+        item_unit_id = (inventory_item.get('unit_id') or '').strip()
+        item_unit_name = (inventory_item.get('unit_name') or '').strip()
+
+        unit_id = fallback_unit_id
+        unit_name = fallback_unit_name
+
+        def same_unit(candidate_id='', candidate_name=''):
+            candidate_key = (candidate_id or '').strip().lower()
+            candidate_name_key = self._misa_unit_name_key(candidate_name)
+            fallback_key = (fallback_unit_id or '').strip().lower()
+            return bool(
+                candidate_key and fallback_key and candidate_key == fallback_key
+            ) or bool(
+                requested_unit_name_key and candidate_name_key
+                and requested_unit_name_key == candidate_name_key
+            )
+
+        if item_unit_id and same_unit(item_unit_id, item_unit_name):
+            unit_id = item_unit_id
+            unit_name = item_unit_name or unit_name
+        elif main_unit_id and same_unit(main_unit_id, main_unit_name):
+            unit_id = main_unit_id
+            unit_name = main_unit_name or unit_name
 
         rate = 1.0
         operator = '*'
+        unit_key = (unit_id or '').strip().lower()
+        unit_name_key = self._misa_unit_name_key(unit_name)
+        main_unit_key = (main_unit_id or '').strip().lower()
+        main_unit_name_key = self._misa_unit_name_key(main_unit_name)
         if unit_key and main_unit_key and unit_key == main_unit_key:
             pass
         elif unit_name_key and main_unit_name_key and unit_name_key == main_unit_name_key:
-            main_unit_id = main_unit_id or unit_id
-            main_unit_name = main_unit_name or unit_name
+            if main_unit_id and not unit_id:
+                unit_id = main_unit_id
+            if main_unit_name and not unit_name:
+                unit_name = main_unit_name
         else:
             for convert in self._misa_inventory_unit_converts(inventory_item):
                 convert_unit_id = (convert.get('unit_id') or '').strip()
@@ -877,11 +1075,15 @@ class PurchaseOrderAmisSync(models.Model):
                     unit_item = self._find_misa_unit_by_id(config, convert_unit_id)
                     convert_unit_name = (unit_item or {}).get('unit_name') or ''
                 id_matches = bool(unit_key and convert_unit_id and unit_key == convert_unit_id.lower())
-                name_matches = bool(unit_name_key and convert_unit_name and unit_name_key == convert_unit_name.casefold())
+                name_matches = bool(
+                    requested_unit_name_key
+                    and convert_unit_name
+                    and requested_unit_name_key == self._misa_unit_name_key(convert_unit_name)
+                )
                 if not id_matches and not name_matches:
                     continue
-                unit_id = unit_id or convert_unit_id
-                unit_name = unit_name or convert_unit_name
+                unit_id = convert_unit_id or unit_id
+                unit_name = convert_unit_name or unit_name
                 rate = self._misa_float(convert.get('convert_rate'), 1.0) or 1.0
                 operator = (convert.get('exchange_rate_operator') or '*').strip() or '*'
                 break
@@ -1007,3 +1209,33 @@ class PurchaseOrderLineAmisSync(models.Model):
         copy=False,
         help='Da xac nhan ref_detail_id dong Don mua hang tu callback MISA.',
     )
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        lines = super().create(vals_list)
+        if not self.env.context.get('skip_misa_purchase_order_lifecycle'):
+            for order in lines.order_id.filtered(lambda po: po.misa_purchase_order_org_refid):
+                order._mark_misa_purchase_order_for_replacement()
+        return lines
+
+    def write(self, vals):
+        tracked = bool({
+            'product_id', 'name', 'product_qty', 'product_uom', 'price_unit',
+            'discount', 'taxes_id', 'date_planned',
+        }.intersection(vals))
+        orders = self.mapped('order_id').filtered(
+            lambda po: tracked and po.misa_purchase_order_org_refid
+        )
+        result = super().write(vals)
+        if not self.env.context.get('skip_misa_purchase_order_lifecycle'):
+            for order in orders:
+                order._mark_misa_purchase_order_for_replacement()
+        return result
+
+    def unlink(self):
+        orders = self.mapped('order_id').filtered(lambda po: po.misa_purchase_order_org_refid)
+        result = super().unlink()
+        if not self.env.context.get('skip_misa_purchase_order_lifecycle'):
+            for order in orders.exists():
+                order._mark_misa_purchase_order_for_replacement()
+        return result

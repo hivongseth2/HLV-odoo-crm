@@ -102,6 +102,8 @@ class AmisCallbackLog(models.Model):
         if not isinstance(vouchers, list):
             return []
         items = []
+        custom_param = payload.get('custom_param') or {}
+        model_state = custom_param.get('ModelState') if isinstance(custom_param, dict) else False
         for voucher in vouchers:
             if not isinstance(voucher, dict):
                 continue
@@ -119,6 +121,7 @@ class AmisCallbackLog(models.Model):
             item['voucher_type'] = voucher.get('voucher_type') or item.get('voucher_type')
             item['success'] = voucher.get('success') if voucher.get('success') is not None else True
             item['data'] = voucher
+            item['_misa_model_state'] = model_state
             items.append(item)
         return items
 
@@ -227,6 +230,7 @@ class AmisCallbackLogLine(models.Model):
             if not org_refid:
                 continue
             success = bool(line.success)
+            data_type = int(line.log_id.data_type or 0)
             item = line._misa_callback_item()
             voucher_type = line._misa_callback_voucher_type(item)
             item_refno = line._misa_callback_refno(item)
@@ -258,15 +262,70 @@ class AmisCallbackLogLine(models.Model):
                         org_refid,
                     )
             if po:
+                session_id = (line.session_id or '').strip()
+                error_message = line.error_message or line.error_call_back_message or ''
+                if data_type == 2:
+                    if success:
+                        po._misa_complete_purchase_order_deletion()
+                    else:
+                        is_created_voucher = (
+                            (line.error_code or '').strip() == 'IsCreatedVoucher'
+                            or 'Đã sinh chứng từ' in error_message
+                        )
+                        po.with_context(skip_misa_purchase_order_lifecycle=True).sudo().write({
+                            'misa_purchase_order_state': (
+                                'manual_delete_required' if is_created_voucher else 'error'
+                            ),
+                            'misa_purchase_order_last_error': error_message,
+                            'misa_purchase_order_session_id': session_id or False,
+                            'misa_purchase_order_state_updated_at': fields.Datetime.now(),
+                        })
+                    continue
+
+                if data_type == 22:
+                    try:
+                        model_state = int(item.get('_misa_model_state') or 0)
+                    except (TypeError, ValueError):
+                        model_state = 0
+                    if model_state == 3:
+                        po._misa_complete_purchase_order_deletion()
+                        continue
+                    state_by_model_state = {
+                        1: 'created',
+                        2: 'changed_on_misa',
+                        7: 'posted',
+                        8: 'unposted',
+                    }
+                    misa_state = state_by_model_state.get(model_state)
+                    if misa_state:
+                        po.with_context(skip_misa_purchase_order_lifecycle=True).sudo().write({
+                            'misa_purchase_order_synced': True,
+                            'misa_purchase_order_state': misa_state,
+                            'misa_purchase_order_last_error': False,
+                            'misa_purchase_order_state_updated_at': fields.Datetime.now(),
+                        })
+                        if success:
+                            line._apply_purchase_order_detail_ids(po, voucher_data)
+                        continue
+
                 vals = {}
                 if success and actual_refid:
                     vals['misa_purchase_order_refid'] = actual_refid
+                vals.update({
+                    'misa_purchase_order_last_error': False if success else error_message,
+                    'misa_purchase_order_session_id': session_id or False,
+                    'misa_purchase_order_state_updated_at': fields.Datetime.now(),
+                })
                 if not is_request_callback:
                     vals['misa_purchase_order_synced'] = success
+                    vals['misa_purchase_order_state'] = 'created' if success else 'error'
                 elif not success:
                     vals['misa_purchase_order_synced'] = False
+                    vals['misa_purchase_order_state'] = 'error'
+                elif data_type in (1, 3):
+                    vals['misa_purchase_order_state'] = 'request_accepted'
                 if vals:
-                    po.write(vals)
+                    po.with_context(skip_misa_purchase_order_lifecycle=True).sudo().write(vals)
                 if is_request_callback and success:
                     _logger.info(
                         'MISA da nhan de nghi don mua %s (%s), cho callback sinh chung tu that su.',
@@ -279,10 +338,68 @@ class AmisCallbackLogLine(models.Model):
                 payment_request = self.env['amis.payment.request'].sudo().search([
                     ('org_refid', '=', org_refid),
                 ], limit=1)
+                if not payment_request and item_refno:
+                    payment_request = self.env['amis.payment.request'].sudo().search([
+                        ('name', '=', item_refno),
+                    ], limit=1)
+                    if payment_request:
+                        _logger.info(
+                            'Matched MISA payment callback by refno %s because callback org_refid %s differs.',
+                            item_refno,
+                            org_refid,
+                        )
                 if payment_request:
+                    error_message = line.error_message or line.error_call_back_message or ''
+                    session_id = (line.session_id or '').strip()
+                    if data_type == 2:
+                        is_created_voucher = (
+                            (line.error_code or '').strip() == 'IsCreatedVoucher'
+                            or 'Đã sinh chứng từ' in error_message
+                        )
+                        payment_request.write({
+                            'state': (
+                                'deleted' if success
+                                else 'manual_delete_required' if is_created_voucher
+                                else 'error'
+                            ),
+                            'error_msg': False if success else error_message,
+                            'callback_session_id': session_id or False,
+                            'callback_data_type': data_type,
+                            'state_updated_at': fields.Datetime.now(),
+                        })
+                        continue
+                    if data_type == 22:
+                        try:
+                            model_state = int(item.get('_misa_model_state') or 0)
+                        except (TypeError, ValueError):
+                            model_state = 0
+                        if model_state == 3:
+                            payment_request.write({
+                                'state': 'deleted',
+                                'error_msg': False,
+                                'callback_data_type': data_type,
+                                'state_updated_at': fields.Datetime.now(),
+                            })
+                            continue
                     vals = {
-                        'state': 'synced' if success else 'error',
-                        'error_msg': False if success else (line.error_message or line.error_call_back_message or ''),
+                        'state': (
+                            payment_request.state
+                            if payment_request.state in (
+                                'delete_pending', 'manual_delete_required', 'deleted'
+                            )
+                            else 'approved'
+                            if success and (
+                                data_type == 18 or payment_request.state == 'approved'
+                            )
+                            else 'request_accepted'
+                            if success and data_type in (1, 3) and is_request_callback
+                            else 'synced' if success
+                            else 'error'
+                        ),
+                        'error_msg': False if success else error_message,
+                        'callback_session_id': session_id or False,
+                        'callback_data_type': data_type,
+                        'state_updated_at': fields.Datetime.now(),
                     }
                     if success and actual_refid:
                         vals['misa_refid'] = actual_refid

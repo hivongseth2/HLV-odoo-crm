@@ -176,6 +176,21 @@
                             <field name="sync_shopee_only"/>
                         </group>
                     </group>
+                    <group string="Tài khoản chi mặc định theo mục đích">
+                        <field name="payment_bank_config_ids" colspan="2" nolabel="1">
+                            <list editable="bottom">
+                                <field name="active"/>
+                                <field name="purpose"/>
+                                <field name="company_id"/>
+                                <field name="company_partner_id" column_invisible="True"/>
+                                <field name="company_bank_id"
+                                       domain="[('partner_id', '=', company_partner_id)]"
+                                       options="{'no_create': True, 'no_open': True}"/>
+                                <field name="debit_account"/>
+                                <field name="credit_account"/>
+                            </list>
+                        </field>
+                    </group>
                     <group string="Mapping khách hàng Shopee → MISA">
                         <group>
                             <field name="misa_shopee_milwaukee_account_object_id"/>
@@ -343,18 +358,18 @@
                 <xpath expr="//div[@name='button_box']" position="inside">
                     <button name="action_sync_misa_purchase_order" type="object"
                             class="oe_stat_button" icon="fa-cloud-upload"
-                            invisible="state not in ('purchase','done') or misa_purchase_order_synced">
+                            invisible="state not in ('purchase','done') or misa_purchase_order_org_refid">
                         <div class="o_field_widget o_stat_info">
                             <span class="o_stat_text">Sync</span>
                             <span class="o_stat_text">PO MISA</span>
                         </div>
                     </button>
-                    <button name="action_reset_misa_purchase_order" type="object"
+                    <button name="action_revoke_and_resync_misa_purchase_order" type="object"
                             class="oe_stat_button" icon="fa-refresh"
-                            invisible="not misa_purchase_order_synced"
-                            confirm="Reset se cho phep sync lai Don mua hang MISA. Tiep tuc?">
+                            invisible="not misa_purchase_order_org_refid or misa_purchase_order_replacement_pending"
+                            confirm="Odoo sẽ thu hồi đề nghị cũ nếu MISA chưa lập chứng từ. Nếu đã lập, cần xóa chứng từ trên MISA trước khi Odoo tự tạo lại. Tiếp tục?">
                         <div class="o_field_widget o_stat_info">
-                            <span class="o_stat_text">Reset</span>
+                            <span class="o_stat_text">Thu hồi &amp; tạo lại</span>
                             <span class="o_stat_text">PO MISA</span>
                         </div>
                     </button>
@@ -363,8 +378,16 @@
                     <page string="MISA" name="misa_purchase_info"
                           invisible="not misa_purchase_order_synced and not misa_purchase_order_org_refid">
                         <group string="Don mua hang (pu_order)">
+                            <field name="misa_purchase_order_state" widget="badge" readonly="1"/>
                             <field name="misa_purchase_order_synced" readonly="1"/>
                             <field name="misa_purchase_order_org_refid" readonly="1"/>
+                            <field name="misa_purchase_order_refid" readonly="1"/>
+                            <field name="misa_purchase_order_replacement_pending" readonly="1"/>
+                            <field name="misa_purchase_order_session_id" readonly="1"/>
+                            <field name="misa_purchase_order_state_updated_at" readonly="1"/>
+                            <field name="misa_purchase_order_revision" readonly="1"/>
+                            <field name="misa_purchase_order_previous_org_refids" readonly="1"/>
+                            <field name="misa_purchase_order_last_error" readonly="1"/>
                         </group>
                     </page>
                 </xpath>
@@ -565,6 +588,7 @@
                         <group>
                             <field name="retry_count"/>
                             <field name="processed_at"/>
+                            <field name="next_attempt_at"/>
                         </group>
                     </group>
                     <group string="Lỗi" invisible="not error_msg">
@@ -613,6 +637,7 @@
                 <field name="issue_count" optional="show"/>
                 <field name="retry_count"/>
                 <field name="processed_at"/>
+                <field name="next_attempt_at" optional="show"/>
                 <field name="error_msg" optional="show"/>
                 <button name="action_retry" type="object" string="Thử lại"
                         invisible="status not in ('error',)" icon="fa-refresh"/>

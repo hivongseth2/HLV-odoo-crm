@@ -10,6 +10,9 @@ from odoo.exceptions import UserError
 _logger = logging.getLogger(__name__)
 
 ZERO_UUID = '00000000-0000-0000-0000-000000000000'
+MISA_PO_REQUEST_SETTLE_SECONDS = 90
+MISA_DEFAULT_PURCHASE_PURPOSE_ID = 'ed4bd91d-83ac-4a26-b4c1-4bce85faecb8'
+MISA_DEFAULT_PURCHASE_PURPOSE_CODE = '1'
 
 
 class StockPickingAmisSync(models.Model):
@@ -158,6 +161,14 @@ class StockPickingAmisSync(models.Model):
         self._enqueue_misa_sync('outgoing')
         return True
 
+    def _misa_latest_done_purchase_order_job(self, purchase_order):
+        self.ensure_one()
+        return self.env['amis.sync.job'].sudo().search([
+            ('purchase_order_id', '=', purchase_order.id),
+            ('direction', '=', 'purchase_order'),
+            ('status', '=', 'done'),
+        ], order='processed_at desc, id desc', limit=1)
+
     def _sync_incoming_po_to_misa(self):
         self.ensure_one()
         if self.state != 'done' or self.picking_type_code != 'incoming':
@@ -219,9 +230,24 @@ class StockPickingAmisSync(models.Model):
                     % (purchase_order.name, reason)
                 )
             if not purchase_order.misa_purchase_order_synced:
-                _logger.info(
-                    'Don mua %s chua co callback MISA; van tiep tuc link phieu nhap bang org_refid/ref_detail_id da gui.',
+                po_job = self._misa_latest_done_purchase_order_job(purchase_order)
+                if not po_job:
+                    purchase_order._enqueue_misa_purchase_order(raise_on_skip=False, force=True)
+                    raise UserError(
+                        'Don mua hang %s chua co job dong bo MISA thanh cong; da enqueue don mua, phieu nhap se retry sau.'
+                        % purchase_order.name
+                    )
+                processed_at = po_job.processed_at or po_job.create_date
+                elapsed = (fields.Datetime.now() - processed_at).total_seconds() if processed_at else 0.0
+                if elapsed < MISA_PO_REQUEST_SETTLE_SECONDS:
+                    raise UserError(
+                        'Don mua hang %s moi gui de nghi MISA %.0f giay truoc; phieu nhap se retry sau de tranh gui truoc khi MISA sinh xong don mua.'
+                        % (purchase_order.name, elapsed)
+                    )
+                _logger.warning(
+                    'Don mua %s chua co callback sinh chung tu that sau %.0f giay; tiep tuc link phieu nhap bang org_refid/ref_detail_id da gui.',
                     purchase_order.name,
+                    elapsed,
                 )
 
         if not purchase_order_refid:
@@ -233,17 +259,21 @@ class StockPickingAmisSync(models.Model):
         voucher_payload, dictionary_items, reference_items = self._prepare_misa_inward_payload(config, purchase_order)
         org_refid = voucher_payload.get('org_refid')
         _logger.info(
-            'Push MISA inward %s: org_refid=%s, po=%s, header_po_refid=%s, header_po_refno=%s, detail_po_refid=%s, detail_links=%s',
+            'Push MISA inward %s: org_refid=%s, po=%s, reftype=%s, header_po_refid=%s, header_po_refno=%s, detail_po_refid=%s, detail_links=%s',
             self.name,
             org_refid,
             purchase_order.name,
+            voucher_payload.get('reftype') or '',
             voucher_payload.get('pu_order_refid') or '',
             voucher_payload.get('pu_order_refno') or '',
             voucher_payload.get('detail') and voucher_payload['detail'][0].get('pu_order_refid') or '',
             ', '.join(
-                '%s qty=%s inward_detail=%s po_detail=%s' % (
+                '%s qty=%s unit=%s main=%s rate=%s inward_detail=%s po_detail=%s' % (
                     detail.get('inventory_item_code') or detail.get('inventory_item_name') or '',
                     detail.get('quantity') or 0.0,
+                    detail.get('unit_id') or '',
+                    detail.get('main_unit_id') or '',
+                    detail.get('main_convert_rate') or 0.0,
                     detail.get('ref_detail_id') or '',
                     detail.get('pu_order_ref_detail_id') or '',
                 )
@@ -819,13 +849,32 @@ class StockPickingAmisSync(models.Model):
             if not unit_id:
                 raise UserError('Khong tao/tim duoc MISA Unit cho don vi tinh: %s' % move.product_uom.name)
 
-            ref_detail_id = self._misa_move_ref_detail_id(move, 'misa_inward_detail')
+            ref_detail_id = self._misa_move_ref_detail_id(
+                move, 'misa_inward_detail', field_name='misa_inward_ref_detail_id'
+            )
 
             # Tai khoan co dinh theo yeu cau: Kho 1561, Cong no 331.
             debit_account = '1561'
             credit_account = '331'
+            purchase_purpose_id = (
+                inventory_item.get('purchase_purpose_id')
+                or inventory_item.get('purchase_purpose_refid')
+                or MISA_DEFAULT_PURCHASE_PURPOSE_ID
+            )
+            purchase_purpose_code = (
+                inventory_item.get('purchase_purpose_code')
+                or MISA_DEFAULT_PURCHASE_PURPOSE_CODE
+            ).strip()
+            self._misa_store_inward_move_link_values(
+                move,
+                ref_detail_id,
+                pu_order_refid,
+                pu_order_ref_detail_id,
+                purchase_purpose_id,
+                purchase_purpose_code,
+            )
 
-            detail.append({
+            detail_vals = {
                 'ref_detail_id': ref_detail_id,
                 'refid': refid,
                 'inventory_item_id': inventory_item_id,
@@ -866,6 +915,8 @@ class StockPickingAmisSync(models.Model):
                 'debit_account': debit_account,
                 'credit_account': credit_account,
                 'exchange_rate_operator': unit_values['exchange_rate_operator'],
+                'vat_account': '1331',
+                'vat_description': 'Thue GTGT - %s' % (inventory_item_name or move.name or ''),
                 'account_object_name': account_object_name,
                 'account_object_code': account_object_code,
                 'inventory_item_code': inventory_item_code,
@@ -886,7 +937,12 @@ class StockPickingAmisSync(models.Model):
                 'pu_order_ref_detail_id': pu_order_ref_detail_id,
                 'pu_order_refno': purchase_order.name,
                 'state': 0,
-            })
+            }
+            if purchase_purpose_id:
+                detail_vals['purchase_purpose_id'] = purchase_purpose_id
+            if purchase_purpose_code:
+                detail_vals['purchase_purpose_code'] = purchase_purpose_code
+            detail.append(detail_vals)
 
         total_payment_amount = total_amount + total_vat_amount
         reference_items = self._prepare_misa_inward_references(
@@ -904,16 +960,18 @@ class StockPickingAmisSync(models.Model):
             'org_refno': self.name,
             'org_reftype': 302,
             'org_reftype_name': 'Mua hang trong nuoc nhap kho chua thanh toan',
+            # 'refno': '',
             'refid': refid,
             'act_voucher_type': 0,
             'reftype': 302,
             'reftype_name': 'Mua hang trong nuoc nhap kho chua thanh toan',
-            # Field header "Nhap so don mua hang" tren MISA. Detail rows below
-            # carry the line-level links used to update received quantity.
-            'pu_order_refid': pu_order_refid,
-            'pu_order_refno': purchase_order.name,
+            # 'pu_order_refid': pu_order_refid,
+            # 'pu_order_refno': purchase_order.name,
             'branch_id': branch_id,
             'account_object_id': account_object_id,
+            # 'include_invoice': 0,
+            # 'due_time': 0,
+            # 'discount_type': 0,
             'display_on_book': 0,
             'unit_price_method': 0,
             'reforder': int(datetime.utcnow().timestamp() * 1000),
@@ -971,13 +1029,38 @@ class StockPickingAmisSync(models.Model):
             'sort_order': 1,
         }]
 
-    def _misa_move_ref_detail_id(self, move, prefix):
+    def _misa_store_inward_move_link_values(
+        self,
+        move,
+        ref_detail_id,
+        pu_order_refid,
+        pu_order_ref_detail_id,
+        purchase_purpose_id,
+        purchase_purpose_code,
+    ):
+        vals = {
+            'misa_ref_detail_id': ref_detail_id,
+            'misa_inward_ref_detail_id': ref_detail_id,
+            'misa_inward_po_refid': pu_order_refid,
+            'misa_inward_po_ref_detail_id': pu_order_ref_detail_id,
+            'misa_purchase_purpose_id': purchase_purpose_id or False,
+            'misa_purchase_purpose_code': purchase_purpose_code or False,
+        }
+        vals = {
+            key: value
+            for key, value in vals.items()
+            if (move[key] or False) != (value or False)
+        }
+        if vals:
+            move.sudo().write(vals)
+
+    def _misa_move_ref_detail_id(self, move, prefix, field_name='misa_ref_detail_id'):
         ref_detail_id = str(uuid.uuid5(
             uuid.NAMESPACE_DNS,
             '%s|%d|%d' % (prefix, self.id, move.id)
         ))
-        if (move.misa_ref_detail_id or '').strip() != ref_detail_id:
-            move.sudo().write({'misa_ref_detail_id': ref_detail_id})
+        if (move[field_name] or '').strip() != ref_detail_id:
+            move.sudo().write({field_name: ref_detail_id})
         return ref_detail_id
 
     def _misa_lookup_account_object_by_id(self, config, account_object_id):
@@ -1102,4 +1185,29 @@ class StockMoveAmisMapping(models.Model):
         string='MISA Ref Detail ID',
         copy=False,
         help='ID thật của dòng chi tiết chứng từ trên MISA.',
+    )
+    misa_inward_ref_detail_id = fields.Char(
+        string='MISA Ref Detail ID phieu nhap',
+        copy=False,
+        help='ref_detail_id gui cho dong pu_voucher_detail khi sync phieu nhap MISA.',
+    )
+    misa_inward_po_refid = fields.Char(
+        string='MISA PO RefID lien ket phieu nhap',
+        copy=False,
+        help='pu_order_refid gui tren dong pu_voucher_detail de lien ket ve don mua MISA.',
+    )
+    misa_inward_po_ref_detail_id = fields.Char(
+        string='MISA PO Ref Detail ID lien ket phieu nhap',
+        copy=False,
+        help='pu_order_ref_detail_id gui tren dong pu_voucher_detail de cap nhat so luong nhan.',
+    )
+    misa_purchase_purpose_id = fields.Char(
+        string='MISA Purchase Purpose ID',
+        copy=False,
+        help='purchase_purpose_id gui tren dong pu_voucher_detail.',
+    )
+    misa_purchase_purpose_code = fields.Char(
+        string='MISA Purchase Purpose Code',
+        copy=False,
+        help='purchase_purpose_code gui tren dong pu_voucher_detail.',
     )

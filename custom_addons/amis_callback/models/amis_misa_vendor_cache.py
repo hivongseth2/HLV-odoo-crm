@@ -381,6 +381,51 @@ class AmisMisaVendorCache(models.Model):
 
         return Cache.browse(), stale
 
+    @api.model
+    def find_active_vendor_for_partner(self, config, partner):
+        Cache = self.sudo()
+        if not config or not partner:
+            return Cache.browse()
+        base = [
+            ('config_id', '=', config.id),
+            ('is_vendor', '=', True),
+            ('is_deleted', '=', False),
+            ('misa_inactive', '=', False),
+        ]
+        linked = Cache.search(base + [('partner_id', '=', partner.id)], limit=2)
+        if len(linked) == 1:
+            return linked
+        code_key = self._match_code(partner.ref)
+        tax_key = self._match_tax(partner.vat)
+        candidates = Cache.search(base).filtered(
+            lambda rec: not rec.partner_id or rec.partner_id.id == partner.id
+        )
+        if code_key and tax_key:
+            both = candidates.filtered(
+                lambda rec: self._match_code(rec.account_object_code) == code_key
+                and self._match_tax(rec.company_tax_code) == tax_key
+            )
+            if len(both) == 1:
+                return both
+        if tax_key:
+            by_tax = candidates.filtered(
+                lambda rec: self._match_tax(rec.company_tax_code) == tax_key
+            )
+            if len(by_tax) == 1:
+                return by_tax
+        if code_key:
+            by_code = candidates.filtered(
+                lambda rec: self._match_code(rec.account_object_code) == code_key
+                and (
+                    not tax_key
+                    or not self._match_tax(rec.company_tax_code)
+                    or self._match_tax(rec.company_tax_code) == tax_key
+                )
+            )
+            if len(by_code) == 1:
+                return by_code
+        return Cache.browse()
+
 
 class AmisMisaVendorBankCache(models.Model):
     _name = 'amis.misa.vendor.bank.cache'
