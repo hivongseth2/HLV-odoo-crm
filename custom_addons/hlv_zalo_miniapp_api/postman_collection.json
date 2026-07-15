@@ -832,6 +832,34 @@
       "name": "4. Cart API",
       "item": [
         {
+          "name": "4.0 POST Cart Get (No Auth - should fail)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Error response', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.false;",
+                  "    pm.expect(json.error.code).to.eql('AUTH_REQUIRED');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"contact_id\": {{contact_id}}\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/v1/zalo/cart/get",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "zalo", "cart", "get"]
+            }
+          }
+        },
+        {
           "name": "4.1 POST Cart Get",
           "event": [
             {
@@ -856,7 +884,10 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" }
+            ],
             "body": { "mode": "raw", "raw": "{\n  \"contact_id\": {{contact_id}}\n}" },
             "url": {
               "raw": "{{base_url}}/api/v1/zalo/cart/get",
@@ -885,7 +916,10 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" }
+            ],
             "body": { "mode": "raw", "raw": "{\n  \"contact_id\": {{contact_id}},\n  \"product_id\": 1,\n  \"quantity\": 2\n}" },
             "url": {
               "raw": "{{base_url}}/api/v1/zalo/cart/add",
@@ -913,7 +947,10 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" }
+            ],
             "body": { "mode": "raw", "raw": "{\n  \"contact_id\": {{contact_id}},\n  \"product_id\": 99999,\n  \"quantity\": 1\n}" },
             "url": {
               "raw": "{{base_url}}/api/v1/zalo/cart/add",
@@ -941,7 +978,10 @@
           ],
           "request": {
             "method": "PUT",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" }
+            ],
             "body": { "mode": "raw", "raw": "{\n  \"contact_id\": {{contact_id}},\n  \"line_id\": {{line_id}},\n  \"quantity\": 5\n}" },
             "url": {
               "raw": "{{base_url}}/api/v1/zalo/cart/update",
@@ -969,7 +1009,10 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" }
+            ],
             "body": { "mode": "raw", "raw": "{\n  \"contact_id\": {{contact_id}},\n  \"line_id\": {{line_id}}\n}" },
             "url": {
               "raw": "{{base_url}}/api/v1/zalo/cart/remove",
@@ -998,7 +1041,10 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" }
+            ],
             "body": { "mode": "raw", "raw": "{\n  \"contact_id\": {{contact_id}}\n}" },
             "url": {
               "raw": "{{base_url}}/api/v1/zalo/cart/clear",
@@ -1026,7 +1072,10 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" }
+            ],
             "body": { "mode": "raw", "raw": "{}" },
             "url": {
               "raw": "{{base_url}}/api/v1/zalo/cart/get",
@@ -1040,6 +1089,34 @@
     {
       "name": "5. Order API",
       "item": [
+        {
+          "name": "5.0 POST Create Order (No Auth - should fail)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Error response', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.false;",
+                  "    pm.expect(json.error.code).to.eql('AUTH_REQUIRED');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"contact_id\": {{contact_id}},\n  \"items\": [\n    {\"product_id\": 1, \"quantity\": 2}\n  ]\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/v1/zalo/orders/create",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "zalo", "orders", "create"]
+            }
+          }
+        },
         {
           "name": "5.1 POST Create Order (with items)",
           "event": [
@@ -1063,7 +1140,10 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" }
+            ],
             "body": { "mode": "raw", "raw": "{\n  \"contact_id\": {{contact_id}},\n  \"items\": [\n    {\"product_id\": 1, \"quantity\": 2}\n  ],\n  \"address_id\": {{contact_id}},\n  \"note\": \"Giao trước 18h\"\n}" },
             "url": {
               "raw": "{{base_url}}/api/v1/zalo/orders/create",
@@ -1098,7 +1178,10 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" }
+            ],
             "body": { "mode": "raw", "raw": "{\n  \"contact_id\": {{contact_id}},\n  \"limit\": 10,\n  \"offset\": 0\n}" },
             "url": {
               "raw": "{{base_url}}/api/v1/zalo/orders/list",
@@ -1129,7 +1212,10 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" }
+            ],
             "body": { "mode": "raw", "raw": "{\n  \"contact_id\": {{contact_id}},\n  \"limit\": 10,\n  \"offset\": 0,\n  \"state\": \"sale\"\n}" },
             "url": {
               "raw": "{{base_url}}/api/v1/zalo/orders/list",
@@ -1162,7 +1248,10 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" }
+            ],
             "body": { "mode": "raw", "raw": "{\n  \"order_id\": {{order_id}}\n}" },
             "url": {
               "raw": "{{base_url}}/api/v1/zalo/orders/detail",
@@ -1191,7 +1280,10 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" }
+            ],
             "body": { "mode": "raw", "raw": "{\n  \"order_id\": {{order_id}},\n  \"contact_id\": {{contact_id}},\n  \"reason\": \"Đổi ý không mua nữa\"\n}" },
             "url": {
               "raw": "{{base_url}}/api/v1/zalo/orders/cancel",
@@ -1219,7 +1311,10 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" }
+            ],
             "body": { "mode": "raw", "raw": "{\n  \"order_id\": {{order_id}},\n  \"contact_id\": 99999,\n  \"reason\": \"Test\"\n}" },
             "url": {
               "raw": "{{base_url}}/api/v1/zalo/orders/cancel",
@@ -1247,7 +1342,10 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" }
+            ],
             "body": { "mode": "raw", "raw": "{\n  \"order_id\": 99999\n}" },
             "url": {
               "raw": "{{base_url}}/api/v1/zalo/orders/detail",

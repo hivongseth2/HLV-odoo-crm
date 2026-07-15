@@ -90,10 +90,6 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
             if not pricelist:
                 return None
 
-            # _get_product_price accepts (product, quantity) signature
-            # Dùng compute_price_ids hoặc gọi trực tiếp cho từng product
-            # Odoo không có _get_product_price_batch native, 
-            # nên dùng sudo()._get_product_price trong loop nhưng chỉ 1 query pricelist
             batch_prices = {}
             for p in products:
                 try:
@@ -119,7 +115,8 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
     )
     def product_list(self, **params):
         """Danh sách sản phẩm (variant) với sort/filter/query.
-        Body: {"limit":10, "offset":0, "query":"áo", "sort":"name", "category_id":0}"""
+        Body: {"limit":10, "offset":0, "query":"áo", "sort":"name", "category_id":0,
+               "min_price":10000, "max_price":500000, "in_stock":true}"""
         try:
             body = self._request_json()
             try:
@@ -130,6 +127,13 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
             query = (body.get("query") or "").strip()
             sort = (body.get("sort") or "name").strip()
             category_id = self._parse_int(body.get("category_id"), 0)
+            min_price = self._parse_float(body.get("min_price"), 0.0)
+            max_price = self._parse_float(body.get("max_price"), 0.0)
+            in_stock = body.get("in_stock", False)
+            # Convert boolean: accept both bool and string
+            if isinstance(in_stock, str):
+                in_stock = in_stock.lower() in ("true", "1", "yes")
+            in_stock = bool(in_stock)
 
             domain = [
                 ("x_active_zalo", "=", True),
@@ -139,6 +143,16 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
 
             if category_id:
                 domain.append(("pos_categ_ids", "in", [category_id]))
+
+            # Lọc theo khoảng giá
+            if min_price > 0:
+                domain.append(("x_zalo_price", ">=", min_price))
+            if max_price > 0:
+                domain.append(("x_zalo_price", "<=", max_price))
+
+            # Lọc theo tồn kho
+            if in_stock:
+                domain.append(("free_qty", ">", 0.0))
 
             if query:
                 domain += [
@@ -170,12 +184,12 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
             batch_prices = self._get_batch_prices(products)
             data = [self._build_product_data(p, batch_prices=batch_prices) for p in products]
 
-            return self._response_success({
+            return self._response_success_cached({
                 "total": total,
                 "limit": limit,
                 "offset": offset,
                 "products": data,
-            })
+            }, max_age=120)  # cache 2 phút
         except Exception as e:
             _logger.exception("product_list error")
             return self._response_error("SERVER_ERROR", str(e), 500)
@@ -229,7 +243,7 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
                 )
             data["images"] = images
 
-            return self._response_success(data)
+            return self._response_success_cached(data, max_age=120)
         except Exception as e:
             _logger.exception("product_detail error")
             return self._response_error("SERVER_ERROR", str(e), 500)

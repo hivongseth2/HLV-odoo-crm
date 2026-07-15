@@ -55,12 +55,12 @@ class ZaloCategoryAPI(ZaloBaseAPI, http.Controller):
                     "image_url": img_url,
                 })
 
-            return self._response_success({
+            return self._response_success_cached({
                 "total": total,
                 "limit": limit,
                 "offset": offset,
                 "categories": data,
-            })
+            }, max_age=300)
         except Exception as e:
             _logger.exception("category_list error")
             return self._response_error("SERVER_ERROR", str(e), 500)
