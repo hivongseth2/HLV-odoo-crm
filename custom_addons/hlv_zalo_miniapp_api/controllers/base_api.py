@@ -129,7 +129,7 @@ class ZaloBaseAPI:
         auth_header = request.httprequest.headers.get("Authorization", "")
         if not auth_header.startswith("Bearer "):
             return self._response_error("AUTH_REQUIRED", "Thiếu token xác thực", 401)
-        token = auth_header[7:]
+        token = auth_header[7:].strip()
         pid = self._verify_token(token)
         if not pid:
             return self._response_error("INVALID_TOKEN", "Token không hợp lệ hoặc đã hết hạn", 401)
