@@ -24,14 +24,29 @@ shopee_webhook/
 ### 2. Status Mapping
 Shopee statuses are mapped to Vietnamese labels and displayed using badges on Sale Orders (for code 3 pushes).
 
-### 3. Automatic Order Fetch (New)
+### 3. Tracking Number Push
+- Shopee `order_trackingno_push` (`code=4`) carries `data.ordersn`,
+  `data.package_number`, and `data.tracking_no`.
+- The webhook matches both `ordersn` and `shop_id`, then writes the latest
+  `tracking_no` to both `carrier_tracking_ref` and `name` on the related
+  outgoing picking. If several delivery pickings exist, the oldest active one
+  is selected so picking names remain unique.
+- Cancelled pickings are never updated. Active outgoing pickings are preferred;
+  completed outgoing pickings are used only when no active picking remains.
+- Code 4 requests must pass Shopee's `Authorization` HMAC-SHA256 check using the
+  exact raw request body. Set `shopee_webhook.callback_url` when the public URL
+  configured in Shopee differs from the URL seen by Odoo behind a reverse proxy.
+- Operational pushes return HTTP 204 with an empty body. Verification requests
+  still return the required `verify_info` JSON value.
+
+### 4. Automatic Order Fetch (New)
 - **Auto-Sync**: If a webhook arrives for an `ordersn` that is not yet in Odoo, the system automatically:
     1. Identifies the `shopee.shop` using `shop_id` from the payload.
     2. Calls Shopee API (Order Detail & Escrow Detail) using the shop's credentials.
     3. Builds and creates the `sale.order` in Odoo via `shopee_order_builder`.
     4. Continues to update the order status.
 
-### 4. Automation & Notifications
+### 5. Automation & Notifications
 - **Auto-validation**: Automatically validates pickings when status is `LOGISTICS_DELIVERY_DONE` (code 30).
 - **Cancel Notification**: Sends a Zalo message to the warehouse when status is `CANCELLED`.
     - Uses configuration from `hlv_order_cancel_request`: `hlv_order_cancel_request.warehouse_zalo_mapping`.
