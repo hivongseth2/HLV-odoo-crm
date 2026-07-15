@@ -28,11 +28,12 @@ Shopee statuses are mapped to Vietnamese labels and displayed using badges on Sa
 - Shopee `order_trackingno_push` (`code=4`) carries `data.ordersn`,
   `data.package_number`, and `data.tracking_no`.
 - The webhook matches both `ordersn` and `shop_id`, then writes the latest
-  `tracking_no` to both `carrier_tracking_ref` and `name` on the related
-  outgoing picking. If several delivery pickings exist, the oldest active one
-  is selected so picking names remain unique.
-- Cancelled pickings are never updated. Active outgoing pickings are preferred;
-  completed outgoing pickings are used only when no active picking remains.
+  `tracking_no` to both `carrier_tracking_ref` and `name` on the related PICK
+  picking. If the sale has no PICK step, an outgoing picking is used as fallback.
+  If several candidates exist, the oldest active one is selected so picking
+  names remain unique.
+- Cancelled pickings are never updated. Active PICK pickings are preferred;
+  a completed PICK is used only when no active PICK remains.
 - Code 4 requests must pass Shopee's `Authorization` HMAC-SHA256 check using the
   exact raw request body. Set `shopee_webhook.callback_url` when the public URL
   configured in Shopee differs from the URL seen by Odoo behind a reverse proxy.
