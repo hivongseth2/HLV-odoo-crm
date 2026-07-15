@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
-import base64
 import logging
-from datetime import timedelta, timezone
 
 from odoo import fields, http
 from odoo.http import request
@@ -14,8 +12,13 @@ _logger = logging.getLogger(__name__)
 class ZaloProductAPI(ZaloBaseAPI, http.Controller):
     """API Sản phẩm (product.product variant) cho Zalo Mini App"""
 
-    def _build_product_data(self, product):
-        """Build standard product response dict from a product.product record."""
+    def _build_product_data(self, product, batch_prices=None):
+        """Build standard product response dict from a product.product record.
+        
+        :param product: product.product record
+        :param batch_prices: dict {product_id: promotional_price} từ batch query pricelist
+                             Nếu None, sẽ query riêng lẻ (fallback cũ)
+        """
         attributes = []
         if hasattr(product, "product_template_attribute_value_ids"):
             for ptav in product.product_template_attribute_value_ids:
@@ -34,17 +37,24 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
         elif product.categ_id:
             category = {"id": product.categ_id.id, "name": product.categ_id.name}
 
+        # Lấy promotional price từ batch_prices dict nếu có
         promotional_price = None
-        try:
-            pricelist = request.env["product.pricelist"].sudo().search([
-                ("active", "=", True),
-            ], limit=1, order="id")
-            if pricelist:
-                promo = pricelist._get_product_price(product, quantity=1.0)
-                if promo and promo != product.x_zalo_price:
-                    promotional_price = promo
-        except Exception:
-            pass
+        if batch_prices and isinstance(batch_prices, dict):
+            promo = batch_prices.get(product.id)
+            if promo and promo != product.x_zalo_price:
+                promotional_price = promo
+        else:
+            # Fallback: query riêng lẻ (giữ compatible với product_detail)
+            try:
+                pricelist = request.env["product.pricelist"].sudo().search([
+                    ("active", "=", True),
+                ], limit=1, order="id")
+                if pricelist:
+                    promo = pricelist._get_product_price(product, quantity=1.0)
+                    if promo and promo != product.x_zalo_price:
+                        promotional_price = promo
+            except Exception:
+                pass
 
         img_url = None
         if product.image_128:
@@ -69,6 +79,33 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
             "description": product.description_sale or "",
             "description_html": product.description or "",
         }
+
+    def _get_batch_prices(self, products):
+        """Batch query pricelist prices cho tất cả products.
+        Trả về dict {product_id: promotional_price} hoặc None nếu không có pricelist."""
+        try:
+            pricelist = request.env["product.pricelist"].sudo().search([
+                ("active", "=", True),
+            ], limit=1, order="id")
+            if not pricelist:
+                return None
+
+            # _get_product_price accepts (product, quantity) signature
+            # Dùng compute_price_ids hoặc gọi trực tiếp cho từng product
+            # Odoo không có _get_product_price_batch native, 
+            # nên dùng sudo()._get_product_price trong loop nhưng chỉ 1 query pricelist
+            batch_prices = {}
+            for p in products:
+                try:
+                    promo = pricelist._get_product_price(p, quantity=1.0)
+                    if promo:
+                        batch_prices[p.id] = promo
+                except Exception:
+                    pass
+            return batch_prices if batch_prices else None
+        except Exception as e:
+            _logger.warning("Batch price error: %s", e)
+            return None
 
     # =========================================================================
     # POST /api/v1/zalo/products/list
@@ -129,7 +166,9 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
             )
             total = request.env["product.product"].sudo().search_count(domain)
 
-            data = [self._build_product_data(p) for p in products]
+            # Batch query pricelist 1 lần cho tất cả products
+            batch_prices = self._get_batch_prices(products)
+            data = [self._build_product_data(p, batch_prices=batch_prices) for p in products]
 
             return self._response_success({
                 "total": total,
@@ -167,7 +206,8 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
             if not product.x_active_zalo:
                 return self._response_error("NOT_FOUND", "Sản phẩm không tồn tại", 404)
 
-            data = self._build_product_data(product)
+            # product_detail dùng fallback single query (batch_prices=None)
+            data = self._build_product_data(product, batch_prices=None)
 
             data["description_full"] = product.description or ""
             data["standard_price"] = product.standard_price
