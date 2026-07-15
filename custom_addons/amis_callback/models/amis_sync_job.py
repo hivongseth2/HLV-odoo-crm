@@ -44,6 +44,18 @@ class AmisSyncJob(models.Model):
     error_msg = fields.Text(string='Lỗi cuối')
     processed_at = fields.Datetime(string='Xử lý lúc')
 
+    @api.model_create_multi
+    def create(self, vals_list):
+        jobs = super().create(vals_list)
+        if any(job.status == 'pending' for job in jobs):
+            cron = self.env.ref(
+                'amis_callback.ir_cron_amis_sync_queue',
+                raise_if_not_found=False,
+            )
+            if cron:
+                cron.sudo()._trigger()
+        return jobs
+
     @api.model
     def _process_pending(self):
         """Được gọi bởi ir.cron. Xử lý tất cả job pending theo thứ tự."""
@@ -163,4 +175,7 @@ class AmisSyncJob(models.Model):
                     cr.commit()
             except Exception:
                 _logger.exception('AMIS sync job %d: action_run_now failed', job.id)
-        return True
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'reload',
+        }

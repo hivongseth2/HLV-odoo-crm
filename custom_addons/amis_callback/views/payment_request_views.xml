@@ -74,9 +74,9 @@
                         </group>
                     </group>
                     <group string="Tài khoản chi" invisible="payment_method != 'bank'">
-                        <field name="company_bank_id" readonly="state not in ('draft','error')"/>
-                        <field name="company_bank_account_number" readonly="state not in ('draft','error')"/>
-                        <field name="company_bank_name" readonly="state not in ('draft','error')"/>
+                        <field name="company_bank_id" readonly="1"/>
+                        <field name="company_bank_account_number" readonly="1"/>
+                        <field name="company_bank_name" readonly="1"/>
                     </group>
                     <group string="Tài khoản nhận" invisible="payment_method != 'bank'">
                         <field name="beneficiary_account_type" readonly="state not in ('draft','error')"/>
@@ -206,6 +206,7 @@
                     <field name="company_partner_id" invisible="1"/>
                     <group string="Tài khoản chi" invisible="payment_method != 'bank'">
                         <field name="company_bank_id"
+                               readonly="1"
                                domain="[('partner_id', '=', company_partner_id)]"
                                options="{'no_create': True, 'no_open': True}"/>
                         <field name="company_bank_account_number" readonly="1"/>
