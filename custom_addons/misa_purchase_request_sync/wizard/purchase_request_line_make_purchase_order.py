@@ -47,6 +47,7 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
         res = super(PurchaseRequestLineMakePurchaseOrder, self)._prepare_item(line)
         res['keep_description'] = True
         res['keep_estimated_cost'] = True
+        res['currency_id'] = line.currency_id.id if line.currency_id else False
 
         remaining_qty = line.product_qty - line.purchased_qty
         res['product_qty'] = max(0.0, remaining_qty)
