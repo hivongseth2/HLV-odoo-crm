@@ -1,0 +1,30 @@
+/* Tự động co giãn modal dialog theo chiều rộng của bảng bên trong */
+.modal:has(.custom_make_rfq_dialog) .modal-dialog {
+    width: max-content !important;
+    max-width: 98% !important; /* Giới hạn tối đa sát mép màn hình */
+    min-width: 80% !important; /* Kích thước tối thiểu để không bị co quá nhỏ khi ít cột */
+}
+
+/* Đảm bảo bảng tự động tính toán độ rộng các cột theo nội dung thay vì bị ép cứng */
+.modal:has(.custom_make_rfq_dialog) table.o_list_table {
+    table-layout: auto !important;
+    width: 100% !important;
+}
+
+/* Giữ cho nội dung các ô dữ liệu hiển thị tự nhiên, không bị ngắt dòng tùy tiện */
+.modal:has(.custom_make_rfq_dialog) table.o_list_table th,
+.modal:has(.custom_make_rfq_dialog) table.o_list_table td {
+    white-space: nowrap !important;
+}
+
+/* Cho phép cột tên/mô tả sản phẩm và mô tả dòng được phép xuống dòng nếu quá dài để tránh bảng quá rộng */
+.modal:has(.custom_make_rfq_dialog) table.o_list_table td[name="name"],
+.modal:has(.custom_make_rfq_dialog) table.o_list_table td.o_list_char {
+    white-space: normal !important;
+    min-width: 200px !important;
+}
+
+/* Cho phép xuất hiện thanh cuộn ngang nếu số lượng cột vượt quá 98% chiều rộng màn hình */
+.modal:has(.custom_make_rfq_dialog) .table-responsive {
+    overflow-x: auto !important;
+}

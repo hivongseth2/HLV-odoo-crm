@@ -7,7 +7,7 @@
         <field name="model">purchase.request.line.make.purchase.order</field>
         <field name="type">form</field>
         <field name="arch" type="xml">
-            <form string="Tạo RFQ">
+            <form string="Tạo RFQ" class="custom_make_rfq_dialog">
                 <separator string="RFQ hiện có để cập nhật:" />
                 <newline />
                 <group>
