@@ -46,6 +46,13 @@
                   decoration-muted="parent_id"
                   decoration-info="hlv_business_role == 'customer_shopee'"
                   decoration-warning="hlv_dirty_child_code or hlv_root_code_mismatch">
+                <header>
+                    <button name="%(action_hlv_contact_vietqr_wizard)d"
+                            type="action"
+                            string="Tạo liên hệ từ MST"
+                            class="btn-primary"
+                            display="always"/>
+                </header>
                 <field name="display_name" string="Tên"/>
                 <field name="commercial_partner_id" string="Thuộc hồ sơ"/>
                 <field name="hlv_relationship_label" string="Quan hệ"/>
