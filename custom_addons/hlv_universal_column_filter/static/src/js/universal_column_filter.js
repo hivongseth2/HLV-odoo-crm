@@ -14,6 +14,7 @@ const ENABLED_MODELS = [
     'sale.order',
     'hlv.undelivered.report',
     'out.return.report.line',
+    'purchase.request',
 ];
 
 function toUTCDateTime(dateStr, timeStr) {
@@ -71,6 +72,13 @@ const SELECTION_FIELDS = {
             { value: 'purchase', label: 'Đơn mua hàng', color: '#28a745' },
             { value: 'done', label: 'Đã khoá', color: '#714B67' },
             { value: 'cancel', label: 'Đã hủy', color: '#dc3545' },
+        ],
+        'purchase.request': [
+            { value: 'draft', label: 'Nháp', color: '#6c757d' },
+            { value: 'to_approve', label: 'Cần phê duyệt', color: '#ffc107' },
+            { value: 'approved', label: 'Đã duyệt', color: '#17a2b8' },
+            { value: 'rejected', label: 'Từ chối', color: '#dc3545' },
+            { value: 'done', label: 'Hoàn thành', color: '#28a745' },
         ],
     },
     'invoice_status': {
