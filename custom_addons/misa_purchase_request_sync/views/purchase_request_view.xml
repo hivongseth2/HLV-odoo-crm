@@ -37,30 +37,55 @@
             <xpath expr="//button[@name='action_view_stock_picking']/field[@name='move_count']" position="attributes">
                 <attribute name="string">Phiếu nhập kho</attribute>
             </xpath>
+            <!-- Cho phép chỉnh sửa line_ids ở các state khác để toggle skip_processing -->
+            <xpath expr="//field[@name='line_ids']" position="attributes">
+                <attribute name="readonly">0</attribute>
+            </xpath>
+            <xpath expr="//field[@name='line_ids']/list" position="attributes">
+                <attribute name="create">parent.state == 'draft'</attribute>
+                <attribute name="delete">parent.state == 'draft'</attribute>
+            </xpath>
+
+            <!-- Khóa các trường cơ bản khi không phải draft -->
             <xpath expr="//field[@name='line_ids']/list/field[@name='product_id']" position="attributes">
+                <attribute name="readonly">parent.state != 'draft'</attribute>
                 <attribute name="width">250</attribute>
                 <attribute name="widget">product_two_lines</attribute>
             </xpath>
             <xpath expr="//field[@name='line_ids']/list/field[@name='estimated_cost']" position="attributes">
+                <attribute name="readonly">parent.state != 'draft'</attribute>
                 <attribute name="optional">hide</attribute>
             </xpath>
             <!-- Ẩn cột mô tả và ngày yêu cầu (vẫn có thể hiện lại qua optional) -->
             <xpath expr="//field[@name='line_ids']/list/field[@name='name']" position="attributes">
+                <attribute name="readonly">parent.state != 'draft'</attribute>
                 <attribute name="optional">hide</attribute>
             </xpath>
             <xpath expr="//field[@name='line_ids']/list/field[@name='date_required']" position="attributes">
+                <attribute name="readonly">parent.state != 'draft'</attribute>
                 <attribute name="optional">hide</attribute>
+            </xpath>
+            
+            <!-- Khóa uom và analytic_distribution khi không phải draft -->
+            <xpath expr="//field[@name='line_ids']/list/field[@name='product_uom_id'][1]" position="attributes">
+                <attribute name="readonly">parent.state != 'draft'</attribute>
+            </xpath>
+            <xpath expr="//field[@name='line_ids']/list/field[@name='product_uom_id'][2]" position="attributes">
+                <attribute name="readonly">parent.state != 'draft'</attribute>
+            </xpath>
+            <xpath expr="//field[@name='line_ids']/list/field[@name='analytic_distribution']" position="attributes">
+                <attribute name="readonly">parent.state != 'draft'</attribute>
             </xpath>
 
             <!-- YC2: Thêm cột STT (sequence) ngay trước product_id -->
             <xpath expr="//field[@name='line_ids']/list/field[@name='product_id']" position="before">
-                <field name="sequence" string="STT" widget="integer" optional="show" width="60"/>
+                <field name="sequence" string="STT" widget="integer" optional="show" width="60" readonly="parent.state != 'draft'"/>
             </xpath>
 
             <!-- YC3: Thêm cột Bỏ qua? ngay sau STT, luôn editable bất kể state -->
             <xpath expr="//field[@name='line_ids']/list/field[@name='sequence']" position="after">
                 <field name="skip_processing" string="Bỏ qua?" widget="boolean"
-                       optional="show" force_save="1" readonly="0"/>
+                       optional="show" force_save="1" readonly="parent.state in ('done', 'rejected')"/>
             </xpath>
 
             <!-- YC2: Dời purchased_qty ra sau product_qty -->
@@ -68,6 +93,7 @@
             <xpath expr="//field[@name='line_ids']/list/field[@name='product_qty']" position="attributes">
                 <attribute name="string">Số lượng yêu cầu</attribute>
                 <attribute name="column_invisible">parent.state != 'draft'</attribute>
+                <attribute name="readonly">parent.state != 'draft'</attribute>
             </xpath>
             <xpath expr="//field[@name='line_ids']/list/field[@name='product_qty']" position="after">
                 <field name="display_qty_html" string="Số lượng" widget="html" column_invisible="parent.state == 'draft'"/>
@@ -81,28 +107,28 @@
             <xpath expr="//field[@name='line_ids']/list/field[@name='estimated_cost']" position="after">
                 <field name="sale_proposed_supplier_id" widget="many2one_with_proposed" optional="show" width="200" readonly="parent.state != 'draft'"/>
                 <field name="display_supplier_html" string="NCC" widget="html" column_invisible="1" optional="hide" width="200"/>
-                <field name="misa_supplier_id" optional="hide"/>
-                <field name="misa_stock_total" optional="hide"/>
-                <field name="misa_stock_selected" optional="hide"/>
-                <field name="misa_stock_undelivered" optional="hide"/>
+                <field name="misa_supplier_id" optional="hide" readonly="1"/>
+                <field name="misa_stock_total" optional="hide" readonly="1"/>
+                <field name="misa_stock_selected" optional="hide" readonly="1"/>
+                <field name="misa_stock_undelivered" optional="hide" readonly="1"/>
                 
                 <field name="misa_price_before_tax" widget="float_with_proposed" optional="show" readonly="parent.state != 'draft'"/>
                 <field name="display_price_unit_html" string="Đơn giá trước thuế" widget="html" column_invisible="1" optional="hide"/>
                 
                 <field name="misa_price_before_tax_total" optional="show" sum="Tổng tiền trước thuế"/>
                 
-                <field name="misa_discount_rate" column_invisible="parent.state != 'draft'" optional="hide"/>
+                <field name="misa_discount_rate" column_invisible="parent.state != 'draft'" optional="hide" readonly="parent.state != 'draft'"/>
                 <field name="display_discount_rate_html" string="TL chiết khấu (MISA)" widget="html" column_invisible="parent.state == 'draft'" optional="hide"/>
                 
-                <field name="misa_discount_amount" optional="hide"/>
+                <field name="misa_discount_amount" optional="hide" readonly="parent.state != 'draft'"/>
                 
-                <field name="misa_tax_rate" column_invisible="parent.state != 'draft'" optional="show"/>
+                <field name="misa_tax_rate" column_invisible="parent.state != 'draft'" optional="show" readonly="parent.state != 'draft'"/>
                 <field name="display_tax_rate_html" string="% Thuế (MISA)" widget="html" column_invisible="parent.state == 'draft'" optional="show"/>
                 
                 <field name="misa_tax_amount_total" optional="show" sum="Tổng tiền thuế"/>
-                <field name="misa_tax_amount" optional="hide"/>
+                <field name="misa_tax_amount" optional="hide" readonly="parent.state != 'draft'"/>
                 <field name="misa_price_after_tax_total" optional="show" sum="Tổng sau thuế"/>
-                <field name="misa_price_after_tax" optional="hide"/>
+                <field name="misa_price_after_tax" optional="hide" readonly="1"/>
                 <field name="misa_amount" optional="show" sum="Thành tiền"/>
             </xpath>
             <xpath expr="//field[@name='line_ids']/list" position="inside">
@@ -211,7 +237,7 @@
                         <field name="history_po_line_id" readonly="is_editable == False" options="{'no_create': True}"/>
                         <field name="cancelled" widget="boolean" string="Đã hủy?"/>
                         <!-- YC3: Thêm skip_processing vào form detail -->
-                        <field name="skip_processing" widget="boolean" string="Bỏ qua?"/>
+                        <field name="skip_processing" widget="boolean" string="Bỏ qua?" readonly="request_state in ('done', 'rejected')"/>
                         
                         <!-- Hidden fields required by original logic -->
                         <field name="is_editable" invisible="1" />
