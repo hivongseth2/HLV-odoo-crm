@@ -1547,6 +1547,10 @@ class MisaApiUtils(models.AbstractModel):
             raise Exception(f"Không tìm thấy sản phẩm có ID {product_id} trong Odoo")
         return self._process_create_product(product)
     
+    def _normalize_unit_key(self, value):
+        """Chuẩn hóa tên đơn vị để so khớp không phân biệt hoa/thường, khoảng trắng."""
+        return str(value or "").strip().lower()
+
     def _find_dictionary_item_unit(self, headers, search_text):
         """
         Lấy danh sách Unit. Viết lại theo style của _get_category_name_by_id.
@@ -1591,12 +1595,12 @@ class MisaApiUtils(models.AbstractModel):
                     if raw_data_list and isinstance(raw_data_list, list) and len(raw_data_list) > 0:
                         items = raw_data_list[0] # Lấy list thật sự bên trong
 
-                    search_norm = search_text.strip().lower()
+                    search_norm = self._normalize_unit_key(search_text)
 
                     for item in items:
                         # Key trong response này là 'text' và 'id'
                         item_name = item.get("text") or ""
-                        if item_name.strip().lower() == search_norm:
+                        if self._normalize_unit_key(item_name) == search_norm:
                             found_id = item.get("id")
                             _logger.info(f"✅ Found Unit: '{search_text}' -> ID: {found_id}")
                             return found_id, item_name
@@ -1799,7 +1803,10 @@ class MisaApiUtils(models.AbstractModel):
             # Tìm Unit
             uom_id = False
             if unit_name:
-                found_uom = self.env['uom.uom'].sudo().search([('name', '=', unit_name)], limit=1)
+                unit_key = self._normalize_unit_key(unit_name)
+                found_uom = self.env['uom.uom'].sudo().search([]).filtered(
+                    lambda uom: self._normalize_unit_key(uom.name) == unit_key
+                )[:1]
                 if found_uom:
                     uom_id = found_uom.id
 
