@@ -113,6 +113,10 @@ export class HlvContactExplorer extends Component {
         });
     }
 
+    openVietQRWizard() {
+        this.action.doAction("hlv_contact_refine.action_hlv_contact_vietqr_wizard");
+    }
+
     async fixPartnerData(partnerId) {
         const data = await this.orm.call("res.partner", "hlv_contact_explorer_fix_data", [partnerId]);
         const selectedId = data.selected && data.selected.id;

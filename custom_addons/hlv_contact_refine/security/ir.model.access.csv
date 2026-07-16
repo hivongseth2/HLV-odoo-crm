@@ -1,4 +1,5 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_hlv_contact_filter_tag,hlv.contact.filter.tag,model_hlv_contact_filter_tag,base.group_user,1,1,1,1
+access_hlv_contact_vietqr_wizard,hlv.contact.vietqr.wizard,model_hlv_contact_vietqr_wizard,base.group_user,1,1,1,1
 access_hlv_contact_merge_wizard,hlv.contact.merge.wizard,model_hlv_contact_merge_wizard,base.group_user,1,1,1,1
 access_hlv_contact_split_wizard,hlv.contact.split.wizard,model_hlv_contact_split_wizard,base.group_user,1,1,1,1
