@@ -439,8 +439,7 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
     @api.onchange("product_id", "supplier_id")
     def onchange_product_id(self):
         if self.product_id:
-            if not self.keep_description:
-                name = self.product_id.name
+            name = self.name if self.keep_description else self.product_id.name
             code = self.product_id.code
             supplier = self.supplier_id or self.wiz_id.supplier_id
             domain = [
