@@ -26,6 +26,7 @@ Module cung cấp:
         "data/ir_config_parameter.xml",
         "data/ir_cron.xml",
         "views/purchase_request_view.xml",
+        "views/purchase_order_view.xml",
         "views/wizard_views.xml",
         "views/price_history_wizard_views.xml",
         "views/misa_sync_queue_views.xml",
