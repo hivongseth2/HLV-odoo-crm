@@ -60,6 +60,9 @@ Module không tự tạo model YCMH mới mà kế thừa trực tiếp từ mod
 - **`delivery_address`** (`Char`): 
   - **Công dụng:** Lưu địa chỉ/kho giao nhận hàng hóa cụ thể.
   - **Lý do dùng Char:** Do dữ liệu MISA trả về dạng text tự do, không map cứng vào ID của model Res Partner.
+- **`active`** (`Boolean`, default=True):
+  - **Công dụng:** Hỗ trợ lưu trữ (archive) YCMH. Khi set False, YCMH bị ẩn khỏi list view mặc định.
+  - **Ghi chú:** Override `_can_be_deleted` để hướng dẫn người dùng archive thay vì xóa khi YCMH không ở trạng thái `draft`.
 
 **Cập nhật trên Form View Odoo (`views/purchase_request_view.xml`):**
 - Hiển thị `sale_order_id` và `delivery_address` ngay dưới trường Người yêu cầu (`requested_by`). Cả 2 trường sẽ bị khóa (readonly) nếu YCMH đã ở trạng thái `done` hoặc `rejected`.
@@ -69,6 +72,14 @@ Module không tự tạo model YCMH mới mà kế thừa trực tiếp từ mod
 Kế thừa để hỗ trợ điền tự động và cho phép chọn giá trị tham khảo từ lịch sử mua hàng.
 
 **Các trường (Fields) được bổ sung thêm:**
+- **`sequence`** (`Integer`, default=10):
+  - **Công dụng:** Số thứ tự dòng (STT) trong YCMH, hiển thị ở cột đầu tiên của list view.
+- **`skip_processing`** (`Boolean`, default=False):
+  - **Công dụng:** Flag "Bỏ qua?". Khi bật, dòng này:
+    - Không được tính vào tiến độ mua (progress_total/purchased/received)
+    - Không xuất hiện trong Wizard tạo RFQ (`get_items` filter)
+    - Vẫn hiển thị trong YCMH nhưng bị bỏ qua về mặt logic
+
 - **`history_po_line_id`** (`Many2one` liên kết tới `purchase.order.line`):
   - **Công dụng:** Cho phép người dùng chọn một dòng từ lịch sử các đơn mua hàng (PO) đã mua trước đó cho cùng sản phẩm (`product_id`) để lấy giá cũ làm chi phí ước tính.
   - **Logic (`onchange`):**
@@ -93,7 +104,7 @@ Kế thừa để hỗ trợ điền tự động và cho phép chọn giá tr�
 
 ### 3.4. Computed Fields: Tiến độ mua hàng (v1.1.0+)
 Module bổ sung các computed fields trên `purchase.request` để hiển thị tiến độ mua hàng trong list view:
-- **`progress_total`** (`Integer`, `store=True`): Tổng số dòng yêu cầu (không tính dòng đã hủy).
+- **`progress_total`** (`Integer`, `store=True`): Tổng số dòng yêu cầu (không tính dòng đã hủy hoặc bỏ qua).
 - **`progress_purchased`** (`Integer`, `store=True`): Số dòng đã có Đơn mua hàng (PO/RFQ).
 - **`progress_received`** (`Integer`, `store=True`): Số dòng đã nhận đủ hàng.
 - **`progress_badge`** (`Char`, `store=True`): Hiển thị gọn dạng `ĐH 4/5 • NK 3/5` = đã tạo ĐH 4/5, đã nhận 3/5.
@@ -102,14 +113,18 @@ Module bổ sung các computed fields trên `purchase.request` để hiển th�
   - `in_progress`: Đang mua (info/xanh dương)
   - `partial`: Nhận một phần (warning/vàng)
   - `done`: Hoàn thành (success/xanh lá)
+- **`progress_purchased_badge`** (`Char`, `store=True`): Cột ĐH riêng, hiển thị `4/5`.
+- **`progress_received_badge`** (`Char`, `store=True`): Cột NK riêng, hiển thị `3/5`.
+- **`progress_purchased_status`** (`Selection`, `store=True`): Trạng thái ĐH riêng.
+- **`progress_received_status`** (`Selection`, `store=True`): Trạng thái NK riêng.
 
 **Logic computed (`_compute_purchase_progress`):**
-- Lọc `active_lines = line_ids.filtered(lambda l: not l.cancelled)`
+- Lọc `active_lines = line_ids.filtered(lambda l: not l.cancelled and not l.skip_processing)` — YC3: bỏ qua dòng skip
 - `purchased`: Đếm dòng có `purchase_lines` với `state != 'cancel'`
 - `received`: Đếm dòng có `qty_done >= product_qty` (hoặc `purchase_state == 'done'` và `qty_done > 0`)
 
 **View XML:**
-- Kế thừa `view_purchase_request_tree` thêm cột `progress_badge` với `widget="badge"` và `decoration-*` dựa trên `progress_status`.
+- Kế thừa `view_purchase_request_tree` thay 1 cột `progress_badge` cũ bằng 2 cột `progress_purchased_badge` và `progress_received_badge` với `widget="badge"` và `decoration-*` riêng biệt.
 
 ### 3.5. Thông số hệ thống (`ir.config_parameter`)
 - **Key:** `misa_extension_token`
@@ -141,3 +156,39 @@ Module bổ sung các computed fields trên `purchase.request` để hiển th�
 **Đăng ký Assets:**
 - Các components được viết bằng OWL 2.0+ tại `static/src/components/proposed_fields.js` và `static/src/components/proposed_fields.xml`.
 - Đăng ký qua `web.assets_backend` trong `__manifest__.py`.
+
+### 3.8. Xử lý tương thích đơn vị tính (UoM Compatibility)
+Để giải quyết tình trạng lỗi không tương thích đơn vị tính (UoM) do sai lệch viết hoa/thường (ví dụ: "bộ" trong Odoo vs "Bộ" trong MISA) khi tạo RFQ, module áp dụng các cơ chế tự động sau:
+- **Chuẩn hóa ĐVT hiện tại khi đồng bộ YCMH (`models/purchase_request.py`)**:
+  - Khi đồng bộ YCMH mới, nếu ĐVT của dòng chưa được tạo trong Odoo, hệ thống tìm kiếm ĐVT hiện có trong Odoo không phân biệt hoa thường (`=ilike`).
+  - Nếu tìm thấy ĐVT (ví dụ: `"bộ"` chữ thường) nhưng tên của nó chưa được viết hoa chữ đầu (`"Bộ"`), hệ thống sẽ cập nhật tên của ĐVT đó thành Title Case (`"Bộ"`). Điều này đảm bảo thư viện dùng chung `odoo.utils._get_or_create_product` sẽ tìm thấy chính xác bản ghi ĐVT cũ này (vì `_get_or_create_uom` tìm bằng `=` và Title Case), ngăn chặn việc sinh ra ĐVT mới trùng tên khác nhóm (category).
+- **Tự động map ĐVT trong Wizard tạo RFQ (`wizard/purchase_request_line_make_purchase_order.py`)**:
+  - Khi người dùng bấm nút "Tạo RFQ" từ YCMH, hệ thống kiểm tra ĐVT được chọn trên dòng Wizard so với ĐVT mặc định của sản phẩm (`product.uom_po_id` hoặc `product.uom_id`).
+  - Nếu tên của hai ĐVT này giống hệt nhau khi loại bỏ khoảng trắng và viết thường (`.lower()`), nhưng khác ID bản ghi (do lịch sử database có sẵn các ĐVT trùng tên khác nhóm), hệ thống tự động gán `product_uom_id` của dòng Wizard và `product_uom_id` của dòng YCMH (`line_id`) về đúng ĐVT của sản phẩm. Việc này giúp loại bỏ hoàn toàn lỗi `"đơn vị tính không tương thích"` của OCA khi tính toán số lượng.
+
+---
+## 4. Các tính năng mới bổ sung (v1.5.0+)
+
+### 4.1. Tách cột Tiến độ mua (YC1)
+- Thay 1 cột badge `progress_badge` bằng 2 cột riêng:
+  - `progress_purchased_badge`: Hiển thị `4/5` với decoration success/warning/muted
+  - `progress_received_badge`: Hiển thị `3/5` với decoration riêng
+- **Files ảnh hưởng:** `models/purchase_request.py`, `views/purchase_request_view.xml`
+
+### 4.2. STT & Dời cột SL đã lên RFQ/PO (YC2)
+- **Cột STT**: `purchase.request.line` có field `sequence`, hiển thị ngay trước `product_id` trong list view.
+- **Cột purchased_qty**: Dời ra sau cột số lượng (`product_qty`/`display_qty_html`).
+- **Files ảnh hưởng:** `models/purchase_request_line.py`, `views/purchase_request_view.xml`
+
+### 4.3. Flag Bỏ qua (skip_processing) (YC3)
+- Field `skip_processing` (Boolean, default=False) trên `purchase.request.line`.
+- **Ảnh hưởng đến tiến độ:** `_compute_purchase_progress` filter thêm `not l.skip_processing`.
+- **Ảnh hưởng wizard:** `get_items` trong wizard bỏ qua các dòng có `skip_processing=True`.
+- **Hiển thị:** Cột toggle trong list view, checkbox trong form detail.
+- **Files ảnh hưởng:** `models/purchase_request_line.py`, `models/purchase_request.py`, `wizard/purchase_request_line_make_purchase_order.py`, `views/purchase_request_view.xml`
+
+### 4.4. Lưu trữ (Archive) cho YCMH (YC4)
+- Field `active` (Boolean, default=True) trên `purchase.request`.
+- Override `_can_be_deleted`: Chỉ cho xóa ở state `draft`. Các state khác hướng dẫn archive.
+- Search view thêm filter "Đã lưu trữ" (`domain="[('active', '=', False)]"`).
+- **Files ảnh hưởng:** `models/purchase_request.py`, `views/purchase_request_view.xml`

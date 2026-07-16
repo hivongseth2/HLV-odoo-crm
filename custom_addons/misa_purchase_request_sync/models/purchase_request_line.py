@@ -8,6 +8,27 @@ from odoo.exceptions import UserError
 
 class PurchaseRequestLine(models.Model):
     _inherit = "purchase.request.line"
+    _order = "id"
+
+    # === Số thứ tự & Bỏ qua ===
+    sequence = fields.Integer(
+        string="STT",
+        compute="_compute_sequence",
+    )
+    skip_processing = fields.Boolean(
+        string="Bỏ qua?",
+        default=False,
+        help="Nếu bật, dòng này sẽ bị bỏ qua khi tạo RFQ và không tính vào tiến độ mua.",
+    )
+
+    @api.depends('request_id.line_ids')
+    def _compute_sequence(self):
+        for pr in self.mapped('request_id'):
+            for idx, line in enumerate(pr.line_ids, 1):
+                line.sequence = idx
+        for line in self:
+            if not line.request_id:
+                line.sequence = 0
 
     misa_line_id = fields.Char(
         string="MISA Line ID",
@@ -26,24 +47,24 @@ class PurchaseRequestLine(models.Model):
     # --- Các trường lấy từ MISA CRM (Sale tự điền) ---
     misa_supplier_id = fields.Many2one('res.partner', string="Mã/Tên NCC (MISA)")
     sale_proposed_supplier_id = fields.Many2one('res.partner', string="NCC Sale Đề Xuất")
-    misa_price_before_tax = fields.Float(string="Đơn giá trước thuế (MISA)")
-    misa_price_after_tax = fields.Float(string="Đơn giá sau thuế (MISA)")
-    misa_amount = fields.Float(string="Thành tiền (MISA)")
-    misa_tax_amount = fields.Float(string="Thuế (MISA)")
+    misa_price_before_tax = fields.Monetary(string="Đơn giá trước thuế (MISA)", currency_field="currency_id")
+    misa_price_after_tax = fields.Monetary(string="Đơn giá sau thuế (MISA)", currency_field="currency_id")
+    misa_amount = fields.Monetary(string="Thành tiền (MISA)", currency_field="currency_id")
+    misa_tax_amount = fields.Monetary(string="Thuế (MISA)", currency_field="currency_id")
     misa_tax_rate = fields.Float(string="% Thuế (MISA)")
     misa_discount_rate = fields.Float(string="TL chiết khấu (MISA)")
-    misa_discount_amount = fields.Float(string="Tiền chiết khấu (MISA)")
+    misa_discount_amount = fields.Monetary(string="Tiền chiết khấu (MISA)", currency_field="currency_id")
     misa_stock_total = fields.Float(string="Tổng SL tồn kho (MISA)")
     misa_stock_selected = fields.Float(string="SL tồn kho đã chọn (MISA)")
     misa_stock_undelivered = fields.Float(string="SL tồn kho chưa giao (MISA)")
     
     # --- Các trường lưu thực tế mua hàng (từ Wizard chuyển qua) ---
     actual_qty = fields.Float(string="SL thực mua")
-    actual_price_unit = fields.Float(string="Đơn giá thực mua")
+    actual_price_unit = fields.Monetary(string="Đơn giá thực mua", currency_field="currency_id")
     actual_tax_id = fields.Many2one('account.tax', string="Thuế (%) thu mua")
     actual_tax_rate = fields.Float(string="Thuế thu mua (%)")
     actual_discount_rate = fields.Float(string="CK thu mua (%)")
-    actual_discount_amount = fields.Float(string="Tiền CK thu mua")
+    actual_discount_amount = fields.Monetary(string="Tiền CK thu mua", currency_field="currency_id")
     actual_supplier_id = fields.Many2one('res.partner', string="NCC thực mua")
 
     # --- Các trường HTML hiển thị so sánh ở list view ---
@@ -107,37 +128,30 @@ class PurchaseRequestLine(models.Model):
         }
 
     # --- Computed fields để tự tính tổng khi người dùng thay đổi số lượng ---
-    misa_price_before_tax_total = fields.Float(
+    misa_price_before_tax_total = fields.Monetary(
         string="Tổng tiền trước thuế",
         compute="_compute_misa_financial_totals",
         store=True,
-        digits='Product Price',
+        currency_field="currency_id",
         help="Số lượng * Đơn giá trước thuế"
     )
 
-    misa_tax_amount_total = fields.Float(
+    misa_tax_amount_total = fields.Monetary(
         string="Tổng tiền thuế",
         compute="_compute_misa_financial_totals",
         store=True,
-        digits='Product Price',
+        currency_field="currency_id",
         help="Số lượng * (Đơn giá trước thuế * Thuế suất / 100)"
     )
 
-    misa_price_after_tax_total = fields.Float(
+    misa_price_after_tax_total = fields.Monetary(
         string="Tổng tiền sau thuế",
         compute="_compute_misa_financial_totals",
         store=True,
-        digits='Product Price',
+        currency_field="currency_id",
         help="Số lượng * Đơn giá sau thuế"
     )
 
-    misa_amount = fields.Float(
-        string="Thành tiền (MISA)",
-        compute="_compute_misa_financial_totals",
-        store=True,
-        digits='Product Price',
-        help="Tổng trước thuế - Tiền chiết khấu + Tổng thuế"
-    )
 
     @api.depends('product_qty', 'misa_price_before_tax', 'misa_tax_amount',
                  'misa_discount_amount', 'misa_price_after_tax')
@@ -153,7 +167,6 @@ class PurchaseRequestLine(models.Model):
             line.misa_price_before_tax_total = before_tax_total
             line.misa_tax_amount_total = qty * (before_tax * (line.misa_tax_rate or 0.0) / 100.0)
             line.misa_price_after_tax_total = qty * after_tax
-            line.misa_amount = before_tax_total - discount_amount + tax_amount
 
     # --- Onchange: tự động tính thuế 2 chiều ---
     @api.onchange('misa_tax_rate')

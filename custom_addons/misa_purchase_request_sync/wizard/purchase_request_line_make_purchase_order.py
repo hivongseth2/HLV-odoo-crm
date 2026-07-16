@@ -34,6 +34,9 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
         self._check_valid_request_line(request_line_ids)
         self.check_group(request_lines)
         for line in request_lines:
+            # YC3: Bỏ qua các dòng có flag skip_processing
+            if line.skip_processing:
+                continue
             remaining_qty = line.product_qty - line.purchased_qty
             if remaining_qty > 0:
                 items.append([0, 0, self._prepare_item(line)])
@@ -153,6 +156,15 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
         đảm bảo price_unit cuối cùng đúng với actual_price_unit.
         """
         for item in self.item_ids:
+            # Khắc phục sai lệch chữ hoa/thường của ĐVT giữa YCMH và Sản phẩm
+            if item.product_id and item.product_uom_id:
+                target_uom = item.product_id.uom_po_id or item.product_id.uom_id
+                if target_uom and item.product_uom_id.name.strip().lower() == target_uom.name.strip().lower():
+                    if item.product_uom_id != target_uom:
+                        item.product_uom_id = target_uom
+                        if item.line_id:
+                            item.line_id.product_uom_id = target_uom
+
             qty = item.actual_qty or item.product_qty or 0.0
             price = item.actual_price_unit or item.misa_price_before_tax or 0.0
             item.write({
@@ -244,11 +256,16 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
     keep_description = fields.Boolean(default=True)
     keep_estimated_cost = fields.Boolean(default=True)
     price_history_btn = fields.Char(string=" ", readonly=True)
+    currency_id = fields.Many2one(
+        related="line_id.currency_id",
+        readonly=True,
+    )
 
     # === Sale đề xuất (từ PR, readonly) ===
-    misa_price_before_tax = fields.Float(
+    misa_price_before_tax = fields.Monetary(
         string="Đơn giá sale đề xuất",
         readonly=True,
+        currency_field="currency_id",
     )
     misa_tax_id = fields.Many2one(
         'account.tax',
@@ -268,17 +285,19 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
         string="Thuế sale yêu cầu (%)",
         readonly=True,
     )
-    misa_tax_amount = fields.Float(
+    misa_tax_amount = fields.Monetary(
         string="Thuế",
         readonly=True,
+        currency_field="currency_id",
     )
     misa_discount_rate = fields.Float(
         string="CK sale đề xuất (%)",
         readonly=True,
     )
-    misa_discount_amount = fields.Float(
+    misa_discount_amount = fields.Monetary(
         string="Tiền CK sale đề xuất",
         readonly=True,
+        currency_field="currency_id",
     )
     supplier_ref = fields.Char(
         related='supplier_id.ref',
@@ -291,8 +310,9 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
         string="SL thực mua",
         help="Số lượng thực tế cần mua. Để trống sẽ dùng số lượng đề xuất.",
     )
-    actual_price_unit = fields.Float(
+    actual_price_unit = fields.Monetary(
         string="Đơn giá thực mua",
+        currency_field="currency_id",
         help="Đơn giá thực tế mua hàng. Để trống sẽ dùng đơn giá từ yêu cầu.",
     )
     actual_tax_id = fields.Many2one(
@@ -309,8 +329,9 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
         string="CK thu mua (%)",
         help="Chiết khấu thực tế (%). Nhập % → tự tính tiền. Nhập tiền → tự tính %.",
     )
-    actual_discount_amount = fields.Float(
+    actual_discount_amount = fields.Monetary(
         string="Tiền CK thu mua",
+        currency_field="currency_id",
         help="Chiết khấu thực tế (tiền). Nhập tiền → tự tính %. Nhập % → tự tính tiền.",
     )
 
@@ -381,23 +402,23 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
         return action
 
     # === Computed fields (readonly, hiển thị tổng tiền) ===
-    misa_price_before_tax_total = fields.Float(
+    misa_price_before_tax_total = fields.Monetary(
         string="Tổng tiền trước thuế",
         compute="_compute_wizard_financials",
         readonly=True,
-        digits='Product Price',
+        currency_field="currency_id",
     )
-    misa_tax_amount_total = fields.Float(
+    misa_tax_amount_total = fields.Monetary(
         string="Tổng tiền thuế",
         compute="_compute_wizard_financials",
         readonly=True,
-        digits='Product Price',
+        currency_field="currency_id",
     )
-    misa_amount = fields.Float(
+    misa_amount = fields.Monetary(
         string="Thành tiền",
         compute="_compute_wizard_financials",
         readonly=True,
-        digits='Product Price',
+        currency_field="currency_id",
     )
 
     @api.depends('actual_qty', 'actual_price_unit', 'actual_tax_rate', 'actual_discount_amount')

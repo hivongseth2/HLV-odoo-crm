@@ -349,6 +349,12 @@ class MisaExtensionController(http.Controller):
                     "previous_status": "cancel",
                 }
             else:
+                # Kiểm tra OUT đã hoàn tất — nếu có thì không cho thu hồi
+                # PICK/PACK dù đã done vẫn cho thu hồi (chỉ chặn OUT)
+                out_done = so.picking_ids.filtered(
+                    lambda p: p.picking_type_id.code == 'outgoing' and p.state == 'done'
+                )
+                can_revoke = not bool(out_done)
                 payload = {
                     "ok": True,
                     "exists": True,
@@ -356,7 +362,7 @@ class MisaExtensionController(http.Controller):
                     "name": so.name,
                     "status": so.state,
                     "status_label": state_label,
-                    "can_revoke": True,
+                    "can_revoke": can_revoke,
                 }
 
         return request.make_response(

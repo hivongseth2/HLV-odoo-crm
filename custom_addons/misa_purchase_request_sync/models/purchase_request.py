@@ -8,6 +8,7 @@ Mở rộng `purchase.request` để:
 2. Cung cấp helper `_prepare_misa_user(owner_text)` được controller dùng
    khi tạo PR từ Browser Extension.
 3. Cung cấp computed fields tiến độ mua hàng cho list view badge.
+4. Hỗ trợ lưu trữ (archive) cho YCMH.
 """
 
 import json
@@ -37,6 +38,10 @@ class PurchaseRequest(models.Model):
         string="Có NCC mới", 
         compute="_compute_misa_has_new_supplier"
     )
+    x_misa_requested_by = fields.Char(string="Người yêu cầu (MISA)")
+
+    # === Hỗ trợ lưu trữ (YC4) ===
+    active = fields.Boolean(string="Hoạt động", default=True)
 
     def _compute_misa_has_new_supplier(self):
         for rec in self:
@@ -58,7 +63,7 @@ class PurchaseRequest(models.Model):
         string="Tổng SL món",
         compute="_compute_purchase_progress",
         store=True,
-        help="Tổng số dòng yêu cầu (không tính dòng đã hủy).",
+        help="Tổng số dòng yêu cầu (không tính dòng đã hủy hoặc bỏ qua).",
     )
     progress_purchased = fields.Integer(
         string="SL đã tạo ĐH",
@@ -90,10 +95,44 @@ class PurchaseRequest(models.Model):
         store=True,
         help="Dùng cho decoration-* trong list view.",
     )
+    # === YC1: Tách riêng 2 cột ĐH và NK ===
+    progress_purchased_badge = fields.Char(
+        string="ĐH",
+        compute="_compute_purchase_progress",
+        store=True,
+        help="Số dòng đã tạo ĐH / Tổng số dòng.",
+    )
+    progress_received_badge = fields.Char(
+        string="NK",
+        compute="_compute_purchase_progress",
+        store=True,
+        help="Số dòng đã nhập kho / Tổng số dòng.",
+    )
+    progress_purchased_status = fields.Selection(
+        selection=[
+            ("not_started", "Chưa có ĐH"),
+            ("partial", "Đã có ĐH một phần"),
+            ("done", "Đã có ĐH đầy đủ"),
+        ],
+        string="Trạng thái ĐH",
+        compute="_compute_purchase_progress",
+        store=True,
+    )
+    progress_received_status = fields.Selection(
+        selection=[
+            ("not_started", "Chưa nhập kho"),
+            ("partial", "Nhập một phần"),
+            ("done", "Nhập đủ"),
+        ],
+        string="Trạng thái NK",
+        compute="_compute_purchase_progress",
+        store=True,
+    )
 
     @api.depends(
         "line_ids",
         "line_ids.cancelled",
+        "line_ids.skip_processing",
         "line_ids.purchase_lines",
         "line_ids.purchase_lines.state",
         "line_ids.qty_done",
@@ -102,7 +141,10 @@ class PurchaseRequest(models.Model):
     )
     def _compute_purchase_progress(self):
         for rec in self:
-            active_lines = rec.line_ids.filtered(lambda l: not l.cancelled)
+            # YC3: Bỏ qua các dòng có skip_processing = True hoặc cancelled
+            active_lines = rec.line_ids.filtered(
+                lambda l: not l.cancelled and not l.skip_processing
+            )
             total = len(active_lines)
             if total == 0:
                 rec.progress_total = 0
@@ -110,6 +152,10 @@ class PurchaseRequest(models.Model):
                 rec.progress_received = 0
                 rec.progress_badge = ""
                 rec.progress_status = "not_started"
+                rec.progress_purchased_badge = ""
+                rec.progress_received_badge = ""
+                rec.progress_purchased_status = "not_started"
+                rec.progress_received_status = "not_started"
                 continue
 
             purchased = 0
@@ -132,7 +178,10 @@ class PurchaseRequest(models.Model):
             rec.progress_purchased = purchased
             rec.progress_received = received
             rec.progress_badge = f"ĐH {purchased}/{total} • NK {received}/{total}"
+            rec.progress_purchased_badge = f"{purchased}/{total}"
+            rec.progress_received_badge = f"{received}/{total}"
 
+            # Trạng thái tổng thể
             if received >= total and total > 0:
                 rec.progress_status = "done"
             elif received > 0:
@@ -141,6 +190,22 @@ class PurchaseRequest(models.Model):
                 rec.progress_status = "in_progress"
             else:
                 rec.progress_status = "not_started"
+
+            # Trạng thái ĐH
+            if purchased >= total and total > 0:
+                rec.progress_purchased_status = "done"
+            elif purchased > 0:
+                rec.progress_purchased_status = "partial"
+            else:
+                rec.progress_purchased_status = "not_started"
+
+            # Trạng thái NK
+            if received >= total and total > 0:
+                rec.progress_received_status = "done"
+            elif received > 0:
+                rec.progress_received_status = "partial"
+            else:
+                rec.progress_received_status = "not_started"
 
     @api.model
     def _default_picking_type(self):
@@ -158,6 +223,28 @@ class PurchaseRequest(models.Model):
             return ben_cam
 
         return super(PurchaseRequest, self)._default_picking_type()
+
+    # ------------------------------------------------------------
+    # YC4: Lưu trữ - Cho phép archive khi không phải draft
+    # ------------------------------------------------------------
+    def _can_be_deleted(self):
+        """Cho phép xóa ở draft, hướng dẫn archive ở các state khác."""
+        self.ensure_one()
+        if self.state == "draft":
+            return True
+        # Nếu không phải draft → không cho xóa, hướng dẫn archive
+        raise UserError(
+            _("Bạn không thể xóa YCMH ở trạng thái '%s'. "
+              "Hãy sử dụng chức năng Lưu trữ (Archive) để ẩn YCMH này.") % self.state
+        )
+
+    def toggle_active(self):
+        """Override toggle_active để thêm ghi chú khi archive/unarchive."""
+        for rec in self:
+            if not rec.active and rec.state == "draft":
+                # Khi unarchive từ draft thì OK
+                pass
+        return super(PurchaseRequest, self).toggle_active()
 
     # ------------------------------------------------------------
     # NÚT BẤM TRÊN FORM (STUB - TODO)
@@ -249,8 +336,11 @@ class PurchaseRequest(models.Model):
 
         user_id, owner_message = self._prepare_misa_user(payload.get("OwnerIDText"))
         
-        # Tìm Đơn bán hàng liên quan
+        # Tìm Đơn bán hàng liên quan hoặc Mục đích mua
         so_name = (payload.get("SaleOrderIDText") or "").strip()
+        purchase_purpose = (payload.get("PurchasePurpose") or "").strip()
+        origin_val = so_name or purchase_purpose or "MISA CRM"
+
         sale_order_id = False
         if so_name:
             so = self.env["sale.order"].search([("name", "=", so_name)], limit=1)
@@ -303,6 +393,7 @@ class PurchaseRequest(models.Model):
                 "description": payload.get("description") or "",
                 "delivery_address": payload.get("DeliveryAddress") or "",
                 "sale_order_id": sale_order_id,
+                "origin": origin_val,
             }
             if date_start:
                 write_vals["date_start"] = date_start
@@ -316,10 +407,11 @@ class PurchaseRequest(models.Model):
                 "requested_by": user_id,
                 "assigned_to": self.env.ref("base.user_admin", raise_if_not_found=False).id if self.env.ref("base.user_admin", raise_if_not_found=False) else False,
                 "state": "to_approve",
-                "origin": "MISA CRM",
+                "origin": origin_val,
                 "description": payload.get("description") or "",
                 "delivery_address": payload.get("DeliveryAddress") or "",
                 "sale_order_id": sale_order_id,
+                "x_misa_requested_by": payload.get("OwnerIDText") or "",
             }
             if date_start:
                 pr_vals["date_start"] = date_start
@@ -342,6 +434,13 @@ class PurchaseRequest(models.Model):
             if pcode and not product:
                 # Gọi odoo.utils của module misa_fetch_po_button để tạo/lấy sản phẩm
                 unit_name = uom_name or "Cái"
+                if unit_name:
+                    uom_exist = uom_model.search([("name", "=ilike", unit_name.strip())], limit=1)
+                    if uom_exist and uom_exist.name != unit_name.strip().title():
+                        try:
+                            uom_exist.write({'name': unit_name.strip().title()})
+                        except Exception:
+                            pass
                 product_name = (line_data.get("name") or line_data.get("product_name") or pcode).strip()
                 
                 price_unit = 0.0
