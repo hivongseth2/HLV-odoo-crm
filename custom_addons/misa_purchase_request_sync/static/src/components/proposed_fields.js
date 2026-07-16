@@ -19,7 +19,7 @@ export class FloatWithProposedField extends FloatField {
         
         const val = this.props.record.data[proposedField];
         if (typeof val === 'number') {
-            return val.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            return val.toLocaleString('vi-VN', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
         }
         return val || "";
     }
