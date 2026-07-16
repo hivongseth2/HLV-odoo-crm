@@ -1,0 +1,4 @@
+.modal:has(.custom_make_rfq_dialog) .modal-dialog {
+    max-width: 95% !important;
+    width: 95% !important;
+}

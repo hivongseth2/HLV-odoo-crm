@@ -35,6 +35,7 @@ Module cung cấp:
         "web.assets_backend": [
             "misa_purchase_request_sync/static/src/components/proposed_fields.js",
             "misa_purchase_request_sync/static/src/components/proposed_fields.xml",
+            "misa_purchase_request_sync/static/src/css/rfq_dialog.css",
         ],
     },
     "license": "LGPL-3",
