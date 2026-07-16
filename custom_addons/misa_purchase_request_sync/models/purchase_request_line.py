@@ -57,6 +57,7 @@ class PurchaseRequestLine(models.Model):
     misa_stock_total = fields.Float(string="Tổng SL tồn kho (MISA)")
     misa_stock_selected = fields.Float(string="SL tồn kho đã chọn (MISA)")
     misa_stock_undelivered = fields.Float(string="SL tồn kho chưa giao (MISA)")
+    misa_note = fields.Char(string="Ghi chú (MISA)")
     
     # --- Các trường lưu thực tế mua hàng (từ Wizard chuyển qua) ---
     actual_qty = fields.Float(string="SL thực mua")

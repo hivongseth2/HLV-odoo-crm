@@ -276,6 +276,11 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
         string="NCC đề xuất name",
         readonly=True,
     )
+    misa_note = fields.Char(
+        related="line_id.misa_note",
+        string="Ghi chú (MISA)",
+        readonly=True,
+    )
     misa_tax_rate = fields.Float(
         string="Thuế sale yêu cầu (%)",
         readonly=True,

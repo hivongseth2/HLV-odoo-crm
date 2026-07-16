@@ -82,6 +82,9 @@
             <xpath expr="//field[@name='line_ids']/list/field[@name='product_id']" position="before">
                 <field name="sequence" string="STT" widget="integer" optional="show" width="60" readonly="parent.state != 'draft'"/>
             </xpath>
+            <xpath expr="//field[@name='line_ids']/list/field[@name='product_id']" position="after">
+                <field name="misa_note" string="Ghi chú (MISA)" optional="show" readonly="parent.state != 'draft'" width="180"/>
+            </xpath>
 
             <!-- YC3: Thêm cột Bỏ qua? ngay sau STT, luôn editable bất kể state -->
             <xpath expr="//field[@name='line_ids']/list/field[@name='sequence']" position="after">
@@ -273,6 +276,7 @@
                             <field name="misa_stock_total" readonly="is_editable == False"/>
                             <field name="misa_stock_selected" readonly="is_editable == False"/>
                             <field name="misa_stock_undelivered" readonly="is_editable == False"/>
+                            <field name="misa_note" readonly="is_editable == False"/>
                         </group>
                     </group>
                 </page>
