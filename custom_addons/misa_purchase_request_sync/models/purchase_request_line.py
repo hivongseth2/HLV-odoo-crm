@@ -8,6 +8,7 @@ from odoo.exceptions import UserError
 
 class PurchaseRequestLine(models.Model):
     _inherit = "purchase.request.line"
+    _order = "sequence, id"
 
     # === Số thứ tự & Bỏ qua ===
     sequence = fields.Integer(

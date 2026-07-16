@@ -59,8 +59,8 @@
 
             <!-- YC3: Thêm cột Bỏ qua? ngay sau STT, dùng force_save để không bị reset -->
             <xpath expr="//field[@name='line_ids']/list/field[@name='sequence']" position="after">
-                <field name="skip_processing" string="Bỏ qua?" widget="boolean_toggle"
-                       optional="show" color="danger" force_save="1"/>
+                <field name="skip_processing" string="Bỏ qua?" widget="boolean"
+                       optional="show" force_save="1"/>
             </xpath>
 
             <!-- YC2: Dời purchased_qty ra sau product_qty -->
@@ -133,12 +133,12 @@
                        decoration-info="progress_status == 'in_progress'"
                        decoration-warning="progress_status == 'partial'"
                        decoration-muted="progress_status == 'not_started'"/>
-                <field name="progress_purchased_badge" string="ĐH" optional="show"
+                <field name="progress_purchased_badge" string="Tiến độ ĐH" optional="show"
                        widget="badge"
                        decoration-success="progress_purchased_status == 'done'"
                        decoration-warning="progress_purchased_status == 'partial'"
                        decoration-muted="progress_purchased_status == 'not_started'"/>
-                <field name="progress_received_badge" string="NK" optional="show"
+                <field name="progress_received_badge" string="Tiến độ NK" optional="show"
                        widget="badge"
                        decoration-success="progress_received_status == 'done'"
                        decoration-warning="progress_received_status == 'partial'"
