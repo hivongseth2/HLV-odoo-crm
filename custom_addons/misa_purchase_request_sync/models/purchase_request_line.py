@@ -8,6 +8,27 @@ from odoo.exceptions import UserError
 
 class PurchaseRequestLine(models.Model):
     _inherit = "purchase.request.line"
+    _order = "id"
+
+    # === Số thứ tự & Bỏ qua ===
+    sequence = fields.Integer(
+        string="STT",
+        compute="_compute_sequence",
+    )
+    skip_processing = fields.Boolean(
+        string="Bỏ qua?",
+        default=False,
+        help="Nếu bật, dòng này sẽ bị bỏ qua khi tạo RFQ và không tính vào tiến độ mua.",
+    )
+
+    @api.depends('request_id.line_ids')
+    def _compute_sequence(self):
+        for pr in self.mapped('request_id'):
+            for idx, line in enumerate(pr.line_ids, 1):
+                line.sequence = idx
+        for line in self:
+            if not line.request_id:
+                line.sequence = 0
 
     misa_line_id = fields.Char(
         string="MISA Line ID",

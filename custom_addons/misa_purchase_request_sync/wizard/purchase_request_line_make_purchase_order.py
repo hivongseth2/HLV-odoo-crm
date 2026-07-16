@@ -34,6 +34,9 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
         self._check_valid_request_line(request_line_ids)
         self.check_group(request_lines)
         for line in request_lines:
+            # YC3: Bỏ qua các dòng có flag skip_processing
+            if line.skip_processing:
+                continue
             remaining_qty = line.product_qty - line.purchased_qty
             if remaining_qty > 0:
                 items.append([0, 0, self._prepare_item(line)])
