@@ -140,4 +140,8 @@
             </xpath>
         </field>
     </record>
+    <!-- Override action để mở rộng popup RFQ ra full-width -->
+    <record id="purchase_request.action_purchase_request_line_make_purchase_order" model="ir.actions.act_window">
+        <field name="context">{'dialog_size': 'full-width'}</field>
+    </record>
 </odoo>
