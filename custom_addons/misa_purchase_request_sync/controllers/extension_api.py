@@ -704,7 +704,8 @@ class MisaExtensionController(http.Controller):
         # 1. Lấy danh sách NCC
         domain = [
             ('parent_id', '=', False),
-            ('hlv_business_role', 'in', ['supplier', 'vendor'])
+            ('hlv_business_role', 'in', ['supplier', 'vendor']),
+            ('supplier_rank', '>', 1),
         ]
         q = payload.get('q') or kwargs.get('q')
         if q:
