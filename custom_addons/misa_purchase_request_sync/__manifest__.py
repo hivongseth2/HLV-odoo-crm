@@ -39,6 +39,7 @@ Module cung cấp:
             "misa_purchase_request_sync/static/src/css/rfq_dialog.css",
         ],
     },
+    "post_init_hook": "fix_pr_line_sequence",
     "license": "LGPL-3",
     "installable": True,
     "application": False,
