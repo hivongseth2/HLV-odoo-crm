@@ -8,16 +8,12 @@ from odoo.exceptions import UserError
 
 class PurchaseRequestLine(models.Model):
     _inherit = "purchase.request.line"
-    _order = "sequence, id"
+    _order = "id"
 
     # === Số thứ tự & Bỏ qua ===
     sequence = fields.Integer(
         string="STT",
         compute="_compute_sequence",
-        store=True,
-        readonly=False,
-        default=10,
-        help="Số thứ tự dòng trong YCMH.",
     )
     skip_processing = fields.Boolean(
         string="Bỏ qua?",
@@ -28,22 +24,11 @@ class PurchaseRequestLine(models.Model):
     @api.depends('request_id.line_ids')
     def _compute_sequence(self):
         for pr in self.mapped('request_id'):
-            existing_lines = pr.line_ids.filtered(lambda l: l._origin.id)
-            new_lines = pr.line_ids - existing_lines
-            
-            # Sắp xếp các dòng đã có theo ID tăng dần
-            sorted_existing = existing_lines.sorted(key=lambda l: l._origin.id)
-            
-            # Ghép lại: dòng cũ xếp trước, dòng mới xếp sau
-            ordered_lines = sorted_existing + new_lines
-            
-            for idx, line in enumerate(ordered_lines, 1):
+            for idx, line in enumerate(pr.line_ids, 1):
                 line.sequence = idx
-                
-        # Gán default cho các dòng không có request_id
         for line in self:
             if not line.request_id:
-                line.sequence = 10
+                line.sequence = 0
 
     misa_line_id = fields.Char(
         string="MISA Line ID",
