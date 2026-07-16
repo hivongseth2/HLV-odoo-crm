@@ -65,9 +65,9 @@ def _build_signed_params(creds, api_path, extra=None):
     return params
 
 
-def _do_get(api_path, params, timeout=30):
+def _do_get(api_path, params, timeout=30, base_url=None):
     """Thực hiện HTTP GET và trả về (status_code, body_dict)."""
-    url = f"{SHOPEE_BASE_URL}{api_path}"
+    url = f"{base_url or SHOPEE_BASE_URL}{api_path}"
     try:
         resp = req_lib.get(url, params=params, timeout=timeout)
     except Exception as e:
@@ -214,6 +214,52 @@ def call_order_detail_with_token_refresh(shop, order_sn_list_str, optional_field
     _refresh_shop_access_token(shop)
     creds = get_credentials_from_shop(shop)
     status_code, body, params = call_order_detail(creds, order_sn_list_str, optional_fields)
+    return status_code, body, params, creds
+
+
+def call_tracking_number(creds, order_sn, package_number=None):
+    """Call Shopee get_tracking_number without sending an empty package_number."""
+    api_path = '/api/v2/logistics/get_tracking_number'
+    extra = {'order_sn': order_sn}
+    if package_number:
+        extra['package_number'] = package_number
+
+    params = _build_signed_params(creds, api_path, extra)
+    _logger.info(
+        "Shopee API get_tracking_number - order_sn=%s package_number=%s",
+        order_sn,
+        package_number or '',
+    )
+    status_code, body = _do_get(
+        api_path, params, base_url=creds.get('base_url')
+    )
+    return status_code, body, params
+
+
+def call_tracking_number_with_token_refresh(shop, order_sn, package_number=None):
+    """Get a tracking number and retry once after refreshing an expired token."""
+    creds = get_credentials_from_shop(shop)
+    status_code, body, params = call_tracking_number(
+        creds, order_sn, package_number=package_number
+    )
+    if not _is_invalid_token_response(body):
+        return status_code, body, params, creds
+
+    _logger.warning(
+        "Shopee get_tracking_number invalid access_token for shop %s - refreshing and retrying once.",
+        shop.display_name,
+    )
+    if hasattr(shop, 'action_force_update_shop'):
+        shop.sudo().action_force_update_shop()
+    elif hasattr(shop, '_refresh_shopee_token'):
+        shop.sudo()._refresh_shopee_token()
+    else:
+        refresh_shopee_access_token(shop)
+
+    creds = get_credentials_from_shop(shop)
+    status_code, body, params = call_tracking_number(
+        creds, order_sn, package_number=package_number
+    )
     return status_code, body, params, creds
 
 

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_picking_form_inherit_shopee_tracking" model="ir.ui.view">
+        <field name="name">stock.picking.form.inherit.shopee.tracking</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header" position="inside">
+                <field name="shopee_tracking_button_visible" invisible="1"/>
+                <button name="action_fetch_shopee_tracking_number"
+                        string="Lấy Mã Vận Đơn Shopee"
+                        type="object"
+                        icon="fa-truck"
+                        class="btn-primary"
+                        groups="stock.group_stock_user"
+                        invisible="not shopee_tracking_button_visible"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>
