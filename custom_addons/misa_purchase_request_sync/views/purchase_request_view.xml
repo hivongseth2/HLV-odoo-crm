@@ -57,10 +57,10 @@
                 <field name="sequence" string="STT" widget="integer" optional="show" width="60"/>
             </xpath>
 
-            <!-- YC3: Thêm cột Bỏ qua? ngay sau STT, dùng force_save để không bị reset -->
+            <!-- YC3: Thêm cột Bỏ qua? ngay sau STT, luôn editable bất kể state -->
             <xpath expr="//field[@name='line_ids']/list/field[@name='sequence']" position="after">
                 <field name="skip_processing" string="Bỏ qua?" widget="boolean"
-                       optional="show" force_save="1"/>
+                       optional="show" force_save="1" readonly="0"/>
             </xpath>
 
             <!-- YC2: Dời purchased_qty ra sau product_qty -->
