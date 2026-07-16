@@ -37,6 +37,7 @@ class PurchaseRequest(models.Model):
         string="Có NCC mới", 
         compute="_compute_misa_has_new_supplier"
     )
+    x_misa_requested_by = fields.Char(string="Người yêu cầu (MISA)")
 
     def _compute_misa_has_new_supplier(self):
         for rec in self:
@@ -316,10 +317,11 @@ class PurchaseRequest(models.Model):
                 "requested_by": user_id,
                 "assigned_to": self.env.ref("base.user_admin", raise_if_not_found=False).id if self.env.ref("base.user_admin", raise_if_not_found=False) else False,
                 "state": "to_approve",
-                "origin": "MISA CRM",
+                "origin": so_name or "MISA CRM",
                 "description": payload.get("description") or "",
                 "delivery_address": payload.get("DeliveryAddress") or "",
                 "sale_order_id": sale_order_id,
+                "x_misa_requested_by": payload.get("OwnerIDText") or "",
             }
             if date_start:
                 pr_vals["date_start"] = date_start
