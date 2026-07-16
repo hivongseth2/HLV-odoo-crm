@@ -13,6 +13,9 @@ class PurchaseRequestLine(models.Model):
     # === Số thứ tự & Bỏ qua ===
     sequence = fields.Integer(
         string="STT",
+        compute="_compute_sequence",
+        store=True,
+        readonly=False,
         default=10,
         help="Số thứ tự dòng trong YCMH.",
     )
@@ -22,15 +25,25 @@ class PurchaseRequestLine(models.Model):
         help="Nếu bật, dòng này sẽ bị bỏ qua khi tạo RFQ và không tính vào tiến độ mua.",
     )
 
-    @api.model_create_multi
-    def create(self, vals_list):
-        """Override create để tự gán sequence tăng dần cho mỗi dòng trong cùng YCMH."""
-        for vals in vals_list:
-            if vals.get('request_id'):
-                # Đếm số dòng hiện có + 1 làm STT
-                existing = self.search_count([('request_id', '=', vals['request_id'])])
-                vals['sequence'] = existing + 1
-        return super(PurchaseRequestLine, self).create(vals_list)
+    @api.depends('request_id.line_ids')
+    def _compute_sequence(self):
+        for pr in self.mapped('request_id'):
+            existing_lines = pr.line_ids.filtered(lambda l: l._origin.id)
+            new_lines = pr.line_ids - existing_lines
+            
+            # Sắp xếp các dòng đã có theo ID tăng dần
+            sorted_existing = existing_lines.sorted(key=lambda l: l._origin.id)
+            
+            # Ghép lại: dòng cũ xếp trước, dòng mới xếp sau
+            ordered_lines = sorted_existing + new_lines
+            
+            for idx, line in enumerate(ordered_lines, 1):
+                line.sequence = idx
+                
+        # Gán default cho các dòng không có request_id
+        for line in self:
+            if not line.request_id:
+                line.sequence = 10
 
     misa_line_id = fields.Char(
         string="MISA Line ID",
