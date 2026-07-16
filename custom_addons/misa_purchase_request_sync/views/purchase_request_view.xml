@@ -24,6 +24,7 @@
                 <attribute name="invisible">1</attribute>
             </xpath>
             <xpath expr="//field[@name='requested_by']" position="after">
+                <field name="active" invisible="1"/>
                 <field name="x_misa_requested_by" string="Người yêu cầu" readonly="1"/>
                 <field name="state" invisible="1"/>
                 <field name="sale_order_id" readonly="state in ('done', 'rejected')"/>
