@@ -705,7 +705,7 @@ class MisaExtensionController(http.Controller):
         domain = [
             ('parent_id', '=', False),
             ('hlv_business_role', 'in', ['supplier', 'vendor']),
-            ('supplier_rank', '>', 1),
+            ('supplier_rank', '>', 0),
         ]
         q = payload.get('q') or kwargs.get('q')
         if q:
