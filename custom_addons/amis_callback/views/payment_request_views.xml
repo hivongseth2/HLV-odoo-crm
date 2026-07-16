@@ -214,7 +214,9 @@
                     </group>
                     <group string="Tài khoản nhận của nhà cung cấp" invisible="payment_method != 'bank'">
                         <field name="beneficiary_account_type" required="payment_method == 'bank'"/>
-                        <field name="vendor_bank_id" readonly="1" options="{'no_open': True}"/>
+                        <field name="vendor_bank_id"
+                               domain="[('partner_id', '=', partner_id)]"
+                               options="{'no_create': True, 'no_open': True}"/>
                         <field name="vendor_account_holder"/>
                         <field name="vendor_bank_account_number"/>
                         <field name="vendor_bank_name"/>
