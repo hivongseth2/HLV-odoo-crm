@@ -57,6 +57,12 @@
                 <field name="sequence" string="STT" widget="integer" optional="show" width="60"/>
             </xpath>
 
+            <!-- YC3: Thêm cột Bỏ qua? ngay sau STT, dùng force_save để không bị reset -->
+            <xpath expr="//field[@name='line_ids']/list/field[@name='sequence']" position="after">
+                <field name="skip_processing" string="Bỏ qua?" widget="boolean_toggle"
+                       optional="show" color="danger" force_save="1"/>
+            </xpath>
+
             <!-- YC2: Dời purchased_qty ra sau product_qty -->
             <!-- Đổi tên cột số lượng và RFQ/PO, và ẩn hiện thông minh theo trạng thái -->
             <xpath expr="//field[@name='line_ids']/list/field[@name='product_qty']" position="attributes">
@@ -67,15 +73,9 @@
                 <field name="display_qty_html" string="Số lượng" widget="html" column_invisible="parent.state == 'draft'"/>
             </xpath>
 
-            <!-- YC2: purchased_qty ra sau display_qty_html (hoặc product_qty) -->
+            <!-- YC2: purchased_qty ra sau display_qty_html -->
             <xpath expr="//field[@name='line_ids']/list/field[@name='display_qty_html']" position="after">
                 <field name="purchased_qty" string="SL đã lên RFQ/PO" optional="show"/>
-            </xpath>
-
-            <!-- YC3: Thêm cột Bỏ qua? dạng toggle -->
-            <xpath expr="//field[@name='line_ids']/list/field[@name='purchased_qty']" position="after">
-                <field name="skip_processing" string="Bỏ qua?" widget="boolean_toggle"
-                       optional="show" color="danger"/>
             </xpath>
 
             <xpath expr="//field[@name='line_ids']/list/field[@name='estimated_cost']" position="after">

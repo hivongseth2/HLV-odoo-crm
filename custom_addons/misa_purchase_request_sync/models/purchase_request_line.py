@@ -21,6 +21,16 @@ class PurchaseRequestLine(models.Model):
         help="Nếu bật, dòng này sẽ bị bỏ qua khi tạo RFQ và không tính vào tiến độ mua.",
     )
 
+    @api.model_create_multi
+    def create(self, vals_list):
+        """Override create để tự gán sequence tăng dần cho mỗi dòng trong cùng YCMH."""
+        for vals in vals_list:
+            if vals.get('request_id'):
+                # Đếm số dòng hiện có + 1 làm STT
+                existing = self.search_count([('request_id', '=', vals['request_id'])])
+                vals['sequence'] = existing + 1
+        return super(PurchaseRequestLine, self).create(vals_list)
+
     misa_line_id = fields.Char(
         string="MISA Line ID",
         index=True,
