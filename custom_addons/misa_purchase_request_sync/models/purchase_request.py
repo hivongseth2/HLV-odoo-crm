@@ -496,7 +496,10 @@ class PurchaseRequest(models.Model):
                     misa_supplier_id = None
             
             raw = line.get("rawData", {})
-            misa_note_val = (line.get("CustomField6") or raw.get("CustomField6") or "").strip()
+            custom_field_6 = raw.get("CustomField6")
+            if custom_field_6 is None:
+                custom_field_6 = line.get("CustomField6")
+            misa_note_val = str(custom_field_6 or "").strip()
 
             def _float_val(key, default=0.0):
                 """Helper lấy float từ line hoặc raw, ưu tiên line."""
