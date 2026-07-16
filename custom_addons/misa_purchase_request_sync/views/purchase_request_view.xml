@@ -51,6 +51,13 @@
             <xpath expr="//field[@name='line_ids']/list/field[@name='date_required']" position="attributes">
                 <attribute name="optional">hide</attribute>
             </xpath>
+
+            <!-- YC2: Thêm cột STT (sequence) ngay trước product_id -->
+            <xpath expr="//field[@name='line_ids']/list/field[@name='product_id']" position="before">
+                <field name="sequence" string="STT" widget="integer" optional="show" width="60"/>
+            </xpath>
+
+            <!-- YC2: Dời purchased_qty ra sau product_qty -->
             <!-- Đổi tên cột số lượng và RFQ/PO, và ẩn hiện thông minh theo trạng thái -->
             <xpath expr="//field[@name='line_ids']/list/field[@name='product_qty']" position="attributes">
                 <attribute name="string">Số lượng yêu cầu</attribute>
@@ -59,9 +66,18 @@
             <xpath expr="//field[@name='line_ids']/list/field[@name='product_qty']" position="after">
                 <field name="display_qty_html" string="Số lượng" widget="html" column_invisible="parent.state == 'draft'"/>
             </xpath>
-            <xpath expr="//field[@name='line_ids']/list/field[@name='purchased_qty']" position="attributes">
-                <attribute name="string">Số lượng đã lên RFQ/PO</attribute>
+
+            <!-- YC2: purchased_qty ra sau display_qty_html (hoặc product_qty) -->
+            <xpath expr="//field[@name='line_ids']/list/field[@name='display_qty_html']" position="after">
+                <field name="purchased_qty" string="SL đã lên RFQ/PO" optional="show"/>
             </xpath>
+
+            <!-- YC3: Thêm cột Bỏ qua? dạng toggle -->
+            <xpath expr="//field[@name='line_ids']/list/field[@name='purchased_qty']" position="after">
+                <field name="skip_processing" string="Bỏ qua?" widget="boolean_toggle"
+                       optional="show" color="danger"/>
+            </xpath>
+
             <xpath expr="//field[@name='line_ids']/list/field[@name='estimated_cost']" position="after">
                 <field name="sale_proposed_supplier_id" widget="many2one_with_proposed" optional="show" width="200" readonly="parent.state != 'draft'"/>
                 <field name="display_supplier_html" string="NCC" widget="html" column_invisible="1" optional="hide" width="200"/>
@@ -109,18 +125,33 @@
                 <field name="x_misa_requested_by" string="Người yêu cầu" optional="show"/>
             </xpath>
             <xpath expr="//field[@name='state']" position="before">
-                <field name="progress_badge" string="Tiến độ mua" optional="show"
+                <!-- YC1: Ẩn badge cũ, thay bằng 2 cột ĐH và NK riêng -->
+                <field name="progress_badge" string="Tiến độ" optional="show"
+                       column_invisible="1"
                        widget="badge"
                        decoration-success="progress_status == 'done'"
                        decoration-info="progress_status == 'in_progress'"
                        decoration-warning="progress_status == 'partial'"
                        decoration-muted="progress_status == 'not_started'"/>
+                <field name="progress_purchased_badge" string="ĐH" optional="show"
+                       widget="badge"
+                       decoration-success="progress_purchased_status == 'done'"
+                       decoration-warning="progress_purchased_status == 'partial'"
+                       decoration-muted="progress_purchased_status == 'not_started'"/>
+                <field name="progress_received_badge" string="NK" optional="show"
+                       widget="badge"
+                       decoration-success="progress_received_status == 'done'"
+                       decoration-warning="progress_received_status == 'partial'"
+                       decoration-muted="progress_received_status == 'not_started'"/>
                 <field name="progress_status" column_invisible="1"/>
+                <field name="progress_purchased_status" column_invisible="1"/>
+                <field name="progress_received_status" column_invisible="1"/>
+                <field name="active" column_invisible="1"/>
             </xpath>
         </field>
     </record>
 
-    <!-- Kế thừa search view để thêm filter cho x_misa_requested_by -->
+    <!-- Kế thừa search view để thêm filter cho x_misa_requested_by và active -->
     <record id="view_purchase_request_search_inherit_misa_sync" model="ir.ui.view">
         <field name="name">purchase.request.search.inherit.misa.sync</field>
         <field name="model">purchase.request</field>
@@ -128,6 +159,9 @@
         <field name="arch" type="xml">
             <xpath expr="//field[@name='requested_by']" position="after">
                 <field name="x_misa_requested_by"/>
+                <!-- YC4: Thêm filter archive -->
+                <filter name="archived" string="Đã lưu trữ" domain="[('active', '=', False)]"/>
+                <separator/>
             </xpath>
         </field>
     </record>
@@ -176,6 +210,8 @@
                         <field name="estimated_cost" widget="monetary" readonly="is_editable == False" />
                         <field name="history_po_line_id" readonly="is_editable == False" options="{'no_create': True}"/>
                         <field name="cancelled" widget="boolean" string="Đã hủy?"/>
+                        <!-- YC3: Thêm skip_processing vào form detail -->
+                        <field name="skip_processing" widget="boolean" string="Bỏ qua?"/>
                         
                         <!-- Hidden fields required by original logic -->
                         <field name="is_editable" invisible="1" />

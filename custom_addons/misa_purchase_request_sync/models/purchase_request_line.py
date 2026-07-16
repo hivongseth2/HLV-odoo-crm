@@ -9,6 +9,18 @@ from odoo.exceptions import UserError
 class PurchaseRequestLine(models.Model):
     _inherit = "purchase.request.line"
 
+    # === Số thứ tự & Bỏ qua ===
+    sequence = fields.Integer(
+        string="STT",
+        default=10,
+        help="Số thứ tự dòng trong YCMH.",
+    )
+    skip_processing = fields.Boolean(
+        string="Bỏ qua?",
+        default=False,
+        help="Nếu bật, dòng này sẽ bị bỏ qua khi tạo RFQ và không tính vào tiến độ mua.",
+    )
+
     misa_line_id = fields.Char(
         string="MISA Line ID",
         index=True,
