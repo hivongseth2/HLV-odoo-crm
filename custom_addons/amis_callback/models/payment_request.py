@@ -306,15 +306,6 @@ class AmisPaymentRequest(models.Model):
                 po.name,
             )
         memo = (self.memo or '').strip() or default_memo
-        account_type_label = dict(self._fields['beneficiary_account_type'].selection).get(
-            self.beneficiary_account_type, ''
-        )
-        if is_bank:
-            memo = '[TK NHẬN: %s - CHỦ TK: %s] %s' % (
-                account_type_label.upper(),
-                (self.vendor_account_holder or '').strip(),
-                memo,
-            )
         currency = self.currency_id.name or 'VND'
         exchange_rate = float(getattr(po, 'currency_rate', 1.0) or 1.0) if po else 1.0
         account_object_id = account_object.get('account_object_id') or ''
