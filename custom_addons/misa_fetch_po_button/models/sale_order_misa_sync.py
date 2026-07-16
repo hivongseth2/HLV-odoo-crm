@@ -1150,6 +1150,19 @@ class SaleOrder(models.Model):
 
         _logger.info("=== Bắt đầu partial resync cho SO %s ===", self.name)
 
+        # --------- Nếu SO đã cancel, đưa về draft trước ---------
+        if self.state == 'cancel':
+            _logger.info("🔄 SO %s đang ở trạng thái 'cancel', đưa về draft trước khi đồng bộ", self.name)
+            try:
+                self.action_draft()
+            except Exception as e:
+                _logger.warning("Không thể action_draft SO %s: %s (thử force write)", self.name, e)
+                try:
+                    self.write({'state': 'draft'})
+                except Exception as e2:
+                    _logger.error("Không thể đưa SO %s về draft: %s", self.name, e2)
+                    raise UserError(_("Không thể đưa đơn %s về draft để đồng bộ: %s") % (self.name, e2))
+
         # --------- Cập nhật x_studio_misa_saler_code và x_studio_misa_order_date ---------
         misa_order_id = data.get("ID") or data.get("CustomID") or self.misa_id
         owner_date = {}
