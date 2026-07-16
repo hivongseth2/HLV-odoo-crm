@@ -49,6 +49,7 @@ class PurchaseRequestLine(models.Model):
     sale_proposed_supplier_id = fields.Many2one('res.partner', string="NCC Sale Đề Xuất")
     misa_price_before_tax = fields.Monetary(string="Đơn giá trước thuế (MISA)", currency_field="currency_id")
     misa_price_after_tax = fields.Monetary(string="Đơn giá sau thuế (MISA)", currency_field="currency_id")
+    misa_amount = fields.Monetary(string="Thành tiền (MISA)", currency_field="currency_id")
     misa_tax_amount = fields.Monetary(string="Thuế (MISA)", currency_field="currency_id")
     misa_tax_rate = fields.Float(string="% Thuế (MISA)")
     misa_discount_rate = fields.Float(string="TL chiết khấu (MISA)")
@@ -151,13 +152,6 @@ class PurchaseRequestLine(models.Model):
         help="Số lượng * Đơn giá sau thuế"
     )
 
-    misa_amount = fields.Monetary(
-        string="Thành tiền (MISA)",
-        compute="_compute_misa_financial_totals",
-        store=True,
-        currency_field="currency_id",
-        help="Tổng trước thuế - Tiền chiết khấu + Tổng thuế"
-    )
 
     @api.depends('product_qty', 'misa_price_before_tax', 'misa_tax_amount',
                  'misa_discount_amount', 'misa_price_after_tax')
@@ -173,7 +167,6 @@ class PurchaseRequestLine(models.Model):
             line.misa_price_before_tax_total = before_tax_total
             line.misa_tax_amount_total = qty * (before_tax * (line.misa_tax_rate or 0.0) / 100.0)
             line.misa_price_after_tax_total = qty * after_tax
-            line.misa_amount = before_tax_total - discount_amount + tax_amount
 
     # --- Onchange: tự động tính thuế 2 chiều ---
     @api.onchange('misa_tax_rate')
