@@ -336,8 +336,11 @@ class PurchaseRequest(models.Model):
 
         user_id, owner_message = self._prepare_misa_user(payload.get("OwnerIDText"))
         
-        # Tìm Đơn bán hàng liên quan
+        # Tìm Đơn bán hàng liên quan hoặc Mục đích mua
         so_name = (payload.get("SaleOrderIDText") or "").strip()
+        purchase_purpose = (payload.get("PurchasePurpose") or "").strip()
+        origin_val = so_name or purchase_purpose or "MISA CRM"
+
         sale_order_id = False
         if so_name:
             so = self.env["sale.order"].search([("name", "=", so_name)], limit=1)
@@ -390,6 +393,7 @@ class PurchaseRequest(models.Model):
                 "description": payload.get("description") or "",
                 "delivery_address": payload.get("DeliveryAddress") or "",
                 "sale_order_id": sale_order_id,
+                "origin": origin_val,
             }
             if date_start:
                 write_vals["date_start"] = date_start
@@ -403,7 +407,7 @@ class PurchaseRequest(models.Model):
                 "requested_by": user_id,
                 "assigned_to": self.env.ref("base.user_admin", raise_if_not_found=False).id if self.env.ref("base.user_admin", raise_if_not_found=False) else False,
                 "state": "to_approve",
-                "origin": so_name or "MISA CRM",
+                "origin": origin_val,
                 "description": payload.get("description") or "",
                 "delivery_address": payload.get("DeliveryAddress") or "",
                 "sale_order_id": sale_order_id,
