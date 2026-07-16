@@ -113,7 +113,7 @@
                 <field name="misa_stock_selected" optional="hide" readonly="1"/>
                 <field name="misa_stock_undelivered" optional="hide" readonly="1"/>
                 
-                <field name="misa_price_before_tax" widget="float_with_proposed" optional="show" readonly="parent.state != 'draft'"/>
+                <field name="misa_price_before_tax" widget="monetary_with_proposed" optional="show" readonly="parent.state != 'draft'"/>
                 <field name="display_price_unit_html" string="Đơn giá trước thuế" widget="html" column_invisible="1" optional="hide"/>
                 
                 <field name="misa_price_before_tax_total" optional="show" sum="Tổng tiền trước thuế"/>

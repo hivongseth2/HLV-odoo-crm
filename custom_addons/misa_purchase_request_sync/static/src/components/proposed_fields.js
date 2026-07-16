@@ -4,6 +4,7 @@ import { registry } from "@web/core/registry";
 import { FloatField, floatField } from "@web/views/fields/float/float_field";
 import { Many2OneField, many2OneField } from "@web/views/fields/many2one/many2one_field";
 import { CharField, charField } from "@web/views/fields/char/char_field";
+import { MonetaryField, monetaryField } from "@web/views/fields/monetary/monetary_field";
 import { useService } from "@web/core/utils/hooks";
 
 export class FloatWithProposedField extends FloatField {
@@ -80,6 +81,83 @@ export class FloatWithProposedField extends FloatField {
 FloatWithProposedField.template = "misa_purchase_request_sync.FloatWithProposedField";
 FloatWithProposedField.props = {
     ...FloatField.props,
+    options: { type: Object, optional: true },
+};
+
+export class MonetaryWithProposedField extends MonetaryField {
+    setup() {
+        super.setup();
+        this.orm = useService("orm");
+        this.action = useService("action");
+    }
+
+    get proposedValue() {
+        const proposedField = this.props.options?.proposed_field;
+        if (!proposedField) return null;
+        
+        const val = this.props.record.data[proposedField];
+        if (typeof val === 'number') {
+            return val.toLocaleString('vi-VN', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+        }
+        return val || "";
+    }
+
+    get showPriceHistoryButton() {
+        return (this.props.name === 'actual_price_unit' || this.props.name === 'misa_price_before_tax') && !!this.props.record.data.product_id;
+    }
+
+    async onViewPriceHistory() {
+        const resModel = this.props.record.resModel;
+        const resId = this.props.record.resId;
+        const productData = this.props.record.data.product_id;
+        if (!productData) return;
+
+        let lineIdInt = false;
+        if (resModel === 'purchase.request.line') {
+            if (typeof resId === 'number' && resId > 0) {
+                lineIdInt = resId;
+            }
+        } else {
+            const lineData = this.props.record.data.line_id;
+            if (lineData) {
+                if (Array.isArray(lineData)) {
+                    lineIdInt = lineData[0];
+                } else if (lineData && typeof lineData === 'object') {
+                    lineIdInt = lineData.resId || lineData.id || false;
+                } else if (typeof lineData === 'number') {
+                    lineIdInt = lineData;
+                }
+            }
+        }
+
+        if (!lineIdInt || (typeof lineIdInt === 'string' && lineIdInt.startsWith('virtual_'))) {
+            return;
+        }
+
+        const action = await this.orm.call(
+            "purchase.request.line",
+            "action_view_price_history",
+            [[lineIdInt]]
+        );
+        if (action) {
+            if (!action.views && action.view_mode) {
+                action.views = action.view_mode.split(',').map(mode => [false, mode.trim()]);
+            }
+            if (resModel === 'purchase.request.line.make.purchase.order.item' && typeof resId === 'number' && resId > 0) {
+                action.context = { ...(action.context || {}), active_make_order_item_id: resId };
+            }
+            this.action.doAction(action);
+        }
+    }
+
+    onDummy(event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
+}
+MonetaryWithProposedField.template = "misa_purchase_request_sync.MonetaryWithProposedField";
+MonetaryWithProposedField.props = {
+    ...MonetaryField.props,
     options: { type: Object, optional: true },
 };
 
@@ -226,6 +304,16 @@ registry.category("fields").add("float_with_proposed", {
     component: FloatWithProposedField,
     extractProps: (fieldInfo, activeActions) => {
         const props = floatField.extractProps ? floatField.extractProps(fieldInfo, activeActions) : {};
+        props.options = fieldInfo.options || fieldInfo.attrs?.options;
+        return props;
+    },
+});
+
+registry.category("fields").add("monetary_with_proposed", {
+    ...monetaryField,
+    component: MonetaryWithProposedField,
+    extractProps: (fieldInfo, activeActions) => {
+        const props = monetaryField.extractProps ? monetaryField.extractProps(fieldInfo, activeActions) : {};
         props.options = fieldInfo.options || fieldInfo.attrs?.options;
         return props;
     },

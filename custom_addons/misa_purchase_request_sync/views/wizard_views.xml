@@ -99,7 +99,7 @@
                         <!-- Đơn giá: Sale đề xuất (ẩn) + Thực mua (widget) -->
                         <field name="misa_price_before_tax" column_invisible="1" force_save="1" />
                         <field name="actual_price_unit" string="Đơn giá thực mua" 
-                               width="140px" widget="float_with_proposed" options="{'proposed_field': 'misa_price_before_tax'}"
+                               width="140px" widget="monetary_with_proposed" options="{'proposed_field': 'misa_price_before_tax'}"
                                force_save="1" decoration-success="1" />
                         
                         <!-- Thuế: Sale yêu cầu (ẩn) + Thu mua (widget) -->
@@ -125,7 +125,7 @@
                                width="100px" widget="float_with_proposed" options="{'proposed_field': 'misa_discount_rate'}"
                                decoration-success="1" optional="hide" force_save="1" />
                         <field name="actual_discount_amount" string="Tiền CK thu mua" 
-                               width="110px" widget="float_with_proposed" options="{'proposed_field': 'misa_discount_amount'}"
+                               width="110px" widget="monetary_with_proposed" options="{'proposed_field': 'misa_discount_amount'}"
                                decoration-success="1" optional="hide" force_save="1" />
                         
                         <field name="estimated_cost" optional="hide" force_save="1" />
