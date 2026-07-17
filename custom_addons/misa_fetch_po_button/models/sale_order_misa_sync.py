@@ -235,7 +235,9 @@ class SaleOrder(models.Model):
         return [tax.id] if tax else []
 
 
-    def _sync_so_lines_from_misa_no_picking(self, lines, headers, defer_quantity=False):
+    def _sync_so_lines_from_misa_no_picking(
+        self, lines, headers, defer_quantity=False, prepared_lines=None,
+    ):
         """
         Đưa các dòng SO về đúng như MISA (qty/price/uom) theo UoM mặc định của product.
         KHÔNG group theo product code - mỗi dòng MISA = 1 SOL riêng biệt.
@@ -245,6 +247,7 @@ class SaleOrder(models.Model):
         env = self.env
         odoo_utils = env['odoo.utils']
         SaleLine = env['sale.order.line']
+        source_lines = [] if prepared_lines is not None else (lines or [])
 
         def _flt(x, dv=0.0):
             try:
@@ -258,7 +261,7 @@ class SaleOrder(models.Model):
         # Nếu combo parent có BoM Kit, Odoo sẽ tự explode ra picking
         # → không cần thêm children vào SO, tránh trùng lặp
         combo_codes_with_bom = set()
-        for ln in (lines or []):
+        for ln in source_lines:
             if ln.get("IsSetProduct"):
                 combo_code = (ln.get("ProductIDText") or "").strip()
                 if combo_code:
@@ -277,7 +280,7 @@ class SaleOrder(models.Model):
         misa_sol_data = []
         current_parent_code = None  # Track combo parent hiện tại theo SortOrder
         
-        for ln in (lines or []):
+        for ln in source_lines:
             code = (ln.get("ProductIDText") or "").strip()
             if not code:
                 continue
@@ -341,9 +344,65 @@ class SaleOrder(models.Model):
                 'status': x_studio_product_status,
             })
 
+        # Khi kho duyệt, dùng dữ liệu đã chuẩn hóa/lưu từ lần fetch trước.
+        # Không gọi lại CRM, kể cả API quy đổi đơn vị sản phẩm.
+        if prepared_lines is not None:
+            Product = env['product.product']
+            for saved in prepared_lines:
+                product = Product.browse(int(saved.get('product_id') or 0)).exists()
+                if not product:
+                    raise UserError(_(
+                        "Sản phẩm của snapshot MISA không còn tồn tại trong Odoo (CRM line %s)."
+                    ) % (saved.get('crm_line_id') or '-'))
+                misa_sol_data.append({
+                    'crm_line_id': str(saved.get('crm_line_id') or '').strip(),
+                    'product': product,
+                    'code': saved.get('code') or product.default_code or product.display_name,
+                    'name': saved.get('name') or product.display_name,
+                    'qty': float(saved.get('qty') or 0.0),
+                    'price': float(saved.get('price') or 0.0),
+                    'discount': float(saved.get('discount') or 0.0),
+                    'note': saved.get('note') or '',
+                    'tax_ids': [int(tax_id) for tax_id in (saved.get('tax_ids') or [])],
+                    'is_default_uom': bool(saved.get('is_default_uom')),
+                    'status': saved.get('status') or '',
+                })
+
+        line_snapshot = [{
+            'crm_line_id': item['crm_line_id'],
+            'product_id': item['product'].id,
+            'code': item['code'],
+            'name': item['name'],
+            'qty': item['qty'],
+            'price': item['price'],
+            'discount': item['discount'],
+            'note': item['note'],
+            'tax_ids': item['tax_ids'],
+            'is_default_uom': item['is_default_uom'],
+            'status': item['status'],
+        } for item in misa_sol_data]
+
         # Lấy danh sách SOL hiện tại
         existing_sols = list(self.order_line.filtered(lambda line: not line.display_type))
         qty_changes = []
+        audit_changes = []
+
+        def _audit(misa_data, sol, field_name, old_value, new_value, change_type='update'):
+            audit_changes.append({
+                'change_type': change_type,
+                'crm_line_id': misa_data.get('crm_line_id') if misa_data else sol.misa_crm_line_id,
+                'product_id': (
+                    misa_data['product'].id if misa_data and misa_data.get('product')
+                    else sol.product_id.id
+                ),
+                'product_code': (
+                    misa_data.get('code') if misa_data
+                    else sol.product_id.default_code or sol.product_id.display_name
+                ),
+                'field_name': field_name,
+                'old_value': str(old_value if old_value not in (None, False) else ''),
+                'new_value': str(new_value if new_value not in (None, False) else ''),
+            })
         
         # Match: Tìm SOL hiện có khớp với từng dòng MISA
         # Ưu tiên match theo: product + qty + price (tránh nhầm lẫn khi có 2 dòng cùng product)
@@ -406,6 +465,29 @@ class SaleOrder(models.Model):
             new_qty = float(misa_data['qty'] or 0.0)
             product_changed = sol.product_id != misa_data['product']
             stock_changed = product_changed or abs(old_qty - new_qty) >= 0.01
+            if product_changed:
+                _audit(
+                    misa_data, sol, _('Sản phẩm'),
+                    sol.product_id.display_name, misa_data['product'].display_name,
+                )
+            if abs(old_qty - new_qty) >= 0.01:
+                _audit(misa_data, sol, _('Số lượng'), "%g" % old_qty, "%g" % new_qty)
+            if abs(float(sol.price_unit or 0.0) - float(misa_data['price'] or 0.0)) >= 0.01:
+                _audit(
+                    misa_data, sol, _('Đơn giá'),
+                    "%g" % float(sol.price_unit or 0.0),
+                    "%g" % float(misa_data['price'] or 0.0),
+                )
+            if abs(float(sol.discount or 0.0) - float(misa_data['discount'] or 0.0)) >= 0.0001:
+                _audit(
+                    misa_data, sol, _('Chiết khấu (%)'),
+                    "%g" % float(sol.discount or 0.0),
+                    "%g" % float(misa_data['discount'] or 0.0),
+                )
+            if (sol.name or '').strip() != (misa_data['name'] or '').strip():
+                _audit(misa_data, sol, _('Mô tả'), sol.name, misa_data['name'])
+            if (sol.note or '').strip() != (misa_data['note'] or '').strip():
+                _audit(misa_data, sol, _('Ghi chú dòng'), sol.note, misa_data['note'])
             if stock_changed:
                 qty_changes.append({
                     'crm_line_id': misa_data['crm_line_id'],
@@ -449,6 +531,11 @@ class SaleOrder(models.Model):
         for misa_data in unmatched_misa:
             new_qty = float(misa_data['qty'] or 0.0)
             if abs(new_qty) >= 0.01:
+                _audit(
+                    misa_data, None, _('Dòng sản phẩm'), '',
+                    _("SL %g; đơn giá %g") % (new_qty, float(misa_data['price'] or 0.0)),
+                    change_type='add',
+                )
                 qty_changes.append({
                     'crm_line_id': misa_data['crm_line_id'],
                     'code': misa_data['code'],
@@ -505,6 +592,12 @@ class SaleOrder(models.Model):
             new_qty = max(qty_delivered, 0.0)
             old_qty = float(sol.product_uom_qty or 0.0)
             if abs(old_qty - new_qty) >= 0.01:
+                _audit(
+                    None, sol, _('Dòng sản phẩm'),
+                    _("SL %g; đơn giá %g") % (old_qty, float(sol.price_unit or 0.0)),
+                    _("SL %g") % new_qty,
+                    change_type='remove',
+                )
                 qty_changes.append({
                     'crm_line_id': sol.misa_crm_line_id,
                     'code': code,
@@ -528,7 +621,9 @@ class SaleOrder(models.Model):
 
         return {
             'qty_changes': qty_changes,
+            'audit_changes': audit_changes,
             'quantity_deferred': bool(defer_quantity and qty_changes),
+            'line_snapshot': line_snapshot,
         }
 
 
@@ -650,6 +745,69 @@ class SaleOrder(models.Model):
                 )
             )
         return "\n".join(rows)
+
+    def _misa_record_sync_snapshot_history(self, sync_result, header_data, pending):
+        """Lưu một phiên bản thay đổi có thể truy vết; phiên bản mới thay phiên bản pending cũ."""
+        self.ensure_one()
+        snapshot_payload = sync_result.get('line_snapshot') or []
+        audit_changes = sync_result.get('audit_changes') or []
+        current = self.misa_qty_sync_pending_history_id.sudo()
+
+        # Cùng một snapshot được resync lại thì không tạo thêm lịch sử trùng.
+        if pending and current and current.snapshot_payload == snapshot_payload:
+            return current
+
+        now = fields.Datetime.now()
+        history = self.env['misa.sale.sync.snapshot']
+        if audit_changes:
+            summary = "\n".join(
+                "[%s] %s: %s → %s" % (
+                    change.get('product_code') or '-',
+                    change.get('field_name') or _('Thay đổi'),
+                    change.get('old_value') or '-',
+                    change.get('new_value') or '-',
+                )
+                for change in audit_changes
+            )
+            crm_modified_at = False
+            crm_modified_at_raw = (
+                header_data.get('ModifiedDate')
+                or header_data.get('LastModifiedDate')
+                or header_data.get('UpdatedDate')
+            )
+            if crm_modified_at_raw:
+                try:
+                    crm_modified_at = dtparse(crm_modified_at_raw).replace(tzinfo=None)
+                except Exception:
+                    crm_modified_at = False
+            history = self.env['misa.sale.sync.snapshot'].sudo().create({
+                'name': "%s / %s" % (self.name, fields.Datetime.to_string(now)),
+                'sale_order_id': self.id,
+                'misa_order_id': str(self.misa_id or ''),
+                'fetched_at': now,
+                'fetched_by_id': self.env.user.id,
+                'crm_owner': header_data.get('OwnerIDText') or False,
+                'crm_modified_by': (
+                    header_data.get('ModifiedByIDText')
+                    or header_data.get('ModifiedByName')
+                    or header_data.get('ModifiedByText')
+                    or header_data.get('LastModifiedByIDText')
+                    or False
+                ),
+                'crm_modified_at': crm_modified_at,
+                'state': 'pending' if pending else 'applied',
+                'summary': summary,
+                'snapshot_payload': snapshot_payload,
+                'change_count': len(audit_changes),
+                'line_ids': [(0, 0, change) for change in audit_changes],
+            })
+
+        if current:
+            vals = {'state': 'superseded'}
+            if history:
+                vals['replaced_by_id'] = history.id
+            current.write(vals)
+        return history
 
     def _misa_notify_warehouse(self, title, detail=None):
         """Ghi chatter trên SO/picking và notify người kho đã được assign."""
@@ -791,10 +949,14 @@ class SaleOrder(models.Model):
             )
             if self.state != 'cancel':
                 self.action_cancel()
+            if self.misa_qty_sync_pending_history_id:
+                self.misa_qty_sync_pending_history_id.sudo().write({'state': 'superseded'})
             self.write({
                 'misa_qty_sync_pending': False,
                 'misa_qty_sync_pending_at': False,
                 'misa_qty_sync_pending_summary': False,
+                'misa_qty_sync_pending_snapshot': False,
+                'misa_qty_sync_pending_history_id': False,
             })
             return {
                 'type': 'ir.actions.client',
@@ -809,14 +971,18 @@ class SaleOrder(models.Model):
         lines = self._misa_fetch_lines(misa_order_id)
         self._sync_misa_header_in_place(data, headers)
         touched_pickings = self._misa_warehouse_touched_pickings()
-        quantity_approved = bool(self.env.context.get('misa_quantity_approved'))
         sync_result = self._sync_so_lines_from_misa_no_picking(
             lines,
             headers,
-            defer_quantity=bool(touched_pickings and not quantity_approved),
+            defer_quantity=bool(touched_pickings),
         )
 
         qty_changes = sync_result.get('qty_changes') or []
+        history = self._misa_record_sync_snapshot_history(
+            sync_result,
+            data,
+            pending=bool(sync_result.get('quantity_deferred')),
+        )
         if sync_result.get('quantity_deferred'):
             summary = self._misa_qty_change_summary(qty_changes)
             was_pending = self.misa_qty_sync_pending
@@ -825,6 +991,8 @@ class SaleOrder(models.Model):
                 'misa_qty_sync_pending': True,
                 'misa_qty_sync_pending_at': fields.Datetime.now(),
                 'misa_qty_sync_pending_summary': summary,
+                'misa_qty_sync_pending_snapshot': sync_result.get('line_snapshot') or [],
+                'misa_qty_sync_pending_history_id': history.id,
             })
             if not was_pending or old_summary != summary:
                 self._misa_notify_warehouse(
@@ -846,6 +1014,8 @@ class SaleOrder(models.Model):
             'misa_qty_sync_pending': False,
             'misa_qty_sync_pending_at': False,
             'misa_qty_sync_pending_summary': False,
+            'misa_qty_sync_pending_snapshot': False,
+            'misa_qty_sync_pending_history_id': False,
         })
         if self.state in ('draft', 'sent'):
             self.action_confirm()
@@ -865,13 +1035,48 @@ class SaleOrder(models.Model):
             raise UserError(_("Đơn không có thay đổi số lượng MISA đang chờ duyệt."))
         if not self.env.user.has_group('stock.group_stock_user'):
             raise UserError(_("Chỉ người dùng kho mới được duyệt thay đổi số lượng MISA."))
+        snapshot = self.misa_qty_sync_pending_snapshot
+        if not isinstance(snapshot, list):
+            raise UserError(_(
+                "Đơn chờ duyệt này chưa có snapshot. Vui lòng đồng bộ MISA lại một lần để tạo snapshot mới."
+            ))
         approver_name = self.env.user.name
         order = self.sudo()
+        pending_summary = order.misa_qty_sync_pending_summary
+        pending_history = order.misa_qty_sync_pending_history_id
+        order._sync_so_lines_from_misa_no_picking(
+            lines=[],
+            headers={},
+            defer_quantity=False,
+            prepared_lines=snapshot,
+        )
+        order.write({
+            'misa_qty_sync_pending': False,
+            'misa_qty_sync_pending_at': False,
+            'misa_qty_sync_pending_summary': False,
+            'misa_qty_sync_pending_snapshot': False,
+            'misa_qty_sync_pending_history_id': False,
+        })
+        if pending_history:
+            pending_history.sudo().write({
+                'state': 'applied',
+                'approved_at': fields.Datetime.now(),
+                'approved_by_id': self.env.user.id,
+            })
+        if order.state in ('draft', 'sent'):
+            order.action_confirm()
+        order._auto_apply_misa_tags()
         order._misa_notify_warehouse(
             _("Kho (%s) đã duyệt thay đổi số lượng MISA cho đơn %s.") % (approver_name, order.name),
-            order.misa_qty_sync_pending_summary,
+            pending_summary,
         )
-        return order.with_context(misa_quantity_approved=True).action_resync_from_misa()
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': 'sale.order',
+            'view_mode': 'form',
+            'res_id': order.id,
+            'target': 'current',
+        }
 # =====================API
     @api.model
     def api_resync_by_misa(self, misa_order_id, warehouse_id=None, create_when_missing=True):
