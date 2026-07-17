@@ -18,6 +18,13 @@
         </xpath>
         <xpath expr="//header" position="inside">
           <field name="misa_qty_sync_pending" invisible="1"/>
+          <!-- Compatibility anchor cho các view DB/Studio cũ còn xpath theo tên hard sync.
+               Method cùng tên chỉ gọi resync tại chỗ an toàn, không hủy/tạo lại move. -->
+          <button name="action_resync_from_misa_hard"
+                  type="object"
+                  string="Đồng bộ MISA (tương thích)"
+                  groups="base.group_no_one"
+                  invisible="1"/>
           <!-- <button name="action_resync_from_misa"
                   type="object"
                   string="Đồng bộ MISA"

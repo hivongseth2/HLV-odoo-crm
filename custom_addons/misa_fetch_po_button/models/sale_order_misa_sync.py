@@ -1029,6 +1029,10 @@ class SaleOrder(models.Model):
             'target': 'current',
         }
 
+    def action_resync_from_misa_hard(self):
+        """Alias tương thích view cũ; tuyệt đối không khôi phục luồng hard/delete move."""
+        return self.action_resync_from_misa()
+
     def action_approve_misa_quantity_sync(self):
         self.ensure_one()
         if not self.misa_qty_sync_pending:
