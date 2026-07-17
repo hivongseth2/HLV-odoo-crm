@@ -1,0 +1,3 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_misa_extension_element_admin,access_misa_extension_element_admin,model_misa_extension_element,base.group_system,1,1,1,1
+access_misa_extension_config_version_admin,access_misa_extension_config_version_admin,model_misa_extension_config_version,base.group_system,1,1,1,1
