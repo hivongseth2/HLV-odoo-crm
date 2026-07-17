@@ -1,7 +1,7 @@
 {
     'name': 'MISA PO Fetch Button',
     'version': '1.0',
-    'depends': ['base', 'contacts', 'stock', 'purchase', 'sale', 'sales_team', 'point_of_sale'],
+    'depends': ['base', 'contacts', 'stock', 'purchase', 'sale', 'sale_stock', 'sales_team', 'point_of_sale'],
     'author': 'Luan',
     'category': 'Purchases',
     'description': 'Fetch PO from MISA and create in Odoo',
@@ -14,6 +14,7 @@
         'views/misa_combined_button_view.xml',
         'views/misa_return_button_view.xml',
         'views/sale_order_misa_sync.xml',
+        'views/stock_picking_misa_sync.xml',
         'views/crm_tag_views.xml',
         'wizard/misa_pos_sync_wizard_views.xml',
         'wizard/misa_tag_update_wizard_views.xml',

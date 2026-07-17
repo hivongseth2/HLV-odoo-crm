@@ -6,17 +6,34 @@
       <field name="inherit_id" ref="sale.view_order_form"/>
       <field name="arch" type="xml">
         <xpath expr="//header" position="inside">
-          <button name="action_resync_from_misa_hard"
+          <field name="misa_qty_sync_pending" invisible="1"/>
+          <button name="action_resync_from_misa"
                   type="object"
                   string="Đồng bộ MISA"
-                  class="btn-danger"
-                  help="Chỉ chạy khi không có phiếu giao done và không có hoá đơn posted."
+                  class="btn-primary"
+                  help="Cập nhật trực tiếp đơn hiện tại theo CRM Line ID; không xóa SO hoặc phiếu kho."
                   invisible="misa_id == False"/>
+          <button name="action_approve_misa_quantity_sync"
+                  type="object"
+                  string="Kho duyệt SL MISA"
+                  class="btn-warning"
+                  groups="stock.group_stock_user"
+                  invisible="not misa_qty_sync_pending"/>
           <button name="action_update_tag_single"
                   type="object"
                   string="Cập nhật Thẻ"
                   class="btn-secondary"
                   invisible="state not in ('draft', 'sent', 'sale')"/>
+        </xpath>
+        <xpath expr="//sheet" position="inside">
+          <div class="alert alert-warning" role="alert" invisible="not misa_qty_sync_pending">
+            <strong>Đơn đang chờ kho duyệt thay đổi số lượng từ MISA.</strong>
+            <field name="misa_qty_sync_pending_at" readonly="1" class="ms-2"/>
+            <field name="misa_qty_sync_pending_summary" readonly="1" nolabel="1"/>
+          </div>
+        </xpath>
+        <xpath expr="//field[@name='order_line']//field[@name='product_id']" position="after">
+          <field name="misa_crm_line_id" optional="hide" readonly="1"/>
         </xpath>
       </field>
     </record>
