@@ -355,6 +355,19 @@ class MisaExtensionController(http.Controller):
                     lambda p: p.picking_type_id.code == 'outgoing' and p.state == 'done'
                 )
                 can_revoke = not bool(out_done)
+
+                lines_data = []
+                for line in so.order_line:
+                    if line.display_type:
+                        continue
+                    lines_data.append({
+                        "misa_line_id": line.misa_line_id if hasattr(line, 'misa_line_id') and line.misa_line_id else "",
+                        "product_code": line.product_id.default_code if line.product_id else "",
+                        "name": line.name or "",
+                        "qty": line.product_uom_qty,
+                        "qty_delivered": line.qty_delivered if hasattr(line, 'qty_delivered') else 0.0,
+                    })
+
                 payload = {
                     "ok": True,
                     "exists": True,
@@ -363,6 +376,7 @@ class MisaExtensionController(http.Controller):
                     "status": so.state,
                     "status_label": state_label,
                     "can_revoke": can_revoke,
+                    "lines": lines_data,
                 }
 
         return request.make_response(
