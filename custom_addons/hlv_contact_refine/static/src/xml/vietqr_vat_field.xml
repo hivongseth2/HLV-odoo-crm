@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="hlv_contact_refine.HlvVietqrVatField" owl="1">
+        <div class="d-flex align-items-center gap-2 w-100">
+            <div class="flex-grow-1">
+                <t t-call="web.CharField"/>
+            </div>
+            <button t-if="showLookupButton"
+                    type="button"
+                    class="btn btn-secondary text-nowrap"
+                    t-att-disabled="state.loading"
+                    t-on-click.stop.prevent="lookupBusiness">
+                <i t-att-class="state.loading ? 'fa fa-spinner fa-spin me-1' : 'fa fa-search me-1'"/>
+                <t t-if="state.loading">Đang lấy...</t>
+                <t t-else="">Lấy thông tin MST</t>
+            </button>
+        </div>
+    </t>
+</templates>
