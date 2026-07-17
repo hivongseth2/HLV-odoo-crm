@@ -1964,3 +1964,99 @@ class MisaExtensionController(http.Controller):
             _logger.exception("Extension API /po/reconcile_only exception: %s", e)
             return json_response({"ok": False, "error": "exception", "message": str(e)}, 500)
 
+    # ============================================================
+    # POST /api/extension/pr/batch_check
+    # ============================================================
+    @http.route(
+        "/api/extension/pr/batch_check",
+        type="http",
+        auth="none",
+        methods=["POST", "OPTIONS"],
+        csrf=False,
+        cors="*",
+    )
+    def api_extension_pr_batch_check(self, **payload):
+        """
+        Kiểm tra trạng thái Odoo của nhiều YCMH cùng lúc (dùng cho list page).
+
+        Body JSON:
+        {
+            "token": "...",
+            "names": ["YCMH2441...", "YCMH2442...", ...]
+        }
+
+        Response 200 JSON:
+        {
+            "ok": true,
+            "results": {
+                "YCMH2441...": {
+                    "exists": true,
+                    "state": "draft",
+                    "state_label": "Bản nháp"
+                },
+                "YCMH2442...": {
+                    "exists": false
+                }
+            }
+        }
+        """
+        def json_response(data, status=200):
+            return request.make_response(
+                json.dumps(data), headers=[("Content-Type", "application/json")]
+            )
+
+        if request.httprequest.method == "OPTIONS":
+            return json_response({"ok": True})
+
+        payload = self._parse_json_body(payload)
+        token = self._extract_token(payload)
+        ok, err = self._authenticate(token)
+        if not ok:
+            return json_response(err, 401)
+
+        names = payload.get("names") or []
+        if not names or not isinstance(names, list):
+            return json_response({"ok": False, "error": "missing_names", "message": "Thiếu danh sách 'names'."}, 400)
+
+        # Lọc names rỗng
+        names = [n.strip() for n in names if n and n.strip()]
+        if not names:
+            return json_response({"ok": False, "error": "empty_names", "message": "Danh sách 'names' rỗng."}, 400)
+
+        admin_user = request.env.ref("base.user_admin", raise_if_not_found=False)
+        env = request.env(user=admin_user) if admin_user else request.env
+
+        # Batch search tất cả PRs có name trong danh sách
+        prs = env["purchase.request"].sudo().search([("name", "in", names)])
+        pr_map = {pr.name: pr for pr in prs}
+
+        # Kiểm tra queue cho các name không có PR
+        queue_names = [n for n in names if n not in pr_map]
+        queues = env["misa.sync.queue"].sudo().search([
+            ('name', 'in', queue_names),
+            ('sync_type', '=', 'pr'),
+            ('state', 'in', ['draft', 'processing'])
+        ])
+        queue_name_set = set(q.name for q in queues)
+
+        results = {}
+        for name in names:
+            if name in pr_map:
+                pr = pr_map[name]
+                state_label = dict(pr._fields["state"].selection).get(pr.state, pr.state)
+                results[name] = {
+                    "exists": True,
+                    "state": pr.state,
+                    "state_label": state_label
+                }
+            elif name in queue_name_set:
+                results[name] = {
+                    "exists": True,
+                    "state": "queued",
+                    "state_label": "Đang đồng bộ"
+                }
+            else:
+                results[name] = {"exists": False}
+
+        return json_response({"ok": True, "results": results})
+
