@@ -356,6 +356,17 @@ class MisaExtensionController(http.Controller):
                 )
                 can_revoke = not bool(out_done)
 
+                # --- KIỂM TRA PHIÊN BẢN VÀ TRẠNG THÁI CHỜ DUYỆT (TOÁN TỬ 3 CẤP) ---
+                is_pending = bool(getattr(so, 'misa_qty_sync_pending', False))
+                history_rec = getattr(so, 'misa_qty_sync_pending_history_id', None)
+                history_name = history_rec.name if history_rec else ""
+
+                status_label = (
+                    f"Chờ phê duyệt phiên bản {history_name}" if (is_pending and history_name)
+                    else ("Chờ kho duyệt thay đổi số lượng" if is_pending
+                    else state_label)
+                )
+
                 lines_data = []
                 for line in so.order_line:
                     if line.display_type:
@@ -373,9 +384,11 @@ class MisaExtensionController(http.Controller):
                     "exists": True,
                     "id": so.id,
                     "name": so.name,
-                    "status": so.state,
-                    "status_label": state_label,
-                    "can_revoke": can_revoke,
+                    "status": "pending_approval" if is_pending else so.state,
+                    "status_label": status_label,
+                    "can_revoke": can_revoke and not is_pending,
+                    "misa_qty_sync_pending": is_pending,
+                    "misa_qty_sync_pending_history_name": history_name,
                     "lines": lines_data,
                 }
 
