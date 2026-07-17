@@ -608,14 +608,35 @@ class SaleOrder(models.Model):
             
         return record
 
-    def _misa_open_printed_pickings(self):
-        """Phiếu đã phát cho kho nhưng chưa hoàn tất/hủy."""
+    def _misa_warehouse_touched_pickings(self):
+        """Phiếu đã được in, mở trên app kho, quét, đóng kiện hoặc hoàn tất."""
         self.ensure_one()
-        open_pickings = self.picking_ids.filtered(lambda p: p.state not in ('done', 'cancel'))
-        return open_pickings.filtered(lambda p: (
-            ('x_printed' in p._fields and p.x_printed)
-            or ('x_pick_print_start_at' in p._fields and p.x_pick_print_start_at)
-        ))
+        active_pickings = self.picking_ids.filtered(lambda p: p.state != 'cancel')
+
+        def _was_touched(picking):
+            if picking.state in ('done', 'in_progress'):
+                return True
+            if 'x_printed' in picking._fields and picking.x_printed:
+                return True
+            if 'x_pick_print_start_at' in picking._fields and picking.x_pick_print_start_at:
+                return True
+            if 'x_pack_actual_start_at' in picking._fields and picking.x_pack_actual_start_at:
+                return True
+            if 'hlv_barcode_auto_cleared' in picking._fields and picking.hlv_barcode_auto_cleared:
+                return True
+            for move_line in picking.move_line_ids:
+                if 'qty_scanned' in move_line._fields and (move_line.qty_scanned or 0.0) > 0.0:
+                    return True
+                if move_line.result_package_id:
+                    return True
+                if (
+                    'package_transfer_qty_set' in move_line._fields
+                    and move_line.package_transfer_qty_set
+                ):
+                    return True
+            return False
+
+        return active_pickings.filtered(_was_touched)
 
     def _misa_qty_change_summary(self, changes):
         rows = []
@@ -637,7 +658,7 @@ class SaleOrder(models.Model):
         if detail:
             body += Markup("<br/><pre>{}</pre>").format(detail)
 
-        open_pickings = self.picking_ids.filtered(lambda p: p.state not in ('done', 'cancel'))
+        open_pickings = self.picking_ids.filtered(lambda p: p.state != 'cancel')
         partner_ids = set()
         for picking in open_pickings:
             if 'x_pack_packer_user_id' in picking._fields and picking.x_pack_packer_user_id:
@@ -787,12 +808,12 @@ class SaleOrder(models.Model):
 
         lines = self._misa_fetch_lines(misa_order_id)
         self._sync_misa_header_in_place(data, headers)
-        printed_pickings = self._misa_open_printed_pickings()
+        touched_pickings = self._misa_warehouse_touched_pickings()
         quantity_approved = bool(self.env.context.get('misa_quantity_approved'))
         sync_result = self._sync_so_lines_from_misa_no_picking(
             lines,
             headers,
-            defer_quantity=bool(printed_pickings and not quantity_approved),
+            defer_quantity=bool(touched_pickings and not quantity_approved),
         )
 
         qty_changes = sync_result.get('qty_changes') or []
