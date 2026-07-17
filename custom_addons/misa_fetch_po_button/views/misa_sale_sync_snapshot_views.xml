@@ -15,10 +15,14 @@
           <field name="fetched_at"/>
           <field name="crm_owner" optional="show"/>
           <field name="crm_modified_by" optional="show"/>
-          <field name="crm_modified_at" optional="show"/>
+          <field name="crm_modified_at_display" optional="show"/>
           <field name="fetched_by_id" optional="hide"/>
           <field name="change_count"/>
-          <field name="state" widget="badge"/>
+          <field name="state" widget="badge"
+                 decoration-warning="state == 'pending'"
+                 decoration-success="state == 'applied'"
+                 decoration-muted="state == 'superseded'"
+                 decoration-danger="state == 'cancelled'"/>
           <field name="approved_by_id" optional="show"/>
           <field name="approved_at" optional="show"/>
           <button name="action_approve_snapshot"
@@ -82,7 +86,8 @@
               <group>
                 <field name="crm_owner" readonly="1"/>
                 <field name="crm_modified_by" readonly="1"/>
-                <field name="crm_modified_at" readonly="1"/>
+                <field name="crm_modified_at_display" readonly="1"/>
+                <field name="crm_modified_at_raw" readonly="1"/>
                 <field name="approved_by_id" readonly="1" invisible="not approved_by_id"/>
                 <field name="approved_at" readonly="1" invisible="not approved_at"/>
                 <field name="replaced_by_id" readonly="1" invisible="not replaced_by_id"/>
@@ -95,8 +100,11 @@
             <notebook>
               <page string="Chi tiết cũ / mới">
                 <field name="line_ids" readonly="1" nolabel="1">
-                  <list create="0" edit="0" delete="0">
-                    <field name="change_type" widget="badge"/>
+                  <list create="0" edit="0" delete="0" default_order="id desc">
+                    <field name="change_type" widget="badge"
+                           decoration-success="change_type == 'add'"
+                           decoration-info="change_type == 'update'"
+                           decoration-danger="change_type == 'remove'"/>
                     <field name="crm_line_id"/>
                     <field name="sale_order_line_id" optional="hide"/>
                     <field name="product_code"/>
@@ -125,9 +133,13 @@
       <field name="name">misa.sale.sync.snapshot.line.list</field>
       <field name="model">misa.sale.sync.snapshot.line</field>
       <field name="arch" type="xml">
-        <list string="Lịch sử thay đổi dòng đơn bán" create="0" edit="0" delete="0">
+        <list string="Lịch sử thay đổi dòng đơn bán" create="0" edit="0" delete="0"
+              default_order="id desc">
           <field name="snapshot_id"/>
-          <field name="change_type" widget="badge"/>
+          <field name="change_type" widget="badge"
+                 decoration-success="change_type == 'add'"
+                 decoration-info="change_type == 'update'"
+                 decoration-danger="change_type == 'remove'"/>
           <field name="crm_line_id"/>
           <field name="product_code"/>
           <field name="field_name"/>

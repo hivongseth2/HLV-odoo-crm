@@ -1,6 +1,7 @@
 # models/sale_order_misa_sync.py
 import requests
 import logging
+import pytz
 from odoo import models, fields, api, _
 from markupsafe import Markup
 from dateutil.parser import parse as dtparse
@@ -8,6 +9,7 @@ from odoo.exceptions import UserError
 import json
 
 _logger = logging.getLogger(__name__)
+MISA_CRM_TZ = pytz.timezone('Asia/Ho_Chi_Minh')
 class SaleOrder(models.Model):
     _inherit = 'sale.order'
 
@@ -775,11 +777,15 @@ class SaleOrder(models.Model):
             )
             if crm_modified_at_raw:
                 try:
-                    crm_modified_at = dtparse(crm_modified_at_raw).replace(tzinfo=None)
+                    # ModifiedDate của CRM là giờ Việt Nam dạng wall-clock, kể cả khi payload
+                    # có gắn timezone marker. Chuyển đúng về UTC trước khi lưu fields.Datetime.
+                    crm_wall_time = dtparse(str(crm_modified_at_raw)).replace(tzinfo=None)
+                    crm_modified_at = MISA_CRM_TZ.localize(
+                        crm_wall_time
+                    ).astimezone(pytz.UTC).replace(tzinfo=None)
                 except Exception:
                     crm_modified_at = False
             history = self.env['misa.sale.sync.snapshot'].sudo().create({
-                'name': "%s / %s" % (self.name, fields.Datetime.to_string(now)),
                 'sale_order_id': self.id,
                 'misa_order_id': str(self.misa_id or ''),
                 'fetched_at': now,
@@ -793,6 +799,7 @@ class SaleOrder(models.Model):
                     or False
                 ),
                 'crm_modified_at': crm_modified_at,
+                'crm_modified_at_raw': str(crm_modified_at_raw) if crm_modified_at_raw else False,
                 'state': 'pending' if pending else 'applied',
                 'summary': summary,
                 'warehouse_summary': self._misa_qty_change_summary(

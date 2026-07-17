@@ -1,6 +1,12 @@
 # models/sale_order_misa_id.py
-from odoo import models, fields, _
+import pytz
+
+from dateutil.parser import parse as dtparse
+from odoo import models, fields, api, _
 from odoo.exceptions import UserError
+
+
+BUSINESS_TZ = pytz.timezone('Asia/Ho_Chi_Minh')
 
 class SaleOrder(models.Model):
     _inherit = 'sale.order'
@@ -139,7 +145,7 @@ class MisaSaleSyncSnapshot(models.Model):
     _description = 'Lịch sử snapshot đồng bộ Sale Order từ MISA'
     _order = 'fetched_at desc, id desc'
 
-    name = fields.Char(string="Phiên bản", required=True, readonly=True)
+    name = fields.Char(string="Phiên bản", compute='_compute_name', readonly=True)
     sale_order_id = fields.Many2one(
         'sale.order', string="Đơn bán", required=True, index=True, ondelete='cascade', readonly=True,
     )
@@ -149,6 +155,12 @@ class MisaSaleSyncSnapshot(models.Model):
     crm_owner = fields.Char(string="Sale phụ trách trên CRM", readonly=True)
     crm_modified_by = fields.Char(string="Người sửa trên CRM", readonly=True)
     crm_modified_at = fields.Datetime(string="CRM sửa lúc", readonly=True)
+    crm_modified_at_raw = fields.Char(string="Giờ CRM gốc", readonly=True)
+    crm_modified_at_display = fields.Char(
+        string="CRM sửa lúc",
+        compute='_compute_crm_modified_at_display',
+        readonly=True,
+    )
     state = fields.Selection([
         ('pending', 'Chờ kho duyệt'),
         ('superseded', 'Đã được phiên bản mới thay thế'),
@@ -167,6 +179,39 @@ class MisaSaleSyncSnapshot(models.Model):
     replaced_by_id = fields.Many2one(
         'misa.sale.sync.snapshot', string="Được thay bởi", readonly=True, ondelete='set null',
     )
+
+    @api.depends('sale_order_id.name', 'fetched_at')
+    def _compute_name(self):
+        for snapshot in self:
+            order_name = snapshot.sale_order_id.name or _('Đơn bán')
+            if snapshot.fetched_at:
+                utc_dt = snapshot.fetched_at
+                if utc_dt.tzinfo is None:
+                    utc_dt = pytz.UTC.localize(utc_dt)
+                local_dt = utc_dt.astimezone(BUSINESS_TZ)
+                snapshot.name = "%s / %s" % (
+                    order_name,
+                    local_dt.strftime('%Y-%m-%d %H:%M:%S'),
+                )
+            else:
+                snapshot.name = _("%s / Snapshot MISA") % order_name
+
+    @api.depends('crm_modified_at_raw', 'crm_modified_at')
+    def _compute_crm_modified_at_display(self):
+        for snapshot in self:
+            wall_time = False
+            if snapshot.crm_modified_at_raw:
+                try:
+                    # MISA gửi giờ nghiệp vụ Việt Nam; bỏ timezone marker nếu có.
+                    wall_time = dtparse(snapshot.crm_modified_at_raw).replace(tzinfo=None)
+                except Exception:
+                    wall_time = False
+            elif snapshot.crm_modified_at:
+                # Tương thích lịch sử cũ: giá trị từng được lưu thẳng như UTC dù thực chất là giờ CRM.
+                wall_time = snapshot.crm_modified_at.replace(tzinfo=None)
+            snapshot.crm_modified_at_display = (
+                wall_time.strftime('%d/%m/%Y %H:%M:%S') if wall_time else False
+            )
 
     def _check_stock_approval_user(self):
         if not self.env.user.has_group('stock.group_stock_user'):
@@ -219,7 +264,6 @@ class MisaSaleSyncSnapshot(models.Model):
             raise UserError(_("Snapshot không còn payload hợp lệ để phục hồi."))
         now = fields.Datetime.now()
         restored = self.sudo().create({
-            'name': _("%s / phục hồi %s") % (self.sale_order_id.name, fields.Datetime.to_string(now)),
             'sale_order_id': order.id,
             'misa_order_id': self.misa_order_id,
             'fetched_at': now,
@@ -227,6 +271,7 @@ class MisaSaleSyncSnapshot(models.Model):
             'crm_owner': self.crm_owner,
             'crm_modified_by': self.crm_modified_by,
             'crm_modified_at': self.crm_modified_at,
+            'crm_modified_at_raw': self.crm_modified_at_raw,
             'state': 'pending',
             'summary': self.summary,
             'warehouse_summary': self.warehouse_summary,
@@ -268,7 +313,7 @@ class MisaSaleSyncSnapshot(models.Model):
 class MisaSaleSyncSnapshotLine(models.Model):
     _name = 'misa.sale.sync.snapshot.line'
     _description = 'Chi tiết thay đổi Sale Order trong snapshot MISA'
-    _order = 'id'
+    _order = 'id desc'
 
     snapshot_id = fields.Many2one(
         'misa.sale.sync.snapshot', string="Phiên bản", required=True, index=True,
