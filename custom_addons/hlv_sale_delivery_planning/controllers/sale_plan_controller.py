@@ -1386,6 +1386,9 @@ function renderList(){
 
 var _currentDrawerOrderId=null;
 var _currentMsgFiles=[];
+var _publicMessageQueue=[];
+var _publicMessageSending=false;
+var _publicMessageRefreshOrders={};
 
 function fmtFileSize(sz){
   if(sz>=1048576) return (sz/1048576).toFixed(1)+'MB';
@@ -1541,23 +1544,72 @@ function loadMessages(orderId){
     $('dr-msg-list').innerHTML='<div class="msg-empty text-danger">Lỗi kết nối</div>';
   });
 }
+function updatePublicMessageSendingState(){
+  var btn=$('dr-msg-send');
+  if(!btn)return;
+  btn.title=_publicMessageSending?'Đang gửi - bạn vẫn có thể gửi tiếp':'Gửi tin nhắn';
+  btn.innerHTML='<i class="fa fa-paper-plane"></i>'+(_publicMessageSending?'<i class="fa fa-spinner fa-spin ms-1"></i>':'');
+}
+function restorePublicMessageDraft(item){
+  if(!item||_currentDrawerOrderId!==item.orderId)return;
+  var input=$('dr-msg-input');
+  if(input&&item.body)input.value=item.body+(input.value?'\n'+input.value:'');
+  if(item.files&&item.files.length){
+    _currentMsgFiles=item.files.concat(_currentMsgFiles);
+    renderPublicFileQueue();
+  }
+}
+function processPublicMessageQueue(){
+  if(_publicMessageSending||!_publicMessageQueue.length)return;
+  var item=_publicMessageQueue.shift();
+  _publicMessageSending=true;
+  updatePublicMessageSendingState();
+  fetch('/api/sale_plan/send_message',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{order_id:item.orderId,body:item.body,author_name:item.authorName,attachments:item.attachments}})})
+  .then(function(r){return r.json();})
+  .then(function(resp){
+    var d=resp.result||{};
+    if(d.status!=='success')throw new Error(d.message||'Lỗi gửi tin nhắn');
+    _publicMessageRefreshOrders[item.orderId]=true;
+  })
+  .catch(function(err){
+    restorePublicMessageDraft(item);
+    alert((err&&err.message)||'Lỗi kết nối');
+  })
+  .then(function(){
+    _publicMessageSending=false;
+    updatePublicMessageSendingState();
+    if(_publicMessageQueue.length){
+      processPublicMessageQueue();
+    }else{
+      var currentOrderId=_currentDrawerOrderId;
+      var shouldRefresh=!!_publicMessageRefreshOrders[currentOrderId];
+      _publicMessageRefreshOrders={};
+      if(shouldRefresh)loadMessages();
+    }
+  });
+}
 function sendPublicMessage(){
-  var body=($('dr-msg-input').value||'').trim();
+  var input=$('dr-msg-input');
+  var body=(input.value||'').trim();
   if((!body&&!_currentMsgFiles.length)||!_currentDrawerOrderId)return;
   var authorName=($('dr-msg-author').value||'').trim();
   if(!authorName){$('dr-msg-author').focus();$('dr-msg-author').classList.add('is-invalid');return;}
   $('dr-msg-author').classList.remove('is-invalid');
   localStorage.setItem('hlv_msg_author',authorName);
-  var btn=$('dr-msg-send');btn.disabled=true;
-  fetch('/api/sale_plan/send_message',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{order_id:_currentDrawerOrderId,body:body,author_name:authorName,attachments:_currentMsgFiles.map(function(f){return {name:f.name,mimetype:f.mimetype,datas:f.datas};})}})})
-  .then(function(r){return r.json();})
-  .then(function(resp){
-    btn.disabled=false;
-    var d=resp.result||{};
-    if(d.status==='success'){$('dr-msg-input').value='';_currentMsgFiles=[];renderPublicFileQueue();loadMessages();}
-    else{alert(d.message||'Lỗi gửi tin nhắn');}
-  })
-  .catch(function(){btn.disabled=false;alert('Lỗi kết nối');});
+  var files=_currentMsgFiles.slice();
+  _publicMessageQueue.push({
+    orderId:_currentDrawerOrderId,
+    body:body,
+    authorName:authorName,
+    files:files,
+    attachments:files.map(function(f){return {name:f.name,mimetype:f.mimetype,datas:f.datas};}),
+  });
+  input.value='';
+  _currentMsgFiles=[];
+  renderPublicFileQueue();
+  var suggest=$('dr-mention-suggest');
+  if(suggest){suggest.classList.remove('open');suggest.innerHTML='';}
+  processPublicMessageQueue();
 }
 
 function openDrawer(id){

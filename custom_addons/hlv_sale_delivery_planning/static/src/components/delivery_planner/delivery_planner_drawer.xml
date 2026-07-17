@@ -574,9 +574,9 @@
                         </div>
                         <button class="btn btn-sm btn-primary px-3"
                                 t-on-click="() => this.sendDrawerMessage()"
-                                t-att-disabled="state.drawerMessageSending || ((!state.drawerMessageText || !state.drawerMessageText.trim()) &amp;&amp; !state.drawerMessageFiles.length)">
-                            <i class="fa fa-paper-plane" t-if="!state.drawerMessageSending"></i>
-                            <i class="fa fa-spinner fa-spin" t-else=""></i>
+                                t-att-disabled="((!state.drawerMessageText || !state.drawerMessageText.trim()) &amp;&amp; !state.drawerMessageFiles.length)">
+                            <i class="fa fa-paper-plane"></i>
+                            <i class="fa fa-spinner fa-spin ms-1" t-if="state.drawerMessageSending"></i>
                         </button>
                     </div>
                     <div t-if="state.drawerMessageFiles.length" class="d-flex flex-wrap gap-1 mb-3">
