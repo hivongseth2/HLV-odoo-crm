@@ -6,13 +6,13 @@
         <field name="name">misa.extension.config.version.tree</field>
         <field name="model">misa.extension.config.version</field>
         <field name="arch" type="xml">
-            <tree>
+            <list>
                 <field name="version"/>
                 <field name="min_extension_version"/>
                 <field name="published_at"/>
                 <field name="notes"/>
                 <field name="active" widget="boolean_toggle"/>
-            </tree>
+            </list>
         </field>
     </record>
 
@@ -41,14 +41,14 @@
                     </group>
                     <group string="Các element thuộc version này">
                         <field name="element_ids" nolabel="1">
-                            <tree>
+                            <list>
                                 <field name="sequence" widget="handle"/>
                                 <field name="code"/>
                                 <field name="name"/>
                                 <field name="element_type"/>
                                 <field name="page_type"/>
                                 <field name="enabled" widget="boolean_toggle"/>
-                            </tree>
+                            </list>
                         </field>
                     </group>
                 </sheet>
@@ -59,7 +59,7 @@
     <record id="action_misa_extension_config_version" model="ir.actions.act_window">
         <field name="name">MISA Extension Config Versions</field>
         <field name="res_model">misa.extension.config.version</field>
-        <field name="view_mode">tree,form</field>
+        <field name="view_mode">list,form</field>
     </record>
 
     <!-- ============================================================ -->
@@ -69,7 +69,7 @@
         <field name="name">misa.extension.element.tree</field>
         <field name="model">misa.extension.element</field>
         <field name="arch" type="xml">
-            <tree>
+            <list>
                 <field name="sequence" widget="handle"/>
                 <field name="code"/>
                 <field name="name"/>
@@ -79,7 +79,7 @@
                 <field name="endpoint"/>
                 <field name="enabled" widget="boolean_toggle"/>
                 <field name="active" widget="boolean_toggle"/>
-            </tree>
+            </list>
         </field>
     </record>
 
@@ -168,7 +168,7 @@
     <record id="action_misa_extension_element" model="ir.actions.act_window">
         <field name="name">MISA Extension Elements</field>
         <field name="res_model">misa.extension.element</field>
-        <field name="view_mode">tree,form</field>
+        <field name="view_mode">list,form</field>
     </record>
 
     <!-- ============================================================ -->
