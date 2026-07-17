@@ -72,11 +72,15 @@ class PurchaseOrder(models.Model):
                 message = po._purchase_request_confirm_message_content(
                     request, requests_dict[request_id]
                 )
-                request.sudo().message_post(
+                request.sudo().with_context(
+                    mail_post_autofollow=False,
+                    mail_create_nosubscribe=True,
+                ).message_post(
                     body=Markup(message),
                     subtype_id=self.env.ref(
                         "purchase_request.mt_request_po_confirmed"
                     ).id,
+                    partner_ids=[],
                 )
             return True
 
@@ -196,9 +200,13 @@ class PurchaseOrderLine(models.Model):
                     message_data
                 )
                 if message:
-                    alloc.purchase_request_line_id.request_id.sudo().message_post(
+                    alloc.purchase_request_line_id.request_id.sudo().with_context(
+                        mail_post_autofollow=False,
+                        mail_create_nosubscribe=True,
+                    ).message_post(
                         body=Markup(message),
                         subtype_id=self.env.ref("mail.mt_note").id,
+                        partner_ids=[],
                     )
 
                 alloc.purchase_request_line_id._compute_qty()
