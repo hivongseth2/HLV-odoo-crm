@@ -11,3 +11,5 @@ access_misa_tax_update_wizard,misa.tax.update.wizard,model_misa_tax_update_wizar
 access_misa_shipping_address_batch_update,misa.shipping.address.batch.update,model_misa_shipping_address_batch_update,base.group_user,1,1,1,1
 access_misa_crm_contact_sync_run,misa.crm.contact.sync.run,model_misa_crm_contact_sync_run,base.group_user,1,1,1,0
 access_misa_crm_contact_sync_line,misa.crm.contact.sync.line,model_misa_crm_contact_sync_line,base.group_user,1,1,1,0
+access_misa_sale_sync_snapshot_user,misa.sale.sync.snapshot,model_misa_sale_sync_snapshot,base.group_user,1,0,0,0
+access_misa_sale_sync_snapshot_line_user,misa.sale.sync.snapshot.line,model_misa_sale_sync_snapshot_line,base.group_user,1,0,0,0

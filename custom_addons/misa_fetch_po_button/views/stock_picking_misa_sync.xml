@@ -1,5 +1,45 @@
 <odoo>
   <data>
+    <record id="view_sale_order_list_misa_qty_approval" model="ir.ui.view">
+      <field name="name">sale.order.list.misa.qty.approval</field>
+      <field name="model">sale.order</field>
+      <field name="arch" type="xml">
+        <list string="Đơn MISA chờ kho duyệt" create="0" delete="0" edit="0"
+              default_order="misa_qty_sync_pending_at desc, id desc">
+          <field name="name" string="Đơn bán"/>
+          <field name="partner_id"/>
+          <field name="warehouse_id"/>
+          <field name="state"/>
+          <field name="user_id"/>
+          <field name="misa_qty_sync_pending_at"/>
+          <field name="misa_qty_sync_pending_summary"/>
+          <button name="action_approve_misa_quantity_sync"
+                  type="object"
+                  string="Duyệt đồng bộ"
+                  class="btn-warning"
+                  groups="stock.group_stock_user"/>
+        </list>
+      </field>
+    </record>
+
+    <record id="action_sale_order_misa_qty_approval" model="ir.actions.act_window">
+      <field name="name">Đơn MISA chờ kho duyệt</field>
+      <field name="res_model">sale.order</field>
+      <field name="view_mode">list,form</field>
+      <field name="view_id" ref="view_sale_order_list_misa_qty_approval"/>
+      <field name="domain">[('misa_qty_sync_pending', '=', True)]</field>
+      <field name="help" type="html">
+        <p class="o_view_nocontent_smiling_face">Không có đơn MISA nào đang chờ kho duyệt.</p>
+      </field>
+    </record>
+
+    <menuitem id="menu_picking_misa_qty_approval"
+              name="Đơn MISA chờ duyệt"
+              parent="stock.menu_stock_warehouse_mgmt"
+              action="action_sale_order_misa_qty_approval"
+              groups="stock.group_stock_user"
+              sequence="12"/>
+
     <record id="view_picking_form_misa_qty_approval_inherit" model="ir.ui.view">
       <field name="name">stock.picking.form.misa.qty.approval</field>
       <field name="model">stock.picking</field>

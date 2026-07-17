@@ -13,6 +13,7 @@
         'views/misa_po_sync_view.xml',
         'views/misa_combined_button_view.xml',
         'views/misa_return_button_view.xml',
+        'views/misa_sale_sync_snapshot_views.xml',
         'views/sale_order_misa_sync.xml',
         'views/stock_picking_misa_sync.xml',
         'views/crm_tag_views.xml',
