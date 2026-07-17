@@ -18,12 +18,12 @@
         </xpath>
         <xpath expr="//header" position="inside">
           <field name="misa_qty_sync_pending" invisible="1"/>
-          <button name="action_resync_from_misa"
+          <!-- <button name="action_resync_from_misa"
                   type="object"
                   string="Đồng bộ MISA"
                   class="btn-primary"
                   help="Cập nhật trực tiếp đơn hiện tại theo CRM Line ID; không xóa SO hoặc phiếu kho."
-                  invisible="misa_id == False"/>
+                  invisible="misa_id == False"/> -->
           <button name="action_approve_misa_quantity_sync"
                   type="object"
                   string="Kho duyệt SL MISA"
