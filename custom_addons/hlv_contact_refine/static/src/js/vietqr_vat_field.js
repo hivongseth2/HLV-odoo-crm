@@ -18,7 +18,6 @@ export class HlvVietqrVatField extends CharField {
         const record = this.props.record;
         return (
             record.isNew
-            && record.context?.res_partner_search_mode === "supplier"
             && !this.props.readonly
         );
     }
