@@ -190,20 +190,28 @@ class StockMoveLine(models.Model):
                 messages_data
             )
             if message:
-                request.sudo().message_post(
+                request.sudo().with_context(
+                    mail_post_autofollow=False,
+                    mail_create_nosubscribe=True,
+                ).message_post(
                     body=Markup(message),
                     subtype_id=self.env.ref(
                         "purchase_request.mt_request_picking_done"
                     ).id,
+                    partner_ids=[],
                 )
 
             picking_message = self._picking_confirm_done_messages_content(
                 messages_data
             )
             if picking_message:
-                picking.sudo().message_post(
+                picking.sudo().with_context(
+                    mail_post_autofollow=False,
+                    mail_create_nosubscribe=True,
+                ).message_post(
                     body=Markup(picking_message),
                     subtype_id=self.env.ref("mail.mt_note").id,
+                    partner_ids=[],
                 )
 
     def _action_done(self):
