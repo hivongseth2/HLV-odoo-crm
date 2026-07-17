@@ -25,8 +25,8 @@ class StockPicking(models.Model):
                                 all_done = False
                                 break
                         
-                        # Nếu đã hoàn thành toàn bộ, tự động click nút Hoàn thành cho PR
+                        # Nếu đã hoàn thành toàn bộ, tự động cập nhật trạng thái PR thành done
                         if all_done:
-                            pr.sudo().button_done()
+                            pr.sudo().write({'state': 'done'})
 
         return res

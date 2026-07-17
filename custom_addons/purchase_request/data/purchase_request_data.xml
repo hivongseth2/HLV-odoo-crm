@@ -7,24 +7,28 @@
         <field name="name">YCMH chờ phê duyệt</field>
         <field name="res_model">purchase.request</field>
         <field name="default" eval="True" />
+        <field name="internal" eval="True" />
         <field name="description">YCMH chờ phê duyệt</field>
     </record>
     <record id="mt_request_approved" model="mail.message.subtype">
         <field name="name">YCMH đã phê duyệt</field>
         <field name="res_model">purchase.request</field>
         <field name="default" eval="True" />
+        <field name="internal" eval="True" />
         <field name="description">YCMH đã phê duyệt</field>
     </record>
     <record id="mt_request_rejected" model="mail.message.subtype">
         <field name="name">YCMH bị từ chối</field>
         <field name="res_model">purchase.request</field>
         <field name="default" eval="True" />
+        <field name="internal" eval="True" />
         <field name="description">YCMH bị từ chối</field>
     </record>
     <record id="mt_request_done" model="mail.message.subtype">
         <field name="name">YCMH hoàn tất</field>
         <field name="res_model">purchase.request</field>
         <field name="default" eval="True" />
+        <field name="internal" eval="True" />
         <field name="description">YCMH đã hoàn tất</field>
     </record>
     <record id="mt_request_po_confirmed" model="mail.message.subtype">

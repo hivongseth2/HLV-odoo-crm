@@ -72,13 +72,13 @@ class PurchaseOrder(models.Model):
                 message = po._purchase_request_confirm_message_content(
                     request, requests_dict[request_id]
                 )
-                request.message_post(
+                request.sudo().message_post(
                     body=Markup(message),
                     subtype_id=self.env.ref(
                         "purchase_request.mt_request_po_confirmed"
                     ).id,
                 )
-        return True
+            return True
 
     def _purchase_request_line_check(self):
         for po in self:
@@ -196,9 +196,9 @@ class PurchaseOrderLine(models.Model):
                     message_data
                 )
                 if message:
-                    alloc.purchase_request_line_id.request_id.message_post(
+                    alloc.purchase_request_line_id.request_id.sudo().message_post(
                         body=Markup(message),
-                        subtype_id=self.env.ref("mail.mt_comment").id,
+                        subtype_id=self.env.ref("mail.mt_note").id,
                     )
 
                 alloc.purchase_request_line_id._compute_qty()
