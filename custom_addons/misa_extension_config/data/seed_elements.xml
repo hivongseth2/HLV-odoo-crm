@@ -1,0 +1,244 @@
+<odoo noupdate="1">
+    <!-- ============================================================ -->
+    <!-- Config Version 1 - Initial seed -->
+    <!-- ============================================================ -->
+    <record id="config_version_1" model="misa.extension.config.version">
+        <field name="version">1</field>
+        <field name="min_extension_version">2.0.0</field>
+        <field name="notes">Initial config seed - 9 endpoints + all UI elements from current extension hard-code</field>
+        <field name="active" eval="True"/>
+    </record>
+
+    <!-- ============================================================ -->
+    <!-- PURCHASE REQUEST PAGE ELEMENTS -->
+    <!-- ============================================================ -->
+
+    <!-- check_pr (internal - check PR status from Odoo) -->
+    <record id="element_check_pr" model="misa.extension.element">
+        <field name="code">check_pr</field>
+        <field name="name">Check YCMH (internal)</field>
+        <field name="element_type">button</field>
+        <field name="page_type">purchase_request</field>
+        <field name="endpoint">/api/extension/pr/check</field>
+        <field name="http_method">GET</field>
+        <field name="handler_key">check_pr</field>
+        <field name="anchor_strategy">first_child</field>
+        <field name="sequence">1</field>
+        <field name="requires_data_event">MISA_PR_DATA</field>
+        <field name="tooltip">(internal - triggered automatically when PR data received)</field>
+        <field name="version_id" ref="config_version_1"/>
+    </record>
+
+    <!-- create_pr_btn - Nút "Tạo YCMH Odoo" -->
+    <record id="element_create_pr_btn" model="misa.extension.element">
+        <field name="code">create_pr_btn</field>
+        <field name="name">Tạo YCMH Odoo</field>
+        <field name="element_type">button</field>
+        <field name="page_type">purchase_request</field>
+        <field name="endpoint">/api/extension/pr/create</field>
+        <field name="http_method">POST</field>
+        <field name="handler_key">create_pr</field>
+        <field name="anchor_selector">.listmenu, div[class*="listmenu"]</field>
+        <field name="anchor_strategy">first_child</field>
+        <field name="tooltip">Tạo Yêu Cầu Mua Hàng trên Odoo</field>
+        <field name="sequence">10</field>
+        <field name="styles">{"backgroundColor":"#2b88ff","color":"#ffffff","marginLeft":"16px","marginRight":"16px","padding":"6px 16px","minWidth":"140px","border":"none","borderRadius":"4px","fontSize":"13px","fontWeight":"600","cursor":"pointer","display":"inline-flex","alignItems":"center","justifyContent":"center","whiteSpace":"nowrap","boxShadow":"0 1px 2px rgba(0,0,0,0.05)","transition":"background-color 0.2s"}</field>
+        <field name="state_config">{"create":{"label":"Tạo YCMH Odoo","color":"#2b88ff","textColor":"#ffffff","cursor":"pointer"},"syncing":{"label":"Đang đồng bộ...","color":"#f59e0b","textColor":"#ffffff","cursor":"wait","disabled":true},"synced":{"label":"Đã đồng bộ Odoo","color":"#e5e7eb","textColor":"#6b7280","cursor":"not-allowed","disabled":true},"revoke":{"label":"Thu hồi YCMH","color":"#ef4444","textColor":"#ffffff","cursor":"pointer"},"queued":{"label":"Đang đồng bộ Odoo","color":"#f59e0b","textColor":"#ffffff","cursor":"wait","disabled":true}}</field>
+        <field name="requires_data_event">MISA_PR_DATA</field>
+        <field name="version_id" ref="config_version_1"/>
+    </record>
+
+    <!-- pr_skeleton - Loading skeleton button -->
+    <record id="element_pr_skeleton" model="misa.extension.element">
+        <field name="code">pr_skeleton</field>
+        <field name="name">Đang kiểm tra Odoo...</field>
+        <field name="element_type">skeleton</field>
+        <field name="page_type">purchase_request</field>
+        <field name="anchor_selector">.listmenu, div[class*="listmenu"]</field>
+        <field name="anchor_strategy">first_child</field>
+        <field name="sequence">5</field>
+        <field name="styles">{"opacity":"0.7","cursor":"wait","marginLeft":"16px","marginRight":"16px"}</field>
+        <field name="requires_data_event">MISA_PR_DATA</field>
+        <field name="version_id" ref="config_version_1"/>
+    </record>
+
+    <!-- pr_grid_columns - Toggle toàn bộ 11 cột grid column (NCC, Tồn kho, Giá...) -->
+    <record id="element_pr_grid_columns" model="misa.extension.element">
+        <field name="code">pr_grid_columns</field>
+        <field name="name">Grid Columns (NCC, Tồn kho, Giá...)</field>
+        <field name="element_type">grid_column</field>
+        <field name="page_type">purchase_request</field>
+        <field name="endpoint">/api/extension/suppliers_and_stock</field>
+        <field name="http_method">POST</field>
+        <field name="handler_key">suppliers_stock</field>
+        <field name="anchor_strategy">grid_header</field>
+        <field name="sequence">20</field>
+        <field name="tooltip">Toggle on/off toàn bộ 11 cột: NCC, Tồn kho, SL đã chọn, SL chưa giao, Đơn giá, Chiết khấu, Thuế, Thành tiền...</field>
+        <field name="requires_data_event">MISA_PR_DATA</field>
+        <field name="version_id" ref="config_version_1"/>
+    </record>
+
+    <!-- suppliers_stock (internal - fetch NCC + tồn kho) -->
+    <record id="element_suppliers_stock" model="misa.extension.element">
+        <field name="code">suppliers_stock</field>
+        <field name="name">Fetch NCC + Tồn kho (internal)</field>
+        <field name="element_type">button</field>
+        <field name="page_type">purchase_request</field>
+        <field name="endpoint">/api/extension/suppliers_and_stock</field>
+        <field name="http_method">POST</field>
+        <field name="handler_key">suppliers_stock</field>
+        <field name="anchor_strategy">first_child</field>
+        <field name="sequence">2</field>
+        <field name="requires_data_event">MISA_PR_DATA</field>
+        <field name="tooltip">(internal - triggered automatically when PR grid needs data)</field>
+        <field name="version_id" ref="config_version_1"/>
+    </record>
+
+    <!-- batch_check_pr (internal - batch check PR list) -->
+    <record id="element_batch_check_pr" model="misa.extension.element">
+        <field name="code">batch_check_pr</field>
+        <field name="name">Batch Check YCMH List (internal)</field>
+        <field name="element_type">button</field>
+        <field name="page_type">purchase_request_list</field>
+        <field name="endpoint">/api/extension/pr/batch_check</field>
+        <field name="http_method">POST</field>
+        <field name="handler_key">batch_check_pr</field>
+        <field name="anchor_strategy">first_child</field>
+        <field name="sequence">1</field>
+        <field name="tooltip">(internal - triggered when loading PR list page)</field>
+        <field name="version_id" ref="config_version_1"/>
+    </record>
+
+    <!-- ============================================================ -->
+    <!-- SALE ORDER PAGE ELEMENTS -->
+    <!-- ============================================================ -->
+
+    <!-- check_so (internal - check SO status from Odoo) -->
+    <record id="element_check_so" model="misa.extension.element">
+        <field name="code">check_so</field>
+        <field name="name">Check Đơn bán (internal)</field>
+        <field name="element_type">button</field>
+        <field name="page_type">sale_order</field>
+        <field name="endpoint">/api/extension/so/check</field>
+        <field name="http_method">GET</field>
+        <field name="handler_key">check_so</field>
+        <field name="anchor_strategy">first_child</field>
+        <field name="sequence">1</field>
+        <field name="requires_data_event">MISA_SO_DATA</field>
+        <field name="tooltip">(internal - triggered automatically when SO data received)</field>
+        <field name="version_id" ref="config_version_1"/>
+    </record>
+
+    <!-- create_so_btn - Nút "Tạo Đơn Odoo" -->
+    <record id="element_create_so_btn" model="misa.extension.element">
+        <field name="code">create_so_btn</field>
+        <field name="name">Tạo Đơn Odoo</field>
+        <field name="element_type">button</field>
+        <field name="page_type">sale_order</field>
+        <field name="endpoint">/api/misa/sale_order/resync</field>
+        <field name="http_method">JSONRPC</field>
+        <field name="handler_key">create_so</field>
+        <field name="anchor_selector">.listmenu, div[class*="listmenu"]</field>
+        <field name="anchor_strategy">first_child</field>
+        <field name="tooltip">Tạo đơn bán hàng trên Odoo</field>
+        <field name="sequence">10</field>
+        <field name="styles">{"backgroundColor":"#2b88ff","color":"#ffffff","marginLeft":"16px","marginRight":"16px","padding":"6px 16px","minWidth":"140px","maxWidth":"220px","height":"36px","border":"none","borderRadius":"4px","fontSize":"13px","fontWeight":"600","cursor":"pointer","display":"inline-flex","alignItems":"center","justifyContent":"center","whiteSpace":"nowrap","boxShadow":"0 1px 2px rgba(0,0,0,0.05)","transition":"background-color 0.2s"}</field>
+        <field name="state_config">{"create":{"label":"Tạo Đơn Odoo","color":"#2b88ff","textColor":"#ffffff","cursor":"pointer","tooltip":"Tạo đơn bán hàng trên Odoo"},"syncing":{"label":"Đang đồng bộ...","color":"#f59e0b","textColor":"#ffffff","cursor":"wait","disabled":true,"tooltip":"Đơn bán hàng đang được đồng bộ sang Odoo, vui lòng chờ..."},"synced":{"label":"Đã đồng bộ Odoo","color":"#e5e7eb","textColor":"#6b7280","cursor":"not-allowed","disabled":true},"revoke":{"label":"Thu hồi Đơn trên Odoo","color":"#ef4444","textColor":"#ffffff","cursor":"pointer","hoverColor":"#dc2626","tooltip":"Thu hồi Đơn bán hàng trên Odoo"},"queued":{"label":"Đang đồng bộ Odoo","color":"#f59e0b","textColor":"#ffffff","cursor":"wait","disabled":true,"tooltip":"Đơn bán hàng đang chờ đồng bộ trên Odoo..."}}</field>
+        <field name="requires_data_event">MISA_SO_DATA</field>
+        <field name="auto_trigger_event">MISA_SO_LEDGER_SAVE</field>
+        <field name="version_id" ref="config_version_1"/>
+    </record>
+
+    <!-- so_skeleton - Loading skeleton for SO -->
+    <record id="element_so_skeleton" model="misa.extension.element">
+        <field name="code">so_skeleton</field>
+        <field name="name">Đang kiểm tra Odoo...</field>
+        <field name="element_type">skeleton</field>
+        <field name="page_type">sale_order</field>
+        <field name="anchor_selector">.listmenu, div[class*="listmenu"]</field>
+        <field name="anchor_strategy">first_child</field>
+        <field name="sequence">5</field>
+        <field name="styles">{"opacity":"0.7","cursor":"wait","marginLeft":"16px","marginRight":"16px"}</field>
+        <field name="requires_data_event">MISA_SO_DATA</field>
+        <field name="version_id" ref="config_version_1"/>
+    </record>
+
+    <!-- ============================================================ -->
+    <!-- POPUP ELEMENTS -->
+    <!-- ============================================================ -->
+
+    <!-- reconcile_po_btn - Nút "Đối chiếu Phiếu nhập kho" trong popup -->
+    <record id="element_reconcile_po_btn" model="misa.extension.element">
+        <field name="code">reconcile_po_btn</field>
+        <field name="name">Đối chiếu Phiếu nhập kho</field>
+        <field name="element_type">button</field>
+        <field name="page_type">popup</field>
+        <field name="endpoint">/api/extension/po/reconcile</field>
+        <field name="http_method">POST</field>
+        <field name="handler_key">reconcile_po</field>
+        <field name="anchor_strategy">append</field>
+        <field name="sequence">10</field>
+        <field name="tooltip">Đối chiếu dữ liệu Phiếu nhập kho giữa Odoo và AMIS MISA</field>
+        <field name="styles">{"width":"100%","padding":"10px","fontWeight":"bold","backgroundColor":"#1e3a8a","color":"#ffffff"}</field>
+        <field name="version_id" ref="config_version_1"/>
+    </record>
+
+    <!-- reconcile_po_only_btn - Nút "Đối chiếu Đơn mua hàng" trong popup -->
+    <record id="element_reconcile_po_only_btn" model="misa.extension.element">
+        <field name="code">reconcile_po_only_btn</field>
+        <field name="name">Đối chiếu Đơn mua hàng</field>
+        <field name="element_type">button</field>
+        <field name="page_type">popup</field>
+        <field name="endpoint">/api/extension/po/reconcile_only</field>
+        <field name="http_method">POST</field>
+        <field name="handler_key">reconcile_po_only</field>
+        <field name="anchor_strategy">append</field>
+        <field name="sequence">20</field>
+        <field name="tooltip">Đối chiếu dữ liệu Đơn mua hàng giữa Odoo và AMIS MISA</field>
+        <field name="styles">{"width":"100%","padding":"10px","fontWeight":"bold","backgroundColor":"#6b7280","color":"#ffffff"}</field>
+        <field name="version_id" ref="config_version_1"/>
+    </record>
+
+    <!-- ============================================================ -->
+    <!-- STATUS ELEMENTS (render on both PR and SO pages) -->
+    <!-- ============================================================ -->
+
+    <!-- pr_status_column - Cột trạng thái Odoo trong list YCMH -->
+    <record id="element_pr_status_column" model="misa.extension.element">
+        <field name="code">pr_status_column</field>
+        <field name="name">Trạng thái Odoo</field>
+        <field name="element_type">list_column</field>
+        <field name="page_type">purchase_request_list</field>
+        <field name="anchor_strategy">first_child</field>
+        <field name="sequence">10</field>
+        <field name="tooltip">Cột trạng thái Odoo trong danh sách YCMH</field>
+        <field name="version_id" ref="config_version_1"/>
+    </record>
+
+    <!-- so_status_field - Trường trạng thái trong form Đơn bán -->
+    <record id="element_so_status_field" model="misa.extension.element">
+        <field name="code">so_status_field</field>
+        <field name="name">Trạng thái Odoo (SO)</field>
+        <field name="element_type">status_field</field>
+        <field name="page_type">sale_order</field>
+        <field name="anchor_strategy">form_field</field>
+        <field name="sequence">15</field>
+        <field name="tooltip">Inject trường trạng thái Odoo vào form Thông tin chung của Đơn bán</field>
+        <field name="requires_data_event">MISA_SO_DATA</field>
+        <field name="version_id" ref="config_version_1"/>
+    </record>
+
+    <!-- pr_status_field - Trường trạng thái trong form YCMH -->
+    <record id="element_pr_status_field" model="misa.extension.element">
+        <field name="code">pr_status_field</field>
+        <field name="name">Trạng thái Odoo (YCMH)</field>
+        <field name="element_type">status_field</field>
+        <field name="page_type">purchase_request</field>
+        <field name="anchor_strategy">form_field</field>
+        <field name="sequence">15</field>
+        <field name="tooltip">Inject trường trạng thái Odoo vào form Thông tin chung của YCMH</field>
+        <field name="requires_data_event">MISA_PR_DATA</field>
+        <field name="version_id" ref="config_version_1"/>
+    </record>
+
+</odoo>

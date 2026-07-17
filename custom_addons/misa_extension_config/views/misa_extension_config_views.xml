@@ -1,0 +1,198 @@
+<odoo>
+    <!-- ============================================================ -->
+    <!-- MISA Extension Config Version - Tree & Form -->
+    <!-- ============================================================ -->
+    <record id="view_misa_extension_config_version_tree" model="ir.ui.view">
+        <field name="name">misa.extension.config.version.tree</field>
+        <field name="model">misa.extension.config.version</field>
+        <field name="arch" type="xml">
+            <tree>
+                <field name="version"/>
+                <field name="min_extension_version"/>
+                <field name="published_at"/>
+                <field name="notes"/>
+                <field name="active" widget="boolean_toggle"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_misa_extension_config_version_form" model="ir.ui.view">
+        <field name="name">misa.extension.config.version.form</field>
+        <field name="model">misa.extension.config.version</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="version" class="oe_inline"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="min_extension_version"/>
+                            <field name="published_at"/>
+                        </group>
+                        <group>
+                            <field name="active"/>
+                        </group>
+                    </group>
+                    <group string="Mô tả thay đổi">
+                        <field name="notes" nolabel="1"/>
+                    </group>
+                    <group string="Các element thuộc version này">
+                        <field name="element_ids" nolabel="1">
+                            <tree>
+                                <field name="sequence" widget="handle"/>
+                                <field name="code"/>
+                                <field name="name"/>
+                                <field name="element_type"/>
+                                <field name="page_type"/>
+                                <field name="enabled" widget="boolean_toggle"/>
+                            </tree>
+                        </field>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_misa_extension_config_version" model="ir.actions.act_window">
+        <field name="name">MISA Extension Config Versions</field>
+        <field name="res_model">misa.extension.config.version</field>
+        <field name="view_mode">tree,form</field>
+    </record>
+
+    <!-- ============================================================ -->
+    <!-- MISA Extension Element - Tree & Form -->
+    <!-- ============================================================ -->
+    <record id="view_misa_extension_element_tree" model="ir.ui.view">
+        <field name="name">misa.extension.element.tree</field>
+        <field name="model">misa.extension.element</field>
+        <field name="arch" type="xml">
+            <tree>
+                <field name="sequence" widget="handle"/>
+                <field name="code"/>
+                <field name="name"/>
+                <field name="element_type"/>
+                <field name="page_type"/>
+                <field name="handler_key"/>
+                <field name="endpoint"/>
+                <field name="enabled" widget="boolean_toggle"/>
+                <field name="active" widget="boolean_toggle"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_misa_extension_element_form" model="ir.ui.view">
+        <field name="name">misa.extension.element.form</field>
+        <field name="model">misa.extension.element</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" class="oe_inline"/>
+                        </h1>
+                    </div>
+                    <group string="Định danh">
+                        <group>
+                            <field name="code"/>
+                            <field name="element_type"/>
+                            <field name="page_type"/>
+                        </group>
+                        <group>
+                            <field name="active"/>
+                            <field name="enabled"/>
+                            <field name="sequence"/>
+                            <field name="tooltip"/>
+                        </group>
+                    </group>
+                    <group string="API Wiring">
+                        <group>
+                            <field name="handler_key"/>
+                            <field name="endpoint"/>
+                            <field name="http_method"/>
+                        </group>
+                    </group>
+                    <group string="Vị trí inject">
+                        <group>
+                            <field name="anchor_selector"/>
+                            <field name="anchor_strategy"/>
+                        </group>
+                    </group>
+                    <group string="Styles">
+                        <field name="styles" nolabel="1" placeholder='{"backgroundColor":"#2b88ff","color":"#ffffff"}'/>
+                    </group>
+                    <group string="State Config (cho element_type=button)">
+                        <field name="state_config" nolabel="1" placeholder='{"create":{"label":"Tạo","color":"#2b88ff"},"syncing":{"label":"Đang đồng bộ","color":"#f59e0b"}}'/>
+                    </group>
+                    <group string="Column Config (cho element_type=grid_column)">
+                        <field name="column_config" nolabel="1" placeholder='[{"key":"misa_supplier_id","name":"Nhà cung cấp","width":"160px"}]'/>
+                    </group>
+                    <group string="Trigger động">
+                        <group>
+                            <field name="requires_data_event"/>
+                            <field name="auto_trigger_event"/>
+                        </group>
+                    </group>
+                    <group string="Versioning">
+                        <group>
+                            <field name="version_id"/>
+                            <field name="config_version"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_misa_extension_element_search" model="ir.ui.view">
+        <field name="name">misa.extension.element.search</field>
+        <field name="model">misa.extension.element</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="code"/>
+                <field name="name"/>
+                <filter string="Buttons" name="filter_button" domain="[('element_type', '=', 'button')]"/>
+                <filter string="Badges/Status" name="filter_badge" domain="[('element_type', 'in', ['status_badge', 'status_field', 'badge'])]"/>
+                <filter string="Grid/List Columns" name="filter_column" domain="[('element_type', 'in', ['grid_column', 'list_column'])]"/>
+                <filter string="Đang bật" name="filter_enabled" domain="[('enabled', '=', True)]"/>
+                <group expand="0" string="Group By">
+                    <filter string="Element Type" name="group_by_element_type" domain="[]" context="{'group_by': 'element_type'}"/>
+                    <filter string="Page Type" name="group_by_page_type" domain="[]" context="{'group_by': 'page_type'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_misa_extension_element" model="ir.actions.act_window">
+        <field name="name">MISA Extension Elements</field>
+        <field name="res_model">misa.extension.element</field>
+        <field name="view_mode">tree,form</field>
+    </record>
+
+    <!-- ============================================================ -->
+    <!-- Main menu -->
+    <!-- ============================================================ -->
+    <menuitem
+        id="menu_misa_extension_config_root"
+        name="MISA Extension Config"
+        sequence="90"
+    />
+
+    <menuitem
+        id="menu_misa_extension_element"
+        name="Elements"
+        parent="menu_misa_extension_config_root"
+        action="action_misa_extension_element"
+        sequence="10"
+    />
+
+    <menuitem
+        id="menu_misa_extension_config_version"
+        name="Config Versions"
+        parent="menu_misa_extension_config_root"
+        action="action_misa_extension_config_version"
+        sequence="20"
+    />
+</odoo>
