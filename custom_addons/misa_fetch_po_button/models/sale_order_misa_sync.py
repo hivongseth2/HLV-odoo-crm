@@ -255,8 +255,6 @@ class SaleOrder(models.Model):
             except Exception:
                 return dv
 
-        posted_inv_exists = bool(self.invoice_ids.filtered(lambda m: m.state == 'posted'))
-        
         # ===== Build combo_codes_with_bom để skip children =====
         # Nếu combo parent có BoM Kit, Odoo sẽ tự explode ra picking
         # → không cần thêm children vào SO, tránh trùng lặp
@@ -388,9 +386,10 @@ class SaleOrder(models.Model):
         audit_changes = []
 
         def _audit(misa_data, sol, field_name, old_value, new_value, change_type='update'):
-            audit_changes.append({
+            change = {
                 'change_type': change_type,
                 'crm_line_id': misa_data.get('crm_line_id') if misa_data else sol.misa_crm_line_id,
+                'sale_order_line_id': sol.id if sol else False,
                 'product_id': (
                     misa_data['product'].id if misa_data and misa_data.get('product')
                     else sol.product_id.id
@@ -402,7 +401,9 @@ class SaleOrder(models.Model):
                 'field_name': field_name,
                 'old_value': str(old_value if old_value not in (None, False) else ''),
                 'new_value': str(new_value if new_value not in (None, False) else ''),
-            })
+            }
+            audit_changes.append(change)
+            return change
         
         # Match: Tìm SOL hiện có khớp với từng dòng MISA
         # Ưu tiên match theo: product + qty + price (tránh nhầm lẫn khi có 2 dòng cùng product)
@@ -530,8 +531,9 @@ class SaleOrder(models.Model):
         # Tạo mới SOL cho các dòng MISA chưa match
         for misa_data in unmatched_misa:
             new_qty = float(misa_data['qty'] or 0.0)
+            new_line_audit = False
             if abs(new_qty) >= 0.01:
-                _audit(
+                new_line_audit = _audit(
                     misa_data, None, _('Dòng sản phẩm'), '',
                     _("SL %g; đơn giá %g") % (new_qty, float(misa_data['price'] or 0.0)),
                     change_type='add',
@@ -567,7 +569,9 @@ class SaleOrder(models.Model):
             else:
                 vals_line['tax_id'] = [(5, 0, 0)]
             
-            SaleLine.create(vals_line)
+            new_sale_line = SaleLine.create(vals_line)
+            if new_line_audit:
+                new_line_audit['sale_order_line_id'] = new_sale_line.id
             _logger.info("➕ Tạo mới SOL %s: qty=%.2f", misa_data['code'], misa_data['qty'])
         
         # ===== XỬ LÝ SẢN PHẨM BỊ XÓA KHỎI MISA =====
@@ -581,15 +585,12 @@ class SaleOrder(models.Model):
                 _logger.info("Giữ nguyên dòng Odoo chưa có CRM Line ID: %s", code)
                 continue
             
-            # Nếu đã có invoice posted -> giữ nguyên
-            if posted_inv_exists:
-                _logger.warning("⚠️ Dòng %s không còn trong MISA nhưng giữ nguyên (đã có invoice posted).", code)
-                continue
-            
             qty_delivered = float(getattr(sol, 'qty_delivered', 0.0) or 0.0)
-            
-            # Set qty = 0 hoặc qty_delivered (nếu đã giao)
-            new_qty = max(qty_delivered, 0.0)
+
+            # CRM Line ID đã biến mất khỏi response mới = sale đã xóa dòng trên MISA.
+            # Giữ record SOL để truy vết nhưng đưa ordered quantity về đúng 0,
+            # kể cả khi đã giao/xuất hóa đơn; qty_delivered/qty_invoiced vẫn giữ số thực tế.
+            new_qty = 0.0
             old_qty = float(sol.product_uom_qty or 0.0)
             if abs(old_qty - new_qty) >= 0.01:
                 _audit(
@@ -610,14 +611,11 @@ class SaleOrder(models.Model):
                     sol.misa_crm_line_id, code, old_qty, new_qty,
                 )
                 continue
-            try:
-                sol.write({'product_uom_qty': new_qty})
-                if new_qty > 0:
-                    _logger.info("↘️ Set qty=%s cho dòng %s (đã giao %s, không xóa).", new_qty, code, qty_delivered)
-                else:
-                    _logger.info("↘️ Set qty=0 cho dòng %s (không còn trong MISA).", code)
-            except Exception as e:
-                _logger.warning("Không thể set qty cho dòng %s: %s", code, e)
+            sol.write({'product_uom_qty': new_qty})
+            _logger.info(
+                "↘️ Set qty=0 cho CRM line %s (%s) không còn trong MISA; qty_delivered=%s được giữ nguyên.",
+                sol.misa_crm_line_id, code, qty_delivered,
+            )
 
         return {
             'qty_changes': qty_changes,
@@ -797,6 +795,9 @@ class SaleOrder(models.Model):
                 'crm_modified_at': crm_modified_at,
                 'state': 'pending' if pending else 'applied',
                 'summary': summary,
+                'warehouse_summary': self._misa_qty_change_summary(
+                    sync_result.get('qty_changes') or []
+                ),
                 'snapshot_payload': snapshot_payload,
                 'change_count': len(audit_changes),
                 'line_ids': [(0, 0, change) for change in audit_changes],
@@ -824,6 +825,15 @@ class SaleOrder(models.Model):
         for picking in open_pickings:
             picking.message_post(body=body, partner_ids=list(partner_ids))
         self.message_post(body=body, partner_ids=list(partner_ids))
+
+    def _misa_sync_open_picking_contact(self):
+        """Giữ phiếu kho mở theo đúng liên hệ giao hàng của SO sau resync/approve."""
+        self.ensure_one()
+        shipping_partner = self.partner_shipping_id or self.partner_id
+        if shipping_partner:
+            self.picking_ids.filtered(
+                lambda picking: picking.state not in ('done', 'cancel')
+            ).write({'partner_id': shipping_partner.id})
 
     def _sync_misa_header_in_place(self, data, headers):
         """Cập nhật header trên chính SO hiện tại, không thay record và không đụng move."""
@@ -926,9 +936,7 @@ class SaleOrder(models.Model):
 
         vals = {key: value for key, value in vals.items() if key in self._fields}
         self.write(vals)
-        self.picking_ids.filtered(lambda p: p.state not in ('done', 'cancel')).write({
-            'partner_id': partner.id,
-        })
+        self._misa_sync_open_picking_contact()
 
     def action_resync_from_misa(self):
         """Đồng bộ tại chỗ theo CRM line ID và để Odoo tự quản lý stock moves."""
@@ -1054,6 +1062,19 @@ class SaleOrder(models.Model):
             defer_quantity=False,
             prepared_lines=snapshot,
         )
+        order._misa_sync_open_picking_contact()
+        if pending_history:
+            lines_by_crm_id = {
+                line.misa_crm_line_id: line
+                for line in order.order_line
+                if line.misa_crm_line_id
+            }
+            for history_line in pending_history.line_ids.filtered(
+                lambda line: not line.sale_order_line_id and line.crm_line_id
+            ):
+                sale_line = lines_by_crm_id.get(history_line.crm_line_id)
+                if sale_line:
+                    history_line.sudo().write({'sale_order_line_id': sale_line.id})
         order.write({
             'misa_qty_sync_pending': False,
             'misa_qty_sync_pending_at': False,
