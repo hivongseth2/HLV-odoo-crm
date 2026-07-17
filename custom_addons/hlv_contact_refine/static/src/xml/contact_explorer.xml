@@ -94,11 +94,6 @@
                         </t>
                     </div>
                     <div class="hlv_toolbar_right">
-                        <button type="button"
-                                class="hlv_toolbar_button"
-                                t-on-click="openVietQRWizard">
-                            Tạo liên hệ từ MST
-                        </button>
                         <button t-if="mergeCount"
                                 type="button"
                                 class="hlv_toolbar_button"

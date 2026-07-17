@@ -18,6 +18,8 @@
     ],
     'assets': {
         'web.assets_backend': [
+            'hlv_contact_refine/static/src/xml/vietqr_vat_field.xml',
+            'hlv_contact_refine/static/src/js/vietqr_vat_field.js',
             'hlv_contact_refine/static/src/xml/contact_explorer.xml',
             'hlv_contact_refine/static/src/js/contact_explorer.js',
             'hlv_contact_refine/static/src/scss/contact_explorer.scss',

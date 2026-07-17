@@ -1,40 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <record id="view_hlv_contact_vietqr_wizard_form" model="ir.ui.view">
-        <field name="name">hlv.contact.vietqr.wizard.form</field>
-        <field name="model">hlv.contact.vietqr.wizard</field>
-        <field name="arch" type="xml">
-            <form string="Tạo liên hệ từ mã số thuế">
-                <sheet>
-                    <group>
-                        <field name="tax_code"
-                               placeholder="Ví dụ: 3603151043"
-                               options="{'trim': True}"/>
-                    </group>
-                    <div class="text-muted">
-                        Hệ thống sẽ lấy tên doanh nghiệp và địa chỉ từ VietQR,
-                        sau đó tạo một liên hệ công ty mới.
-                    </div>
-                </sheet>
-                <footer>
-                    <button name="action_fetch_and_create"
-                            type="object"
-                            string="Lấy dữ liệu và tạo liên hệ"
-                            class="btn-primary"/>
-                    <button string="Hủy" special="cancel" class="btn-secondary"/>
-                </footer>
-            </form>
-        </field>
-    </record>
-
-    <record id="action_hlv_contact_vietqr_wizard" model="ir.actions.act_window">
-        <field name="name">Tạo liên hệ từ MST</field>
-        <field name="res_model">hlv.contact.vietqr.wizard</field>
-        <field name="view_mode">form</field>
-        <field name="view_id" ref="view_hlv_contact_vietqr_wizard_form"/>
-        <field name="target">new</field>
-    </record>
-
     <record id="view_hlv_contact_merge_wizard_form" model="ir.ui.view">
         <field name="name">hlv.contact.merge.wizard.form</field>
         <field name="model">hlv.contact.merge.wizard</field>
