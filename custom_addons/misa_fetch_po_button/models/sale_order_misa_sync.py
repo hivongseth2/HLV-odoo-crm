@@ -255,8 +255,6 @@ class SaleOrder(models.Model):
             except Exception:
                 return dv
 
-        posted_inv_exists = bool(self.invoice_ids.filtered(lambda m: m.state == 'posted'))
-        
         # ===== Build combo_codes_with_bom để skip children =====
         # Nếu combo parent có BoM Kit, Odoo sẽ tự explode ra picking
         # → không cần thêm children vào SO, tránh trùng lặp
@@ -587,15 +585,12 @@ class SaleOrder(models.Model):
                 _logger.info("Giữ nguyên dòng Odoo chưa có CRM Line ID: %s", code)
                 continue
             
-            # Nếu đã có invoice posted -> giữ nguyên
-            if posted_inv_exists:
-                _logger.warning("⚠️ Dòng %s không còn trong MISA nhưng giữ nguyên (đã có invoice posted).", code)
-                continue
-            
             qty_delivered = float(getattr(sol, 'qty_delivered', 0.0) or 0.0)
-            
-            # Set qty = 0 hoặc qty_delivered (nếu đã giao)
-            new_qty = max(qty_delivered, 0.0)
+
+            # CRM Line ID đã biến mất khỏi response mới = sale đã xóa dòng trên MISA.
+            # Giữ record SOL để truy vết nhưng đưa ordered quantity về đúng 0,
+            # kể cả khi đã giao/xuất hóa đơn; qty_delivered/qty_invoiced vẫn giữ số thực tế.
+            new_qty = 0.0
             old_qty = float(sol.product_uom_qty or 0.0)
             if abs(old_qty - new_qty) >= 0.01:
                 _audit(
@@ -616,14 +611,11 @@ class SaleOrder(models.Model):
                     sol.misa_crm_line_id, code, old_qty, new_qty,
                 )
                 continue
-            try:
-                sol.write({'product_uom_qty': new_qty})
-                if new_qty > 0:
-                    _logger.info("↘️ Set qty=%s cho dòng %s (đã giao %s, không xóa).", new_qty, code, qty_delivered)
-                else:
-                    _logger.info("↘️ Set qty=0 cho dòng %s (không còn trong MISA).", code)
-            except Exception as e:
-                _logger.warning("Không thể set qty cho dòng %s: %s", code, e)
+            sol.write({'product_uom_qty': new_qty})
+            _logger.info(
+                "↘️ Set qty=0 cho CRM line %s (%s) không còn trong MISA; qty_delivered=%s được giữ nguyên.",
+                sol.misa_crm_line_id, code, qty_delivered,
+            )
 
         return {
             'qty_changes': qty_changes,
