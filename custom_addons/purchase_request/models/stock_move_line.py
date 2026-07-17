@@ -169,7 +169,7 @@ class StockMoveLine(models.Model):
                         to_allocate_uom_qty, to_allocate_uom
                     )
 
-                request = allocation.purchase_request_line_id.request_id
+                request = allocation.purchase_request_line_id.sudo().request_id
                 if allocated_qty:
                     message_data = self._prepare_message_data(
                         ml, request, allocated_qty
@@ -181,7 +181,7 @@ class StockMoveLine(models.Model):
 
                 allocation._compute_open_product_qty()
 
-        # Send grouped messages
+        # Send grouped messages to Chatter (internal log notes, no external emails)
         for (request, picking), messages_data in grouped_messages.items():
             if not messages_data:
                 continue
@@ -190,20 +190,28 @@ class StockMoveLine(models.Model):
                 messages_data
             )
             if message:
-                request.message_post(
+                request.sudo().with_context(
+                    mail_post_autofollow=False,
+                    mail_create_nosubscribe=True,
+                ).message_post(
                     body=Markup(message),
                     subtype_id=self.env.ref(
                         "purchase_request.mt_request_picking_done"
                     ).id,
+                    partner_ids=[],
                 )
 
             picking_message = self._picking_confirm_done_messages_content(
                 messages_data
             )
             if picking_message:
-                picking.message_post(
+                picking.sudo().with_context(
+                    mail_post_autofollow=False,
+                    mail_create_nosubscribe=True,
+                ).message_post(
                     body=Markup(picking_message),
-                    subtype_id=self.env.ref("mail.mt_comment").id,
+                    subtype_id=self.env.ref("mail.mt_note").id,
+                    partner_ids=[],
                 )
 
     def _action_done(self):

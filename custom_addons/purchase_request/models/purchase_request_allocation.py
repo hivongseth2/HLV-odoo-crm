@@ -128,7 +128,11 @@ class PurchaseRequestAllocation(models.Model):
             po_line = allocation.purchase_line_id
             message_data = self._prepare_message_data(po_line, request, allocated_qty)
             message = self._purchase_request_confirm_done_message_content(message_data)
-            request.message_post(
+            request.sudo().with_context(
+                mail_post_autofollow=False,
+                mail_create_nosubscribe=True,
+            ).message_post(
                 body=Markup(message),
                 subtype_id=self.env.ref("mail.mt_note").id,
+                partner_ids=[],
             )

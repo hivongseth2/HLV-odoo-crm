@@ -319,7 +319,11 @@ class PurchaseRequest(models.Model):
         return self.write({"state": "in_progress"})
 
     def button_done(self):
-        if not self.env.user.has_group("purchase_request.group_purchase_request_manager"):
+        if (
+            not self.env.su
+            and not self.env.context.get("bypass_pr_manager_check")
+            and not self.env.user.has_group("purchase_request.group_purchase_request_manager")
+        ):
             raise UserError(_("Bạn không có quyền thực hiện hành động này."))
         return self.write({"state": "done"})
 
