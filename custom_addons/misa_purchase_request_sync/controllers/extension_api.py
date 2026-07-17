@@ -2047,16 +2047,30 @@ class MisaExtensionController(http.Controller):
                 results[name] = {
                     "exists": True,
                     "state": pr.state,
-                    "state_label": state_label
+                    "state_label": state_label,
+                    "po_progress": pr.progress_purchased_badge or "0/0",
+                    "po_progress_status": pr.progress_purchased_status or "not_started",
+                    "stock_progress": pr.progress_received_badge or "0/0",
+                    "stock_progress_status": pr.progress_received_status or "not_started",
                 }
             elif name in queue_name_set:
                 results[name] = {
                     "exists": True,
                     "state": "queued",
-                    "state_label": "Đang đồng bộ"
+                    "state_label": "Đang đồng bộ",
+                    "po_progress": "-",
+                    "po_progress_status": "not_started",
+                    "stock_progress": "-",
+                    "stock_progress_status": "not_started",
                 }
             else:
-                results[name] = {"exists": False}
+                results[name] = {
+                    "exists": False,
+                    "po_progress": "-",
+                    "po_progress_status": "not_started",
+                    "stock_progress": "-",
+                    "stock_progress_status": "not_started",
+                }
 
         return json_response({"ok": True, "results": results})
 
