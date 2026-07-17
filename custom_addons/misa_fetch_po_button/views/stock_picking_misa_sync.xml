@@ -1,0 +1,26 @@
+<odoo>
+  <data>
+    <record id="view_picking_form_misa_qty_approval_inherit" model="ir.ui.view">
+      <field name="name">stock.picking.form.misa.qty.approval</field>
+      <field name="model">stock.picking</field>
+      <field name="inherit_id" ref="stock.view_picking_form"/>
+      <field name="arch" type="xml">
+        <xpath expr="//header" position="inside">
+          <field name="misa_sale_qty_sync_pending" invisible="1"/>
+          <button name="action_approve_misa_quantity_sync"
+                  type="object"
+                  string="Duyệt SL MISA"
+                  class="btn-warning"
+                  groups="stock.group_stock_user"
+                  invisible="not misa_sale_qty_sync_pending"/>
+        </xpath>
+        <xpath expr="//sheet" position="inside">
+          <div class="alert alert-warning" role="alert" invisible="not misa_sale_qty_sync_pending">
+            <strong>Sale Order đang chờ kho duyệt thay đổi số lượng từ MISA.</strong>
+            <field name="misa_sale_qty_sync_pending_summary" readonly="1" nolabel="1"/>
+          </div>
+        </xpath>
+      </field>
+    </record>
+  </data>
+</odoo>
