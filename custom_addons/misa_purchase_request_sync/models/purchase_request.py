@@ -322,6 +322,70 @@ class PurchaseRequest(models.Model):
 
 
     @api.model
+    def _resolve_misa_picking_type(self, raw_data, company_id=False):
+        """
+        Xác định Kho nhận (stock.picking.type incoming) dựa vào CustomField13/CustomField13Text của MISA payload:
+        1: Bến Cam
+        2: Hiền Đức
+        3: Tân Sơn Nhì
+        4: TSN Showroom
+        """
+        if not raw_data or not isinstance(raw_data, dict):
+            raw_data = {}
+
+        type_obj = self.env["stock.picking.type"].sudo()
+        wh_obj = self.env["stock.warehouse"].sudo()
+
+        cf13_id = raw_data.get("CustomField13")
+        cf13_text = (raw_data.get("CustomField13Text") or "").strip()
+
+        # Map ID -> Warehouse Name search pattern
+        id_map = {
+            1: "Bến Cam",
+            2: "Hiền Đức",
+            3: "Tân Sơn Nhì",
+            4: "TSN Showroom",
+        }
+
+        search_text = False
+        if cf13_id in id_map:
+            search_text = id_map[cf13_id]
+        elif isinstance(cf13_id, str) and cf13_id.isdigit() and int(cf13_id) in id_map:
+            search_text = id_map[int(cf13_id)]
+        elif cf13_text:
+            search_text = cf13_text
+
+        if search_text:
+            domain = [
+                ("code", "=", "incoming"),
+                "|",
+                ("warehouse_id.name", "ilike", search_text),
+                ("warehouse_id.code", "ilike", search_text),
+            ]
+            if company_id:
+                domain.append(("warehouse_id.company_id", "=", company_id))
+
+            pt = type_obj.search(domain, limit=1)
+            if pt:
+                return pt.id
+
+            # Fallback search warehouse directly
+            wh_domain = [
+                "|",
+                ("name", "ilike", search_text),
+                ("code", "ilike", search_text),
+            ]
+            if company_id:
+                wh_domain.append(("company_id", "=", company_id))
+            wh = wh_obj.search(wh_domain, limit=1)
+            if wh and wh.in_type_id:
+                return wh.in_type_id.id
+
+        # Fallback về mặc định nếu không khớp
+        default_pt = self._default_picking_type()
+        return default_pt.id if default_pt else False
+
+    @api.model
     def api_create_from_misa_payload(self, payload):
         """
         Tạo PR từ JSON payload của MISA (đã trích xuất từ controller extension_api)
@@ -348,6 +412,7 @@ class PurchaseRequest(models.Model):
                 sale_order_id = so.id
 
         raw_data = payload.get("rawData", {})
+        picking_type_id = self._resolve_misa_picking_type(raw_data, self.env.company.id)
         date_start = False
         create_date = False
         date_required = False
@@ -395,6 +460,8 @@ class PurchaseRequest(models.Model):
                 "sale_order_id": sale_order_id,
                 "origin": origin_val,
             }
+            if picking_type_id:
+                write_vals["picking_type_id"] = picking_type_id
             if date_start:
                 write_vals["date_start"] = date_start
             pr.write(write_vals)
@@ -413,6 +480,8 @@ class PurchaseRequest(models.Model):
                 "sale_order_id": sale_order_id,
                 "x_misa_requested_by": payload.get("OwnerIDText") or "",
             }
+            if picking_type_id:
+                pr_vals["picking_type_id"] = picking_type_id
             if date_start:
                 pr_vals["date_start"] = date_start
             if create_date:
@@ -477,7 +546,12 @@ class PurchaseRequest(models.Model):
             product_id = product.id if product else False
             uom_id = uom.id if uom else False
 
-            line_name = (line.get("name") or "Sản phẩm không tên").strip()
+            # Ưu tiên lấy tên từ datasubpaging (line.get("name")), fallback về product.name
+            line_name = (
+                line.get("name")
+                or line.get("product_name")
+                or (product.name if product else "Sản phẩm không tên")
+            ).strip()
             try:
                 qty = float(line.get("qty", 1.0))
             except ValueError:
