@@ -362,12 +362,19 @@ class MisaExtensionController(http.Controller):
                 edit_locked_at = getattr(so, 'misa_sale_edit_locked_at', False)
                 history_rec = getattr(so, 'misa_qty_sync_pending_history_id', None)
                 history_name = history_rec.name if history_rec else ""
+                active_sync_queue = env["misa.sync.queue"].sudo().search([
+                    ("name", "=", str(so.misa_id or misa_id or "")),
+                    ("sync_type", "=", "so"),
+                    ("state", "in", ["draft", "processing"]),
+                ], limit=1)
+                is_sync_request_pending = bool(active_sync_queue)
 
                 status_label = (
-                    f"Chờ phê duyệt phiên bản {history_name}" if (is_pending and history_name)
+                    "Đã gửi yêu cầu thay đổi - đang chờ hệ thống xử lý" if is_sync_request_pending
+                    else (f"Chờ phê duyệt phiên bản {history_name}" if (is_pending and history_name)
                     else ("Chờ kho duyệt thay đổi số lượng" if is_pending
                     else ("Sale đang chỉnh sửa - phiếu OUT đang khóa" if is_edit_locked
-                    else state_label))
+                    else state_label)))
                 )
 
                 lines_data = []
@@ -459,6 +466,7 @@ class MisaExtensionController(http.Controller):
                     "status_label": status_label,
                     "can_revoke": can_revoke,
                     "misa_qty_sync_pending": is_pending,
+                    "misa_sync_request_pending": is_sync_request_pending,
                     "misa_qty_sync_pending_history_name": history_name,
                     "misa_sale_edit_locked": is_edit_locked,
                     "misa_sale_edit_locked_at": (
