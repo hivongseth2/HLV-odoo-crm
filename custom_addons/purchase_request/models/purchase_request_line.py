@@ -298,6 +298,12 @@ class PurchaseRequestLine(models.Model):
             requests.check_auto_reject()
         return res
 
+    @api.depends(
+        "purchase_lines",
+        "purchase_lines.product_qty",
+        "purchase_lines.product_uom",
+        "purchase_lines.state",
+    )
     def _compute_purchased_qty(self):
         for rec in self:
             rec.purchased_qty = 0.0
