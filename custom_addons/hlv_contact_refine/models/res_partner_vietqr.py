@@ -5,7 +5,7 @@ from urllib.parse import quote
 
 import requests
 
-from odoo import _, api, models
+from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
 
@@ -17,6 +17,14 @@ VIETNAM_TAX_CODE_PATTERN = re.compile(r"^\d{10}(?:-\d{3})?$")
 
 class ResPartner(models.Model):
     _inherit = 'res.partner'
+
+    hlv_vietqr_lookup_button = fields.Boolean(
+        compute='_compute_hlv_vietqr_lookup_button',
+    )
+
+    def _compute_hlv_vietqr_lookup_button(self):
+        for partner in self:
+            partner.hlv_vietqr_lookup_button = False
 
     @api.model
     def hlv_vietqr_lookup_business(self, tax_code):

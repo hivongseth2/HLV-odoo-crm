@@ -1,36 +1,32 @@
 /** @odoo-module **/
 
-import { useState } from "@odoo/owl";
+import { Component, useState } from "@odoo/owl";
 import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
-import { CharField, charField } from "@web/views/fields/char/char_field";
+import { standardFieldProps } from "@web/views/fields/standard_field_props";
 
 
-export class HlvVietqrVatField extends CharField {
+export class HlvVietqrLookupButton extends Component {
+    static template = "hlv_contact_refine.HlvVietqrLookupButton";
+    static props = {
+        ...standardFieldProps,
+    };
+
     setup() {
-        super.setup();
         this.orm = useService("orm");
         this.notification = useService("notification");
         this.state = useState({ loading: false });
     }
 
     get showLookupButton() {
-        const record = this.props.record;
-        return (
-            record.isNew
-            && !this.props.readonly
-        );
+        return this.props.record.isNew;
     }
 
     async lookupBusiness() {
         if (this.state.loading) {
             return;
         }
-        const taxCode = (
-            this.input.el?.value
-            || this.props.record.data[this.props.name]
-            || ""
-        ).trim();
+        const taxCode = String(this.props.record.data.vat || "").trim();
         if (!taxCode) {
             this.notification.add("Vui lòng nhập mã số thuế trước.", {
                 type: "warning",
@@ -67,12 +63,7 @@ export class HlvVietqrVatField extends CharField {
     }
 }
 
-HlvVietqrVatField.template = "hlv_contact_refine.HlvVietqrVatField";
-HlvVietqrVatField.props = {
-    ...CharField.props,
-};
-
-registry.category("fields").add("hlv_vietqr_vat", {
-    ...charField,
-    component: HlvVietqrVatField,
+registry.category("fields").add("hlv_vietqr_lookup_button", {
+    component: HlvVietqrLookupButton,
+    supportedTypes: ["boolean"],
 });
