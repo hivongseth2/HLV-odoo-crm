@@ -1357,6 +1357,11 @@ class HLVMobileBarcodePickingScan(http.Controller):
             'return_of_id': picking.return_id.id if is_return_picking else False,
             'return_of_name': picking.return_id.name if is_return_picking else False,
             'has_scanned_data': has_scanned_data,
+            'misa_sale_edit_locked': bool(
+                picking.sale_id
+                and 'misa_sale_edit_locked' in picking.sale_id._fields
+                and picking.sale_id.misa_sale_edit_locked
+            ),
             'hlv_barcode_auto_cleared': getattr(picking, 'hlv_barcode_auto_cleared', False),
             'packer_name': picking._hlv_mobile_packer_display_name(picking.x_pack_packer_user_id) if picking.x_pack_packer_user_id else '',
         }

@@ -7,6 +7,11 @@
             </div>
             
             <t t-elif="state.picking">
+                <div t-if="state.picking.misa_sale_edit_locked"
+                     class="alert alert-info"
+                     style="margin: 0 0 10px; padding: 10px 12px; font-weight: 700;">
+                    <i class="fa fa-pencil-alt"/> Sale đang chỉnh sửa đơn trên CRM. Bạn vẫn tiếp tục PICK bình thường; phiếu OUT đang được khóa xác nhận.
+                </div>
                 <!-- CONFLICT POPUP: Khi vào lại phiếu PICK, tồn kho đã thay đổi -->
                 <div class="modal-overlay" t-if="state.showConflictPopup" style="z-index: 10000;">
                     <div class="modal-content" style="max-width: 420px; width: 92%;">

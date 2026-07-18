@@ -973,6 +973,7 @@ class SaleOrder(models.Model):
                 'misa_qty_sync_pending_snapshot': False,
                 'misa_qty_sync_pending_history_id': False,
             })
+            self._misa_clear_sale_edit_lock()
             return {
                 'type': 'ir.actions.client',
                 'tag': 'display_notification',
@@ -1032,6 +1033,7 @@ class SaleOrder(models.Model):
             'misa_qty_sync_pending_snapshot': False,
             'misa_qty_sync_pending_history_id': False,
         })
+        self._misa_clear_sale_edit_lock()
         if self.state in ('draft', 'sent'):
             self.action_confirm()
         self._auto_apply_misa_tags()
@@ -1089,6 +1091,7 @@ class SaleOrder(models.Model):
             'misa_qty_sync_pending_snapshot': False,
             'misa_qty_sync_pending_history_id': False,
         })
+        order._misa_clear_sale_edit_lock()
         if pending_history:
             pending_history.sudo().write({
                 'state': 'applied',

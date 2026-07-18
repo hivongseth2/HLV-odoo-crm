@@ -4,8 +4,8 @@
       <field name="name">sale.order.list.misa.qty.approval</field>
       <field name="model">sale.order</field>
       <field name="arch" type="xml">
-        <list string="Đơn MISA chờ kho duyệt" create="0" delete="0" edit="0"
-              default_order="misa_qty_sync_pending_at desc, id desc">
+        <list string="Đơn MISA đang sửa / chờ kho duyệt" create="0" delete="0" edit="0"
+              default_order="misa_sale_edit_locked_at desc, misa_qty_sync_pending_at desc, id desc">
           <field name="name" string="Đơn bán"/>
           <field name="partner_id"/>
           <field name="warehouse_id"/>
@@ -13,28 +13,31 @@
           <field name="user_id"/>
           <field name="misa_qty_sync_pending_at"/>
           <field name="misa_qty_sync_pending_summary"/>
+          <field name="misa_sale_edit_locked" readonly="1"/>
+          <field name="misa_sale_edit_locked_at"/>
           <button name="action_approve_misa_quantity_sync"
                   type="object"
                   string="Duyệt đồng bộ"
                   class="btn-warning"
-                  groups="stock.group_stock_user"/>
+                  groups="stock.group_stock_user"
+                  invisible="not misa_qty_sync_pending"/>
         </list>
       </field>
     </record>
 
     <record id="action_sale_order_misa_qty_approval" model="ir.actions.act_window">
-      <field name="name">Đơn MISA chờ kho duyệt</field>
+      <field name="name">Đơn MISA đang sửa / chờ duyệt</field>
       <field name="res_model">sale.order</field>
       <field name="view_mode">list,form</field>
       <field name="view_id" ref="view_sale_order_list_misa_qty_approval"/>
-      <field name="domain">[('misa_qty_sync_pending', '=', True)]</field>
+      <field name="domain">['|', ('misa_sale_edit_locked', '=', True), ('misa_qty_sync_pending', '=', True)]</field>
       <field name="help" type="html">
-        <p class="o_view_nocontent_smiling_face">Không có đơn MISA nào đang chờ kho duyệt.</p>
+        <p class="o_view_nocontent_smiling_face">Không có đơn MISA nào đang chỉnh sửa hoặc chờ kho duyệt.</p>
       </field>
     </record>
 
     <menuitem id="menu_picking_misa_qty_approval"
-              name="Đơn MISA chờ duyệt"
+              name="Đơn MISA đang sửa / chờ duyệt"
               parent="stock.menu_stock_warehouse_mgmt"
               action="action_sale_order_misa_qty_approval"
               groups="stock.group_stock_user"
@@ -47,6 +50,10 @@
       <field name="arch" type="xml">
         <xpath expr="//header" position="inside">
           <field name="misa_sale_qty_sync_pending" invisible="1"/>
+          <field name="misa_sale_edit_locked" invisible="1"/>
+          <span class="badge text-bg-info ms-2" invisible="not misa_sale_edit_locked">
+            Sale đang chỉnh sửa - OUT đang khóa
+          </span>
           <button name="action_approve_misa_quantity_sync"
                   type="object"
                   string="Duyệt SL MISA"
@@ -55,6 +62,11 @@
                   invisible="not misa_sale_qty_sync_pending"/>
         </xpath>
         <xpath expr="//sheet" position="inside">
+          <div class="alert alert-info" role="alert" invisible="not misa_sale_edit_locked">
+            <strong>Sale đang chỉnh sửa đơn trên CRM.</strong>
+            PICK/PACK vẫn làm bình thường; riêng phiếu OUT không thể xác nhận cho đến khi bản sửa được áp dụng.
+            <field name="misa_sale_edit_locked_at" readonly="1" class="ms-2"/>
+          </div>
           <div class="alert alert-warning" role="alert" invisible="not misa_sale_qty_sync_pending">
             <strong>Sale Order đang chờ kho duyệt thay đổi số lượng từ MISA.</strong>
             <field name="misa_sale_qty_sync_pending_summary" readonly="1" nolabel="1"/>

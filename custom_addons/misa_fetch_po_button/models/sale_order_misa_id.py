@@ -12,6 +12,17 @@ class SaleOrder(models.Model):
     _inherit = 'sale.order'
 
     misa_id = fields.Char(string="MISA ID", copy=False, index=True)
+    misa_sale_edit_locked = fields.Boolean(
+        string="Sale đang chỉnh sửa trên CRM",
+        default=False,
+        copy=False,
+        index=True,
+    )
+    misa_sale_edit_locked_at = fields.Datetime(
+        string="Bắt đầu chỉnh sửa lúc",
+        copy=False,
+        readonly=True,
+    )
     misa_qty_sync_pending = fields.Boolean(
         string="Chờ kho duyệt thay đổi số lượng",
         default=False,
@@ -66,6 +77,46 @@ class SaleOrder(models.Model):
             'create': False,
         }
         return action
+
+    def action_misa_start_sale_edit(self):
+        """Khóa xác nhận OUT trong lúc sale sửa CRM; PICK/PACK vẫn hoạt động."""
+        self.ensure_one()
+        order = self.sudo()
+        if order.state == 'cancel':
+            raise UserError(_("Đơn bán đã hủy nên không thể bắt đầu chỉnh sửa."))
+        done_out = order.picking_ids.filtered(
+            lambda picking: picking.picking_type_id.code == 'outgoing'
+            and picking.state == 'done'
+        )
+        if done_out:
+            raise UserError(_(
+                "Đơn đã hoàn tất phiếu xuất kho %s nên không thể khóa để chỉnh sửa."
+            ) % ', '.join(done_out.mapped('name')))
+        if not order.misa_sale_edit_locked:
+            now = fields.Datetime.now()
+            order.write({
+                'misa_sale_edit_locked': True,
+                'misa_sale_edit_locked_at': now,
+            })
+            order._misa_notify_warehouse(
+                _("Sale bắt đầu chỉnh sửa đơn %s trên CRM. Phiếu OUT tạm khóa xác nhận; PICK/PACK vẫn xử lý bình thường.")
+                % order.name
+            )
+        return order
+
+    def _misa_clear_sale_edit_lock(self):
+        locked_orders = self.sudo().filtered('misa_sale_edit_locked')
+        if locked_orders:
+            locked_orders.write({
+                'misa_sale_edit_locked': False,
+                'misa_sale_edit_locked_at': False,
+            })
+        return True
+
+    def action_cancel(self):
+        result = super().action_cancel()
+        self._misa_clear_sale_edit_lock()
+        return result
 
 
 class SaleOrderLine(models.Model):
@@ -132,6 +183,33 @@ class StockPicking(models.Model):
         string="Thay đổi số lượng MISA",
         readonly=True,
     )
+    misa_sale_edit_locked = fields.Boolean(
+        related='sale_id.misa_sale_edit_locked',
+        string="Sale đang chỉnh sửa trên CRM",
+        readonly=True,
+    )
+    misa_sale_edit_locked_at = fields.Datetime(
+        related='sale_id.misa_sale_edit_locked_at',
+        string="Sale bắt đầu chỉnh sửa lúc",
+        readonly=True,
+    )
+
+    def button_validate(self):
+        blocked = self.filtered(
+            lambda picking: picking.picking_type_id.code == 'outgoing'
+            and picking.sale_id
+            and picking.sale_id.misa_sale_edit_locked
+        )
+        if blocked:
+            details = ', '.join(
+                "%s (%s)" % (picking.name, picking.sale_id.name)
+                for picking in blocked
+            )
+            raise UserError(_(
+                "Không thể xác nhận phiếu xuất kho %s vì sale đang chỉnh sửa đơn trên CRM. "
+                "PICK/PACK vẫn được xử lý bình thường; hãy chờ sale đồng bộ và kho áp dụng bản sửa."
+            ) % details)
+        return super().button_validate()
 
     def action_approve_misa_quantity_sync(self):
         self.ensure_one()
@@ -241,6 +319,7 @@ class MisaSaleSyncSnapshot(models.Model):
                 'misa_qty_sync_pending_snapshot': False,
                 'misa_qty_sync_pending_history_id': False,
             })
+            order._misa_clear_sale_edit_lock()
         order._misa_notify_warehouse(
             _("Kho (%s) đã hủy snapshot MISA %s của đơn %s.")
             % (self.env.user.name, self.name, order.name)
@@ -262,6 +341,7 @@ class MisaSaleSyncSnapshot(models.Model):
             ) % active_snapshot.name)
         if not isinstance(self.snapshot_payload, list):
             raise UserError(_("Snapshot không còn payload hợp lệ để phục hồi."))
+        order.action_misa_start_sale_edit()
         now = fields.Datetime.now()
         restored = self.sudo().create({
             'sale_order_id': order.id,

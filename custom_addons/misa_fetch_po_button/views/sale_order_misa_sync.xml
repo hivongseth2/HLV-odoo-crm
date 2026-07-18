@@ -18,6 +18,10 @@
         </xpath>
         <xpath expr="//header" position="inside">
           <field name="misa_qty_sync_pending" invisible="1"/>
+          <field name="misa_sale_edit_locked" invisible="1"/>
+          <span class="badge text-bg-info ms-2" invisible="not misa_sale_edit_locked">
+            Sale đang chỉnh sửa - OUT đang khóa
+          </span>
           <!-- Compatibility anchor cho các view DB/Studio cũ còn xpath theo tên hard sync.
                Method cùng tên chỉ gọi resync tại chỗ an toàn, không hủy/tạo lại move. -->
           <button name="action_resync_from_misa_hard"
@@ -44,6 +48,11 @@
                   invisible="state not in ('draft', 'sent', 'sale')"/>
         </xpath>
         <xpath expr="//sheet" position="inside">
+          <div class="alert alert-info" role="alert" invisible="not misa_sale_edit_locked">
+            <strong>Sale đang chỉnh sửa đơn trên CRM.</strong>
+            Phiếu OUT tạm khóa xác nhận; PICK/PACK vẫn xử lý bình thường.
+            <field name="misa_sale_edit_locked_at" readonly="1" class="ms-2"/>
+          </div>
           <div class="alert alert-warning" role="alert" invisible="not misa_qty_sync_pending">
             <strong>Đơn đang chờ kho duyệt thay đổi số lượng từ MISA.</strong>
             <field name="misa_qty_sync_pending_at" readonly="1" class="ms-2"/>

@@ -1,12 +1,59 @@
 # controllers/misa_api.py
 # -*- coding: utf-8 -*-
 import logging, json,re
-from odoo import http
+from odoo import fields, http
 from odoo.http import request
 
 _logger = logging.getLogger(__name__)
 
 class MisaApiSaleOrder(http.Controller):
+
+    @http.route('/api/misa/sale_order/edit_lock', type='json', auth='none', methods=['POST', 'OPTIONS'], csrf=False, cors="*")
+    def api_misa_sale_order_edit_lock(self, **payload):
+        """Nhận MISA order ID và khóa riêng việc xác nhận phiếu OUT của SO."""
+        if not payload:
+            body = request.httprequest.get_json(force=False, silent=True) or {}
+            payload = dict(body.get('params') or body)
+
+        raw_token = payload.get('token') or request.httprequest.headers.get('X-MISA-Token')
+        token = re.sub(r'[\u200B-\u200D\uFEFF]', '', (raw_token or '').strip())
+        expected = request.env['ir.config_parameter'].sudo().get_param('misa.api.token') or 'hoanglongvu'
+        expected = re.sub(r'[\u200B-\u200D\uFEFF]', '', expected)
+        if token != expected:
+            return {"ok": False, "error": "invalid_token", "message": "Token không hợp lệ."}
+
+        misa_order_id = str(payload.get('misa_order_id') or payload.get('id') or '').strip()
+        if not misa_order_id:
+            return {"ok": False, "error": "missing_misa_order_id", "message": "Thiếu MISA order ID."}
+
+        admin_user = request.env.ref('base.user_admin', raise_if_not_found=False)
+        if not admin_user:
+            return {"ok": False, "error": "admin_not_found", "message": "Không tìm thấy tài khoản quản trị."}
+
+        try:
+            order = request.env(user=admin_user)['sale.order'].sudo().search([
+                ('misa_id', '=', misa_order_id),
+                ('state', '!=', 'cancel'),
+            ], limit=1)
+            if not order:
+                return {
+                    "ok": False,
+                    "error": "not_found",
+                    "message": "Không tìm thấy đơn Odoo theo MISA ID %s." % misa_order_id,
+                }
+            order.action_misa_start_sale_edit()
+            return {
+                "ok": True,
+                "order_id": order.id,
+                "name": order.name,
+                "misa_order_id": order.misa_id,
+                "misa_sale_edit_locked": True,
+                "misa_sale_edit_locked_at": fields.Datetime.to_string(order.misa_sale_edit_locked_at),
+                "message": "Đã khóa xác nhận phiếu xuất kho; PICK/PACK vẫn xử lý bình thường.",
+            }
+        except Exception as error:
+            _logger.exception("MISA API /edit_lock exception for %s: %s", misa_order_id, error)
+            return {"ok": False, "error": "exception", "message": str(error)}
 
     @http.route('/api/misa/sale_order/resync', type='json', auth='none', methods=['POST', 'OPTIONS'], csrf=False, cors="*")
     def api_misa_sale_order_resync(self, **payload):

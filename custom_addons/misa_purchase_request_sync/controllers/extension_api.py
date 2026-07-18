@@ -40,7 +40,7 @@ import json
 import logging
 import re
 
-from odoo import http
+from odoo import fields, http
 from odoo.http import request
 
 _logger = logging.getLogger(__name__)
@@ -358,13 +358,16 @@ class MisaExtensionController(http.Controller):
 
                 # --- KIỂM TRA PHIÊN BẢN VÀ TRẠNG THÁI CHỜ DUYỆT (TOÁN TỬ 3 CẤP) ---
                 is_pending = bool(getattr(so, 'misa_qty_sync_pending', False))
+                is_edit_locked = bool(getattr(so, 'misa_sale_edit_locked', False))
+                edit_locked_at = getattr(so, 'misa_sale_edit_locked_at', False)
                 history_rec = getattr(so, 'misa_qty_sync_pending_history_id', None)
                 history_name = history_rec.name if history_rec else ""
 
                 status_label = (
                     f"Chờ phê duyệt phiên bản {history_name}" if (is_pending and history_name)
                     else ("Chờ kho duyệt thay đổi số lượng" if is_pending
-                    else state_label)
+                    else ("Sale đang chỉnh sửa - phiếu OUT đang khóa" if is_edit_locked
+                    else state_label))
                 )
 
                 lines_data = []
@@ -389,6 +392,10 @@ class MisaExtensionController(http.Controller):
                     "can_revoke": can_revoke,
                     "misa_qty_sync_pending": is_pending,
                     "misa_qty_sync_pending_history_name": history_name,
+                    "misa_sale_edit_locked": is_edit_locked,
+                    "misa_sale_edit_locked_at": (
+                        fields.Datetime.to_string(edit_locked_at) if edit_locked_at else False
+                    ),
                     "lines": lines_data,
                 }
 
