@@ -1,6 +1,6 @@
 {
     'name': 'Refine Contact Interface',
-    'version': '18.0.2.1.2',
+    'version': '18.0.2.1.3',
     'category': 'Sales/CRM',
     'summary': 'Refined contact classification, cleanup, merge and split workflows',
     'description': """

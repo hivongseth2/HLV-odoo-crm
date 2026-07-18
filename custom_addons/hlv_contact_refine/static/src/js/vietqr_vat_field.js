@@ -22,11 +22,19 @@ export class HlvVietqrLookupButton extends Component {
         return this.props.record.isNew;
     }
 
-    async lookupBusiness() {
+    async lookupBusiness(event) {
         if (this.state.loading) {
             return;
         }
-        const taxCode = String(this.props.record.data.vat || "").trim();
+        const form = event.currentTarget.closest(".o_form_view");
+        const vatInput = form?.querySelector(
+            '.o_field_widget[name="vat"] input, '
+            + '.o_field_widget[data-name="vat"] input, '
+            + 'input[name="vat"]'
+        );
+        const taxCode = String(
+            vatInput?.value || this.props.record.data.vat || ""
+        ).trim();
         if (!taxCode) {
             this.notification.add("Vui lòng nhập mã số thuế trước.", {
                 type: "warning",
