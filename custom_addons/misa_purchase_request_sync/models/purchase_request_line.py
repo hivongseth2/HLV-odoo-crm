@@ -248,13 +248,13 @@ class PurchaseRequestLine(models.Model):
             s = s.rstrip('0').rstrip(',')
         return s
 
-    @api.depends('product_qty', 'actual_qty')
+    @api.depends('product_qty', 'purchased_qty')
     def _compute_display_qty_html(self):
         for line in self:
             qty_str = line._format_misa_float(line.product_qty)
-            if line.actual_qty:
-                act_qty_str = line._format_misa_float(line.actual_qty)
-                line.display_qty_html = Markup(f"<div>{qty_str}</div><div style='font-size: 0.85rem; color: #2e7d32; font-weight: bold; font-style: italic;'>PO: {act_qty_str}</div>")
+            if line.purchased_qty:
+                purchased_qty_str = line._format_misa_float(line.purchased_qty)
+                line.display_qty_html = Markup(f"<div>{qty_str}</div><div style='font-size: 0.85rem; color: #2e7d32; font-weight: bold; font-style: italic;'>PO: {purchased_qty_str}</div>")
             else:
                 line.display_qty_html = Markup(f"<div>{qty_str}</div>")
 

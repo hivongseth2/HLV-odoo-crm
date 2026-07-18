@@ -101,7 +101,62 @@ class PurchaseOrder(models.Model):
         self._purchase_request_confirm_message()
         return res
 
+    def _get_purchase_request_event_data(self):
+        event_data = []
+        for po in self:
+            request_ids = po.order_line.sudo().mapped(
+                "purchase_request_lines.request_id"
+            ).ids
+            if request_ids:
+                event_data.append(
+                    {
+                        "po_name": po.name,
+                        "request_ids": request_ids,
+                    }
+                )
+        return event_data
+
+    @api.model
+    def _post_purchase_request_order_event(self, event_data, event):
+        for data in event_data:
+            if event == "cancel":
+                event_message = _("Đơn mua hàng %s đã bị hủy.") % data["po_name"]
+            else:
+                event_message = _("Đơn mua hàng %s đã bị xóa.") % data["po_name"]
+
+            body = Markup("<b>%s</b><br/>%s: %s") % (
+                event_message,
+                _("Người thực hiện"),
+                self.env.user.display_name,
+            )
+            requests = self.env["purchase.request"].sudo().browse(
+                data["request_ids"]
+            ).exists()
+            for request in requests:
+                request.with_context(
+                    mail_post_autofollow=False,
+                    mail_create_nosubscribe=True,
+                ).message_post(
+                    body=body,
+                    subtype_id=self.env.ref("mail.mt_note").id,
+                    partner_ids=[],
+                )
+
+    def write(self, vals):
+        event_data = []
+        if vals.get("state") == "cancel":
+            event_data = self.filtered(
+                lambda po: po.state != "cancel"
+            )._get_purchase_request_event_data()
+        res = super().write(vals)
+        if event_data:
+            self.env["purchase.order"]._post_purchase_request_order_event(
+                event_data, "cancel"
+            )
+        return res
+
     def unlink(self):
+        event_data = self._get_purchase_request_event_data()
         alloc_to_unlink = self.env["purchase.request.allocation"]
         for rec in self:
             for alloc in (
@@ -114,6 +169,10 @@ class PurchaseOrder(models.Model):
                 alloc_to_unlink += alloc
         res = super().unlink()
         alloc_to_unlink.unlink()
+        if event_data:
+            self.env["purchase.order"]._post_purchase_request_order_event(
+                event_data, "unlink"
+            )
         return res
 
 
