@@ -375,12 +375,80 @@ class MisaExtensionController(http.Controller):
                     if line.display_type:
                         continue
                     lines_data.append({
-                        "misa_line_id": line.misa_line_id if hasattr(line, 'misa_line_id') and line.misa_line_id else "",
+                        "misa_line_id": line.misa_crm_line_id if hasattr(line, 'misa_crm_line_id') and line.misa_crm_line_id else "",
                         "product_code": line.product_id.default_code if line.product_id else "",
                         "name": line.name or "",
                         "qty": line.product_uom_qty,
+                        "price": line.price_unit,
+                        "discount": line.discount,
+                        "tax_percentages": sorted(line.tax_id.mapped('amount')),
+                        "uom": line.product_uom.name or "",
                         "qty_delivered": line.qty_delivered if hasattr(line, 'qty_delivered') else 0.0,
                     })
+
+                # Baseline dùng để extension so sánh ngay trong trình duyệt, không fetch CRM.
+                # Pending: so với snapshot chờ mới nhất để phát hiện lần sửa tiếp theo.
+                # Bình thường: lấy SO hiện tại; snapshot applied chỉ hỗ trợ quy ngược UoM CRM
+                # nếu dòng Odoo vẫn khớp nguyên trạng với lần sync gần nhất.
+                applied_snapshot = env[
+                    "misa.sale.sync.snapshot"
+                ].sudo().search([
+                    ("sale_order_id", "=", so.id),
+                    ("state", "=", "applied"),
+                ], order="fetched_at desc, id desc", limit=1)
+                pending_payload = (
+                    history_rec.snapshot_payload
+                    if is_pending and history_rec and isinstance(history_rec.snapshot_payload, list)
+                    else None
+                )
+                applied_payload = (
+                    applied_snapshot.snapshot_payload
+                    if applied_snapshot and isinstance(applied_snapshot.snapshot_payload, list)
+                    else []
+                )
+                if pending_payload is not None:
+                    sync_baseline_lines = [{
+                        "misa_line_id": str(item.get("crm_line_id") or ""),
+                        "product_code": item.get("code") or "",
+                        "name": item.get("name") or "",
+                        "qty": float(item.get("crm_qty", item.get("qty")) or 0.0),
+                        "price": float(item.get("crm_price", item.get("price")) or 0.0),
+                        "discount": float(item.get("crm_discount", item.get("discount")) or 0.0),
+                        "tax_percentages": sorted(
+                            env['account.tax'].sudo().browse(item.get("tax_ids") or []).exists().mapped('amount')
+                        ),
+                        "uom": item.get("crm_uom") or "",
+                    } for item in pending_payload]
+                    sync_baseline_source = "pending_snapshot"
+                else:
+                    applied_by_line_id = {
+                        str(item.get("crm_line_id") or ""): item
+                        for item in applied_payload
+                        if item.get("crm_line_id")
+                    }
+                    sync_baseline_lines = []
+                    for line in lines_data:
+                        if not line.get("misa_line_id") or not line.get("qty"):
+                            continue
+                        baseline_line = dict(line)
+                        applied = applied_by_line_id.get(str(line["misa_line_id"]))
+                        if applied:
+                            unchanged_since_sync = (
+                                abs(float(line.get("qty") or 0.0) - float(applied.get("qty") or 0.0)) < 0.0001
+                                and abs(float(line.get("price") or 0.0) - float(applied.get("price") or 0.0)) < 0.01
+                                and abs(float(line.get("discount") or 0.0) - float(applied.get("discount") or 0.0)) < 0.0001
+                                and (line.get("product_code") or "") == (applied.get("code") or "")
+                                and (line.get("name") or "").strip() == (applied.get("name") or "").strip()
+                            )
+                            if unchanged_since_sync:
+                                baseline_line.update({
+                                    "qty": float(applied.get("crm_qty", applied.get("qty")) or 0.0),
+                                    "price": float(applied.get("crm_price", applied.get("price")) or 0.0),
+                                    "discount": float(applied.get("crm_discount", applied.get("discount")) or 0.0),
+                                    "uom": applied.get("crm_uom") or "",
+                                })
+                        sync_baseline_lines.append(baseline_line)
+                    sync_baseline_source = "sale_order"
 
                 payload = {
                     "ok": True,
@@ -396,6 +464,15 @@ class MisaExtensionController(http.Controller):
                     "misa_sale_edit_locked_at": (
                         fields.Datetime.to_string(edit_locked_at) if edit_locked_at else False
                     ),
+                    "sync_baseline_lines": sync_baseline_lines,
+                    "sync_baseline_source": sync_baseline_source,
+                    "sync_baseline_header": {
+                        "shipping_address": so.misa_shipping_address or "",
+                        "phone": getattr(so, 'x_studio_sdt_giao_hang', False) or "",
+                        "account_name": so.partner_id.name or "",
+                        "book_date": fields.Datetime.to_string(so.date_order) if so.date_order else "",
+                        "deadline_date": fields.Datetime.to_string(so.commitment_date) if so.commitment_date else "",
+                    },
                     "lines": lines_data,
                 }
 

@@ -342,6 +342,10 @@ class SaleOrder(models.Model):
                 'tax_ids': tax_ids,
                 'is_default_uom': is_default,
                 'status': x_studio_product_status,
+                'crm_qty': qty,
+                'crm_price': price,
+                'crm_discount': discount,
+                'crm_uom': uom_name,
             })
 
         # Khi kho duyệt, dùng dữ liệu đã chuẩn hóa/lưu từ lần fetch trước.
@@ -366,6 +370,10 @@ class SaleOrder(models.Model):
                     'tax_ids': [int(tax_id) for tax_id in (saved.get('tax_ids') or [])],
                     'is_default_uom': bool(saved.get('is_default_uom')),
                     'status': saved.get('status') or '',
+                    'crm_qty': float(saved.get('crm_qty', saved.get('qty')) or 0.0),
+                    'crm_price': float(saved.get('crm_price', saved.get('price')) or 0.0),
+                    'crm_discount': float(saved.get('crm_discount', saved.get('discount')) or 0.0),
+                    'crm_uom': saved.get('crm_uom') or '',
                 })
 
         line_snapshot = [{
@@ -380,6 +388,10 @@ class SaleOrder(models.Model):
             'tax_ids': item['tax_ids'],
             'is_default_uom': item['is_default_uom'],
             'status': item['status'],
+            'crm_qty': item['crm_qty'],
+            'crm_price': item['crm_price'],
+            'crm_discount': item['crm_discount'],
+            'crm_uom': item['crm_uom'],
         } for item in misa_sol_data]
 
         # Lấy danh sách SOL hiện tại
