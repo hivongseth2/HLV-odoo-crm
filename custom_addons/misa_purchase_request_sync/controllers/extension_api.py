@@ -634,10 +634,11 @@ class MisaExtensionController(http.Controller):
             }, 400)
 
         try:
-            if pr.state != 'draft':
-                pr.button_draft()
-            pr.unlink()
-            return json_response({"ok": True, "message": "Đã thu hồi YCMH thành công."})
+            from markupsafe import Markup
+            msg_body = Markup("<b>[MISA Extension]</b> YCMH đã được thu hồi từ MISA CRM và chuyển sang <b>Lưu trữ (Archive)</b>. Dữ liệu được bảo lưu hoàn toàn.")
+            pr.message_post(body=msg_body)
+            pr.write({"active": False})
+            return json_response({"ok": True, "message": "Đã thu hồi và lưu trữ YCMH thành công."})
         except Exception as e:
             return json_response({"ok": False, "error": "exception", "message": str(e)}, 500)
 
