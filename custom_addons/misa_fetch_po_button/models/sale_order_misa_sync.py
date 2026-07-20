@@ -1647,6 +1647,416 @@ class SaleOrder(models.Model):
         # --------------------------------
             
         return record
+
+    def _misa_warehouse_touched_pickings(self):
+        """Phiếu đã được in, mở trên app kho, quét, đóng kiện hoặc hoàn tất."""
+        self.ensure_one()
+        active_pickings = self.picking_ids.filtered(lambda p: p.state != 'cancel')
+
+        def _was_touched(picking):
+            if picking.state in ('done', 'in_progress'):
+                return True
+            if 'x_printed' in picking._fields and picking.x_printed:
+                return True
+            if 'x_pick_print_start_at' in picking._fields and picking.x_pick_print_start_at:
+                return True
+            if 'x_pack_actual_start_at' in picking._fields and picking.x_pack_actual_start_at:
+                return True
+            if 'hlv_barcode_auto_cleared' in picking._fields and picking.hlv_barcode_auto_cleared:
+                return True
+            for move_line in picking.move_line_ids:
+                if 'qty_scanned' in move_line._fields and (move_line.qty_scanned or 0.0) > 0.0:
+                    return True
+                if move_line.result_package_id:
+                    return True
+                if (
+                    'package_transfer_qty_set' in move_line._fields
+                    and move_line.package_transfer_qty_set
+                ):
+                    return True
+            return False
+
+        return active_pickings.filtered(_was_touched)
+
+    def _misa_qty_change_summary(self, changes):
+        rows = []
+        for change in changes or []:
+            rows.append(
+                "%s: %g → %g (CRM line %s)" % (
+                    change.get('code') or _('Không mã'),
+                    change.get('old_qty') or 0.0,
+                    change.get('new_qty') or 0.0,
+                    change.get('crm_line_id') or '-',
+                )
+            )
+        return "\n".join(rows)
+
+    def _misa_record_sync_snapshot_history(self, sync_result, header_data, pending):
+        """Lưu một phiên bản thay đổi có thể truy vết; phiên bản mới thay phiên bản pending cũ."""
+        self.ensure_one()
+        snapshot_payload = sync_result.get('line_snapshot') or []
+        audit_changes = sync_result.get('audit_changes') or []
+        current = self.misa_qty_sync_pending_history_id.sudo()
+
+        # Cùng một snapshot được resync lại thì không tạo thêm lịch sử trùng.
+        if pending and current and current.snapshot_payload == snapshot_payload:
+            return current
+
+        now = fields.Datetime.now()
+        history = self.env['misa.sale.sync.snapshot']
+        if audit_changes:
+            summary = "\n".join(
+                "[%s] %s: %s → %s" % (
+                    change.get('product_code') or '-',
+                    change.get('field_name') or _('Thay đổi'),
+                    change.get('old_value') or '-',
+                    change.get('new_value') or '-',
+                )
+                for change in audit_changes
+            )
+            crm_modified_at = False
+            crm_modified_at_raw = (
+                header_data.get('ModifiedDate')
+                or header_data.get('LastModifiedDate')
+                or header_data.get('UpdatedDate')
+            )
+            if crm_modified_at_raw:
+                try:
+                    # ModifiedDate của CRM là giờ Việt Nam dạng wall-clock, kể cả khi payload
+                    # có gắn timezone marker. Chuyển đúng về UTC trước khi lưu fields.Datetime.
+                    crm_wall_time = dtparse(str(crm_modified_at_raw)).replace(tzinfo=None)
+                    crm_modified_at = MISA_CRM_TZ.localize(
+                        crm_wall_time
+                    ).astimezone(pytz.UTC).replace(tzinfo=None)
+                except Exception:
+                    crm_modified_at = False
+            history = self.env['misa.sale.sync.snapshot'].sudo().create({
+                'sale_order_id': self.id,
+                'misa_order_id': str(self.misa_id or ''),
+                'fetched_at': now,
+                'fetched_by_id': self.env.user.id,
+                'crm_owner': header_data.get('OwnerIDText') or False,
+                'crm_modified_by': (
+                    header_data.get('ModifiedByIDText')
+                    or header_data.get('ModifiedByName')
+                    or header_data.get('ModifiedByText')
+                    or header_data.get('LastModifiedByIDText')
+                    or False
+                ),
+                'crm_modified_at': crm_modified_at,
+                'crm_modified_at_raw': str(crm_modified_at_raw) if crm_modified_at_raw else False,
+                'state': 'pending' if pending else 'applied',
+                'summary': summary,
+                'warehouse_summary': self._misa_qty_change_summary(
+                    sync_result.get('qty_changes') or []
+                ),
+                'snapshot_payload': snapshot_payload,
+                'change_count': len(audit_changes),
+                'line_ids': [(0, 0, change) for change in audit_changes],
+            })
+
+        if current:
+            vals = {'state': 'superseded'}
+            if history:
+                vals['replaced_by_id'] = history.id
+            current.write(vals)
+        return history
+
+    def _misa_notify_warehouse(self, title, detail=None):
+        """Ghi chatter trên SO/picking và notify người kho đã được assign."""
+        self.ensure_one()
+        body = Markup("<b>{}</b>").format(title)
+        if detail:
+            body += Markup("<br/><pre>{}</pre>").format(detail)
+
+        open_pickings = self.picking_ids.filtered(lambda p: p.state != 'cancel')
+        partner_ids = set()
+        for picking in open_pickings:
+            if 'x_pack_packer_user_id' in picking._fields and picking.x_pack_packer_user_id:
+                partner_ids.add(picking.x_pack_packer_user_id.partner_id.id)
+        for picking in open_pickings:
+            picking.message_post(body=body, partner_ids=list(partner_ids))
+        self.message_post(body=body, partner_ids=list(partner_ids))
+
+    def _misa_sync_open_picking_contact(self):
+        """Giữ phiếu kho mở theo đúng liên hệ giao hàng của SO sau resync/approve."""
+        self.ensure_one()
+        shipping_partner = self.partner_shipping_id or self.partner_id
+        if shipping_partner:
+            self.picking_ids.filtered(
+                lambda picking: picking.state not in ('done', 'cancel')
+            ).write({'partner_id': shipping_partner.id})
+
+    def _sync_misa_header_in_place(self, data, headers):
+        """Cập nhật header trên chính SO hiện tại, không thay record và không đụng move."""
+        self.ensure_one()
+        env = self.env
+        misa_order_id = data.get('ID') or data.get('CustomID') or self.misa_id
+        owner_date = {}
+        try:
+            owner_date = env['misa.api.utils'].get_saleorder_owner_and_date(misa_order_id, headers) or {}
+        except Exception as exc:
+            _logger.warning("Không lấy được header bổ sung MISA cho SO=%s: %s", misa_order_id, exc)
+
+        partner_name = data.get('AccountIDText') or data.get('BillingAccountIDText') or _('Khách hàng MISA')
+        account_id = data.get('AccountID') or data.get('AccountId')
+        partner = None
+        misa_code = None
+        tax_code = None
+        if account_id:
+            try:
+                partner = env['misa.api.utils']._sync_customer_from_misa_account_api(account_id, headers)
+                identity = env['misa.api.utils'].get_account_identity(account_id, headers) or {}
+                misa_code = identity.get('account_number') or identity.get('id')
+                tax_code = identity.get('taxcode')
+            except Exception as exc:
+                _logger.warning("Không đồng bộ được khách MISA AccountID=%s: %s", account_id, exc)
+        if not partner:
+            partner = env['odoo.utils']._get_or_create_partner(
+                partner_name, misa_code=misa_code, tax_code=tax_code,
+            )
+        partner = partner.commercial_partner_id or partner
+
+        shipping_address = (data.get('ShippingAddress') or '').strip()
+        shipping_addr = shipping_address or data.get('BillingAddress') or ''
+        shipping_contact = owner_date.get('shipping_contact') or data.get('ShippingContactIDText')
+        shipping_id = False
+        e_accounts = {
+            "TIKTOK HOÀNG LONG VŨ",
+            "SHOPEE TRANG MILWAUKEE",
+            "SHOPEE TRANG TBCN HLV",
+            "SHOPEE TRANG DEWALT STANLEY",
+            "KHÁCH LẺ KHÔNG LẤY HÓA ĐƠN_SHOPEE STANLEY",
+            "KHÁCH LẺ KHÔNG LẤY HÓA ĐƠN_SHOPEE",
+            "KHÁCH LẺ KHÔNG LẤY HÓA ĐƠN_SHOPEE TBCN",
+            "KHÁCH LẺ KHÔNG LẤY HÓA ĐƠN_TIKTOK",
+            "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE",
+            "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE TBCN",
+            "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE STANLEY",
+            "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_TIKTOK",
+            "TOOL DEWALT",
+        }
+        try:
+            delivery_contact = env['sale.api.import.wizard']._get_or_create_delivery_contact(
+                parent_partner=partner,
+                addr_str=shipping_addr,
+                phone=data.get('Phone'),
+                province_text=data.get('ShippingProvinceIDText') or data.get('BillingProvinceIDText'),
+                contact_name=shipping_contact.strip() if shipping_contact else None,
+                is_e_account=(partner_name in e_accounts),
+            )
+            shipping_id = delivery_contact.id
+        except Exception as exc:
+            _logger.warning("Không cập nhật được địa chỉ giao hàng SO %s: %s", self.name, exc)
+
+        crm_order_no = str(data.get('SaleOrderNo') or '').strip()
+        crm_order_name = str(data.get('SaleOrderName') or '').strip()
+        vals = {
+            'name': crm_order_no or crm_order_name or self.name,
+            'partner_id': partner.id,
+            'partner_invoice_id': partner.id,
+            'partner_shipping_id': shipping_id or self.partner_shipping_id.id or partner.id,
+            'origin': crm_order_name or self.origin,
+            'misa_id': str(misa_order_id) if misa_order_id else self.misa_id,
+            'misa_shipping_address': shipping_address or False,
+            'x_studio_zns': bool(data.get('CustomField23', False)),
+            'x_studio_sdt_giao_hang': data.get('Phone') or False,
+        }
+        for source_key, field_name in (
+            ('owner_code', 'x_studio_misa_saler_code'),
+            ('sale_order_date', 'x_studio_misa_order_date'),
+            ('misa_delivery', 'x_studio_misa_delivery'),
+            ('httt', 'x_studio_httt'),
+            ('htgh', 'x_studio_htgh'),
+            ('misa_note', 'x_studio_misa_note'),
+        ):
+            if owner_date.get(source_key) and field_name in self._fields:
+                vals[field_name] = owner_date[source_key]
+
+        book_date = data.get('BookDate') or data.get('InvoiceDate') or data.get('DeliveryDate')
+        deadline_date = data.get('DeadlineDate')
+        if book_date:
+            try:
+                vals['date_order'] = dtparse(book_date).replace(tzinfo=None)
+            except Exception:
+                pass
+        if deadline_date:
+            try:
+                vals['commitment_date'] = dtparse(deadline_date).replace(tzinfo=None)
+            except Exception:
+                pass
+
+        vals = {key: value for key, value in vals.items() if key in self._fields}
+        self.write(vals)
+        self._misa_sync_open_picking_contact()
+
+    def action_resync_from_misa(self):
+        """Đồng bộ tại chỗ theo CRM line ID và để Odoo tự quản lý stock moves."""
+        self.ensure_one()
+        if not self.misa_id:
+            raise UserError(_("Thiếu MISA ID trên đơn bán."))
+
+        headers, _crm_token = self._misa_headers()
+        data = self._misa_fetch_order()
+        misa_order_id = data.get('ID') or data.get('CustomID') or self.misa_id
+        status_id = data.get('RevenueStatusID')
+        status_text = (data.get('RevenueStatusIDText') or '').strip().lower()
+
+        # Hủy đơn là quyết định từ CRM: không cần kho duyệt, dùng action_cancel chuẩn Odoo.
+        if str(status_id or '').strip() == '4' or status_text == 'từ chối ghi':
+            self._misa_notify_warehouse(
+                _("Đơn %s đã bị hủy trên MISA; vui lòng dừng xử lý.") % self.name,
+            )
+            if self.state != 'cancel':
+                self.action_cancel()
+            if self.misa_qty_sync_pending_history_id:
+                self.misa_qty_sync_pending_history_id.sudo().write({'state': 'superseded'})
+            self.write({
+                'misa_qty_sync_pending': False,
+                'misa_qty_sync_pending_at': False,
+                'misa_qty_sync_pending_summary': False,
+                'misa_qty_sync_pending_snapshot': False,
+                'misa_qty_sync_pending_history_id': False,
+            })
+            self._misa_clear_sale_edit_lock()
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': _("Đã hủy đơn theo MISA"),
+                    'message': self.name,
+                    'type': 'warning',
+                },
+            }
+
+        lines = self._misa_fetch_lines(misa_order_id)
+        self._sync_misa_header_in_place(data, headers)
+        touched_pickings = self._misa_warehouse_touched_pickings()
+        sync_result = self._sync_so_lines_from_misa_no_picking(
+            lines,
+            headers,
+            defer_quantity=bool(touched_pickings),
+        )
+
+        qty_changes = sync_result.get('qty_changes') or []
+        history = self._misa_record_sync_snapshot_history(
+            sync_result,
+            data,
+            pending=bool(sync_result.get('quantity_deferred')),
+        )
+        if sync_result.get('quantity_deferred'):
+            summary = self._misa_qty_change_summary(qty_changes)
+            was_pending = self.misa_qty_sync_pending
+            old_summary = self.misa_qty_sync_pending_summary or ''
+            self.write({
+                'misa_qty_sync_pending': True,
+                'misa_qty_sync_pending_at': fields.Datetime.now(),
+                'misa_qty_sync_pending_summary': summary,
+                'misa_qty_sync_pending_snapshot': sync_result.get('line_snapshot') or [],
+                'misa_qty_sync_pending_history_id': history.id,
+            })
+            if not was_pending or old_summary != summary:
+                self._misa_notify_warehouse(
+                    _("Đơn %s thay đổi số lượng trên MISA và đang chờ kho duyệt.") % self.name,
+                    summary,
+                )
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': _("Chờ kho duyệt số lượng"),
+                    'message': summary,
+                    'type': 'warning',
+                    'sticky': True,
+                },
+            }
+
+        self.write({
+            'misa_qty_sync_pending': False,
+            'misa_qty_sync_pending_at': False,
+            'misa_qty_sync_pending_summary': False,
+            'misa_qty_sync_pending_snapshot': False,
+            'misa_qty_sync_pending_history_id': False,
+        })
+        self._misa_clear_sale_edit_lock()
+        if self.state in ('draft', 'sent'):
+            self.action_confirm()
+        self._auto_apply_misa_tags()
+        self.message_post(body=_("Đã đồng bộ MISA tại chỗ; giữ nguyên SO và các phiếu kho hiện có."))
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': 'sale.order',
+            'view_mode': 'form',
+            'res_id': self.id,
+            'target': 'current',
+        }
+
+    def action_resync_from_misa_hard(self):
+        """Alias tương thích view cũ; tuyệt đối không khôi phục luồng hard/delete move."""
+        return self.action_resync_from_misa()
+
+    def action_approve_misa_quantity_sync(self):
+        self.ensure_one()
+        if not self.misa_qty_sync_pending:
+            raise UserError(_("Đơn không có thay đổi số lượng MISA đang chờ duyệt."))
+        if not self.env.user.has_group('stock.group_stock_user'):
+            raise UserError(_("Chỉ người dùng kho mới được duyệt thay đổi số lượng MISA."))
+        snapshot = self.misa_qty_sync_pending_snapshot
+        if not isinstance(snapshot, list):
+            raise UserError(_(
+                "Đơn chờ duyệt này chưa có snapshot. Vui lòng đồng bộ MISA lại một lần để tạo snapshot mới."
+            ))
+        approver_name = self.env.user.name
+        order = self.sudo()
+        pending_summary = order.misa_qty_sync_pending_summary
+        pending_history = order.misa_qty_sync_pending_history_id
+        order._sync_so_lines_from_misa_no_picking(
+            lines=[],
+            headers={},
+            defer_quantity=False,
+            prepared_lines=snapshot,
+        )
+        order._misa_sync_open_picking_contact()
+        if pending_history:
+            lines_by_crm_id = {
+                line.misa_crm_line_id: line
+                for line in order.order_line
+                if line.misa_crm_line_id
+            }
+            for history_line in pending_history.line_ids.filtered(
+                lambda line: not line.sale_order_line_id and line.crm_line_id
+            ):
+                sale_line = lines_by_crm_id.get(history_line.crm_line_id)
+                if sale_line:
+                    history_line.sudo().write({'sale_order_line_id': sale_line.id})
+        order.write({
+            'misa_qty_sync_pending': False,
+            'misa_qty_sync_pending_at': False,
+            'misa_qty_sync_pending_summary': False,
+            'misa_qty_sync_pending_snapshot': False,
+            'misa_qty_sync_pending_history_id': False,
+        })
+        order._misa_clear_sale_edit_lock()
+        if pending_history:
+            pending_history.sudo().write({
+                'state': 'applied',
+                'approved_at': fields.Datetime.now(),
+                'approved_by_id': self.env.user.id,
+            })
+        if order.state in ('draft', 'sent'):
+            order.action_confirm()
+        order._auto_apply_misa_tags()
+        order._misa_notify_warehouse(
+            _("Kho (%s) đã duyệt thay đổi số lượng MISA cho đơn %s.") % (approver_name, order.name),
+            pending_summary,
+        )
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': 'sale.order',
+            'view_mode': 'form',
+            'res_id': order.id,
+            'target': 'current',
+        }
 # =====================API
     @api.model
     def api_resync_by_misa(self, misa_order_id, warehouse_id=None, create_when_missing=True):

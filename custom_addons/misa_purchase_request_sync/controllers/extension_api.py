@@ -307,6 +307,32 @@ class MisaExtensionController(http.Controller):
         admin_user = request.env.ref("base.user_admin", raise_if_not_found=False)
         env = request.env(user=admin_user) if admin_user else request.env
         
+        # 1. Kiểm tra trong hàng chờ đồng bộ (misa.sync.queue) trước
+        search_queue_domain = [
+            ('sync_type', '=', 'so'),
+            ('state', 'in', ['draft', 'processing'])
+        ]
+        if misa_id and name:
+            search_queue_domain.extend(['|', ('name', '=', misa_id), ('name', '=', name)])
+        elif misa_id:
+            search_queue_domain.append(('name', '=', misa_id))
+        else:
+            search_queue_domain.append(('name', '=', name))
+
+        queue = env["misa.sync.queue"].sudo().search(search_queue_domain, limit=1)
+        if queue:
+            payload = {
+                "ok": True,
+                "exists": True,
+                "status": "queued",
+                "status_label": "Đang chờ đồng bộ...",
+                "can_revoke": False
+            }
+            return request.make_response(
+                json.dumps(payload), headers=[("Content-Type", "application/json")]
+            )
+
+        # 2. Kiểm tra Đơn bán hàng trên Odoo
         domain = []
         if misa_id:
             domain = [("misa_id", "=", misa_id)]
@@ -316,38 +342,46 @@ class MisaExtensionController(http.Controller):
         so = env["sale.order"].sudo().search(domain, limit=1)
 
         if not so:
-            search_queue_name = misa_id or name
-            queue = env["misa.sync.queue"].sudo().search([
-                ('name', '=', search_queue_name),
-                ('sync_type', '=', 'so'),
-                ('state', 'in', ['draft', 'processing'])
-            ], limit=1)
-            
-            if queue:
-                payload = {
-                    "ok": True,
-                    "exists": True,
-                    "status": "queued",
-                    "status_label": "Đang chờ đồng bộ...",
-                    "can_revoke": False
-                }
-            else:
-                payload = {"ok": True, "exists": False}
+            payload = {"ok": True, "exists": False}
         else:
             state_label = (
                 dict(so._fields["state"].selection).get(so.state, so.state)
                 if so.state
                 else ""
             )
-            # Nếu đơn đã hủy, trả về exists=False để extension có thể đồng bộ lại
+            lines_data = []
+            for line in so.order_line:
+                if line.display_type:
+                    continue
+                lines_data.append({
+                    "misa_line_id": line.misa_crm_line_id if hasattr(line, 'misa_crm_line_id') and line.misa_crm_line_id else "",
+                    "product_code": line.product_id.default_code if line.product_id else "",
+                    "name": line.name or "",
+                    "qty": line.product_uom_qty,
+                    "price": line.price_unit,
+                    "discount": line.discount,
+                    "tax_percentages": sorted(line.tax_id.mapped('amount')),
+                    "uom": line.product_uom.name or "",
+                    "qty_delivered": line.qty_delivered if hasattr(line, 'qty_delivered') else 0.0,
+                })
+
+            # Nếu đơn đã hủy trên Odoo, hiển thị trạng thái Đã hủy và cho phép đồng bộ lại
             if so.state == 'cancel':
                 payload = {
                     "ok": True,
-                    "exists": False,
+                    "exists": True,
+                    "id": so.id,
                     "name": so.name,
-                    "message": "Đơn đã hủy, có thể đồng bộ lại.",
-                    "previous_status": "cancel",
+                    "status": "cancel",
+                    "status_label": "Đã hủy",
+                    "can_revoke": False,
+                    "can_resync": True,
+                    "message": "Đơn đã bị hủy trên Odoo, có thể đồng bộ lại.",
+                    "lines": lines_data,
                 }
+                return request.make_response(
+                    json.dumps(payload), headers=[("Content-Type", "application/json")]
+                )
             else:
                 # Kiểm tra OUT đã hoàn tất — nếu có thì không cho thu hồi
                 # PICK/PACK dù đã done vẫn cho thu hồi (chỉ chặn OUT)
@@ -355,14 +389,41 @@ class MisaExtensionController(http.Controller):
                     lambda p: p.picking_type_id.code == 'outgoing' and p.state == 'done'
                 )
                 can_revoke = not bool(out_done)
+
+                # --- KIỂM TRA PHIÊN BẢN VÀ TRẠNG THÁI CHỜ DUYỆT (TOÁN TỬ 3 CẤP) ---
+                is_pending = bool(getattr(so, 'misa_qty_sync_pending', False))
+                history_rec = getattr(so, 'misa_qty_sync_pending_history_id', None)
+                history_name = history_rec.name if history_rec else ""
+
+                status_label = (
+                    f"Chờ phê duyệt phiên bản {history_name}" if (is_pending and history_name)
+                    else ("Chờ kho duyệt thay đổi số lượng" if is_pending
+                    else state_label)
+                )
+
+                lines_data = []
+                for line in so.order_line:
+                    if line.display_type:
+                        continue
+                    lines_data.append({
+                        "misa_line_id": line.misa_line_id if hasattr(line, 'misa_line_id') and line.misa_line_id else "",
+                        "product_code": line.product_id.default_code if line.product_id else "",
+                        "name": line.name or "",
+                        "qty": line.product_uom_qty,
+                        "qty_delivered": line.qty_delivered if hasattr(line, 'qty_delivered') else 0.0,
+                    })
+
                 payload = {
                     "ok": True,
                     "exists": True,
                     "id": so.id,
                     "name": so.name,
                     "status": so.state,
-                    "status_label": state_label,
+                    "status_label": status_label,
                     "can_revoke": can_revoke,
+                    "misa_qty_sync_pending": is_pending,
+                    "misa_qty_sync_pending_history_name": history_name,
+                    "lines": lines_data,
                 }
 
         return request.make_response(
@@ -1964,4 +2025,114 @@ class MisaExtensionController(http.Controller):
         except Exception as e:
             _logger.exception("Extension API /po/reconcile_only exception: %s", e)
             return json_response({"ok": False, "error": "exception", "message": str(e)}, 500)
+
+    # ============================================================
+    # POST /api/extension/pr/batch_check
+    # ============================================================
+    @http.route(
+        "/api/extension/pr/batch_check",
+        type="http",
+        auth="none",
+        methods=["POST", "OPTIONS"],
+        csrf=False,
+        cors="*",
+    )
+    def api_extension_pr_batch_check(self, **payload):
+        """
+        Kiểm tra trạng thái Odoo của nhiều YCMH cùng lúc (dùng cho list page).
+
+        Body JSON:
+        {
+            "token": "...",
+            "names": ["YCMH2441...", "YCMH2442...", ...]
+        }
+
+        Response 200 JSON:
+        {
+            "ok": true,
+            "results": {
+                "YCMH2441...": {
+                    "exists": true,
+                    "state": "draft",
+                    "state_label": "Bản nháp"
+                },
+                "YCMH2442...": {
+                    "exists": false
+                }
+            }
+        }
+        """
+        def json_response(data, status=200):
+            return request.make_response(
+                json.dumps(data), headers=[("Content-Type", "application/json")]
+            )
+
+        if request.httprequest.method == "OPTIONS":
+            return json_response({"ok": True})
+
+        payload = self._parse_json_body(payload)
+        token = self._extract_token(payload)
+        ok, err = self._authenticate(token)
+        if not ok:
+            return json_response(err, 401)
+
+        names = payload.get("names") or []
+        if not names or not isinstance(names, list):
+            return json_response({"ok": False, "error": "missing_names", "message": "Thiếu danh sách 'names'."}, 400)
+
+        # Lọc names rỗng
+        names = [n.strip() for n in names if n and n.strip()]
+        if not names:
+            return json_response({"ok": False, "error": "empty_names", "message": "Danh sách 'names' rỗng."}, 400)
+
+        admin_user = request.env.ref("base.user_admin", raise_if_not_found=False)
+        env = request.env(user=admin_user) if admin_user else request.env
+
+        # Batch search tất cả PRs có name trong danh sách
+        prs = env["purchase.request"].sudo().search([("name", "in", names)])
+        pr_map = {pr.name: pr for pr in prs}
+
+        # Kiểm tra queue cho các name không có PR
+        queue_names = [n for n in names if n not in pr_map]
+        queues = env["misa.sync.queue"].sudo().search([
+            ('name', 'in', queue_names),
+            ('sync_type', '=', 'pr'),
+            ('state', 'in', ['draft', 'processing'])
+        ])
+        queue_name_set = set(q.name for q in queues)
+
+        results = {}
+        for name in names:
+            if name in pr_map:
+                pr = pr_map[name]
+                state_label = dict(pr._fields["state"].selection).get(pr.state, pr.state)
+                results[name] = {
+                    "exists": True,
+                    "state": pr.state,
+                    "state_label": state_label,
+                    "po_progress": pr.progress_purchased_badge or "0/0",
+                    "po_progress_status": pr.progress_purchased_status or "not_started",
+                    "stock_progress": pr.progress_received_badge or "0/0",
+                    "stock_progress_status": pr.progress_received_status or "not_started",
+                }
+            elif name in queue_name_set:
+                results[name] = {
+                    "exists": True,
+                    "state": "queued",
+                    "state_label": "Đang đồng bộ",
+                    "po_progress": "-",
+                    "po_progress_status": "not_started",
+                    "stock_progress": "-",
+                    "stock_progress_status": "not_started",
+                }
+            else:
+                results[name] = {
+                    "exists": False,
+                    "po_progress": "-",
+                    "po_progress_status": "not_started",
+                    "stock_progress": "-",
+                    "stock_progress_status": "not_started",
+                }
+
+        return json_response({"ok": True, "results": results})
 
