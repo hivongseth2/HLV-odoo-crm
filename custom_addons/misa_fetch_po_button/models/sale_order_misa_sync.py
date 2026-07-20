@@ -972,7 +972,7 @@ class SaleOrder(models.Model):
         # Hủy đơn là quyết định từ CRM: không cần kho duyệt, dùng action_cancel chuẩn Odoo.
         if str(status_id or '').strip() == '4' or status_text == 'từ chối ghi':
             self._misa_notify_warehouse(
-                _("Đơn %s đã bị hủy trên MISA; vui lòng dừng xử lý.") % self.name,
+                _("Đơn %s đã bị hủy ghi doanh số, Lưu ý : sale đang tiến hành sửa đơn.") % self.name,
             )
             if self.state != 'cancel':
                 self.action_cancel()
