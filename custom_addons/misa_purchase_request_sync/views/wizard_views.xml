@@ -22,7 +22,7 @@
                         <label for="supplier_id" string="Nhà cung cấp (Áp dụng tất cả)"/>
                         <div class="o_row">
                             <field name="supplier_id" nolabel="1"
-                                   domain="[('parent_id', '=', False), ('active', '=', True)]"
+                                   domain="[('parent_id', '=', False), ('active', '=', True), '|', ('hlv_business_role', '=', 'supplier'), ('supplier_rank', '&gt;', 0)]"
                                    options="{'no_create': False, 'no_quick_create': True}"
                                    context="{'default_supplier_rank': 1, 'default_is_company': True, 'default_company_type': 'company'}"
                                    help="Chọn Nhà cung cấp ở đây sẽ lọc các đơn mua hàng có sẵn và áp dụng chung cho các sản phẩm bên dưới nếu bạn gộp đơn."/>
@@ -86,7 +86,7 @@
                         <field name="currency_id" column_invisible="1" force_save="1"/>
                         <field name="line_id" options="{'no_open': true}" optional="hide" force_save="1" />
                         <field name="request_id" optional="hide" force_save="1" />
-                        <field name="supplier_ref" optional="hide" force_save="1" />
+                        <field name="supplier_ref" optional="show" force_save="1" />
                         <field name="misa_supplier_name" column_invisible="1" force_save="1" />
                         <field name="supplier_id" width="180px" widget="many2one_with_proposed" options="{'proposed_field': 'misa_supplier_name'}" force_save="1" />
                         <field name="product_id" width="200px" widget="product_two_lines" force_save="1" />
