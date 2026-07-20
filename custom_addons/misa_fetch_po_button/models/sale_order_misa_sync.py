@@ -996,6 +996,11 @@ class SaleOrder(models.Model):
                 },
             }
 
+        # Nếu SO hiện tại đang ở trạng thái cancel (do hủy thủ công trên Odoo)
+        # nhưng MISA CRM không hủy => Reset về draft để cho phép cập nhật lại
+        if self.state == 'cancel':
+            self.action_draft()
+
         lines = self._misa_fetch_lines(misa_order_id)
         self._sync_misa_header_in_place(data, headers)
         touched_pickings = self._misa_warehouse_touched_pickings()

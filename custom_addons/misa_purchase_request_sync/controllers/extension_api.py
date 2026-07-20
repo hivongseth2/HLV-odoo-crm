@@ -307,6 +307,32 @@ class MisaExtensionController(http.Controller):
         admin_user = request.env.ref("base.user_admin", raise_if_not_found=False)
         env = request.env(user=admin_user) if admin_user else request.env
         
+        # 1. Kiểm tra trong hàng chờ đồng bộ (misa.sync.queue) trước
+        search_queue_domain = [
+            ('sync_type', '=', 'so'),
+            ('state', 'in', ['draft', 'processing'])
+        ]
+        if misa_id and name:
+            search_queue_domain.extend(['|', ('name', '=', misa_id), ('name', '=', name)])
+        elif misa_id:
+            search_queue_domain.append(('name', '=', misa_id))
+        else:
+            search_queue_domain.append(('name', '=', name))
+
+        queue = env["misa.sync.queue"].sudo().search(search_queue_domain, limit=1)
+        if queue:
+            payload = {
+                "ok": True,
+                "exists": True,
+                "status": "queued",
+                "status_label": "Đang chờ đồng bộ...",
+                "can_revoke": False
+            }
+            return request.make_response(
+                json.dumps(payload), headers=[("Content-Type", "application/json")]
+            )
+
+        # 2. Kiểm tra Đơn bán hàng trên Odoo
         domain = []
         if misa_id:
             domain = [("misa_id", "=", misa_id)]
@@ -316,38 +342,46 @@ class MisaExtensionController(http.Controller):
         so = env["sale.order"].sudo().search(domain, limit=1)
 
         if not so:
-            search_queue_name = misa_id or name
-            queue = env["misa.sync.queue"].sudo().search([
-                ('name', '=', search_queue_name),
-                ('sync_type', '=', 'so'),
-                ('state', 'in', ['draft', 'processing'])
-            ], limit=1)
-            
-            if queue:
-                payload = {
-                    "ok": True,
-                    "exists": True,
-                    "status": "queued",
-                    "status_label": "Đang chờ đồng bộ...",
-                    "can_revoke": False
-                }
-            else:
-                payload = {"ok": True, "exists": False}
+            payload = {"ok": True, "exists": False}
         else:
             state_label = (
                 dict(so._fields["state"].selection).get(so.state, so.state)
                 if so.state
                 else ""
             )
-            # Nếu đơn đã hủy, trả về exists=False để extension có thể đồng bộ lại
+            lines_data = []
+            for line in so.order_line:
+                if line.display_type:
+                    continue
+                lines_data.append({
+                    "misa_line_id": line.misa_crm_line_id if hasattr(line, 'misa_crm_line_id') and line.misa_crm_line_id else "",
+                    "product_code": line.product_id.default_code if line.product_id else "",
+                    "name": line.name or "",
+                    "qty": line.product_uom_qty,
+                    "price": line.price_unit,
+                    "discount": line.discount,
+                    "tax_percentages": sorted(line.tax_id.mapped('amount')),
+                    "uom": line.product_uom.name or "",
+                    "qty_delivered": line.qty_delivered if hasattr(line, 'qty_delivered') else 0.0,
+                })
+
+            # Nếu đơn đã hủy trên Odoo, hiển thị trạng thái Đã hủy và cho phép đồng bộ lại
             if so.state == 'cancel':
                 payload = {
                     "ok": True,
-                    "exists": False,
+                    "exists": True,
+                    "id": so.id,
                     "name": so.name,
-                    "message": "Đơn đã hủy, có thể đồng bộ lại.",
-                    "previous_status": "cancel",
+                    "status": "cancel",
+                    "status_label": "Đã hủy",
+                    "can_revoke": False,
+                    "can_resync": True,
+                    "message": "Đơn đã bị hủy trên Odoo, có thể đồng bộ lại.",
+                    "lines": lines_data,
                 }
+                return request.make_response(
+                    json.dumps(payload), headers=[("Content-Type", "application/json")]
+                )
             else:
                 # Kiểm tra OUT đã hoàn tất — nếu có thì không cho thu hồi
                 # PICK/PACK dù đã done vẫn cho thu hồi (chỉ chặn OUT)
