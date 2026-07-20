@@ -428,6 +428,26 @@ class PurchaseOrderAmisPaymentRequest(models.Model):
         'amis.payment.request', string='Đề nghị chi MISA gần nhất',
         compute='_compute_misa_payment_request_id', compute_sudo=True,
     )
+    misa_payment_request_state = fields.Selection(
+        related='misa_payment_request_id.state', string='Trạng thái đề nghị chi', readonly=True,
+    )
+    misa_payment_request_job_status = fields.Selection(
+        related='misa_payment_request_id.job_status', string='Trạng thái hàng đợi', readonly=True,
+    )
+    misa_payment_request_org_refid = fields.Char(
+        related='misa_payment_request_id.org_refid', string='MISA org_refid', readonly=True,
+    )
+    misa_payment_request_callback_data_type = fields.Integer(
+        related='misa_payment_request_id.callback_data_type',
+        string='MISA data_type cuối', readonly=True,
+    )
+    misa_payment_request_state_updated_at = fields.Datetime(
+        related='misa_payment_request_id.state_updated_at',
+        string='Cập nhật trạng thái lúc', readonly=True,
+    )
+    misa_payment_request_error = fields.Text(
+        related='misa_payment_request_id.error_msg', string='Lỗi MISA', readonly=True,
+    )
     misa_payment_request_count = fields.Integer(
         string='Số đề nghị chi MISA', compute='_compute_misa_payment_request_count',
     )
