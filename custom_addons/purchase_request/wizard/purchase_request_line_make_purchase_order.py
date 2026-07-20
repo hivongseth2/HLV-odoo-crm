@@ -26,7 +26,14 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
             "hlv_prioritize_company": True,
             "hlv_product_ids": "hlv_product_ids",
         },
-        domain=[("type", "!=", "delivery"), ("is_company", "=", True), ("active", "=", True)],
+        domain=[
+            ("type", "!=", "delivery"),
+            ("is_company", "=", True),
+            ("active", "=", True),
+            "|",
+            ("hlv_business_role", "=", "supplier"),
+            ("supplier_rank", ">", 0),
+        ],
         help="Nếu chọn, sẽ được áp dụng cho tất cả các dòng bên dưới.",
     )
     item_ids = fields.One2many(
@@ -407,7 +414,13 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
             "hlv_prioritize_company": True,
             "default_is_company": True,
         },
-        domain=[("is_company", "=", True), ("active", "=", True)],
+        domain=[
+            ("is_company", "=", True),
+            ("active", "=", True),
+            "|",
+            ("hlv_business_role", "=", "supplier"),
+            ("supplier_rank", ">", 0),
+        ],
         required=True,
     )
     name = fields.Char(string="Mô tả", required=True)
