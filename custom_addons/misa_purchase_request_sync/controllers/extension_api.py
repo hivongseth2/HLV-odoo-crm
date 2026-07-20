@@ -379,6 +379,9 @@ class MisaExtensionController(http.Controller):
                     "message": "Đơn đã bị hủy trên Odoo, có thể đồng bộ lại.",
                     "lines": lines_data,
                 }
+                return request.make_response(
+                    json.dumps(payload), headers=[("Content-Type", "application/json")]
+                )
             else:
                 # Kiểm tra OUT đã hoàn tất — nếu có thì không cho thu hồi
                 # PICK/PACK dù đã done vẫn cho thu hồi (chỉ chặn OUT)
