@@ -424,9 +424,18 @@ class PurchaseOrderAmisPaymentRequest(models.Model):
     misa_payment_request_ids = fields.One2many(
         'amis.payment.request', 'purchase_order_id', string='Đề nghị chi MISA',
     )
+    misa_payment_request_id = fields.Many2one(
+        'amis.payment.request', string='Đề nghị chi MISA gần nhất',
+        compute='_compute_misa_payment_request_id', compute_sudo=True,
+    )
     misa_payment_request_count = fields.Integer(
         string='Số đề nghị chi MISA', compute='_compute_misa_payment_request_count',
     )
+
+    @api.depends('misa_payment_request_ids')
+    def _compute_misa_payment_request_id(self):
+        for order in self:
+            order.misa_payment_request_id = order.misa_payment_request_ids[:1]
 
     @api.depends('misa_payment_request_ids')
     def _compute_misa_payment_request_count(self):
