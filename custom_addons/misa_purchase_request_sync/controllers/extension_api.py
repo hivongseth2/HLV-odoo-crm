@@ -365,7 +365,7 @@ class MisaExtensionController(http.Controller):
                     "qty_delivered": line.qty_delivered if hasattr(line, 'qty_delivered') else 0.0,
                 })
 
-            # Nếu đơn đã hủy trên Odoo, hiển thị trạng thái Đã hủy và cho phép đồng bộ lại
+            # Nếu đơn đã hủy trên Odoo, hiển thị Đã hủy và cho phép đồng bộ lại
             if so.state == 'cancel':
                 payload = {
                     "ok": True,
@@ -870,7 +870,7 @@ class MisaExtensionController(http.Controller):
             ['id', 'name', 'ref']
         )
         
-        # 2. Lấy thông tin tồn kho
+        # 2. Lấy thông tin tồn kho1
         stock_info = {}
         product_codes = payload.get('product_codes') or []
         if product_codes:
