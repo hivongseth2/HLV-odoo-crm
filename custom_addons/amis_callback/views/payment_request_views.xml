@@ -74,9 +74,9 @@
                         </group>
                     </group>
                     <group string="Tài khoản chi" invisible="payment_method != 'bank'">
-                        <field name="company_bank_id" readonly="state not in ('draft','error')"/>
-                        <field name="company_bank_account_number" readonly="state not in ('draft','error')"/>
-                        <field name="company_bank_name" readonly="state not in ('draft','error')"/>
+                        <field name="company_bank_id" readonly="1"/>
+                        <field name="company_bank_account_number" readonly="1"/>
+                        <field name="company_bank_name" readonly="1"/>
                     </group>
                     <group string="Tài khoản nhận" invisible="payment_method != 'bank'">
                         <field name="beneficiary_account_type" readonly="state not in ('draft','error')"/>
@@ -206,6 +206,7 @@
                     <field name="company_partner_id" invisible="1"/>
                     <group string="Tài khoản chi" invisible="payment_method != 'bank'">
                         <field name="company_bank_id"
+                               readonly="1"
                                domain="[('partner_id', '=', company_partner_id)]"
                                options="{'no_create': True, 'no_open': True}"/>
                         <field name="company_bank_account_number" readonly="1"/>
@@ -213,7 +214,9 @@
                     </group>
                     <group string="Tài khoản nhận của nhà cung cấp" invisible="payment_method != 'bank'">
                         <field name="beneficiary_account_type" required="payment_method == 'bank'"/>
-                        <field name="vendor_bank_id" readonly="1" options="{'no_open': True}"/>
+                        <field name="vendor_bank_id"
+                               domain="[('partner_id', '=', partner_id)]"
+                               options="{'no_create': True, 'no_open': True}"/>
                         <field name="vendor_account_holder"/>
                         <field name="vendor_bank_account_number"/>
                         <field name="vendor_bank_name"/>
@@ -243,6 +246,19 @@
         <field name="model">purchase.order</field>
         <field name="inherit_id" ref="purchase.purchase_order_form"/>
         <field name="arch" type="xml">
+            <xpath expr="//field[@name='payment_term_id']" position="after">
+                <field name="misa_payment_request_id" readonly="1"
+                       options="{'no_create': True, 'no_open': True}"/>
+                <field name="misa_payment_request_state" readonly="1" widget="badge"
+                       decoration-success="misa_payment_request_state in ('approved','synced')"
+                       decoration-info="misa_payment_request_state in ('sent','request_accepted')"
+                       decoration-warning="misa_payment_request_state in ('pending','delete_pending','manual_delete_required')"
+                       decoration-danger="misa_payment_request_state == 'error'"/>
+                <field name="misa_payment_request_job_status" readonly="1" widget="badge"
+                       decoration-success="misa_payment_request_job_status == 'done'"
+                       decoration-warning="misa_payment_request_job_status == 'pending'"
+                       decoration-danger="misa_payment_request_job_status == 'error'"/>
+            </xpath>
             <xpath expr="//div[@name='button_box']" position="inside">
                 <button name="action_open_misa_payment_request_wizard" type="object"
                         class="oe_stat_button" icon="fa-money"

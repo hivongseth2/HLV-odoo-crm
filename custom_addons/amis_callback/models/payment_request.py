@@ -309,12 +309,6 @@ class AmisPaymentRequest(models.Model):
         account_type_label = dict(self._fields['beneficiary_account_type'].selection).get(
             self.beneficiary_account_type, ''
         )
-        if is_bank:
-            memo = '[TK NHẬN: %s - CHỦ TK: %s] %s' % (
-                account_type_label.upper(),
-                (self.vendor_account_holder or '').strip(),
-                memo,
-            )
         currency = self.currency_id.name or 'VND'
         exchange_rate = float(getattr(po, 'currency_rate', 1.0) or 1.0) if po else 1.0
         account_object_id = account_object.get('account_object_id') or ''
@@ -425,28 +419,16 @@ class PurchaseOrderAmisPaymentRequest(models.Model):
         'amis.payment.request', 'purchase_order_id', string='Đề nghị chi MISA',
     )
     misa_payment_request_id = fields.Many2one(
-        'amis.payment.request', string='Đề nghị chi MISA gần nhất',
+        'amis.payment.request', string='Số đề nghị chi',
         compute='_compute_misa_payment_request_id', compute_sudo=True,
     )
     misa_payment_request_state = fields.Selection(
-        related='misa_payment_request_id.state', string='Trạng thái đề nghị chi', readonly=True,
+        related='misa_payment_request_id.state',
+        string='Trạng thái đề nghị chi', readonly=True,
     )
     misa_payment_request_job_status = fields.Selection(
-        related='misa_payment_request_id.job_status', string='Trạng thái hàng đợi', readonly=True,
-    )
-    misa_payment_request_org_refid = fields.Char(
-        related='misa_payment_request_id.org_refid', string='MISA org_refid', readonly=True,
-    )
-    misa_payment_request_callback_data_type = fields.Integer(
-        related='misa_payment_request_id.callback_data_type',
-        string='MISA data_type cuối', readonly=True,
-    )
-    misa_payment_request_state_updated_at = fields.Datetime(
-        related='misa_payment_request_id.state_updated_at',
-        string='Cập nhật trạng thái lúc', readonly=True,
-    )
-    misa_payment_request_error = fields.Text(
-        related='misa_payment_request_id.error_msg', string='Lỗi MISA', readonly=True,
+        related='misa_payment_request_id.job_status',
+        string='Trạng thái đồng bộ MISA', readonly=True,
     )
     misa_payment_request_count = fields.Integer(
         string='Số đề nghị chi MISA', compute='_compute_misa_payment_request_count',
@@ -455,7 +437,9 @@ class PurchaseOrderAmisPaymentRequest(models.Model):
     @api.depends('misa_payment_request_ids')
     def _compute_misa_payment_request_id(self):
         for order in self:
-            order.misa_payment_request_id = order.misa_payment_request_ids[:1]
+            order.misa_payment_request_id = order.misa_payment_request_ids.sorted(
+                'id', reverse=True,
+            )[:1]
 
     @api.depends('misa_payment_request_ids')
     def _compute_misa_payment_request_count(self):

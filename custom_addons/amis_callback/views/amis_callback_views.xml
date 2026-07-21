@@ -588,7 +588,6 @@
                         <group>
                             <field name="retry_count"/>
                             <field name="processed_at"/>
-                            <field name="next_attempt_at"/>
                         </group>
                     </group>
                     <group string="Lỗi" invisible="not error_msg">

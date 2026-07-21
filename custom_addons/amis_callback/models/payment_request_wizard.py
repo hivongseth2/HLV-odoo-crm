@@ -22,7 +22,9 @@ class AmisPaymentRequestWizard(models.TransientModel):
     company_partner_id = fields.Many2one(
         related='company_id.partner_id', string='Đối tác công ty', readonly=True,
     )
-    company_bank_id = fields.Many2one('res.partner.bank', string='Tài khoản chi')
+    company_bank_id = fields.Many2one(
+        'res.partner.bank', string='Tài khoản chi', readonly=True,
+    )
     company_bank_account_number = fields.Char(string='Số tài khoản chi')
     company_bank_name = fields.Char(string='Ngân hàng chi')
 
@@ -134,6 +136,8 @@ class AmisPaymentRequestWizard(models.TransientModel):
             wizard.vendor_bank_branch = vals.get('vendor_bank_branch', '')
             if wizard.vendor_bank_id and 'acc_holder_name' in wizard.vendor_bank_id._fields and wizard.vendor_bank_id.acc_holder_name:
                 wizard.vendor_account_holder = wizard.vendor_bank_id.acc_holder_name
+            else:
+                wizard.vendor_account_holder = wizard.partner_id.display_name or ''
 
     def action_create_payment_request(self):
         self.ensure_one()
@@ -142,6 +146,8 @@ class AmisPaymentRequestWizard(models.TransientModel):
         if self.payment_method == 'bank':
             if not self.company_bank_id or not self.company_bank_account_number:
                 raise UserError('Vui lòng chọn tài khoản chi của công ty.')
+            if self.vendor_bank_id and self.vendor_bank_id.partner_id != self.partner_id:
+                raise UserError('Tài khoản nhận phải thuộc nhà cung cấp của đơn mua hàng.')
             if not self.beneficiary_account_type:
                 raise UserError('Vui lòng chọn tài khoản nhận là tài khoản công ty hay cá nhân.')
             if not self.vendor_bank_account_number or not self.vendor_bank_name:
