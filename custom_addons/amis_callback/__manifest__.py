@@ -15,10 +15,11 @@
         "data/meinvoice_mail_data.xml",
         "views/misa_invoice_template_wizard_views.xml",
         "views/meinvoice_publish_wizard_views.xml",
+        # Defines menu_amis_callback_root, required by the child menus below.
+        "views/amis_callback_views.xml",
         "views/shopee_wallet_import_wizard_views.xml",
         "views/webhook_queue_views.xml",
         "views/meinvoice_mail_queue_views.xml",
-        "views/amis_callback_views.xml",
         "views/amis_misa_inventory_cache_views.xml",
         "views/payment_request_views.xml",
         "views/shopee_meinvoice_reconcile_wizard_views.xml",
