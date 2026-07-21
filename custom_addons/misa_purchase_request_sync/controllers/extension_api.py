@@ -870,7 +870,7 @@ class MisaExtensionController(http.Controller):
             ['id', 'name', 'ref']
         )
         
-        # 2. Lấy thông tin tồn kho
+        # 2. Lấy thông tin tồn kho1
         stock_info = {}
         product_codes = payload.get('product_codes') or []
         if product_codes:
