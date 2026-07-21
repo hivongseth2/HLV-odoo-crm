@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Kế thừa View Form Đơn mua hàng (purchase.order) -->
+    <record id="purchase_order_form_inherit_line_custom" model="ir.ui.view">
+        <field name="name">purchase.order.form.inherit.line.custom</field>
+        <field name="model">purchase.order</field>
+        <field name="inherit_id" ref="purchase.purchase_order_form"/>
+        <field name="arch" type="xml">
+            <!-- Thêm cột STT phía trước Sản phẩm trong bảng dòng sản phẩm -->
+            <xpath expr="//field[@name='order_line']/list/field[@name='product_id']" position="before">
+                <field name="stt" string="STT" readonly="1" width="50px"/>
+            </xpath>
+            <!-- Thêm Năm sản xuất và Xuất xứ phía sau Sản phẩm trong bảng dòng sản phẩm -->
+            <xpath expr="//field[@name='order_line']/list/field[@name='product_id']" position="after">
+                <field name="production_year" string="Năm sản xuất" optional="show"/>
+                <field name="country_of_origin" string="Xuất xứ" optional="show"/>
+            </xpath>
+            <!-- Thêm Năm sản xuất và Xuất xứ trong Form pop-up/chi tiết của dòng sản phẩm -->
+            <xpath expr="//field[@name='order_line']/form//field[@name='product_id']" position="after">
+                <field name="production_year" string="Năm sản xuất"/>
+                <field name="country_of_origin" string="Xuất xứ"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Kế thừa View Danh sách Dòng đơn mua hàng (purchase.order.line) -->
+    <record id="purchase_order_line_tree_inherit_line_custom" model="ir.ui.view">
+        <field name="name">purchase.order.line.list.inherit.line.custom</field>
+        <field name="model">purchase.order.line</field>
+        <field name="inherit_id" ref="purchase.purchase_order_line_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='product_id']" position="before">
+                <field name="stt" string="STT" readonly="1" optional="show"/>
+            </xpath>
+            <xpath expr="//field[@name='product_id']" position="after">
+                <field name="production_year" string="Năm sản xuất" optional="show"/>
+                <field name="country_of_origin" string="Xuất xứ" optional="show"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>
