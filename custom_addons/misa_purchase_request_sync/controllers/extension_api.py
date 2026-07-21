@@ -1005,7 +1005,7 @@ class MisaExtensionController(http.Controller):
 
         # So sánh từng dòng sản phẩm — aggregate by code
         # Odoo: aggregate qty_received (số lượng đã nhận thực tế, KHÔNG phải product_qty đặt hàng)
-        odoo_prod_map = {}  # code -> {"qty": float, "price_unit": float, "display": str, "name": str}
+        odoo_prod_map = {}  # code -> {"qty": float, "price_unit": float, "price_tax": float, "vat_rate": float, "display": str, "name": str}
         for oline in odoo_lines_detail:
             code = oline["code"]
             if code not in odoo_prod_map:
@@ -1013,6 +1013,7 @@ class MisaExtensionController(http.Controller):
                     "qty": 0.0,
                     "price_unit": oline.get("price_unit", 0.0),
                     "price_tax": 0.0,
+                    "vat_rate": oline.get("vat_rate", 0.0),
                     "display": oline["display"],
                     "name": oline["name"],
                 }
@@ -1020,16 +1021,17 @@ class MisaExtensionController(http.Controller):
             odoo_prod_map[code]["price_tax"] += oline.get("price_tax", 0.0)
 
         # AMIS: aggregate quantity_receipt
-        amis_prod_map = {}  # code -> {"qty": float, "price_unit": float, "name": str}
+        amis_prod_map = {}  # code -> {"qty": float, "price_unit": float, "price_tax": float, "vat_rate": float, "name": str}
         for aline in amis_lines:
             orig_code = aline.get("inventory_item_code", "unknown_code").strip()
             code = orig_code.lower()
             a_qty = float(aline.get("quantity_receipt", 0))
             a_price = float(aline.get("unit_price", 0) or 0)
             a_tax = float(aline.get("vat_amount", aline.get("tax_amount", 0)) or 0)
+            a_vat_rate = float(aline.get("vat_rate", 0) or 0)
             a_name = aline.get("inventory_item_name", "")
             if code not in amis_prod_map:
-                amis_prod_map[code] = {"qty": 0.0, "price_unit": a_price, "price_tax": 0.0, "name": a_name, "orig_code": orig_code}
+                amis_prod_map[code] = {"qty": 0.0, "price_unit": a_price, "price_tax": 0.0, "vat_rate": a_vat_rate, "name": a_name, "orig_code": orig_code}
             amis_prod_map[code]["qty"] += a_qty
             amis_prod_map[code]["price_tax"] += a_tax
 
@@ -1073,17 +1075,30 @@ class MisaExtensionController(http.Controller):
                 prod_name = ""
 
             if o_item and not a_item:
-                # Sản phẩm chỉ có trên Odoo
-                has_missing_in_amis = True
-                differences.append({
-                    "type": "missing_in_amis",
-                    "product_code": code,
-                    "product_name": prod_name,
-                    "field": "qty",
-                    "odoo_value": o_item["qty"],
-                    "misa_value": 0,
-                    "severity": "critical"
-                })
+                # Thử fallback match theo tên sản phẩm cho trường hợp Odoo code = unknown_code (sản phẩm đã archive)
+                fallback_matched = False
+                if code == "unknown_code" and o_item.get("name"):
+                    o_name_lower = o_item["name"].lower().strip()
+                    for alt_code, alt_item in amis_prod_map.items():
+                        alt_name = (alt_item.get("name") or "").lower().strip()
+                        if alt_name and (alt_name == o_name_lower or o_name_lower in alt_name or alt_name in o_name_lower):
+                            # Match found: merge odoo data into amis item
+                            a_item = alt_item
+                            fallback_matched = True
+                            _logger.info("✅ Fallback match by name: Odoo '%s' (name='%s') -> AMIS code='%s'", code, o_item["name"], alt_code)
+                            break
+                if not fallback_matched:
+                    # Sản phẩm chỉ có trên Odoo
+                    has_missing_in_amis = True
+                    differences.append({
+                        "type": "missing_in_amis",
+                        "product_code": code,
+                        "product_name": prod_name,
+                        "field": "qty",
+                        "odoo_value": o_item["qty"],
+                        "misa_value": 0,
+                        "severity": "critical"
+                    })
             elif a_item and not o_item:
                 # Sản phẩm chỉ có trên AMIS
                 has_missing_in_odoo = True
@@ -1127,7 +1142,7 @@ class MisaExtensionController(http.Controller):
                         "severity": "warning"
                     })
                     
-                # So sánh Thuế %
+                # So sánh Thuế % (vat_rate)
                 o_vat = float(o_item.get("vat_rate", 0.0))
                 a_vat = float(a_item.get("vat_rate", 0.0))
                 if abs(o_vat - a_vat) > 0.01:
@@ -1139,6 +1154,21 @@ class MisaExtensionController(http.Controller):
                         "field": "vat_rate",
                         "odoo_value": o_vat,
                         "misa_value": a_vat,
+                        "severity": "warning"
+                    })
+
+                # So sánh Tiền thuế từng dòng (price_tax)
+                o_tax_amt = float(o_item.get("price_tax", 0.0))
+                a_tax_amt = float(a_item.get("price_tax", 0.0))
+                if abs(o_tax_amt - a_tax_amt) > 100.0:
+                    has_tax_diff = True
+                    differences.append({
+                        "type": "tax_diff",
+                        "product_code": code,
+                        "product_name": prod_name,
+                        "field": "price_tax",
+                        "odoo_value": o_tax_amt,
+                        "misa_value": a_tax_amt,
                         "severity": "warning"
                     })
 
@@ -1187,7 +1217,7 @@ class MisaExtensionController(http.Controller):
             status = "qty_mismatch"
         elif has_price_diff:
             status = "price_mismatch"
-        elif has_vat_diff or has_total_diff:
+        elif has_vat_diff or has_total_diff or has_tax_diff:
             status = "tax_diff"
         else:
             status = "diff"
@@ -1203,6 +1233,20 @@ class MisaExtensionController(http.Controller):
             orig_code = (oline.product_id.default_code or "").strip()
             prod_name = (oline.product_id.name or "").strip()
             code = orig_code.lower()
+            if not code:
+                # Sản phẩm đã bị archive và mất default_code (do tạo lại sản phẩm mới cùng mã)
+                # Fallback: tìm sản phẩm active có cùng tên để lấy default_code
+                try:
+                    active_prod = self.env['product.product'].sudo().search([
+                        ('name', '=', oline.product_id.name),
+                        ('default_code', '!=', False),
+                        ('active', '=', True)
+                    ], limit=1)
+                    if active_prod and active_prod.default_code:
+                        orig_code = active_prod.default_code.strip()
+                        code = orig_code.lower()
+                except Exception:
+                    pass
             if not code:
                 code = "unknown_code"
                 orig_code = "Unknown"

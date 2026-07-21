@@ -1,0 +1,23 @@
+from odoo import fields, models
+
+
+class StockMoveLine(models.Model):
+    _inherit = "stock.move.line"
+
+    stt = fields.Char(
+        string="STT",
+        related="move_id.stt",
+        readonly=True,
+    )
+    production_year = fields.Char(
+        string="Năm sản xuất",
+        related="move_id.production_year",
+        store=True,
+        readonly=False,
+    )
+    country_of_origin = fields.Char(
+        string="Xuất xứ",
+        related="move_id.country_of_origin",
+        store=True,
+        readonly=False,
+    )
