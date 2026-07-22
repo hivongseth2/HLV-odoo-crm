@@ -726,8 +726,8 @@ class PublicInventory(http.Controller):
         internal_in_domain = [
             ("product_id", "=", pid),
             ("state", "not in", ["done", "cancel", "draft"]),
-            ("picking_type_id.code", "=", "internal"),
-            ("location_dest_id.usage", "=", "internal"),
+            ("sale_line_id", "=", False),
+            ("picking_id.sale_id", "=", False),
         ]
         if wid:
             wh = Warehouse.browse(wid).exists()
@@ -742,10 +742,13 @@ class PublicInventory(http.Controller):
                 wh_loc_ids = allowed_whs.mapped('view_location_id').ids
                 internal_in_domain.extend([
                     ("location_dest_id", "child_of", wh_loc_ids),
+                    ("location_id", "not child_of", wh_loc_ids),
                 ])
 
         try:
-            internal_in_moves = StockMove.search(internal_in_domain, order="date asc")
+            all_int_in_moves = StockMove.search(internal_in_domain, order="date asc")
+            po_move_ids = set(incoming_moves.ids)
+            internal_in_moves = all_int_in_moves.filtered(lambda m: m.id not in po_move_ids)
         except Exception:
             internal_in_moves = StockMove.browse([])
 
@@ -777,21 +780,6 @@ class PublicInventory(http.Controller):
             internal_in_by_picking[key]["qty"] += move.product_uom_qty
 
         # --- Phiếu xuất từ ĐBH ---
-        # Strategy: search ALL active SO-linked moves, no location filter.
-        #
-        # Why no location filter?
-        # KBC uses a 3-step custom flow:
-        #   PICK (stock → pack_zone, done) → PACK (pack_zone → output, confirmed) → SHIP (pending)
-        # KBC/Khu vực đóng gói is a SIBLING of lot_stock_id (not a child), so
-        # child_of lot_stock_id never catches the PACK move. Any location-based
-        # approach (lot_stock_id OR view_location_id) leaves outgoing=0.
-        #
-        # By searching all active SO moves without location constraint we get:
-        # - 1-step: stock→customer (captured ✓)
-        # - 2-step: active SHIP (output→customer, captured ✓); PICK already done
-        # - 3-step: active PACK (pack→output, captured ✓); PICK done, SHIP not yet active
-        # Double-counting (PACK + SHIP both active) is practically impossible in this
-        # Odoo setup since SHIP is created lazily after PACK completes.
         try:
             outgoing_moves = StockMove.search([
                 ("product_id", "=", pid),
@@ -834,8 +822,8 @@ class PublicInventory(http.Controller):
         internal_out_domain = [
             ("product_id", "=", pid),
             ("state", "not in", ["done", "cancel", "draft"]),
-            ("picking_type_id.code", "=", "internal"),
-            ("location_id.usage", "=", "internal"),
+            ("sale_line_id", "=", False),
+            ("picking_id.sale_id", "=", False),
         ]
         if wid:
             wh = Warehouse.browse(wid).exists()
@@ -850,10 +838,13 @@ class PublicInventory(http.Controller):
                 wh_loc_ids = allowed_whs.mapped('view_location_id').ids
                 internal_out_domain.extend([
                     ("location_id", "child_of", wh_loc_ids),
+                    ("location_dest_id", "not child_of", wh_loc_ids),
                 ])
 
         try:
-            internal_out_moves = StockMove.search(internal_out_domain, order="date asc")
+            all_int_out_moves = StockMove.search(internal_out_domain, order="date asc")
+            so_move_ids = set(outgoing_moves.ids)
+            internal_out_moves = all_int_out_moves.filtered(lambda m: m.id not in so_move_ids)
         except Exception:
             internal_out_moves = StockMove.browse([])
 
