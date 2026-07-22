@@ -137,7 +137,8 @@ class PublicInventory(http.Controller):
                 wh_rows = []
                 for wh in warehouses:
                     qt, qr = _get_qty(child.id, wh)
-                    wh_rows.append({"warehouse_id": wh.id, "warehouse_name": wh.name, "qty_total": qt, "qty_reserved": qr, "qty_available": qt - qr})
+                    qf = self._compute_custom_forecast_breakdown(env, child, wh.id, company_ids)["qty_forecast"]
+                    wh_rows.append({"warehouse_id": wh.id, "warehouse_name": wh.name, "qty_total": qt, "qty_reserved": qr, "qty_available": qt - qr, "qty_forecast": qf})
                 
                 rows.append({
                     "child_product_id": child.id,
@@ -153,7 +154,8 @@ class PublicInventory(http.Controller):
             rows = []
             for wh in warehouses:
                 qt, qr = _get_qty(product.id, wh)
-                rows.append({"warehouse_id": wh.id, "warehouse_name": wh.name, "qty_available": qt - qr, "qty_total": qt, "qty_reserved": qr})
+                qf = self._compute_custom_forecast_breakdown(env, product, wh.id, company_ids)["qty_forecast"]
+                rows.append({"warehouse_id": wh.id, "warehouse_name": wh.name, "qty_available": qt - qr, "qty_total": qt, "qty_reserved": qr, "qty_forecast": qf})
             return {"mode": "warehouses", "rows": rows}
 
     def _compute_custom_forecast_breakdown(self, env, product, warehouse_id, company_ids):
@@ -497,7 +499,8 @@ class PublicInventory(http.Controller):
                 wh_rows = []
                 for wh in warehouses:
                     qt, qr = _sum_for_product_in_wh(Quant, child.id, wh)
-                    wh_rows.append({"warehouse_id": wh.id, "warehouse_name": wh.name, "qty_total": qt, "qty_reserved": qr, "qty_available": qt - qr})
+                    qf = self._compute_custom_forecast_breakdown(env, child, wh.id, company_ids)["qty_forecast"]
+                    wh_rows.append({"warehouse_id": wh.id, "warehouse_name": wh.name, "qty_total": qt, "qty_reserved": qr, "qty_available": qt - qr, "qty_forecast": qf})
                 rows.append({
                     "child_product_id": child.id, "default_code": child.default_code or "", "name": child.name or "", "uom": child.uom_id.name or "",
                     "image_url": _get_product_image_url(child),
@@ -510,8 +513,9 @@ class PublicInventory(http.Controller):
         rows = []
         for wh in warehouses:
             qt, qr = _sum_for_product_in_wh(Quant, pid, wh)
-            rows.append({"warehouse_id": wh.id, "warehouse_name": wh.name, "qty_available": qt - qr, "qty_total": qt, "qty_reserved": qr})
-        return {"ok": True, "mode": "warehouses", "rows": rows}
+            qf = self._compute_custom_forecast_breakdown(env, product, wh.id, company_ids)["qty_forecast"]
+            rows.append({"warehouse_id": wh.id, "warehouse_name": wh.name, "qty_available": qt - qr, "qty_total": qt, "qty_reserved": qr, "qty_forecast": qf})
+        return {"ok": True, "mode": "warehouses", "rows": rows, "product_id": pid, "product_name": product.display_name}
     
     @http.route(["/search_stock/location_details"], type="json", auth="public", methods=["POST"])
     def location_details(self, product_id=None, warehouse_id=None):

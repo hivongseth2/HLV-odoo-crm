@@ -747,7 +747,8 @@
                                                             <th class="py-2 ps-3 text-muted fst-italic">Kho hàng</th>
                                                             <th class="py-2 text-end text-muted fst-italic">Tồn</th>
                                                             <th class="py-2 text-end text-muted fst-italic">Giữ</th>
-                                                            <th class="py-2 text-end text-muted fst-italic pe-3">Sẵn sàng</th>
+                                                            <th class="py-2 text-end text-muted fst-italic">Sẵn sàng</th>
+                                                            <th class="py-2 text-end text-muted fst-italic pe-3">Dự báo</th>
                                                             <th class="py-2 text-center text-muted fst-italic" style="width: 80px;">Vị trí</th>
                                                         </tr>
                                                     </thead>
@@ -757,8 +758,17 @@
                                                                 <td class="ps-3"><t t-esc="w['warehouse_name']"/></td>
                                                                 <td class="text-end"><t t-esc="'{:,.0f}'.format(w['qty_total'])"/></td>
                                                                 <td class="text-end"><t t-esc="'{:,.0f}'.format(w['qty_reserved'])"/></td>
-                                                                <td t-attf-class="text-end pe-3 #{ 'text-success fw-bold' if w['qty_available'] > 0 else 'text-muted' }">
+                                                                <td t-attf-class="text-end #{ 'text-success fw-bold' if w['qty_available'] > 0 else 'text-muted' }">
                                                                     <t t-esc="'{:,.0f}'.format(w['qty_available'])"/>
+                                                                </td>
+                                                                <td class="text-end pe-3">
+                                                                    <a href="#" class="text-primary text-decoration-none btn-forecast-detail fw-bold"
+                                                                       t-att-data-pid="r['id']"
+                                                                       t-att-data-wid="w['warehouse_id']"
+                                                                       t-att-data-name="r['name'] + ' (' + w['warehouse_name'] + ')'"
+                                                                       title="Xem chi tiết dự báo kho này">
+                                                                        <t t-esc="'{:,.0f}'.format(w.get('qty_forecast', 0))"/>
+                                                                    </a>
                                                                 </td>
                                                                 <td class="text-center">
                                                                     <button type="button" class="btn btn-sm btn-light text-primary btn-view-location border py-0 px-2"
@@ -786,6 +796,7 @@
                                                          <div t-attf-class="wh-stat-col #{ 'dim' if w['qty_total']==0 else '' }"><div class="wh-label">Tổng</div><div class="wh-val"><t t-esc="'{:,.0f}'.format(w['qty_total'])"/></div></div>
                                                          <div t-attf-class="wh-stat-col #{ 'dim' if w['qty_reserved']==0 else '' }"><div class="wh-label">Đã giữ</div><div class="wh-val text-muted"><t t-esc="'{:,.0f}'.format(w['qty_reserved'])"/></div></div>
                                                          <div class="wh-stat-col highlight"><div class="wh-label">Có thể bán</div><div class="wh-val"><t t-esc="'{:,.0f}'.format(w['qty_available'])"/></div></div>
+                                                         <div class="wh-stat-col"><div class="wh-label">Dự báo</div><div class="wh-val"><a href="#" class="text-primary text-decoration-none btn-forecast-detail fw-bold" t-att-data-pid="r['id']" t-att-data-wid="w['warehouse_id']" t-att-data-name="r['name'] + ' (' + w['warehouse_name'] + ')'"><t t-esc="'{:,.0f}'.format(w.get('qty_forecast', 0))"/></a></div></div>
                                                        </div>
                                                      </div>
                                                 </t>
@@ -1125,21 +1136,26 @@
                   else {
                       html += '<div class="detail-container-mobile">';
                       html += '<div class="d-none d-md-block p-3 bg-white">';
-                      html += '<table class="table table-sm mb-0"><thead><tr><th>Kho hàng</th><th class="text-end">Tồn</th><th class="text-end">Giữ</th><th class="text-end">Sẵn sàng</th></tr></thead><tbody>';
+                      html += '<table class="table table-sm mb-0"><thead><tr><th>Kho hàng</th><th class="text-end">Tồn</th><th class="text-end">Giữ</th><th class="text-end">Sẵn sàng</th><th class="text-end">Dự báo</th></tr></thead><tbody>';
                       rows.forEach(function(r){
                           var availClass = (r.qty_available > 0) ? 'text-success fw-bold' : 'text-muted';
-                          html += '<tr><td>' + r.warehouse_name + '</td><td class="text-end">' + fmt(r.qty_total) + '</td><td class="text-end">' + fmt(r.qty_reserved) + '</td><td class="text-end ' + availClass + '">' + fmt(r.qty_available) + '</td></tr>';
+                          var fcVal = fmt(r.qty_forecast || 0);
+                          var fcLink = '<a href="#" class="text-primary text-decoration-none btn-forecast-detail fw-bold" data-pid="' + (data.product_id || '') + '" data-wid="' + r.warehouse_id + '" data-name="' + (data.product_name || '') + ' (' + r.warehouse_name + ')">' + fcVal + '</a>';
+                          html += '<tr><td>' + r.warehouse_name + '</td><td class="text-end">' + fmt(r.qty_total) + '</td><td class="text-end">' + fmt(r.qty_reserved) + '</td><td class="text-end ' + availClass + '">' + fmt(r.qty_available) + '</td><td class="text-end">' + fcLink + '</td></tr>';
                       });
                       html += '</tbody></table></div>';
 
                       html += '<div class="d-md-none">';
                       rows.forEach(function(r){
+                           var fcVal = fmt(r.qty_forecast || 0);
+                           var fcLink = '<a href="#" class="text-primary text-decoration-none btn-forecast-detail fw-bold" data-pid="' + (data.product_id || '') + '" data-wid="' + r.warehouse_id + '" data-name="' + (data.product_name || '') + ' (' + r.warehouse_name + ')">' + fcVal + '</a>';
                            html += '<div class="wh-card">';
                            html += '  <div class="wh-header">' + r.warehouse_name + '</div>';
                            html += '  <div class="wh-stats">';
                            html += '    <div class="wh-stat-col ' + (r.qty_total==0 ? 'dim':'') + '"><div class="wh-label">Tổng</div><div class="wh-val">' + fmt(r.qty_total) + '</div></div>';
                            html += '    <div class="wh-stat-col ' + (r.qty_reserved==0 ? 'dim':'') + '"><div class="wh-label">Đã giữ</div><div class="wh-val text-muted">' + fmt(r.qty_reserved) + '</div></div>';
                            html += '    <div class="wh-stat-col highlight"><div class="wh-label">Có thể bán</div><div class="wh-val">' + fmt(r.qty_available) + '</div></div>';
+                           html += '    <div class="wh-stat-col"><div class="wh-label">Dự báo</div><div class="wh-val">' + fcLink + '</div></div>';
                            html += '  </div>';
                            html += '</div>';
                       });
@@ -1154,8 +1170,8 @@
               $(document).on('click', '.btn-forecast-detail', function(e) {
                   e.preventDefault();
                   var pid = $(this).data('pid');
+                  var wid = $(this).data('wid') || $('select[name="warehouse_id"]').val() || '';
                   var name = $(this).data('name');
-                  var wid = $('select[name="warehouse_id"]').val() || '';
 
                   $('#forecastDetailsProductName').text(name);
                   $('#forecastDetailsBody').html(
