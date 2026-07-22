@@ -62,6 +62,75 @@ class SaleOrder(models.Model):
         product_lines = misa_utils.get_list_product_by_order_crm(order_detail_url, headers, payload_detail)
         # logging.debug("productline", product_lines)
         return product_lines or []
+
+    def _misa_warehouse_from_sale_lines(self, lines):
+        """Xác định kho Odoo từ dòng SO MISA đầu tiên có mã kho map được."""
+        self.ensure_one()
+        stock_mapping = {
+            "HCM": "TSN/Stock",
+            "BENCAM": "KBC/Tồn kho",
+            "HIENDUC": "KHD/Tồn kho",
+            "HCM_SHOWROOM": "TSNSR/Stock",
+            "HLV": "TSN/Stock",
+            "BẾN CAM": "KBC/Tồn kho",
+            "BẾNCAM": "KBC/Tồn kho",
+            "HIỀN ĐỨC": "KHD/Tồn kho",
+            "ĐÀ NẴNG": "KDN/Tồn kho",
+            "ĐÀNẴNG": "KDN/Tồn kho",
+            "HIỀNĐỨC": "KHD/Tồn kho",
+            "DANANG": "KDN/Tồn kho",
+            "TSN SHOWROOM": "TSNSR/Stock",
+            "TSNSHOWROOM": "TSNSR/Stock",
+            "TSNSR": "TSNSR/Stock",
+        }
+
+        for line in lines or []:
+            # Luồng cũ lưu mã kho ở CustomField2; một số response trả đúng StockIDText.
+            candidates = (line.get("CustomField2"), line.get("StockIDText"))
+            for raw_stock_id in candidates:
+                stock_id = str(raw_stock_id or "").strip().upper()
+                if not stock_id:
+                    continue
+
+                location_name = stock_mapping.get(stock_id)
+                if not location_name:
+                    _logger.info("🏭 Bỏ qua mã kho MISA chưa có mapping: %s", stock_id)
+                    continue
+
+                location = self.env['stock.location'].search([
+                    ('complete_name', '=', location_name),
+                ], limit=1)
+                if not location:
+                    _logger.warning(
+                        "⚠️ Không tìm thấy stock.location %s cho mã kho MISA %s",
+                        location_name, stock_id,
+                    )
+                    continue
+
+                warehouse = (
+                    location.warehouse_id
+                    if 'warehouse_id' in location._fields
+                    else False
+                )
+                if not warehouse and location.location_id:
+                    warehouse = self.env['stock.warehouse'].search([
+                        ('view_location_id', '=', location.location_id.id),
+                    ], limit=1)
+                if not warehouse:
+                    _logger.warning(
+                        "⚠️ Không tìm thấy stock.warehouse từ location %s",
+                        location.complete_name,
+                    )
+                    continue
+
+                _logger.info(
+                    "🏭 Xác định kho SO từ dòng MISA: %s → %s",
+                    stock_id, warehouse.name,
+                )
+                return warehouse
+
+        _logger.warning("⚠️ Không xác định được kho từ SO line MISA; giữ kho mặc định Odoo")
+        return self.env['stock.warehouse']
         # ===== Helpers lấy/convert UoM từ MISA =====
 
     
@@ -1017,6 +1086,10 @@ class SaleOrder(models.Model):
             self.action_draft()
 
         lines = self._misa_fetch_lines(misa_order_id)
+        if self.env.context.get('misa_assign_warehouse_from_lines'):
+            warehouse = self._misa_warehouse_from_sale_lines(lines)
+            if warehouse and self.warehouse_id != warehouse:
+                self.write({'warehouse_id': warehouse.id})
         self._sync_misa_header_in_place(data, headers)
         touched_pickings = self._misa_warehouse_touched_pickings()
         sync_result = self._sync_so_lines_from_misa_no_picking(
@@ -1190,7 +1263,9 @@ class SaleOrder(models.Model):
             vals['warehouse_id'] = int(warehouse_id)
             
         so_boot = self.create(vals)
-        so_boot.sudo().action_resync_from_misa()
+        so_boot.sudo().with_context(
+            misa_assign_warehouse_from_lines=not bool(warehouse_id),
+        ).action_resync_from_misa()
         return {
             'ok': True,
             'res_id': so_boot.id,
