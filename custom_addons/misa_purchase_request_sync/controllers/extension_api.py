@@ -1277,6 +1277,7 @@ class MisaExtensionController(http.Controller):
                 "price_subtotal": oline.price_subtotal,
                 "price_tax": oline.price_tax,
                 "vat_rate": vat_rate,
+                "uom_name": oline.product_uom.name if oline.product_uom else "",
                 "receipt_history": receipt_history
             })
         return lines
@@ -2055,13 +2056,24 @@ class MisaExtensionController(http.Controller):
                         orig_code = (aline.get("inventory_item_code") or "").strip()
                         prod_name = (aline.get("description") or aline.get("inventory_item_name") or "").strip()
                         code = orig_code.lower()
+                        # Lấy thông tin ĐVT để đối chiếu đúng (có thể MISA dùng unit_name còn Odoo dùng main_unit_name)
+                        misa_main_qty = float(aline.get("main_quantity") or 0)
+                        misa_main_convert = float(aline.get("main_convert_rate") or 1)
+                        # Nếu main_convert_rate > 0 và main_quantity > 0, tính lại qty từ main để so sánh
+                        misa_qty = float(aline.get("quantity") or 0)
+                        misa_qty_receipt = float(aline.get("quantity_receipt") or 0)
                         amis_lines_detail.append({
                             "code": code,
                             "orig_code": orig_code,
                             "name": prod_name,
                             "display": f"[{orig_code}] {prod_name}" if orig_code else "Unknown Code",
-                            "qty": float(aline.get("quantity") or 0),
-                            "qty_receipt": float(aline.get("quantity_receipt") or 0),
+                            "qty": misa_qty,
+                            "qty_receipt": misa_qty_receipt,
+                            "main_quantity": misa_main_qty,
+                            "main_quantity_receipt": float(aline.get("main_quantity_receipt") or 0),
+                            "main_convert_rate": misa_main_convert,
+                            "unit_name": aline.get("unit_name") or "",
+                            "main_unit_name": aline.get("main_unit_name") or "",
                             "price_unit": float(aline.get("unit_price") or aline.get("main_unit_price") or 0),
                             "amount": float(aline.get("amount") or aline.get("amount_oc") or 0),
                             "price_tax": float(aline.get("vat_amount") or aline.get("vat_amount_oc") or 0),
