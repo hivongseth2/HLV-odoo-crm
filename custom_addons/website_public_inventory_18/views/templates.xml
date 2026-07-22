@@ -412,7 +412,8 @@
                                                             <th class="py-2 ps-3 text-muted fst-italic">Kho hàng</th>
                                                             <th class="py-2 text-end text-muted fst-italic">Tồn</th>
                                                             <th class="py-2 text-end text-muted fst-italic">Giữ</th>
-                                                            <th class="py-2 text-end text-muted fst-italic pe-3">Sẵn sàng</th>
+                                                            <th class="py-2 text-end text-muted fst-italic">Sẵn sàng</th>
+                                                            <th class="py-2 text-end text-muted fst-italic pe-3">Dự báo</th>
                                                             <th class="py-2 text-center text-muted fst-italic" style="width: 80px;">Vị trí</th>
                                                         </tr>
                                                     </thead>
@@ -422,8 +423,17 @@
                                                                 <td class="ps-3"><t t-esc="w['warehouse_name']"/></td>
                                                                 <td class="text-end"><t t-esc="'{:,.0f}'.format(w['qty_total'])"/></td>
                                                                 <td class="text-end"><t t-esc="'{:,.0f}'.format(w['qty_reserved'])"/></td>
-                                                                <td t-attf-class="text-end pe-3 #{ 'text-success fw-bold' if w['qty_available'] > 0 else 'text-muted' }">
+                                                                <td t-attf-class="text-end #{ 'text-success fw-bold' if w['qty_available'] > 0 else 'text-muted' }">
                                                                     <t t-esc="'{:,.0f}'.format(w['qty_available'])"/>
+                                                                </td>
+                                                                <td class="text-end pe-3">
+                                                                    <a href="#" class="text-primary text-decoration-none btn-forecast-detail fw-bold"
+                                                                       t-att-data-pid="r['id']"
+                                                                       t-att-data-wid="w['warehouse_id']"
+                                                                       t-att-data-name="r['name'] + ' (' + w['warehouse_name'] + ')'"
+                                                                       title="Xem chi tiết dự báo kho này">
+                                                                        <t t-esc="'{:,.0f}'.format(w.get('qty_forecast', 0))"/>
+                                                                    </a>
                                                                 </td>
                                                                 <td class="text-center">
                                                                     <button type="button" class="btn btn-sm btn-light text-primary btn-view-location border py-0 px-2"
@@ -451,6 +461,7 @@
                                                          <div t-attf-class="wh-stat-col #{ 'dim' if w['qty_total']==0 else '' }"><div class="wh-label">Tổng</div><div class="wh-val"><t t-esc="'{:,.0f}'.format(w['qty_total'])"/></div></div>
                                                          <div t-attf-class="wh-stat-col #{ 'dim' if w['qty_reserved']==0 else '' }"><div class="wh-label">Đã giữ</div><div class="wh-val text-muted"><t t-esc="'{:,.0f}'.format(w['qty_reserved'])"/></div></div>
                                                          <div class="wh-stat-col highlight"><div class="wh-label">Có thể bán</div><div class="wh-val"><t t-esc="'{:,.0f}'.format(w['qty_available'])"/></div></div>
+                                                         <div class="wh-stat-col"><div class="wh-label">Dự báo</div><div class="wh-val"><a href="#" class="text-primary text-decoration-none btn-forecast-detail fw-bold" t-att-data-pid="r['id']" t-att-data-wid="w['warehouse_id']" t-att-data-name="r['name'] + ' (' + w['warehouse_name'] + ')'"><t t-esc="'{:,.0f}'.format(w.get('qty_forecast', 0))"/></a></div></div>
                                                        </div>
                                                      </div>
                                                 </t>
@@ -789,21 +800,26 @@
                   else {
                       html += '<div class="detail-container-mobile">';
                       html += '<div class="d-none d-md-block p-3 bg-white">';
-                      html += '<table class="table table-sm mb-0"><thead><tr><th>Kho hàng</th><th class="text-end">Tồn</th><th class="text-end">Giữ</th><th class="text-end">Sẵn sàng</th></tr></thead><tbody>';
+                      html += '<table class="table table-sm mb-0"><thead><tr><th>Kho hàng</th><th class="text-end">Tồn</th><th class="text-end">Giữ</th><th class="text-end">Sẵn sàng</th><th class="text-end">Dự báo</th></tr></thead><tbody>';
                       rows.forEach(function(r){
                           var availClass = (r.qty_available > 0) ? 'text-success fw-bold' : 'text-muted';
-                          html += '<tr><td>' + r.warehouse_name + '</td><td class="text-end">' + fmt(r.qty_total) + '</td><td class="text-end">' + fmt(r.qty_reserved) + '</td><td class="text-end ' + availClass + '">' + fmt(r.qty_available) + '</td></tr>';
+                          var fcVal = fmt(r.qty_forecast || 0);
+                          var fcLink = '<a href="#" class="text-primary text-decoration-none btn-forecast-detail fw-bold" data-pid="' + (data.product_id || '') + '" data-wid="' + r.warehouse_id + '" data-name="' + (data.product_name || '') + ' (' + r.warehouse_name + ')">' + fcVal + '</a>';
+                          html += '<tr><td>' + r.warehouse_name + '</td><td class="text-end">' + fmt(r.qty_total) + '</td><td class="text-end">' + fmt(r.qty_reserved) + '</td><td class="text-end ' + availClass + '">' + fmt(r.qty_available) + '</td><td class="text-end">' + fcLink + '</td></tr>';
                       });
                       html += '</tbody></table></div>';
 
                       html += '<div class="d-md-none">';
                       rows.forEach(function(r){
+                           var fcVal = fmt(r.qty_forecast || 0);
+                           var fcLink = '<a href="#" class="text-primary text-decoration-none btn-forecast-detail fw-bold" data-pid="' + (data.product_id || '') + '" data-wid="' + r.warehouse_id + '" data-name="' + (data.product_name || '') + ' (' + r.warehouse_name + ')">' + fcVal + '</a>';
                            html += '<div class="wh-card">';
                            html += '  <div class="wh-header">' + r.warehouse_name + '</div>';
                            html += '  <div class="wh-stats">';
                            html += '    <div class="wh-stat-col ' + (r.qty_total==0 ? 'dim':'') + '"><div class="wh-label">Tổng</div><div class="wh-val">' + fmt(r.qty_total) + '</div></div>';
                            html += '    <div class="wh-stat-col ' + (r.qty_reserved==0 ? 'dim':'') + '"><div class="wh-label">Đã giữ</div><div class="wh-val text-muted">' + fmt(r.qty_reserved) + '</div></div>';
                            html += '    <div class="wh-stat-col highlight"><div class="wh-label">Có thể bán</div><div class="wh-val">' + fmt(r.qty_available) + '</div></div>';
+                           html += '    <div class="wh-stat-col"><div class="wh-label">Dự báo</div><div class="wh-val">' + fcLink + '</div></div>';
                            html += '  </div>';
                            html += '</div>';
                       });
@@ -818,8 +834,8 @@
               $(document).on('click', '.btn-forecast-detail', function(e) {
                   e.preventDefault();
                   var pid = $(this).data('pid');
+                  var wid = $(this).data('wid') || $('select[name="warehouse_id"]').val() || '';
                   var name = $(this).data('name');
-                  var wid = $('select[name="warehouse_id"]').val() || '';
 
                   $('#forecastDetailsProductName').text(name);
                   $('#forecastDetailsBody').html(
@@ -899,21 +915,33 @@
                   var fqBg   = isPos ? '#f0fdf4' : '#fef2f2';
                   var fqBord = isPos ? '#4ade80' : '#f87171';
                   var fqSh   = isPos ? 'rgba(22,163,74,.18)' : 'rgba(220,38,38,.18)';
-                  html += '<div style="padding:20px 28px 18px;border-bottom:2px solid #f3f4f6;background:#fafafa;">';
-                  html += '<div style="display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;">';
-                  html += _pill('Tồn kho',   fmt(data.qty_on_hand),    '#fff',   '#e5e7eb',  '#111827', '#9ca3af');
-                  html += '<span style="font-size:24px;font-weight:700;color:#16a34a;">+</span>';
-                  html += _pill('Nhập ĐMH', '+'+fmt(data.total_incoming), '#f0fdf4','#86efac','#16a34a','#16a34a');
-                  html += '<span style="font-size:24px;font-weight:700;color:#dc2626;">−</span>';
-                  html += _pill('Xuất ĐBH', '−'+fmt(data.total_outgoing), '#fef2f2','#fca5a5','#dc2626','#dc2626');
-                  html += '<span style="font-size:24px;font-weight:700;color:#6b7280;">=</span>';
-                  html += _pill('Dự báo',   fmt(data.qty_forecast),    fqBg, fqBord, fqColor, fqColor, true, fqSh);
+
+                  var totalPo     = data.total_po !== undefined ? data.total_po : data.total_incoming;
+                  var totalIntIn  = data.total_internal_in || 0;
+                  var totalSo     = data.total_so !== undefined ? data.total_so : data.total_outgoing;
+                  var totalIntOut = data.total_internal_out || 0;
+
+                  html += '<div style="padding:16px 20px;border-bottom:2px solid #f3f4f6;background:#fafafa;">';
+                  html += '<div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;">';
+                  html += _pill('Tồn kho',   fmt(data.qty_on_hand), '#fff',   '#e5e7eb', '#111827', '#9ca3af');
+                  html += '<span style="font-size:20px;font-weight:700;color:#16a34a;">+</span>';
+                  html += _pill('Nhập ĐMH', '+'+fmt(totalPo),       '#f0fdf4','#86efac','#16a34a','#16a34a');
+                  html += '<span style="font-size:20px;font-weight:700;color:#0d9488;">+</span>';
+                  html += _pill('Nhập CK',  '+'+fmt(totalIntIn),   '#f0fdfa','#99f6e4','#0d9488','#0d9488');
+                  html += '<span style="font-size:20px;font-weight:700;color:#dc2626;">−</span>';
+                  html += _pill('Xuất ĐBH', '−'+fmt(totalSo),       '#fef2f2','#fca5a5','#dc2626','#dc2626');
+                  html += '<span style="font-size:20px;font-weight:700;color:#d97706;">−</span>';
+                  html += _pill('Xuất CK',  '−'+fmt(totalIntOut),  '#fffbeb','#fde68a','#d97706','#d97706');
+                  html += '<span style="font-size:20px;font-weight:700;color:#6b7280;">=</span>';
+                  html += _pill('Dự báo',   fmt(data.qty_forecast), fqBg,     fqBord,    fqColor,  fqColor, true, fqSh);
                   html += '</div></div>';
 
-                  var inCount  = data.incoming.length;
-                  var outCount = data.outgoing.length;
+                  var inCount    = data.incoming.length;
+                  var intInCount = (data.internal_incoming || []).length;
+                  var outCount   = data.outgoing.length;
+                  var intOutCount = (data.internal_outgoing || []).length;
 
-                  // ── INCOMING ────────────────────────────────────────────────
+                  // ── 1. INCOMING PO ───────────────────────────────────────────
                   html += '<div style="padding:20px 28px 6px;">';
                   html += _sectionHeader('Phiếu nhập kho từ ĐMH', inCount, '#16a34a');
 
@@ -939,9 +967,10 @@
                           html += '<td style="text-align:right;"><span class="fc-num" style="color:#16a34a;">+'+fmt(r.qty)+'</span></td>';
                           html += '</tr>';
                       });
+                      var sumIn = data.incoming.reduce(function(a,b){return a+b.qty;}, 0);
                       html += '</tbody><tfoot><tr>';
-                      html += '<td colspan="6" style="text-align:right;font-weight:700;color:#6b7280;font-size:.78rem;padding:8px 12px;">Tổng nhập:</td>';
-                      html += '<td style="text-align:right;"><span class="fc-num" style="color:#16a34a;">+'+fmt(data.total_incoming)+'</span></td>';
+                      html += '<td colspan="6" style="text-align:right;font-weight:700;color:#6b7280;font-size:.78rem;padding:8px 12px;">Tổng nhập ĐMH:</td>';
+                      html += '<td style="text-align:right;"><span class="fc-num" style="color:#16a34a;">+'+fmt(sumIn)+'</span></td>';
                       html += '</tr></tfoot></table></div></div>';
 
                       // Mobile: cards
@@ -956,7 +985,6 @@
                               ['Hàng về',       r.date_planned||r.scheduled_date, '#2563eb', true],
                           ]);
                       });
-                      html += '<div style="text-align:right;font-size:.78rem;font-weight:700;color:#16a34a;padding-bottom:10px;">Tổng nhập: +'+fmt(data.total_incoming)+'</div>';
                       html += '</div>';
 
                   } else {
@@ -964,9 +992,54 @@
                   }
                   html += '</div>';
 
-                  // ── OUTGOING ────────────────────────────────────────────────
-                  html += '<div style="padding:4px 28px 24px;">';
-                  html += '<div style="border-top:1px solid #f3f4f6;padding-top:18px;">';
+                  // ── 2. INTERNAL INCOMING (Chuyển kho đến) ────────────────────
+                  html += '<div style="padding:4px 28px 12px;">';
+                  html += '<div style="border-top:1px solid #f3f4f6;padding-top:16px;">';
+                  html += _sectionHeader('Phiếu chuyển kho đến (Nhập nội bộ)', intInCount, '#0d9488');
+
+                  if (intInCount > 0) {
+                      html += '<div class="fc-desktop">';
+                      html += '<div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">';
+                      html += '<table class="fc-table">';
+                      html += '<thead><tr>';
+                      html += '<th>Phiếu chuyển</th><th>Mã / Tham chiếu</th><th>Tuyến chuyển (Nguồn → Đích)</th>';
+                      html += '<th>Ngày dự kiến</th><th style="text-align:right;">SL chuyển đến</th>';
+                      html += '</tr></thead><tbody>';
+                      data.internal_incoming.forEach(function(r) {
+                          var ss = _stateStyle(r.state);
+                          html += '<tr>';
+                          html += '<td><span class="fc-pick">'+r.picking_name+'</span><br>';
+                          html += '    <span class="fc-badge" style="background:'+ss.bg+';color:'+ss.color+';border-color:'+ss.border+';margin-top:3px;">'+r.state+'</span></td>';
+                          html += '<td class="fw-bold" style="color:#0d9488;">'+(r.po_origin || r.origin || '—')+'</td>';
+                          html += '<td style="font-weight:600;color:#374151;">'+r.partner+'</td>';
+                          html += '<td style="font-weight:700;color:#0d9488;">'+(r.scheduled_date || '—')+'</td>';
+                          html += '<td style="text-align:right;"><span class="fc-num" style="color:#0d9488;">+'+fmt(r.qty)+'</span></td>';
+                          html += '</tr>';
+                      });
+                      var sumIntIn = data.internal_incoming.reduce(function(a,b){return a+b.qty;}, 0);
+                      html += '</tbody><tfoot><tr>';
+                      html += '<td colspan="4" style="text-align:right;font-weight:700;color:#6b7280;font-size:.78rem;padding:8px 12px;">Tổng chuyển đến:</td>';
+                      html += '<td style="text-align:right;"><span class="fc-num" style="color:#0d9488;">+'+fmt(sumIntIn)+'</span></td>';
+                      html += '</tr></tfoot></table></div></div>';
+
+                      html += '<div class="fc-mobile">';
+                      data.internal_incoming.forEach(function(r) {
+                          var ss = _stateStyle(r.state);
+                          html += _pickingCard(r.picking_name, r.state, ss, '+'+fmt(r.qty), '#0d9488', '#f0fdf4', [
+                              ['Tham chiếu', r.po_origin || r.origin || '—', '#0d9488', true],
+                              ['Tuyến kho',   r.partner, '#374151', false],
+                              ['Dự kiến',     r.scheduled_date, '#0d9488', true],
+                          ]);
+                      });
+                      html += '</div>';
+                  } else {
+                      html += _empty('Không có phiếu chuyển kho đến nào');
+                  }
+                  html += '</div></div>';
+
+                  // ── 3. OUTGOING SO ───────────────────────────────────────────
+                  html += '<div style="padding:4px 28px 12px;">';
+                  html += '<div style="border-top:1px solid #f3f4f6;padding-top:16px;">';
                   html += _sectionHeader('Phiếu xuất kho từ ĐBH', outCount, '#dc2626');
 
                   if (outCount > 0) {
@@ -989,9 +1062,10 @@
                           html += '<td style="text-align:right;"><span class="fc-num" style="color:#dc2626;">−'+fmt(r.qty)+'</span></td>';
                           html += '</tr>';
                       });
+                      var sumOut = data.outgoing.reduce(function(a,b){return a+b.qty;}, 0);
                       html += '</tbody><tfoot><tr>';
-                      html += '<td colspan="4" style="text-align:right;font-weight:700;color:#6b7280;font-size:.78rem;padding:8px 12px;">Tổng xuất:</td>';
-                      html += '<td style="text-align:right;"><span class="fc-num" style="color:#dc2626;">−'+fmt(data.total_outgoing)+'</span></td>';
+                      html += '<td colspan="4" style="text-align:right;font-weight:700;color:#6b7280;font-size:.78rem;padding:8px 12px;">Tổng xuất ĐBH:</td>';
+                      html += '<td style="text-align:right;"><span class="fc-num" style="color:#dc2626;">−'+fmt(sumOut)+'</span></td>';
                       html += '</tr></tfoot></table></div></div>';
 
                       // Mobile: cards
@@ -1004,11 +1078,55 @@
                               ['Giao hàng',  r.scheduled_date, '#2563eb', true],
                           ]);
                       });
-                      html += '<div style="text-align:right;font-size:.78rem;font-weight:700;color:#dc2626;padding-bottom:10px;">Tổng xuất: −'+fmt(data.total_outgoing)+'</div>';
                       html += '</div>';
 
                   } else {
                       html += _empty('Không có phiếu xuất nào từ đơn bán hàng');
+                  }
+                  html += '</div></div>';
+
+                  // ── 4. INTERNAL OUTGOING (Chuyển kho đi) ────────────────────
+                  html += '<div style="padding:4px 28px 24px;">';
+                  html += '<div style="border-top:1px solid #f3f4f6;padding-top:16px;">';
+                  html += _sectionHeader('Phiếu chuyển kho đi (Xuất nội bộ)', intOutCount, '#d97706');
+
+                  if (intOutCount > 0) {
+                      html += '<div class="fc-desktop">';
+                      html += '<div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">';
+                      html += '<table class="fc-table">';
+                      html += '<thead><tr>';
+                      html += '<th>Phiếu chuyển</th><th>Mã / Tham chiếu</th><th>Tuyến chuyển (Nguồn → Đích)</th>';
+                      html += '<th>Ngày dự kiến</th><th style="text-align:right;">SL chuyển đi</th>';
+                      html += '</tr></thead><tbody>';
+                      data.internal_outgoing.forEach(function(r) {
+                          var ss = _stateStyle(r.state);
+                          html += '<tr>';
+                          html += '<td><span class="fc-pick">'+r.picking_name+'</span><br>';
+                          html += '    <span class="fc-badge" style="background:'+ss.bg+';color:'+ss.color+';border-color:'+ss.border+';margin-top:3px;">'+r.state+'</span></td>';
+                          html += '<td class="fw-bold" style="color:#d97706;">'+(r.origin || '—')+'</td>';
+                          html += '<td style="font-weight:600;color:#374151;">'+r.partner+'</td>';
+                          html += '<td style="font-weight:700;color:#d97706;">'+(r.scheduled_date || '—')+'</td>';
+                          html += '<td style="text-align:right;"><span class="fc-num" style="color:#d97706;">−'+fmt(r.qty)+'</span></td>';
+                          html += '</tr>';
+                      });
+                      var sumIntOut = data.internal_outgoing.reduce(function(a,b){return a+b.qty;}, 0);
+                      html += '</tbody><tfoot><tr>';
+                      html += '<td colspan="4" style="text-align:right;font-weight:700;color:#6b7280;font-size:.78rem;padding:8px 12px;">Tổng chuyển đi:</td>';
+                      html += '<td style="text-align:right;"><span class="fc-num" style="color:#d97706;">−'+fmt(sumIntOut)+'</span></td>';
+                      html += '</tr></tfoot></table></div></div>';
+
+                      html += '<div class="fc-mobile">';
+                      data.internal_outgoing.forEach(function(r) {
+                          var ss = _stateStyle(r.state);
+                          html += _pickingCard(r.picking_name, r.state, ss, '−'+fmt(r.qty), '#d97706', '#fffbeb', [
+                              ['Tham chiếu', r.origin || '—', '#d97706', true],
+                              ['Tuyến kho',   r.partner, '#374151', false],
+                              ['Dự kiến',     r.scheduled_date, '#d97706', true],
+                          ]);
+                      });
+                      html += '</div>';
+                  } else {
+                      html += _empty('Không có phiếu chuyển kho đi nào');
                   }
                   html += '</div></div>';
 

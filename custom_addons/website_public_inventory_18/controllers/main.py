@@ -136,7 +136,9 @@ class PublicInventory(http.Controller):
                 wh_rows = []
                 for wh in warehouses:
                     qt, qr = _get_qty(child.id, wh)
-                    wh_rows.append({"warehouse_id": wh.id, "warehouse_name": wh.name, "qty_total": qt, "qty_reserved": qr, "qty_available": qt - qr})
+                    fc = self.forecast_details(product_id=child.id, warehouse_id=wh.id)
+                    qf = fc.get("qty_forecast", qt - qr) if isinstance(fc, dict) and fc.get("ok") else (qt - qr)
+                    wh_rows.append({"warehouse_id": wh.id, "warehouse_name": wh.name, "qty_total": qt, "qty_reserved": qr, "qty_available": qt - qr, "qty_forecast": qf})
                 
                 rows.append({
                     "child_product_id": child.id,
@@ -152,7 +154,9 @@ class PublicInventory(http.Controller):
             rows = []
             for wh in warehouses:
                 qt, qr = _get_qty(product.id, wh)
-                rows.append({"warehouse_id": wh.id, "warehouse_name": wh.name, "qty_available": qt - qr, "qty_total": qt, "qty_reserved": qr})
+                fc = self.forecast_details(product_id=product.id, warehouse_id=wh.id)
+                qf = fc.get("qty_forecast", qt - qr) if isinstance(fc, dict) and fc.get("ok") else (qt - qr)
+                rows.append({"warehouse_id": wh.id, "warehouse_name": wh.name, "qty_available": qt - qr, "qty_total": qt, "qty_reserved": qr, "qty_forecast": qf})
             return {"mode": "warehouses", "rows": rows}
 
     @http.route(["/search_stock"], type="http", auth="public", website=True, sitemap=True)
@@ -428,21 +432,25 @@ class PublicInventory(http.Controller):
                 wh_rows = []
                 for wh in warehouses:
                     qt, qr = _sum_for_product_in_wh(Quant, child.id, wh)
-                    wh_rows.append({"warehouse_id": wh.id, "warehouse_name": wh.name, "qty_total": qt, "qty_reserved": qr, "qty_available": qt - qr})
+                    fc = self.forecast_details(product_id=child.id, warehouse_id=wh.id)
+                    qf = fc.get("qty_forecast", qt - qr) if isinstance(fc, dict) and fc.get("ok") else (qt - qr)
+                    wh_rows.append({"warehouse_id": wh.id, "warehouse_name": wh.name, "qty_total": qt, "qty_reserved": qr, "qty_available": qt - qr, "qty_forecast": qf})
                 rows.append({
                     "child_product_id": child.id, "default_code": child.default_code or "", "name": child.name or "", "uom": child.uom_id.name or "",
                     "image_url": _get_product_image_url(child),
                     "component_qty_in_combo": float(getattr(line, 'product_quantity', 0) or getattr(line, 'product_qty', 1.0)), "warehouses": wh_rows
                 })
-            return {"ok": True, "mode": "components_by_warehouse", "rows": rows}
+            return {"ok": True, "mode": "components_by_warehouse", "rows": rows, "product_id": pid, "product_name": product.display_name}
 
         if wid: wh = Warehouse.browse(wid).exists(); warehouses = wh if wh else Warehouse.browse([])
         else: warehouses = _get_allowed_warehouses() or Warehouse.search([])
         rows = []
         for wh in warehouses:
             qt, qr = _sum_for_product_in_wh(Quant, pid, wh)
-            rows.append({"warehouse_id": wh.id, "warehouse_name": wh.name, "qty_available": qt - qr, "qty_total": qt, "qty_reserved": qr})
-        return {"ok": True, "mode": "warehouses", "rows": rows}
+            fc = self.forecast_details(product_id=pid, warehouse_id=wh.id)
+            qf = fc.get("qty_forecast", qt - qr) if isinstance(fc, dict) and fc.get("ok") else (qt - qr)
+            rows.append({"warehouse_id": wh.id, "warehouse_name": wh.name, "qty_available": qt - qr, "qty_total": qt, "qty_reserved": qr, "qty_forecast": qf})
+        return {"ok": True, "mode": "warehouses", "rows": rows, "product_id": pid, "product_name": product.display_name}
     
     @http.route(["/search_stock/location_details"], type="json", auth="public", methods=["POST"])
     def location_details(self, product_id=None, warehouse_id=None):
@@ -658,11 +666,10 @@ class PublicInventory(http.Controller):
                     domain_list.append(("location_id", "child_of", allowed_whs.mapped('view_location_id').ids))
             return domain_list
 
-        # --- Phiếu nhập từ ĐMH (picking type = incoming, có purchase_id hoặc purchase_line_id) ---
+        # --- Phiếu nhập từ ĐMH (có purchase_id hoặc purchase_line_id) ---
         incoming_domain = _wh_dest_domain([
             ("product_id", "=", pid),
             ("state", "not in", ["done", "cancel", "draft"]),
-            ("picking_type_id.code", "=", "incoming"),
             "|",
             ("purchase_line_id", "!=", False),
             ("picking_id.purchase_id", "!=", False),
@@ -714,30 +721,73 @@ class PublicInventory(http.Controller):
                 }
             incoming_by_picking[key]["qty"] += move.product_uom_qty
 
-        # --- Phiếu xuất từ ĐBH ---
-        # Strategy: search ALL active SO-linked moves, no location filter.
-        #
-        # Why no location filter?
-        # KBC uses a 3-step custom flow:
-        #   PICK (stock → pack_zone, done) → PACK (pack_zone → output, confirmed) → SHIP (pending)
-        # KBC/Khu vực đóng gói is a SIBLING of lot_stock_id (not a child), so
-        # child_of lot_stock_id never catches the PACK move. Any location-based
-        # approach (lot_stock_id OR view_location_id) leaves outgoing=0.
-        #
-        # By searching all active SO moves without location constraint we get:
-        # - 1-step: stock→customer (captured ✓)
-        # - 2-step: active SHIP (output→customer, captured ✓); PICK already done
-        # - 3-step: active PACK (pack→output, captured ✓); PICK done, SHIP not yet active
-        # Double-counting (PACK + SHIP both active) is practically impossible in this
-        # Odoo setup since SHIP is created lazily after PACK completes.
+        # --- Phiếu chuyển kho nội bộ (Nhập) ---
+        internal_in_domain = [
+            ("product_id", "=", pid),
+            ("state", "not in", ["done", "cancel", "draft"]),
+            ("sale_line_id", "=", False),
+            ("picking_id.sale_id", "=", False),
+        ]
+        if wid:
+            wh = Warehouse.browse(wid).exists()
+            if wh:
+                internal_in_domain.extend([
+                    ("location_dest_id", "child_of", wh.view_location_id.id),
+                    "!", ("location_id", "child_of", wh.view_location_id.id),
+                ])
+        else:
+            allowed_whs = _get_allowed_warehouses()
+            if allowed_whs:
+                wh_loc_ids = allowed_whs.mapped('view_location_id').ids
+                internal_in_domain.extend([
+                    ("location_dest_id", "child_of", wh_loc_ids),
+                    "!", ("location_id", "child_of", wh_loc_ids),
+                ])
+
         try:
-            outgoing_moves = StockMove.search([
-                ("product_id", "=", pid),
-                ("state", "not in", ["done", "cancel", "draft"]),
-                "|",
-                ("sale_line_id", "!=", False),
-                ("picking_id.sale_id", "!=", False),
-            ], order="date asc")
+            all_int_in_moves = StockMove.search(internal_in_domain, order="date asc")
+            po_move_ids = set(incoming_moves.ids)
+            internal_in_moves = all_int_in_moves.filtered(lambda m: m.id not in po_move_ids)
+        except Exception:
+            internal_in_moves = StockMove.browse([])
+
+        internal_in_by_picking = {}
+        for move in internal_in_moves:
+            picking = move.picking_id
+            if not picking:
+                continue
+            key = picking.id
+            if key not in internal_in_by_picking:
+                sched = picking.scheduled_date
+                src_wh = move.location_id.warehouse_id.name if getattr(move.location_id, 'warehouse_id', None) else ""
+                dest_wh = move.location_dest_id.warehouse_id.name if getattr(move.location_dest_id, 'warehouse_id', None) else ""
+                src_name = f"{src_wh} ({move.location_id.name})" if src_wh else (move.location_id.display_name or move.location_id.name or "")
+                dest_name = f"{dest_wh} ({move.location_dest_id.name})" if dest_wh else (move.location_dest_id.display_name or move.location_dest_id.name or "")
+
+                internal_in_by_picking[key] = {
+                    "picking_name": picking.name or "",
+                    "po_name": f"Chuyển kho nội bộ",
+                    "po_origin": (picking.origin or move.reference or ""),
+                    "scheduled_date": sched.strftime('%d/%m/%Y') if sched else "",
+                    "state": _STATE_VN.get(picking.state, picking.state),
+                    "qty": 0.0,
+                    "partner": f"{src_name} → {dest_name}",
+                    "origin": picking.origin or "",
+                    "misa_date": "",
+                    "date_planned": sched.strftime('%d/%m/%Y') if sched else "",
+                }
+            internal_in_by_picking[key]["qty"] += move.product_uom_qty
+
+        # --- Phiếu xuất từ ĐBH ---
+        outgoing_domain = _wh_src_domain([
+            ("product_id", "=", pid),
+            ("state", "not in", ["done", "cancel", "draft"]),
+            "|",
+            ("sale_line_id", "!=", False),
+            ("picking_id.sale_id", "!=", False),
+        ])
+        try:
+            outgoing_moves = StockMove.search(outgoing_domain, order="date asc")
         except Exception:
             outgoing_moves = StockMove.browse([])
 
@@ -768,17 +818,82 @@ class PublicInventory(http.Controller):
                 }
             outgoing_by_picking[key]["qty"] += move.product_uom_qty
 
-        total_incoming = sum(v["qty"] for v in incoming_by_picking.values())
-        total_outgoing = sum(v["qty"] for v in outgoing_by_picking.values())
+        # --- Phiếu chuyển kho nội bộ (Xuất) ---
+        internal_out_domain = [
+            ("product_id", "=", pid),
+            ("state", "not in", ["done", "cancel", "draft"]),
+            ("sale_line_id", "=", False),
+            ("picking_id.sale_id", "=", False),
+        ]
+        if wid:
+            wh = Warehouse.browse(wid).exists()
+            if wh:
+                internal_out_domain.extend([
+                    ("location_id", "child_of", wh.view_location_id.id),
+                    "!", ("location_dest_id", "child_of", wh.view_location_id.id),
+                ])
+        else:
+            allowed_whs = _get_allowed_warehouses()
+            if allowed_whs:
+                wh_loc_ids = allowed_whs.mapped('view_location_id').ids
+                internal_out_domain.extend([
+                    ("location_id", "child_of", wh_loc_ids),
+                    "!", ("location_dest_id", "child_of", wh_loc_ids),
+                ])
+
+        try:
+            all_int_out_moves = StockMove.search(internal_out_domain, order="date asc")
+            so_move_ids = set(outgoing_moves.ids)
+            internal_out_moves = all_int_out_moves.filtered(lambda m: m.id not in so_move_ids)
+        except Exception:
+            internal_out_moves = StockMove.browse([])
+
+        internal_out_by_picking = {}
+        for move in internal_out_moves:
+            picking = move.picking_id
+            if not picking:
+                continue
+            key = picking.id
+            if key not in internal_out_by_picking:
+                sched = picking.scheduled_date
+                src_wh = move.location_id.warehouse_id.name if getattr(move.location_id, 'warehouse_id', None) else ""
+                dest_wh = move.location_dest_id.warehouse_id.name if getattr(move.location_dest_id, 'warehouse_id', None) else ""
+                src_name = f"{src_wh} ({move.location_id.name})" if src_wh else (move.location_id.display_name or move.location_id.name or "")
+                dest_name = f"{dest_wh} ({move.location_dest_id.name})" if dest_wh else (move.location_dest_id.display_name or move.location_dest_id.name or "")
+
+                internal_out_by_picking[key] = {
+                    "picking_name": picking.name or "",
+                    "so_name": f"Chuyển kho nội bộ",
+                    "scheduled_date": sched.strftime('%d/%m/%Y') if sched else "",
+                    "state": _STATE_VN.get(picking.state, picking.state),
+                    "qty": 0.0,
+                    "partner": f"{src_name} → {dest_name}",
+                    "origin": picking.origin or "",
+                }
+            internal_out_by_picking[key]["qty"] += move.product_uom_qty
+
+        total_po = sum(v["qty"] for v in incoming_by_picking.values())
+        total_internal_in = sum(v["qty"] for v in internal_in_by_picking.values())
+        total_so = sum(v["qty"] for v in outgoing_by_picking.values())
+        total_internal_out = sum(v["qty"] for v in internal_out_by_picking.values())
+
+        total_incoming = total_po + total_internal_in
+        total_outgoing = total_so + total_internal_out
         qty_forecast = qty_on_hand + total_incoming - total_outgoing
 
         return {
             "ok": True,
             "product_name": product.display_name,
             "qty_on_hand": qty_on_hand,
+            "total_po": total_po,
+            "total_internal_in": total_internal_in,
+            "total_so": total_so,
+            "total_internal_out": total_internal_out,
             "total_incoming": total_incoming,
             "total_outgoing": total_outgoing,
             "qty_forecast": qty_forecast,
             "incoming": sorted(incoming_by_picking.values(), key=lambda x: x["scheduled_date"]),
             "outgoing": sorted(outgoing_by_picking.values(), key=lambda x: x["scheduled_date"]),
+            "internal_incoming": sorted(internal_in_by_picking.values(), key=lambda x: x["scheduled_date"]),
+            "internal_outgoing": sorted(internal_out_by_picking.values(), key=lambda x: x["scheduled_date"]),
         }
