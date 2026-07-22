@@ -734,9 +734,7 @@ class PublicInventory(http.Controller):
             if wh:
                 internal_in_domain.extend([
                     ("location_dest_id", "child_of", wh.view_location_id.id),
-                    "|",
-                    ("location_id.usage", "!=", "internal"),
-                    ("location_id", "not child_of", wh.view_location_id.id),
+                    "!", ("location_id", "child_of", wh.view_location_id.id),
                 ])
         else:
             allowed_whs = _get_allowed_warehouses()
@@ -744,9 +742,7 @@ class PublicInventory(http.Controller):
                 wh_loc_ids = allowed_whs.mapped('view_location_id').ids
                 internal_in_domain.extend([
                     ("location_dest_id", "child_of", wh_loc_ids),
-                    "|",
-                    ("location_id.usage", "!=", "internal"),
-                    ("location_id", "not child_of", wh_loc_ids),
+                    "!", ("location_id", "child_of", wh_loc_ids),
                 ])
 
         try:
@@ -834,9 +830,7 @@ class PublicInventory(http.Controller):
             if wh:
                 internal_out_domain.extend([
                     ("location_id", "child_of", wh.view_location_id.id),
-                    "|",
-                    ("location_dest_id.usage", "!=", "internal"),
-                    ("location_dest_id", "not child_of", wh.view_location_id.id),
+                    "!", ("location_dest_id", "child_of", wh.view_location_id.id),
                 ])
         else:
             allowed_whs = _get_allowed_warehouses()
@@ -844,9 +838,7 @@ class PublicInventory(http.Controller):
                 wh_loc_ids = allowed_whs.mapped('view_location_id').ids
                 internal_out_domain.extend([
                     ("location_id", "child_of", wh_loc_ids),
-                    "|",
-                    ("location_dest_id.usage", "!=", "internal"),
-                    ("location_dest_id", "not child_of", wh_loc_ids),
+                    "!", ("location_dest_id", "child_of", wh_loc_ids),
                 ])
 
         try:
