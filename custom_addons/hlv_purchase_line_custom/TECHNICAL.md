@@ -2,7 +2,7 @@
 
 ## 1. Tổng quan Module (Overview)
 Module `hlv_purchase_line_custom` mở rộng model `purchase.order.line`, `stock.move`, và `stock.move.line` nhằm hỗ trợ bổ sung các thông tin chi tiết trên từng dòng Đơn mua hàng (Purchase Order) và **tự động liên kết liên thông (link) sang Phiếu nhập kho (Stock Picking)**:
-- **Cột STT (Số thứ tự)**: Tự động đánh số thứ tự 1, 2, 3... cho các dòng sản phẩm trong PO và tự động truyền/hiển thị đúng số thứ tự này trên phiếu nhập kho tương ứng.
+- **Cột MISA org_ref_detail_id**: Trường `related` từ `purchase_line_id.misa_purchase_order_org_ref_detail_id` hiển thị mã định danh duy nhất của dòng Đơn mua hàng trên Phiếu nhập kho (`stock.move` và `stock.move.line`).
 - **Cột Năm sản xuất (`production_year`)**: Trường nhập liệu văn bản (`Char`) từ PO line tự động kế thừa và liên kết sang Dịch chuyển kho (`stock.move`) và Chi tiết dịch chuyển kho (`stock.move.line`).
 - **Cột Xuất xứ (`country_of_origin`)**: Trường nhập liệu văn bản (`Char`) từ PO line tự động kế thừa và liên kết sang Dịch chuyển kho (`stock.move`) và Chi tiết dịch chuyển kho (`stock.move.line`).
 
@@ -38,7 +38,7 @@ hlv_purchase_line_custom/
 - File: `models/stock_move.py`
 - Kế thừa: `stock.move`
 - Fields bổ sung:
-  - `stt` (`fields.Char`): Compute non-stored field. Nếu dịch chuyển tạo từ PO line (`purchase_line_id`), lấy STT trực tiếp từ PO line. Ngược lại, tính theo số thứ tự dòng trong phiếu nhập.
+  - `misa_purchase_order_org_ref_detail_id` (`fields.Char`): Related tới `purchase_line_id.misa_purchase_order_org_ref_detail_id`, `store=True`, `readonly=True`.
   - `production_year` (`fields.Char`): Related tới `purchase_line_id.production_year`, `store=True`, `readonly=False`.
   - `country_of_origin` (`fields.Char`): Related tới `purchase_line_id.country_of_origin`, `store=True`, `readonly=False`.
 
@@ -46,13 +46,13 @@ hlv_purchase_line_custom/
 - File: `models/stock_move_line.py`
 - Kế thừa: `stock.move.line`
 - Fields bổ sung:
-  - `stt` (`fields.Char`): Related tới `move_id.stt`.
+  - `misa_purchase_order_org_ref_detail_id` (`fields.Char`): Related tới `move_id.misa_purchase_order_org_ref_detail_id`.
   - `production_year` (`fields.Char`): Related tới `move_id.production_year`.
   - `country_of_origin` (`fields.Char`): Related tới `move_id.country_of_origin`.
 
 ### 3.4 View Extensions
-- File: `views/purchase_order_views.xml`: Kế thừa `purchase.order` form và `purchase.order.line` list view để hiển thị STT, Năm sản xuất, Xuất xứ.
-- File: `views/stock_picking_views.xml`: Kế thừa `stock.picking` form view và `stock.move.line` detailed operations tree view để hiển thị STT, Năm sản xuất, Xuất xứ trên Phiếu nhập kho.
+- File: `views/purchase_order_views.xml`: Kế thừa `purchase.order` form và `purchase.order.line` list view để hiển thị STT, Năm sản xuất, Xuất xứ trên Đơn mua hàng.
+- File: `views/stock_picking_views.xml`: Kế thừa `stock.picking` form view và `stock.move.line` detailed operations tree view để hiển thị `MISA org_ref_detail_id`, Năm sản xuất, Xuất xứ trên Phiếu nhập kho (ẩn hiển thị STT thừa).
 
 ## 4. Hướng dẫn Nâng cấp & Mở rộng (Extension Guide)
-- Khi xác nhận đơn mua hàng (PO), Odoo tự động gọi `_prepare_stock_moves` và gán `purchase_line_id` cho `stock.move`. Thông tin STT, Năm sản xuất, Xuất xứ sẽ hiển thị đồng nhất từ PO sang Phiếu nhập kho.
+- Khi xác nhận đơn mua hàng (PO), Odoo tự động gọi `_prepare_stock_moves` và gán `purchase_line_id` cho `stock.move`. Thông tin `MISA org_ref_detail_id`, Năm sản xuất, Xuất xứ sẽ hiển thị đồng nhất từ PO sang Phiếu nhập kho.

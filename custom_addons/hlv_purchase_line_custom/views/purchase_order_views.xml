@@ -10,10 +10,12 @@
             <xpath expr="//field[@name='order_line']/list/field[@name='product_id']" position="before">
                 <field name="stt" string="STT" readonly="1" width="50px"/>
             </xpath>
-            <!-- Thêm Năm sản xuất và Xuất xứ phía sau Sản phẩm trong bảng dòng sản phẩm -->
+            <!-- Thêm Năm sản xuất, Xuất xứ và Phiếu nhập kho phía sau Sản phẩm trong bảng dòng sản phẩm -->
             <xpath expr="//field[@name='order_line']/list/field[@name='product_id']" position="after">
                 <field name="production_year" string="Năm sản xuất" optional="show"/>
                 <field name="country_of_origin" string="Xuất xứ" optional="show"/>
+                <field name="picking_ids" widget="many2many_tags" optional="show" readonly="1" string="Phiếu nhập kho"/>
+                <button name="action_open_picking" type="object" icon="fa-truck" title="Mở Phiếu nhập kho" invisible="not picking_ids"/>
             </xpath>
             <!-- Thêm Năm sản xuất và Xuất xứ trong Form pop-up/chi tiết của dòng sản phẩm -->
             <xpath expr="//field[@name='order_line']/form//field[@name='product_id']" position="after">

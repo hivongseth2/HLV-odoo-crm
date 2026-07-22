@@ -6,11 +6,9 @@
         <field name="model">stock.picking</field>
         <field name="inherit_id" ref="stock.view_picking_form"/>
         <field name="arch" type="xml">
-            <!-- Thêm cột STT, Năm sản xuất, Xuất xứ trong danh sách move_ids_without_package -->
-            <xpath expr="//field[@name='move_ids_without_package']/list/field[@name='product_id']" position="before">
-                <field name="stt" string="STT" readonly="1" width="50px"/>
-            </xpath>
+            <!-- Thêm cột MISA org_ref_detail_id, Năm sản xuất, Xuất xứ trong danh sách move_ids_without_package -->
             <xpath expr="//field[@name='move_ids_without_package']/list/field[@name='product_id']" position="after">
+                <field name="misa_purchase_order_org_ref_detail_id" string="MISA org_ref_detail_id" optional="show" readonly="1"/>
                 <field name="production_year" string="Năm sản xuất" optional="show"/>
                 <field name="country_of_origin" string="Xuất xứ" optional="show"/>
             </xpath>
@@ -23,10 +21,8 @@
         <field name="model">stock.move.line</field>
         <field name="inherit_id" ref="stock.view_stock_move_line_detailed_operation_tree"/>
         <field name="arch" type="xml">
-            <xpath expr="//field[@name='product_id']" position="before">
-                <field name="stt" string="STT" readonly="1" optional="show"/>
-            </xpath>
             <xpath expr="//field[@name='product_id']" position="after">
+                <field name="misa_purchase_order_org_ref_detail_id" string="MISA org_ref_detail_id" optional="show" readonly="1"/>
                 <field name="production_year" string="Năm sản xuất" optional="show"/>
                 <field name="country_of_origin" string="Xuất xứ" optional="show"/>
             </xpath>
