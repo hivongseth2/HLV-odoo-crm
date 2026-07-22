@@ -152,7 +152,6 @@ class InventoryCheckLine(models.Model):
                 'check_id': self.check_id.id,
                 'line_id': self.id,
                 'product_id': self.product_id.id,
-                'difference': self.difference,
             })
             self.discrepancy_id = discrepancy.id
         

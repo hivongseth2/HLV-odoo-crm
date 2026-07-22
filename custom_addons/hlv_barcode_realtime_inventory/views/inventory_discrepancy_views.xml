@@ -15,7 +15,10 @@
         <field name="name">inventory.discrepancy.list</field>
         <field name="model">inventory.discrepancy</field>
         <field name="arch" type="xml">
-            <list string="Chênh Lệch Kiểm Kê" decoration-success="state == 'confirmed'" decoration-warning="state == 'draft'" decoration-danger="difference > 5">
+            <list string="Chênh Lệch Kiểm Kê"
+                  decoration-success="state == 'confirmed' and difference &gt;= -5 and difference &lt;= 5"
+                  decoration-warning="state == 'draft' and difference &gt;= -5 and difference &lt;= 5"
+                  decoration-danger="difference &gt; 5 or difference &lt; -5">
                 <field name="check_id"/>
                 <field name="product_id"/>
                 <field name="difference"/>

@@ -37,7 +37,9 @@ class InventoryDiscrepancy(models.Model):
     # ========== Discrepancy Info ==========
     difference = fields.Float(
         string='Số Lượng Chênh Lệch',
-        required=True,
+        related='line_id.difference',
+        store=True,
+        readonly=True,
         help='Chênh lệch = Thực tế - Lý thuyết'
     )
 

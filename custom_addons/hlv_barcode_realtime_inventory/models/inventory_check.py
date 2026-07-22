@@ -655,7 +655,6 @@ class InventoryCheck(models.Model):
             disc = self.env['inventory.discrepancy'].create({
                 'check_id': line.check_id.id,
                 'line_id': line.id,
-                'difference': line.difference,
                 'reason': reason,
                 'notes': notes or '',
             })
