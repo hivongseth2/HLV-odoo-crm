@@ -290,6 +290,13 @@ class AmisCallbackLogLine(models.Model):
                     if model_state == 3:
                         po._misa_complete_purchase_order_deletion()
                         continue
+                    if po.misa_purchase_order_replacement_pending:
+                        _logger.info(
+                            'Bo qua callback chung tu cua phien ban Don mua cu %s (%s) dang duoc thu hoi.',
+                            po.name,
+                            org_refid,
+                        )
+                        continue
                     state_by_model_state = {
                         1: 'created',
                         2: 'changed_on_misa',
@@ -307,6 +314,14 @@ class AmisCallbackLogLine(models.Model):
                         if success:
                             line._apply_purchase_order_detail_ids(po, voucher_data)
                         continue
+
+                if is_request_callback and po.misa_purchase_order_replacement_pending:
+                    _logger.info(
+                        'Bo qua callback save cua phien ban Don mua cu %s (%s) dang duoc thu hoi.',
+                        po.name,
+                        org_refid,
+                    )
+                    continue
 
                 vals = {}
                 if success and actual_refid:

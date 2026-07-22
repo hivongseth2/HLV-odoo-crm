@@ -138,6 +138,9 @@ class PurchaseOrderAmisSync(models.Model):
             'misa_purchase_order_replacement_pending': True,
             'misa_purchase_order_last_error': False,
         })
+        self._misa_skip_pending_purchase_order_jobs(
+            'Bỏ qua job gửi Đơn mua cũ vì Đơn mua đang được thu hồi để tạo lại.'
+        )
         if self.misa_purchase_order_state == 'deleted':
             self._misa_prepare_new_purchase_order_identity()
             self.with_context(skip_misa_purchase_order_lifecycle=True).sudo().write({
@@ -191,6 +194,9 @@ class PurchaseOrderAmisSync(models.Model):
 
     def _misa_prepare_new_purchase_order_identity(self):
         self.ensure_one()
+        self._misa_skip_pending_purchase_order_jobs(
+            'Bỏ qua job gửi Đơn mua thuộc phiên bản MISA cũ.'
+        )
         old_org_refid = (self.misa_purchase_order_org_refid or '').strip()
         previous_ids = [
             value.strip()
@@ -214,6 +220,21 @@ class PurchaseOrderAmisSync(models.Model):
             'misa_purchase_order_ref_detail_id': False,
             'misa_purchase_order_ref_detail_synced': False,
         })
+
+    def _misa_skip_pending_purchase_order_jobs(self, reason):
+        self.ensure_one()
+        jobs = self.env['amis.sync.job'].sudo().search([
+            ('purchase_order_id', '=', self.id),
+            ('direction', '=', 'purchase_order'),
+            ('status', '=', 'pending'),
+        ])
+        if jobs:
+            jobs.write({
+                'status': 'skipped',
+                'error_msg': reason,
+                'processed_at': fields.Datetime.now(),
+            })
+        return jobs
 
     def _misa_complete_purchase_order_deletion(self):
         self.ensure_one()
@@ -348,7 +369,10 @@ class PurchaseOrderAmisSync(models.Model):
         delivery_term = self._misa_field_value('x_studio_delivery_term')
         payment_term_text = self._misa_payment_term_text()
         receive_address = self._misa_receive_address()
-        purchase_status_code = self._misa_purchase_status_code(lines)
+        # Tạm thời không đồng bộ phiếu nhập kho; PO trên MISA luôn ở trạng thái đang thực hiện.
+        # Mở lại khi bật đồng bộ phiếu nhập kho:
+        # purchase_status_code = self._misa_purchase_status_code(lines)
+        purchase_status_code = 2
         purchase_status = self._misa_purchase_status_name(purchase_status_code)
         employee_name = self.user_id.name if self.user_id else ''
         stock_code = self._misa_purchase_stock_code()

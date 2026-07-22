@@ -88,6 +88,13 @@ class AmisSyncJob(models.Model):
         try:
             if self.direction == 'purchase_order':
                 if po:
+                    if po.misa_purchase_order_replacement_pending:
+                        self.write({
+                            'status': 'skipped',
+                            'error_msg': 'Bỏ qua vì Đơn mua đang được thu hồi để tạo lại trên MISA.',
+                            'processed_at': fields.Datetime.now(),
+                        })
+                        return
                     po._sync_purchase_order_to_misa()
                 else:
                     raise ValueError('purchase_order job thieu purchase_order_id')
