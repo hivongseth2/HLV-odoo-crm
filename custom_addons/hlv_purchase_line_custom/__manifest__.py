@@ -5,7 +5,7 @@
     "category": "Purchases",
     "author": "HLV",
     "license": "LGPL-3",
-    "depends": ["purchase", "stock", "purchase_stock"],
+    "depends": ["purchase", "stock", "purchase_stock", "amis_callback"],
     "data": [
         "views/purchase_order_views.xml",
         "views/stock_picking_views.xml",

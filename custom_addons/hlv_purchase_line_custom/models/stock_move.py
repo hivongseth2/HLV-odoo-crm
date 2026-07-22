@@ -24,6 +24,13 @@ class StockMove(models.Model):
         readonly=False,
         help="Xuất xứ được liên kết từ dòng đơn mua hàng",
     )
+    misa_purchase_order_org_ref_detail_id = fields.Char(
+        string="MISA org_ref_detail_id",
+        related="purchase_line_id.misa_purchase_order_org_ref_detail_id",
+        store=True,
+        readonly=True,
+        help="MISA org_ref_detail_id được liên kết từ dòng đơn mua hàng",
+    )
 
     @api.depends("purchase_line_id.stt", "picking_id.move_ids")
     def _compute_stt(self):

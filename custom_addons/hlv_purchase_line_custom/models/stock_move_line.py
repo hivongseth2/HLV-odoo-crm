@@ -21,3 +21,8 @@ class StockMoveLine(models.Model):
         store=True,
         readonly=False,
     )
+    misa_purchase_order_org_ref_detail_id = fields.Char(
+        string="MISA org_ref_detail_id",
+        related="move_id.misa_purchase_order_org_ref_detail_id",
+        readonly=True,
+    )
