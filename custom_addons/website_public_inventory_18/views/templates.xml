@@ -3,535 +3,200 @@
   <template id="inventory_page" name="Public Inventory Page">
     <t t-call="website.layout">
       <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;display=swap');
-
-        /* ============================================================
-           Public Inventory UI v5 — single source, no duplication
-           Sections: Vars · Layout · Typography · Tabs · Search
-                     Buttons · Cards · WH-detail · Modal · Desktop · Mobile
-           ============================================================ */
-
-        /* ── CSS variables ── */
-        :root {
-          --inv-p:       #2563eb;
-          --inv-p-soft:  #eff6ff;
-          --inv-p-ring:  rgba(37,99,235,.15);
-          --inv-tx:      #1e293b;
-          --inv-mu:      #64748b;
-          --inv-su:      #94a3b8;
-          --inv-bd:      #e2e8f0;
-          --inv-bd-s:    #f1f5f9;
-          --inv-bg:      #f8fafc;
-          --inv-ok:      #15803d;
-          --inv-ok-bg:   #dcfce7;
-          --inv-err:     #b91c1c;
-          --inv-err-bg:  #fee2e2;
-          --inv-warn:    #a16207;
-          --inv-warn-bg: #fef3c7;
-          --inv-sh-sm:   0 1px 2px rgba(15,23,42,.05);
-          --inv-sh-md:   0 10px 24px -6px rgba(15,23,42,.10);
-          --inv-sh-gl:   0 16px 44px -28px rgba(15,23,42,.36), inset 0 1px 0 rgba(255,255,255,.78);
-        }
-
-        /* ── Odoo theme width override ── */
-        html #wrapwrap > main#wrap,
-        html #wrapwrap > #wrap.oe_structure,
-        html #wrapwrap > *:has(#inv-table),
-        html #wrapwrap > main#wrap > section,
-        html #wrapwrap > #wrap.oe_structure > section,
-        body:has(#inv-table) #wrapwrap > * {
-          max-width: none !important;
-          width: 100% !important;
-          margin-left: 0 !important;
-          margin-right: 0 !important;
-        }
-
-        /* ── Page scroll ── */
-        body:has(#inv-table),
-        body:has(#inv-table) #wrapwrap,
-        body:has(#inv-table) #wrap {
-          height: auto !important;
-          min-height: 100vh !important;
-          overflow-y: auto !important;
-          overflow-x: hidden !important;
-        }
-
-        /* ── Page base ── */
-        #wrap {
-          font-family: "Inter","Segoe UI",system-ui,-apple-system,sans-serif;
-          font-size: 14px;
-          font-weight: 400;
-          line-height: 1.5;
-          letter-spacing: -.01em;
-          color: var(--inv-tx);
-          background: linear-gradient(135deg,rgba(37,99,235,.05) 0%,transparent 30%),
-                      linear-gradient(180deg,#f8fafc 0%,#eef4fb 50%,#f8fafc 100%);
-          min-height: 100vh;
-          -webkit-font-smoothing: antialiased;
-        }
-        #wrap input,#wrap select,#wrap button,#wrap textarea,#wrap table {
-          font-family: inherit;
-          letter-spacing: inherit;
-        }
-        #wrap .container-fluid {
-          width: min(100%,calc(100vw - 20px)) !important;
-          max-width: 1900px !important;
-          padding: 12px 10px 32px !important;
-          margin: 0 auto !important;
-          color: var(--inv-tx);
-        }
-
-        /* ── Typography ── */
-        #wrap .text-dark,#wrap .fw-bold,#wrap label,#wrap .form-label { color: var(--inv-tx) !important; }
-        #wrap .text-muted,#wrap small { color: var(--inv-mu) !important; }
-        #wrap .text-primary,#wrap a.text-primary,#wrap .btn-forecast-detail { color: var(--inv-p) !important; }
-        #wrap .fw-bold,#wrap .fw-semibold,#wrap strong,
-        #wrap [style*="font-weight:7"],#wrap [style*="font-weight: 7"],
-        #wrap [style*="font-weight:8"],#wrap [style*="font-weight: 8"],
-        #wrap [style*="font-weight:bold"],#wrap [style*="font-weight: bold"] { font-weight: 600 !important; }
-
-        /* ── Tab strip ── */
-        #wrap .container-fluid > div:first-child {
-          position: sticky; top: 6px; z-index: 1032;
-          padding: 10px 12px; margin-bottom: 10px;
-          border: 1px solid rgba(226,232,240,.7); border-radius: 4px;
-          background: rgba(255,255,255,.82);
-          box-shadow: var(--inv-sh-gl); backdrop-filter: blur(18px) saturate(145%);
-        }
-        #wrap .nav.nav-pills { gap: 6px !important; }
-        #wrap .nav-pills .nav-link {
-          border: 1px solid rgba(226,232,240,.7) !important; border-radius: 999px !important;
-          background: rgba(255,255,255,.5) !important; color: var(--inv-mu) !important;
-          font-size: .88rem !important; font-weight: 500 !important; box-shadow: none !important;
-          transition: color .15s,background .15s,border-color .15s;
-        }
-        #wrap .nav-pills .nav-link:hover {
-          color: var(--inv-p) !important; background: var(--inv-p-soft) !important; border-color: #dbeafe !important;
-        }
-        #wrap .nav-pills .nav-link.active,#wrap .nav-pills .show > .nav-link {
-          color: var(--inv-p) !important; background: rgba(239,246,255,.95) !important;
-          border-color: rgba(147,197,253,.8) !important;
-          box-shadow: 0 6px 14px -12px rgba(37,99,235,.65) !important;
-        }
-
-        /* ── Search form ── */
-        #search-form {
-          position: sticky; top: 74px; z-index: 1031;
-          display: grid;
-          grid-template-columns: minmax(300px,1.4fr) minmax(150px,.55fr) minmax(220px,.7fr) minmax(130px,.35fr);
-          gap: 8px !important; align-items: center;
-          padding: 10px !important; margin-bottom: 12px !important;
-          border: 1px solid rgba(226,232,240,.72); border-radius: 4px;
-          background: rgba(255,255,255,.82);
-          box-shadow: var(--inv-sh-gl); backdrop-filter: blur(18px) saturate(145%);
-        }
-        #search-form > [class*="col-"] {
-          width: auto !important; max-width: none !important;
-          flex: none !important; padding: 0 !important; margin: 0 !important;
-        }
-        .search-wrapper,#search-form .form-select,#search-form .form-control {
-          height: 40px; min-height: 40px;
-          border: 1px solid rgba(203,213,225,.8) !important; border-radius: 4px !important;
-          background: rgba(255,255,255,.75) !important; color: var(--inv-tx) !important;
-          backdrop-filter: blur(10px); transition: border-color .15s,box-shadow .15s;
-        }
-        .search-wrapper {
-          display: flex; flex-wrap: wrap; align-items: center;
-          gap: 5px; padding: 4px 9px; cursor: text;
-        }
-        .search-wrapper:focus-within,
-        #search-form .form-select:focus,
-        #search-form .form-control:focus {
-          border-color: var(--inv-p) !important;
-          box-shadow: 0 0 0 3px var(--inv-p-ring) !important; outline: none !important;
-        }
-        .search-input-field {
-          border: none; outline: none; flex-grow: 1; min-width: 90px;
-          font-size: 14px; background: transparent; color: var(--inv-tx) !important;
-        }
-        .search-input-field::placeholder { color: var(--inv-su); }
-        .search-chip {
-          display: inline-flex; align-items: center; gap: 4px;
-          padding: 2px 8px; background: var(--inv-p-soft) !important;
-          color: #1d4ed8 !important; border: 1px solid #bfdbfe;
-          border-radius: 999px; font-size: .84rem; font-weight: 500; user-select: none;
-        }
-        .search-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px; }
-        .search-chip .btn-close-chip { cursor: pointer; color: #60a5fa !important; font-weight: 600; font-size: 15px; line-height: 1; }
-        #search-form .col-md-3 {
-          display: flex; align-items: center; gap: 10px;
-          min-height: 40px; padding: 6px 9px !important;
-          border: 1px solid rgba(226,232,240,.7); border-radius: 4px;
-          background: rgba(248,250,252,.65) !important;
-        }
-        #search-form .form-check-label { color: var(--inv-mu) !important; font-size: .87rem; font-weight: 500; }
-        #search-form .form-check-input { border-color: #cbd5e1; box-shadow: none !important; }
-        #search-form .form-check-input:checked { background-color: var(--inv-p); border-color: var(--inv-p); }
-        #search-suggestions {
-          border: 1px solid var(--inv-bd) !important; border-radius: 4px !important;
-          box-shadow: var(--inv-sh-md) !important; overflow: hidden;
-          background: rgba(255,255,255,.95) !important; backdrop-filter: blur(14px); max-height: 60vh;
-        }
-        #search-suggestions .suggestion-item {
-          border-bottom-color: var(--inv-bd-s) !important; cursor: pointer; transition: background .13s;
-        }
-        #search-suggestions .suggestion-item:hover { background: var(--inv-bg); }
-
-        /* ── Buttons ── */
-        #wrap .btn {
-          border-radius: 4px !important; font-weight: 500 !important; box-shadow: var(--inv-sh-sm);
-          transition: transform .12s,box-shadow .14s,background .14s;
-        }
-        #wrap .btn:hover { transform: translateY(-1px); box-shadow: 0 4px 10px rgba(15,23,42,.08); }
-        #wrap .btn-primary,#search-form .btn-primary {
-          background: linear-gradient(180deg,#3b82f6,#2563eb) !important;
-          border-color: rgba(37,99,235,.9) !important; color: #fff !important; height: 40px;
-          box-shadow: 0 8px 20px -14px rgba(37,99,235,.85) !important;
-        }
-        #wrap .btn-light,#wrap .btn-secondary {
-          background: #f8fafc !important; border: 1px solid var(--inv-bd) !important; color: var(--inv-tx) !important;
-        }
-        #wrap .btn-expand {
-          width: 28px; height: 28px; display: inline-flex;
-          align-items: center; justify-content: center; border-radius: 999px !important;
-          color: var(--inv-p) !important; background: var(--inv-p-soft) !important;
-          border: 1px solid #dbeafe !important; box-shadow: none;
-        }
-
-        /* ── Generic card ── */
-        #wrap .card {
-          border: 1px solid rgba(226,232,240,.76) !important; border-radius: 4px !important;
-          box-shadow: var(--inv-sh-gl) !important; background: rgba(255,255,255,.82) !important;
-          backdrop-filter: blur(14px) saturate(140%);
-        }
-
-        /* ── Warehouse detail components (shared desktop + mobile base) ── */
-        .wh-stats { display: flex; padding: 8px 0; }
-        .wh-stat-col {
-          flex: 1; display: flex; flex-direction: column;
-          align-items: center; justify-content: center; border-right: 1px solid #f0f0f0;
-        }
-        .wh-stat-col:last-child { border-right: none; }
-        .wh-label { font-size: .7rem; text-transform: uppercase; color: var(--inv-su) !important; font-weight: 600 !important; margin-bottom: 2px; }
-        .wh-val   { font-size: 1rem; font-weight: 600 !important; color: var(--inv-tx) !important; }
-        .wh-stat-col.highlight .wh-label { color: var(--inv-ok) !important; opacity: .85; }
-        .wh-stat-col.highlight .wh-val   { color: var(--inv-ok) !important; }
-        .wh-stat-col.dim .wh-val { color: #ced4da !important; }
-        .combo-comp-title { font-size: .88rem; font-weight: 600; color: #d63384 !important; margin-bottom: 4px; padding-left: 4px; }
-
-        /* ── Modals ── */
-        #forecastDetailsModal .modal-content,
-        #locationDetailsModal .modal-content {
-          border: 1px solid rgba(226,232,240,.85) !important; border-radius: 4px !important;
-          box-shadow: var(--inv-sh-md) !important; overflow: hidden;
-          color: var(--inv-tx); background: rgba(255,255,255,.92) !important; backdrop-filter: blur(14px);
-        }
-        #forecastDetailsModal .modal-header,#locationDetailsModal .modal-header {
-          background: #fff !important; border-bottom: 1px solid var(--inv-bd-s) !important; padding: 14px 18px !important;
-        }
-        #forecastDetailsModal .modal-title,#locationDetailsModal .modal-title,
-        #forecastDetailsModal [style*="font-weight:7"],#locationDetailsModal [style*="font-weight:7"] {
-          color: var(--inv-tx) !important; font-weight: 600 !important;
-        }
-        #forecastDetailsModal .modal-body,#locationDetailsModal .modal-body { background: #fff; }
-        #forecastDetailsModal .modal-footer,#locationDetailsModal .modal-footer {
-          background: var(--inv-bg) !important; border-top: 1px solid var(--inv-bd-s) !important; padding: 9px 18px !important;
-        }
-        #forecastDetailsModal .btn-close,#locationDetailsModal .btn-close {
-          border-radius: 999px; opacity: .52; transition: opacity .13s;
-        }
-        #forecastDetailsModal .btn-close:hover,#locationDetailsModal .btn-close:hover { opacity: .9; }
-        #forecastDetailsBody > div:first-child {
-          background: var(--inv-bg) !important; border-bottom: 1px solid var(--inv-bd-s) !important;
-        }
-        #forecastDetailsBody > div:first-child > div:first-child { gap: 8px !important; }
-        #forecastDetailsBody > div:first-child > div:first-child > div[style*="border-radius"] {
-          border: 1px solid var(--inv-bd-s) !important; border-radius: 4px !important;
-          box-shadow: var(--inv-sh-sm) !important; background: #fff !important; min-width: 100px !important;
-        }
-        #forecastDetailsBody > div:first-child > div:first-child > span {
-          color: var(--inv-mu) !important; font-weight: 600 !important;
-        }
-        #forecastDetailsBody .fc-table { color: var(--inv-tx) !important; font-size: .83rem !important; }
-        #forecastDetailsBody .fc-table th {
-          background: var(--inv-bg) !important; color: var(--inv-mu) !important;
-          border-bottom: 1px solid var(--inv-bd) !important; font-weight: 500 !important; padding: 9px 11px !important;
-        }
-        #forecastDetailsBody .fc-table td { border-bottom: 1px solid var(--inv-bd-s) !important; padding: 10px !important; }
-        #forecastDetailsBody .fc-table tr:hover td { background: var(--inv-bg) !important; }
-        #forecastDetailsBody .fc-badge { border-radius: 4px !important; font-weight: 600 !important; padding: 2px 8px !important; }
-
-        /* ============================================================
-           DESKTOP &gt;= 769px
-           ============================================================ */
+        /* --- GIỮ NGUYÊN CSS --- */
+        .search-wrapper { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid #ced4da; border-radius: 0.375rem; background-color: #fff; min-height: 45px; cursor: text; transition: border-color .15s ease-in-out,box-shadow .15s ease-in-out; }
+        .search-wrapper:focus-within { border-color: #86b7fe; outline: 0; box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25); }
+        .search-chip { display: inline-flex; align-items: center; background-color: #e9ecef; color: #495057; font-size: 0.9rem; padding: 4px 10px; border-radius: 16px; user-select: none; max-width: 100%; }
+        .search-chip span { text-overflow: ellipsis; max-width: 300px; white-space: nowrap; overflow: hidden; }
+        .search-chip .btn-close-chip { margin-left: 6px; cursor: pointer; color: #adb5bd; font-weight: bold; line-height: 1; font-size: 16px; }
+        .search-input-field { border: none; outline: none; flex-grow: 1; min-width: 120px; font-size: 16px; padding: 0; margin: 0; background: transparent; color: #212529; }
+        #search-suggestions { border-radius: 0.5rem; box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15); border: 1px solid rgba(0,0,0,.05); max-height: 60vh; }
+        /* Sticky Header for Desktop */
         @media (min-width: 769px) {
-          #wrap .card:has(#inv-table) {
-            padding: 0 !important; border: 0 !important;
-            background: transparent !important; box-shadow: none !important;
-          }
-          .table-responsive {
-            overflow: auto !important; 
-            border: 1px solid rgba(226,232,240,.76); border-radius: 4px;
-            background: rgba(255,255,255,.78); box-shadow: var(--inv-sh-gl);
-            backdrop-filter: blur(18px) saturate(145%);
-            scrollbar-width: thin; scrollbar-color: rgba(148,163,184,.55) transparent;
-            overscroll-behavior: contain;
-          }
-          .table-responsive::-webkit-scrollbar { width: 5px; height: 7px; }
-          .table-responsive::-webkit-scrollbar-track { background: transparent; }
-          .table-responsive::-webkit-scrollbar-thumb { background: rgba(148,163,184,.44); border-radius: 999px; }
-          #inv-table {
-            min-width: 1380px !important; width: 100%;
-            border-collapse: separate !important; border-spacing: 0 !important;
-            border: 0 !important; background: transparent !important;
-            color: var(--inv-tx); font-size: 13px; line-height: 1.5;
-          }
-          #inv-table th,#inv-table td {
-            padding: 11px 13px !important; vertical-align: middle !important;
-            text-align: center !important;
-            border: 0 !important; border-bottom: 1px solid rgba(226,232,240,.6) !important;
-          }
-          #inv-table tbody tr.main-row td:nth-child(4) { text-align: left !important; }
-          #inv-table thead th {
-            position: sticky !important; top: 0 !important; z-index: 30 !important;
-            height: 44px; white-space: nowrap;
-            background: rgba(248,250,252,.95) !important; color: var(--inv-mu) !important;
-            font-size: 10.5px !important; font-weight: 600 !important;
-            letter-spacing: .02em !important; text-transform: uppercase;
-            box-shadow: 0 1px 0 var(--inv-bd), 0 10px 18px -22px rgba(15,23,42,.9) !important;
-            backdrop-filter: blur(18px) saturate(150%) !important;
-          }
-          #inv-table .detail-row thead th,
-          #inv-table .detail-container-mobile thead th {
-            position: static !important; height: auto; font-size: 12px !important;
-            box-shadow: none !important; backdrop-filter: none !important;
-          }
-          #inv-table tbody tr.main-row { background: rgba(255,255,255,.38) !important; transition: background .14s; }
-          #inv-table tbody tr.main-row:hover { background: rgba(255,255,255,.78) !important; cursor: pointer; }
-          #inv-table tbody tr.main-row:hover td { background: transparent !important; }
-          #inv-table tbody tr.main-row td:nth-child(1),
-          #inv-table tbody tr.main-row td:nth-child(2),
-          #inv-table tbody tr.main-row td:nth-child(14) { width: 1%; white-space: nowrap; }
-          #inv-table tbody tr.main-row td:nth-child(3) { color: var(--inv-p) !important; font-weight: 600 !important; white-space: nowrap; }
-          #inv-table tbody tr.main-row td:nth-child(4) .text-wrap {
-            min-width: 220px !important; max-width: 400px; color: var(--inv-tx) !important; font-weight: 600 !important;
-          }
-          #inv-table tbody tr.main-row td:nth-child(5),
-          #inv-table tbody tr.main-row td:nth-child(6),
-          #inv-table tbody tr.main-row td:nth-child(9),
-          #inv-table tbody tr.main-row td:nth-child(10),
-          #inv-table tbody tr.main-row td:nth-child(11),
-          #inv-table tbody tr.main-row td:nth-child(12),
-          #inv-table tbody tr.main-row td:nth-child(13) { color: var(--inv-mu) !important; font-weight: 400 !important; }
-          #inv-table tbody tr.main-row td:nth-child(2) img { border-radius: 4px; border: 1px solid var(--inv-bd-s); background: #fff; }
-          #inv-table tbody tr.main-row td:nth-child(8) > span,
-          #inv-table tbody tr.main-row td:nth-child(7) a {
-            display: inline-flex; align-items: center; justify-content: center;
-            min-height: 22px; padding: 1px 7px; border-radius: 4px;
-            font-weight: 600 !important; line-height: 1.2;
-          }
-          #inv-table tbody tr.main-row td:nth-child(8) > span.text-success { color: var(--inv-ok) !important; background: var(--inv-ok-bg) !important; }
-          #inv-table tbody tr.main-row td:nth-child(8) > span.text-danger  { color: var(--inv-err) !important; background: var(--inv-err-bg) !important; }
-          #inv-table td.text-success { color: var(--inv-ok) !important; }
-          #inv-table td.text-danger  { color: var(--inv-err) !important; }
-          #inv-table tbody tr.main-row td:nth-child(7) a { color: var(--inv-mu) !important; background: var(--inv-bg); }
-          #inv-table .badge { border-radius: 999px; font-weight: 600 !important; box-shadow: none !important; }
-          #inv-table .bg-warning { background: var(--inv-warn-bg) !important; color: var(--inv-warn) !important; }
-          #inv-table tbody tr.detail-row > td {
-            padding: 8px 12px !important; background: rgba(248,250,252,.5) !important;
-            border-bottom: 1px solid var(--inv-bd) !important;
-          }
-          .detail-container-mobile {
-            background: rgba(248,250,252,.8); border: 1px solid var(--inv-bd-s);
-            border-radius: 4px;
-          }
-          .wh-card,.detail-container-mobile .card {
-            border: 1px solid var(--inv-bd-s) !important; border-radius: 4px !important;
-            box-shadow: var(--inv-sh-sm) !important; overflow: hidden; margin-bottom: 8px;
-          }
-          .wh-header,.detail-container-mobile .card-header {
-            padding: 8px 11px; background: #fff !important;
-            border-bottom: 1px solid var(--inv-bd-s) !important; font-weight: 600 !important; color: var(--inv-tx) !important;
-          }
-          .wh-stat-col.highlight .wh-val {
-            background: var(--inv-ok-bg); border-radius: 4px; padding: 1px 8px;
-            display: inline-flex; align-items: center; justify-content: center; min-height: 22px;
-          }
-          .detail-container-mobile .table,
-          .detail-container-mobile table { color: var(--inv-tx); border-color: var(--inv-bd-s) !important; }
-          .detail-container-mobile thead th {
-            background: var(--inv-bg) !important; color: var(--inv-mu) !important;
-            font-weight: 500 !important; box-shadow: none !important;
-          }
-          .detail-container-mobile td,
-          .detail-container-mobile th { border-color: var(--inv-bd-s) !important; }
-        }
+            /* 1. Quan trọng: Phải ép các thẻ cha không được để overflow: hidden hoặc auto */
+            #wrap, 
+            .container,
+            .card,
+            .table-responsive {
+                overflow: visible !important;
+            }
 
-        /* Tablet: 2-col search bar */
-        @media (min-width: 769px) and (max-width: 1199.98px) {
-          #search-form { grid-template-columns: 1fr 1fr; top: 70px; }
-        }
+            /* 2. Thiết lập cho bảng */
+            #inv-table {
+                border-collapse: separate; /* Bắt buộc để dùng sticky */
+                border-spacing: 0;
+                border-left: 1px solid #dee2e6;
+            }
 
-        /* ============================================================
-           MOBILE &lt;= 768px
-           ============================================================ */
+            #inv-table th, #inv-table td {
+                border-right: 1px solid #dee2e6;
+                text-align: center !important; /* Căn giữa nội dung */
+                vertical-align: middle;
+            }
+
+            /* 3. Thiết lập cho dòng header */
+            #inv-table thead th {
+                  position: -webkit-sticky;
+                  position: sticky;
+                  top: 0; /* Nếu có navbar Odoo thì để 56px, nếu không thì để 0 */
+                  background-color: #f8f9fa !important;
+                  z-index: 1020; /* Ưu tiên cao nhất */
+                  box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.4);
+                  border-bottom: 2px solid #dee2e6;
+              }
+            .detail-row thead th {
+                position: static !important; /* Trả về hiển thị bình thường, không dính nữa */
+                background-color: #ffffff;
+                z-index: 1;
+            }
+
+            /* Nếu website Odoo của bạn có thanh navbar cố định phía trên (thường cao 56px-70px)
+              Hãy điều chỉnh top bằng đúng chiều cao đó để không bị che mất header bảng */
+            .o_header_standard + #wrap #inv-table thead th {
+                top: 56px; 
+            }
+        }
         @media (max-width: 768px) {
-          /* Natural page scroll */
-          body:has(#inv-table),
-          body:has(#inv-table) #wrapwrap,
-          body:has(#inv-table) #wrap,
-          body:has(#inv-table) main,
-          body:has(#inv-table) section,
-          body:has(#inv-table) .container-fluid,
-          body:has(#inv-table) .card,
-          body:has(#inv-table) .table-responsive {
-            height: auto !important; max-height: none !important; overflow-y: visible !important;
-          }
-          body:has(#inv-table) { overflow-y: auto !important; -webkit-overflow-scrolling: touch; }
-          #wrap .container-fluid { width: 100% !important; max-width: none !important; padding: 8px 8px 80px !important; }
-          /* Hide desktop tab bar */
-          #wrap .container-fluid > div:first-child { display: none !important; }
-          /* Search: single column */
-          #search-form {
-            display: grid !important; grid-template-columns: 1fr !important;
-            position: relative !important; top: auto !important; z-index: 1 !important;
-            gap: 8px !important; padding: 10px !important; margin-bottom: 10px !important;
-            border: 1px solid rgba(226,232,240,.72) !important; border-radius: 4px !important;
-            background: rgba(255,255,255,.82) !important;
-            box-shadow: 0 8px 20px -16px rgba(15,23,42,.4) !important; backdrop-filter: blur(12px) !important;
-          }
-          #search-form > [class*="col-"] { width: 100% !important; max-width: none !important; padding: 0 !important; margin: 0 !important; }
-          .search-wrapper,#search-form .form-select,#search-form .btn { height: 40px !important; min-height: 40px !important; }
-          #search-form .col-md-3 {
-            height: auto !important; min-height: 40px !important;
-            padding: 7px 9px !important; justify-content: space-between !important;
-          }
-          /* Table -> blocks */
-          .table-responsive {
-            overflow: visible !important; max-height: none !important;
-            border: 0 !important; border-radius: 0 !important;
-            background: transparent !important; box-shadow: none !important; backdrop-filter: none !important;
-          }
-          #inv-table,#inv-table tbody {
-            display: block !important; width: 100% !important; max-width: 100% !important;
-            min-width: 0 !important; border: 0 !important; background: transparent !important;
-          }
-          #inv-table thead { display: none !important; }
-          /* ── Product card ── */
-          #inv-table tbody tr.main-row {
-            display: grid !important;
-            grid-template-columns: 58px minmax(0,1fr) 28px !important;
-            grid-template-rows: auto auto auto auto auto auto auto !important;
-            gap: 5px 9px !important;
-            margin: 0 0 5px !important; padding: 9px !important;
-            border: 1px solid var(--inv-bd) !important; border-radius: 4px !important;
-            background: #fff !important; box-shadow: 0 1px 2px rgba(15,23,42,.05) !important;
-          }
-          #inv-table tbody tr.main-row td {
-            display: none !important; padding: 0 !important; border: 0 !important;
-            background: transparent !important; min-width: 0 !important;
-          }
-          /* toggle (+/-) */
-          #inv-table tbody tr.main-row td:nth-child(1) {
-            display: flex !important; position: static !important;
-            grid-column: 3 !important; grid-row: 1 !important;
-            align-self: start; justify-self: end;
-          }
-          /* image */
-          #inv-table tbody tr.main-row td:nth-child(2) {
-            display: block !important; grid-column: 1 !important; grid-row: 1 / 3 !important; width: 58px !important;
-          }
-          #inv-table tbody tr.main-row td:nth-child(2) > div { width: 52px !important; height: 52px !important; }
-          #inv-table tbody tr.main-row td:nth-child(2) img   { border-radius: 3px !important; }
-          /* name */
-          #inv-table tbody tr.main-row td:nth-child(4) {
-            display: block !important; grid-column: 2 / 3 !important; grid-row: 1 / 3 !important;
-          }
-          #inv-table tbody tr.main-row td:nth-child(4) .text-wrap {
-            min-width: 0 !important; max-width: none !important; margin: 0 !important;
-            color: var(--inv-tx) !important; font-size: 13px !important; font-weight: 600 !important; line-height: 1.35 !important;
-          }
-          #inv-table tbody tr.main-row td:nth-child(4) .d-md-none {
-            display: block !important; color: var(--inv-p) !important;
-            font-size: 11px !important; font-weight: 600 !important; margin-top: 2px !important;
-          }
-          /* hidden cols */
-          #inv-table tbody tr.main-row td:nth-child(3),
-          #inv-table tbody tr.main-row td:nth-child(5),
-          #inv-table tbody tr.main-row td:nth-child(6),
-          #inv-table tbody tr.main-row td:nth-child(7),
-          #inv-table tbody tr.main-row td:nth-child(14) { display: none !important; }
-          /* price / stock rows */
-          #inv-table tbody tr.main-row td:nth-child(8),
-          #inv-table tbody tr.main-row td:nth-child(9),
-          #inv-table tbody tr.main-row td:nth-child(10),
-          #inv-table tbody tr.main-row td:nth-child(11),
-          #inv-table tbody tr.main-row td:nth-child(12),
-          #inv-table tbody tr.main-row td:nth-child(13) {
-            grid-column: 1 / 4 !important; display: flex !important;
-            justify-content: space-between !important; align-items: center !important;
-            min-height: 25px !important; padding: 3px 0 0 !important;
-            border-top: 1px solid var(--inv-bd-s) !important;
-            color: var(--inv-tx) !important; font-size: 12.5px !important;
-          }
-          #inv-table tbody tr.main-row td:nth-child(8) { padding-top: 7px !important; margin-top: 1px !important; }
-          #inv-table tbody tr.main-row td:nth-child(8) > span {
-            display: inline-flex !important; align-items: center !important;
-            min-height: 20px !important; border-radius: 3px !important; padding: 1px 6px !important; font-weight: 600 !important;
-          }
-          #inv-table tbody tr.main-row td:nth-child(8) > span.text-success { color: var(--inv-ok) !important; background: var(--inv-ok-bg) !important; }
-          #inv-table tbody tr.main-row td:nth-child(8) > span.text-danger  { color: var(--inv-err) !important; background: var(--inv-err-bg) !important; }
-          /* pseudo labels */
-          #inv-table tbody tr.main-row td:nth-child(8):before  { content:"Tổng tồn kho:";  color:var(--inv-mu); font-size:.82rem; }
-          #inv-table tbody tr.main-row td:nth-child(9):before  { content:"Giá Web:";        color:var(--inv-mu); font-size:.82rem; }
-          #inv-table tbody tr.main-row td:nth-child(10):before { content:"Giá TMĐT:";       color:var(--inv-mu); font-size:.82rem; }
-          #inv-table tbody tr.main-row td:nth-child(11):before { content:"Giá niêm yết:";   color:var(--inv-mu); font-size:.82rem; }
-          #inv-table tbody tr.main-row td:nth-child(12):before { content:"Giá TM:";         color:var(--inv-mu); font-size:.82rem; }
-          #inv-table tbody tr.main-row td:nth-child(13):before { content:"Giá bán:";        color:var(--inv-mu); font-size:.82rem; }
-          /* ── Warehouse detail nested under product card ── */
-          #inv-table tbody tr.detail-row {
-            display: block !important;
-            margin: 0 20px !important; padding: 10px !important;
-            border: 0 !important; border-left: 2px solid #cbd5e1 !important;
-            background: transparent !important;
-          }
-          #inv-table tbody tr.detail-row:before {
-            content: "Tồn theo kho"; display: block; margin-bottom: 5px;
-            color: var(--inv-mu); font-size: 10px; font-weight: 600;
-            letter-spacing: .04em; text-transform: uppercase;
-          }
-          #inv-table tbody tr.detail-row > td {
-            display: block !important; width: 100% !important;
-            padding: 0 !important; border: 0 !important; background: transparent !important;
-          }
-          .detail-container-mobile {
-            display: block !important; max-height: none !important; overflow: visible !important;
-            margin: 0 !important; padding: 0 !important;
-            border: 0 !important; border-radius: 0 !important;
-            background: transparent !important; box-shadow: none !important; backdrop-filter: none !important;
-          }
-          .wh-card,.detail-container-mobile .card {
-            border: 1px solid var(--inv-bd) !important; border-radius: 3px !important;
-            background: #f8fafc !important; box-shadow: none !important;
-            margin-bottom: 5px !important; overflow: hidden;
-          }
-          .wh-header,.detail-container-mobile .card-header {
-            min-height: 34px; padding: 6px 9px !important; background: #fff !important;
-            border-bottom: 1px solid var(--inv-bd-s) !important;
-            font-size: 12.5px !important; font-weight: 600 !important; color: var(--inv-tx) !important;
-          }
-          .wh-header .btn-view-location,.detail-container-mobile .btn-view-location {
-            padding: 2px 6px !important; border-radius: 3px !important;
-            background: #fff !important; border: 1px solid var(--inv-bd) !important;
-            box-shadow: none !important; font-size: 11px !important;
-          }
-          .wh-stats { padding: 5px 0; background: #f8fafc; }
-          .wh-label { font-size: 9px !important; }
-          .wh-val   { font-size: 13px !important; }
-          .wh-stat-col.highlight .wh-label { opacity: .85; }
-          .wh-stat-col.highlight .wh-val   { font-size: 1rem !important; }
-          #forecastDetailsModal .modal-dialog,
-          #locationDetailsModal .modal-dialog { margin: 8px !important; }
+            .mb-6 { margin-bottom: 2rem !important; }
+            #search-form .col-md-5, #search-form .col-md-2, #search-form .col-md-3 { margin-bottom: 10px; }
+            #search-form .col-md-3 { justify-content: space-between !important; background: #f8f9fa; padding: 10px; border-radius: 8px; }
+
+            /* CARD SẢN PHẨM CHÍNH */
+            #inv-table thead { display: none; }
+            #inv-table tbody tr.main-row {
+                display: grid;
+                grid-template-columns: 80px 1fr; 
+                grid-template-rows: auto auto;
+                gap: 8px;
+                background: #fff;
+                margin-bottom: 12px;
+                padding: 12px;
+                border: 1px solid #e9ecef;
+                border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+                position: relative;
+            }
+            #inv-table tbody tr.main-row td:nth-child(2) { grid-row: 1 / 3; grid-column: 1 / 2; padding: 0 !important; border: none; }
+            #inv-table tbody tr.main-row td:nth-child(3) { display: none; }
+            #inv-table tbody tr.main-row td:nth-child(4) { 
+                grid-column: 2 / 3; display: flex; flex-direction: column; padding: 0 !important; border: none; 
+            }
+            #inv-table tbody tr.main-row td:nth-child(4) .text-wrap { font-weight: 700; color: #0d6efd; font-size: 1rem; line-height: 1.3; margin-right: 30px; }
+            
+            #inv-table tbody tr.main-row td:nth-child(1) { position: absolute; top: 8px; right: 8px; padding: 0 !important; border: none; z-index: 10; }
+
+            #inv-table tbody tr.main-row td:nth-child(12), 
+            #inv-table tbody tr.main-row td:nth-child(13) {
+                grid-column: 1 / 3; display: flex; justify-content: space-between; align-items: center;
+                padding: 6px 0 !important; border: none; border-top: 1px dashed #eee; margin-top: 4px;
+            }
+            /* Forecast (Position 8) and List Price (Position 13 - Old "Giá bán") */
+            /* New columns indexes: 
+               1: Button
+               2: Image
+               3: Code
+               4: Name
+               5: Barcode
+               6: UOM
+               7: Forecast
+               8: Quantity (Actual)
+               9: Web Price
+               10: TMDT
+               11: Listed
+               12: Commercial
+               13: List Price (Old)
+               14: Link
+            */
+            /* Mobile Layout: 
+               Total Stock -> use col 8
+               List Price -> use col 13
+            */
+            #inv-table tbody tr.main-row td:nth-child(8) {
+                grid-column: 1 / 3; display: flex; justify-content: space-between; align-items: center;
+                padding: 4px 0 !important; border: none; border-top: 1px dashed #eee; margin-top: 4px;
+            }
+            /* Show all prices on mobile as stacked rows */
+            #inv-table tbody tr.main-row td:nth-child(9),
+            #inv-table tbody tr.main-row td:nth-child(10),
+            #inv-table tbody tr.main-row td:nth-child(11),
+            #inv-table tbody tr.main-row td:nth-child(12),
+            #inv-table tbody tr.main-row td:nth-child(13) {
+                grid-column: 1 / 3; display: flex; justify-content: space-between; align-items: center;
+                padding: 2px 0 !important; border: none; font-size: 0.95rem;
+            }
+
+            #inv-table tbody tr.main-row td:nth-child(8):before { content: "Tổng tồn kho:"; color: #6c757d; font-size: 0.9rem; }
+            
+            /* Labels for new prices */
+            #inv-table tbody tr.main-row td:nth-child(9):before { content: "Giá Web:"; color: #6c757d; font-size: 0.9rem; }
+            #inv-table tbody tr.main-row td:nth-child(10):before { content: "Giá TMDT:"; color: #6c757d; font-size: 0.9rem; }
+            #inv-table tbody tr.main-row td:nth-child(11):before { content: "Giá niêm yết:"; color: #6c757d; font-size: 0.9rem; }
+            #inv-table tbody tr.main-row td:nth-child(12):before { content: "Giá TM:"; color: #6c757d; font-size: 0.9rem; }
+            #inv-table tbody tr.main-row td:nth-child(13):before { content: "Giá bán:"; color: #6c757d; font-size: 0.9rem; }
+            
+            #inv-table tbody tr.main-row td:nth-child(13) { font-weight: bold; color: #198754; }
+
+            /* Hide extended info but KEEP prices visible */
+            #inv-table tbody tr.main-row td:nth-child(5), #inv-table tbody tr.main-row td:nth-child(6), 
+            #inv-table tbody tr.main-row td:nth-child(7), #inv-table tbody tr.main-row td:nth-child(14)
+             { display: none; }
+
+            /* CSS CHI TIẾT (GRID 3 CỘT) */
+            #inv-table tbody tr.detail-row { display: block; padding: 0; margin-top: -10px; margin-bottom: 15px; border: none; }
+            #inv-table tbody tr.detail-row td { display: block; padding: 0 !important; border: none; }
+            
+            .detail-container-mobile { 
+                background: #f1f3f5; 
+                border-radius: 0 0 8px 8px; 
+                padding: 10px; 
+                border: 1px solid #e9ecef; 
+                border-top: none; 
+            }
+            
+            .wh-card {
+                background: #fff;
+                border-radius: 8px;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+                margin-bottom: 8px;
+                overflow: hidden;
+            }
+            .wh-header {
+                padding: 8px 12px;
+                font-weight: 700;
+                color: #495057;
+                background: #fff;
+                border-bottom: 1px solid #f0f0f0;
+                font-size: 0.95rem;
+            }
+            .wh-stats {
+                display: flex;
+                padding: 8px 0;
+            }
+            .wh-stat-col {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                border-right: 1px solid #f0f0f0;
+            }
+            .wh-stat-col:last-child { border-right: none; }
+            .wh-label {
+                font-size: 0.7rem;
+                text-transform: uppercase;
+                color: #adb5bd;
+                margin-bottom: 2px;
+                font-weight: 600;
+            }
+            .wh-val {
+                font-size: 1rem;
+                font-weight: 600;
+                color: #212529;
+            }
+            .wh-stat-col.highlight .wh-label { color: #198754; opacity: 0.8; }
+            .wh-stat-col.highlight .wh-val { color: #198754; font-size: 1.2rem; font-weight: 800; }
+            .wh-stat-col.dim .wh-val { color: #ced4da; }
+            .combo-comp-title { font-size: 0.9rem; font-weight: bold; color: #d63384; margin-bottom: 4px; padding-left: 4px; }
         }
       </style>
 
@@ -555,9 +220,9 @@
 
         <t t-if="pw_ok">
           <section>
-            <div class="container-fluid mt-3 mb-6">
+            <div class="container-fluid mt-3 mb-6" style="max-width: 1550px;">
               <!-- Navigation Tabs -->
-              <div>
+              <div style="border-bottom: 2px solid #e9ecef; padding-bottom: 16px; margin-bottom: 1.5rem;">
                 <ul class="nav nav-pills justify-content-center flex-wrap gap-2">
                   <li class="nav-item">
                     <a class="nav-link active bg-primary text-white px-3 py-2" href="/search_stock" style="font-weight:600;font-size:.9rem;">
@@ -591,7 +256,7 @@
                     <div id="search-suggestions" class="position-absolute w-100 bg-white overflow-auto" style="display:none; z-index:1050; top:100%; left:0; margin-top:4px;"></div>
                 </div>
                 <div class="col-md-2">
-                  <select name="warehouse_id" class="form-select"> <option t-att-selected="not warehouse_id" value="">Tất cả kho</option>
+                  <select name="warehouse_id" class="form-select" style="height: 47px;"> <option t-att-selected="not warehouse_id" value="">Tất cả kho</option>
                     <t t-foreach="warehouses" t-as="w">
                       <option t-att-value="w.id" t-att-selected="int(warehouse_id)==w.id if warehouse_id else False"><t t-esc="w.name"/></option>
                     </t>
@@ -608,14 +273,14 @@
                   </div>
                 </div>
                 <div class="col-md-2">
-                  <button class="btn btn-primary w-100 fw-bold" type="submit"><i class="fa fa-search me-1"></i> Tìm kiếm</button>
+                  <button class="btn btn-primary w-100 fw-bold" style="height: 47px;" type="submit"><i class="fa fa-search me-1"></i> Tìm kiếm</button>
                 </div>
               </form>
 
               <t t-if="rows">
                 <div class="card shadow-sm border-0 bg-transparent">
-                    <div class="table-responsive">
-                      <table class="table table-sm table-hover align-middle mb-0" id="inv-table">
+                    <div class="table-responsive" style="overflow-x: auto;">
+                      <table class="table table-sm table-hover align-middle mb-0" id="inv-table" style="border-collapse: separate; border-spacing: 0;">
                         <thead class="bg-light">
                           <tr>
                             <th style="width:40px;"></th>
@@ -740,7 +405,7 @@
                                     <t t-else="">
                                         <div class="detail-container-mobile">
                                             <!-- Desktop -->
-                                            <div class="d-none d-md-block bg-white">
+                                            <div class="d-none d-md-block p-3 bg-white">
                                                 <table class="table table-sm mb-0 shadow-sm border">
                                                     <thead class="table-light">
                                                         <tr>
@@ -957,8 +622,7 @@
                    var qtyInfo = (q > 0) ? ('<span class="badge ' + badgeClass + ' text-white border ms-2">Tồn: ' + fmt(q) + '</span>') : '<span class="badge bg-light text-muted border ms-2">Hết hàng</span>';
                    if (q > 0 && q <= 5) qtyInfo = '<span class="badge ' + badgeClass + ' border ms-2">Tồn: ' + fmt(q) + '</span>';
                    
-                   var searchTerm = displayName;
-                   html += '<div class="suggestion-item border-bottom p-2" data-name="' + displayName + '" data-code="' + (p.default_code || '') + '" data-search-term="' + searchTerm + '" style="cursor:pointer;">';
+                   html += '<div class="suggestion-item border-bottom p-2" data-name="' + displayName + '" style="cursor:pointer;">';
                    html += '  <div class="d-flex align-items-center">';
                    html += '    <img src="' + imgUrl + '" class=" me-2 flex-shrink-0" style="width:40px; height:40px; object-fit:cover;"/>';
                    html += '    <div class="flex-grow-1 overflow-hidden">';
@@ -1018,8 +682,8 @@
                   else $dropdown.hide();
                 }, 300));
                 $(document).on('click', '.suggestion-item', function() {
-                  var term = $(this).data('name') || $(this).data('search-term');
-                  if (term) { window.addSearchChip(term); $dropdown.hide(); $('#search-form').submit(); }
+                  var name = $(this).data('name');
+                  if (name) { window.addSearchChip(name); $dropdown.hide(); $('#search-form').submit(); }
                 });
                 $(document).on('click', function(e) { if (!$(e.target).closest('#chip-container, #search-suggestions').length) $dropdown.hide(); });
                 
@@ -1235,7 +899,7 @@
               _fcss += '.fc-table td{padding:10px 12px;border-bottom:1px solid #f3f4f6;vertical-align:middle;}';
               _fcss += '.fc-table tr:last-child td{border-bottom:none;}';
               _fcss += '.fc-table tr:hover td{background:#fafafa;}';
-              _fcss += '.fc-table .fc-num{font-weight:600;font-size:.95rem;}';
+              _fcss += '.fc-table .fc-num{font-weight:800;font-size:.95rem;}';
               _fcss += '.fc-table .fc-pick{font-weight:700;color:#374151;}';
               _fcss += '.fc-badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:5px;font-size:.68rem;font-weight:700;border-width:1px;border-style:solid;}';
               _fcss += '@media(max-width:640px){.fc-desktop{display:none!important;}.fc-mobile{display:block!important;}}';
@@ -1391,7 +1055,7 @@
                   h += '<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;">';
                   h += '<span style="font-weight:700;color:#374151;">'+name+'</span>';
                   h += '<span class="fc-badge" style="background:'+ss.bg+';color:'+ss.color+';border-color:'+ss.border+';">'+state+'</span>';
-                  h += '</div><span style="font-weight:600;color:'+qColor+';font-size:1rem;">'+qty+'</span></div>';
+                  h += '</div><span style="font-weight:800;color:'+qColor+';font-size:1rem;">'+qty+'</span></div>';
                   h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px 14px;">';
                   meta.forEach(function(c) {
                       if (!c[1]) return;

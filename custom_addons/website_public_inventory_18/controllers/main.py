@@ -3,7 +3,6 @@ import hmac
 import logging
 import math
 import base64
-import re
 from odoo import http
 from odoo.http import request
 from odoo.osv import expression
@@ -137,7 +136,8 @@ class PublicInventory(http.Controller):
                 wh_rows = []
                 for wh in warehouses:
                     qt, qr = _get_qty(child.id, wh)
-                    qf = self._compute_custom_forecast_breakdown(env, child, wh.id, company_ids)["qty_forecast"]
+                    fc = self.forecast_details(product_id=child.id, warehouse_id=wh.id)
+                    qf = fc.get("qty_forecast", qt - qr) if isinstance(fc, dict) and fc.get("ok") else (qt - qr)
                     wh_rows.append({"warehouse_id": wh.id, "warehouse_name": wh.name, "qty_total": qt, "qty_reserved": qr, "qty_available": qt - qr, "qty_forecast": qf})
                 
                 rows.append({
@@ -154,71 +154,10 @@ class PublicInventory(http.Controller):
             rows = []
             for wh in warehouses:
                 qt, qr = _get_qty(product.id, wh)
-                qf = self._compute_custom_forecast_breakdown(env, product, wh.id, company_ids)["qty_forecast"]
+                fc = self.forecast_details(product_id=product.id, warehouse_id=wh.id)
+                qf = fc.get("qty_forecast", qt - qr) if isinstance(fc, dict) and fc.get("ok") else (qt - qr)
                 rows.append({"warehouse_id": wh.id, "warehouse_name": wh.name, "qty_available": qt - qr, "qty_total": qt, "qty_reserved": qr, "qty_forecast": qf})
             return {"mode": "warehouses", "rows": rows}
-
-    def _compute_custom_forecast_breakdown(self, env, product, warehouse_id, company_ids):
-        if not product:
-            return {
-                "qty_on_hand": 0.0,
-                "total_incoming": 0.0,
-                "total_outgoing": 0.0,
-                "qty_forecast": 0.0,
-            }
-
-        Quant = env["stock.quant"].sudo().with_context(allowed_company_ids=company_ids)
-        StockMove = env["stock.move"].sudo().with_context(allowed_company_ids=company_ids)
-        Warehouse = env["stock.warehouse"].sudo().with_context(allowed_company_ids=company_ids)
-
-        quant_domain = [("product_id", "=", product.id), ("location_id.usage", "=", "internal")]
-        if warehouse_id:
-            wh = Warehouse.browse(int(warehouse_id)).exists()
-            if wh:
-                quant_domain.append(("location_id", "child_of", wh.view_location_id.id))
-        else:
-            allowed_whs = _get_allowed_warehouses()
-            if allowed_whs:
-                quant_domain.append(("location_id", "child_of", allowed_whs.mapped('view_location_id').ids))
-        quant_groups = Quant.read_group(quant_domain, ["product_id", "quantity:sum"], ["product_id"], lazy=False)
-        qty_on_hand = sum(_rg_sum(g, "quantity") for g in quant_groups)
-
-        incoming_domain = [
-            ("product_id", "=", product.id),
-            ("state", "not in", ["done", "cancel", "draft"]),
-            ("picking_type_id.code", "=", "incoming"),
-            "|",
-            ("purchase_line_id", "!=", False),
-            ("picking_id.purchase_id", "!=", False),
-        ]
-        if warehouse_id:
-            wh = Warehouse.browse(int(warehouse_id)).exists()
-            if wh:
-                incoming_domain.append(("location_dest_id", "child_of", wh.view_location_id.id))
-        else:
-            allowed_whs = _get_allowed_warehouses()
-            if allowed_whs:
-                incoming_domain.append(("location_dest_id", "child_of", allowed_whs.mapped('view_location_id').ids))
-        incoming_moves = StockMove.search(incoming_domain, order="date asc")
-        total_incoming = sum(move.product_uom_qty for move in incoming_moves)
-
-        outgoing_moves = StockMove.search([
-            ("product_id", "=", product.id),
-            ("state", "not in", ["done", "cancel", "draft"]),
-            "|",
-            ("sale_line_id", "!=", False),
-            ("picking_id.sale_id", "!=", False),
-        ], order="date asc")
-        total_outgoing = sum(move.product_uom_qty for move in outgoing_moves)
-
-        qty_forecast = qty_on_hand + total_incoming - total_outgoing
-
-        return {
-            "qty_on_hand": qty_on_hand,
-            "total_incoming": total_incoming,
-            "total_outgoing": total_outgoing,
-            "qty_forecast": qty_forecast,
-        }
 
     @http.route(["/search_stock"], type="http", auth="public", website=True, sitemap=True)
     def inventory_page(self, q="", warehouse_id=None, page=1, **kw):
@@ -289,9 +228,7 @@ class PublicInventory(http.Controller):
 
         # 4. SEARCH
         found_products = Product.search(domain, order="name asc") 
-        # Dùng list + seen set để giữ nguyên thứ tự DB (name asc), không sort lại theo ID
-        ordered_product_ids = []
-        seen_pids = set()
+        final_product_ids = set()
         
         # Pre-fetch BoM status for found products to avoid N+1 queries loop
         # Map tmpl_id -> is_combo
@@ -305,9 +242,7 @@ class PublicInventory(http.Controller):
         combo_tmpl_ids = set(boms.mapped('product_tmpl_id').ids)
 
         for p in found_products:
-            if p.id not in seen_pids:
-                ordered_product_ids.append(p.id)
-                seen_pids.add(p.id)
+            final_product_ids.add(p.id)
             if combo_search_mode:
                 is_combo = p.product_tmpl_id.id in combo_tmpl_ids
                 # Nếu là combo (và đang bật search combo), bung children (nếu cần show con)
@@ -317,12 +252,10 @@ class PublicInventory(http.Controller):
                     # Optimized: filter boms in memory
                     product_bom = next((b for b in boms if b.product_tmpl_id.id == p.product_tmpl_id.id), None)
                     if product_bom:
-                        for child_id in product_bom.bom_line_ids.mapped('product_id').ids:
-                            if child_id not in seen_pids:
-                                ordered_product_ids.append(child_id)
-                                seen_pids.add(child_id)
+                         child_ids = product_bom.bom_line_ids.mapped('product_id').ids
+                         final_product_ids.update(child_ids)
 
-        sorted_pids = ordered_product_ids  # Giữ nguyên thứ tự name asc từ DB
+        sorted_pids = sorted(list(final_product_ids))
         
         # 5. PAGINATION
         total = len(sorted_pids)
@@ -373,9 +306,9 @@ class PublicInventory(http.Controller):
 
             qty_forecasted = 0.0
             if not is_combo:
-                qty_forecasted = self._compute_custom_forecast_breakdown(env, p, wid, company_ids)["qty_forecast"]
-            else:
-                qty_forecasted = qty_total
+                p_ctx = p.with_context(warehouse=wid) if wid else p
+                qty_forecasted = p_ctx.virtual_available
+            else: qty_forecasted = qty_total
 
             rows.append({
                 "id": pid,
@@ -499,21 +432,23 @@ class PublicInventory(http.Controller):
                 wh_rows = []
                 for wh in warehouses:
                     qt, qr = _sum_for_product_in_wh(Quant, child.id, wh)
-                    qf = self._compute_custom_forecast_breakdown(env, child, wh.id, company_ids)["qty_forecast"]
+                    fc = self.forecast_details(product_id=child.id, warehouse_id=wh.id)
+                    qf = fc.get("qty_forecast", qt - qr) if isinstance(fc, dict) and fc.get("ok") else (qt - qr)
                     wh_rows.append({"warehouse_id": wh.id, "warehouse_name": wh.name, "qty_total": qt, "qty_reserved": qr, "qty_available": qt - qr, "qty_forecast": qf})
                 rows.append({
                     "child_product_id": child.id, "default_code": child.default_code or "", "name": child.name or "", "uom": child.uom_id.name or "",
                     "image_url": _get_product_image_url(child),
                     "component_qty_in_combo": float(getattr(line, 'product_quantity', 0) or getattr(line, 'product_qty', 1.0)), "warehouses": wh_rows
                 })
-            return {"ok": True, "mode": "components_by_warehouse", "rows": rows}
+            return {"ok": True, "mode": "components_by_warehouse", "rows": rows, "product_id": pid, "product_name": product.display_name}
 
         if wid: wh = Warehouse.browse(wid).exists(); warehouses = wh if wh else Warehouse.browse([])
         else: warehouses = _get_allowed_warehouses() or Warehouse.search([])
         rows = []
         for wh in warehouses:
             qt, qr = _sum_for_product_in_wh(Quant, pid, wh)
-            qf = self._compute_custom_forecast_breakdown(env, product, wh.id, company_ids)["qty_forecast"]
+            fc = self.forecast_details(product_id=pid, warehouse_id=wh.id)
+            qf = fc.get("qty_forecast", qt - qr) if isinstance(fc, dict) and fc.get("ok") else (qt - qr)
             rows.append({"warehouse_id": wh.id, "warehouse_name": wh.name, "qty_available": qt - qr, "qty_total": qt, "qty_reserved": qr, "qty_forecast": qf})
         return {"ok": True, "mode": "warehouses", "rows": rows, "product_id": pid, "product_name": product.display_name}
     
@@ -652,37 +587,8 @@ class PublicInventory(http.Controller):
                 "is_combo": is_combo,
             })
         
-        # Sort: relevance score (cao hơn = match chính xác hơn) > qty > name
-        # Ví dụ: "dù mil" → "Dù MILWAUKEE" (exact word) > "Bi sắt dùng..." ("dù" là substring "dùng")
-        tokens_lower = [t.lower() for t in tokens]
-
-        def _relevance_score(item):
-            """Tính điểm match: exact word >> word-prefix >> substring."""
-            name_lower  = (item['name'] or '').lower()
-            code_lower  = (item['default_code'] or '').lower()
-            barcode_low = (item['barcode'] or '').lower()
-            # Tách tên thành các từ để check word boundary
-            name_words  = re.split(r'[\s\-_/\\]+', name_lower)
-            code_words  = re.split(r'[\s\-_/\\]+', code_lower)
-            total = 0
-            for t in tokens_lower:
-                s = 0
-                # --- default_code ---
-                if code_lower == t:                    s = max(s, 200)  # exact full code
-                elif any(w == t for w in code_words):  s = max(s, 180)  # exact word in code
-                elif any(w.startswith(t) for w in code_words): s = max(s, 120)  # code word prefix
-                elif t in code_lower:                   s = max(s, 60)   # code substring
-                # --- name ---
-                if any(w == t for w in name_words):     s = max(s, 160)  # exact word in name
-                elif any(w.startswith(t) for w in name_words): s = max(s, 80)  # name word prefix
-                elif t in name_lower:                   s = max(s, 20)   # name substring
-                # --- barcode ---
-                if barcode_low.startswith(t):           s = max(s, 50)
-                elif t in barcode_low:                  s = max(s, 10)
-                total += s
-            return total
-
-        results.sort(key=lambda x: (-_relevance_score(x), -x['qty_total'], x['name']))
+        # Sort by quantity (stock first), then limit to 10
+        results.sort(key=lambda x: (-x['qty_total'], x['name']))  # Negative for descending qty, then name ascending
         results = results[:10]
         
         return {"ok": True, "products": results}
@@ -870,11 +776,9 @@ class PublicInventory(http.Controller):
                 }
             outgoing_by_picking[key]["qty"] += move.product_uom_qty
 
-        forecast = self._compute_custom_forecast_breakdown(env, product, wid, company_ids)
-        qty_on_hand = forecast["qty_on_hand"]
-        total_incoming = forecast["total_incoming"]
-        total_outgoing = forecast["total_outgoing"]
-        qty_forecast = forecast["qty_forecast"]
+        total_incoming = sum(v["qty"] for v in incoming_by_picking.values())
+        total_outgoing = sum(v["qty"] for v in outgoing_by_picking.values())
+        qty_forecast = qty_on_hand + total_incoming - total_outgoing
 
         return {
             "ok": True,
