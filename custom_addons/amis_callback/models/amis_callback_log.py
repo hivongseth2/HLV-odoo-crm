@@ -326,6 +326,34 @@ class AmisCallbackLogLine(models.Model):
                     vals['misa_purchase_order_state'] = 'request_accepted'
                 if vals:
                     po.with_context(skip_misa_purchase_order_lifecycle=True).sudo().write(vals)
+                if is_request_callback and not success and data_type in (1, 3):
+                    retry_job = self.env['amis.sync.job'].sudo().search([
+                        ('purchase_order_id', '=', po.id),
+                        ('direction', '=', 'purchase_order'),
+                    ], order='id desc', limit=1)
+                    if retry_job:
+                        retry_scheduled = retry_job._schedule_retry_after_callback_error(error_message)
+                    else:
+                        po._enqueue_misa_purchase_order(force=True)
+                        retry_scheduled = True
+                    if retry_scheduled:
+                        po.with_context(skip_misa_purchase_order_lifecycle=True).sudo().write({
+                            'misa_purchase_order_state': 'queued',
+                            'misa_purchase_order_last_error': error_message,
+                            'misa_purchase_order_state_updated_at': fields.Datetime.now(),
+                        })
+                        _logger.warning(
+                            'MISA bao loi de nghi don mua %s; da dua job ve hang doi gui lai: %s',
+                            po.name,
+                            error_message,
+                        )
+                    else:
+                        _logger.error(
+                            'MISA bao loi de nghi don mua %s; job da het %s lan thu: %s',
+                            po.name,
+                            retry_job.retry_count,
+                            error_message,
+                        )
                 if is_request_callback and success:
                     _logger.info(
                         'MISA da nhan de nghi don mua %s (%s), cho callback sinh chung tu that su.',
