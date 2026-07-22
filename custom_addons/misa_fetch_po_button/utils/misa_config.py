@@ -310,7 +310,7 @@ class MisaConfig(models.AbstractModel):
 
     def get_misa_update_product_description_payload(self, misa_id, new_value, old_value):
         return {
-            "FieldName": "CustomField17",
+            "FieldName": "Description",
             "PrimaryKeyName": "ID",
             "PrimaryKeyValue": str(misa_id),
             "Id": 2130,

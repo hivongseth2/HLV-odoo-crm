@@ -159,6 +159,31 @@ class AmisSyncJob(models.Model):
             job.write({'status': 'pending', 'retry_count': 0, 'error_msg': False})
         return True
 
+    def _schedule_retry_after_callback_error(self, error_message=''):
+        """Đưa job đã gửi thành công HTTP về hàng đợi khi callback MISA báo lỗi."""
+        self.ensure_one()
+        if self.status == 'pending':
+            return True
+        if self.retry_count >= MAX_RETRY:
+            return False
+
+        next_retry_count = self.retry_count + 1
+        should_retry = next_retry_count < MAX_RETRY
+        self.sudo().write({
+            'status': 'pending' if should_retry else 'error',
+            'retry_count': next_retry_count,
+            'error_msg': (error_message or '')[:2000] or False,
+            'processed_at': fields.Datetime.now(),
+        })
+        if should_retry:
+            cron = self.env.ref(
+                'amis_callback.ir_cron_amis_sync_queue',
+                raise_if_not_found=False,
+            )
+            if cron:
+                cron.sudo()._trigger()
+        return should_retry
+
     def action_run_now(self):
         """Chạy ngay job này trong cursor riêng (không cần đợi cron)."""
         import odoo

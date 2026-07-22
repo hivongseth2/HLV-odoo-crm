@@ -33,8 +33,10 @@ class MisaCrmContactSyncRun(models.Model):
     state = fields.Selection([
         ("running", "Running"),
         ("done", "Done"),
+        ("stopped", "Stopped"),
         ("failed", "Failed"),
     ], default="running", required=True)
+    stop_requested = fields.Boolean()
     service_date = fields.Date(index=True)
     start_at = fields.Datetime(default=fields.Datetime.now, required=True)
     end_at = fields.Datetime()
@@ -44,10 +46,35 @@ class MisaCrmContactSyncRun(models.Model):
     created_count = fields.Integer()
     updated_count = fields.Integer()
     unchanged_count = fields.Integer()
+    skipped_count = fields.Integer()
     failed_count = fields.Integer()
     page_count = fields.Integer()
     message = fields.Text()
     line_ids = fields.One2many("misa.crm.contact.sync.line", "run_id", string="Details")
+
+    def action_stop(self):
+        for run in self:
+            if run.state == "running":
+                run.sudo().write({
+                    "stop_requested": True,
+                    "message": _("Stop requested. Current run will stop after the current row/page."),
+                })
+        return True
+
+    def action_disable_cron(self):
+        cron = self.env.ref("misa_fetch_po_button.ir_cron_misa_crm_contact_sync", raise_if_not_found=False)
+        if cron:
+            cron.sudo().write({"active": False})
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": _("CRM sync queue stopped"),
+                "message": _("The scheduled CRM contact sync cron has been disabled."),
+                "type": "warning",
+                "sticky": False,
+            },
+        }
 
     def action_run_now(self):
         run = self.sudo().cron_sync_contacts_from_crm(force=True)
@@ -72,7 +99,7 @@ class MisaCrmContactSyncRun(models.Model):
                 return False
             existing = self.search([
                 ("service_date", "=", service_date),
-                ("state", "in", ["running", "done"]),
+                ("state", "in", ["running", "done", "stopped"]),
             ], limit=1)
             if existing:
                 return existing
@@ -84,12 +111,13 @@ class MisaCrmContactSyncRun(models.Model):
         started = time.time()
         try:
             run._sync_contacts()
-            run.write({
-                "state": "done",
-                "end_at": fields.Datetime.now(),
-                "duration_seconds": time.time() - started,
-                "message": _("Completed"),
-            })
+            if run.state == "running":
+                run.write({
+                    "state": "done",
+                    "end_at": fields.Datetime.now(),
+                    "duration_seconds": time.time() - started,
+                    "message": _("Completed"),
+                })
         except Exception as exc:
             _logger.exception("MISA CRM contact sync failed")
             run.write({
@@ -113,19 +141,35 @@ class MisaCrmContactSyncRun(models.Model):
     def _sync_contacts(self):
         self.ensure_one()
         page_size = int(self.env["ir.config_parameter"].sudo().get_param(
-            "misa.crm.contact_sync_page_size", "200"
-        ) or 200)
+            "misa.crm.contact_sync_page_size", "50"
+        ) or 50)
+        page_size = max(1, min(page_size, 100))
+        batch_limit = int(self.env["ir.config_parameter"].sudo().get_param(
+            "misa.crm.contact_sync_batch_limit", "50"
+        ) or 50)
+        batch_limit = max(1, min(batch_limit, 100))
         max_pages = int(self.env["ir.config_parameter"].sudo().get_param(
-            "misa.crm.contact_sync_max_pages", "100"
-        ) or 100)
+            "misa.crm.contact_sync_max_pages", "2"
+        ) or 2)
+        max_pages = max(1, min(max_pages, 10))
 
-        total = success = created = updated = unchanged = failed = 0
+        total = success = created = updated = unchanged = skipped = failed = 0
         page = 1
-        while page <= max_pages:
+        stopped = False
+        while page <= max_pages and total < batch_limit:
+            self.env.invalidate_all()
+            if self.sudo().browse(self.id).stop_requested:
+                stopped = True
+                break
             accounts = self._fetch_crm_account_page(page, page_size)
             if not accounts:
                 break
             for account in accounts:
+                self.env.invalidate_all()
+                fresh_run = self.sudo().browse(self.id)
+                if fresh_run.stop_requested or total >= batch_limit:
+                    stopped = bool(fresh_run.stop_requested)
+                    break
                 total += 1
                 result = self._sync_one_account(account)
                 if result["state"] == "failed":
@@ -136,6 +180,8 @@ class MisaCrmContactSyncRun(models.Model):
                         created += 1
                     elif result["action"] == "updated":
                         updated += 1
+                    elif result["action"] == "skipped":
+                        skipped += 1
                     else:
                         unchanged += 1
                 self.env["misa.crm.contact.sync.line"].create(dict(result, run_id=self.id))
@@ -146,12 +192,23 @@ class MisaCrmContactSyncRun(models.Model):
                 "created_count": created,
                 "updated_count": updated,
                 "unchanged_count": unchanged,
+                "skipped_count": skipped,
                 "failed_count": failed,
                 "page_count": page,
             })
+            self.env.cr.commit()
+            if stopped or total >= batch_limit:
+                break
             if len(accounts) < page_size:
                 break
             page += 1
+
+        if stopped or self.sudo().browse(self.id).stop_requested:
+            self.write({
+                "state": "stopped",
+                "end_at": fields.Datetime.now(),
+                "message": _("Stopped after processing %s CRM account(s).") % total,
+            })
 
     def _fetch_crm_account_page(self, page, page_size):
         payload = {
@@ -215,6 +272,12 @@ class MisaCrmContactSyncRun(models.Model):
 
             tracked_fields = self._tracked_partner_fields()
             before_partner = self._find_partner_by_key(account_number, tax_code)
+            if not before_partner and not self._allow_create_missing():
+                base_result.update({
+                    "action": "skipped",
+                    "change_summary": _("No existing Odoo root contact for this CRM code; creation disabled."),
+                })
+                return base_result
             before_values = self._partner_snapshot(before_partner, tracked_fields) if before_partner else {}
             partner = odoo_utils._get_or_create_partner(
                 account_name or account_number,
@@ -247,18 +310,41 @@ class MisaCrmContactSyncRun(models.Model):
 
     def _find_partner_by_key(self, account_number, tax_code):
         Partner = self.env["res.partner"].sudo().with_context(active_test=False)
+        account_number = (account_number or "").strip()
+        tax_code = (tax_code or "").strip()
+        code_norm = account_number.upper().replace(" ", "")
+
+        def has_same_code(partner):
+            return (
+                (partner.ref or "").strip().upper().replace(" ", "") == code_norm
+                or (partner.company_registry or "").strip().upper().replace(" ", "") == code_norm
+            )
+
         partners = Partner.search([
             ("parent_id", "=", False),
-            ("is_company", "=", True),
             "|",
             ("ref", "=", account_number),
             ("company_registry", "=", account_number),
-        ], order="active desc, id asc")
+        ], order="active desc, is_company desc, id asc").filtered(has_same_code)
+        if not partners:
+            partners = Partner.search([
+                ("parent_id", "=", False),
+                "|",
+                ("ref", "!=", False),
+                ("company_registry", "!=", False),
+            ], order="active desc, is_company desc, id asc").filtered(has_same_code)
+
         if tax_code:
             tax_match = partners.filtered(lambda p: (p.vat or "").strip() == tax_code)[:1]
             no_tax = partners.filtered(lambda p: not (p.vat or "").strip())[:1]
-            return tax_match or no_tax
+            return tax_match or no_tax or partners[:1]
         return partners[:1]
+
+    def _allow_create_missing(self):
+        value = self.env["ir.config_parameter"].sudo().get_param(
+            "misa.crm.contact_sync_create_missing", "0"
+        )
+        return str(value).strip().lower() in ("1", "true", "yes", "y")
 
     def _values_from_crm_account(self, account, partner):
         vals = {}
@@ -329,6 +415,7 @@ class MisaCrmContactSyncLine(models.Model):
         ("created", "Created"),
         ("updated", "Updated"),
         ("unchanged", "Unchanged"),
+        ("skipped", "Skipped"),
         ("failed", "Failed"),
     ], default="unchanged", required=True)
     change_summary = fields.Char()

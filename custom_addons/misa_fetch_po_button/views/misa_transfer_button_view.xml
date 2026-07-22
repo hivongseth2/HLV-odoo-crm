@@ -32,5 +32,6 @@
               name="Lấy Internal Transfer từ MISA"
               parent="stock.menu_stock_root"
               action="action_misa_transfer_fetch_main"
-              sequence="101"/>
+              sequence="101"
+              active="False"/>
 </odoo>

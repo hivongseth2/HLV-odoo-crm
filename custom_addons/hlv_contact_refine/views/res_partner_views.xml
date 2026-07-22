@@ -127,6 +127,11 @@
         <field name="model">res.partner</field>
         <field name="inherit_id" ref="base.view_partner_form"/>
         <field name="arch" type="xml">
+            <xpath expr="//field[@name='vat']" position="after">
+                <field name="hlv_vietqr_lookup_button"
+                       widget="hlv_vietqr_lookup_button"
+                       nolabel="1"/>
+            </xpath>
             <xpath expr="//sheet" position="before">
                 <header>
                     <button name="action_hlv_refresh_contact_classification" type="object" string="Quét phân loại" class="btn-secondary"/>
