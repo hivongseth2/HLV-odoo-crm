@@ -666,11 +666,10 @@ class PublicInventory(http.Controller):
                     domain_list.append(("location_id", "child_of", allowed_whs.mapped('view_location_id').ids))
             return domain_list
 
-        # --- Phiếu nhập từ ĐMH (picking type = incoming, có purchase_id hoặc purchase_line_id) ---
+        # --- Phiếu nhập từ ĐMH (có purchase_id hoặc purchase_line_id) ---
         incoming_domain = _wh_dest_domain([
             ("product_id", "=", pid),
             ("state", "not in", ["done", "cancel", "draft"]),
-            ("picking_type_id.code", "=", "incoming"),
             "|",
             ("purchase_line_id", "!=", False),
             ("picking_id.purchase_id", "!=", False),
@@ -780,14 +779,15 @@ class PublicInventory(http.Controller):
             internal_in_by_picking[key]["qty"] += move.product_uom_qty
 
         # --- Phiếu xuất từ ĐBH ---
+        outgoing_domain = _wh_src_domain([
+            ("product_id", "=", pid),
+            ("state", "not in", ["done", "cancel", "draft"]),
+            "|",
+            ("sale_line_id", "!=", False),
+            ("picking_id.sale_id", "!=", False),
+        ])
         try:
-            outgoing_moves = StockMove.search([
-                ("product_id", "=", pid),
-                ("state", "not in", ["done", "cancel", "draft"]),
-                "|",
-                ("sale_line_id", "!=", False),
-                ("picking_id.sale_id", "!=", False),
-            ], order="date asc")
+            outgoing_moves = StockMove.search(outgoing_domain, order="date asc")
         except Exception:
             outgoing_moves = StockMove.browse([])
 
