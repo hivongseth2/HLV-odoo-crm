@@ -49,9 +49,9 @@ class SaleOrder(models.Model):
             raise ValueError(_("MISA trả về lỗi (FormDataNew): %s") % js)
         return js.get("Data", {}).get("CurrentData", {})
 
+    @api.model
     def _misa_fetch_lines(self, misa_order_id):
         """Gọi DataSubPaging lấy các dòng sản phẩm (theo cách bạn đang dùng)."""
-        self.ensure_one()
         misa_utils = self.env['misa.api.utils']
         misa_config = self.env['misa.config']
         headers, crm_headers = self._misa_headers()
@@ -63,9 +63,9 @@ class SaleOrder(models.Model):
         # logging.debug("productline", product_lines)
         return product_lines or []
 
+    @api.model
     def _misa_warehouse_from_sale_lines(self, lines):
         """Xác định kho Odoo từ dòng SO MISA đầu tiên có mã kho map được."""
-        self.ensure_one()
         stock_mapping = {
             "HCM": "TSN/Stock",
             "BENCAM": "KBC/Tồn kho",
@@ -1041,7 +1041,7 @@ class SaleOrder(models.Model):
         self.write(vals)
         self._misa_sync_open_picking_contact()
 
-    def action_resync_from_misa(self):
+    def action_resync_from_misa(self, prefetched_lines=None):
         """Đồng bộ tại chỗ theo CRM line ID và để Odoo tự quản lý stock moves."""
         self.ensure_one()
         if not self.misa_id:
@@ -1085,12 +1085,26 @@ class SaleOrder(models.Model):
         if self.state == 'cancel':
             self.action_draft()
 
-        lines = self._misa_fetch_lines(misa_order_id)
+        lines = (
+            prefetched_lines
+            if prefetched_lines is not None
+            else self._misa_fetch_lines(misa_order_id)
+        )
         if self.env.context.get('misa_assign_warehouse_from_lines'):
-            warehouse = self._misa_warehouse_from_sale_lines(lines)
+            warehouse = self.env['stock.warehouse'].browse(
+                self.env.context.get('misa_resolved_warehouse_id') or []
+            ).exists()
+            if not warehouse:
+                warehouse = self._misa_warehouse_from_sale_lines(lines)
+        self._sync_misa_header_in_place(data, headers)
+        if self.env.context.get('misa_assign_warehouse_from_lines'):
             if warehouse and self.warehouse_id != warehouse:
                 self.write({'warehouse_id': warehouse.id})
-        self._sync_misa_header_in_place(data, headers)
+            if warehouse:
+                _logger.info(
+                    "Kho SO %s sau khi dong bo header: %s",
+                    self.name, self.warehouse_id.name,
+                )
         touched_pickings = self._misa_warehouse_touched_pickings()
         sync_result = self._sync_so_lines_from_misa_no_picking(
             lines,
@@ -1259,13 +1273,32 @@ class SaleOrder(models.Model):
             'partner_id': partner.id,
             'misa_id': misa_order_id,
         }
+        prefetched_lines = None
+        misa_warehouse = self.env['stock.warehouse']
         if warehouse_id:
             vals['warehouse_id'] = int(warehouse_id)
+        else:
+            # sale.order.warehouse_id is precomputed during create(). Resolve the
+            # MISA warehouse first so the bootstrap order never starts at the
+            # current user's default warehouse (usually TSN).
+            prefetched_lines = self._misa_fetch_lines(misa_order_id)
+            misa_warehouse = self._misa_warehouse_from_sale_lines(prefetched_lines)
+            if misa_warehouse:
+                vals['warehouse_id'] = misa_warehouse.id
             
         so_boot = self.create(vals)
+        _logger.info(
+            "Tao SO bootstrap MISA %s voi kho: %s",
+            misa_order_id, so_boot.warehouse_id.name,
+        )
         so_boot.sudo().with_context(
             misa_assign_warehouse_from_lines=not bool(warehouse_id),
-        ).action_resync_from_misa()
+            misa_resolved_warehouse_id=misa_warehouse.id or False,
+        ).action_resync_from_misa(prefetched_lines=prefetched_lines)
+        _logger.info(
+            "Hoan tat dong bo SO %s, kho cuoi cung: %s",
+            so_boot.name, so_boot.warehouse_id.name,
+        )
         return {
             'ok': True,
             'res_id': so_boot.id,
