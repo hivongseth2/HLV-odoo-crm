@@ -15,6 +15,11 @@
                 <field name="production_year" string="Năm sản xuất" optional="show"/>
                 <field name="country_of_origin" string="Xuất xứ" optional="show"/>
             </xpath>
+            <xpath expr="//field[@name='order_line']//field[@name='qty_received']" position="after">
+                <field name="misa_purchase_order_org_ref_detail_id" optional="show" readonly="1" string="MISA org_ref_detail_id"/>
+                <field name="picking_ids" widget="many2many_tags" optional="show" readonly="1" string="Phiếu nhập kho"/>
+                <button name="action_open_picking" type="object" icon="fa-truck" title="Mở Phiếu nhập kho" invisible="not picking_ids"/>
+            </xpath>
             <!-- Thêm Năm sản xuất và Xuất xứ trong Form pop-up/chi tiết của dòng sản phẩm -->
             <xpath expr="//field[@name='order_line']/form//field[@name='product_id']" position="after">
                 <field name="production_year" string="Năm sản xuất"/>
