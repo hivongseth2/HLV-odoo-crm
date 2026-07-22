@@ -722,6 +722,60 @@ class PublicInventory(http.Controller):
                 }
             incoming_by_picking[key]["qty"] += move.product_uom_qty
 
+        # --- Phiếu chuyển kho nội bộ (Nhập) ---
+        internal_in_domain = [
+            ("product_id", "=", pid),
+            ("state", "not in", ["done", "cancel", "draft"]),
+            ("picking_type_id.code", "=", "internal"),
+            ("location_dest_id.usage", "=", "internal"),
+        ]
+        if wid:
+            wh = Warehouse.browse(wid).exists()
+            if wh:
+                internal_in_domain.extend([
+                    ("location_dest_id", "child_of", wh.view_location_id.id),
+                    ("location_id", "not child_of", wh.view_location_id.id),
+                ])
+        else:
+            allowed_whs = _get_allowed_warehouses()
+            if allowed_whs:
+                wh_loc_ids = allowed_whs.mapped('view_location_id').ids
+                internal_in_domain.extend([
+                    ("location_dest_id", "child_of", wh_loc_ids),
+                ])
+
+        try:
+            internal_in_moves = StockMove.search(internal_in_domain, order="date asc")
+        except Exception:
+            internal_in_moves = StockMove.browse([])
+
+        internal_in_by_picking = {}
+        for move in internal_in_moves:
+            picking = move.picking_id
+            if not picking:
+                continue
+            key = picking.id
+            if key not in internal_in_by_picking:
+                sched = picking.scheduled_date
+                src_wh = move.location_id.warehouse_id.name if getattr(move.location_id, 'warehouse_id', None) else ""
+                dest_wh = move.location_dest_id.warehouse_id.name if getattr(move.location_dest_id, 'warehouse_id', None) else ""
+                src_name = f"{src_wh} ({move.location_id.name})" if src_wh else (move.location_id.display_name or move.location_id.name or "")
+                dest_name = f"{dest_wh} ({move.location_dest_id.name})" if dest_wh else (move.location_dest_id.display_name or move.location_dest_id.name or "")
+
+                internal_in_by_picking[key] = {
+                    "picking_name": picking.name or "",
+                    "po_name": f"Chuyển kho nội bộ",
+                    "po_origin": (picking.origin or move.reference or ""),
+                    "scheduled_date": sched.strftime('%d/%m/%Y') if sched else "",
+                    "state": _STATE_VN.get(picking.state, picking.state),
+                    "qty": 0.0,
+                    "partner": f"{src_name} → {dest_name}",
+                    "origin": picking.origin or "",
+                    "misa_date": "",
+                    "date_planned": sched.strftime('%d/%m/%Y') if sched else "",
+                }
+            internal_in_by_picking[key]["qty"] += move.product_uom_qty
+
         # --- Phiếu xuất từ ĐBH ---
         # Strategy: search ALL active SO-linked moves, no location filter.
         #
@@ -776,8 +830,59 @@ class PublicInventory(http.Controller):
                 }
             outgoing_by_picking[key]["qty"] += move.product_uom_qty
 
-        total_incoming = sum(v["qty"] for v in incoming_by_picking.values())
-        total_outgoing = sum(v["qty"] for v in outgoing_by_picking.values())
+        # --- Phiếu chuyển kho nội bộ (Xuất) ---
+        internal_out_domain = [
+            ("product_id", "=", pid),
+            ("state", "not in", ["done", "cancel", "draft"]),
+            ("picking_type_id.code", "=", "internal"),
+            ("location_id.usage", "=", "internal"),
+        ]
+        if wid:
+            wh = Warehouse.browse(wid).exists()
+            if wh:
+                internal_out_domain.extend([
+                    ("location_id", "child_of", wh.view_location_id.id),
+                    ("location_dest_id", "not child_of", wh.view_location_id.id),
+                ])
+        else:
+            allowed_whs = _get_allowed_warehouses()
+            if allowed_whs:
+                wh_loc_ids = allowed_whs.mapped('view_location_id').ids
+                internal_out_domain.extend([
+                    ("location_id", "child_of", wh_loc_ids),
+                ])
+
+        try:
+            internal_out_moves = StockMove.search(internal_out_domain, order="date asc")
+        except Exception:
+            internal_out_moves = StockMove.browse([])
+
+        internal_out_by_picking = {}
+        for move in internal_out_moves:
+            picking = move.picking_id
+            if not picking:
+                continue
+            key = picking.id
+            if key not in internal_out_by_picking:
+                sched = picking.scheduled_date
+                src_wh = move.location_id.warehouse_id.name if getattr(move.location_id, 'warehouse_id', None) else ""
+                dest_wh = move.location_dest_id.warehouse_id.name if getattr(move.location_dest_id, 'warehouse_id', None) else ""
+                src_name = f"{src_wh} ({move.location_id.name})" if src_wh else (move.location_id.display_name or move.location_id.name or "")
+                dest_name = f"{dest_wh} ({move.location_dest_id.name})" if dest_wh else (move.location_dest_id.display_name or move.location_dest_id.name or "")
+
+                internal_out_by_picking[key] = {
+                    "picking_name": picking.name or "",
+                    "so_name": f"Chuyển kho nội bộ",
+                    "scheduled_date": sched.strftime('%d/%m/%Y') if sched else "",
+                    "state": _STATE_VN.get(picking.state, picking.state),
+                    "qty": 0.0,
+                    "partner": f"{src_name} → {dest_name}",
+                    "origin": picking.origin or "",
+                }
+            internal_out_by_picking[key]["qty"] += move.product_uom_qty
+
+        total_incoming = sum(v["qty"] for v in incoming_by_picking.values()) + sum(v["qty"] for v in internal_in_by_picking.values())
+        total_outgoing = sum(v["qty"] for v in outgoing_by_picking.values()) + sum(v["qty"] for v in internal_out_by_picking.values())
         qty_forecast = qty_on_hand + total_incoming - total_outgoing
 
         return {
@@ -789,4 +894,6 @@ class PublicInventory(http.Controller):
             "qty_forecast": qty_forecast,
             "incoming": sorted(incoming_by_picking.values(), key=lambda x: x["scheduled_date"]),
             "outgoing": sorted(outgoing_by_picking.values(), key=lambda x: x["scheduled_date"]),
+            "internal_incoming": sorted(internal_in_by_picking.values(), key=lambda x: x["scheduled_date"]),
+            "internal_outgoing": sorted(internal_out_by_picking.values(), key=lambda x: x["scheduled_date"]),
         }

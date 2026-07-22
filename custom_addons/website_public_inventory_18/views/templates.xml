@@ -926,10 +926,12 @@
                   html += _pill('Dự báo',   fmt(data.qty_forecast),    fqBg, fqBord, fqColor, fqColor, true, fqSh);
                   html += '</div></div>';
 
-                  var inCount  = data.incoming.length;
-                  var outCount = data.outgoing.length;
+                  var inCount    = data.incoming.length;
+                  var intInCount = (data.internal_incoming || []).length;
+                  var outCount   = data.outgoing.length;
+                  var intOutCount = (data.internal_outgoing || []).length;
 
-                  // ── INCOMING ────────────────────────────────────────────────
+                  // ── 1. INCOMING PO ───────────────────────────────────────────
                   html += '<div style="padding:20px 28px 6px;">';
                   html += _sectionHeader('Phiếu nhập kho từ ĐMH', inCount, '#16a34a');
 
@@ -955,9 +957,10 @@
                           html += '<td style="text-align:right;"><span class="fc-num" style="color:#16a34a;">+'+fmt(r.qty)+'</span></td>';
                           html += '</tr>';
                       });
+                      var sumIn = data.incoming.reduce(function(a,b){return a+b.qty;}, 0);
                       html += '</tbody><tfoot><tr>';
-                      html += '<td colspan="6" style="text-align:right;font-weight:700;color:#6b7280;font-size:.78rem;padding:8px 12px;">Tổng nhập:</td>';
-                      html += '<td style="text-align:right;"><span class="fc-num" style="color:#16a34a;">+'+fmt(data.total_incoming)+'</span></td>';
+                      html += '<td colspan="6" style="text-align:right;font-weight:700;color:#6b7280;font-size:.78rem;padding:8px 12px;">Tổng nhập ĐMH:</td>';
+                      html += '<td style="text-align:right;"><span class="fc-num" style="color:#16a34a;">+'+fmt(sumIn)+'</span></td>';
                       html += '</tr></tfoot></table></div></div>';
 
                       // Mobile: cards
@@ -972,7 +975,6 @@
                               ['Hàng về',       r.date_planned||r.scheduled_date, '#2563eb', true],
                           ]);
                       });
-                      html += '<div style="text-align:right;font-size:.78rem;font-weight:700;color:#16a34a;padding-bottom:10px;">Tổng nhập: +'+fmt(data.total_incoming)+'</div>';
                       html += '</div>';
 
                   } else {
@@ -980,9 +982,54 @@
                   }
                   html += '</div>';
 
-                  // ── OUTGOING ────────────────────────────────────────────────
-                  html += '<div style="padding:4px 28px 24px;">';
-                  html += '<div style="border-top:1px solid #f3f4f6;padding-top:18px;">';
+                  // ── 2. INTERNAL INCOMING (Chuyển kho đến) ────────────────────
+                  html += '<div style="padding:4px 28px 12px;">';
+                  html += '<div style="border-top:1px solid #f3f4f6;padding-top:16px;">';
+                  html += _sectionHeader('Phiếu chuyển kho đến (Nhập nội bộ)', intInCount, '#0d9488');
+
+                  if (intInCount > 0) {
+                      html += '<div class="fc-desktop">';
+                      html += '<div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">';
+                      html += '<table class="fc-table">';
+                      html += '<thead><tr>';
+                      html += '<th>Phiếu chuyển</th><th>Mã / Tham chiếu</th><th>Tuyến chuyển (Nguồn → Đích)</th>';
+                      html += '<th>Ngày dự kiến</th><th style="text-align:right;">SL chuyển đến</th>';
+                      html += '</tr></thead><tbody>';
+                      data.internal_incoming.forEach(function(r) {
+                          var ss = _stateStyle(r.state);
+                          html += '<tr>';
+                          html += '<td><span class="fc-pick">'+r.picking_name+'</span><br>';
+                          html += '    <span class="fc-badge" style="background:'+ss.bg+';color:'+ss.color+';border-color:'+ss.border+';margin-top:3px;">'+r.state+'</span></td>';
+                          html += '<td class="fw-bold" style="color:#0d9488;">'+(r.po_origin || r.origin || '—')+'</td>';
+                          html += '<td style="font-weight:600;color:#374151;">'+r.partner+'</td>';
+                          html += '<td style="font-weight:700;color:#0d9488;">'+(r.scheduled_date || '—')+'</td>';
+                          html += '<td style="text-align:right;"><span class="fc-num" style="color:#0d9488;">+'+fmt(r.qty)+'</span></td>';
+                          html += '</tr>';
+                      });
+                      var sumIntIn = data.internal_incoming.reduce(function(a,b){return a+b.qty;}, 0);
+                      html += '</tbody><tfoot><tr>';
+                      html += '<td colspan="4" style="text-align:right;font-weight:700;color:#6b7280;font-size:.78rem;padding:8px 12px;">Tổng chuyển đến:</td>';
+                      html += '<td style="text-align:right;"><span class="fc-num" style="color:#0d9488;">+'+fmt(sumIntIn)+'</span></td>';
+                      html += '</tr></tfoot></table></div></div>';
+
+                      html += '<div class="fc-mobile">';
+                      data.internal_incoming.forEach(function(r) {
+                          var ss = _stateStyle(r.state);
+                          html += _pickingCard(r.picking_name, r.state, ss, '+'+fmt(r.qty), '#0d9488', '#f0fdf4', [
+                              ['Tham chiếu', r.po_origin || r.origin || '—', '#0d9488', true],
+                              ['Tuyến kho',   r.partner, '#374151', false],
+                              ['Dự kiến',     r.scheduled_date, '#0d9488', true],
+                          ]);
+                      });
+                      html += '</div>';
+                  } else {
+                      html += _empty('Không có phiếu chuyển kho đến nào');
+                  }
+                  html += '</div></div>';
+
+                  // ── 3. OUTGOING SO ───────────────────────────────────────────
+                  html += '<div style="padding:4px 28px 12px;">';
+                  html += '<div style="border-top:1px solid #f3f4f6;padding-top:16px;">';
                   html += _sectionHeader('Phiếu xuất kho từ ĐBH', outCount, '#dc2626');
 
                   if (outCount > 0) {
@@ -1005,9 +1052,10 @@
                           html += '<td style="text-align:right;"><span class="fc-num" style="color:#dc2626;">−'+fmt(r.qty)+'</span></td>';
                           html += '</tr>';
                       });
+                      var sumOut = data.outgoing.reduce(function(a,b){return a+b.qty;}, 0);
                       html += '</tbody><tfoot><tr>';
-                      html += '<td colspan="4" style="text-align:right;font-weight:700;color:#6b7280;font-size:.78rem;padding:8px 12px;">Tổng xuất:</td>';
-                      html += '<td style="text-align:right;"><span class="fc-num" style="color:#dc2626;">−'+fmt(data.total_outgoing)+'</span></td>';
+                      html += '<td colspan="4" style="text-align:right;font-weight:700;color:#6b7280;font-size:.78rem;padding:8px 12px;">Tổng xuất ĐBH:</td>';
+                      html += '<td style="text-align:right;"><span class="fc-num" style="color:#dc2626;">−'+fmt(sumOut)+'</span></td>';
                       html += '</tr></tfoot></table></div></div>';
 
                       // Mobile: cards
@@ -1020,11 +1068,55 @@
                               ['Giao hàng',  r.scheduled_date, '#2563eb', true],
                           ]);
                       });
-                      html += '<div style="text-align:right;font-size:.78rem;font-weight:700;color:#dc2626;padding-bottom:10px;">Tổng xuất: −'+fmt(data.total_outgoing)+'</div>';
                       html += '</div>';
 
                   } else {
                       html += _empty('Không có phiếu xuất nào từ đơn bán hàng');
+                  }
+                  html += '</div></div>';
+
+                  // ── 4. INTERNAL OUTGOING (Chuyển kho đi) ────────────────────
+                  html += '<div style="padding:4px 28px 24px;">';
+                  html += '<div style="border-top:1px solid #f3f4f6;padding-top:16px;">';
+                  html += _sectionHeader('Phiếu chuyển kho đi (Xuất nội bộ)', intOutCount, '#d97706');
+
+                  if (intOutCount > 0) {
+                      html += '<div class="fc-desktop">';
+                      html += '<div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">';
+                      html += '<table class="fc-table">';
+                      html += '<thead><tr>';
+                      html += '<th>Phiếu chuyển</th><th>Mã / Tham chiếu</th><th>Tuyến chuyển (Nguồn → Đích)</th>';
+                      html += '<th>Ngày dự kiến</th><th style="text-align:right;">SL chuyển đi</th>';
+                      html += '</tr></thead><tbody>';
+                      data.internal_outgoing.forEach(function(r) {
+                          var ss = _stateStyle(r.state);
+                          html += '<tr>';
+                          html += '<td><span class="fc-pick">'+r.picking_name+'</span><br>';
+                          html += '    <span class="fc-badge" style="background:'+ss.bg+';color:'+ss.color+';border-color:'+ss.border+';margin-top:3px;">'+r.state+'</span></td>';
+                          html += '<td class="fw-bold" style="color:#d97706;">'+(r.origin || '—')+'</td>';
+                          html += '<td style="font-weight:600;color:#374151;">'+r.partner+'</td>';
+                          html += '<td style="font-weight:700;color:#d97706;">'+(r.scheduled_date || '—')+'</td>';
+                          html += '<td style="text-align:right;"><span class="fc-num" style="color:#d97706;">−'+fmt(r.qty)+'</span></td>';
+                          html += '</tr>';
+                      });
+                      var sumIntOut = data.internal_outgoing.reduce(function(a,b){return a+b.qty;}, 0);
+                      html += '</tbody><tfoot><tr>';
+                      html += '<td colspan="4" style="text-align:right;font-weight:700;color:#6b7280;font-size:.78rem;padding:8px 12px;">Tổng chuyển đi:</td>';
+                      html += '<td style="text-align:right;"><span class="fc-num" style="color:#d97706;">−'+fmt(sumIntOut)+'</span></td>';
+                      html += '</tr></tfoot></table></div></div>';
+
+                      html += '<div class="fc-mobile">';
+                      data.internal_outgoing.forEach(function(r) {
+                          var ss = _stateStyle(r.state);
+                          html += _pickingCard(r.picking_name, r.state, ss, '−'+fmt(r.qty), '#d97706', '#fffbeb', [
+                              ['Tham chiếu', r.origin || '—', '#d97706', true],
+                              ['Tuyến kho',   r.partner, '#374151', false],
+                              ['Dự kiến',     r.scheduled_date, '#d97706', true],
+                          ]);
+                      });
+                      html += '</div>';
+                  } else {
+                      html += _empty('Không có phiếu chuyển kho đi nào');
                   }
                   html += '</div></div>';
 
