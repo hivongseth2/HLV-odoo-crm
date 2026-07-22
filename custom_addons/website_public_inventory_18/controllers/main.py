@@ -872,14 +872,23 @@ class PublicInventory(http.Controller):
                 }
             internal_out_by_picking[key]["qty"] += move.product_uom_qty
 
-        total_incoming = sum(v["qty"] for v in incoming_by_picking.values()) + sum(v["qty"] for v in internal_in_by_picking.values())
-        total_outgoing = sum(v["qty"] for v in outgoing_by_picking.values()) + sum(v["qty"] for v in internal_out_by_picking.values())
+        total_po = sum(v["qty"] for v in incoming_by_picking.values())
+        total_internal_in = sum(v["qty"] for v in internal_in_by_picking.values())
+        total_so = sum(v["qty"] for v in outgoing_by_picking.values())
+        total_internal_out = sum(v["qty"] for v in internal_out_by_picking.values())
+
+        total_incoming = total_po + total_internal_in
+        total_outgoing = total_so + total_internal_out
         qty_forecast = qty_on_hand + total_incoming - total_outgoing
 
         return {
             "ok": True,
             "product_name": product.display_name,
             "qty_on_hand": qty_on_hand,
+            "total_po": total_po,
+            "total_internal_in": total_internal_in,
+            "total_so": total_so,
+            "total_internal_out": total_internal_out,
             "total_incoming": total_incoming,
             "total_outgoing": total_outgoing,
             "qty_forecast": qty_forecast,

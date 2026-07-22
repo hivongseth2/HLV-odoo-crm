@@ -915,15 +915,25 @@
                   var fqBg   = isPos ? '#f0fdf4' : '#fef2f2';
                   var fqBord = isPos ? '#4ade80' : '#f87171';
                   var fqSh   = isPos ? 'rgba(22,163,74,.18)' : 'rgba(220,38,38,.18)';
-                  html += '<div style="padding:20px 28px 18px;border-bottom:2px solid #f3f4f6;background:#fafafa;">';
-                  html += '<div style="display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;">';
-                  html += _pill('Tồn kho',   fmt(data.qty_on_hand),    '#fff',   '#e5e7eb',  '#111827', '#9ca3af');
-                  html += '<span style="font-size:24px;font-weight:700;color:#16a34a;">+</span>';
-                  html += _pill('Nhập ĐMH', '+'+fmt(data.total_incoming), '#f0fdf4','#86efac','#16a34a','#16a34a');
-                  html += '<span style="font-size:24px;font-weight:700;color:#dc2626;">−</span>';
-                  html += _pill('Xuất ĐBH', '−'+fmt(data.total_outgoing), '#fef2f2','#fca5a5','#dc2626','#dc2626');
-                  html += '<span style="font-size:24px;font-weight:700;color:#6b7280;">=</span>';
-                  html += _pill('Dự báo',   fmt(data.qty_forecast),    fqBg, fqBord, fqColor, fqColor, true, fqSh);
+
+                  var totalPo     = data.total_po !== undefined ? data.total_po : data.total_incoming;
+                  var totalIntIn  = data.total_internal_in || 0;
+                  var totalSo     = data.total_so !== undefined ? data.total_so : data.total_outgoing;
+                  var totalIntOut = data.total_internal_out || 0;
+
+                  html += '<div style="padding:16px 20px;border-bottom:2px solid #f3f4f6;background:#fafafa;">';
+                  html += '<div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;">';
+                  html += _pill('Tồn kho',   fmt(data.qty_on_hand), '#fff',   '#e5e7eb', '#111827', '#9ca3af');
+                  html += '<span style="font-size:20px;font-weight:700;color:#16a34a;">+</span>';
+                  html += _pill('Nhập ĐMH', '+'+fmt(totalPo),       '#f0fdf4','#86efac','#16a34a','#16a34a');
+                  html += '<span style="font-size:20px;font-weight:700;color:#0d9488;">+</span>';
+                  html += _pill('Nhập CK',  '+'+fmt(totalIntIn),   '#f0fdfa','#99f6e4','#0d9488','#0d9488');
+                  html += '<span style="font-size:20px;font-weight:700;color:#dc2626;">−</span>';
+                  html += _pill('Xuất ĐBH', '−'+fmt(totalSo),       '#fef2f2','#fca5a5','#dc2626','#dc2626');
+                  html += '<span style="font-size:20px;font-weight:700;color:#d97706;">−</span>';
+                  html += _pill('Xuất CK',  '−'+fmt(totalIntOut),  '#fffbeb','#fde68a','#d97706','#d97706');
+                  html += '<span style="font-size:20px;font-weight:700;color:#6b7280;">=</span>';
+                  html += _pill('Dự báo',   fmt(data.qty_forecast), fqBg,     fqBord,    fqColor,  fqColor, true, fqSh);
                   html += '</div></div>';
 
                   var inCount    = data.incoming.length;
