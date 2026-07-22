@@ -13,6 +13,7 @@
                 <field name="created_count"/>
                 <field name="updated_count"/>
                 <field name="unchanged_count"/>
+                <field name="skipped_count"/>
                 <field name="failed_count"/>
                 <field name="page_count"/>
                 <field name="duration_seconds"/>
@@ -27,7 +28,9 @@
             <form string="MISA CRM Contact Sync Run">
                 <header>
                     <button name="action_run_now" type="object" string="Chạy ngay" class="btn-primary"/>
-                    <field name="state" widget="statusbar" statusbar_visible="running,done,failed"/>
+                    <button name="action_stop" type="object" string="Dung lan chay" class="btn-secondary" invisible="state != 'running'"/>
+                    <button name="action_disable_cron" type="object" string="Tat cron" class="btn-secondary"/>
+                    <field name="state" widget="statusbar" statusbar_visible="running,done,stopped,failed"/>
                 </header>
                 <sheet>
                     <group>
@@ -44,17 +47,19 @@
                             <field name="created_count"/>
                             <field name="updated_count"/>
                             <field name="unchanged_count"/>
+                            <field name="skipped_count"/>
                             <field name="failed_count"/>
                             <field name="page_count"/>
                         </group>
                     </group>
                     <group>
+                        <field name="stop_requested" readonly="1"/>
                         <field name="message"/>
                     </group>
                     <notebook>
                         <page string="Chi tiết">
                             <field name="line_ids" readonly="1">
-                                <list decoration-danger="state == 'failed'" decoration-success="action == 'created'" decoration-info="action == 'updated'">
+                                <list decoration-danger="state == 'failed'" decoration-success="action == 'created'" decoration-info="action == 'updated'" decoration-muted="action == 'skipped'">
                                     <field name="state"/>
                                     <field name="action"/>
                                     <field name="partner_id"/>

@@ -1,0 +1,188 @@
+<odoo>
+  <data>
+    <record id="view_misa_sale_sync_snapshot_list" model="ir.ui.view">
+      <field name="name">misa.sale.sync.snapshot.list</field>
+      <field name="model">misa.sale.sync.snapshot</field>
+      <field name="arch" type="xml">
+        <list string="Lịch sử thay đổi MISA" create="0" edit="0" delete="0"
+              default_order="fetched_at desc, id desc"
+              decoration-warning="state == 'pending'"
+              decoration-muted="state == 'superseded'"
+              decoration-success="state == 'applied'"
+              decoration-danger="state == 'cancelled'">
+          <field name="name"/>
+          <field name="sale_order_id"/>
+          <field name="fetched_at"/>
+          <field name="crm_owner" optional="show"/>
+          <field name="crm_modified_by" optional="show"/>
+          <field name="crm_modified_at_display" optional="show"/>
+          <field name="fetched_by_id" optional="hide"/>
+          <field name="change_count"/>
+          <field name="state" widget="badge"
+                 decoration-warning="state == 'pending'"
+                 decoration-success="state == 'applied'"
+                 decoration-muted="state == 'superseded'"
+                 decoration-danger="state == 'cancelled'"/>
+          <field name="approved_by_id" optional="show"/>
+          <field name="approved_at" optional="show"/>
+          <button name="action_approve_snapshot"
+                  type="object"
+                  string="Xác nhận"
+                  class="btn-primary"
+                  groups="stock.group_stock_user"
+                  invisible="state != 'pending'"/>
+          <button name="action_cancel_snapshot"
+                  type="object"
+                  string="Hủy"
+                  groups="stock.group_stock_user"
+                  invisible="state != 'pending'"/>
+          <button name="action_restore_snapshot"
+                  type="object"
+                  string="Nhân bản &amp; chờ duyệt"
+                  class="btn-warning"
+                  groups="stock.group_stock_user"
+                  invisible="state != 'cancelled'"/>
+        </list>
+      </field>
+    </record>
+
+    <record id="view_misa_sale_sync_snapshot_form" model="ir.ui.view">
+      <field name="name">misa.sale.sync.snapshot.form</field>
+      <field name="model">misa.sale.sync.snapshot</field>
+      <field name="arch" type="xml">
+        <form string="Phiên bản thay đổi MISA" create="0" edit="0" delete="0">
+          <header>
+            <button name="action_approve_snapshot"
+                    type="object"
+                    string="Xác nhận áp dụng"
+                    class="btn-primary"
+                    groups="stock.group_stock_user"
+                    invisible="state != 'pending'"/>
+            <button name="action_cancel_snapshot"
+                    type="object"
+                    string="Hủy snapshot"
+                    groups="stock.group_stock_user"
+                    invisible="state != 'pending'"/>
+            <button name="action_restore_snapshot"
+                    type="object"
+                    string="Nhân bản &amp; đưa lại chờ duyệt"
+                    class="btn-warning"
+                    groups="stock.group_stock_user"
+                    invisible="state != 'cancelled'"/>
+            <field name="state" widget="statusbar"
+                   statusbar_visible="pending,applied,cancelled,superseded"/>
+          </header>
+          <sheet>
+            <div class="oe_title">
+              <h1><field name="name" readonly="1"/></h1>
+            </div>
+            <group>
+              <group>
+                <field name="sale_order_id" readonly="1"/>
+                <field name="misa_order_id" readonly="1"/>
+                <field name="fetched_at" readonly="1"/>
+                <field name="fetched_by_id" readonly="1"/>
+              </group>
+              <group>
+                <field name="crm_owner" readonly="1"/>
+                <field name="crm_modified_by" readonly="1"/>
+                <field name="crm_modified_at_display" readonly="1"/>
+                <field name="crm_modified_at_raw" readonly="1"/>
+                <field name="approved_by_id" readonly="1" invisible="not approved_by_id"/>
+                <field name="approved_at" readonly="1" invisible="not approved_at"/>
+                <field name="replaced_by_id" readonly="1" invisible="not replaced_by_id"/>
+              </group>
+            </group>
+            <group string="Tóm tắt">
+              <field name="change_count" readonly="1"/>
+              <field name="summary" readonly="1" nolabel="1"/>
+            </group>
+            <notebook>
+              <page string="Chi tiết cũ / mới">
+                <field name="line_ids" readonly="1" nolabel="1">
+                  <list create="0" edit="0" delete="0" default_order="id desc">
+                    <field name="change_type" widget="badge"
+                           decoration-success="change_type == 'add'"
+                           decoration-info="change_type == 'update'"
+                           decoration-danger="change_type == 'remove'"/>
+                    <field name="crm_line_id"/>
+                    <field name="sale_order_line_id" optional="hide"/>
+                    <field name="product_code"/>
+                    <field name="product_id"/>
+                    <field name="field_name"/>
+                    <field name="old_value"/>
+                    <field name="new_value"/>
+                  </list>
+                </field>
+              </page>
+            </notebook>
+          </sheet>
+        </form>
+      </field>
+    </record>
+
+    <record id="action_misa_sale_sync_snapshot" model="ir.actions.act_window">
+      <field name="name">Lịch sử thay đổi MISA</field>
+      <field name="res_model">misa.sale.sync.snapshot</field>
+      <field name="view_mode">list,form</field>
+      <field name="view_id" ref="view_misa_sale_sync_snapshot_list"/>
+      <field name="context">{'create': False}</field>
+    </record>
+
+    <record id="view_misa_sale_sync_snapshot_line_list" model="ir.ui.view">
+      <field name="name">misa.sale.sync.snapshot.line.list</field>
+      <field name="model">misa.sale.sync.snapshot.line</field>
+      <field name="arch" type="xml">
+        <list string="Lịch sử thay đổi dòng đơn bán" create="0" edit="0" delete="0"
+              default_order="id desc">
+          <field name="snapshot_id"/>
+          <field name="change_type" widget="badge"
+                 decoration-success="change_type == 'add'"
+                 decoration-info="change_type == 'update'"
+                 decoration-danger="change_type == 'remove'"/>
+          <field name="crm_line_id"/>
+          <field name="product_code"/>
+          <field name="field_name"/>
+          <field name="old_value"/>
+          <field name="new_value"/>
+        </list>
+      </field>
+    </record>
+
+    <record id="view_misa_sale_sync_snapshot_line_form" model="ir.ui.view">
+      <field name="name">misa.sale.sync.snapshot.line.form</field>
+      <field name="model">misa.sale.sync.snapshot.line</field>
+      <field name="arch" type="xml">
+        <form string="Chi tiết thay đổi dòng đơn bán" create="0" edit="0" delete="0">
+          <sheet>
+            <group>
+              <group>
+                <field name="snapshot_id" readonly="1"/>
+                <field name="sale_order_line_id" readonly="1"/>
+                <field name="crm_line_id" readonly="1"/>
+                <field name="change_type" readonly="1"/>
+              </group>
+              <group>
+                <field name="product_id" readonly="1"/>
+                <field name="product_code" readonly="1"/>
+                <field name="field_name" readonly="1"/>
+              </group>
+            </group>
+            <group>
+              <field name="old_value" readonly="1"/>
+              <field name="new_value" readonly="1"/>
+            </group>
+          </sheet>
+        </form>
+      </field>
+    </record>
+
+    <record id="action_misa_sale_sync_snapshot_line" model="ir.actions.act_window">
+      <field name="name">Lịch sử thay đổi dòng đơn bán</field>
+      <field name="res_model">misa.sale.sync.snapshot.line</field>
+      <field name="view_mode">list,form</field>
+      <field name="view_id" ref="view_misa_sale_sync_snapshot_line_list"/>
+      <field name="context">{'create': False}</field>
+    </record>
+  </data>
+</odoo>

@@ -591,6 +591,7 @@ class SaleApiImportWizard(models.TransientModel):
             # ===== CHUẨN BỊ VALS =====
             vals_line = {
                 'order_id': existing_order.id,
+                'misa_crm_line_id': str(misa_line.get('ID') or '').strip() or False,
                 'product_id': product.id,
                 'name': description,
                 'product_uom_qty': qty_for_odoo,
@@ -1303,6 +1304,7 @@ class SaleApiImportWizard(models.TransientModel):
                         # ===== TẠO SALE ORDER LINE =====
                         vals_line = {
                             'order_id': sale_order.id,
+                            'misa_crm_line_id': str(line.get('ID') or '').strip() or False,
                             'product_id': product.id,
                             'name': description,
                             'product_uom_qty': qty_for_odoo,
@@ -1330,7 +1332,7 @@ class SaleApiImportWizard(models.TransientModel):
                         if production_status_text:
                             vals_line['x_studio_product_status'] = production_status_text
                         
-                        allowed_fields = {'order_id','product_id','name','product_uom_qty','price_unit','discount','note','product_uom','tax_id','x_studio_is_combo_child','x_studio_combo_parent_code','x_studio_product_status'}
+                        allowed_fields = {'order_id','misa_crm_line_id','product_id','name','product_uom_qty','price_unit','discount','note','product_uom','tax_id','x_studio_is_combo_child','x_studio_combo_parent_code','x_studio_product_status'}
                         safe_vals_line = {k: v for k, v in vals_line.items() if k in allowed_fields}
                         self.env['sale.order.line'].create(safe_vals_line)
 
@@ -1547,6 +1549,7 @@ class SaleApiImportWizard(models.TransientModel):
                             # ===== TẠO SALE ORDER LINE =====
                             line_vals = {
                                 'order_id': sale_order.id,
+                                'misa_crm_line_id': str(line.get('ID') or '').strip() or False,
                                 'product_id': product.id,
                                 'name': description,
                                 'product_uom_qty': qty_for_odoo,
@@ -1574,7 +1577,7 @@ class SaleApiImportWizard(models.TransientModel):
                             if production_status_text:
                                 line_vals['x_studio_product_status'] = production_status_text
                             
-                            allowed_fields = {'order_id','product_id','name','product_uom_qty','price_unit','discount','note','product_uom','tax_id','x_studio_is_combo_child','x_studio_combo_parent_code','x_studio_product_status'}
+                            allowed_fields = {'order_id','misa_crm_line_id','product_id','name','product_uom_qty','price_unit','discount','note','product_uom','tax_id','x_studio_is_combo_child','x_studio_combo_parent_code','x_studio_product_status'}
                             safe_line_vals = {k: v for k, v in line_vals.items() if k in allowed_fields}
                             self.env['sale.order.line'].create(safe_line_vals)
 

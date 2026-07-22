@@ -24,6 +24,35 @@ class OdooUtils(models.AbstractModel):
         tax_code = (tax_code or "").strip()
         Partner = self.env["res.partner"].sudo().with_context(active_test=False)
 
+        def _norm_code(value):
+            return (value or "").strip().upper().replace(" ", "")
+
+        def _normalize_existing_partner(partner):
+            vals = {}
+            if not partner.active:
+                vals["active"] = True
+            if not partner.is_company:
+                vals["is_company"] = True
+            if partner.parent_id:
+                vals["parent_id"] = False
+            if misa_code and partner.ref != misa_code:
+                vals["ref"] = misa_code
+            if misa_code and partner.company_registry != misa_code:
+                vals["company_registry"] = misa_code
+            if tax_code and not (partner.vat or "").strip():
+                vals["vat"] = tax_code
+            if vals:
+                partner.write(vals)
+            if tax_code and (partner.vat or "").strip() and (partner.vat or "").strip() != tax_code:
+                _logger.warning(
+                    "MISA code %s matched existing partner %s but VAT differs: Odoo=%s MISA=%s. Reusing existing partner.",
+                    misa_code,
+                    partner.id,
+                    partner.vat,
+                    tax_code,
+                )
+            return partner
+
         # MISA CRM can have multiple accounts with the same company name but
         # different customer codes. When misa_code is provided, use it as the
         # primary key and never fall back to name matching.
@@ -35,56 +64,46 @@ class OdooUtils(models.AbstractModel):
                 ("company_registry", "=", misa_code),
             ], order="id asc")
             partner = candidates.filtered(
-                lambda p: (p.ref or "").strip() == misa_code
-                or (p.company_registry or "").strip() == misa_code
+                lambda p: _norm_code(p.ref) == _norm_code(misa_code)
+                or _norm_code(p.company_registry) == _norm_code(misa_code)
             )
+            if not partner:
+                partner = Partner.search([
+                    ("parent_id", "=", False),
+                    "|",
+                    ("ref", "!=", False),
+                    ("company_registry", "!=", False),
+                ]).filtered(
+                    lambda p: _norm_code(p.ref) == _norm_code(misa_code)
+                    or _norm_code(p.company_registry) == _norm_code(misa_code)
+                )
             if tax_code:
                 tax_match = partner.filtered(lambda p: (p.vat or "").strip() == tax_code)[:1]
                 if tax_match:
-                    vals = {}
-                    if not tax_match.active:
-                        vals["active"] = True
-                    if tax_match.ref != misa_code:
-                        vals["ref"] = misa_code
-                    if tax_match.company_registry != misa_code:
-                        vals["company_registry"] = misa_code
-                    if vals:
-                        tax_match.write(vals)
+                    _normalize_existing_partner(tax_match)
                     _logger.info("Use existing partner by MISA key %s-%s: %s", tax_code, misa_code, tax_match.name)
                     return tax_match
 
                 no_tax = partner.filtered(lambda p: not (p.vat or "").strip())[:1]
                 if no_tax:
-                    vals = {"vat": tax_code}
-                    if not no_tax.active:
-                        vals["active"] = True
-                    if no_tax.ref != misa_code:
-                        vals["ref"] = misa_code
-                    if no_tax.company_registry != misa_code:
-                        vals["company_registry"] = misa_code
-                    no_tax.write(vals)
+                    _normalize_existing_partner(no_tax)
                     _logger.info("Use existing partner by code %s and fill VAT=%s: %s", misa_code, tax_code, no_tax.name)
                     return no_tax
 
                 if partner:
                     _logger.warning(
-                        "MISA key mismatch for code %s tax %s. Existing partner ids=%s; creating a new root company.",
+                        "MISA key mismatch for code %s tax %s. Existing partner ids=%s; reuse first partner to avoid duplicate code.",
                         misa_code,
                         tax_code,
                         partner.ids,
                     )
+                    partner = partner[:1]
+                    _normalize_existing_partner(partner)
+                    return partner
 
             partner = partner[:1]
             if partner:
-                vals = {}
-                if not partner.active:
-                    vals["active"] = True
-                if partner.ref != misa_code:
-                    vals["ref"] = misa_code
-                if partner.company_registry != misa_code:
-                    vals["company_registry"] = misa_code
-                if vals:
-                    partner.write(vals)
+                _normalize_existing_partner(partner)
                 _logger.info("Use existing partner by MISA code %s: %s", misa_code, partner.name)
                 return partner
 
@@ -99,7 +118,7 @@ class OdooUtils(models.AbstractModel):
                 vals["vat"] = tax_code
             partner = Partner.create(vals)
             _logger.info("Created partner by MISA key %s-%s: %s", tax_code or "-", misa_code, name)
-            return partner.with_context(misa_partner_created=True)
+            return partner
 
         partner = Partner.search([
             ("name", "=", name),
@@ -123,7 +142,7 @@ class OdooUtils(models.AbstractModel):
         vals = {"name": name, "customer_rank": 1, "is_company": True}
         partner = Partner.create(vals)
         _logger.info("Created partner without MISA code: %s", name)
-        return partner.with_context(misa_partner_created=True)
+        return partner
 
     def _get_or_create_uom(self, name):
         """Tìm hoặc tạo mới đơn vị tính (UoM) dựa trên tên."""

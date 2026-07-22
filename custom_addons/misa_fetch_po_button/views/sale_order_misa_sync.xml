@@ -5,18 +5,70 @@
       <field name="model">sale.order</field>
       <field name="inherit_id" ref="sale.view_order_form"/>
       <field name="arch" type="xml">
+        <xpath expr="//div[@name='button_box']" position="inside">
+          <button name="action_view_misa_sync_snapshots"
+                  type="object"
+                  class="oe_stat_button"
+                  icon="fa-history"
+                  invisible="misa_sync_snapshot_count == 0">
+            <field name="misa_sync_snapshot_count"
+                   string="Lịch sử MISA"
+                   widget="statinfo"/>
+          </button>
+        </xpath>
         <xpath expr="//header" position="inside">
+          <field name="misa_qty_sync_pending" invisible="1"/>
+          <field name="misa_sale_edit_locked" invisible="1"/>
+          <span class="badge text-bg-info ms-2" invisible="not misa_sale_edit_locked">
+            Sale đang chỉnh sửa - OUT đang khóa
+          </span>
+          <!-- Compatibility anchor cho các view DB/Studio cũ còn xpath theo tên hard sync.
+               Method cùng tên chỉ gọi resync tại chỗ an toàn, không hủy/tạo lại move. -->
           <button name="action_resync_from_misa_hard"
                   type="object"
+                  string="Đồng bộ MISA (tương thích)"
+                  groups="base.group_no_one"
+                  invisible="1"/>
+          <!-- <button name="action_resync_from_misa"
+                  type="object"
                   string="Đồng bộ MISA"
-                  class="btn-danger"
-                  help="Chỉ chạy khi không có phiếu giao done và không có hoá đơn posted."
-                  invisible="misa_id == False"/>
+                  class="btn-primary"
+                  help="Cập nhật trực tiếp đơn hiện tại theo CRM Line ID; không xóa SO hoặc phiếu kho."
+                  invisible="misa_id == False"/> -->
+          <button name="action_approve_misa_quantity_sync"
+                  type="object"
+                  string="Kho duyệt SL MISA"
+                  class="btn-warning"
+                  groups="stock.group_stock_user"
+                  invisible="not misa_qty_sync_pending"/>
           <button name="action_update_tag_single"
                   type="object"
                   string="Cập nhật Thẻ"
                   class="btn-secondary"
                   invisible="state not in ('draft', 'sent', 'sale')"/>
+        </xpath>
+        <xpath expr="//sheet" position="inside">
+          <div class="alert alert-info" role="alert" invisible="not misa_sale_edit_locked">
+            <strong>Sale đang chỉnh sửa đơn trên CRM.</strong>
+            Phiếu OUT tạm khóa xác nhận; PICK/PACK vẫn xử lý bình thường.
+            <field name="misa_sale_edit_locked_at" readonly="1" class="ms-2"/>
+          </div>
+          <div class="alert alert-warning" role="alert" invisible="not misa_qty_sync_pending">
+            <strong>Đơn đang chờ kho duyệt thay đổi số lượng từ MISA.</strong>
+            <field name="misa_qty_sync_pending_at" readonly="1" class="ms-2"/>
+            <field name="misa_qty_sync_pending_summary" readonly="1" nolabel="1"/>
+          </div>
+        </xpath>
+        <xpath expr="//field[@name='order_line']//field[@name='product_id']" position="after">
+          <field name="misa_crm_line_id" optional="hide" readonly="1"/>
+        </xpath>
+        <xpath expr="//field[@name='order_line']/list/field[@name='product_id']" position="after">
+          <field name="misa_sync_change_count" string="LS MISA" optional="show" readonly="1"/>
+          <button name="action_view_misa_sync_changes"
+                  type="object"
+                  string="Lịch sử"
+                  icon="fa-history"
+                  invisible="misa_sync_change_count == 0"/>
         </xpath>
       </field>
     </record>

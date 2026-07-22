@@ -1,5 +1,3 @@
-from os import name
-
 import requests
 import logging
 import time
@@ -62,35 +60,21 @@ class MisaApiUtils(models.AbstractModel):
                 misa_code=account_number,
                 tax_code=tax_code,
             )
-            partner_created = bool(partner and partner.env.context.get('misa_partner_created'))
             partner = partner.commercial_partner_id or partner
-            if partner_created:
-                partner = partner.with_context(misa_partner_created=True)
 
             vals = {}
-            # Always update name if provided? Or only if different?
-            # User wants to update info.
-            if account_name:
+            if account_name and partner.name != account_name:
                 vals['name'] = account_name
-            if tax_code:
+            if account_number:
+                if not partner.ref:
+                    vals['ref'] = account_number
+                if not partner.company_registry:
+                    vals['company_registry'] = account_number
+            if tax_code and not partner.vat:
                 vals['vat'] = tax_code
-            
-            # Ensure company type
-            if not partner and not vals.get('name'):
-                 # Should rare happen if account_name exists
-                 vals['name'] = account_number
-
-            if partner:
-                # Update existing
-                if vals:
-                    partner.write(vals)
-                _logger.info("✅ Synced customer %s (ref=%s) from MISA Account API", partner.name, account_number)
-            else:
-                # Create new
-                vals['ref'] = account_number
-                vals['company_type'] = 'company' 
-                partner = Partner.create(vals)
-                _logger.info("🆕 Created customer %s (ref=%s) from MISA Account API", partner.name, account_number)
+            if vals:
+                partner.write(vals)
+            _logger.info("Synced customer %s (key=%s-%s) from MISA Account API", partner.name, tax_code or "-", account_number)
                 
             return partner
             
@@ -719,6 +703,7 @@ class MisaApiUtils(models.AbstractModel):
         # Lấy hình thức thanh toán và hình thức giao hàng
         httt = (cd.get("CustomField15") or "").strip() or None  # Hình thức thanh toán
         htgh = (cd.get("CustomField16") or "").strip() or None  # Hình thức giao hàng
+        misa_note = (cd.get("CustomField21") or "").strip() or None  # Ghi chú MISA
 
         # Trả về kết quả dạng dict
         return {
@@ -729,7 +714,8 @@ class MisaApiUtils(models.AbstractModel):
             "other_sys_order_code": other_sys_order_code,
             "delivery_order_number": delivery_order_number,
             "httt": httt,
-            "htgh": htgh
+            "htgh": htgh,
+            "misa_note": misa_note
         }
     
 
@@ -1547,10 +1533,6 @@ class MisaApiUtils(models.AbstractModel):
             raise Exception(f"Không tìm thấy sản phẩm có ID {product_id} trong Odoo")
         return self._process_create_product(product)
     
-    def _normalize_unit_key(self, value):
-        """Chuẩn hóa tên đơn vị để so khớp không phân biệt hoa/thường, khoảng trắng."""
-        return str(value or "").strip().lower()
-
     def _find_dictionary_item_unit(self, headers, search_text):
         """
         Lấy danh sách Unit. Viết lại theo style của _get_category_name_by_id.
@@ -1595,12 +1577,12 @@ class MisaApiUtils(models.AbstractModel):
                     if raw_data_list and isinstance(raw_data_list, list) and len(raw_data_list) > 0:
                         items = raw_data_list[0] # Lấy list thật sự bên trong
 
-                    search_norm = self._normalize_unit_key(search_text)
+                    search_norm = search_text.strip().lower()
 
                     for item in items:
                         # Key trong response này là 'text' và 'id'
                         item_name = item.get("text") or ""
-                        if self._normalize_unit_key(item_name) == search_norm:
+                        if item_name.strip().lower() == search_norm:
                             found_id = item.get("id")
                             _logger.info(f"✅ Found Unit: '{search_text}' -> ID: {found_id}")
                             return found_id, item_name
@@ -1696,10 +1678,10 @@ class MisaApiUtils(models.AbstractModel):
         # if not cat_id:
         #      cat_id = self._get_category_id_by_name(headers, "Hàng hóa") or 23 
         
-        # _logger.debug("catname", cat_name,)
+        _logger.debug("catname", cat_name,)
 
         unit_id, unit_text = self._find_dictionary_item_unit(headers, unit_name)
-        # _logger.info(f"Checking Unit: {unit_name} -> Found: {unit_id} - {unit_text}")
+        _logger.info(f"Checking Unit: {unit_name} -> Found: {unit_id} - {unit_text}")
         
 
         if not unit_id:
@@ -1718,7 +1700,7 @@ class MisaApiUtils(models.AbstractModel):
         payload = {
             "ProductCode": code,
             "ProductName": name,
-            "Description": "",
+            "Description": description or "",
             "ProductCategoryID": cat_id,
             # "ProductCategoryIDText": category_name if cat_id != 23 else "Hàng hóa",
             "ProductCategoryIDText": cat_name or "",
@@ -1746,7 +1728,6 @@ class MisaApiUtils(models.AbstractModel):
                 "CustomField14": None,
                 "CustomField15": None,
                 "CustomField16": int(price_pu_val), 
-                "CustomField17": description or "",
                 "Avatar": ""
             },
             
@@ -1803,10 +1784,7 @@ class MisaApiUtils(models.AbstractModel):
             # Tìm Unit
             uom_id = False
             if unit_name:
-                unit_key = self._normalize_unit_key(unit_name)
-                found_uom = self.env['uom.uom'].sudo().search([]).filtered(
-                    lambda uom: self._normalize_unit_key(uom.name) == unit_key
-                )[:1]
+                found_uom = self.env['uom.uom'].sudo().search([('name', '=', unit_name)], limit=1)
                 if found_uom:
                     uom_id = found_uom.id
 
@@ -1983,45 +1961,88 @@ class MisaApiUtils(models.AbstractModel):
         headers.update({"LayoutCode": "product", "X-Misa-Language": "vi-VN"})
 
         # Sử dụng API g1 thay vì g2
-        url = "https://amisapp.misa.vn/crm/g2/api/business/Product/Grid"
+        url = "https://amisapp.misa.vn/crm/g1/api/business/Product/Grid"
         
         filters = []
-        keyword = name or code # Lấy giá trị nào đang có dữ liệu
-
-        if keyword:
-            keyword = keyword.strip()
-            # Thêm filter cho ProductCode
+        
+        if name:
             filters.append({
-                "Group": None,
-                "Addition": 1,
-                "InputType": 1,
-                "IsFromFormula": True,
+                "Value": name.strip(),
+                "IsDefaultFilter": False,
+                "IsCustomField": False,
+                "IsRelatedField": False,
+                "ModuleRelated": "",
+                "FromFilterCustom": False,
+                "ValueDisplayText": "",
+                "isValueDateNumber": False,
+                "IsSearchModule": False,
+                "ConfigDisplayRelatedField": "",
+                "ConfigSubDisplayRelatedField": "",
+                "ConfigSearchField": [],
+                "ConfigUrlCbx": "",
+                "FilterObjects": [],
+                "dataOperator": [],
+                "IsProductCategory": False,
+                "SelectedDataList": [],
+                "IsCustomTypeDecimalDigits": False,
+                "IsFromFormula": False,
                 "Operator": 1,
-                "Property": "ProductCode",
-                "Text": keyword,
-                "Value": keyword
-            })
-            # Thêm filter cho ProductName
-            filters.append({
-                "Group": None,
                 "Addition": 1,
-                "InputType": 1,
-                "IsFromFormula": True,
-                "Operator": 1,
                 "Property": "ProductName",
-                "Text": keyword,
-                "Value": keyword
+                "InputType": 1,
+                "FieldType": 0,
+                "FieldName": "ProductName",
+                "OperatorBeforeDetectChanges": 1,
+                "InputTypeOrigin": 1,
+                "DisplayField": "Tên hàng hóa",
+                "DisplayOperator": "Chứa",
+                "DisplayValue": name.strip(),
+                "ValueOrigin": name.strip()
+            })
+        
+        if code:
+            filters.append({
+                "Value": code.strip(),
+                "IsDefaultFilter": False,
+                "IsCustomField": False,
+                "IsRelatedField": False,
+                "ModuleRelated": "",
+                "FromFilterCustom": False,
+                "ValueDisplayText": "",
+                "isValueDateNumber": False,
+                "IsSearchModule": False,
+                "ConfigDisplayRelatedField": "",
+                "ConfigSubDisplayRelatedField": "",
+                "ConfigSearchField": [],
+                "ConfigUrlCbx": "",
+                "FilterObjects": [],
+                "dataOperator": [],
+                "IsProductCategory": False,
+                "SelectedDataList": [],
+                "IsCustomTypeDecimalDigits": False,
+                "IsFromFormula": False,
+                "Operator": 1,
+                "Addition": 1,
+                "Property": "ProductCode",
+                "InputType": 1,
+                "FieldType": 0,
+                "FieldName": "ProductCode",
+                "OperatorBeforeDetectChanges": 1,
+                "InputTypeOrigin": 1,
+                "DisplayField": "Mã hàng hóa",
+                "DisplayOperator": "Chứa",
+                "DisplayValue": code.strip(),
+                "ValueOrigin": code.strip()
             })
         
         payload = {
             "Columns": "SUQsUHJvZHVjdENvZGUsUHJvZHVjdE5hbWUsUHJvZHVjdENhdGVnb3J5SUQsUHJvZHVjdENhdGVnb3J5SURUZXh0LFVzYWdlVW5pdElELFVzYWdlVW5pdElEVGV4dCxEZWZhdWx0U3RvY2tJRCxEZWZhdWx0U3RvY2tJRFRleHQsU291cmNlLEJyYW5kSUQsQnJhbmRJRFRleHQsUHJvZHVjdFByb3BlcnRpZXNJRCxQcm9kdWN0UHJvcGVydGllc0lEVGV4dCxSYWRpdXMsRm9ybUxheW91dElELEZvcm1MYXlvdXRJRFRleHQsSGVpZ2h0LExlbmd0aCxXaWR0aCxRdWFudGl0eUZvcm11bGEsRGVzY3JpcHRpb24sT3JnYW5pemF0aW9uVW5pdElELE9yZ2FuaXphdGlvblVuaXRJRFRleHQsT3duZXJJRCxPd25lcklEVGV4dCxJc1N5c3RlbSxBdmF0YXIsSXNDb3Jw",
-            "CustomColumns":"Q3VzdG9tRmllbGQxNSxDdXN0b21GaWVsZDEzLEN1c3RvbUZpZWxkMTNUZXh0LEN1c3RvbUZpZWxkMTQsQ3VzdG9tRmllbGQxNw==",
             "Sorts": [{"SortBy": "ModifiedDate", "Type": 0, "SortDirection": 1}],
             "Start": 0,
             "Page": 1,
             "PageSize": limit,
             "Filters": filters,
-            "Formula": "( 1 OR 2 )" if keyword else "", # <--- Cập nhật dòng này
+            "Formula": "",
             "LayoutCode": "Product",
             "DefaultTotal": True,
             "IsMappingData": False,
@@ -2037,11 +2058,10 @@ class MisaApiUtils(models.AbstractModel):
             "IsConverted": False,
             "SessionID": str(uuid.uuid4()),
             "LayoutCodeCheckPermission": "Product",
-            "AISearchKeyword": "",
-            "SkipNormalSearch": False # <--- Thêm dòng này
+            "AISearchKeyword": ""
         }
 
-        # _logger.info(f"🔎 [MISA SEARCH] Tìm kiếm sản phẩm với tên: '{name}'")
+        _logger.info(f"🔎 [MISA SEARCH] Tìm kiếm sản phẩm với tên: '{name}'")
 
         session = self._get_retry_session()
         try:
@@ -2071,7 +2091,7 @@ class MisaApiUtils(models.AbstractModel):
                     "tax": p.get("TaxIDText"),
                     "type": p.get("ProductPropertiesIDText"),
                     "active": p.get("Active", True),
-                    "description": p.get("CustomField17", ""),
+                    "description": p.get("Description", ""),
                 })
             
             return result
