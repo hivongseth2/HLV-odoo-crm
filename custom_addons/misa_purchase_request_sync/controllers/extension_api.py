@@ -1122,31 +1122,10 @@ class MisaExtensionController(http.Controller):
                     "severity": "critical"
                 })
             else:
-                # Cả 2 đều có, so sánh số lượng có tính đến ĐVT khác nhau
+                # Cả 2 đều có, so sánh số lượng đã nhập kho
                 o_qty = o_item["qty"]
                 a_qty = a_item["qty"]
-                o_uom = o_item.get("uom_name", "").lower().strip()
-                a_unit_name = a_item.get("unit_name", "").lower().strip()
-                a_main_unit = a_item.get("main_unit_name", "").lower().strip()
-                a_main_qty = a_item.get("main_qty", 0.0)
-                a_main_convert = a_item.get("main_convert_rate", 1)
-                
-                # Nếu Odoo dùng ĐVT chính (main unit) và MISA có main_qty, so sánh với main_qty
-                if a_main_qty > 0 and o_uom and (o_uom == a_main_unit or (a_unit_name and o_uom != a_unit_name)):
-                    # So sánh odoo_qty với misa main_qty
-                    if abs(o_qty - a_main_qty) > 0.01:
-                        has_qty_diff = True
-                        differences.append({
-                            "type": "qty_mismatch",
-                            "product_code": code,
-                            "product_name": prod_name,
-                            "field": "qty_received",
-                            "odoo_value": o_qty,
-                            "misa_value": a_qty,
-                            "severity": "warning",
-                            "note": f"Odoo dùng '{o_uom}', MISA dùng '{a_unit_name}' (1 {a_main_unit} = {a_main_convert} {a_unit_name}). Odoo={o_qty} {o_uom} ~ MISA main={a_main_qty} {a_main_unit}"
-                        })
-                elif abs(o_qty - a_qty) > 0.01:
+                if abs(o_qty - a_qty) > 0.01:
                     has_qty_diff = True
                     differences.append({
                         "type": "qty_mismatch",
