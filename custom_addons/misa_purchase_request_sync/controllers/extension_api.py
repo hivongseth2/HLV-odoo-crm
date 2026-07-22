@@ -1005,7 +1005,7 @@ class MisaExtensionController(http.Controller):
 
         # So sánh từng dòng sản phẩm — aggregate by code
         # Odoo: aggregate qty_received (số lượng đã nhận thực tế, KHÔNG phải product_qty đặt hàng)
-        odoo_prod_map = {}  # code -> {"qty": float, "price_unit": float, "price_tax": float, "vat_rate": float, "display": str, "name": str}
+        odoo_prod_map = {}  # code -> {"qty": float, "price_unit": float, "price_tax": float, "vat_rate": float, "display": str, "name": str, "uom_name": str}
         for oline in odoo_lines_detail:
             code = oline["code"]
             if code not in odoo_prod_map:
@@ -1016,12 +1016,13 @@ class MisaExtensionController(http.Controller):
                     "vat_rate": oline.get("vat_rate", 0.0),
                     "display": oline["display"],
                     "name": oline["name"],
+                    "uom_name": oline.get("uom_name", ""),
                 }
             odoo_prod_map[code]["qty"] += oline.get("qty_received", oline.get("qty", 0.0))
             odoo_prod_map[code]["price_tax"] += oline.get("price_tax", 0.0)
 
         # AMIS: aggregate quantity_receipt
-        amis_prod_map = {}  # code -> {"qty": float, "price_unit": float, "price_tax": float, "vat_rate": float, "name": str}
+        amis_prod_map = {}  # code -> {"qty": float, "price_unit": float, "price_tax": float, "vat_rate": float, "name": str, "unit_name": str, "main_unit_name": str, "main_convert_rate": float}
         for aline in amis_lines:
             orig_code = aline.get("inventory_item_code", "unknown_code").strip()
             code = orig_code.lower()
@@ -1030,9 +1031,18 @@ class MisaExtensionController(http.Controller):
             a_tax = float(aline.get("vat_amount", aline.get("tax_amount", 0)) or 0)
             a_vat_rate = float(aline.get("vat_rate", 0) or 0)
             a_name = aline.get("inventory_item_name", "")
+            a_main_qty = float(aline.get("main_quantity", 0) or 0)
+            a_main_convert = float(aline.get("main_convert_rate", 1) or 1)
             if code not in amis_prod_map:
-                amis_prod_map[code] = {"qty": 0.0, "price_unit": a_price, "price_tax": 0.0, "vat_rate": a_vat_rate, "name": a_name, "orig_code": orig_code}
+                amis_prod_map[code] = {
+                    "qty": 0.0, "price_unit": a_price, "price_tax": 0.0, "vat_rate": a_vat_rate,
+                    "name": a_name, "orig_code": orig_code,
+                    "unit_name": aline.get("unit_name", ""), "main_unit_name": aline.get("main_unit_name", ""),
+                    "main_convert_rate": a_main_convert,
+                    "main_qty": 0.0,
+                }
             amis_prod_map[code]["qty"] += a_qty
+            amis_prod_map[code]["main_qty"] += a_main_qty
             amis_prod_map[code]["price_tax"] += a_tax
 
         all_codes = set(list(odoo_prod_map.keys()) + list(amis_prod_map.keys()))
@@ -1112,10 +1122,31 @@ class MisaExtensionController(http.Controller):
                     "severity": "critical"
                 })
             else:
-                # Cả 2 đều có, so sánh số lượng đã nhập kho
+                # Cả 2 đều có, so sánh số lượng có tính đến ĐVT khác nhau
                 o_qty = o_item["qty"]
                 a_qty = a_item["qty"]
-                if abs(o_qty - a_qty) > 0.01:
+                o_uom = o_item.get("uom_name", "").lower().strip()
+                a_unit_name = a_item.get("unit_name", "").lower().strip()
+                a_main_unit = a_item.get("main_unit_name", "").lower().strip()
+                a_main_qty = a_item.get("main_qty", 0.0)
+                a_main_convert = a_item.get("main_convert_rate", 1)
+                
+                # Nếu Odoo dùng ĐVT chính (main unit) và MISA có main_qty, so sánh với main_qty
+                if a_main_qty > 0 and o_uom and (o_uom == a_main_unit or (a_unit_name and o_uom != a_unit_name)):
+                    # So sánh odoo_qty với misa main_qty
+                    if abs(o_qty - a_main_qty) > 0.01:
+                        has_qty_diff = True
+                        differences.append({
+                            "type": "qty_mismatch",
+                            "product_code": code,
+                            "product_name": prod_name,
+                            "field": "qty_received",
+                            "odoo_value": o_qty,
+                            "misa_value": a_qty,
+                            "severity": "warning",
+                            "note": f"Odoo dùng '{o_uom}', MISA dùng '{a_unit_name}' (1 {a_main_unit} = {a_main_convert} {a_unit_name}). Odoo={o_qty} {o_uom} ~ MISA main={a_main_qty} {a_main_unit}"
+                        })
+                elif abs(o_qty - a_qty) > 0.01:
                     has_qty_diff = True
                     differences.append({
                         "type": "qty_mismatch",
@@ -1654,6 +1685,11 @@ class MisaExtensionController(http.Controller):
                             "display": f"[{orig_code}] {prod_name}" if orig_code else "Unknown Code",
                             "qty": float(aline.get("quantity") or 0),
                             "qty_receipt": float(aline.get("quantity_receipt") or 0),
+                            "main_quantity": float(aline.get("main_quantity") or 0),
+                            "main_quantity_receipt": float(aline.get("main_quantity_receipt") or 0),
+                            "main_convert_rate": float(aline.get("main_convert_rate") or 1),
+                            "unit_name": aline.get("unit_name") or "",
+                            "main_unit_name": aline.get("main_unit_name") or "",
                             "price_unit": float(aline.get("unit_price") or aline.get("main_unit_price") or 0),
                             "amount": float(aline.get("amount") or aline.get("amount_oc") or 0),
                             "price_tax": float(aline.get("vat_amount") or aline.get("vat_amount_oc") or 0),
