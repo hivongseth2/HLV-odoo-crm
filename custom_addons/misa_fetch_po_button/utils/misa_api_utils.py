@@ -1700,7 +1700,7 @@ class MisaApiUtils(models.AbstractModel):
         payload = {
             "ProductCode": code,
             "ProductName": name,
-            "Description": description or "",
+            # "Description": description or "",
             "ProductCategoryID": cat_id,
             # "ProductCategoryIDText": category_name if cat_id != 23 else "Hàng hóa",
             "ProductCategoryIDText": cat_name or "",
@@ -1728,6 +1728,7 @@ class MisaApiUtils(models.AbstractModel):
                 "CustomField14": None,
                 "CustomField15": None,
                 "CustomField16": int(price_pu_val), 
+                "CustomField17": description or "",
                 "Avatar": ""
             },
             
@@ -2091,7 +2092,7 @@ class MisaApiUtils(models.AbstractModel):
                     "tax": p.get("TaxIDText"),
                     "type": p.get("ProductPropertiesIDText"),
                     "active": p.get("Active", True),
-                    "description": p.get("Description", ""),
+                    "description": p.get("CustomField17", ""),
                 })
             
             return result
