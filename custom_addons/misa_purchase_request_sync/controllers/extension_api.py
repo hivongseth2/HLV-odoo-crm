@@ -607,6 +607,17 @@ class MisaExtensionController(http.Controller):
 
             # Bước 6: Trả về thành công (KHÔNG xóa record)
             if order.state == 'cancel':
+                try:
+                    zalo_config = env_admin['hlv.zalo.stock.notification'].sudo()._get_active_config()
+                    if zalo_config:
+                        zalo_config.send_cancel_so_notification(order)
+                    else:
+                        _logger.warning("MISA API /so/revoke: no active Zalo config for %s", name)
+                except Exception as zalo_error:
+                    _logger.exception(
+                        "MISA API /so/revoke: failed to send Zalo cancellation for %s: %s",
+                        name, zalo_error,
+                    )
                 return json_response({"ok": True, "message": f"Đã huỷ thành công đơn hàng {name}, có thể đồng bộ lại."})
 
             return json_response({"ok": False, "error": "cancel_failed", "message": f"Không thể huỷ đơn {name}"}, 400)

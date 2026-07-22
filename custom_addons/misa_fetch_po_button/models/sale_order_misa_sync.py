@@ -829,8 +829,8 @@ class SaleOrder(models.Model):
             current.write(vals)
         return history
 
-    def _misa_notify_warehouse(self, title, detail=None):
-        """Ghi chatter trên SO/picking và notify người kho đã được assign."""
+    def _misa_notify_warehouse(self, title, detail=None, send_zalo=False):
+        """Ghi chatter; chỉ gửi Zalo khi caller xác nhận đúng điều kiện nghiệp vụ."""
         self.ensure_one()
         body = Markup("<b>{}</b>").format(title)
         if detail:
@@ -844,6 +844,21 @@ class SaleOrder(models.Model):
         for picking in open_pickings:
             picking.message_post(body=body, partner_ids=list(partner_ids))
         self.message_post(body=body, partner_ids=list(partner_ids))
+
+        if send_zalo:
+            try:
+                zalo_config = self.env['hlv.zalo.stock.notification'].sudo()._get_active_config()
+                if not zalo_config:
+                    _logger.warning("MISA warehouse Zalo notification skipped for %s: no active config", self.name)
+                    return
+                result = zalo_config.send_so_warehouse_notification(
+                    self.sudo(),
+                    str(title),
+                    str(detail) if detail else None,
+                )
+                _logger.info("MISA warehouse Zalo notification result for %s: %s", self.name, result)
+            except Exception as exc:
+                _logger.exception("MISA warehouse Zalo notification failed for %s: %s", self.name, exc)
 
     def _misa_sync_open_picking_contact(self):
         """Giữ phiếu kho mở theo đúng liên hệ giao hàng của SO sau resync/approve."""
@@ -1031,6 +1046,7 @@ class SaleOrder(models.Model):
                 self._misa_notify_warehouse(
                     _("Đơn %s thay đổi số lượng trên MISA và đang chờ kho duyệt.") % self.name,
                     summary,
+                    send_zalo=True,
                 )
             return {
                 'type': 'ir.actions.client',

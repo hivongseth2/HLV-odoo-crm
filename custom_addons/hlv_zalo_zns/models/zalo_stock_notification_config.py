@@ -316,8 +316,14 @@ class ZaloStockNotificationConfig(models.Model):
 
                 for uid in wh_recipient_ids:
                     try:
-                        self.send_notification_message(uid, msg_warehouse)
-                        _logger.info("Sent Cancel SO msg to Warehouse Staff %s (WH: %s)", uid, wh_code)
+                        result = self.send_notification_message(uid, msg_warehouse) or {}
+                        if result.get('error') == 0:
+                            _logger.info("Sent Cancel SO msg to Warehouse Staff %s (WH: %s)", uid, wh_code)
+                        else:
+                            _logger.warning(
+                                "Failed Cancel SO msg to Warehouse Staff %s (WH: %s): %s",
+                                uid, wh_code, result,
+                            )
                     except Exception as e:
                         _logger.exception("Error sending to WH staff %s: %s", uid, e)
 
@@ -350,12 +356,89 @@ class ZaloStockNotificationConfig(models.Model):
 
                 for uid in saler_zalo_ids:
                     try:
-                        self.send_notification_message(uid, msg_sale)
-                        _logger.info("Sent Cancel SO msg to Salesperson %s (Code: %s)", uid, saler_code)
+                        result = self.send_notification_message(uid, msg_sale) or {}
+                        if result.get('error') == 0:
+                            _logger.info("Sent Cancel SO msg to Salesperson %s (Code: %s)", uid, saler_code)
+                        else:
+                            _logger.warning(
+                                "Failed Cancel SO msg to Salesperson %s (Code: %s): %s",
+                                uid, saler_code, result,
+                            )
                     except Exception as e:
                         _logger.exception("Error sending to Salesperson %s: %s", uid, e)
             else:
                 _logger.info("Cancel SO: No Zalo ID mapping found for saler_code %s", saler_code)
+
+    def send_so_warehouse_notification(self, sale_order, title, detail=None):
+        """Gửi thông báo thay đổi SO tới người nhận Zalo của các kho liên quan."""
+        self.ensure_one()
+        if not sale_order:
+            return {'sent': 0, 'failed': 0, 'skipped': 'missing_sale_order'}
+
+        warehouses = sale_order.picking_ids.mapped('picking_type_id.warehouse_id').filtered(bool)
+        if not warehouses and sale_order.warehouse_id:
+            warehouses = sale_order.warehouse_id
+
+        if not warehouses:
+            _logger.warning("SO warehouse notification skipped for %s: no warehouse", sale_order.name)
+            return {'sent': 0, 'failed': 0, 'skipped': 'missing_warehouse'}
+
+        text_mapping = self._parse_cancel_so_warehouse_mapping()
+        default_recipients = self.get_recipient_list()
+        sent = 0
+        failed = 0
+
+        for warehouse in warehouses:
+            warehouse_code = (warehouse.code or '').strip().upper()
+            recipient_ids = list(text_mapping.get(warehouse_code, []))
+
+            if not recipient_ids:
+                warehouse_mapping = self.warehouse_recipient_ids.filtered(
+                    lambda mapping: mapping.active and mapping.warehouse_id == warehouse
+                )[:1]
+                if warehouse_mapping:
+                    recipient_ids = warehouse_mapping.get_recipient_list()
+
+            if not recipient_ids:
+                recipient_ids = list(default_recipients)
+
+            recipient_ids = list(dict.fromkeys(
+                str(user_id).strip() for user_id in recipient_ids if user_id
+            ))
+            if not recipient_ids:
+                _logger.warning(
+                    "SO warehouse notification skipped for %s (WH: %s): no recipients",
+                    sale_order.name, warehouse_code,
+                )
+                continue
+
+            message_text = (
+                f"⚠️ YÊU CẦU THAY ĐỔI ĐƠN HÀNG\n"
+                f"--------------------\n"
+                f"📦 Mã đơn: {sale_order.name}\n"
+                f"🏭 Kho: {warehouse.name}\n"
+                f"👤 Khách hàng: {sale_order.partner_id.name}\n"
+                f"📣 Nội dung: {title}\n"
+            )
+            if detail:
+                message_text += f"--------------------\n{detail}"
+
+            for user_id in recipient_ids:
+                result = self.send_notification_message(user_id, message_text) or {}
+                if result.get('error') == 0:
+                    sent += 1
+                    _logger.info(
+                        "Sent SO warehouse change msg to %s for %s (WH: %s)",
+                        user_id, sale_order.name, warehouse_code,
+                    )
+                else:
+                    failed += 1
+                    _logger.warning(
+                        "Failed SO warehouse change msg to %s for %s (WH: %s): %s",
+                        user_id, sale_order.name, warehouse_code, result,
+                    )
+
+        return {'sent': sent, 'failed': failed}
 
     def _parse_incoming_warehouse_mapping(self):
         """
