@@ -80,10 +80,10 @@
                 </div>
             </xpath>
 
-            <!-- Sắp xếp lại danh sách sản phẩm -->
             <xpath expr="//field[@name='item_ids']" position="replace">
                 <field name="item_ids" nolabel="1" colspan="2">
                     <list name="Chi tiết" create="false" editable="bottom">
+                        <field name="currency_id" column_invisible="1" force_save="1"/>
                         <field name="line_id" options="{'no_open': true}" optional="hide" force_save="1" />
                         <field name="request_id" optional="hide" force_save="1" />
                         <field name="supplier_ref" optional="show" force_save="1" />
@@ -100,7 +100,7 @@
                         <!-- Đơn giá: Sale đề xuất (ẩn) + Thực mua (widget) -->
                         <field name="misa_price_before_tax" column_invisible="1" force_save="1" />
                         <field name="actual_price_unit" string="Đơn giá thực mua" 
-                               width="140px" widget="float_with_proposed" options="{'proposed_field': 'misa_price_before_tax'}"
+                               width="140px" widget="monetary_with_proposed" options="{'proposed_field': 'misa_price_before_tax'}"
                                force_save="1" decoration-success="1" />
                         
                         <!-- Thuế: Sale yêu cầu (ẩn) + Thu mua (widget) -->
@@ -126,7 +126,7 @@
                                width="100px" widget="float_with_proposed" options="{'proposed_field': 'misa_discount_rate'}"
                                decoration-success="1" optional="hide" force_save="1" />
                         <field name="actual_discount_amount" string="Tiền CK thu mua" 
-                               width="110px" widget="float_with_proposed" options="{'proposed_field': 'misa_discount_amount'}"
+                               width="110px" widget="monetary_with_proposed" options="{'proposed_field': 'misa_discount_amount'}"
                                decoration-success="1" optional="hide" force_save="1" />
                         
                         <field name="estimated_cost" optional="hide" force_save="1" />

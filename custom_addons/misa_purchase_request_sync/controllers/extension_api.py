@@ -40,7 +40,7 @@ import json
 import logging
 import re
 
-from odoo import http
+from odoo import fields, http
 from odoo.http import request
 
 _logger = logging.getLogger(__name__)
@@ -365,7 +365,7 @@ class MisaExtensionController(http.Controller):
                     "qty_delivered": line.qty_delivered if hasattr(line, 'qty_delivered') else 0.0,
                 })
 
-            # Nếu đơn đã hủy trên Odoo, hiển thị trạng thái Đã hủy và cho phép đồng bộ lại
+            # Nếu đơn đã hủy trên Odoo, hiển thị Đã hủy và cho phép đồng bộ lại
             if so.state == 'cancel':
                 payload = {
                     "ok": True,
@@ -392,13 +392,23 @@ class MisaExtensionController(http.Controller):
 
                 # --- KIỂM TRA PHIÊN BẢN VÀ TRẠNG THÁI CHỜ DUYỆT (TOÁN TỬ 3 CẤP) ---
                 is_pending = bool(getattr(so, 'misa_qty_sync_pending', False))
+                is_edit_locked = bool(getattr(so, 'misa_sale_edit_locked', False))
+                edit_locked_at = getattr(so, 'misa_sale_edit_locked_at', False)
                 history_rec = getattr(so, 'misa_qty_sync_pending_history_id', None)
                 history_name = history_rec.name if history_rec else ""
+                active_sync_queue = env["misa.sync.queue"].sudo().search([
+                    ("name", "=", str(so.misa_id or misa_id or "")),
+                    ("sync_type", "=", "so"),
+                    ("state", "in", ["draft", "processing"]),
+                ], limit=1)
+                is_sync_request_pending = bool(active_sync_queue)
 
                 status_label = (
-                    f"Chờ phê duyệt phiên bản {history_name}" if (is_pending and history_name)
+                    "Đã gửi yêu cầu thay đổi - đang chờ hệ thống xử lý" if is_sync_request_pending
+                    else (f"Chờ phê duyệt phiên bản {history_name}" if (is_pending and history_name)
                     else ("Chờ kho duyệt thay đổi số lượng" if is_pending
-                    else state_label)
+                    else ("Sale đang chỉnh sửa - phiếu OUT đang khóa" if is_edit_locked
+                    else state_label)))
                 )
 
                 lines_data = []
@@ -406,12 +416,80 @@ class MisaExtensionController(http.Controller):
                     if line.display_type:
                         continue
                     lines_data.append({
-                        "misa_line_id": line.misa_line_id if hasattr(line, 'misa_line_id') and line.misa_line_id else "",
+                        "misa_line_id": line.misa_crm_line_id if hasattr(line, 'misa_crm_line_id') and line.misa_crm_line_id else "",
                         "product_code": line.product_id.default_code if line.product_id else "",
                         "name": line.name or "",
                         "qty": line.product_uom_qty,
+                        "price": line.price_unit,
+                        "discount": line.discount,
+                        "tax_percentages": sorted(line.tax_id.mapped('amount')),
+                        "uom": line.product_uom.name or "",
                         "qty_delivered": line.qty_delivered if hasattr(line, 'qty_delivered') else 0.0,
                     })
+
+                # Baseline dùng để extension so sánh ngay trong trình duyệt, không fetch CRM.
+                # Pending: so với snapshot chờ mới nhất để phát hiện lần sửa tiếp theo.
+                # Bình thường: lấy SO hiện tại; snapshot applied chỉ hỗ trợ quy ngược UoM CRM
+                # nếu dòng Odoo vẫn khớp nguyên trạng với lần sync gần nhất.
+                applied_snapshot = env[
+                    "misa.sale.sync.snapshot"
+                ].sudo().search([
+                    ("sale_order_id", "=", so.id),
+                    ("state", "=", "applied"),
+                ], order="fetched_at desc, id desc", limit=1)
+                pending_payload = (
+                    history_rec.snapshot_payload
+                    if is_pending and history_rec and isinstance(history_rec.snapshot_payload, list)
+                    else None
+                )
+                applied_payload = (
+                    applied_snapshot.snapshot_payload
+                    if applied_snapshot and isinstance(applied_snapshot.snapshot_payload, list)
+                    else []
+                )
+                if pending_payload is not None:
+                    sync_baseline_lines = [{
+                        "misa_line_id": str(item.get("crm_line_id") or ""),
+                        "product_code": item.get("code") or "",
+                        "name": item.get("name") or "",
+                        "qty": float(item.get("crm_qty", item.get("qty")) or 0.0),
+                        "price": float(item.get("crm_price", item.get("price")) or 0.0),
+                        "discount": float(item.get("crm_discount", item.get("discount")) or 0.0),
+                        "tax_percentages": sorted(
+                            env['account.tax'].sudo().browse(item.get("tax_ids") or []).exists().mapped('amount')
+                        ),
+                        "uom": item.get("crm_uom") or "",
+                    } for item in pending_payload]
+                    sync_baseline_source = "pending_snapshot"
+                else:
+                    applied_by_line_id = {
+                        str(item.get("crm_line_id") or ""): item
+                        for item in applied_payload
+                        if item.get("crm_line_id")
+                    }
+                    sync_baseline_lines = []
+                    for line in lines_data:
+                        if not line.get("misa_line_id") or not line.get("qty"):
+                            continue
+                        baseline_line = dict(line)
+                        applied = applied_by_line_id.get(str(line["misa_line_id"]))
+                        if applied:
+                            unchanged_since_sync = (
+                                abs(float(line.get("qty") or 0.0) - float(applied.get("qty") or 0.0)) < 0.0001
+                                and abs(float(line.get("price") or 0.0) - float(applied.get("price") or 0.0)) < 0.01
+                                and abs(float(line.get("discount") or 0.0) - float(applied.get("discount") or 0.0)) < 0.0001
+                                and (line.get("product_code") or "") == (applied.get("code") or "")
+                                and (line.get("name") or "").strip() == (applied.get("name") or "").strip()
+                            )
+                            if unchanged_since_sync:
+                                baseline_line.update({
+                                    "qty": float(applied.get("crm_qty", applied.get("qty")) or 0.0),
+                                    "price": float(applied.get("crm_price", applied.get("price")) or 0.0),
+                                    "discount": float(applied.get("crm_discount", applied.get("discount")) or 0.0),
+                                    "uom": applied.get("crm_uom") or "",
+                                })
+                        sync_baseline_lines.append(baseline_line)
+                    sync_baseline_source = "sale_order"
 
                 payload = {
                     "ok": True,
@@ -422,7 +500,21 @@ class MisaExtensionController(http.Controller):
                     "status_label": status_label,
                     "can_revoke": can_revoke,
                     "misa_qty_sync_pending": is_pending,
+                    "misa_sync_request_pending": is_sync_request_pending,
                     "misa_qty_sync_pending_history_name": history_name,
+                    "misa_sale_edit_locked": is_edit_locked,
+                    "misa_sale_edit_locked_at": (
+                        fields.Datetime.to_string(edit_locked_at) if edit_locked_at else False
+                    ),
+                    "sync_baseline_lines": sync_baseline_lines,
+                    "sync_baseline_source": sync_baseline_source,
+                    "sync_baseline_header": {
+                        "shipping_address": so.misa_shipping_address or "",
+                        "phone": getattr(so, 'x_studio_sdt_giao_hang', False) or "",
+                        "account_name": so.partner_id.name or "",
+                        "book_date": fields.Datetime.to_string(so.date_order) if so.date_order else "",
+                        "deadline_date": fields.Datetime.to_string(so.commitment_date) if so.commitment_date else "",
+                    },
                     "lines": lines_data,
                 }
 
@@ -765,8 +857,7 @@ class MisaExtensionController(http.Controller):
         # 1. Lấy danh sách NCC
         domain = [
             ('parent_id', '=', False),
-            ('hlv_business_role', 'in', ['supplier', 'vendor']),
-            ('supplier_rank', '>', 0),
+            ('hlv_business_role', 'in', ['supplier', 'vendor'])
         ]
         q = payload.get('q') or kwargs.get('q')
         if q:
@@ -779,7 +870,7 @@ class MisaExtensionController(http.Controller):
             ['id', 'name', 'ref']
         )
         
-        # 2. Lấy thông tin tồn kho
+        # 2. Lấy thông tin tồn kho11
         stock_info = {}
         product_codes = payload.get('product_codes') or []
         if product_codes:
@@ -914,7 +1005,7 @@ class MisaExtensionController(http.Controller):
 
         # So sánh từng dòng sản phẩm — aggregate by code
         # Odoo: aggregate qty_received (số lượng đã nhận thực tế, KHÔNG phải product_qty đặt hàng)
-        odoo_prod_map = {}  # code -> {"qty": float, "price_unit": float, "display": str, "name": str}
+        odoo_prod_map = {}  # code -> {"qty": float, "price_unit": float, "price_tax": float, "vat_rate": float, "display": str, "name": str, "uom_name": str}
         for oline in odoo_lines_detail:
             code = oline["code"]
             if code not in odoo_prod_map:
@@ -922,24 +1013,36 @@ class MisaExtensionController(http.Controller):
                     "qty": 0.0,
                     "price_unit": oline.get("price_unit", 0.0),
                     "price_tax": 0.0,
+                    "vat_rate": oline.get("vat_rate", 0.0),
                     "display": oline["display"],
                     "name": oline["name"],
+                    "uom_name": oline.get("uom_name", ""),
                 }
             odoo_prod_map[code]["qty"] += oline.get("qty_received", oline.get("qty", 0.0))
             odoo_prod_map[code]["price_tax"] += oline.get("price_tax", 0.0)
 
         # AMIS: aggregate quantity_receipt
-        amis_prod_map = {}  # code -> {"qty": float, "price_unit": float, "name": str}
+        amis_prod_map = {}  # code -> {"qty": float, "price_unit": float, "price_tax": float, "vat_rate": float, "name": str, "unit_name": str, "main_unit_name": str, "main_convert_rate": float}
         for aline in amis_lines:
             orig_code = aline.get("inventory_item_code", "unknown_code").strip()
             code = orig_code.lower()
             a_qty = float(aline.get("quantity_receipt", 0))
             a_price = float(aline.get("unit_price", 0) or 0)
             a_tax = float(aline.get("vat_amount", aline.get("tax_amount", 0)) or 0)
+            a_vat_rate = float(aline.get("vat_rate", 0) or 0)
             a_name = aline.get("inventory_item_name", "")
+            a_main_qty = float(aline.get("main_quantity", 0) or 0)
+            a_main_convert = float(aline.get("main_convert_rate", 1) or 1)
             if code not in amis_prod_map:
-                amis_prod_map[code] = {"qty": 0.0, "price_unit": a_price, "price_tax": 0.0, "name": a_name, "orig_code": orig_code}
+                amis_prod_map[code] = {
+                    "qty": 0.0, "price_unit": a_price, "price_tax": 0.0, "vat_rate": a_vat_rate,
+                    "name": a_name, "orig_code": orig_code,
+                    "unit_name": aline.get("unit_name", ""), "main_unit_name": aline.get("main_unit_name", ""),
+                    "main_convert_rate": a_main_convert,
+                    "main_qty": 0.0,
+                }
             amis_prod_map[code]["qty"] += a_qty
+            amis_prod_map[code]["main_qty"] += a_main_qty
             amis_prod_map[code]["price_tax"] += a_tax
 
         all_codes = set(list(odoo_prod_map.keys()) + list(amis_prod_map.keys()))
@@ -982,17 +1085,30 @@ class MisaExtensionController(http.Controller):
                 prod_name = ""
 
             if o_item and not a_item:
-                # Sản phẩm chỉ có trên Odoo
-                has_missing_in_amis = True
-                differences.append({
-                    "type": "missing_in_amis",
-                    "product_code": code,
-                    "product_name": prod_name,
-                    "field": "qty",
-                    "odoo_value": o_item["qty"],
-                    "misa_value": 0,
-                    "severity": "critical"
-                })
+                # Thử fallback match theo tên sản phẩm cho trường hợp Odoo code = unknown_code (sản phẩm đã archive)
+                fallback_matched = False
+                if code == "unknown_code" and o_item.get("name"):
+                    o_name_lower = o_item["name"].lower().strip()
+                    for alt_code, alt_item in amis_prod_map.items():
+                        alt_name = (alt_item.get("name") or "").lower().strip()
+                        if alt_name and (alt_name == o_name_lower or o_name_lower in alt_name or alt_name in o_name_lower):
+                            # Match found: merge odoo data into amis item
+                            a_item = alt_item
+                            fallback_matched = True
+                            _logger.info("✅ Fallback match by name: Odoo '%s' (name='%s') -> AMIS code='%s'", code, o_item["name"], alt_code)
+                            break
+                if not fallback_matched:
+                    # Sản phẩm chỉ có trên Odoo
+                    has_missing_in_amis = True
+                    differences.append({
+                        "type": "missing_in_amis",
+                        "product_code": code,
+                        "product_name": prod_name,
+                        "field": "qty",
+                        "odoo_value": o_item["qty"],
+                        "misa_value": 0,
+                        "severity": "critical"
+                    })
             elif a_item and not o_item:
                 # Sản phẩm chỉ có trên AMIS
                 has_missing_in_odoo = True
@@ -1036,7 +1152,7 @@ class MisaExtensionController(http.Controller):
                         "severity": "warning"
                     })
                     
-                # So sánh Thuế %
+                # So sánh Thuế % (vat_rate)
                 o_vat = float(o_item.get("vat_rate", 0.0))
                 a_vat = float(a_item.get("vat_rate", 0.0))
                 if abs(o_vat - a_vat) > 0.01:
@@ -1048,6 +1164,21 @@ class MisaExtensionController(http.Controller):
                         "field": "vat_rate",
                         "odoo_value": o_vat,
                         "misa_value": a_vat,
+                        "severity": "warning"
+                    })
+
+                # So sánh Tiền thuế từng dòng (price_tax)
+                o_tax_amt = float(o_item.get("price_tax", 0.0))
+                a_tax_amt = float(a_item.get("price_tax", 0.0))
+                if abs(o_tax_amt - a_tax_amt) > 100.0:
+                    has_tax_diff = True
+                    differences.append({
+                        "type": "tax_diff",
+                        "product_code": code,
+                        "product_name": prod_name,
+                        "field": "price_tax",
+                        "odoo_value": o_tax_amt,
+                        "misa_value": a_tax_amt,
                         "severity": "warning"
                     })
 
@@ -1096,7 +1227,7 @@ class MisaExtensionController(http.Controller):
             status = "qty_mismatch"
         elif has_price_diff:
             status = "price_mismatch"
-        elif has_vat_diff or has_total_diff:
+        elif has_vat_diff or has_total_diff or has_tax_diff:
             status = "tax_diff"
         else:
             status = "diff"
@@ -1112,6 +1243,20 @@ class MisaExtensionController(http.Controller):
             orig_code = (oline.product_id.default_code or "").strip()
             prod_name = (oline.product_id.name or "").strip()
             code = orig_code.lower()
+            if not code:
+                # Sản phẩm đã bị archive và mất default_code (do tạo lại sản phẩm mới cùng mã)
+                # Fallback: tìm sản phẩm active có cùng tên để lấy default_code
+                try:
+                    active_prod = self.env['product.product'].sudo().search([
+                        ('name', '=', oline.product_id.name),
+                        ('default_code', '!=', False),
+                        ('active', '=', True)
+                    ], limit=1)
+                    if active_prod and active_prod.default_code:
+                        orig_code = active_prod.default_code.strip()
+                        code = orig_code.lower()
+                except Exception:
+                    pass
             if not code:
                 code = "unknown_code"
                 orig_code = "Unknown"
@@ -1142,6 +1287,7 @@ class MisaExtensionController(http.Controller):
                 "price_subtotal": oline.price_subtotal,
                 "price_tax": oline.price_tax,
                 "vat_rate": vat_rate,
+                "uom_name": oline.product_uom.name if oline.product_uom else "",
                 "receipt_history": receipt_history
             })
         return lines
@@ -1518,6 +1664,11 @@ class MisaExtensionController(http.Controller):
                             "display": f"[{orig_code}] {prod_name}" if orig_code else "Unknown Code",
                             "qty": float(aline.get("quantity") or 0),
                             "qty_receipt": float(aline.get("quantity_receipt") or 0),
+                            "main_quantity": float(aline.get("main_quantity") or 0),
+                            "main_quantity_receipt": float(aline.get("main_quantity_receipt") or 0),
+                            "main_convert_rate": float(aline.get("main_convert_rate") or 1),
+                            "unit_name": aline.get("unit_name") or "",
+                            "main_unit_name": aline.get("main_unit_name") or "",
                             "price_unit": float(aline.get("unit_price") or aline.get("main_unit_price") or 0),
                             "amount": float(aline.get("amount") or aline.get("amount_oc") or 0),
                             "price_tax": float(aline.get("vat_amount") or aline.get("vat_amount_oc") or 0),
@@ -1913,28 +2064,31 @@ class MisaExtensionController(http.Controller):
                     except Exception as e:
                         _logger.warning("detail_full exception for %s: %s", po_name, e)
                     
-                    # V>i "?`i chiu ?MH", chA1ng ta ch% so sAnh s` lng `t hAng (ordered qty)
-                    # nAn ta ghi `A? qty_received bng qty ` hAm _classify_po_status so sAnh chA-nh xAc.
-                    for ol in odoo_lines_detail:
-                        ol["qty_received"] = ol.get("qty", 0.0)
-
                     amis_lines_detail = []
                     for aline in amis_lines:
                         if not isinstance(aline, dict): continue
                         
-                        # Ghi `A? quantity_receipt bng quantity ` _classify_po_status so sAnh s` lng `t hAng
-                        aline["quantity_receipt"] = aline.get("quantity", 0.0)
-                        
                         orig_code = (aline.get("inventory_item_code") or "").strip()
                         prod_name = (aline.get("description") or aline.get("inventory_item_name") or "").strip()
                         code = orig_code.lower()
+                        # Lấy thông tin ĐVT để đối chiếu đúng (có thể MISA dùng unit_name còn Odoo dùng main_unit_name)
+                        misa_main_qty = float(aline.get("main_quantity") or 0)
+                        misa_main_convert = float(aline.get("main_convert_rate") or 1)
+                        # Nếu main_convert_rate > 0 và main_quantity > 0, tính lại qty từ main để so sánh
+                        misa_qty = float(aline.get("quantity") or 0)
+                        misa_qty_receipt = float(aline.get("quantity_receipt") or 0)
                         amis_lines_detail.append({
                             "code": code,
                             "orig_code": orig_code,
                             "name": prod_name,
                             "display": f"[{orig_code}] {prod_name}" if orig_code else "Unknown Code",
-                            "qty": float(aline.get("quantity") or 0),
-                            "qty_receipt": float(aline.get("quantity") or 0),
+                            "qty": misa_qty,
+                            "qty_receipt": misa_qty_receipt,
+                            "main_quantity": misa_main_qty,
+                            "main_quantity_receipt": float(aline.get("main_quantity_receipt") or 0),
+                            "main_convert_rate": misa_main_convert,
+                            "unit_name": aline.get("unit_name") or "",
+                            "main_unit_name": aline.get("main_unit_name") or "",
                             "price_unit": float(aline.get("unit_price") or aline.get("main_unit_price") or 0),
                             "amount": float(aline.get("amount") or aline.get("amount_oc") or 0),
                             "price_tax": float(aline.get("vat_amount") or aline.get("vat_amount_oc") or 0),

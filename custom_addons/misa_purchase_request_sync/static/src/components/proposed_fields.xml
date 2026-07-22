@@ -16,6 +16,22 @@
             </button>
         </div>
     </t>
+    <!-- Widget Monetary với giá trị đề xuất hiển thị ở dưới -->
+    <t t-name="misa_purchase_request_sync.MonetaryWithProposedField" owl="1">
+        <div class="d-flex flex-column align-items-end justify-content-center w-100">
+            <t t-call="web.MonetaryField"/>
+            <div t-if="proposedValue" class="text-muted fst-italic mt-1" style="font-size: 0.85rem; color: #888888 !important; text-align: right; display: block;">
+                đề xuất: <t t-esc="proposedValue"/>
+            </div>
+            <button t-if="showPriceHistoryButton" 
+                    t-on-mousedown.stop.prevent="onViewPriceHistory" 
+                    t-on-click.stop.prevent="onDummy"
+                    class="btn btn-sm mt-1 py-0 px-2 d-inline-flex align-items-center" 
+                    style="font-size: 0.72rem; font-weight: 500; border-radius: 12px; background-color: #f1f3f5; color: #495057; border: 1px solid #ced4da; transition: all 0.2s ease;">
+                <i class="fa fa-history" style="font-size: 0.72rem; margin-right: 3px;"/>Lịch sử giá
+            </button>
+        </div>
+    </t>
 
     <!-- Widget Many2one với giá trị đề xuất hiển thị ở dưới -->
     <t t-name="misa_purchase_request_sync.Many2oneWithProposedField" owl="1">
