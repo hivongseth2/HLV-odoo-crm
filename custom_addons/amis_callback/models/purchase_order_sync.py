@@ -370,7 +370,10 @@ class PurchaseOrderAmisSync(models.Model):
             gross_amount = qty * unit_price
             discount_amount = max(gross_amount - amount, 0.0)
             vat_rate = self._misa_purchase_line_vat_rate(line)
-            quantity_receipt = self._misa_purchase_line_received_quantity(line)
+            # Tạm thời kế toán tự nhập phiếu nhập kho trên MISA, nên PO luôn gửi đã nhận = 0.
+            # Mở lại khi bật đồng bộ phiếu nhập kho:
+            # quantity_receipt = self._misa_purchase_line_received_quantity(line)
+            quantity_receipt = 0.0
 
             total_sale_amount += amount
             total_discount_amount += discount_amount
