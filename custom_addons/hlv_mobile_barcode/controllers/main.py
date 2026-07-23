@@ -3111,13 +3111,25 @@ class HLVMobileBarcodeController(http.Controller):
                     demand_by_move_id[target_line.move_id.id] = (
                         demand_by_move_id.get(target_line.move_id.id, 0.0) + entry['demand']
                     )
-                    target_line.quantity = target_line.qty_scanned
+                    scanned_qty = target_line.qty_scanned
+                    target_line.write({
+                        'quantity': scanned_qty,
+                        'picked': float_compare(
+                            scanned_qty,
+                            0.0,
+                            precision_rounding=target_line.product_uom_id.rounding,
+                        ) > 0,
+                    })
 
                 duplicate_lines = picking.sudo().move_line_ids.filtered(
                     lambda ml: ml.id not in canonical_line_ids and ml.state not in ['done', 'cancel']
                 )
                 if duplicate_lines:
-                    duplicate_lines.write({'quantity': 0.0, 'qty_scanned': 0.0})
+                    duplicate_lines.write({
+                        'quantity': 0.0,
+                        'qty_scanned': 0.0,
+                        'picked': False,
+                    })
 
                 for move in picking.sudo().move_ids:
                     canonical_demand = demand_by_move_id.get(move.id, 0.0)
@@ -3126,16 +3138,37 @@ class HLVMobileBarcodeController(http.Controller):
             elif is_pick_picking:
                 for ml in picking.sudo().move_line_ids:
                     if ml.quantity > 0:
-                        ml.quantity = ml.qty_scanned
+                        scanned_qty = ml.qty_scanned
+                        ml.write({
+                            'quantity': scanned_qty,
+                            'picked': float_compare(
+                                scanned_qty,
+                                0.0,
+                                precision_rounding=ml.product_uom_id.rounding,
+                            ) > 0,
+                        })
                     elif ml.qty_scanned:
-                        ml.qty_scanned = 0.0
+                        ml.write({'qty_scanned': 0.0, 'picked': False})
+                    elif ml.picked:
+                        ml.picked = False
             elif uses_qty_scanned:
                 for ml in picking.sudo().move_line_ids:
+                    scanned_qty = ml.qty_scanned
+                    is_picked = float_compare(
+                        scanned_qty,
+                        0.0,
+                        precision_rounding=ml.product_uom_id.rounding,
+                    ) > 0
                     if ml.package_id or ml.result_package_id:
-                        if ml.qty_scanned:
-                            ml.quantity = ml.qty_scanned
+                        values = {'picked': is_picked}
+                        if is_picked:
+                            values['quantity'] = scanned_qty
+                        ml.write(values)
                     else:
-                        ml.quantity = ml.qty_scanned
+                        ml.write({
+                            'quantity': scanned_qty,
+                            'picked': is_picked,
+                        })
 
             if _is_new_internal_transfer(picking):
                 _prepare_partial_packages_for_validation(picking)
