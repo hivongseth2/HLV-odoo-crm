@@ -145,6 +145,28 @@ class StockPicking(models.Model):
             company.id if company else False,
         )
 
+    def _hlv_core_auto_picks_all_moves(self, picking):
+        """Mirror stock.picking._pre_action_done_hook() picked fallback."""
+        has_quantity = False
+        has_pick = False
+        for move in picking.move_ids:
+            if move.quantity:
+                has_quantity = True
+            if move.scrapped:
+                continue
+            if move.picked:
+                has_pick = True
+            if has_quantity and has_pick:
+                break
+        return has_quantity and not has_pick
+
+    def _hlv_move_line_selected_for_action_done(self, move_line, auto_pick_all):
+        if auto_pick_all:
+            return True
+        # stock.move._action_done() excludes unpicked moves and unlinks
+        # unpicked lines from a picked move before updating quants.
+        return bool(move_line.move_id.picked and move_line.picked)
+
     def _hlv_collect_validate_quant_deltas_by_picking(self):
         deltas_by_picking = {}
         samples = {}
@@ -153,6 +175,7 @@ class StockPicking(models.Model):
             if picking.state in ('done', 'cancel'):
                 continue
             picking_deltas = defaultdict(float)
+            auto_pick_all = self._hlv_core_auto_picks_all_moves(picking)
             for move_line in picking.move_line_ids:
                 if move_line.state in ('done', 'cancel'):
                     continue
@@ -160,6 +183,10 @@ class StockPicking(models.Model):
                     continue
                 line_qty = self._hlv_move_line_qty_for_quant_delta(move_line)
                 if line_qty <= 0:
+                    continue
+                if not self._hlv_move_line_selected_for_action_done(
+                    move_line, auto_pick_all,
+                ):
                     continue
 
                 uom = move_line.product_uom_id or move_line.product_id.uom_id
