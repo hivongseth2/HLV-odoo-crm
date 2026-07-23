@@ -81,6 +81,10 @@
                                 t-model="state.location_barcode"
                                 t-on-keydown="onLocationBarcodeInput"
                                 inputmode="none"
+                                autocomplete="off"
+                                autocapitalize="off"
+                                autocorrect="off"
+                                spellcheck="false"
                                 autofocus="autofocus"/>
                         </div>
                     </div>
@@ -192,6 +196,10 @@
                                     t-model="state.location_barcode"
                                     t-on-keydown="onLocationBarcodeInput"
                                     inputmode="none"
+                                    autocomplete="off"
+                                    autocapitalize="off"
+                                    autocorrect="off"
+                                    spellcheck="false"
                                     autofocus="autofocus"/>
                             </div>
                         </div>
@@ -250,6 +258,10 @@
                                         t-model="state.product_barcode"
                                         t-on-keydown="onProductBarcodeInput"
                                         inputmode="none"
+                                        autocomplete="off"
+                                        autocapitalize="off"
+                                        autocorrect="off"
+                                        spellcheck="false"
                                         autofocus="autofocus"/>
                                     <button class="hlv-input-group__btn hlv-input-group__btn--camera"
                                             t-on-click="() => this.openCamera('product')"
@@ -282,6 +294,9 @@
                                         <div class="hlv-product-row__info">
                                             <div class="hlv-product-row__name" t-esc="line.product_name"/>
                                             <div class="hlv-product-row__sku" t-if="line.product_code" t-esc="line.product_code"/>
+                                            <div class="hlv-product-row__sku" t-if="line.package_name">
+                                                <i class="fa fa-cube"/> Kiện: <t t-esc="line.package_name"/>
+                                            </div>
                                         </div>
                                         <div class="hlv-product-row__actions">
                                             <t t-if="line.difference !== 0 &amp;&amp; !line.discrepancy_id">

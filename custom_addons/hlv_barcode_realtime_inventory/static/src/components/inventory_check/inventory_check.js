@@ -19,6 +19,7 @@ export class InventoryCheckScanner extends Component {
         this._zxingReader = null;
         this._lastScannedCode = '';
         this._lastScanTime = 0;
+        this._scanQueue = Promise.resolve();
 
         this.state = useState({
             // Session
@@ -117,12 +118,21 @@ export class InventoryCheckScanner extends Component {
                 }, 200);
             };
             document.addEventListener('focusout', this._globalFocusOut);
+
+            // iOS can refuse a programmatic focus after the page has settled.
+            // Capture hardware-scanner keystrokes at document level as a
+            // fallback so scans still work when Safari drops input focus.
+            this._globalScannerKeydown = this._handleGlobalScannerKeydown.bind(this);
+            document.addEventListener('keydown', this._globalScannerKeydown, true);
         });
 
         onWillUnmount(() => {
             this._stopCameraStream();
             if (this._globalFocusOut) {
                 document.removeEventListener('focusout', this._globalFocusOut);
+            }
+            if (this._globalScannerKeydown) {
+                document.removeEventListener('keydown', this._globalScannerKeydown, true);
             }
         });
     }
@@ -222,9 +232,12 @@ export class InventoryCheckScanner extends Component {
     }
 
     async onLocationViewerInput(event) {
-        if (event.key !== 'Enter') return;
+        if (!this._isScanTerminator(event)) return;
+        event.preventDefault();
         const barcode = this.state.location_viewer_barcode.trim();
         if (!barcode) return;
+        this.state.location_viewer_barcode = '';
+        if (event.currentTarget) event.currentTarget.value = '';
         await this._loadLocationStock(barcode);
     }
 
@@ -304,7 +317,7 @@ export class InventoryCheckScanner extends Component {
 
     // ========== Location Selection ==========
     async onLocationBarcodeInput(event) {
-        if (event.key === 'Enter') {
+        if (this._isScanTerminator(event)) {
             event.preventDefault();
             await this.selectLocationByBarcode();
         }
@@ -317,6 +330,9 @@ export class InventoryCheckScanner extends Component {
             return;
         }
         this.state.location_barcode = '';  // always clear immediately
+        document.querySelectorAll('.hlv-location-hidden-input').forEach((input) => {
+            input.value = '';
+        });
         this.state.is_loading = true;
         try {
             const result = await this.orm.call(
@@ -372,49 +388,87 @@ export class InventoryCheckScanner extends Component {
 
     // ========== Barcode Scanning ==========
     async onProductBarcodeInput(event) {
-        if (event.key === 'Enter') {
+        if (this._isScanTerminator(event)) {
             event.preventDefault();
             await this.scanProduct();
         }
     }
 
-    async scanProduct() {
-        const barcode = this.state.product_barcode.trim();
-        if (!barcode) return;
-        // Small delay for UI to settle (camera continuous mode)
-        await new Promise(r => setTimeout(r, 50));
-        // Don't block UI with loading overlay for scans
+    scanProduct(barcodeOverride = null) {
+        const barcode = typeof barcodeOverride === 'string'
+            ? barcodeOverride.trim()
+            : this.state.product_barcode.trim();
+        if (!barcode) return Promise.resolve();
+
+        // Clear before any RPC. Hardware scanners can send the next code while
+        // the previous request is still running; clearing after await caused
+        // the two codes to be concatenated, especially on iOS.
+        this.state.product_barcode = '';
+        const input = document.querySelector('.hlv-input--scan');
+        if (input) input.value = '';
+        this._scanQueue = this._scanQueue
+            .then(() => this._processInventoryBarcode(barcode))
+            .catch((error) => {
+                this._showError('Lỗi quét: ' + error.message);
+            });
+        return this._scanQueue;
+    }
+
+    async _processInventoryBarcode(barcode) {
         try {
-            const pr = await this.orm.call(
-                'inventory.check', 'search_product', [barcode], {}
+            const barcodeResult = await this.orm.call(
+                'inventory.check', 'search_inventory_barcode',
+                [barcode, this.state.location_id], {}
             );
-            if (!pr.success) {
-                this._showError(pr.error);
-                this.state.product_barcode = '';
+            if (!barcodeResult.success) {
+                this._beepError();
+                this._showError(barcodeResult.error);
                 return;
             }
+
+            if (barcodeResult.barcode_type === 'package') {
+                const packageResult = await this.orm.call(
+                    'inventory.check', 'register_package_scan',
+                    [this.state.check_id, barcodeResult.package_id, this.state.location_id], {}
+                );
+                if (!packageResult.success) {
+                    this._beepError();
+                    this._showError(packageResult.error);
+                    return;
+                }
+                await this._refreshCheckData();
+                this._beepSuccess();
+                this._showNotification(
+                    `✓ Kiện ${packageResult.package_name}: ${packageResult.product_count} sản phẩm / ${packageResult.package_quantity}`,
+                    'success'
+                );
+                return;
+            }
+
             const sr = await this.orm.call(
                 'inventory.check', 'register_scan',
-                [this.state.check_id, pr.product_id, this.state.location_id, 1], {}
+                [this.state.check_id, barcodeResult.product_id, this.state.location_id, 1], {}
             );
             if (sr.success) {
                 if (sr.warning) this.state.warning_message = sr.error;
-                this._refreshCheckData();
+                await this._refreshCheckData();
                 this._beepSuccess();
-                this._showNotification(`✓ ${pr.product_name} (SL: ${sr.scanned_qty})`, 'success');
+                this._showNotification(`✓ ${barcodeResult.product_name} (SL: ${sr.scanned_qty})`, 'success');
                 this.state.last_scanned_line_id = sr.line_id;
                 setTimeout(() => { this.state.last_scanned_line_id = null; }, 1200);
                 setTimeout(() => {
                     const el = document.querySelector(`.hlv-product-row[data-line-id="${sr.line_id}"]`);
                     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 }, 50);
-                this.state.product_barcode = '';
-                this._focusOnBarcodeInput();
             } else {
+                this._beepError();
                 this._showError(sr.error);
             }
         } catch (error) {
+            this._beepError();
             this._showError('Lỗi quét: ' + error.message);
+        } finally {
+            this._focusOnBarcodeInput();
         }
     }
 
@@ -797,6 +851,63 @@ export class InventoryCheckScanner extends Component {
     clearWarning() { this.state.warning_message = ''; }
     clearError() { this.state.error_message = ''; }
 
+    _isScanTerminator(event) {
+        return event.key === 'Enter' ||
+            event.key === 'Tab' ||
+            event.code === 'NumpadEnter' ||
+            event.keyCode === 13;
+    }
+
+    _handleGlobalScannerKeydown(event) {
+        if (event.defaultPrevented || event.isComposing ||
+            event.ctrlKey || event.altKey || event.metaKey ||
+            this.state.camera_active) {
+            return;
+        }
+
+        const target = event.target;
+        if (target && target.matches && target.matches(
+            '.hlv-location-hidden-input, .hlv-input--scan, .hlv-lv-input'
+        )) {
+            return;
+        }
+        if (target && target.closest && target.closest(
+            'input, textarea, select, [contenteditable="true"], .hlv-discrepancy-dialog, .hlv-confirm-dialog'
+        )) {
+            return;
+        }
+        if (!['home', 'scanning', 'location_viewer'].includes(this.state.view)) {
+            return;
+        }
+
+        const stateKey = this.state.view === 'location_viewer'
+            ? 'location_viewer_barcode'
+            : (this.state.location_id ? 'product_barcode' : 'location_barcode');
+
+        if (this._isScanTerminator(event)) {
+            if (!this.state[stateKey].trim()) return;
+            event.preventDefault();
+            if (stateKey === 'product_barcode') {
+                this.scanProduct();
+            } else if (stateKey === 'location_barcode') {
+                this.selectLocationByBarcode();
+            } else {
+                const barcode = this.state.location_viewer_barcode.trim();
+                this.state.location_viewer_barcode = '';
+                this._loadLocationStock(barcode);
+            }
+            return;
+        }
+
+        if (event.key === 'Backspace') {
+            event.preventDefault();
+            this.state[stateKey] = this.state[stateKey].slice(0, -1);
+        } else if (event.key && event.key.length === 1) {
+            event.preventDefault();
+            this.state[stateKey] += event.key;
+        }
+    }
+
     _focusOnBarcodeInput() {
         setTimeout(() => {
             const active = document.activeElement;
@@ -864,8 +975,9 @@ export class InventoryCheckScanner extends Component {
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: {
                     facingMode: { ideal: 'environment' },
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 },
+                    width: { ideal: 1920 },
+                    height: { ideal: 1080 },
+                    frameRate: { ideal: 30 },
                 }
             });
             this._cameraStream = stream;
@@ -877,8 +989,26 @@ export class InventoryCheckScanner extends Component {
 
             // iOS requires muted + playsinline for autoplay
             video.muted = true;
+            video.setAttribute('playsinline', 'true');
             video.srcObject = stream;
             try { await video.play(); } catch(e) { /* autoplay attribute handles it */ }
+
+            // Ask iPhone cameras for continuous autofocus when WebKit exposes
+            // the capability. Unsupported constraints are safely ignored.
+            const videoTrack = stream.getVideoTracks()[0];
+            if (videoTrack && videoTrack.getCapabilities && videoTrack.applyConstraints) {
+                try {
+                    const capabilities = videoTrack.getCapabilities();
+                    if (capabilities.focusMode &&
+                        capabilities.focusMode.includes('continuous')) {
+                        await videoTrack.applyConstraints({
+                            advanced: [{ focusMode: 'continuous' }],
+                        });
+                    }
+                } catch (focusError) {
+                    // Safari versions differ; decoding still works without it.
+                }
+            }
 
             this.state.camera_status = '';
 
@@ -918,7 +1048,13 @@ export class InventoryCheckScanner extends Component {
 
     _startZXingScan(stream, video) {
         if (!this.state.camera_active || !window.ZXing) return;
-        const reader = new window.ZXing.BrowserMultiFormatReader();
+        const hints = new Map();
+        if (window.ZXing.DecodeHintType) {
+            hints.set(window.ZXing.DecodeHintType.TRY_HARDER, true);
+        }
+        // A shorter interval plus TRY_HARDER noticeably improves recognition
+        // on iOS Safari while preserving the existing duplicate debounce.
+        const reader = new window.ZXing.BrowserMultiFormatReader(hints, 80);
         this._zxingReader = reader;
         // decodeFromStream does continuous scanning from a live MediaStream
         reader.decodeFromStream(stream, video, (result, err) => {
@@ -984,8 +1120,7 @@ export class InventoryCheckScanner extends Component {
             setTimeout(() => {
                 if (this.state.camera_active) this.state.camera_status = '';
             }, 900);
-            this.state.product_barcode = code;
-            this.scanProduct();
+            this.scanProduct(code);
         }
     }
 

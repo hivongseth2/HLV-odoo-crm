@@ -447,6 +447,7 @@ class InventoryCheck(models.Model):
             'location_id': line.location_id.id,
             'lot_id': line.lot_id.id,
             'package_id': line.package_id.id,
+            'package_name': line.package_id.name if line.package_id else '',
             'discrepancy_id': line.discrepancy_id.id if line.discrepancy_id else False,
         } for line in self.line_ids]
 
@@ -509,24 +510,47 @@ class InventoryCheck(models.Model):
                 'warning': True,
             }
         
-        # Tìm hoặc tạo line
+        # Tìm dòng tồn đã được nạp khi chọn vị trí. Khi máy quét chỉ gửi
+        # barcode sản phẩm (không có lot/package), vẫn phải cộng vào dòng tồn
+        # đóng kiện thay vì tạo thêm một dòng "hàng lẻ" giả.
         domain = [
             ('check_id', '=', check_id),
             ('product_id', '=', product_id),
             ('location_id', '=', location_id),
         ]
-        
+
         if lot_id:
             domain.append(('lot_id', '=', lot_id))
-        else:
-            domain.append(('lot_id', '=', False))
-        
+
         if package_id:
             domain.append(('package_id', '=', package_id))
+
+        candidate_lines = self.env['inventory.check.line'].search(domain)
+        if lot_id or package_id:
+            line = candidate_lines[:1]
         else:
-            domain.append(('package_id', '=', False))
-        
-        line = self.env['inventory.check.line'].search(domain, limit=1)
+            # Ưu tiên dòng chưa đếm đủ; trong cùng trạng thái ưu tiên hàng lẻ,
+            # sau đó tới kiện. Nếu một sản phẩm nằm trong nhiều kiện, các lần
+            # quét sẽ lần lượt lấp đầy từng dòng mà vẫn giữ nguyên package_id.
+            line = candidate_lines.filtered(
+                lambda candidate: candidate.scanned_qty < candidate.theoretical_qty
+            ).sorted(
+                key=lambda candidate: (
+                    bool(candidate.package_id),
+                    candidate.lot_id.id or 0,
+                    candidate.package_id.id or 0,
+                    candidate.id,
+                )
+            )[:1]
+            if not line:
+                line = candidate_lines.sorted(
+                    key=lambda candidate: (
+                        bool(candidate.package_id),
+                        candidate.lot_id.id or 0,
+                        candidate.package_id.id or 0,
+                        candidate.id,
+                    )
+                )[:1]
         
         if line:
             line.scanned_qty += qty
@@ -565,6 +589,81 @@ class InventoryCheck(models.Model):
             'theoretical_qty': line.theoretical_qty,
             'difference': line.difference,
             'product_count': check.product_count,
+            'total_scans': check.scan_count,
+        }
+
+    @api.model
+    def register_package_scan(self, check_id, package_id, location_id):
+        """Đếm toàn bộ nội dung một kiện đang nằm tại vị trí kiểm kê.
+
+        Một kiện được xem là một đơn vị niêm phong: quét lại cùng mã kiện chỉ
+        đồng bộ về số lượng trong kiện, không cộng lặp thêm lần nữa.
+        """
+        check = self.browse(check_id)
+        package = self.env['stock.quant.package'].browse(package_id)
+
+        if not check.exists() or check.state not in ['draft', 'in_progress']:
+            return {'success': False, 'error': _('Phiên kiểm kê không hợp lệ')}
+        if check.location_id.id != location_id:
+            return {'success': False, 'error': _('Vị trí kiểm kê không hợp lệ')}
+        if not package.exists():
+            return {'success': False, 'error': _('Không tìm thấy kiện hàng')}
+        if check.has_pending_outbound:
+            return {
+                'success': False,
+                'error': _('Cảnh báo: Có outbound chờ xử lý. Vui lòng hoàn thành kiểm kê và thoát!'),
+                'warning': True,
+            }
+
+        quants = self.env['stock.quant'].search([
+            ('package_id', '=', package.id),
+            ('location_id', '=', location_id),
+            ('quantity', '>', 0),
+        ])
+        if not quants:
+            return {
+                'success': False,
+                'error': _('Kiện %s không có tồn tại vị trí đang kiểm kê') % package.name,
+            }
+
+        grouped_quantities = {}
+        for quant in quants:
+            key = (quant.product_id.id, quant.lot_id.id or False)
+            grouped_quantities[key] = grouped_quantities.get(key, 0.0) + quant.quantity
+
+        scanned_line_ids = []
+        total_quantity = 0.0
+        for (product_id, lot_id), package_quantity in grouped_quantities.items():
+            line = self.env['inventory.check.line'].search([
+                ('check_id', '=', check.id),
+                ('product_id', '=', product_id),
+                ('location_id', '=', location_id),
+                ('lot_id', '=', lot_id),
+                ('package_id', '=', package.id),
+            ], limit=1)
+            if line:
+                line.scanned_qty = package_quantity
+            else:
+                line = self.env['inventory.check.line'].create({
+                    'check_id': check.id,
+                    'product_id': product_id,
+                    'location_id': location_id,
+                    'lot_id': lot_id,
+                    'package_id': package.id,
+                    'scanned_qty': package_quantity,
+                    'theoretical_qty': package_quantity,
+                })
+            scanned_line_ids.append(line.id)
+            total_quantity += package_quantity
+
+        check.write({'last_scan_time': fields.Datetime.now()})
+        return {
+            'success': True,
+            'package_id': package.id,
+            'package_name': package.name,
+            'line_ids': scanned_line_ids,
+            'product_count': len(grouped_quantities),
+            'package_quantity': total_quantity,
             'total_scans': check.scan_count,
         }
 
@@ -980,3 +1079,42 @@ class InventoryCheck(models.Model):
             'uom_id': product.uom_id.id,
             'uom_name': product.uom_id.name,
         }
+
+    @api.model
+    def search_inventory_barcode(self, barcode, location_id=False):
+        """Nhận diện barcode kiện trước, sau đó fallback sang sản phẩm."""
+        normalized_barcode = (barcode or '').strip()
+        if not normalized_barcode:
+            return {'success': False, 'error': _('Barcode không hợp lệ')}
+
+        packages_by_name = self.env['stock.quant.package'].search([
+            ('name', '=', normalized_barcode),
+        ])
+        packages = packages_by_name
+        if location_id and packages_by_name:
+            package_ids_at_location = self.env['stock.quant'].search([
+                ('package_id', 'in', packages_by_name.ids),
+                ('location_id', '=', location_id),
+                ('quantity', '>', 0),
+            ]).mapped('package_id').ids
+            packages = packages_by_name.filtered(
+                lambda candidate: candidate.id in package_ids_at_location
+            )
+            if not packages:
+                return {
+                    'success': False,
+                    'error': _('Kiện %s không nằm tại vị trí đang kiểm kê') % normalized_barcode,
+                }
+        package = packages[:1]
+        if package:
+            return {
+                'success': True,
+                'barcode_type': 'package',
+                'package_id': package.id,
+                'package_name': package.name,
+            }
+
+        product_result = self.search_product(normalized_barcode)
+        if product_result.get('success'):
+            product_result['barcode_type'] = 'product'
+        return product_result
