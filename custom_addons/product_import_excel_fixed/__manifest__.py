@@ -1,7 +1,7 @@
 {
     "name": "Product Import Excel",
     "version": "1.0",
-    "depends": ["base", "product", "combo_product"],
+    "depends": ["base", "product", "stock", "combo_product"],
     "author": "ChatGPT",
     "category": "Tools",
     "description": "Import products and combo products from Excel file",
