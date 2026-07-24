@@ -68,7 +68,7 @@ class TestStockNoNegative(TransactionCase):
                 }
             )
         )
-        self.env["stock.move"].create(
+        move = self.env["stock.move"].create(
             {
                 "name": "Test Move",
                 "product_id": prod.id,
@@ -80,7 +80,19 @@ class TestStockNoNegative(TransactionCase):
             }
         )
         picking.action_confirm()
-        picking.move_ids.write({"quantity": 100.0, "picked": True})
+        # Create move line with qty_done to pass Odoo 18 _sanity_check()
+        self.env["stock.move.line"].create(
+            {
+                "product_id": prod.id,
+                "quantity": 100.0,
+                "qty_done": 100.0,
+                "picking_id": picking.id,
+                "move_id": move.id,
+                "location_id": self.location_id.id,
+                "location_dest_id": self.location_dest_id.id,
+                "picked": True,
+            }
+        )
         return picking
 
     def test_check_constrains(self):
@@ -97,18 +109,8 @@ class TestStockNoNegative(TransactionCase):
         make the stock level of the product negative with
         a product with lot"""
         picking = self._create_picking(self.product_with_lot)
-        self.env["stock.move.line"].create(
-            {
-                "product_id": self.product_with_lot.id,
-                "quantity": 100.0,
-                "picking_id": picking.id,
-                "move_id": picking.move_ids[0].id,
-                "location_id": self.location_id.id,
-                "location_dest_id": self.location_dest_id.id,
-                "lot_id": self.lot1.id,
-                "picked": True,
-            }
-        )
+        # Update the move line with the lot (tracked product requires lot)
+        picking.move_line_ids.write({"lot_id": self.lot1.id})
         picking.move_ids.write({"quantity": 100.0, "picked": True})
         with self.assertRaises(ValidationError):
             picking.button_validate()
@@ -149,19 +151,8 @@ class TestStockNoNegative(TransactionCase):
         picking = self._create_picking(self.product_with_lot)
         with self.assertRaises(UserError):
             picking.button_validate()
-        # create Detail Operations (move line with lot)
-        self.env["stock.move.line"].create(
-            {
-                "product_id": self.product_with_lot.id,
-                "quantity": 100.0,
-                "picking_id": picking.id,
-                "move_id": picking.move_ids[0].id,
-                "location_id": self.location_id.id,
-                "location_dest_id": self.location_dest_id.id,
-                "lot_id": self.lot1.id,
-                "picked": True,
-            }
-        )
+        # Update the move line with the lot (tracked product requires lot)
+        picking.move_line_ids.write({"lot_id": self.lot1.id})
         picking.move_ids.write({"quantity": 100.0, "picked": True})
         picking.button_validate()
         quant = self.env["stock.quant"].search(
