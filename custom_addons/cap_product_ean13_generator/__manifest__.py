@@ -11,7 +11,7 @@
     barcode for product in odoo16, barcode on product, ean13 barcode on product. 
     """,
     'depends': ['base', 'product', 'sale', 'barcodes'],
-    'external_dependencies': {'python': ['barcode']},
+    'external_dependencies': {'python': ['python-barcode']},
     'data': [
         'security/ir.model.access.csv',
         'views/barcode_generate_view.xml',

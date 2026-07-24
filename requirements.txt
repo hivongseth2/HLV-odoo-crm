@@ -25,3 +25,4 @@ markdown2
 requests
 pgvector
 beautifulsoup4
+letta-client
