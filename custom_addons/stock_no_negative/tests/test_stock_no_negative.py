@@ -134,6 +134,7 @@ class TestStockNoNegative(TransactionCase):
         tries to validate the stock operation which would
         make the stock level of the product negative"""
         self.stock_picking.action_confirm()
+        self.stock_picking.move_ids.write({"picked": True, "quantity": 100.0})
         with self.assertRaises(ValidationError):
             self.stock_picking.button_validate()
 
@@ -155,6 +156,7 @@ class TestStockNoNegative(TransactionCase):
                 "picked": True,
             }
         )
+        self.stock_picking_with_lot.move_ids.write({"picked": True, "quantity": 100.0})
         with self.assertRaises(ValidationError):
             self.stock_picking_with_lot.button_validate()
 
@@ -163,6 +165,7 @@ class TestStockNoNegative(TransactionCase):
         the allow_negative_stock is set active in the product"""
         self.product.allow_negative_stock = True
         self.stock_picking.action_confirm()
+        self.stock_picking.move_ids.write({"picked": True, "quantity": 100.0})
         self.stock_picking.button_validate()
         quant = self.env["stock.quant"].search(
             [
@@ -178,6 +181,7 @@ class TestStockNoNegative(TransactionCase):
         self.product.allow_negative_stock = False
         self.location_id.allow_negative_stock = True
         self.stock_picking.action_confirm()
+        self.stock_picking.move_ids.write({"picked": True, "quantity": 100.0})
         self.stock_picking.button_validate()
         quant = self.env["stock.quant"].search(
             [
@@ -192,6 +196,7 @@ class TestStockNoNegative(TransactionCase):
         the allow_negative_stock is set active in the product with lot"""
         self.product_with_lot.allow_negative_stock = True
         self.stock_picking_with_lot.action_confirm()
+        self.stock_picking_with_lot.move_ids.write({"picked": True, "quantity": 100.0})
         with self.assertRaises(UserError):
             self.stock_picking_with_lot.button_validate()
         # create Detail Operations (move line with lot)
@@ -207,6 +212,7 @@ class TestStockNoNegative(TransactionCase):
                 "picked": True,
             }
         )
+        self.stock_picking_with_lot.move_ids.write({"picked": True, "quantity": 100.0})
         self.stock_picking_with_lot.button_validate()
         quant = self.env["stock.quant"].search(
             [
