@@ -11,13 +11,13 @@ class StockMoveLine(models.Model):
     )
     production_year = fields.Char(
         string="Năm sản xuất",
-        related="move_id.production_year",
+        related="move_id.purchase_line_id.production_year",
         store=True,
         readonly=False,
     )
     country_of_origin = fields.Char(
         string="Xuất xứ",
-        related="move_id.country_of_origin",
+        related="move_id.purchase_line_id.country_of_origin",
         store=True,
         readonly=False,
     )
