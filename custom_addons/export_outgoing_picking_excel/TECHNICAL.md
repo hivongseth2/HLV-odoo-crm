@@ -56,6 +56,13 @@ export_outgoing_picking_excel/
 ### 4.3. `picking_export_shopee_wizard.py`
 - **Nhiệm vụ chính**: Trích xuất `sale_order` gắn kèm picking, bóc tách và tạo file Excel khớp định dạng order của Shopee (các mã đơn vị vận chuyển, trạng thái tracking đơn vị vận chuyển).
 
+### 4.4. `export_purchase_order_wizard.py`
+- **Model**: `purchase.export.wizard`
+- **Nhiệm vụ chính**: Xuất báo cáo Lệnh mua hàng (Excel) dựa trên các phiếu nhập kho (`incoming` state `done`).
+- **Tính năng mở rộng**:
+  - Xuất cột `MISA org_ref_detail_id` được liên kết từ PO Line / Stock Move (module `hlv_purchase_line_custom`).
+  - Tự động trừ số lượng đã trả hàng (`returned_qty` từ các phiếu `return` `done`) khỏi số lượng đã nhập (`incoming_qty`), tính lại `so_luong`, `thanh_tien`, `tien_thue_gtgt` để số liệu khớp chính xác với thực tế.
+
 ## 5. Luồng xử lý chung để xuất báo cáo
 1. Người dùng mở Form Wizard (qua Actions trên thanh Menu Inventory/Reporting).
 2. Điền điều kiện lọc (`date_from`, `date_to`, `warehouse_ids`...).
