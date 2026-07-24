@@ -20,6 +20,7 @@
         "security/ir.model.access.csv",
         "data/cron_expire_voucher.xml",
         "data/loyalty_reward_request_sequence.xml",
+        "views/menu_views.xml",
         "wizard/redeem_voucher_wizard_views.xml",
         "wizard/loyalty_reset_password_wizard_views.xml",
         "wizard/loyalty_point_adjustment_wizard_views.xml",
@@ -43,7 +44,6 @@
         "views/loyalty_portal_vouchers_full.xml",
         "views/loyalty_reward_request_views.xml",
         "views/loyalty_portal_redeem.xml",
-        "views/menu_views.xml",
         "data/loyalty_tier_data.xml",
     ],
     "assets": {

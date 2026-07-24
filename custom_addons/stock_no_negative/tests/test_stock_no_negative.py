@@ -19,60 +19,44 @@ class TestStockNoNegative(TransactionCase):
         cls.picking_type_id = cls.env.ref("stock.picking_type_out")
         cls.location_id = cls.env.ref("stock.stock_location_stock")
         cls.location_dest_id = cls.env.ref("stock.stock_location_customers")
-        # Create product category
-        cls.product_ctg = cls._create_product_category(cls)
-        # Create a Product
-        cls.product = cls._create_product(cls, "test_product1")
-        # Create a Product With Lot
-        cls.product_with_lot = cls._create_product_with_lot(cls, "test_lot_product1")
-        # Create Lot
-        cls.lot1 = cls._create_lot(cls, "lot1")
-        cls._create_picking(cls)
-        cls._create_picking_with_lot(cls)
 
-    def _create_product_category(self):
-        product_ctg = self.product_ctg_model.create(
+        # Create product category
+        cls.product_ctg = cls.product_ctg_model.create(
             {"name": "test_product_ctg", "allow_negative_stock": False}
         )
-        return product_ctg
-
-    def _create_product(self, name):
-        product = self.product_model.create(
+        # Create a Product
+        cls.product = cls.product_model.create(
             {
-                "name": name,
-                "categ_id": self.product_ctg.id,
+                "name": "test_product1",
+                "categ_id": cls.product_ctg.id,
                 "is_storable": True,
                 "type": "consu",
                 "allow_negative_stock": False,
             }
         )
-        return product
-
-    def _create_product_with_lot(self, name):
-        product = self.product_model.create(
+        # Create a Product With Lot
+        cls.product_with_lot = cls.product_model.create(
             {
-                "name": name,
-                "categ_id": self.product_ctg.id,
+                "name": "test_lot_product1",
+                "categ_id": cls.product_ctg.id,
                 "is_storable": True,
                 "type": "consu",
                 "tracking": "lot",
                 "allow_negative_stock": False,
             }
         )
-        return product
-
-    def _create_lot(self, name):
-        lot = self.lot_model.create(
+        # Create Lot
+        cls.lot1 = cls.lot_model.create(
             {
-                "name": name,
-                "product_id": self.product_with_lot.id,
-                "company_id": self.env.company.id,
+                "name": "lot1",
+                "product_id": cls.product_with_lot.id,
+                "company_id": cls.env.company.id,
             }
         )
-        return lot
 
-    def _create_picking(self):
-        self.stock_picking = (
+    def _create_picking(self, product=None):
+        prod = product or self.product
+        picking = (
             self.env["stock.picking"]
             .with_context(test_stock_no_negative=True)
             .create(
@@ -84,89 +68,57 @@ class TestStockNoNegative(TransactionCase):
                 }
             )
         )
-
-        self.stock_move = self.env["stock.move"].create(
+        self.env["stock.move"].create(
             {
                 "name": "Test Move",
-                "product_id": self.product.id,
+                "product_id": prod.id,
                 "product_uom_qty": 100.0,
-                "product_uom": self.product.uom_id.id,
-                "picking_id": self.stock_picking.id,
-                "state": "draft",
+                "product_uom": prod.uom_id.id,
+                "picking_id": picking.id,
                 "location_id": self.location_id.id,
                 "location_dest_id": self.location_dest_id.id,
-                "quantity": 100.0,
-                "picked": True,
             }
         )
-
-    def _create_picking_with_lot(self):
-        self.stock_picking_with_lot = (
-            self.env["stock.picking"]
-            .with_context(test_stock_no_negative=True)
-            .create(
-                {
-                    "picking_type_id": self.picking_type_id.id,
-                    "move_type": "direct",
-                    "location_id": self.location_id.id,
-                    "location_dest_id": self.location_dest_id.id,
-                }
-            )
-        )
-
-        self.stock_move_with_lot = self.env["stock.move"].create(
-            {
-                "name": "Test Move",
-                "product_id": self.product_with_lot.id,
-                "product_uom_qty": 100.0,
-                "product_uom": self.product_with_lot.uom_id.id,
-                "picking_id": self.stock_picking_with_lot.id,
-                "state": "draft",
-                "location_id": self.location_id.id,
-                "location_dest_id": self.location_dest_id.id,
-                "quantity": 100.0,
-                "picked": True,
-            }
-        )
+        picking.action_confirm()
+        picking.move_ids.write({"quantity": 100.0, "picked": True})
+        return picking
 
     def test_check_constrains(self):
         """Assert that constraint is raised when user
         tries to validate the stock operation which would
         make the stock level of the product negative"""
-        self.stock_picking.action_confirm()
-        self.stock_picking.move_ids.write({"picked": True, "quantity": 100.0})
+        picking = self._create_picking(self.product)
         with self.assertRaises(ValidationError):
-            self.stock_picking.button_validate()
+            picking.button_validate()
 
     def test_check_constrains_with_lot(self):
         """Assert that constraint is raised when user
         tries to validate the stock operation which would
         make the stock level of the product negative with
         a product with lot"""
-        self.stock_picking_with_lot.action_confirm()
-        self.stock_move_line_with_lot = self.env["stock.move.line"].create(
+        picking = self._create_picking(self.product_with_lot)
+        self.env["stock.move.line"].create(
             {
                 "product_id": self.product_with_lot.id,
                 "quantity": 100.0,
-                "picking_id": self.stock_picking_with_lot.id,
-                "move_id": self.stock_move_with_lot.id,
+                "picking_id": picking.id,
+                "move_id": picking.move_ids[0].id,
                 "location_id": self.location_id.id,
                 "location_dest_id": self.location_dest_id.id,
                 "lot_id": self.lot1.id,
                 "picked": True,
             }
         )
-        self.stock_picking_with_lot.move_ids.write({"picked": True, "quantity": 100.0})
+        picking.move_ids.write({"quantity": 100.0, "picked": True})
         with self.assertRaises(ValidationError):
-            self.stock_picking_with_lot.button_validate()
+            picking.button_validate()
 
     def test_true_allow_negative_stock_product(self):
         """Assert that negative stock levels are allowed when
         the allow_negative_stock is set active in the product"""
         self.product.allow_negative_stock = True
-        self.stock_picking.action_confirm()
-        self.stock_picking.move_ids.write({"picked": True, "quantity": 100.0})
-        self.stock_picking.button_validate()
+        picking = self._create_picking(self.product)
+        picking.button_validate()
         quant = self.env["stock.quant"].search(
             [
                 ("product_id", "=", self.product.id),
@@ -180,9 +132,8 @@ class TestStockNoNegative(TransactionCase):
         the allow_negative_stock is set active in the product"""
         self.product.allow_negative_stock = False
         self.location_id.allow_negative_stock = True
-        self.stock_picking.action_confirm()
-        self.stock_picking.move_ids.write({"picked": True, "quantity": 100.0})
-        self.stock_picking.button_validate()
+        picking = self._create_picking(self.product)
+        picking.button_validate()
         quant = self.env["stock.quant"].search(
             [
                 ("product_id", "=", self.product.id),
@@ -195,25 +146,24 @@ class TestStockNoNegative(TransactionCase):
         """Assert that negative stock levels are allowed when
         the allow_negative_stock is set active in the product with lot"""
         self.product_with_lot.allow_negative_stock = True
-        self.stock_picking_with_lot.action_confirm()
-        self.stock_picking_with_lot.move_ids.write({"picked": True, "quantity": 100.0})
+        picking = self._create_picking(self.product_with_lot)
         with self.assertRaises(UserError):
-            self.stock_picking_with_lot.button_validate()
+            picking.button_validate()
         # create Detail Operations (move line with lot)
-        self.stock_move_line_with_lot = self.env["stock.move.line"].create(
+        self.env["stock.move.line"].create(
             {
                 "product_id": self.product_with_lot.id,
                 "quantity": 100.0,
-                "picking_id": self.stock_picking_with_lot.id,
-                "move_id": self.stock_move_with_lot.id,
+                "picking_id": picking.id,
+                "move_id": picking.move_ids[0].id,
                 "location_id": self.location_id.id,
                 "location_dest_id": self.location_dest_id.id,
                 "lot_id": self.lot1.id,
                 "picked": True,
             }
         )
-        self.stock_picking_with_lot.move_ids.write({"picked": True, "quantity": 100.0})
-        self.stock_picking_with_lot.button_validate()
+        picking.move_ids.write({"quantity": 100.0, "picked": True})
+        picking.button_validate()
         quant = self.env["stock.quant"].search(
             [
                 ("product_id", "=", self.product_with_lot.id),
