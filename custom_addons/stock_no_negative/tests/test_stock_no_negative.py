@@ -96,6 +96,7 @@ class TestStockNoNegative(TransactionCase):
                 "location_id": self.location_id.id,
                 "location_dest_id": self.location_dest_id.id,
                 "quantity": 100.0,
+                "picked": True,
             }
         )
 
@@ -123,6 +124,8 @@ class TestStockNoNegative(TransactionCase):
                 "state": "draft",
                 "location_id": self.location_id.id,
                 "location_dest_id": self.location_dest_id.id,
+                "quantity": 100.0,
+                "picked": True,
             }
         )
 
@@ -149,6 +152,7 @@ class TestStockNoNegative(TransactionCase):
                 "location_id": self.location_id.id,
                 "location_dest_id": self.location_dest_id.id,
                 "lot_id": self.lot1.id,
+                "picked": True,
             }
         )
         with self.assertRaises(ValidationError):
@@ -200,6 +204,7 @@ class TestStockNoNegative(TransactionCase):
                 "location_id": self.location_id.id,
                 "location_dest_id": self.location_dest_id.id,
                 "lot_id": self.lot1.id,
+                "picked": True,
             }
         )
         self.stock_picking_with_lot.button_validate()

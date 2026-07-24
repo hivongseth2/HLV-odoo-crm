@@ -338,9 +338,6 @@ class LLMTool(models.Model):
             _logger.debug("Another worker is syncing tools, skipping")
             return {"created": 0, "updated": 0, "deactivated": 0}
 
-        if not self._tool_registry:
-            return {"created": 0, "updated": 0, "deactivated": 0}
-
         # Read existing function tools via raw SQL (bypasses ORM cache)
         cr.execute(
             "SELECT id, name, decorator_model, decorator_method, description,"

@@ -6,8 +6,8 @@
     "depends": ["stock", "base", "purchase"],
     "data": [
         "security/ir.model.access.csv",
-        "views/zalo_shared_token_views.xml",
         "views/zns_config_views.xml",
+        "views/zalo_shared_token_views.xml",
         "views/zalo_stock_notification_views.xml",
         "data/cron_refresh_shared_token.xml",
         "data/cron_refresh_token.xml",
