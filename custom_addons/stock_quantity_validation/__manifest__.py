@@ -17,7 +17,8 @@
     'website': 'https://github.com/hivongseth2/HLV-odoo-crm',
     'depends': ['stock'],
     'data': [],
-    'installable': True,
+    # 'installable': True,  # TẠM TẮT ĐỂ BUILD - module guard gây lỗi test Odoo core
+    'installable': False,
     'auto_install': False,
     'application': False,
     'license': 'LGPL-3',

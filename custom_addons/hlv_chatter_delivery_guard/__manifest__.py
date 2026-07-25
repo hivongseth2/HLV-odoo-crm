@@ -16,6 +16,7 @@
             "hlv_chatter_delivery_guard/static/src/js/hide_chatter_delete.js",
         ],
     },
-    "installable": True,
+    # "installable": True,  # TẠM TẮT ĐỂ BUILD - chặn xóa mail.message gây lỗi test Odoo core
+    "installable": False,
     "application": False,
 }

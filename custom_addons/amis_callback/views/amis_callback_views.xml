@@ -956,18 +956,4 @@
         <field name="context">{'search_default_misa_meinvoice_synced': 1}</field>
     </record>
 
-    <menuitem id="menu_amis_callback_root" name="AMIS Callback" sequence="30" web_icon="amis_callback,static/description/icon.png"
-              groups="amis_callback.group_meinvoice_user"/>
-    <menuitem id="menu_amis_callback_logs" name="Nhật ký callback" parent="menu_amis_callback_root" action="action_amis_callback_log" sequence="10"
-              groups="amis_callback.group_meinvoice_manager"/>
-    <menuitem id="menu_amis_sync_jobs" name="Hàng đợi đồng bộ MISA" parent="menu_amis_callback_root" action="action_amis_sync_job" sequence="15"
-              groups="amis_callback.group_meinvoice_manager"/>
-    <menuitem id="menu_amis_catalog_sync_jobs" name="Hàng đợi mirror MISA" parent="menu_amis_callback_root" action="action_amis_catalog_sync_job" sequence="16"
-              groups="amis_callback.group_meinvoice_manager"/>
-    <menuitem id="menu_amis_catalog_uom_issues" name="ĐVT cần xử lý" parent="menu_amis_callback_root" action="action_amis_catalog_uom_issues" sequence="17"
-              groups="amis_callback.group_meinvoice_manager"/>
-    <menuitem id="menu_meinvoice_invoices" name="Hóa đơn điện tử" parent="menu_amis_callback_root" action="action_meinvoice_invoice" sequence="18"
-              groups="amis_callback.group_meinvoice_user"/>
-    <menuitem id="menu_amis_callback_config" name="Cấu hình" parent="menu_amis_callback_root" action="action_amis_callback_config" sequence="20"
-              groups="amis_callback.group_meinvoice_manager"/>
 </odoo>

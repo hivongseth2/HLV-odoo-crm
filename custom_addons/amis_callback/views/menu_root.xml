@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <!-- Root menu - PHẢI load trước tất cả view files vì nhiều file reference menu_amis_callback_root -->
+    <menuitem id="menu_amis_callback_root" name="AMIS Callback" sequence="30" web_icon="amis_callback,static/description/icon.png"
+              groups="amis_callback.group_meinvoice_user"/>
+</odoo>
