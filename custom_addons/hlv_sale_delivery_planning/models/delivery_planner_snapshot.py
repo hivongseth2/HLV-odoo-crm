@@ -199,7 +199,7 @@ class DeliveryPlannerSnapshot(models.Model):
             'partner_id': order.partner_id.id if order.partner_id else False,
             'commitment_date': order.commitment_date or False,
             'date_order': order.date_order or False,
-            'misa_order_date': order.x_studio_misa_order_date or False,
+            'misa_order_date': getattr(order, 'x_studio_misa_order_date', False) or False,
             'dirty': dirty,
             'dirty_reason': reason or False,
         }
@@ -207,7 +207,7 @@ class DeliveryPlannerSnapshot(models.Model):
     @api.model
     def _is_order_new_today(self, order):
         today = fields.Date.context_today(self)
-        order_date = order.x_studio_misa_order_date
+        order_date = getattr(order, 'x_studio_misa_order_date', False)
         if not order_date and order.date_order:
             order_date = order.date_order.date()
         return bool(order_date and order_date == today)

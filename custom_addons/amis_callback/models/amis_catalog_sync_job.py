@@ -284,6 +284,14 @@ class AmisCatalogSyncJob(models.Model):
                 })
             else:
                 raise ValueError('Hướng đồng bộ danh mục không hỗ trợ: %s' % self.direction)
+        except UserError as exc:
+            self.write({
+                'retry_count': self.retry_count + 1,
+                'status': 'error' if self.retry_count + 1 >= MAX_RETRY else 'pending',
+                'error_msg': str(exc)[:2000],
+                'processed_at': fields.Datetime.now(),
+            })
+            _logger.warning('AMIS catalog sync job %d: %s', self.id, exc)
         except Exception as exc:
             self.write({
                 'retry_count': self.retry_count + 1,
