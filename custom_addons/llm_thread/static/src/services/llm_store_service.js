@@ -248,16 +248,20 @@ export const llmStoreService = {
       },
 
       async loadLLMTools() {
-        // Load available tools with minimal fields
-        const tools = await orm.searchRead(
-          "llm.tool",
-          [["active", "=", true]],
-          ["id", "name"]
-        );
+        try {
+          // Load available tools with minimal fields
+          const tools = await orm.searchRead(
+            "llm.tool",
+            [["active", "=", true]],
+            ["id", "name"]
+          );
 
-        tools.forEach((tool) => {
-          this.llmTools.set(tool.id, tool);
-        });
+          tools.forEach((tool) => {
+            this.llmTools.set(tool.id, tool);
+          });
+        } catch (error) {
+          console.warn("LLM tools not available:", error?.message || error);
+        }
       },
 
       // Thread selection using standard Odoo patterns
@@ -476,8 +480,8 @@ export const llmStoreService = {
           // NOTE: LLM threads are now loaded automatically via res.users._init_messaging()
           this.isReady.resolve();
         } catch (error) {
-          console.error("Error initializing LLM store:", error);
-          this.isReady.reject(error);
+          console.warn("LLM store initialization skipped or limited:", error?.message || error);
+          this.isReady.resolve();
         }
       },
 
