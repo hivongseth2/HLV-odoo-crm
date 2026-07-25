@@ -172,6 +172,7 @@
                             <field name="hlv_business_role"/>
                             <field name="phone"/>
                             <field name="email"/>
+                            <field name="lang" optional="hide"/>
                             <field name="ref"/>
                             <field name="company_registry"/>
                         </list>
@@ -272,6 +273,7 @@
                                             <field name="hlv_business_role"/>
                                             <field name="phone"/>
                                             <field name="email"/>
+                                            <field name="lang" optional="hide"/>
                                             <field name="ref"/>
                                             <field name="company_registry"/>
                                         </list>

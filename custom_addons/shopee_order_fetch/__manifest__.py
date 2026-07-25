@@ -18,7 +18,8 @@
         'views/sale_order_views.xml',
         'views/stock_picking_views.xml',
     ],
-    'installable': True,
+    # 'installable': True,  # TẠM TẮT THEO YÊU CẦU
+    'installable': False,
     'application': False,
     'license': 'LGPL-3',
 }

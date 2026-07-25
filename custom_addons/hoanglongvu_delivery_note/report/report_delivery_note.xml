@@ -154,7 +154,7 @@
                       <span t-esc="line.product_uom_id.name or ''"/>
                     </td>
                     <td style="border: 1px solid #333; padding: 6px; text-align: center; font-size: 10px; font-weight: bold; color: #d32f2f;">
-                      <span t-esc="int(getattr(line, 'qty_done', 0) or getattr(line, 'quantity', 0) or (line.move_id.product_uom_qty if line.move_id else 0))"/>
+                      <span t-esc="int(line.quantity or (line.move_id and line.move_id.product_uom_qty) or 0)"/>
                     </td>
                     <td style="border: 1px solid #333; padding: 6px; text-align: center; font-size: 9px;">
                       <span t-esc="o.sale_id.client_order_ref if o.sale_id else ''"/>
