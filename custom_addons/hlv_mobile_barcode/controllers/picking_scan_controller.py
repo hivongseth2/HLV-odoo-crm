@@ -1748,7 +1748,16 @@ class HLVMobileBarcodePickingScan(http.Controller):
 
         product = request.env['product.product'].sudo().search(['|', ('barcode', '=', barcode), ('default_code', '=', barcode)], limit=1)
         if not product:
-            return {'error': _('Không tìm thấy mã vạch hợp lệ (Sản phẩm hoặc Vị trí).')}
+            # Thử tìm Lot/Serial nếu không tìm thấy product
+            lot = request.env['stock.lot'].sudo().search(
+                ['|', ('name', '=', barcode), ('ref', '=', barcode)], limit=1
+            )
+            if lot and lot.product_id:
+                product = lot.product_id
+                lot_id = lot.id
+                lot_name = lot.name
+            else:
+                return {'error': _('Không tìm thấy mã vạch hợp lệ (Sản phẩm hoặc Vị trí).')}
 
         if picking.source_transfer_id:
             step2_entries, missing_step2_lines = _step2_canonical_line_entries(picking)
