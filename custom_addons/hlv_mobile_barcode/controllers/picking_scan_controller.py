@@ -2108,6 +2108,11 @@ class HLVMobileBarcodePickingScan(http.Controller):
             available_move_line = preferred_move_line if preferred_move_line else _pick_available_lines(move)
             if destination_location_id and move_line:
                 available_move_line = move_line.filtered(lambda ml: ml.qty_scanned < ml.quantity)
+            # Nếu có lot_id, ưu tiên dòng có lot khớp (fix bug quét mã Lô tăng sai dòng)
+            if lot_id and available_move_line:
+                lot_lines = available_move_line.filtered(lambda ml: ml.lot_id.id == lot_id)
+                if lot_lines:
+                    available_move_line = lot_lines
             if not available_move_line:
                 # Nếu tất cả dòng đã quét đủ quantity
                 loc_msg = _(' tại vị trí này') if destination_location_id else ''
