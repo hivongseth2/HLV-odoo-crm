@@ -198,6 +198,16 @@
                                                 <!-- <span t-if="line.location_name" class="item-meta-badge location">
                                                     <i class="fa fa-map-marker-alt"></i> <t t-esc="line.location_name"/>
                                                 </span> -->
+                                                <!-- LOT/SERIAL BADGE -->
+                                                <span t-if="line.lot_name" class="item-meta-badge lot"
+                                                      style="background: #fef3c7; color: #92400e;">
+                                                    <i class="fa fa-hashtag"></i> <t t-esc="line.lot_name"/>
+                                                </span>
+                                                <span t-elif="line.tracking !== 'none' and !line.lot_name"
+                                                      class="item-meta-badge lot-missing"
+                                                      style="background: #fef2f2; color: #dc2626; border: 1px dashed #fca5a5;">
+                                                    <i class="fa fa-exclamation-triangle"></i> Chưa gán Lô/Serial
+                                                </span>
                                                 <span class="item-meta-badge stock">
                                                     <i class="fa fa-cubes"></i> Tồn: <t t-esc="this.formatQty(line.warehouse_qty)"/> <t t-esc="line.uom_name"/>
                                                 </span>
