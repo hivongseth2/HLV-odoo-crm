@@ -10,60 +10,54 @@ _logger = logging.getLogger(__name__)
 
 class ZaloStockNotificationConfig(models.Model):
     """
-    Cấu hình Zalo OA để gửi thông báo tới nhân viên nội bộ
-    khi có đơn hàng nhập/xuất kho
-    
-    === HƯỚNG DẪN SỬ DỤNG ===
-    
-    1. CÀI ĐẶT:
-       - Vào Inventory > Configuration > Zalo Stock Notification
-       - Tạo bản ghi mới với thông tin:
-         + App ID: Lấy từ Zalo Developer Portal
-         + Secret Key: Lấy từ Zalo Developer Portal
-         + Refresh Token: Lấy từ OAuth flow của Zalo
-         + Recipient User IDs (tùy chọn): Nhập các Zalo User ID mặc định (mỗi ID một dòng)
-           VD: 1228622149344688972
-       - Chọn loại đơn cần gửi (Nhập/Xuất)
-       - (Tùy chọn) Thêm cấu hình mapping kho:
-         + Warehouse Code: Mã kho (TSN, TSNSR, KBC, ...)
-         + Recipient User IDs: Danh sách user_id nhận thông báo cho kho đó
-         + Active: Bật/tắt cấu hình
-       - Đánh dấu Active
-    
-    2. ĐIỀU KIỆN GỬI THÔNG BÁO:
-       - Đơn hàng đã validate (state = 'done')
-       - Loại đơn: incoming (nhập) hoặc outgoing (xuất)
-       - Kho phải có cấu hình trong warehouse_recipient_ids hoặc sử dụng danh sách mặc định
-       - Chưa gửi thông báo trước đó (zalo_stock_notification_sent = False)
-    
-    3. LOGIC LẤY RECIPIENTS:
-       a) Hệ thống sẽ lấy mã kho từ picking_type_id.warehouse_id.code
-       b) Tìm kiếm warehouse mapping có warehouse_code matching và active=True
-       c) Nếu tìm thấy → Sử dụng danh sách recipients từ warehouse mapping đó
-       d) Nếu không tìm thấy → Sử dụng danh sách recipients mặc định (recipient_ids field)
-    
-    4. NỘI DUNG THÔNG BÁO:
-       - Mã đơn hàng gốc (origin)
-       - Trạng thái: Xuất/Nhập toàn bộ hay 1 phần
-       - Thời gian xuất/nhập
-       - Thông tin đối tác (tên, địa chỉ, SĐT)
-       - Danh sách sản phẩm và số lượng
-    
+    Cau hinh Zalo OA de gui thong bao toi nhan vien noi bo
+    khi co don hang nhap/xuat kho.
+
+    HUONG DAN SU DUNG:
+
+    1. CAI DAT:
+       - Vao Inventory > Configuration > Zalo Stock Notification
+       - Tao ban ghi moi voi thong tin:
+         App ID, Secret Key, Refresh Token tu Zalo Developer Portal
+         Recipient User IDs (tuy chon): Nhap cac Zalo User ID mac dinh
+       - Chon loai don can gui (Nhap/Xuat)
+       - (Tuy chon) Them cau hinh mapping kho
+       - Danh dau Active
+
+    2. DIEU KIEN GUI THONG BAO:
+       - Don hang da validate (state = done)
+       - Loai don: incoming (nhap) hoac outgoing (xuat)
+       - Kho phai co cau hinh trong warehouse_recipient_ids hoac su dung danh sach mac dinh
+       - Chua gui thong bao truoc do (zalo_stock_notification_sent = False)
+
+    3. LOGIC LAY RECIPIENTS:
+       a) He thong se lay ma kho tu picking_type_id.warehouse_id.code
+       b) Tim kiem warehouse mapping co warehouse_code matching va active=True
+       c) Neu tim thay -> Su dung danh sach recipients tu warehouse mapping do
+       d) Neu khong tim thay -> Su dung danh sach recipients mac dinh (recipient_ids field)
+
+    4. NOI DUNG THONG BAO:
+       - Ma don hang goc (origin)
+       - Trang thai: Xuat/Nhap toan bo hay 1 phan
+       - Thoi gian xuat/nhap
+       - Thong tin doi tac (ten, dia chi, SDT)
+       - Danh sach san pham va so luong
+
     5. TOKEN MANAGEMENT:
-       - Access token tự động refresh khi hết hạn
-       - Cron job chạy mỗi giờ để refresh token
-       - Có thể refresh thủ công bằng button "Refresh Token"
-    
+       - Access token tu dong refresh khi het han
+       - Cron job chay moi gio de refresh token
+       - Co the refresh thu cong bang button Refresh Token
+
     6. TEST:
-       - Sau khi cấu hình, click "Test Gửi Tin Nhắn"
-       - Kiểm tra Recipient User IDs có nhận được tin không
-       - Nếu OK, validate một đơn nhập/xuất kho để test thật
-    
+       - Sau khi cau hinh, click Test Gui Tin Nhan
+       - Kiem tra Recipient User IDs co nhan duoc tin khong
+       - Neu OK, validate mot don nhap/xuat kho de test that
+
     7. DEBUG:
-       - Xem logs: grep "Zalo" trong odoo log file
+       - Xem logs: grep Zalo trong odoo log file
        - Check zalo_stock_notification_sent field trong stock.picking
        - Verify warehouse code: picking_type_id.warehouse_id.code
-       - Kiểm tra warehouse mapping: warehouse_recipient_ids
+       - Kiem tra warehouse mapping: warehouse_recipient_ids
     """
     _name = 'hlv.zalo.stock.notification'
     _description = 'Zalo Stock Notification Config'

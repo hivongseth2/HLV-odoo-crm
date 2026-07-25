@@ -1,6 +1,7 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_barcode_scan_log_shipper,barcode.scan.log shipper,model_barcode_scan_log,group_shipper,1,0,1,0
 access_barcode_scan_log_manager,barcode.scan.log manager,model_barcode_scan_log,group_shipper_manager,1,1,1,1
+access_barcode_scan_log_user,barcode.scan.log user,model_barcode_scan_log,base.group_user,1,0,0,0
 access_stock_picking_shipper,stock.picking shipper,stock.model_stock_picking,group_shipper,1,1,0,0
 access_stock_package_level_shipper,stock.package.level shipper,stock.model_stock_package_level,group_shipper,1,1,0,0
 access_stock_move_line_shipper,stock.move.line shipper,stock.model_stock_move_line,group_shipper,1,1,0,0

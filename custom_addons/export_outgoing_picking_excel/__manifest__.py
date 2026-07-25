@@ -9,6 +9,7 @@
     "depends": ["stock", "purchase", "sale", "hlv_purchase_line_custom"],
     "data": [
         "security/ir.model.access.csv",
+        "views/stock_picking_views.xml",
         "views/picking_export_wizard_views.xml", 
         "views/purchase_export_wizard_views.xml",
         "views/inventory_report_wizard_views.xml",
@@ -16,7 +17,6 @@
         "views/stock_export_wizard_views.xml",
         "views/out_return_report_wizard_views.xml",
         "views/sales_report_export_wizard_views.xml",
-        "views/stock_picking_views.xml",
     ],
     "assets": {},
     "installable": True,
