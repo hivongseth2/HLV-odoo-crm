@@ -16,6 +16,7 @@
             "hlv_sale_order_preview_bottom/static/src/scss/panel.scss"
         ]
     },
-    "installable": True,
+    # "installable": True,  # TẠM TẮT - ĐÃ CÓ MODULE FIXED v145
+    "installable": False,
     "application": False
 }

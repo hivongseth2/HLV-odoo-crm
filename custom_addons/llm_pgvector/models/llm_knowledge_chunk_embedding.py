@@ -55,13 +55,11 @@ class LLMKnowledgeChunkEmbedding(models.Model):
         ),
     ]
 
-    def name_get(self):
-        """Override to provide a better display name"""
-        result = []
+    @api.depends('chunk_id.name', 'embedding_model_id.name')
+    def _compute_display_name(self):
+        """Compute display name for Knowledge Chunk Embedding"""
         for record in self:
-            name = f"{record.chunk_id.name or 'Chunk'} [{record.embedding_model_id.name or 'Model'}]"
-            result.append((record.id, name))
-        return result
+            record.display_name = f"{record.chunk_id.name or 'Chunk'} [{record.embedding_model_id.name or 'Model'}]"
 
     @api.model_create_multi
     def create(self, vals_list):

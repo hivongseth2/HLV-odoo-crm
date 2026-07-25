@@ -25,10 +25,11 @@ class ProductProduct(models.Model):
     image_product = fields.Binary('Hình ảnh mã vạch')
 
     @api.model
-    def default_get(self,field_lst):
+    def default_get(self, field_lst):
         res = super(ProductProduct, self).default_get(field_lst)
-        if not self.env['res.config.settings'].search([], limit=1, order="id desc").barcode_generate:
-            res['is_barcode'] = True
+        if 'is_barcode' in field_lst:
+            if not self.env['res.config.settings'].search([], limit=1, order="id desc").barcode_generate:
+                res['is_barcode'] = True
         return res
 
     @api.model

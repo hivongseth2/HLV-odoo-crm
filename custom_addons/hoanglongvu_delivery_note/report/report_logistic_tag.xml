@@ -99,7 +99,7 @@
                   <span t-esc="o.product_id.barcode or o.product_id.default_code or ''"/>
                 </td>
                 <td style="border: 1px solid black; padding: 5px; text-align: center; font-size: 14px; font-weight: bold;">
-                  <span t-esc="int(o.quantity or o.product_uom_qty or 0)"/>
+                  <span t-esc="int(getattr(o, 'quantity', 0) or getattr(o, 'product_uom_qty', 0) or 0)"/>
                 </td>
               </tr>
             </table>
