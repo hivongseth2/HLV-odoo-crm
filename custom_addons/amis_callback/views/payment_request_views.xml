@@ -141,7 +141,7 @@
         </field>
     </record>
 
-    <record id="view_loyalty_reward_request_form_amis_payment_status_inherit" model="ir.ui.view">
+    <!-- <record id="view_loyalty_reward_request_form_amis_payment_status_inherit" model="ir.ui.view">
         <field name="name">hlv.loyalty.reward.request.form.amis.payment.status.inherit</field>
         <field name="model">hlv.loyalty.reward.request</field>
         <field name="inherit_id" ref="hlv_loyalty.view_loyalty_reward_request_form"/>
@@ -180,7 +180,7 @@
                 </group>
             </xpath>
         </field>
-    </record>
+    </record> -->
 
     <record id="view_amis_payment_request_wizard_form" model="ir.ui.view">
         <field name="name">amis.payment.request.wizard.form</field>

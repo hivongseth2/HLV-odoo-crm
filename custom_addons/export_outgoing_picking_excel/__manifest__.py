@@ -19,7 +19,8 @@
         "views/sales_report_export_wizard_views.xml",
     ],
     "assets": {},
-    "installable": True,
+    # "installable": True,  # TẠM TẮT ĐỂ BUILD
+    "installable": False,
     "application": False,
 }
 

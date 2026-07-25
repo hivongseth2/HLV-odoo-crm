@@ -53,7 +53,8 @@
             "hlv_loyalty/static/src/js/loyalty_notifications.js",
         ],
     },
-    "installable": True,
+    # "installable": True,  # TẠM TẮT ĐỂ BUILD
+    "installable": False,
     "application": True,
     "license": "LGPL-3",
 }

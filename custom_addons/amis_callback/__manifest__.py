@@ -4,7 +4,7 @@
     "category": "Custom",
     "summary": "Nhận callback từ MISA, xác thực chữ ký SHA256 HMAC và xem log trong Odoo",
     "author": "ChatGPT",
-    "depends": ["base", "stock", "purchase", "sale", "mail", "hlv_loyalty"],
+    "depends": ["base", "stock", "purchase", "sale", "mail"],
     "pre_init_hook": "pre_init_hook",
     "data": [
         "security/res_groups.xml",

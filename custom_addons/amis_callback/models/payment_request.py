@@ -475,154 +475,155 @@ class PurchaseOrderAmisPaymentRequest(models.Model):
         }
 
 
-class HlvLoyaltyRewardRequestAmisPayment(models.Model):
-    _inherit = 'hlv.loyalty.reward.request'
+# class HlvLoyaltyRewardRequestAmisPayment(models.Model):
+#     _inherit = 'hlv.loyalty.reward.request'
+# 
+#     misa_payment_request_ids = fields.One2many(
+#         'amis.payment.request', 'loyalty_reward_request_id',
+#         string='Đề nghị chi MISA', readonly=True,
+#     )
+#     misa_payment_request_id = fields.Many2one(
+#         'amis.payment.request', string='Mã đề nghị chi MISA',
+#         compute='_compute_misa_payment_request_id', compute_sudo=True,
+#     )
+#     misa_payment_request_state = fields.Selection(
+#         related='misa_payment_request_id.state', string='Trạng thái đề nghị chi', readonly=True,
+#     )
+#     misa_payment_request_job_status = fields.Selection(
+#         related='misa_payment_request_id.job_status', string='Trạng thái hàng đợi', readonly=True,
+#     )
+#     misa_payment_request_org_refid = fields.Char(
+#         related='misa_payment_request_id.org_refid', string='MISA org_refid', readonly=True,
+#     )
+#     misa_payment_request_callback_data_type = fields.Integer(
+#         related='misa_payment_request_id.callback_data_type',
+#         string='MISA data_type cuối', readonly=True,
+#     )
+#     misa_payment_request_state_updated_at = fields.Datetime(
+#         related='misa_payment_request_id.state_updated_at',
+#         string='Cập nhật trạng thái lúc', readonly=True,
+#     )
+#     misa_payment_request_error = fields.Text(
+#         related='misa_payment_request_id.error_msg', string='Lỗi MISA', readonly=True,
+#     )
+#     misa_payment_request_can_revoke = fields.Boolean(
+#         compute='_compute_misa_payment_request_can_revoke', compute_sudo=True,
+#     )
+# 
+#     @api.depends('misa_payment_request_ids')
+#     def _compute_misa_payment_request_id(self):
+#         for request in self:
+#             request.misa_payment_request_id = request.misa_payment_request_ids[:1]
+# 
+#     @api.depends('misa_payment_request_id.state', 'misa_payment_request_id.org_refid')
+#     def _compute_misa_payment_request_can_revoke(self):
+#         allowed_states = {'sent', 'request_accepted', 'approved', 'synced', 'error'}
+#         for request in self:
+#             payment_request = request.misa_payment_request_id
+#             request.misa_payment_request_can_revoke = bool(
+#                 payment_request.org_refid and payment_request.state in allowed_states
+#             )
+# 
+#     def action_done(self):
+#         cash_requests = self.filtered(
+#             lambda request: request.state == 'pending' and request.request_type == 'cash'
+#         )
+#         result = super().action_done()
+#         for request in cash_requests:
+#             request._enqueue_loyalty_payment_request()
+#         return result
+# 
+#     def _enqueue_loyalty_payment_request(self):
+#         self.ensure_one()
+#         existing = self.env['amis.payment.request'].sudo().search([
+#             ('loyalty_reward_request_id', '=', self.id),
+#         ], limit=1)
+#         if existing:
+#             existing.action_enqueue_sync()
+#             return existing
+# 
+#         config = self.env['amis.callback.config'].sudo().ensure_singleton()
+#         bank_config = config.payment_bank_config_ids.filtered(
+#             lambda line: line.active
+#             and line.purpose == 'loyalty'
+#             and line.company_id == self.company_id
+#         )[:1]
+#         if not bank_config:
+#             bank_config = config.payment_bank_config_ids.filtered(
+#                 lambda line: line.active
+#                 and line.purpose == 'purchase'
+#                 and line.company_id == self.company_id
+#             )[:1]
+#         company_bank = bank_config.company_bank_id if bank_config else self.company_id.partner_id.bank_ids[:1]
+#         partner = self.partner_id
+#         payment_request = self.env['amis.payment.request'].sudo().create({
+#             'loyalty_reward_request_id': self.id,
+#             'partner_id': partner.id,
+#             'company_id': self.company_id.id,
+#             'currency_id': self.company_id.currency_id.id,
+#             'amount': self.cash_value,
+#             'payment_date': fields.Date.context_today(self),
+#             'memo': 'Chi đổi điểm Loyalty %s - %s điểm cho %s' % (
+#                 self.name,
+#                 self.points_required,
+#                 partner.display_name,
+#             ),
+#             'payment_method': 'bank',
+#             'company_bank_id': company_bank.id or False,
+#             'company_bank_account_number': company_bank.acc_number if company_bank else '',
+#             'company_bank_name': (
+#                 company_bank.bank_id.name if company_bank and company_bank.bank_id else ''
+#             ),
+#             'vendor_bank_account_number': self.account_number or '',
+#             'vendor_bank_name': self.bank_name or '',
+#             'vendor_account_holder': self.account_name or partner.display_name,
+#             'beneficiary_account_type': 'company' if partner.is_company else 'personal',
+#             'debit_account': bank_config.debit_account if bank_config else '331',
+#             'credit_account': bank_config.credit_account if bank_config else '1121',
+#         })
+#         payment_request.action_enqueue_sync()
+#         _logger.info(
+#             'Loyalty reward request %s enqueued AMIS payment request %s (job %s).',
+#             self.name,
+#             payment_request.name,
+#             payment_request.job_id.id,
+#         )
+#         return payment_request
+# 
+#     def action_view_loyalty_payment_request(self):
+#         self.ensure_one()
+#         payment_request = self.misa_payment_request_id
+#         if not payment_request:
+#             raise UserError('Yêu cầu Loyalty này chưa có đề nghị chi MISA.')
+#         return {
+#             'type': 'ir.actions.act_window',
+#             'name': 'Đề nghị chi MISA',
+#             'res_model': 'amis.payment.request',
+#             'res_id': payment_request.id,
+#             'views': [[
+#                 self.env.ref('amis_callback.view_amis_payment_request_loyalty_readonly_form').id,
+#                 'form',
+#             ]],
+#             'target': 'current',
+#         }
+# 
+#     def action_revoke_loyalty_payment_request(self):
+#         self.ensure_one()
+#         if not self.env.user.has_group('hlv_loyalty.group_loyalty_operator'):
+#             raise AccessError('Bạn không có quyền thu hồi đề nghị chi Loyalty trên MISA.')
+#         payment_request = self.misa_payment_request_id.sudo()
+#         if not payment_request:
+#             raise UserError('Yêu cầu Loyalty này chưa có đề nghị chi MISA để thu hồi.')
+#         payment_request.action_revoke_misa_payment_request()
+#         return {
+#             'type': 'ir.actions.client',
+#             'tag': 'display_notification',
+#             'params': {
+#                 'title': 'Đã đưa vào hàng đợi',
+#                 'message': 'Đề nghị chi %s đang chờ thu hồi/xóa trên MISA.' % payment_request.name,
+#                 'type': 'warning',
+#                 'sticky': False,
+#                 'next': {'type': 'ir.actions.client', 'tag': 'soft_reload'},
+#             },
+#         }
 
-    misa_payment_request_ids = fields.One2many(
-        'amis.payment.request', 'loyalty_reward_request_id',
-        string='Đề nghị chi MISA', readonly=True,
-    )
-    misa_payment_request_id = fields.Many2one(
-        'amis.payment.request', string='Mã đề nghị chi MISA',
-        compute='_compute_misa_payment_request_id', compute_sudo=True,
-    )
-    misa_payment_request_state = fields.Selection(
-        related='misa_payment_request_id.state', string='Trạng thái đề nghị chi', readonly=True,
-    )
-    misa_payment_request_job_status = fields.Selection(
-        related='misa_payment_request_id.job_status', string='Trạng thái hàng đợi', readonly=True,
-    )
-    misa_payment_request_org_refid = fields.Char(
-        related='misa_payment_request_id.org_refid', string='MISA org_refid', readonly=True,
-    )
-    misa_payment_request_callback_data_type = fields.Integer(
-        related='misa_payment_request_id.callback_data_type',
-        string='MISA data_type cuối', readonly=True,
-    )
-    misa_payment_request_state_updated_at = fields.Datetime(
-        related='misa_payment_request_id.state_updated_at',
-        string='Cập nhật trạng thái lúc', readonly=True,
-    )
-    misa_payment_request_error = fields.Text(
-        related='misa_payment_request_id.error_msg', string='Lỗi MISA', readonly=True,
-    )
-    misa_payment_request_can_revoke = fields.Boolean(
-        compute='_compute_misa_payment_request_can_revoke', compute_sudo=True,
-    )
-
-    @api.depends('misa_payment_request_ids')
-    def _compute_misa_payment_request_id(self):
-        for request in self:
-            request.misa_payment_request_id = request.misa_payment_request_ids[:1]
-
-    @api.depends('misa_payment_request_id.state', 'misa_payment_request_id.org_refid')
-    def _compute_misa_payment_request_can_revoke(self):
-        allowed_states = {'sent', 'request_accepted', 'approved', 'synced', 'error'}
-        for request in self:
-            payment_request = request.misa_payment_request_id
-            request.misa_payment_request_can_revoke = bool(
-                payment_request.org_refid and payment_request.state in allowed_states
-            )
-
-    def action_done(self):
-        cash_requests = self.filtered(
-            lambda request: request.state == 'pending' and request.request_type == 'cash'
-        )
-        result = super().action_done()
-        for request in cash_requests:
-            request._enqueue_loyalty_payment_request()
-        return result
-
-    def _enqueue_loyalty_payment_request(self):
-        self.ensure_one()
-        existing = self.env['amis.payment.request'].sudo().search([
-            ('loyalty_reward_request_id', '=', self.id),
-        ], limit=1)
-        if existing:
-            existing.action_enqueue_sync()
-            return existing
-
-        config = self.env['amis.callback.config'].sudo().ensure_singleton()
-        bank_config = config.payment_bank_config_ids.filtered(
-            lambda line: line.active
-            and line.purpose == 'loyalty'
-            and line.company_id == self.company_id
-        )[:1]
-        if not bank_config:
-            bank_config = config.payment_bank_config_ids.filtered(
-                lambda line: line.active
-                and line.purpose == 'purchase'
-                and line.company_id == self.company_id
-            )[:1]
-        company_bank = bank_config.company_bank_id if bank_config else self.company_id.partner_id.bank_ids[:1]
-        partner = self.partner_id
-        payment_request = self.env['amis.payment.request'].sudo().create({
-            'loyalty_reward_request_id': self.id,
-            'partner_id': partner.id,
-            'company_id': self.company_id.id,
-            'currency_id': self.company_id.currency_id.id,
-            'amount': self.cash_value,
-            'payment_date': fields.Date.context_today(self),
-            'memo': 'Chi đổi điểm Loyalty %s - %s điểm cho %s' % (
-                self.name,
-                self.points_required,
-                partner.display_name,
-            ),
-            'payment_method': 'bank',
-            'company_bank_id': company_bank.id or False,
-            'company_bank_account_number': company_bank.acc_number if company_bank else '',
-            'company_bank_name': (
-                company_bank.bank_id.name if company_bank and company_bank.bank_id else ''
-            ),
-            'vendor_bank_account_number': self.account_number or '',
-            'vendor_bank_name': self.bank_name or '',
-            'vendor_account_holder': self.account_name or partner.display_name,
-            'beneficiary_account_type': 'company' if partner.is_company else 'personal',
-            'debit_account': bank_config.debit_account if bank_config else '331',
-            'credit_account': bank_config.credit_account if bank_config else '1121',
-        })
-        payment_request.action_enqueue_sync()
-        _logger.info(
-            'Loyalty reward request %s enqueued AMIS payment request %s (job %s).',
-            self.name,
-            payment_request.name,
-            payment_request.job_id.id,
-        )
-        return payment_request
-
-    def action_view_loyalty_payment_request(self):
-        self.ensure_one()
-        payment_request = self.misa_payment_request_id
-        if not payment_request:
-            raise UserError('Yêu cầu Loyalty này chưa có đề nghị chi MISA.')
-        return {
-            'type': 'ir.actions.act_window',
-            'name': 'Đề nghị chi MISA',
-            'res_model': 'amis.payment.request',
-            'res_id': payment_request.id,
-            'views': [[
-                self.env.ref('amis_callback.view_amis_payment_request_loyalty_readonly_form').id,
-                'form',
-            ]],
-            'target': 'current',
-        }
-
-    def action_revoke_loyalty_payment_request(self):
-        self.ensure_one()
-        if not self.env.user.has_group('hlv_loyalty.group_loyalty_operator'):
-            raise AccessError('Bạn không có quyền thu hồi đề nghị chi Loyalty trên MISA.')
-        payment_request = self.misa_payment_request_id.sudo()
-        if not payment_request:
-            raise UserError('Yêu cầu Loyalty này chưa có đề nghị chi MISA để thu hồi.')
-        payment_request.action_revoke_misa_payment_request()
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': 'Đã đưa vào hàng đợi',
-                'message': 'Đề nghị chi %s đang chờ thu hồi/xóa trên MISA.' % payment_request.name,
-                'type': 'warning',
-                'sticky': False,
-                'next': {'type': 'ir.actions.client', 'tag': 'soft_reload'},
-            },
-        }

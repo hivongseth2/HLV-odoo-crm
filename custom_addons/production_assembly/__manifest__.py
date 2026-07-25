@@ -48,7 +48,8 @@ Interface:
         'data/demo_data.xml',
         'data/demo_warehouse_access.xml',
     ],
-    'installable': True,
+    # 'installable': True,  # TẠM TẮT ĐỂ BUILD
+    'installable': False,
     'auto_install': False,
     'application': False,
     'license': 'LGPL-3',

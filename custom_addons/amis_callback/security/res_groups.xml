@@ -30,7 +30,7 @@
         <field name="comment">Toàn quyền: cấu hình API, xóa hóa đơn, chạy đồng bộ danh mục.</field>
     </record>
 
-    <record id="amis_payment_request_rule_loyalty_user" model="ir.rule">
+    <!-- <record id="amis_payment_request_rule_loyalty_user" model="ir.rule">
         <field name="name">Đề nghị chi MISA: Loyalty chỉ xem đề nghị đổi điểm</field>
         <field name="model_id" ref="model_amis_payment_request"/>
         <field name="domain_force">[('loyalty_reward_request_id', '!=', False)]</field>
@@ -39,7 +39,7 @@
         <field name="perm_create" eval="False"/>
         <field name="perm_unlink" eval="False"/>
         <field name="groups" eval="[(4, ref('hlv_loyalty.group_loyalty_user'))]"/>
-    </record>
+    </record> -->
 
     <record id="amis_payment_request_rule_amis_user_all" model="ir.rule">
         <field name="name">Đề nghị chi MISA: Người dùng AMIS xem tất cả</field>
