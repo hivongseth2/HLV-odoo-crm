@@ -161,10 +161,7 @@ class ZaloZNSConfig(models.Model):
         - Header dùng 'access_token'
         - Body dùng 'phone' + 'template_data'
         - Xử lý một số lỗi phổ biến: token invalid, price invalid format
-        
-        === CẬP NHẬT: Hỗ trợ Shared Token ===
-        - Nếu use_shared_token = True: Lấy token từ Shared Token Manager
-        - Nếu use_shared_token = False: Sử dụng token riêng (cũ)
+        - Hỗ trợ Shared Token (use_shared_token)
         """
         self.ensure_one()
 

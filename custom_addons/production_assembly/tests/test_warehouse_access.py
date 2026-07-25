@@ -44,7 +44,7 @@ class TestWarehouseAccess(TransactionCase):
         # Create test product
         self.product = self.env['product.product'].create({
             'name': 'Test Product',
-            'type': 'product',
+            'type': 'consu',
         })
         
     def test_warehouse_access_config_creation(self):

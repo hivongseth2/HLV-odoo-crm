@@ -12,19 +12,19 @@ class TestProductionOperation(TransactionCase):
         # Create test products
         self.product_final = self.env['product.product'].create({
             'name': 'Final Product Test',
-            'type': 'product',
+            'type': 'consu',
             'categ_id': self.env.ref('product.product_category_all').id,
         })
         
         self.product_component1 = self.env['product.product'].create({
             'name': 'Component 1 Test',
-            'type': 'product',
+            'type': 'consu',
             'categ_id': self.env.ref('product.product_category_all').id,
         })
         
         self.product_component2 = self.env['product.product'].create({
             'name': 'Component 2 Test',
-            'type': 'product',
+            'type': 'consu',
             'categ_id': self.env.ref('product.product_category_all').id,
         })
         

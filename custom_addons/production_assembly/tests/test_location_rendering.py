@@ -50,7 +50,7 @@ class TestLocationRendering(TransactionCase):
         # Create test product
         self.product = self.env['product.product'].create({
             'name': 'Test Product',
-            'type': 'product',
+            'type': 'consu',
         })
         
         # Add stock to TSN location

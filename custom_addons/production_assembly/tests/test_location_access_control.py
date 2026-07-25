@@ -37,7 +37,7 @@ class TestLocationAccessControl(TransactionCase):
         # Create test product
         self.product = self.env['product.product'].create({
             'name': 'Test Product',
-            'type': 'product',
+            'type': 'consu',
         })
         
         # Create stock in both locations
