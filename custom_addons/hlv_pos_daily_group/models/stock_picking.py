@@ -18,8 +18,8 @@ class StockPicking(models.Model):
 
         for picking in self:
             # Only propagate if this picking has POS fields
-            pos_group = picking.x_studio_pos_group
-            pos_payment = picking.x_studio_pos_payment_method
+            pos_group = getattr(picking, 'x_studio_pos_group', False)
+            pos_payment = getattr(picking, 'x_studio_pos_payment_method', False)
             if not pos_group and not pos_payment:
                 continue
 
@@ -29,9 +29,9 @@ class StockPicking(models.Model):
             
             for dp in downstream_pickings:
                 vals = {}
-                if pos_group and not dp.x_studio_pos_group:
+                if pos_group and hasattr(dp, 'x_studio_pos_group') and not dp.x_studio_pos_group:
                     vals['x_studio_pos_group'] = pos_group
-                if pos_payment and not dp.x_studio_pos_payment_method:
+                if pos_payment and hasattr(dp, 'x_studio_pos_payment_method') and not dp.x_studio_pos_payment_method:
                     vals['x_studio_pos_payment_method'] = pos_payment
                 if vals:
                     dp.write(vals)
