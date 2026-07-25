@@ -181,10 +181,16 @@ class StockPickingAssignLog(models.Model):
         rằng tổng done qty không vượt quá tồn kho vật lý.
         Công thức: available = on_hand - other_pickings_done
         KHÔNG dùng quant.reserved_quantity (dễ bị ghost reservation).
+
+        Bỏ qua phiếu nhập kho (incoming) vì over-delivery là nghiệp vụ bình thường.
         """
         from markupsafe import Markup
 
         for picking in self:
+            # Bỏ qua phiếu nhập kho (incoming)
+            if picking.picking_type_code == 'incoming':
+                continue
+
             adjusted_moves = []
 
             # Nhóm moves theo (product, parent_location)

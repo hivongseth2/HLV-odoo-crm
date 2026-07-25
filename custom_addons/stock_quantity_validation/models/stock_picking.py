@@ -42,12 +42,23 @@ class StockPicking(models.Model):
     def _check_qty_validation_before_validate(self):
         """
         Kiểm tra quantity không được vượt quá product_uom_qty trên picking.
-        Bỏ qua phiếu chuyển hàng nội bộ (có 'INT' trong tên) vì demand luôn = 0.
+        Bỏ qua:
+        - Phiếu chuyển hàng nội bộ (có 'INT' trong tên) vì demand luôn = 0.
+        - Phiếu nhập kho (incoming) vì over-delivery là nghiệp vụ bình thường.
+        - Khi context có 'skip_qty_validation_before_validate' (dùng cho test).
         """
         self.ensure_one()
 
+        # Bypass nếu có context flag (dùng cho test)
+        if self.env.context.get('skip_qty_validation_before_validate'):
+            return
+
         # Bỏ qua phiếu chuyển hàng nội bộ (có 'INT' trong tên)
         if self.name and 'INT' in self.name:
+            return
+
+        # Bỏ qua phiếu nhập kho (incoming) vì over-delivery là nghiệp vụ bình thường
+        if self.picking_type_code == 'incoming':
             return
 
         # Danh sách các move vi phạm (qty_done > product_uom_qty)
@@ -599,7 +610,9 @@ class StockMoveLine(models.Model):
         product_uom_qty của stock.move tương ứng.
 
         Điều này ngăn chặn việc quét mã vạch dư hoặc nhập thủ công số lượng vượt mức.
-        Bỏ qua phiếu chuyển hàng nội bộ (có 'INT' trong tên) vì demand luôn = 0.
+        Bỏ qua:
+        - Phiếu chuyển hàng nội bộ (có 'INT' trong tên) vì demand luôn = 0.
+        - Phiếu nhập kho (incoming) vì over-delivery là nghiệp vụ bình thường.
         """
         # Bypass validation nếu được gọi từ packaging context
         if self.env.context.get('skip_qty_validation'):
@@ -618,6 +631,10 @@ class StockMoveLine(models.Model):
 
             # Bỏ qua phiếu chuyển hàng nội bộ (có 'INT' trong tên)
             if not line.picking_id or (line.picking_id.name and 'INT' in line.picking_id.name):
+                continue
+
+            # Bỏ qua phiếu nhập kho (incoming) vì over-delivery là nghiệp vụ bình thường
+            if line.picking_id and line.picking_id.picking_type_code == 'incoming':
                 continue
 
             move = line.move_id
