@@ -22,7 +22,6 @@
         "data/loyalty_reward_request_sequence.xml",
         "views/res_partner_views.xml",
         "views/loyalty_history_views.xml",
-        "views/menu_views.xml",
         "wizard/redeem_voucher_wizard_views.xml",
         "wizard/loyalty_reset_password_wizard_views.xml",
         "wizard/loyalty_point_adjustment_wizard_views.xml",
@@ -45,6 +44,7 @@
         "views/loyalty_reward_request_views.xml",
         "views/loyalty_portal_redeem.xml",
         "data/loyalty_tier_data.xml",
+        "views/menu_views.xml",
     ],
     "assets": {
         "web.assets_backend": [
