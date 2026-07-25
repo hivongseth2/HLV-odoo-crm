@@ -56,11 +56,11 @@ class MailMessage(models.Model):
                 # Set is_note=True for LLM messages to get the right bubble style
                 data["is_note"] = True
 
-            if hasattr(message, "user_vote"):
-                data["user_vote"] = message.user_vote
+                if hasattr(message, "user_vote") and message.user_vote:
+                    data["user_vote"] = message.user_vote
 
-            if hasattr(message, "body_json") and message.body_json:
-                data["body_json"] = message.body_json
+                if hasattr(message, "body_json") and message.body_json:
+                    data["body_json"] = message.body_json
 
             if data:  # Only add to store if we have data
                 store.add(message, data)
