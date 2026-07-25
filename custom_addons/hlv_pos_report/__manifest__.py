@@ -21,9 +21,7 @@
         'hlv_a4_report',
         'stock',
     ],
-    'data': [
-        'security/ir.model.access.csv',
-    ],
+    'data': [],
     'assets': {
         'point_of_sale._assets_pos': [
             'hlv_pos_report/static/src/css/pos_report.css',
