@@ -1133,6 +1133,9 @@ class HLVMobileBarcodeController(http.Controller):
                         'package_id': ml.package_id.id or False,
                         'is_package_transfer_line': is_package_transfer_line,
                         'package_physical_qty': ml.quantity if is_package_transfer_line else False,
+                        'lot_id': ml.lot_id.id or False,
+                        'lot_name': ml.lot_id.name or ml.lot_name or '',
+                        'tracking': move.product_id.tracking or 'none',
                     })
             else:
                 if is_pick_picking or picking.source_transfer_id:
@@ -1157,6 +1160,9 @@ class HLVMobileBarcodeController(http.Controller):
                     'package_name': False,
                     'result_package_id': False,
                     'package_id': False,
+                    'lot_id': False,
+                    'lot_name': '',
+                    'tracking': move.product_id.tracking or 'none',
                 })
 
         if is_pick_picking and not lines:
@@ -1520,7 +1526,7 @@ class HLVMobileBarcodeController(http.Controller):
         }
 
     @http.route('/hlv_mobile_barcode/process_barcode', type='json', auth='user')
-    def process_barcode(self, picking_id, barcode, destination_location_id=None, last_product_id=None, last_move_line_id=None, location_mode=None, is_multi_location=False, preferred_move_line_id=None, force_partial_package=False, create_loose_lines_only=False):
+    def process_barcode(self, picking_id, barcode, destination_location_id=None, last_product_id=None, last_move_line_id=None, location_mode=None, is_multi_location=False, preferred_move_line_id=None, force_partial_package=False, create_loose_lines_only=False, lot_id=None, lot_name=None):
         picking = request.env['stock.picking'].browse(picking_id)
         if not picking.exists() or picking.state not in ['draft', 'confirmed', 'assigned']:
             return {'error': _('Phiếu này không thể xử lý thêm sản phẩm.')}
@@ -1881,7 +1887,16 @@ class HLVMobileBarcodeController(http.Controller):
 
         product = request.env['product.product'].sudo().search(['|', ('barcode', '=', barcode), ('default_code', '=', barcode)], limit=1)
         if not product:
-            return {'error': _('Không tìm thấy mã vạch hợp lệ (Sản phẩm hoặc Vị trí).')}
+            # 2.5. Try to find Lot/Serial (fallback khi quét mã Lô trong picking view)
+            lot = request.env['stock.lot'].sudo().search(
+                ['|', ('name', '=', barcode), ('ref', '=', barcode)], limit=1
+            )
+            if lot and lot.product_id:
+                product = lot.product_id
+                lot_id = lot.id
+                lot_name = lot.name
+            else:
+                return {'error': _('Không tìm thấy mã vạch hợp lệ (Sản phẩm, Vị trí hoặc Lô/Serial).')}
 
         if picking.source_transfer_id:
             step2_entries, missing_step2_lines = _step2_canonical_line_entries(picking)
