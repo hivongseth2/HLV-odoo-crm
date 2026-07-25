@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Khách hàng tích điểm -->
+    <menuitem id="menu_loyalty_partner_overview"
+              name="Khách hàng"
+              parent="menu_loyalty_management"
+              action="action_loyalty_partner_overview"
+              sequence="5"/>
+
+    <!-- Lịch sử điểm -->
+    <menuitem id="menu_loyalty_history"
+              name="Lịch sử điểm"
+              parent="menu_loyalty_management"
+              action="action_loyalty_history"
+              sequence="10"/>
+
+    <!-- Voucher -->
+    <menuitem id="menu_loyalty_voucher"
+              name="Voucher"
+              parent="menu_loyalty_management"
+              action="action_loyalty_voucher"
+              sequence="20"/>
+
+    <!-- Yêu cầu đổi thưởng -->
+    <menuitem id="menu_loyalty_reward_request"
+              name="Yêu cầu đổi thưởng"
+              parent="menu_loyalty_management"
+              action="action_loyalty_reward_request"
+              sequence="25"/>
+
+    <!-- Chương trình -->
+    <menuitem id="menu_loyalty_program"
+              name="Chương trình Loyalty"
+              parent="menu_loyalty_config"
+              action="action_loyalty_program"
+              sequence="10"/>
+
+    <!-- Gói Voucher -->
+    <menuitem id="menu_loyalty_voucher_package"
+              name="Gói đổi Voucher"
+              parent="menu_loyalty_config"
+              action="action_loyalty_voucher_package"
+              sequence="20"/>
+
+    <!-- Hạng thành viên -->
+    <menuitem id="menu_loyalty_tier"
+              name="Hạng thành viên"
+              parent="menu_loyalty_config"
+              action="action_loyalty_tier"
+              sequence="30"/>
+</odoo>
