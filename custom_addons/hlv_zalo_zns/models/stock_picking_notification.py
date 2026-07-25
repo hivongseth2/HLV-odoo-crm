@@ -747,12 +747,7 @@ class StockPicking(models.Model):
 
 
     def _send_zalo_stock_notification(self):
-        """
-        Gửi thông báo tới nhân viên nội bộ khi đơn hàng được validate.
-        
-        * Đã FIX: Chống trùng lặp tin nhắn do Race Condition (Double Click) bằng SQL Lock.
-        * Đã FIX: Chống trùng lặp do lệch kiểu dữ liệu (String vs Int) khi gom User ID.
-        """
+        """Gửi thông báo tới nhân viên nội bộ khi đơn hàng được validate."""
         self.ensure_one()
 
         # ==============================================================================

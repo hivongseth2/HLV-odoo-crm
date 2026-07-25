@@ -64,11 +64,7 @@ class StockPicking(models.Model):
     # === Helper: tìm phiếu OUT từ PICK ===
     @api.model
     def find_out_picking_by_pick_name(self, pick_name):
-        """
-        Find OUT picking related to PICK order name.
-
-        Logic: PICK (internal transfer) -> liên kết qua origin / sale_id / group_id
-        """
+        """Find OUT picking related to PICK order name via origin, sale_id, or group_id."""
         # 1) Tìm phiếu PICK
         pick_picking = self.search(
             [("name", "=", pick_name), ("picking_type_id.code", "=", "internal")],
