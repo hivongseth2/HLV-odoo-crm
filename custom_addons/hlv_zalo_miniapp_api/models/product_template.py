@@ -14,3 +14,8 @@ class ProductTemplate(models.Model):
         default=False,
         help='Chỉ sản phẩm có flag này = True mới xuất hiện trên Zalo Mini App',
     )
+    x_zalo_categ_ids = fields.Many2many(
+        'pos.category',
+        string='Danh mục Zalo',
+        help='Danh mục sản phẩm hiển thị trên Zalo Mini App (kế thừa từ POS category)',
+    )

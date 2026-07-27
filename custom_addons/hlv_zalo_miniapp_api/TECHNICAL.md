@@ -50,6 +50,7 @@ hlv_zalo_miniapp_api/
 |---|---|---|
 | `x_zalo_price` | Float | Giá hiển thị trên Zalo Mini App |
 | `x_active_zalo` | Boolean | Chỉ sản phẩm có flag = True mới xuất hiện |
+| `x_zalo_categ_ids` | Many2many (pos.category) | Danh mục Zalo riêng, kế thừa từ POS category. Không phụ thuộc `available_in_pos` |
 
 ### `res.partner` (kế thừa)
 
