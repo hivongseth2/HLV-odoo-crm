@@ -96,11 +96,13 @@ class ZaloBaseAPI:
     @staticmethod
     def _get_image_url(model, rec_id, field="image_128"):
         """Return a relative URL for the image.
-        Note: This is a POST endpoint. Frontend should POST with JSON body:
-        {"model": "product.product", "id": 23812, "field": "image_128"}"""
+        Uses safe model name (dots replaced with dashes) for GET endpoint.
+        Frontend can use this URL directly in <img> tags.
+        Example: /api/v1/zalo/image/product-product/123/image_128"""
         if not rec_id:
             return None
-        return f"/api/v1/zalo/image?model={model}&id={rec_id}&field={field}"
+        safe_model = model.replace(".", "-")
+        return f"/api/v1/zalo/image/{safe_model}/{rec_id}/{field}"
 
     @staticmethod
     def _request_json():

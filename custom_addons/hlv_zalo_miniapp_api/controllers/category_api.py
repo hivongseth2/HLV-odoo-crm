@@ -142,9 +142,57 @@ class ZaloCategoryAPI(ZaloBaseAPI, http.Controller):
             return self._response_error("SERVER_ERROR", str(e), 500)
 
     # =========================================================================
+    # GET /api/v1/zalo/image/<model>/<id>/<field>
     # POST /api/v1/zalo/image
     # Body: {"model": "product.product", "id": 23812, "field": "image_128"}
     # =========================================================================
+    @http.route(
+        "/api/v1/zalo/image/<path:image_path>",
+        type="http",
+        auth="public",
+        methods=["GET"],
+        csrf=False,
+    )
+    def get_image_by_path(self, image_path, **params):
+        """Trả ảnh dạng binary qua GET với path params.
+        URL: /api/v1/zalo/image/product-product/123/image_128
+        Model name dùng dấu - thay cho . (vd: product-product = product.product)"""
+        try:
+            parts = image_path.strip("/").split("/")
+            if len(parts) < 2:
+                return self._response_error("INVALID_INPUT", "URL không hợp lệ. Format: /api/v1/zalo/image/<model>/<id>/<field>", 400)
+            safe_model = parts[0]
+            rec_id = self._parse_int(parts[1], 0)
+            field = parts[2] if len(parts) > 2 else "image_128"
+            # Convert safe model name back to dot notation
+            model = safe_model.replace("-", ".")
+            if not model or not rec_id:
+                return self._response_error("INVALID_INPUT", "Thiếu model hoặc id", 400)
+            # Whitelist model check
+            if model not in self.ALLOWED_IMAGE_MODELS:
+                _logger.warning("Rejected image access for unauthorized model: %s", model)
+                return self._response_error("FORBIDDEN", "Model không được phép", 403)
+
+            Model = request.env.get(model)
+            if not Model:
+                return self._response_error("NOT_FOUND", "Model không tồn tại", 404)
+
+            record = Model.sudo().browse(rec_id)
+            if not record.exists():
+                return self._response_error("NOT_FOUND", "Bản ghi không tồn tại", 404)
+
+            image_data = record[field] if hasattr(record, field) else None
+            if not image_data:
+                return self._response_error("NOT_FOUND", "Không có ảnh", 404)
+
+            return Response(
+                base64.b64decode(image_data),
+                content_type="image/png",
+            )
+        except Exception as e:
+            _logger.exception("get_image error")
+            return self._response_error("SERVER_ERROR", str(e), 500)
+
     @http.route(
         "/api/v1/zalo/image",
         type="http",
@@ -153,7 +201,7 @@ class ZaloCategoryAPI(ZaloBaseAPI, http.Controller):
         csrf=False,
     )
     def get_image(self, **params):
-        """Trả ảnh dạng binary.
+        """Trả ảnh dạng binary qua POST với JSON body.
         Security: Chỉ cho phép các model trong ALLOWED_IMAGE_MODELS.
         Body: {"model": "product.product", "id": 23812, "field": "image_128"}"""
         try:

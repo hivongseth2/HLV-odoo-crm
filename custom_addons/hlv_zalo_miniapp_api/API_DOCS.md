@@ -83,7 +83,7 @@ Lấy danh sách danh mục sản phẩm từ `pos.category`, sắp xếp theo `
 | `sequence` | int | Thứ tự sắp xếp |
 | `parent_id` | int hoặc null | ID danh mục cha |
 | `parent_name` | string hoặc null | Tên danh mục cha |
-| `image_url` | string hoặc null | Relative URL ảnh danh mục (`/api/v1/zalo/image/pos.category/{id}/image_128`) |
+| `image_url` | string hoặc null | Relative URL ảnh danh mục (`/api/v1/zalo/image/pos-category/{id}/image_128`) |
 
 #### Response Example
 
@@ -102,7 +102,7 @@ Lấy danh sách danh mục sản phẩm từ `pos.category`, sắp xếp theo `
         "sequence": 1,
         "parent_id": null,
         "parent_name": null,
-        "image_url": "/api/v1/zalo/image/pos.category/5/image_128"
+        "image_url": "/api/v1/zalo/image/pos-category/5/image_128"
       }
     ]
   }
@@ -191,7 +191,7 @@ Lấy danh sách sản phẩm (variant) thuộc một danh mục. Sản phẩm �
         "list_price": 26000000,
         "free_qty": 15.0,
         "uom": "Cái",
-        "image_url": "/api/v1/zalo/image/product.product/42/image_128"
+        "image_url": "/api/v1/zalo/image/product-product/42/image_128"
       }
     ]
   }
@@ -315,7 +315,7 @@ Lấy danh sách sản phẩm variant với các tùy chọn tìm kiếm, sắp 
         "attributes": [
           { "id": 1, "name": "Màu sắc", "value": "Đen" }
         ],
-        "image_url": "/api/v1/zalo/image/product.product/42/image_128",
+        "image_url": "/api/v1/zalo/image/product-product/42/image_128",
         "description": "Mô tả ngắn",
         "description_html": "<p>Mô tả HTML</p>"
       }
@@ -374,7 +374,7 @@ Trả về tất cả các field giống **2.1. Danh sách Sản phẩm**, bổ 
     "x_zalo_price": 25000000,
     "free_qty": 15.0,
     "images": [
-      "/api/v1/zalo/image/product.template/10/image_1920"
+      "/api/v1/zalo/image/product-template/10/image_1920"
     ],
     "attributes": [
       { "id": 1, "name": "Màu sắc", "value": "Đen" }
@@ -1419,7 +1419,7 @@ Lấy danh sách banner hiển thị trên trang chủ Zalo Mini App. Banner đ�
 | `id` | int | ID của banner |
 | `name` | string | Tên banner |
 | `link` | string | URL đích khi click (deep link hoặc external URL) |
-| `image_url` | string | Relative URL ảnh banner (`/api/v1/zalo/image/zalo.miniapp.banner/{id}/image`) |
+| `image_url` | string | Relative URL ảnh banner (`/api/v1/zalo/image/zalo-miniapp-banner/{id}/image`) |
 
 #### Response Example
 
@@ -1432,7 +1432,7 @@ Lấy danh sách banner hiển thị trên trang chủ Zalo Mini App. Banner đ�
                 "id": 1,
                 "name": "test",
                 "link": "https://images.pexels.com/photos/459225/pexels-photo-459225.jpeg?cs=srgb&dl=daylight-environment-forest-459225.jpg&fm=jpg",
-                "image_url": "/api/v1/zalo/image/zalo.miniapp.banner/1/image"
+                "image_url": "/api/v1/zalo/image/zalo-miniapp-banner/1/image"
             }
         ],
         "total": 1,
