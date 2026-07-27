@@ -1148,10 +1148,42 @@ class SaleOrder(models.Model):
             ).exists()
             if not warehouse:
                 warehouse = self._misa_warehouse_from_sale_lines(lines)
+
+        warehouse_changed = bool(
+            self.env.context.get('misa_assign_warehouse_from_lines')
+            and warehouse
+            and self.warehouse_id != warehouse
+        )
+        touched_pickings = self._misa_warehouse_touched_pickings()
+        pickings_to_rebuild = self.env['stock.picking']
+        previous_warehouse = self.warehouse_id
+
+        if warehouse_changed:
+            if touched_pickings:
+                raise UserError(_(
+                    "Không thể tự động đổi kho từ %(old_warehouse)s sang "
+                    "%(new_warehouse)s vì các phiếu kho sau đã được tác động: %(pickings)s."
+                ) % {
+                    'old_warehouse': previous_warehouse.name or '-',
+                    'new_warehouse': warehouse.name,
+                    'pickings': ', '.join(touched_pickings.mapped('name')),
+                })
+
+            pickings_to_rebuild = self.picking_ids.filtered(
+                lambda picking: picking.state not in ('done', 'cancel')
+            )
+            if pickings_to_rebuild:
+                old_picking_names = ', '.join(pickings_to_rebuild.mapped('name'))
+                pickings_to_rebuild.sudo().action_cancel()
+                _logger.info(
+                    "🏭 Hủy chuỗi phiếu kho cũ chưa tác động của SO %s trước khi đổi kho: %s",
+                    self.name,
+                    old_picking_names,
+                )
+
         self._sync_misa_header_in_place(data, headers)
         if self.env.context.get('misa_assign_warehouse_from_lines'):
-            if warehouse and self.warehouse_id != warehouse:
-                previous_warehouse = self.warehouse_id
+            if warehouse_changed:
                 self.write({'warehouse_id': warehouse.id})
                 _logger.info(
                     "🏭 Cập nhật kho SO %s: %s → %s",
@@ -1164,12 +1196,31 @@ class SaleOrder(models.Model):
                     "Kho SO %s sau khi dong bo header: %s",
                     self.name, self.warehouse_id.name,
                 )
-        touched_pickings = self._misa_warehouse_touched_pickings()
+
         sync_result = self._sync_so_lines_from_misa_no_picking(
             lines,
             headers,
             defer_quantity=bool(touched_pickings),
         )
+
+        if warehouse_changed and pickings_to_rebuild:
+            old_picking_ids = set(pickings_to_rebuild.ids)
+            stock_lines = self.order_line.filtered(
+                lambda line: not line.display_type and line.product_uom_qty > 0
+            )
+            stock_lines.sudo()._action_launch_stock_rule()
+            self.invalidate_recordset(['picking_ids'])
+            self._misa_sync_open_picking_contact()
+            new_pickings = self.picking_ids.filtered(
+                lambda picking: picking.id not in old_picking_ids
+                and picking.state != 'cancel'
+            )
+            _logger.info(
+                "🏭 Tạo lại chuỗi phiếu kho SO %s theo kho %s: %s",
+                self.name,
+                warehouse.name,
+                ', '.join(new_pickings.mapped('name')) or '-',
+            )
 
         qty_changes = sync_result.get('qty_changes') or []
         history = self._misa_record_sync_snapshot_history(
@@ -1216,7 +1267,14 @@ class SaleOrder(models.Model):
         if self.state in ('draft', 'sent'):
             self.action_confirm()
         self._auto_apply_misa_tags()
-        self.message_post(body=_("Đã đồng bộ MISA tại chỗ; giữ nguyên SO và các phiếu kho hiện có."))
+        if warehouse_changed and pickings_to_rebuild:
+            self.message_post(body=_(
+                "Đã đồng bộ MISA và tạo lại chuỗi phiếu kho theo kho %(warehouse)s."
+            ) % {'warehouse': warehouse.name})
+        else:
+            self.message_post(body=_(
+                "Đã đồng bộ MISA tại chỗ; giữ nguyên SO và các phiếu kho hiện có."
+            ))
         return {
             'type': 'ir.actions.act_window',
             'res_model': 'sale.order',
