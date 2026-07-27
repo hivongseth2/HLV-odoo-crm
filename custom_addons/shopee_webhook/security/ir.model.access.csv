@@ -3,3 +3,4 @@ access_shopee_poll_log_user,shopee.poll.log user,model_shopee_poll_log,sales_tea
 access_shopee_poll_log_manager,shopee.poll.log manager,model_shopee_poll_log,sales_team.group_sale_manager,1,1,1,1
 access_shopee_poll_log_line_user,shopee.poll.log.line user,model_shopee_poll_log_line,sales_team.group_sale_salesman,1,0,0,0
 access_shopee_poll_log_line_manager,shopee.poll.log.line manager,model_shopee_poll_log_line,sales_team.group_sale_manager,1,1,1,1
+access_shopee_webhook_event_manager,shopee.webhook.event manager,model_shopee_webhook_event,sales_team.group_sale_manager,1,1,1,0

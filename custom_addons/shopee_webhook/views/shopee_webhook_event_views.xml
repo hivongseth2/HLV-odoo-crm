@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_shopee_webhook_event_list" model="ir.ui.view">
+        <field name="name">shopee.webhook.event.list</field>
+        <field name="model">shopee.webhook.event</field>
+        <field name="arch" type="xml">
+            <list string="Hàng đợi Shopee Webhook"
+                  create="false"
+                  delete="false"
+                  default_order="create_date desc"
+                  decoration-success="state == 'done'"
+                  decoration-warning="state in ('pending', 'processing')"
+                  decoration-danger="state == 'error'">
+                <field name="create_date" string="Nhận lúc"/>
+                <field name="shop_id_raw"/>
+                <field name="order_sn"/>
+                <field name="package_number" optional="hide"/>
+                <field name="tracking_no"/>
+                <field name="state" widget="badge"
+                       decoration-success="state == 'done'"
+                       decoration-warning="state in ('pending', 'processing')"
+                       decoration-danger="state == 'error'"/>
+                <field name="attempts"/>
+                <field name="next_attempt_at" optional="show"/>
+                <field name="sale_order_id" optional="show"/>
+                <field name="picking_id" optional="show"/>
+                <button name="action_retry"
+                        type="object"
+                        string="Thử lại"
+                        icon="fa-refresh"
+                        invisible="state not in ('pending', 'error')"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_shopee_webhook_event_form" model="ir.ui.view">
+        <field name="name">shopee.webhook.event.form</field>
+        <field name="model">shopee.webhook.event</field>
+        <field name="arch" type="xml">
+            <form string="Shopee Webhook Event" create="false" delete="false">
+                <header>
+                    <button name="action_retry"
+                            type="object"
+                            string="Thử lại"
+                            class="btn-primary"
+                            invisible="state not in ('pending', 'error')"/>
+                    <field name="state"
+                           widget="statusbar"
+                           statusbar_visible="pending,processing,done,error"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="code"/>
+                            <field name="shop_id_raw"/>
+                            <field name="order_sn"/>
+                            <field name="package_number"/>
+                            <field name="tracking_no"/>
+                        </group>
+                        <group>
+                            <field name="create_date"/>
+                            <field name="push_timestamp"/>
+                            <field name="attempts"/>
+                            <field name="next_attempt_at"/>
+                            <field name="processed_at"/>
+                            <field name="sale_order_id"/>
+                            <field name="picking_id"/>
+                        </group>
+                    </group>
+                    <group invisible="not result_note">
+                        <field name="result_note" nolabel="1"/>
+                    </group>
+                    <group invisible="not last_error">
+                        <field name="last_error" nolabel="1"/>
+                    </group>
+                    <notebook>
+                        <page string="Payload">
+                            <field name="raw_payload" nolabel="1"/>
+                        </page>
+                        <page string="Idempotency">
+                            <field name="event_key" nolabel="1"/>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_shopee_webhook_event_search" model="ir.ui.view">
+        <field name="name">shopee.webhook.event.search</field>
+        <field name="model">shopee.webhook.event</field>
+        <field name="arch" type="xml">
+            <search string="Tìm Shopee Webhook Event">
+                <field name="order_sn"/>
+                <field name="tracking_no"/>
+                <field name="shop_id_raw"/>
+                <filter name="pending"
+                        string="Chờ xử lý"
+                        domain="[('state', 'in', ('pending', 'processing'))]"/>
+                <filter name="error"
+                        string="Lỗi"
+                        domain="[('state', '=', 'error')]"/>
+                <filter name="done"
+                        string="Hoàn thành"
+                        domain="[('state', '=', 'done')]"/>
+                <group expand="0" string="Nhóm theo">
+                    <filter name="group_state"
+                            string="Trạng thái"
+                            context="{'group_by': 'state'}"/>
+                    <filter name="group_shop"
+                            string="Shop"
+                            context="{'group_by': 'shop_id_raw'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_shopee_webhook_event" model="ir.actions.act_window">
+        <field name="name">Hàng đợi Webhook</field>
+        <field name="res_model">shopee.webhook.event</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_shopee_webhook_event_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Chưa có webhook nào.</p>
+            <p>Push code 4 được ACK 204 ngay và xử lý bất đồng bộ tại đây.</p>
+        </field>
+    </record>
+
+    <menuitem id="menu_shopee_webhook_event"
+              name="Hàng đợi Webhook"
+              parent="menu_shopee_root"
+              action="action_shopee_webhook_event"
+              sequence="20"
+              groups="sales_team.group_sale_manager"/>
+</odoo>
