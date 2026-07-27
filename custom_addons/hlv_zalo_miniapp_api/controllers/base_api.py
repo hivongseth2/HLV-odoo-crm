@@ -95,10 +95,11 @@ class ZaloBaseAPI:
 
     @staticmethod
     def _get_image_url(model, rec_id, field="image_128"):
-        """Return a relative URL for the image."""
+        """Return a relative URL for the image.
+        Note: This is a POST endpoint. Frontend should POST with JSON body:
+        {"model": "product.product", "id": 23812, "field": "image_128"}"""
         if not rec_id:
             return None
-        # Dùng query params để tránh lỗi parse path parameter trong Odoo 18
         return f"/api/v1/zalo/image?model={model}&id={rec_id}&field={field}"
 
     @staticmethod

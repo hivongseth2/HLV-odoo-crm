@@ -1454,43 +1454,26 @@ Lấy danh sách banner hiển thị trên trang chủ Zalo Mini App. Banner đ�
 
 ### 7.1. Lấy Ảnh
 
-> **GET** `/api/v1/zalo/image/<model>/<int:rec_id>/<field>`
+> **POST** `/api/v1/zalo/image`
 
 Trả về ảnh dạng binary (image/png) từ Odoo. Ảnh được lưu dưới dạng base64 trong database, API sẽ decode và trả về raw binary.
 
-#### Path Parameters
+#### Request Body
 
-| Parameter | Type | Mô tả |
-|-----------|------|-------|
-| `model` | string | Tên model Odoo. Các model được hỗ trợ: `product.product`, `product.template`, `pos.category`, `zalo.miniapp.banner`, `product.multi.image` |
-| `rec_id` | int | ID của bản ghi |
-| `field` | string | Tên field ảnh. Tùy theo model: `image_128` (thumbnail), `image_1920` (full size), `image` (banner) |
+| Field | Type | Required | Default | Mô tả |
+|-------|------|----------|---------|-------|
+| `model` | string | **Required** | — | Tên model Odoo. Các model được hỗ trợ: `product.product`, `product.template`, `pos.category`, `zalo.miniapp.banner`, `product.multi.image` |
+| `id` | int | **Required** | — | ID của bản ghi |
+| `field` | string | Optional | `image_128` | Tên field ảnh. Tùy theo model: `image_128` (thumbnail), `image_1920` (full size), `image` (banner) |
 
-#### Request Examples
+#### Request Example
 
-**Product Variant (thumbnail 128px)**:
-```
-GET /api/v1/zalo/image/product.product/42/image_128
-```
-
-**Product Template (full size 1920px)**:
-```
-GET /api/v1/zalo/image/product.template/10/image_1920
-```
-
-**Category Image**:
-```
-GET /api/v1/zalo/image/pos.category/5/image_128
-```
-
-**Banner Image**:
-```
-GET /api/v1/zalo/image/zalo.miniapp.banner/1/image
-```
-
-**Product Multi Image (ảnh phụ)**:
-```
-GET /api/v1/zalo/image/product.multi.image/15/image_1920
+```json
+{
+  "model": "product.product",
+  "id": 42,
+  "field": "image_128"
+}
 ```
 
 #### Response
@@ -1502,6 +1485,7 @@ GET /api/v1/zalo/image/product.multi.image/15/image_1920
 
 | Code | HTTP Status | Điều kiện |
 |------|-------------|-----------|
+| `INVALID_INPUT` | 400 | Thiếu `model` hoặc `id` |
 | `FORBIDDEN` | 403 | Model không được phép (không nằm trong whitelist) |
 | `NOT_FOUND` | 404 | Model không tồn tại; Bản ghi không tồn tại; Field không tồn tại; Không có ảnh |
 | `SERVER_ERROR` | 500 | Lỗi server không xác định |
