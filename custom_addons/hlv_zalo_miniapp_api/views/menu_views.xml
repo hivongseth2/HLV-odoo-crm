@@ -52,6 +52,6 @@
     <menuitem id="menu_zalo_miniapp_order_app"
               name="Đơn hàng Zalo"
               parent="menu_zalo_miniapp_management"
-              action="sale.action_orders"
+              action="action_zalo_sale_order"
               sequence="50"/>
 </odoo>

@@ -29,7 +29,8 @@ hlv_zalo_miniapp_api/
 │   ├── banner_views.xml        # View cho Banners
 │   ├── product_product_views.xml # Views & Action filter sản phẩm Zalo
 │   ├── product_template_views.xml# Views bổ sung fields Zalo trên template
-│   └── res_partner_views.xml   # Views & Action filter khách hàng Zalo
+│   ├── res_partner_views.xml   # Views & Action filter khách hàng Zalo
+│   └── sale_order_views.xml    # Action filter đơn hàng từ khách hàng Zalo
 ├── security/
 │   └── ir.model.access.csv
 └── TECHNICAL.md

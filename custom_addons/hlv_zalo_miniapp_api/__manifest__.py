@@ -26,6 +26,7 @@
         "views/product_product_views.xml",
         "views/res_partner_views.xml",
         "views/banner_views.xml",
+        "views/sale_order_views.xml",
         "views/menu_views.xml",
     ],
     "installable": True,
