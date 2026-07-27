@@ -365,6 +365,21 @@ class MisaExtensionController(http.Controller):
                     "qty_delivered": line.qty_delivered if hasattr(line, 'qty_delivered') else 0.0,
                 })
 
+            # Kho trên SO là kết quả đã được resolve từ CustomField2/StockIDText
+            # bởi sale.order._misa_warehouse_from_sale_lines trong luồng đồng bộ.
+            warehouse = so.warehouse_id.sudo()
+            warehouse_location = (
+                warehouse.lot_stock_id.complete_name
+                if warehouse and warehouse.lot_stock_id
+                else ""
+            )
+            warehouse_payload = {
+                "id": warehouse.id if warehouse else False,
+                "name": warehouse.name if warehouse else "",
+                "code": warehouse.code if warehouse else "",
+                "location": warehouse_location,
+            }
+
             # Nếu đơn đã hủy trên Odoo, hiển thị Đã hủy và cho phép đồng bộ lại
             if so.state == 'cancel':
                 payload = {
@@ -377,6 +392,11 @@ class MisaExtensionController(http.Controller):
                     "can_revoke": False,
                     "can_resync": True,
                     "message": "Đơn đã bị hủy trên Odoo, có thể đồng bộ lại.",
+                    "warehouse": warehouse_payload,
+                    "warehouse_id": warehouse_payload["id"],
+                    "warehouse_name": warehouse_payload["name"],
+                    "warehouse_code": warehouse_payload["code"],
+                    "warehouse_location": warehouse_payload["location"],
                     "lines": lines_data,
                 }
                 return request.make_response(
@@ -506,6 +526,11 @@ class MisaExtensionController(http.Controller):
                     "misa_sale_edit_locked_at": (
                         fields.Datetime.to_string(edit_locked_at) if edit_locked_at else False
                     ),
+                    "warehouse": warehouse_payload,
+                    "warehouse_id": warehouse_payload["id"],
+                    "warehouse_name": warehouse_payload["name"],
+                    "warehouse_code": warehouse_payload["code"],
+                    "warehouse_location": warehouse_payload["location"],
                     "sync_baseline_lines": sync_baseline_lines,
                     "sync_baseline_source": sync_baseline_source,
                     "sync_baseline_header": {
@@ -514,6 +539,7 @@ class MisaExtensionController(http.Controller):
                         "account_name": so.partner_id.name or "",
                         "book_date": fields.Datetime.to_string(so.date_order) if so.date_order else "",
                         "deadline_date": fields.Datetime.to_string(so.commitment_date) if so.commitment_date else "",
+                        "warehouse_location": warehouse_payload["location"],
                     },
                     "lines": lines_data,
                 }
