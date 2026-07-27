@@ -31,8 +31,8 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
                 })
 
         category = None
-        if product.pos_categ_ids:
-            cat = product.pos_categ_ids[0]
+        if product.x_zalo_categ_ids:
+            cat = product.x_zalo_categ_ids[0]
             category = {"id": cat.id, "name": cat.name}
         elif product.categ_id:
             category = {"id": product.categ_id.id, "name": product.categ_id.name}
@@ -142,7 +142,7 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
             ]
 
             if category_id:
-                domain.append(("pos_categ_ids", "in", [category_id]))
+                domain.append(("x_zalo_categ_ids", "in", [category_id]))
 
             # Lọc theo khoảng giá
             if min_price > 0:
