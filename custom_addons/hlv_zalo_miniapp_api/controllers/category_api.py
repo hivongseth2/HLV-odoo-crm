@@ -147,23 +147,20 @@ class ZaloCategoryAPI(ZaloBaseAPI, http.Controller):
     # Body: {"model": "product.product", "id": 23812, "field": "image_128"}
     # =========================================================================
     @http.route(
-        "/api/v1/zalo/image/<path:image_path>",
+        "/api/v1/zalo/image/<string:safe_model>/<int:rec_id>/<string:field>",
         type="http",
         auth="public",
         methods=["GET"],
         csrf=False,
     )
-    def get_image_by_path(self, image_path, **params):
+    def get_image_by_path(self, safe_model, rec_id, field="image_128", **params):
         """Trả ảnh dạng binary qua GET với path params.
         URL: /api/v1/zalo/image/product-product/123/image_128
         Model name dùng dấu - thay cho . (vd: product-product = product.product)"""
         try:
-            parts = image_path.strip("/").split("/")
-            if len(parts) < 2:
-                return self._response_error("INVALID_INPUT", "URL không hợp lệ. Format: /api/v1/zalo/image/<model>/<id>/<field>", 400)
-            safe_model = parts[0]
-            rec_id = self._parse_int(parts[1], 0)
-            field = parts[2] if len(parts) > 2 else "image_128"
+            safe_model = (safe_model or "").strip()
+            if not safe_model:
+                return self._response_error("INVALID_INPUT", "Thiếu model", 400)
             # Convert safe model name back to dot notation
             model = safe_model.replace("-", ".")
             if not model or not rec_id:
