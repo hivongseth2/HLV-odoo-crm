@@ -142,21 +142,25 @@ class ZaloCategoryAPI(ZaloBaseAPI, http.Controller):
             return self._response_error("SERVER_ERROR", str(e), 500)
 
     # =========================================================================
-    # GET /api/v1/zalo/image/<model>/<id>/<field>
+    # GET /api/v1/zalo/image?model=product.product&id=23812&field=image_128
     # =========================================================================
     @http.route(
-        "/api/v1/zalo/image/<model>/<int:rec_id>/<field>",
+        "/api/v1/zalo/image",
         type="http",
         auth="public",
         methods=["GET"],
         csrf=False,
     )
-    def get_image(self, model, rec_id, field="image_128"):
+    def get_image(self, **params):
         """Trả ảnh dạng binary.
-        Security: Chỉ cho phép các model trong ALLOWED_IMAGE_MODELS."""
+        Security: Chỉ cho phép các model trong ALLOWED_IMAGE_MODELS.
+        Query params: model (required), id (required), field (default: image_128)"""
         try:
-            # Decode model name: product-product -> product.product
-            model = model.replace('-', '.')
+            model = params.get("model", "")
+            rec_id = self._parse_int(params.get("id"), 0)
+            field = params.get("field", "image_128")
+            if not model or not rec_id:
+                return self._response_error("INVALID_INPUT", "Thiếu model hoặc id")
             # Whitelist model check
             if model not in self.ALLOWED_IMAGE_MODELS:
                 _logger.warning("Rejected image access for unauthorized model: %s", model)

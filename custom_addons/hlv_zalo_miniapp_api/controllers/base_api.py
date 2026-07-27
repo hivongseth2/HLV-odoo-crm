@@ -98,9 +98,8 @@ class ZaloBaseAPI:
         """Return a relative URL for the image."""
         if not rec_id:
             return None
-        # Dùng dấu - thay vì . vì Odoo route param không parse được dấu .
-        safe_model = model.replace('.', '-')
-        return f"/api/v1/zalo/image/{safe_model}/{rec_id}/{field}"
+        # Dùng query params để tránh lỗi parse path parameter trong Odoo 18
+        return f"/api/v1/zalo/image?model={model}&id={rec_id}&field={field}"
 
     @staticmethod
     def _request_json():
