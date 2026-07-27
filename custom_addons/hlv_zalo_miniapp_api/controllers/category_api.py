@@ -20,11 +20,13 @@ class ZaloCategoryAPI(ZaloBaseAPI, http.Controller):
         "/api/v1/zalo/categories/list",
         type="http",
         auth="public",
-        methods=["POST"],
+        methods=["POST", "OPTIONS"],
         csrf=False,
     )
     def category_list(self, **params):
         """Danh sách danh mục (pos.category) có phân trang."""
+        if request.httprequest.method == "OPTIONS":
+            return self._response_options()
         try:
             body = self._request_json()
             try:
@@ -72,13 +74,15 @@ class ZaloCategoryAPI(ZaloBaseAPI, http.Controller):
         "/api/v1/zalo/categories/products",
         type="http",
         auth="public",
-        methods=["POST"],
+        methods=["POST", "OPTIONS"],
         csrf=False,
     )
     def category_products(self, **params):
         """Lấy sản phẩm (variant) theo danh mục.
         Body: {"category_id": 1, "limit": 10, "offset": 0}
         category_id có thể là x_misa_id hoặc ID nội bộ của Odoo."""
+        if request.httprequest.method == "OPTIONS":
+            return self._response_options()
         try:
             body = self._request_json()
             category_id = self._parse_int(body.get("category_id"), 0)
@@ -150,13 +154,15 @@ class ZaloCategoryAPI(ZaloBaseAPI, http.Controller):
         "/api/v1/zalo/image/<string:safe_model>/<int:rec_id>/<string:field>",
         type="http",
         auth="public",
-        methods=["GET"],
+        methods=["GET", "OPTIONS"],
         csrf=False,
     )
     def get_image_by_path(self, safe_model, rec_id, field="image_128", **params):
         """Trả ảnh dạng binary qua GET với path params.
         URL: /api/v1/zalo/image/product-product/123/image_128
         Model name dùng dấu - thay cho . (vd: product-product = product.product)"""
+        if request.httprequest.method == "OPTIONS":
+            return self._response_options()
         try:
             safe_model = (safe_model or "").strip()
             if not safe_model:
@@ -171,8 +177,6 @@ class ZaloCategoryAPI(ZaloBaseAPI, http.Controller):
                 return self._response_error("FORBIDDEN", "Model không được phép", 403)
 
             Model = request.env.get(model)
-            # A model recordset has no records, therefore its boolean value is
-            # always False.  Only None means the model is not registered.
             if Model is None:
                 return self._response_error("NOT_FOUND", "Model không tồn tại", 404)
 
@@ -189,20 +193,22 @@ class ZaloCategoryAPI(ZaloBaseAPI, http.Controller):
                 content_type="image/png",
             )
         except Exception as e:
-            _logger.exception("get_image error")
+            _logger.exception("get_image_by_path error")
             return self._response_error("SERVER_ERROR", str(e), 500)
 
     @http.route(
         "/api/v1/zalo/image",
         type="http",
         auth="public",
-        methods=["POST"],
+        methods=["POST", "OPTIONS"],
         csrf=False,
     )
     def get_image(self, **params):
         """Trả ảnh dạng binary qua POST với JSON body.
         Security: Chỉ cho phép các model trong ALLOWED_IMAGE_MODELS.
         Body: {"model": "product.product", "id": 23812, "field": "image_128"}"""
+        if request.httprequest.method == "OPTIONS":
+            return self._response_options()
         try:
             body = self._request_json()
             model = (body.get("model") or "").strip()
@@ -216,7 +222,6 @@ class ZaloCategoryAPI(ZaloBaseAPI, http.Controller):
                 return self._response_error("FORBIDDEN", "Model không được phép", 403)
 
             Model = request.env.get(model)
-            # Do not use ``if not Model``: an empty model recordset is falsy.
             if Model is None:
                 return self._response_error("NOT_FOUND", "Model không tồn tại", 404)
 

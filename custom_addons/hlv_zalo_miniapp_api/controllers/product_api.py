@@ -110,13 +110,15 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
         "/api/v1/zalo/products/list",
         type="http",
         auth="public",
-        methods=["POST"],
+        methods=["POST", "OPTIONS"],
         csrf=False,
     )
     def product_list(self, **params):
         """Danh sách sản phẩm (variant) với sort/filter/query.
         Body: {"limit":10, "offset":0, "query":"áo", "sort":"name", "category_id":0,
                "min_price":10000, "max_price":500000, "in_stock":true}"""
+        if request.httprequest.method == "OPTIONS":
+            return self._response_options()
         try:
             body = self._request_json()
             try:
@@ -201,12 +203,14 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
         "/api/v1/zalo/products/detail",
         type="http",
         auth="public",
-        methods=["POST"],
+        methods=["POST", "OPTIONS"],
         csrf=False,
     )
     def product_detail(self, **params):
         """Chi tiết sản phẩm (variant).
         Body: {"product_id": 1}"""
+        if request.httprequest.method == "OPTIONS":
+            return self._response_options()
         try:
             body = self._request_json()
             product_id = self._parse_int(body.get("product_id"), 0)

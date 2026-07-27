@@ -67,6 +67,18 @@ class ZaloBaseAPI:
         }
 
     @staticmethod
+    def _response_options():
+        """Response 200 OK cho HTTP OPTIONS preflight request."""
+        headers = ZaloBaseAPI._cors_headers()
+        return Response(status=200, headers=headers)
+
+    def _check_options(self):
+        """Trả về 200 OK Response nếu request là OPTIONS preflight."""
+        if request.httprequest.method == "OPTIONS":
+            return self._response_options()
+        return None
+
+    @staticmethod
     def _response_success(data=None, status=200):
         payload = {"success": True, "data": data or {}}
         headers = ZaloBaseAPI._cors_headers()

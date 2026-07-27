@@ -87,9 +87,11 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             return {"valid": False, "error": "Không thể kiểm tra voucher"}
 
     # POST /api/v1/zalo/orders/list
-    @http.route("/api/v1/zalo/orders/list", type="http", auth="public", methods=["POST"], csrf=False)
+    @http.route("/api/v1/zalo/orders/list", type="http", auth="public", methods=["POST", "OPTIONS"], csrf=False)
     def order_list(self, **params):
         """Body: {"contact_id": 1, "limit": 20, "offset": 0, "state": "sale"}"""
+        if request.httprequest.method == "OPTIONS":
+            return self._response_options()
         try:
             body = self._request_json()
             contact_id = self._parse_int(body.get("contact_id"), 0)
@@ -127,9 +129,11 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             return self._response_error("SERVER_ERROR", str(e), 500)
 
     # POST /api/v1/zalo/orders/detail
-    @http.route("/api/v1/zalo/orders/detail", type="http", auth="public", methods=["POST"], csrf=False)
+    @http.route("/api/v1/zalo/orders/detail", type="http", auth="public", methods=["POST", "OPTIONS"], csrf=False)
     def order_detail(self, **params):
         """Body: {"order_id": 1}"""
+        if request.httprequest.method == "OPTIONS":
+            return self._response_options()
         try:
             body = self._request_json()
             order_id = self._parse_int(body.get("order_id"), 0)
@@ -154,12 +158,14 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             return self._response_error("SERVER_ERROR", str(e), 500)
 
     # POST /api/v1/zalo/orders/create
-    @http.route("/api/v1/zalo/orders/create", type="http", auth="public", methods=["POST"], csrf=False)
+    @http.route("/api/v1/zalo/orders/create", type="http", auth="public", methods=["POST", "OPTIONS"], csrf=False)
     def order_create(self, **params):
         """Body: {"contact_id":1, "items":[{"product_id":42,"quantity":2}], "address_id":2, "note":"...", "voucher_code":"VHQ-XXXXX"}
         
         items: Danh sách sản phẩm từ frontend (frontend tự quản lý giỏ hàng)
         """
+        if request.httprequest.method == "OPTIONS":
+            return self._response_options()
         try:
             body = self._request_json()
             contact_id = self._parse_int(body.get("contact_id"))
@@ -272,9 +278,11 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             return self._response_error("SERVER_ERROR", str(e), 500)
 
     # POST /api/v1/zalo/orders/cancel
-    @http.route("/api/v1/zalo/orders/cancel", type="http", auth="public", methods=["POST"], csrf=False)
+    @http.route("/api/v1/zalo/orders/cancel", type="http", auth="public", methods=["POST", "OPTIONS"], csrf=False)
     def order_cancel(self, **params):
         """Body: {"order_id": 1, "contact_id": 1, "reason": "Đổi ý"}"""
+        if request.httprequest.method == "OPTIONS":
+            return self._response_options()
         try:
             body = self._request_json()
             order_id = self._parse_int(body.get("order_id"), 0)
