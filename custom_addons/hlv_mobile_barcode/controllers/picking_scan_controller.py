@@ -1747,17 +1747,16 @@ class HLVMobileBarcodePickingScan(http.Controller):
             return {'error': _('Vui lòng quét mã Vị trí (Kệ hàng) trước khi quét sản phẩm!')}
 
         product = request.env['product.product'].sudo().search(['|', ('barcode', '=', barcode), ('default_code', '=', barcode)], limit=1)
-        if not product:
-            # Thử tìm Lot/Serial nếu không tìm thấy product
-            lot = request.env['stock.lot'].sudo().search(
-                ['|', ('name', '=', barcode), ('ref', '=', barcode)], limit=1
-            )
-            if lot and lot.product_id:
-                product = lot.product_id
-                lot_id = lot.id
-                lot_name = lot.name
-            else:
-                return {'error': _('Không tìm thấy mã vạch hợp lệ (Sản phẩm hoặc Vị trí).')}
+        # Luôn kiểm tra Lot/Serial, kể cả khi tìm thấy product (Lot được ưu tiên hơn)
+        lot = request.env['stock.lot'].sudo().search(
+            ['|', ('name', '=', barcode), ('ref', '=', barcode)], limit=1
+        )
+        if lot and lot.product_id:
+            product = lot.product_id
+            lot_id = lot.id
+            lot_name = lot.name
+        elif not product:
+            return {'error': _('Không tìm thấy mã vạch hợp lệ (Sản phẩm hoặc Vị trí).')}
 
         if picking.source_transfer_id:
             step2_entries, missing_step2_lines = _step2_canonical_line_entries(picking)
@@ -2137,6 +2136,14 @@ class HLVMobileBarcodePickingScan(http.Controller):
                 move_line = move_line.filtered(lambda ml: ml.location_dest_id.id == destination_location_id)
         if is_pick_picking:
             updated_move_line = move_line[0]
+            # Ưu tiên dòng có lot khớp nếu quét từ Lot/Serial (fix bug: luôn chọn dòng đầu tiên)
+            if lot_id:
+                lot_matched = move_line.filtered(lambda ml: ml.lot_id.id == lot_id)
+                if lot_matched:
+                    updated_move_line = lot_matched[0]
+                else:
+                    # Báo lỗi thay vì chọn sai dòng khi không tìm thấy dòng khớp lot
+                    return {'error': _('Không có dòng lấy hàng cho Lô "%s" tại vị trí này. Vui lòng kiểm tra lại!', lot_name)}
             updated_move_line.qty_scanned += 1
             res = {
                 'success': True,

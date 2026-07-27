@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from odoo import models, fields
 
+
 class ProductTemplate(models.Model):
     _inherit = 'product.template'
 
@@ -13,4 +14,12 @@ class ProductTemplate(models.Model):
         string='Hiển thị trên Zalo',
         default=False,
         help='Chỉ sản phẩm có flag này = True mới xuất hiện trên Zalo Mini App',
+    )
+    x_zalo_categ_ids = fields.Many2many(
+        'pos.category',
+        relation='product_template_x_zalo_categ_ids_rel',
+        column1='product_template_id',
+        column2='pos_category_id',
+        string='Danh mục Zalo',
+        help='Danh mục sản phẩm hiển thị trên Zalo Mini App (kế thừa từ POS category)',
     )
