@@ -971,6 +971,8 @@ class HLVMobileBarcodeInventory(http.Controller):
                     'location_barcode': q.location_id.barcode or q.location_id.name,
                     'quantity': q.quantity,
                     'package_name': q.package_id.name if q.package_id else '',
+                    'lot_id': q.lot_id.id or False,
+                    'lot_name': q.lot_id.name if q.lot_id else '',
                 })
                 
             # Fetch reservations (picking holding this product)
@@ -1020,6 +1022,8 @@ class HLVMobileBarcodeInventory(http.Controller):
                     'package_name': q.package_id.name if q.package_id else '',
                     'quant_id': q.id,
                     'location_name': q.location_id.display_name,
+                    'lot_id': q.lot_id.id or False,
+                    'lot_name': q.lot_id.name if q.lot_id else '',
                 })
             return {'title': title, 'location_barcode': location_barcode, 'location_name': title, 'results': results, 'reservations': reservations, 'warehouse_code': warehouse_code}
         elif lookup_type == 'package':
@@ -1041,6 +1045,8 @@ class HLVMobileBarcodeInventory(http.Controller):
                     'quantity': q.quantity,
                     'location_name': q.location_id.display_name,
                     'quant_id': q.id,
+                    'lot_id': q.lot_id.id or False,
+                    'lot_name': q.lot_id.name if q.lot_id else '',
                 })
                 if not location and q.location_id:
                     location = q.location_id

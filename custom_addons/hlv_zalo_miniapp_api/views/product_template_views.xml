@@ -14,6 +14,11 @@
             <xpath expr="//group[@name='group_standard_price']" position="inside">
                 <field name="x_zalo_price"/>
             </xpath>
+            <xpath expr="//page[@name='sales']" position="inside">
+                <group string="Danh mục Zalo">
+                    <field name="x_zalo_categ_ids" widget="many2many_tags"/>
+                </group>
+            </xpath>
         </field>
     </record>
 

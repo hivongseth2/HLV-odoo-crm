@@ -100,7 +100,7 @@ class ZaloCategoryAPI(ZaloBaseAPI, http.Controller):
                 return self._response_error("NOT_FOUND", "Danh mục không tồn tại", 404)
 
             domain = [
-                ("pos_categ_ids", "in", [category.id]),
+                ("x_zalo_categ_ids", "in", [category.id]),
                 ("x_active_zalo", "=", True),
                 ("active", "=", True),
                 ("sale_ok", "=", True),

@@ -6,7 +6,7 @@
     "author": "HLV",
     "category": "Inventory/Reporting",
     "license": "LGPL-3",
-    "depends": ["stock", "purchase", "sale"],
+    "depends": ["stock", "purchase", "sale", "hlv_purchase_line_custom"],
     "data": [
         "security/ir.model.access.csv",
         "views/picking_export_wizard_views.xml", 

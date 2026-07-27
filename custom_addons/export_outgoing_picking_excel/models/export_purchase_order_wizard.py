@@ -99,6 +99,7 @@ class PurchaseExportWizard(models.TransientModel):
             {'key': 'ma_cong_trinh', 'name': 'Mã công trình', 'width': 18},
             {'key': 'so_don_dat_hang', 'name': 'Số đơn đặt hàng', 'width': 20},
             {'key': 'so_don_mua_hang', 'name': 'Số đơn mua hàng', 'width': 20},
+            {'key': 'misa_purchase_order_org_ref_detail_id', 'name': 'MISA org_ref_detail_id', 'width': 30},
             {'key': 'so_hop_dong_mua', 'name': 'Số hợp đồng mua', 'width': 20},
             {'key': 'so_hop_dong_ban', 'name': 'Số hợp đồng bán', 'width': 20},
             {'key': 'ma_thong_ke', 'name': 'Mã thống kê', 'width': 15},
@@ -150,6 +151,22 @@ class PurchaseExportWizard(models.TransientModel):
                 seen.add(token)
         return ", ".join(out)
 
+    def _get_returned_qty_for_move(self, move):
+        """Tính tổng số lượng đã trả lại cho 1 stock.move nhập kho (chỉ lấy phiếu trả hàng ở trạng thái done)."""
+        returned_moves = move.returned_move_ids.filtered(lambda m: m.state == 'done')
+        if not returned_moves:
+            returned_moves = self.env['stock.move'].sudo().search([
+                ('origin_returned_move_id', '=', move.id),
+                ('state', '=', 'done')
+            ])
+        total_returned = 0.0
+        for rm in returned_moves:
+            qty = rm.quantity_done if hasattr(rm, 'quantity_done') else getattr(rm, 'quantity', rm.product_uom_qty)
+            if rm.product_uom and move.product_uom and rm.product_uom != move.product_uom:
+                qty = rm.product_uom._compute_quantity(qty, move.product_uom)
+            total_returned += qty
+        return total_returned
+
     def _get_picking_line_rows(self, picking):
         receipt_date_str = _to_date_str(picking.date_done)
         picking_name = picking.name or ""
@@ -164,6 +181,15 @@ class PurchaseExportWizard(models.TransientModel):
 
         rows = []
         
+        # Pre-compute net quantity per stock.move in this picking
+        move_net_qty_map = {}
+        for move in picking.move_ids:
+            if move.state != 'done':
+                continue
+            orig_qty = move.quantity_done if hasattr(move, 'quantity_done') else getattr(move, 'quantity', move.product_uom_qty)
+            ret_qty = self._get_returned_qty_for_move(move)
+            move_net_qty_map[move.id] = max(0.0, orig_qty - ret_qty)
+
         # Helper to process a move/move_line
         def process_line(move, qty, uom):
             if not move.product_id:
@@ -172,10 +198,19 @@ class PurchaseExportWizard(models.TransientModel):
             # Purchase Order Line information
             pol = move.purchase_line_id
             
+            # Adjust qty based on returned qty
+            orig_move_qty = move.quantity_done if hasattr(move, 'quantity_done') else getattr(move, 'quantity', move.product_uom_qty)
+            net_move_qty = move_net_qty_map.get(move.id, orig_move_qty)
+            
+            if orig_move_qty > 0:
+                net_qty = (qty / orig_move_qty) * net_move_qty
+            else:
+                net_qty = qty
+
             rows.append(self._build_row_data(
-                picking, pol, move.product_id, qty, uom,
+                picking, pol, move.product_id, net_qty, uom,
                 receipt_date_str, picking_name, purchase_name, partner_code, partner_name,
-                partner_addr, partner_vat, ma_kho
+                partner_addr, partner_vat, ma_kho, move=move
             ))
 
         # Iterate over move lines if available, otherwise moves without package
@@ -184,13 +219,13 @@ class PurchaseExportWizard(models.TransientModel):
                 process_line(ml.move_id, ml.qty_done, ml.product_uom_id)
         else:
             for move in picking.move_ids_without_package:
-                process_line(move, move.quantity_done, move.product_uom)
+                process_line(move, move.quantity_done if hasattr(move, 'quantity_done') else getattr(move, 'quantity', move.product_uom_qty), move.product_uom)
                 
         return rows
 
     def _build_row_data(self, picking, pol, prod, qty, uom,
                         receipt_date_str, picking_name, purchase_name, partner_code, partner_name,
-                        partner_address, partner_vat, ma_kho):
+                        partner_address, partner_vat, ma_kho, move=None):
         product_code = prod.default_code or getattr(prod, 'barcode', '') or ""
         product_name = prod.display_name or prod.name or ""
         uom_name     = uom.name if uom else ""
@@ -210,14 +245,14 @@ class PurchaseExportWizard(models.TransientModel):
             ty_le_ck = getattr(pol, "discount", 0.0) or 0.0
             
             # Calculate taxes based on the ratio from the PO line
-            # Tax amount per unit * qty or Tax percent * amount?
-            # Re-calculating closely to how Odoo does it might be complex with tax inclusion/exclusion
-            # Simplified approach: (Total Tax / Total Amount) * Line Amount
-            # Or just use the tax percent if standard.
-            
-            # Here keeping consistent with previous logic:
             ty_le_thue_gtgt = next((t.amount or 0.0 for t in pol.taxes_id), 0.0)
             tien_thue_gtgt  = thanh_tien * ty_le_thue_gtgt / 100.0
+
+        misa_org_ref_id = ""
+        if move:
+            misa_org_ref_id = getattr(move, 'misa_purchase_order_org_ref_detail_id', '') or ''
+        if not misa_org_ref_id and pol:
+            misa_org_ref_id = getattr(pol, 'misa_purchase_order_org_ref_detail_id', '') or ''
 
         return {
             # Fixed fields
@@ -292,6 +327,7 @@ class PurchaseExportWizard(models.TransientModel):
             'ma_cong_trinh': '',
             'so_don_dat_hang': '',
             'so_don_mua_hang': purchase_name, # Changed: PO Name
+            'misa_purchase_order_org_ref_detail_id': misa_org_ref_id,
             'so_hop_dong_mua': '',
             'so_hop_dong_ban': '',
             'ma_thong_ke': '',

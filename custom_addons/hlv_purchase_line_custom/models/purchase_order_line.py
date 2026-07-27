@@ -64,10 +64,5 @@ class PurchaseOrderLine(models.Model):
                 number += 1
                 line.stt = str(number)
 
-    def _prepare_stock_moves(self, picking):
-        res = super()._prepare_stock_moves(picking)
-        for re in res:
-            re["production_year"] = self.production_year
-            re["country_of_origin"] = self.country_of_origin
-        return res
+
 

@@ -10,20 +10,6 @@ class StockMove(models.Model):
         store=False,
         help="Số thứ tự của dòng trong phiếu nhập kho / đơn mua",
     )
-    production_year = fields.Char(
-        string="Năm sản xuất",
-        related="purchase_line_id.production_year",
-        store=True,
-        readonly=False,
-        help="Năm sản xuất được liên kết từ dòng đơn mua hàng",
-    )
-    country_of_origin = fields.Char(
-        string="Xuất xứ",
-        related="purchase_line_id.country_of_origin",
-        store=True,
-        readonly=False,
-        help="Xuất xứ được liên kết từ dòng đơn mua hàng",
-    )
     misa_purchase_order_org_ref_detail_id = fields.Char(
         string="MISA org_ref_detail_id",
         related="purchase_line_id.misa_purchase_order_org_ref_detail_id",

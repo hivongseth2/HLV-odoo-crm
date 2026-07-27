@@ -955,7 +955,7 @@ class HLVMobileBarcodePickingScan(http.Controller):
     def smart_scan(self, barcode):
         """
         Smart Routing API: Determine what the scanned barcode represents.
-        Priority: Picking > Product > Location > Package
+        Priority: Picking > Product > Lot/Serial > Location > Package
         """
         if not barcode:
             return {'error': _('Mã vạch không hợp lệ')}
@@ -998,6 +998,19 @@ class HLVMobileBarcodePickingScan(http.Controller):
         product = request.env['product.product'].sudo().search(['|', ('barcode', '=', barcode), ('default_code', '=', barcode)], limit=1)
         if product:
             return {'type': 'product', 'id': product.id, 'name': product.display_name}
+
+        # 2.5. Check if it's a Lot/Serial Number (search by name or ref)
+        lot = request.env['stock.lot'].sudo().search(
+            ['|', ('name', '=', barcode), ('ref', '=', barcode)], limit=1
+        )
+        if lot and lot.product_id:
+            return {
+                'type': 'product',
+                'id': lot.product_id.id,
+                'name': lot.product_id.display_name,
+                'lot_id': lot.id,
+                'lot_name': lot.name,
+            }
 
         # 3. Check if it's a Location (Barcode or Name)
         location = request.env['stock.location'].sudo().search(['|', ('barcode', '=', barcode), ('name', '=', barcode)], limit=1)
@@ -1136,6 +1149,9 @@ class HLVMobileBarcodePickingScan(http.Controller):
                         'package_id': ml.package_id.id or False,
                         'is_package_transfer_line': is_package_transfer_line,
                         'package_physical_qty': ml.quantity if is_package_transfer_line else False,
+                        'lot_id': ml.lot_id.id or False,
+                        'lot_name': ml.lot_id.name or ml.lot_name or '',
+                        'tracking': move.product_id.tracking or 'none',
                     })
             else:
                 if is_pick_picking or picking.source_transfer_id:
@@ -1160,6 +1176,9 @@ class HLVMobileBarcodePickingScan(http.Controller):
                     'package_name': False,
                     'result_package_id': False,
                     'package_id': False,
+                    'lot_id': False,
+                    'lot_name': '',
+                    'tracking': move.product_id.tracking or 'none',
                 })
 
         if is_pick_picking and not lines:
@@ -1368,7 +1387,7 @@ class HLVMobileBarcodePickingScan(http.Controller):
 
 
     @http.route('/hlv_mobile_barcode/process_barcode', type='json', auth='user')
-    def process_barcode(self, picking_id, barcode, destination_location_id=None, last_product_id=None, last_move_line_id=None, location_mode=None, is_multi_location=False, preferred_move_line_id=None, force_partial_package=False, create_loose_lines_only=False):
+    def process_barcode(self, picking_id, barcode, destination_location_id=None, last_product_id=None, last_move_line_id=None, location_mode=None, is_multi_location=False, preferred_move_line_id=None, force_partial_package=False, create_loose_lines_only=False, lot_id=None, lot_name=None):
         picking = request.env['stock.picking'].browse(picking_id)
         if not picking.exists() or picking.state not in ['draft', 'confirmed', 'assigned']:
             return {'error': _('Phiếu này không thể xử lý thêm sản phẩm.')}
@@ -1728,7 +1747,15 @@ class HLVMobileBarcodePickingScan(http.Controller):
             return {'error': _('Vui lòng quét mã Vị trí (Kệ hàng) trước khi quét sản phẩm!')}
 
         product = request.env['product.product'].sudo().search(['|', ('barcode', '=', barcode), ('default_code', '=', barcode)], limit=1)
-        if not product:
+        # Luôn kiểm tra Lot/Serial, kể cả khi tìm thấy product (Lot được ưu tiên hơn)
+        lot = request.env['stock.lot'].sudo().search(
+            ['|', ('name', '=', barcode), ('ref', '=', barcode)], limit=1
+        )
+        if lot and lot.product_id:
+            product = lot.product_id
+            lot_id = lot.id
+            lot_name = lot.name
+        elif not product:
             return {'error': _('Không tìm thấy mã vạch hợp lệ (Sản phẩm hoặc Vị trí).')}
 
         if picking.source_transfer_id:
@@ -1744,6 +1771,11 @@ class HLVMobileBarcodePickingScan(http.Controller):
                 1 if entry['package'] else 0,
                 entry['target_line'].id,
             ))
+            # Bổ sung ưu tiên entry có lot khớp nếu quét từ Lot/Serial
+            if lot_id:
+                lot_entries = [e for e in product_entries if e['target_line'].lot_id.id == lot_id]
+                other_entries = [e for e in product_entries if e['target_line'].lot_id.id != lot_id]
+                product_entries = lot_entries + other_entries
             if not product_entries:
                 return {'error': _('Sản phẩm "%s" đã được quét đủ số lượng của phiếu Bước 2.', product.display_name)}
 
@@ -1822,6 +1854,11 @@ class HLVMobileBarcodePickingScan(http.Controller):
             )
             if destination_location_id:
                 lines = lines.filtered(lambda ml: ml.location_id.id == destination_location_id)
+            # Bổ sung filter theo lot_id nếu được quét từ Lot/Serial
+            if lot_id:
+                lot_lines = lines.filtered(lambda ml: ml.lot_id.id == lot_id)
+                if lot_lines:
+                    lines = lot_lines
             return lines.sorted('id')
 
         product_moves = move
@@ -2005,6 +2042,11 @@ class HLVMobileBarcodePickingScan(http.Controller):
         # Step 2 putaway must update the existing Odoo-created move lines, including package lines.
         if picking.source_transfer_id and is_putaway:
             move_line = move.move_line_ids.filtered(lambda ml: ml.state not in ['done', 'cancel'])
+            # Nếu có lot_id, ưu tiên line có lot khớp
+            if lot_id:
+                lot_ml = move_line.filtered(lambda ml: ml.lot_id.id == lot_id)
+                if lot_ml:
+                    move_line = lot_ml
             available_move_line = move_line.filtered(
                 lambda ml: not ml.quantity_product_uom or (ml.qty_scanned if uses_qty_scanned else ml.quantity) < ml.quantity_product_uom
             )
@@ -2065,6 +2107,11 @@ class HLVMobileBarcodePickingScan(http.Controller):
             available_move_line = preferred_move_line if preferred_move_line else _pick_available_lines(move)
             if destination_location_id and move_line:
                 available_move_line = move_line.filtered(lambda ml: ml.qty_scanned < ml.quantity)
+            # Nếu có lot_id, ưu tiên dòng có lot khớp (fix bug quét mã Lô tăng sai dòng)
+            if lot_id and available_move_line:
+                lot_lines = available_move_line.filtered(lambda ml: ml.lot_id.id == lot_id)
+                if lot_lines:
+                    available_move_line = lot_lines
             if not available_move_line:
                 # Nếu tất cả dòng đã quét đủ quantity
                 loc_msg = _(' tại vị trí này') if destination_location_id else ''
@@ -2089,6 +2136,14 @@ class HLVMobileBarcodePickingScan(http.Controller):
                 move_line = move_line.filtered(lambda ml: ml.location_dest_id.id == destination_location_id)
         if is_pick_picking:
             updated_move_line = move_line[0]
+            # Ưu tiên dòng có lot khớp nếu quét từ Lot/Serial (fix bug: luôn chọn dòng đầu tiên)
+            if lot_id:
+                lot_matched = move_line.filtered(lambda ml: ml.lot_id.id == lot_id)
+                if lot_matched:
+                    updated_move_line = lot_matched[0]
+                else:
+                    # Báo lỗi thay vì chọn sai dòng khi không tìm thấy dòng khớp lot
+                    return {'error': _('Không có dòng lấy hàng cho Lô "%s" tại vị trí này. Vui lòng kiểm tra lại!', lot_name)}
             updated_move_line.qty_scanned += 1
             res = {
                 'success': True,
@@ -2143,6 +2198,8 @@ class HLVMobileBarcodePickingScan(http.Controller):
                     }
                     if scan_package:
                         new_ml_vals['package_id'] = scan_package.id
+                    if lot_id:
+                        new_ml_vals['lot_id'] = lot_id
                     if uses_qty_scanned:
                         new_ml_vals['qty_scanned'] = 1
                     else:
@@ -2160,6 +2217,8 @@ class HLVMobileBarcodePickingScan(http.Controller):
                 }
                 if scan_package:
                     new_ml_vals['package_id'] = scan_package.id
+                if lot_id:
+                    new_ml_vals['lot_id'] = lot_id
                 if uses_qty_scanned:
                     new_ml_vals['qty_scanned'] = 1
                 else:
@@ -2183,6 +2242,8 @@ class HLVMobileBarcodePickingScan(http.Controller):
             }
             if scan_package:
                 new_ml_vals['package_id'] = scan_package.id
+            if lot_id:
+                new_ml_vals['lot_id'] = lot_id
             if uses_qty_scanned:
                 new_ml_vals['qty_scanned'] = 1
             else:

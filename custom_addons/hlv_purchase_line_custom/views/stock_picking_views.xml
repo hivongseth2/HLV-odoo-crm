@@ -6,16 +6,14 @@
         <field name="model">stock.picking</field>
         <field name="inherit_id" ref="stock.view_picking_form"/>
         <field name="arch" type="xml">
-            <!-- Thêm cột MISA org_ref_detail_id, Năm sản xuất, Xuất xứ trong danh sách move_ids_without_package -->
+            <!-- Thêm cột MISA org_ref_detail_id trong danh sách move_ids_without_package -->
             <xpath expr="//field[@name='move_ids_without_package']/list/field[@name='product_id']" position="after">
                 <field name="misa_purchase_order_org_ref_detail_id" string="MISA org_ref_detail_id" optional="show" readonly="1"/>
-                <field name="production_year" string="Năm sản xuất" optional="show"/>
-                <field name="country_of_origin" string="Xuất xứ" optional="show"/>
             </xpath>
         </field>
     </record>
 
-    <!-- Kế thừa Detailed Operations Tree View của Chi tiết dịch chuyển (stock.move.line) -->
+    <!-- Kế thừa Detailed Operations list view (hiện khi bấm nút "Moves" trên picking) -->
     <record id="view_stock_move_line_detailed_operation_tree_inherit_line_custom" model="ir.ui.view">
         <field name="name">stock.move.line.detailed.operation.tree.inherit.line.custom</field>
         <field name="model">stock.move.line</field>
@@ -28,4 +26,18 @@
             </xpath>
         </field>
     </record>
+
+    <!-- Kế thừa Operations list view bên trong popup chi tiết của stock.move -->
+    <record id="view_stock_move_line_operation_tree_inherit_line_custom" model="ir.ui.view">
+        <field name="name">stock.move.line.operation.tree.inherit.line.custom</field>
+        <field name="model">stock.move.line</field>
+        <field name="inherit_id" ref="stock.view_stock_move_line_operation_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='product_id']" position="after">
+                <field name="production_year" string="Năm sản xuất" optional="show"/>
+                <field name="country_of_origin" string="Xuất xứ" optional="show"/>
+            </xpath>
+        </field>
+    </record>
 </odoo>
+

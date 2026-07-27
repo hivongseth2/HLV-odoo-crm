@@ -53,6 +53,9 @@
                                         <div t-if="props.lookupType === 'location' and res.location_name and res.location_name !== state.title" class="item-barcode" style="margin-top: 3px; color: var(--info-color); font-weight: 500;">
                                             <i class="fa fa-map-marker-alt me-1"/> <t t-esc="res.location_name"/>
                                         </div>
+                                        <div t-if="res.lot_name" class="item-barcode" style="margin-top: 3px; color: #d97706; font-weight: 500;">
+                                            <i class="fa fa-hashtag me-1"/> Lô: <t t-esc="res.lot_name"/>
+                                        </div>
                                         <div t-if="res.package_name" class="item-barcode" style="margin-top: 4px;">
                                             <span class="item-package-badge" style="box-shadow: none; padding: 2px 8px;">
                                                 <i class="fa fa-box"></i> <t t-esc="res.package_name"/>
