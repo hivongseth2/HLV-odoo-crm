@@ -27,18 +27,27 @@ Shopee statuses are mapped to Vietnamese labels and displayed using badges on Sa
 ### 3. Tracking Number Push
 - Shopee `order_trackingno_push` (`code=4`) carries `data.ordersn`,
   `data.package_number`, and `data.tracking_no`.
-- The webhook matches both `ordersn` and `shop_id`, then writes the latest
-  `tracking_no` to both `carrier_tracking_ref` and `name` on the related PICK
-  picking. If the sale has no PICK step, an outgoing picking is used as fallback.
-  If several candidates exist, the oldest active one is selected so picking
-  names remain unique.
+- The HTTP callback verifies the signature, persists a deduplicated
+  `shopee.webhook.event`, and immediately returns HTTP 204. No Shopee API call,
+  order creation, or picking update runs inside the callback timeout.
+- Cron `Shopee: Xử lý hàng đợi webhook` processes events outside the request.
+  Missing orders are fetched from Shopee and transient failures (including a
+  picking that has not been created yet) are retried internally.
+- The worker matches both `ordersn` and `shop_id`, then writes the latest
+  `tracking_no` to `carrier_tracking_ref` and, when it is not already used,
+  `name` on the related PICK picking. If the sale has no active PICK step, an
+  active outgoing picking is used as fallback.
 - Cancelled pickings are never updated. Active PICK pickings are preferred;
   a completed PICK is used only when no active PICK remains.
 - Code 4 requests must pass Shopee's `Authorization` HMAC-SHA256 check using the
   exact raw request body. Set `shopee_webhook.callback_url` when the public URL
   configured in Shopee differs from the URL seen by Odoo behind a reverse proxy.
-- Operational pushes return HTTP 204 with an empty body. Verification requests
-  still return the required `verify_info` JSON value.
+  Verification also checks the URL reconstructed from `X-Forwarded-*`,
+  `web.base.url`, and the current request URL to support Odoo.sh TLS termination.
+- Operational pushes always return HTTP 204 with an empty body, including
+  rejected/invalid pushes and internal queue errors, so Shopee does not disable
+  the callback. Verification requests still return the required `verify_info`
+  JSON value.
 
 ### 4. Automatic Order Fetch (New)
 - **Auto-Sync**: If a webhook arrives for an `ordersn` that is not yet in Odoo, the system automatically:
