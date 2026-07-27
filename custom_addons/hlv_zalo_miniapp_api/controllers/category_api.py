@@ -171,7 +171,9 @@ class ZaloCategoryAPI(ZaloBaseAPI, http.Controller):
                 return self._response_error("FORBIDDEN", "Model không được phép", 403)
 
             Model = request.env.get(model)
-            if not Model:
+            # A model recordset has no records, therefore its boolean value is
+            # always False.  Only None means the model is not registered.
+            if Model is None:
                 return self._response_error("NOT_FOUND", "Model không tồn tại", 404)
 
             record = Model.sudo().browse(rec_id)
@@ -214,7 +216,8 @@ class ZaloCategoryAPI(ZaloBaseAPI, http.Controller):
                 return self._response_error("FORBIDDEN", "Model không được phép", 403)
 
             Model = request.env.get(model)
-            if not Model:
+            # Do not use ``if not Model``: an empty model recordset is falsy.
+            if Model is None:
                 return self._response_error("NOT_FOUND", "Model không tồn tại", 404)
 
             record = Model.sudo().browse(rec_id)
