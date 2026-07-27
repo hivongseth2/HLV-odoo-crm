@@ -2,8 +2,7 @@
 
 ## Mục đích
 
-Module cung cấp REST API cho Zalo Mini App, thực hiện export data để phát triển mini app.
-Module này **không xây dựng giao diện frontend** - chỉ chứa API endpoints.
+Module cung cấp REST API cho Zalo Mini App đồng thời đóng vai trò là **Ứng dụng quản trị (Main Application)** trung tâm trên Odoo Backend giúp người dùng quản lý, lọc và cấu hình dữ liệu Zalo Mini App (Banners, Sản phẩm, Danh mục, Khách hàng, Đơn hàng).
 
 ## Cấu trúc thư mục
 
@@ -13,15 +12,25 @@ hlv_zalo_miniapp_api/
 ├── __manifest__.py
 ├── models/
 │   ├── __init__.py
+│   ├── banner.py               # Model zalo.miniapp.banner (quản lý banner)
 │   ├── product_product.py      # Mở rộng product.product: x_zalo_price, x_active_zalo
+│   ├── product_template.py     # Mở rộng product.template
 │   └── res_partner.py           # Mở rộng res.partner: x_is_zalo_account
 ├── controllers/
 │   ├── __init__.py
+│   ├── banner_api.py            # API banner (/api/v1/zalo/banners/*)
 │   ├── category_api.py          # API danh mục (pos.category)
 │   ├── product_api.py           # API sản phẩm (product.product variant)
 │   ├── contact_api.py           # API contact (auth, CRUD, addresses)
 │   ├── cart_api.py              # API giỏ hàng (sale.order draft)
 │   └── order_api.py             # API đơn hàng (list/detail/create/cancel)
+├── views/
+│   ├── menu_views.xml          # Menu chính & phân cấp cho Zalo Mini App
+│   ├── banner_views.xml        # View cho Banners
+│   ├── product_product_views.xml # Views & Action filter sản phẩm Zalo
+│   ├── product_template_views.xml# Views bổ sung fields Zalo trên template
+│   ├── res_partner_views.xml   # Views & Action filter khách hàng Zalo
+│   └── sale_order_views.xml    # Action filter đơn hàng từ khách hàng Zalo
 ├── security/
 │   └── ir.model.access.csv
 └── TECHNICAL.md
@@ -58,7 +67,25 @@ hlv_zalo_miniapp_api/
 |---|---|---|
 | `x_is_zalo_account` | Boolean | Đánh dấu contact đã đăng ký Zalo |
 
+### `zalo.miniapp.banner` (mới)
+
+| Field | Type | Mô tả |
+|---|---|---|
+| `name` | Char | Tên Banner (bắt buộc) |
+| `active` | Boolean | Trạng thái kích hoạt (default: True) |
+| `sequence` | Integer | Thứ tự hiển thị (default: 10) |
+| `image` | Image | Hình ảnh banner (base64) |
+| `link` | Char | Link khi click vào banner |
+
 ## API Endpoints
+
+### Banner API - `/api/v1/zalo/banners/*`
+
+| Method | Route | Mô tả |
+|---|---|---|
+| POST | `/api/v1/zalo/banners/list` | Danh sách banner (chỉ lấy active=True) |
+
+Params: `limit`, `offset`
 
 ### Category API - `/api/v1/zalo/categories/*`
 
@@ -127,16 +154,10 @@ Token format: `{partner_id}.{timestamp}.{signature}`
 Secret key: lưu trong `ir.config_parameter` key `zalo_api_secret`
 Dev mode: nếu chưa config secret, dùng fallback `hlv_zalo_dev_secret_2026` (bỏ qua expiry check)
 
-## Thông tin bổ sung
+### Order Chatter
+- Đơn hàng tạo mới hoặc bị hủy từ Zalo Mini App sẽ tự động ghi log vào **Chatter (message_post)** trên `sale.order` với thông tin chi tiết (Tên khách hàng, SĐT, Thời gian, Ghi chú, Voucher, Lý do hủy) sử dụng `markupsafe.Markup`.
 
-### Tồn kho
-- Sử dụng `product.product.free_qty` - tồn khả dụng, không bao gồm hàng đang giữ chỗ
-
-### Giá
-- `x_zalo_price` - giá chính cho Zalo App
-- `list_price` - giá gốc từ Odoo
-- `promotional_price` - giá khuyến mãi từ pricelist (nếu có)
-
-### Voucher
-- Code voucher verify có sẵn trong order_api (gọi `hlv.loyalty.voucher`)
-- Chưa export API redeem riêng (chờ phê duyệt Zalo)
+### CORS & Security
+- Tất cả API routes đều hỗ trợ `OPTIONS` preflight request (`methods=[..., "OPTIONS"]`) và phản hồi 200 OK kèm CORS headers.
+- CORS Origin mặc định là `*` (Configurable qua `ir.config_parameter` `zalo_api_cors_origin`).
+- Xác thực sử dụng HMAC SHA256 Token với format `{partner_id}.{timestamp}.{signature}`.

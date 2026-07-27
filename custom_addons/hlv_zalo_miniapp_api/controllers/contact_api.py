@@ -101,10 +101,12 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
     # =========================================================================
     # Debug: Verify Token (GUARDED by config)
     # =========================================================================
-    @http.route("/api/v1/zalo/debug/verify-token", type="http", auth="public", methods=["POST"], csrf=False)
+    @http.route("/api/v1/zalo/debug/verify-token", type="http", auth="public", methods=["POST", "OPTIONS"], csrf=False)
     def debug_verify_token(self, **params):
         """Debug: Verify một token và hiển thị chi tiết từng bước.
         Chỉ hoạt động khi config parameter 'zalo_api_debug_enabled' = True."""
+        if request.httprequest.method == "OPTIONS":
+            return self._response_options()
         import json as _json
 
         # Guard: chỉ cho phép khi debug mode được bật
@@ -232,9 +234,11 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
             "is_new": is_new,
         })
 
-    @http.route("/api/v1/zalo/contacts/auth", type="http", auth="public", methods=["POST"], csrf=False)
+    @http.route("/api/v1/zalo/contacts/auth", type="http", auth="public", methods=["POST", "OPTIONS"], csrf=False)
     def contact_auth(self, **params):
         """Body: {"phone": "090xxxxxxxx"}"""
+        if request.httprequest.method == "OPTIONS":
+            return self._response_options()
         try:
             body = self._request_json()
             phone = (body.get("phone") or "").strip()
@@ -248,9 +252,11 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
     # =========================================================================
     # POST /api/v1/zalo/contacts/auth/zalo-phone
     # =========================================================================
-    @http.route("/api/v1/zalo/contacts/auth/zalo-phone", type="http", auth="public", methods=["POST"], csrf=False)
+    @http.route("/api/v1/zalo/contacts/auth/zalo-phone", type="http", auth="public", methods=["POST", "OPTIONS"], csrf=False)
     def contact_auth_zalo_phone(self, **params):
         """Body: {"token": "...", "access_token": "..."}"""
+        if request.httprequest.method == "OPTIONS":
+            return self._response_options()
         try:
             body = self._request_json()
             phone_token = (body.get("token") or "").strip()
@@ -294,9 +300,11 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
     # =========================================================================
     # POST /api/v1/zalo/contacts/list
     # =========================================================================
-    @http.route("/api/v1/zalo/contacts/list", type="http", auth="public", methods=["POST"], csrf=False)
+    @http.route("/api/v1/zalo/contacts/list", type="http", auth="public", methods=["POST", "OPTIONS"], csrf=False)
     def contact_list(self, **params):
         """Body: {"limit": 20, "offset": 0}"""
+        if request.httprequest.method == "OPTIONS":
+            return self._response_options()
         try:
             auth_result = self._auth_required()
             if isinstance(auth_result, Response):
@@ -325,9 +333,11 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
     # =========================================================================
     # POST /api/v1/zalo/contacts/detail
     # =========================================================================
-    @http.route("/api/v1/zalo/contacts/detail", type="http", auth="public", methods=["POST"], csrf=False)
+    @http.route("/api/v1/zalo/contacts/detail", type="http", auth="public", methods=["POST", "OPTIONS"], csrf=False)
     def contact_detail(self, **params):
         """Body: {"contact_id": 1}"""
+        if request.httprequest.method == "OPTIONS":
+            return self._response_options()
         try:
             body = self._request_json()
             contact_id = self._parse_int(body.get("contact_id"), 0)
@@ -390,9 +400,11 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
     # =========================================================================
     # PUT /api/v1/zalo/contacts/update
     # =========================================================================
-    @http.route("/api/v1/zalo/contacts/update", type="http", auth="public", methods=["PUT"], csrf=False)
+    @http.route("/api/v1/zalo/contacts/update", type="http", auth="public", methods=["PUT", "OPTIONS"], csrf=False)
     def contact_update(self, **params):
         """Body: {"contact_id": 1, "name": "...", "email": "...", "phone": "...", "street": "...", "city": "..."}"""
+        if request.httprequest.method == "OPTIONS":
+            return self._response_options()
         try:
             body = self._request_json()
             contact_id = self._parse_int(body.get("contact_id"), 0)
@@ -433,9 +445,11 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
     # =========================================================================
 
     # POST /api/v1/zalo/contacts/addresses/list
-    @http.route("/api/v1/zalo/contacts/addresses/list", type="http", auth="public", methods=["POST"], csrf=False)
+    @http.route("/api/v1/zalo/contacts/addresses/list", type="http", auth="public", methods=["POST", "OPTIONS"], csrf=False)
     def address_list(self, **params):
         """Body: {"contact_id": 1}"""
+        if request.httprequest.method == "OPTIONS":
+            return self._response_options()
         try:
             body = self._request_json()
             contact_id = self._parse_int(body.get("contact_id"), 0)
@@ -467,9 +481,11 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
             return self._response_error("SERVER_ERROR", str(e), 500)
 
     # POST /api/v1/zalo/contacts/addresses/create
-    @http.route("/api/v1/zalo/contacts/addresses/create", type="http", auth="public", methods=["POST"], csrf=False)
+    @http.route("/api/v1/zalo/contacts/addresses/create", type="http", auth="public", methods=["POST", "OPTIONS"], csrf=False)
     def address_create(self, **params):
         """Body: {"contact_id": 1, "name":"...", "street":"...", "city":"...", "phone":"...", "type":"delivery"}"""
+        if request.httprequest.method == "OPTIONS":
+            return self._response_options()
         try:
             body = self._request_json()
             contact_id = self._parse_int(body.get("contact_id"), 0)
@@ -520,9 +536,11 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
             return self._response_error("SERVER_ERROR", str(e), 500)
 
     # PUT /api/v1/zalo/contacts/addresses/update
-    @http.route("/api/v1/zalo/contacts/addresses/update", type="http", auth="public", methods=["PUT"], csrf=False)
+    @http.route("/api/v1/zalo/contacts/addresses/update", type="http", auth="public", methods=["PUT", "OPTIONS"], csrf=False)
     def address_update(self, **params):
         """Body: {"address_id": 12, "street":"...", "city":"..."}"""
+        if request.httprequest.method == "OPTIONS":
+            return self._response_options()
         try:
             body = self._request_json()
             addr_id = self._parse_int(body.get("address_id"), 0)
@@ -566,9 +584,11 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
             return self._response_error("SERVER_ERROR", str(e), 500)
 
     # POST /api/v1/zalo/contacts/addresses/delete
-    @http.route("/api/v1/zalo/contacts/addresses/delete", type="http", auth="public", methods=["POST"], csrf=False)
+    @http.route("/api/v1/zalo/contacts/addresses/delete", type="http", auth="public", methods=["POST", "OPTIONS"], csrf=False)
     def address_delete(self, **params):
         """Body: {"address_id": 12}"""
+        if request.httprequest.method == "OPTIONS":
+            return self._response_options()
         try:
             body = self._request_json()
             addr_id = self._parse_int(body.get("address_id"), 0)

@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 import logging
-from datetime import timedelta, timezone
+from markupsafe import Markup
 
-from odoo import fields, http
+from odoo import _, fields, http
 from odoo.http import request, Response
 
 from .base_api import ZaloBaseAPI
@@ -87,9 +87,11 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             return {"valid": False, "error": "Không thể kiểm tra voucher"}
 
     # POST /api/v1/zalo/orders/list
-    @http.route("/api/v1/zalo/orders/list", type="http", auth="public", methods=["POST"], csrf=False)
+    @http.route("/api/v1/zalo/orders/list", type="http", auth="public", methods=["POST", "OPTIONS"], csrf=False)
     def order_list(self, **params):
         """Body: {"contact_id": 1, "limit": 20, "offset": 0, "state": "sale"}"""
+        if request.httprequest.method == "OPTIONS":
+            return self._response_options()
         try:
             body = self._request_json()
             contact_id = self._parse_int(body.get("contact_id"), 0)
@@ -127,9 +129,11 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             return self._response_error("SERVER_ERROR", str(e), 500)
 
     # POST /api/v1/zalo/orders/detail
-    @http.route("/api/v1/zalo/orders/detail", type="http", auth="public", methods=["POST"], csrf=False)
+    @http.route("/api/v1/zalo/orders/detail", type="http", auth="public", methods=["POST", "OPTIONS"], csrf=False)
     def order_detail(self, **params):
         """Body: {"order_id": 1}"""
+        if request.httprequest.method == "OPTIONS":
+            return self._response_options()
         try:
             body = self._request_json()
             order_id = self._parse_int(body.get("order_id"), 0)
@@ -154,12 +158,14 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             return self._response_error("SERVER_ERROR", str(e), 500)
 
     # POST /api/v1/zalo/orders/create
-    @http.route("/api/v1/zalo/orders/create", type="http", auth="public", methods=["POST"], csrf=False)
+    @http.route("/api/v1/zalo/orders/create", type="http", auth="public", methods=["POST", "OPTIONS"], csrf=False)
     def order_create(self, **params):
         """Body: {"contact_id":1, "items":[{"product_id":42,"quantity":2}], "address_id":2, "note":"...", "voucher_code":"VHQ-XXXXX"}
         
         items: Danh sách sản phẩm từ frontend (frontend tự quản lý giỏ hàng)
         """
+        if request.httprequest.method == "OPTIONS":
+            return self._response_options()
         try:
             body = self._request_json()
             contact_id = self._parse_int(body.get("contact_id"))
@@ -262,6 +268,26 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             # Không cần write state="sale" vì action_confirm() đã chuyển state
             order.write({"date_order": fields.Datetime.now()})
 
+            # Ghi log Chatter thông báo đơn hàng được tạo từ Zalo Mini App
+            try:
+                chatter_msg = Markup(_(
+                    "<b>Đơn hàng được tạo từ Zalo Mini App</b><br/>"
+                    "• <b>Khách hàng:</b> %s (SĐT: %s)<br/>"
+                    "• <b>Thời gian tạo:</b> %s"
+                )) % (
+                    partner.name,
+                    partner.phone or partner.mobile or "N/A",
+                    fields.Datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                )
+                if note:
+                    chatter_msg += Markup(_("<br/>• <b>Ghi chú:</b> %s")) % note
+                if voucher_code:
+                    chatter_msg += Markup(_("<br/>• <b>Voucher:</b> %s")) % voucher_code
+
+                order.message_post(body=chatter_msg, message_type="comment", subtype_xmlid="mail.mt_note")
+            except Exception as me:
+                _logger.warning("Post chatter error on sale.order %s: %s", order.id, me)
+
             result = self._order_to_dict(order)
             if voucher_info:
                 result["voucher_applied"] = voucher_info
@@ -272,9 +298,11 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             return self._response_error("SERVER_ERROR", str(e), 500)
 
     # POST /api/v1/zalo/orders/cancel
-    @http.route("/api/v1/zalo/orders/cancel", type="http", auth="public", methods=["POST"], csrf=False)
+    @http.route("/api/v1/zalo/orders/cancel", type="http", auth="public", methods=["POST", "OPTIONS"], csrf=False)
     def order_cancel(self, **params):
         """Body: {"order_id": 1, "contact_id": 1, "reason": "Đổi ý"}"""
+        if request.httprequest.method == "OPTIONS":
+            return self._response_options()
         try:
             body = self._request_json()
             order_id = self._parse_int(body.get("order_id"), 0)
@@ -316,6 +344,15 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
                 except Exception:
                     pass
                 order.write({"state": "cancel"})
+
+            # Ghi log Chatter thông báo đơn hàng bị hủy từ Zalo Mini App
+            try:
+                cancel_msg = Markup(_("<b>Đơn hàng đã bị hủy từ Zalo Mini App</b>"))
+                if reason:
+                    cancel_msg += Markup(_("<br/>• <b>Lý do hủy:</b> %s")) % reason
+                order.message_post(body=cancel_msg, message_type="comment", subtype_xmlid="mail.mt_note")
+            except Exception as me:
+                _logger.warning("Post cancel chatter error: %s", me)
 
             return self._response_success({
                 "id": order.id, "name": order.name, "state": order.state,

@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Root Menu for Zalo Mini App Main Application -->
+    <menuitem id="menu_zalo_miniapp_root"
+              name="Zalo Mini App"
+              web_icon="hlv_zalo_miniapp_api,static/description/icon.png"
+              sequence="25"/>
+
+    <!-- Management Submenu Category -->
+    <menuitem id="menu_zalo_miniapp_management"
+              name="Quản lý"
+              parent="menu_zalo_miniapp_root"
+              sequence="10"/>
+
+    <!-- Action for POS Category (Zalo Category) -->
+    <record id="action_zalo_pos_category" model="ir.actions.act_window">
+        <field name="name">Danh mục Zalo Mini App</field>
+        <field name="res_model">pos.category</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Tạo danh mục sản phẩm Zalo mới.
+            </p>
+        </field>
+    </record>
+
+    <!-- Submenus under Quản lý -->
+    <menuitem id="menu_zalo_miniapp_banner_app"
+              name="Banners"
+              parent="menu_zalo_miniapp_management"
+              action="action_zalo_miniapp_banner"
+              sequence="10"/>
+
+    <menuitem id="menu_zalo_miniapp_product_app"
+              name="Sản phẩm Zalo"
+              parent="menu_zalo_miniapp_management"
+              action="action_zalo_product_product"
+              sequence="20"/>
+
+    <menuitem id="menu_zalo_miniapp_category_app"
+              name="Danh mục Zalo"
+              parent="menu_zalo_miniapp_management"
+              action="action_zalo_pos_category"
+              sequence="30"/>
+
+    <menuitem id="menu_zalo_miniapp_partner_app"
+              name="Khách hàng Zalo"
+              parent="menu_zalo_miniapp_management"
+              action="action_zalo_res_partner"
+              sequence="40"/>
+
+    <menuitem id="menu_zalo_miniapp_order_app"
+              name="Đơn hàng Zalo"
+              parent="menu_zalo_miniapp_management"
+              action="action_zalo_sale_order"
+              sequence="50"/>
+</odoo>

@@ -12,11 +12,13 @@ _logger = logging.getLogger(__name__)
 
 class ZaloMiniAppBannerAPI(ZaloBaseAPI, http.Controller):
 
-    @http.route("/api/v1/zalo/banners/list", type="http", auth="public", methods=["POST"], csrf=False)
+    @http.route("/api/v1/zalo/banners/list", type="http", auth="public", methods=["POST", "OPTIONS"], csrf=False)
     def list_banners(self, **kwargs):
         """
         POST /api/v1/zalo/banners/list
         """
+        if request.httprequest.method == "OPTIONS":
+            return self._response_options()
         try:
             body = self._request_json()
             try:

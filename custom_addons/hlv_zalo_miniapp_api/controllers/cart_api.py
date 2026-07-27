@@ -64,9 +64,11 @@ class ZaloCartAPI(ZaloBaseAPI, http.Controller):
         }
 
     # POST /api/v1/zalo/cart/get
-    @http.route("/api/v1/zalo/cart/get", type="http", auth="public", methods=["POST"], csrf=False)
+    @http.route("/api/v1/zalo/cart/get", type="http", auth="public", methods=["POST", "OPTIONS"], csrf=False)
     def cart_get(self, **params):
         """Body: {"contact_id": 1}"""
+        if request.httprequest.method == "OPTIONS":
+            return self._response_options()
         try:
             body = self._request_json()
             contact_id = self._parse_int(body.get("contact_id"), 0)
@@ -87,9 +89,11 @@ class ZaloCartAPI(ZaloBaseAPI, http.Controller):
             return self._response_error("SERVER_ERROR", str(e), 500)
 
     # POST /api/v1/zalo/cart/add
-    @http.route("/api/v1/zalo/cart/add", type="http", auth="public", methods=["POST"], csrf=False)
+    @http.route("/api/v1/zalo/cart/add", type="http", auth="public", methods=["POST", "OPTIONS"], csrf=False)
     def cart_add(self, **params):
         """Body: {"contact_id": 1, "product_id": 42, "quantity": 2}"""
+        if request.httprequest.method == "OPTIONS":
+            return self._response_options()
         try:
             body = self._request_json()
             contact_id = self._parse_int(body.get("contact_id"))
@@ -134,9 +138,11 @@ class ZaloCartAPI(ZaloBaseAPI, http.Controller):
             return self._response_error("SERVER_ERROR", str(e), 500)
 
     # PUT /api/v1/zalo/cart/update
-    @http.route("/api/v1/zalo/cart/update", type="http", auth="public", methods=["PUT"], csrf=False)
+    @http.route("/api/v1/zalo/cart/update", type="http", auth="public", methods=["PUT", "OPTIONS"], csrf=False)
     def cart_update(self, **params):
         """Body: {"contact_id": 1, "line_id": 12, "quantity": 3}"""
+        if request.httprequest.method == "OPTIONS":
+            return self._response_options()
         try:
             body = self._request_json()
             contact_id = self._parse_int(body.get("contact_id"))
@@ -174,9 +180,11 @@ class ZaloCartAPI(ZaloBaseAPI, http.Controller):
             return self._response_error("SERVER_ERROR", str(e), 500)
 
     # POST /api/v1/zalo/cart/remove
-    @http.route("/api/v1/zalo/cart/remove", type="http", auth="public", methods=["POST"], csrf=False)
+    @http.route("/api/v1/zalo/cart/remove", type="http", auth="public", methods=["POST", "OPTIONS"], csrf=False)
     def cart_remove(self, **params):
         """Body: {"contact_id": 1, "line_id": 12}"""
+        if request.httprequest.method == "OPTIONS":
+            return self._response_options()
         try:
             body = self._request_json()
             contact_id = self._parse_int(body.get("contact_id"))
@@ -208,9 +216,11 @@ class ZaloCartAPI(ZaloBaseAPI, http.Controller):
             return self._response_error("SERVER_ERROR", str(e), 500)
 
     # POST /api/v1/zalo/cart/clear
-    @http.route("/api/v1/zalo/cart/clear", type="http", auth="public", methods=["POST"], csrf=False)
+    @http.route("/api/v1/zalo/cart/clear", type="http", auth="public", methods=["POST", "OPTIONS"], csrf=False)
     def cart_clear(self, **params):
         """Body: {"contact_id": 1}"""
+        if request.httprequest.method == "OPTIONS":
+            return self._response_options()
         try:
             body = self._request_json()
             contact_id = self._parse_int(body.get("contact_id"), 0)

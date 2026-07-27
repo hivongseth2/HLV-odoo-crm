@@ -1,6 +1,8 @@
-# -*- coding: utf-8 -*-
+import hashlib
+import hmac
 import json
 import logging
+import re
 import time
 
 from odoo.http import request, Response
@@ -18,6 +20,29 @@ class ZaloBaseAPI:
         "zalo.miniapp.banner",
         "product.multi.image",
     }
+
+    @staticmethod
+    def _normalize_vn_phone(phone):
+        if not phone:
+            return ""
+        digits = re.sub(r"\D", "", str(phone))
+        if len(digits) == 11 and digits.startswith("84"):
+            digits = "0" + digits[2:]
+        elif len(digits) == 12 and digits.startswith("084"):
+            digits = "0" + digits[3:]
+        return digits
+
+    @staticmethod
+    def _get_secret_key():
+        try:
+            Param = request.env["ir.config_parameter"].sudo()
+            key = Param.get_param("zalo_api_secret", "")
+            if not key:
+                _logger.warning("zalo_api_secret not configured! Using dev fallback. Set this param in System Parameters for production.")
+                return "hlv_zalo_dev_secret_2026"
+            return key
+        except Exception:
+            return "hlv_zalo_dev_secret_2026"
 
     @staticmethod
     def _get_cors_origin():
@@ -40,6 +65,18 @@ class ZaloBaseAPI:
             "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With",
             "Access-Control-Max-Age": "86400",
         }
+
+    @staticmethod
+    def _response_options():
+        """Response 200 OK cho HTTP OPTIONS preflight request."""
+        headers = ZaloBaseAPI._cors_headers()
+        return Response(status=200, headers=headers)
+
+    def _check_options(self):
+        """Trả về 200 OK Response nếu request là OPTIONS preflight."""
+        if request.httprequest.method == "OPTIONS":
+            return self._response_options()
+        return None
 
     @staticmethod
     def _response_success(data=None, status=200):
@@ -95,10 +132,14 @@ class ZaloBaseAPI:
 
     @staticmethod
     def _get_image_url(model, rec_id, field="image_128"):
-        """Return a relative URL for the image."""
+        """Return a relative URL for the image.
+        Uses safe model name (dots replaced with dashes) for GET endpoint.
+        Frontend can use this URL directly in <img> tags.
+        Example: /api/v1/zalo/image/product-product/123/image_128"""
         if not rec_id:
             return None
-        return f"/api/v1/zalo/image/{model}/{rec_id}/{field}"
+        safe_model = model.replace(".", "-")
+        return f"/api/v1/zalo/image/{safe_model}/{rec_id}/{field}"
 
     @staticmethod
     def _request_json():
@@ -150,9 +191,37 @@ class ZaloBaseAPI:
         return result
 
     def _verify_token(self, token):
-        """Verify HMAC token. Phải được override bởi subclass có logic verify cụ thể.
-        Mặc định trả về None (unauthenticated)."""
-        return None
+        """Verify HMAC token với secret key."""
+        try:
+            parts = token.split(".")
+            if len(parts) != 3:
+                return None
+            partner_id = int(parts[0])
+            timestamp = int(parts[1])
+            signature = parts[2]
+
+            secret = self._get_secret_key()
+
+            partner = request.env["res.partner"].sudo().browse(partner_id)
+            if not partner.exists():
+                return None
+
+            phone = partner.phone or partner.mobile or ""
+            phone = self._normalize_vn_phone(phone)
+
+            expected_payload = f"{partner_id}:{phone}:{timestamp}"
+            expected_sig = hmac.new(secret.encode(), expected_payload.encode(), hashlib.sha256).hexdigest()
+
+            if not hmac.compare_digest(signature, expected_sig):
+                return None
+
+            # Kiểm tra hết hạn: 30 ngày
+            if time.time() - timestamp > 30 * 24 * 3600:
+                return None
+
+            return partner_id
+        except (ValueError, IndexError, Exception):
+            return None
 
     # =========================================================================
     # Logging helper
