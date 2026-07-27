@@ -1,8 +1,5 @@
-# -*- coding: utf-8 -*-
-import logging
-from datetime import timedelta, timezone
-
-from odoo import fields, http
+from markupsafe import Markup
+from odoo import _, fields, http
 from odoo.http import request, Response
 
 from .base_api import ZaloBaseAPI
@@ -268,6 +265,26 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             # Không cần write state="sale" vì action_confirm() đã chuyển state
             order.write({"date_order": fields.Datetime.now()})
 
+            # Ghi log Chatter thông báo đơn hàng được tạo từ Zalo Mini App
+            try:
+                chatter_msg = Markup(_(
+                    "<b>Đơn hàng được tạo từ Zalo Mini App</b><br/>"
+                    "• <b>Khách hàng:</b> %s (SĐT: %s)<br/>"
+                    "• <b>Thời gian tạo:</b> %s"
+                )) % (
+                    partner.name,
+                    partner.phone or partner.mobile or "N/A",
+                    fields.Datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                )
+                if note:
+                    chatter_msg += Markup(_("<br/>• <b>Ghi chú:</b> %s")) % note
+                if voucher_code:
+                    chatter_msg += Markup(_("<br/>• <b>Voucher:</b> %s")) % voucher_code
+
+                order.message_post(body=chatter_msg, message_type="comment", subtype_xmlid="mail.mt_note")
+            except Exception as me:
+                _logger.warning("Post chatter error on sale.order %s: %s", order.id, me)
+
             result = self._order_to_dict(order)
             if voucher_info:
                 result["voucher_applied"] = voucher_info
@@ -324,6 +341,15 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
                 except Exception:
                     pass
                 order.write({"state": "cancel"})
+
+            # Ghi log Chatter thông báo đơn hàng bị hủy từ Zalo Mini App
+            try:
+                cancel_msg = Markup(_("<b>Đơn hàng đã bị hủy từ Zalo Mini App</b>"))
+                if reason:
+                    cancel_msg += Markup(_("<br/>• <b>Lý do hủy:</b> %s")) % reason
+                order.message_post(body=cancel_msg, message_type="comment", subtype_xmlid="mail.mt_note")
+            except Exception as me:
+                _logger.warning("Post cancel chatter error: %s", me)
 
             return self._response_success({
                 "id": order.id, "name": order.name, "state": order.state,

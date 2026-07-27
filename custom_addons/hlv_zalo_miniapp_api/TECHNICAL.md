@@ -154,16 +154,10 @@ Token format: `{partner_id}.{timestamp}.{signature}`
 Secret key: lưu trong `ir.config_parameter` key `zalo_api_secret`
 Dev mode: nếu chưa config secret, dùng fallback `hlv_zalo_dev_secret_2026` (bỏ qua expiry check)
 
-## Thông tin bổ sung
+### Order Chatter
+- Đơn hàng tạo mới hoặc bị hủy từ Zalo Mini App sẽ tự động ghi log vào **Chatter (message_post)** trên `sale.order` với thông tin chi tiết (Tên khách hàng, SĐT, Thời gian, Ghi chú, Voucher, Lý do hủy) sử dụng `markupsafe.Markup`.
 
-### Tồn kho
-- Sử dụng `product.product.free_qty` - tồn khả dụng, không bao gồm hàng đang giữ chỗ
-
-### Giá
-- `x_zalo_price` - giá chính cho Zalo App
-- `list_price` - giá gốc từ Odoo
-- `promotional_price` - giá khuyến mãi từ pricelist (nếu có)
-
-### Voucher
-- Code voucher verify có sẵn trong order_api (gọi `hlv.loyalty.voucher`)
-- Chưa export API redeem riêng (chờ phê duyệt Zalo)
+### CORS & Security
+- Tất cả API routes đều hỗ trợ `OPTIONS` preflight request (`methods=[..., "OPTIONS"]`) và phản hồi 200 OK kèm CORS headers.
+- CORS Origin mặc định là `*` (Configurable qua `ir.config_parameter` `zalo_api_cors_origin`).
+- Xác thực sử dụng HMAC SHA256 Token với format `{partner_id}.{timestamp}.{signature}`.
