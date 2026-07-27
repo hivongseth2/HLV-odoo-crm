@@ -1151,7 +1151,14 @@ class SaleOrder(models.Model):
         self._sync_misa_header_in_place(data, headers)
         if self.env.context.get('misa_assign_warehouse_from_lines'):
             if warehouse and self.warehouse_id != warehouse:
+                previous_warehouse = self.warehouse_id
                 self.write({'warehouse_id': warehouse.id})
+                _logger.info(
+                    "🏭 Cập nhật kho SO %s: %s → %s",
+                    self.name,
+                    previous_warehouse.name or "-",
+                    warehouse.name,
+                )
             if warehouse:
                 _logger.info(
                     "Kho SO %s sau khi dong bo header: %s",
@@ -1299,11 +1306,35 @@ class SaleOrder(models.Model):
         # 1) Tìm SO hiện hữu theo misa_id
         so = self.search([('misa_id', '=', misa_order_id)], limit=1)
         if so:
-            so.sudo().action_resync_from_misa()
+            misa_headers, _crm_token = self._misa_headers()
+            prefetched_lines = self._misa_fetch_lines(
+                misa_order_id,
+                headers=misa_headers,
+            )
+            if warehouse_id:
+                misa_warehouse = self.env['stock.warehouse'].browse(
+                    int(warehouse_id)
+                ).exists()
+                if not misa_warehouse:
+                    raise UserError(_("Không tìm thấy kho Odoo ID %s") % warehouse_id)
+            else:
+                misa_warehouse = self._misa_warehouse_from_sale_lines(
+                    prefetched_lines
+                )
+
+            so.sudo().with_context(
+                misa_assign_warehouse_from_lines=True,
+                misa_resolved_warehouse_id=misa_warehouse.id or False,
+            ).action_resync_from_misa(
+                prefetched_lines=prefetched_lines,
+                misa_headers=misa_headers,
+            )
             return {
                 'ok': True,
                 'res_id': so.id,
                 'name': so.name,
+                'warehouse_id': so.warehouse_id.id,
+                'warehouse_name': so.warehouse_id.name,
                 'detail': (
                     'cancelled_from_misa' if so.state == 'cancel'
                     else 'waiting_warehouse_approval' if so.misa_qty_sync_pending
