@@ -1,6 +1,6 @@
 # Tài liệu API - HLV Zalo Mini App
 
-**Base URL**: `https://<your-odoo-domain>`
+**Base URL**: `https://hoanglongvu-stagin-v1-35145289.dev.odoo.com`
 
 **Content-Type**: `application/json`
 
@@ -40,80 +40,9 @@ Vào Settings > Technical > System Parameters:
 
 ---
 
-## 1. Banner API
+## 1. Category API
 
-### 1.1. Danh sách Banner
-
-> **POST** `/api/v1/zalo/banners/list`
-
-Lấy danh sách banner hiển thị trên trang chủ Zalo Mini App. Banner được lấy từ model `zalo.miniapp.banner`, sắp xếp theo `sequence` tăng dần.
-
-#### Request Body
-
-| Field | Type | Required | Default | Mô tả |
-|-------|------|----------|---------|-------|
-| `limit` | int | Optional | 10 | Số lượng banner tối đa (1-100) |
-| `offset` | int | Optional | 0 | Vị trí bắt đầu lấy dữ liệu |
-
-#### Request Example
-
-```json
-{
-  "limit": 10,
-  "offset": 0
-}
-```
-
-#### Response `data`
-
-| Field | Type | Mô tả |
-|-------|------|-------|
-| `total` | int | Tổng số banner đang active |
-| `limit` | int | Số lượng đã yêu cầu |
-| `offset` | int | Vị trí bắt đầu |
-| `banners` | array[object] | Danh sách banner |
-
-**Mỗi banner object**:
-
-| Field | Type | Mô tả |
-|-------|------|-------|
-| `id` | int | ID của banner |
-| `name` | string | Tên banner |
-| `link` | string | URL đích khi click (deep link hoặc external URL) |
-| `image_url` | string | Relative URL ảnh banner (`/api/v1/zalo/image/zalo.miniapp.banner/{id}/image`) |
-
-#### Response Example
-
-```json
-{
-    "success": true,
-    "data": {
-        "banners": [
-            {
-                "id": 1,
-                "name": "test",
-                "link": "https://images.pexels.com/photos/459225/pexels-photo-459225.jpeg?cs=srgb&dl=daylight-environment-forest-459225.jpg&fm=jpg",
-                "image_url": "/api/v1/zalo/image/zalo.miniapp.banner/1/image"
-            }
-        ],
-        "total": 1,
-        "limit": 10,
-        "offset": 0
-    }
-}
-```
-
-#### Error Codes
-
-| Code | HTTP Status | Điều kiện |
-|------|-------------|-----------|
-| `SERVER_ERROR` | 500 | Lỗi server không xác định |
-
----
-
-## 2. Category API
-
-### 2.1. Danh sách Danh mục
+### 1.1. Danh sách Danh mục
 
 > **POST** `/api/v1/zalo/categories/list`
 
@@ -188,11 +117,11 @@ Lấy danh sách danh mục sản phẩm từ `pos.category`, sắp xếp theo `
 
 ---
 
-### 2.2. Sản phẩm theo Danh mục
+### 1.2. Sản phẩm theo Danh mục
 
 > **POST** `/api/v1/zalo/categories/products`
 
-Lấy danh sách sản phẩm (variant) thuộc một danh mục. Chỉ lấy sản phẩm có `x_active_zalo = True`, `active = True`, `sale_ok = True`.
+Lấy danh sách sản phẩm (variant) thuộc một danh mục. Sản phẩm được lọc theo `x_zalo_categ_ids` (danh mục Zalo riêng), chỉ lấy sản phẩm có `x_active_zalo = True`, `active = True`, `sale_ok = True`.
 
 `category_id` có thể là `x_misa_id` hoặc ID nội bộ Odoo của `pos.category`.
 
@@ -279,13 +208,13 @@ Lấy danh sách sản phẩm (variant) thuộc một danh mục. Chỉ lấy s�
 
 ---
 
-## 3. Product API
+## 2. Product API
 
-### 3.1. Danh sách Sản phẩm
+### 2.1. Danh sách Sản phẩm
 
 > **POST** `/api/v1/zalo/products/list`
 
-Lấy danh sách sản phẩm variant với các tùy chọn tìm kiếm, sắp xếp, lọc theo danh mục. Chỉ lấy sản phẩm có `x_active_zalo = True`, `active = True`, `sale_ok = True`.
+Lấy danh sách sản phẩm variant với các tùy chọn tìm kiếm, sắp xếp, lọc theo danh mục Zalo (`x_zalo_categ_ids`). Chỉ lấy sản phẩm có `x_active_zalo = True`, `active = True`, `sale_ok = True`.
 
 #### Request Body
 
@@ -295,7 +224,10 @@ Lấy danh sách sản phẩm variant với các tùy chọn tìm kiếm, sắp 
 | `offset` | int | Optional | 0 | Vị trí bắt đầu lấy dữ liệu |
 | `query` | string | Optional | "" | Từ khóa tìm kiếm (tìm trong `name`, `default_code`, `barcode`) |
 | `sort` | string | Optional | "name" | Cách sắp xếp (xem bảng bên dưới) |
-| `category_id` | int | Optional | 0 | Lọc theo danh mục (ID nội bộ Odoo của `pos.category`) |
+| `category_id` | int | Optional | 0 | Lọc theo danh mục Zalo (ID nội bộ Odoo của `pos.category`, lọc qua `x_zalo_categ_ids`) |
+| `min_price` | float | Optional | 0 | Lọc sản phẩm có `x_zalo_price >= min_price` |
+| `max_price` | float | Optional | 0 | Lọc sản phẩm có `x_zalo_price <= max_price` |
+| `in_stock` | bool | Optional | false | `true` để chỉ lấy sản phẩm còn hàng (`free_qty > 0`) |
 
 **Giá trị `sort`**:
 
@@ -318,7 +250,10 @@ Lấy danh sách sản phẩm variant với các tùy chọn tìm kiếm, sắp 
   "offset": 0,
   "query": "iphone",
   "sort": "name",
-  "category_id": 0
+  "category_id": 0,
+  "min_price": 10000,
+  "max_price": 500000,
+  "in_stock": true
 }
 ```
 
@@ -347,7 +282,7 @@ Lấy danh sách sản phẩm variant với các tùy chọn tìm kiếm, sắp 
 | `free_qty` | float | Tồn kho khả dụng |
 | `uom` | string | Đơn vị tính |
 | `weight` | float | Trọng lượng |
-| `category` | object hoặc null | Danh mục: `{id, name}` |
+| `category` | object hoặc null | Danh mục Zalo đầu tiên: `{id, name}` (từ `x_zalo_categ_ids`) |
 | `attributes` | array[object] | Danh sách thuộc tính: `{id, name, value}` |
 | `image_url` | string hoặc null | Relative URL ảnh sản phẩm |
 | `description` | string | Mô tả ngắn (`description_sale`) |
@@ -397,7 +332,7 @@ Lấy danh sách sản phẩm variant với các tùy chọn tìm kiếm, sắp 
 
 ---
 
-### 3.2. Chi tiết Sản phẩm
+### 2.2. Chi tiết Sản phẩm
 
 > **POST** `/api/v1/zalo/products/detail`
 
@@ -419,7 +354,7 @@ Lấy thông tin chi tiết của một sản phẩm variant, bao gồm ảnh ph
 
 #### Response `data`
 
-Trả về tất cả các field giống **3.1. Danh sách Sản phẩm**, bổ sung thêm:
+Trả về tất cả các field giống **2.1. Danh sách Sản phẩm**, bổ sung thêm:
 
 | Field | Type | Mô tả |
 |-------|------|-------|
@@ -461,9 +396,9 @@ Trả về tất cả các field giống **3.1. Danh sách Sản phẩm**, bổ 
 
 ---
 
-## 4. Contact API
+## 3. Contact API
 
-### 4.1. Đăng ký / Đăng nhập bằng SĐT
+### 3.1. Đăng ký / Đăng nhập bằng SĐT
 
 > **POST** `/api/v1/zalo/contacts/auth`
 
@@ -519,7 +454,7 @@ Xác thực người dùng bằng số điện thoại. Nếu số điện tho�
 
 ---
 
-### 4.2. Đăng nhập bằng Zalo Phone Token
+### 3.2. Đăng nhập bằng Zalo Phone Token
 
 > **POST** `/api/v1/zalo/contacts/auth/zalo-phone`
 
@@ -549,7 +484,7 @@ Cần cấu hình **Zalo Secret Key** trong System Parameters:
 
 #### Response `data`
 
-Giống với **4.1. Đăng ký / Đăng nhập bằng SĐT**.
+Giống với **3.1. Đăng ký / Đăng nhập bằng SĐT**.
 
 #### Error Codes
 
@@ -563,7 +498,7 @@ Giống với **4.1. Đăng ký / Đăng nhập bằng SĐT**.
 
 ---
 
-### 4.3. Danh sách Contact
+### 3.3. Danh sách Contact
 
 > **POST** `/api/v1/zalo/contacts/list`
 
@@ -618,7 +553,7 @@ Lấy danh sách tất cả contact có `x_is_zalo_account = True`.
 
 ---
 
-### 4.4. Chi tiết Contact
+### 3.4. Chi tiết Contact
 
 > **POST** `/api/v1/zalo/contacts/detail`
 
@@ -720,7 +655,7 @@ Lấy thông tin chi tiết của một contact, bao gồm điểm Loyalty và d
 
 ---
 
-### 4.5. Cập nhật Contact
+### 3.5. Cập nhật Contact
 
 > **PUT** `/api/v1/zalo/contacts/update`
 
@@ -774,7 +709,7 @@ Cập nhật thông tin cơ bản của contact.
 
 ---
 
-### 4.6. Danh sách Địa chỉ
+### 3.6. Danh sách Địa chỉ
 
 > **POST** `/api/v1/zalo/contacts/addresses/list`
 
@@ -800,7 +735,7 @@ Lấy danh sách địa chỉ giao hàng của một contact.
 
 | Field | Type | Mô tả |
 |-------|------|-------|
-| `addresses` | array[object] | Danh sách địa chỉ (cấu trúc giống mục 4.4) |
+| `addresses` | array[object] | Danh sách địa chỉ (cấu trúc giống mục 3.4) |
 
 #### Error Codes
 
@@ -814,7 +749,7 @@ Lấy danh sách địa chỉ giao hàng của một contact.
 
 ---
 
-### 4.7. Tạo Địa chỉ mới
+### 3.7. Tạo Địa chỉ mới
 
 > **POST** `/api/v1/zalo/contacts/addresses/create`
 
@@ -874,7 +809,7 @@ Thêm một địa chỉ giao hàng mới cho contact.
 
 ---
 
-### 4.8. Cập nhật Địa chỉ
+### 3.8. Cập nhật Địa chỉ
 
 > **PUT** `/api/v1/zalo/contacts/addresses/update`
 
@@ -931,7 +866,7 @@ Cập nhật thông tin một địa chỉ.
 
 ---
 
-### 4.9. Xóa Địa chỉ
+### 3.9. Xóa Địa chỉ
 
 > **POST** `/api/v1/zalo/contacts/addresses/delete`
 
@@ -971,11 +906,13 @@ Xóa một địa chỉ giao hàng.
 
 ---
 
-## 5. Cart API
+## 4. Cart API
 
 Giỏ hàng sử dụng `sale.order` với `state = draft` và `team_id = False`. Mỗi contact chỉ có **một** giỏ hàng draft duy nhất.
 
-### 5.1. Lấy Giỏ hàng
+**Auth**: Tất cả Cart API endpoints đều yêu cầu Bearer token (xác thực quyền sở hữu giỏ hàng).
+
+### 4.1. Lấy Giỏ hàng
 
 > **POST** `/api/v1/zalo/cart/get`
 
@@ -1026,13 +963,15 @@ Lấy thông tin giỏ hàng hiện tại của contact. Tự động tạo gi�
 
 | Code | HTTP Status | Điều kiện |
 |------|-------------|-----------|
+| `AUTH_REQUIRED` | 401 | Thiếu `Authorization: Bearer` header |
+| `INVALID_TOKEN` | 401 | Token không hợp lệ hoặc đã hết hạn |
 | `INVALID_INPUT` | 400 | Thiếu `contact_id` |
 | `NOT_FOUND` | 404 | Contact không tồn tại |
 | `SERVER_ERROR` | 500 | Lỗi server không xác định |
 
 ---
 
-### 5.2. Thêm Sản phẩm vào Giỏ
+### 4.2. Thêm Sản phẩm vào Giỏ
 
 > **POST** `/api/v1/zalo/cart/add`
 
@@ -1058,19 +997,21 @@ Thêm sản phẩm vào giỏ hàng. Nếu sản phẩm đã có trong giỏ, s�
 
 #### Response `data`
 
-Giống **5.1. Lấy Giỏ hàng** (giỏ hàng sau khi thêm).
+Giống **4.1. Lấy Giỏ hàng** (giỏ hàng sau khi thêm).
 
 #### Error Codes
 
 | Code | HTTP Status | Điều kiện |
 |------|-------------|-----------|
+| `AUTH_REQUIRED` | 401 | Thiếu `Authorization: Bearer` header |
+| `INVALID_TOKEN` | 401 | Token không hợp lệ hoặc đã hết hạn |
 | `INVALID_INPUT` | 400 | Thiếu `contact_id` hoặc `product_id`; `quantity <= 0` |
 | `NOT_FOUND` | 404 | Contact không tồn tại; Sản phẩm không tồn tại/không active/không có `x_active_zalo` |
 | `SERVER_ERROR` | 500 | Lỗi server không xác định |
 
 ---
 
-### 5.3. Cập nhật Số lượng
+### 4.3. Cập nhật Số lượng
 
 > **PUT** `/api/v1/zalo/cart/update`
 
@@ -1096,19 +1037,21 @@ Cập nhật số lượng của một dòng sản phẩm trong giỏ hàng. N�
 
 #### Response `data`
 
-Giống **5.1. Lấy Giỏ hàng** (giỏ hàng sau khi cập nhật).
+Giống **4.1. Lấy Giỏ hàng** (giỏ hàng sau khi cập nhật).
 
 #### Error Codes
 
 | Code | HTTP Status | Điều kiện |
 |------|-------------|-----------|
+| `AUTH_REQUIRED` | 401 | Thiếu `Authorization: Bearer` header |
+| `INVALID_TOKEN` | 401 | Token không hợp lệ hoặc đã hết hạn |
 | `INVALID_INPUT` | 400 | Thiếu `contact_id` hoặc `line_id` |
 | `NOT_FOUND` | 404 | Contact không tồn tại; Dòng sản phẩm không tồn tại |
 | `SERVER_ERROR` | 500 | Lỗi server không xác định |
 
 ---
 
-### 5.4. Xóa Sản phẩm khỏi Giỏ
+### 4.4. Xóa Sản phẩm khỏi Giỏ
 
 > **POST** `/api/v1/zalo/cart/remove`
 
@@ -1132,19 +1075,21 @@ Xóa một dòng sản phẩm khỏi giỏ hàng.
 
 #### Response `data`
 
-Giống **5.1. Lấy Giỏ hàng** (giỏ hàng sau khi xóa).
+Giống **4.1. Lấy Giỏ hàng** (giỏ hàng sau khi xóa).
 
 #### Error Codes
 
 | Code | HTTP Status | Điều kiện |
 |------|-------------|-----------|
+| `AUTH_REQUIRED` | 401 | Thiếu `Authorization: Bearer` header |
+| `INVALID_TOKEN` | 401 | Token không hợp lệ hoặc đã hết hạn |
 | `INVALID_INPUT` | 400 | Thiếu `contact_id` hoặc `line_id` |
 | `NOT_FOUND` | 404 | Contact không tồn tại |
 | `SERVER_ERROR` | 500 | Lỗi server không xác định |
 
 ---
 
-### 5.5. Xóa toàn bộ Giỏ hàng
+### 4.5. Xóa toàn bộ Giỏ hàng
 
 > **POST** `/api/v1/zalo/cart/clear`
 
@@ -1174,15 +1119,17 @@ Xóa tất cả sản phẩm trong giỏ hàng.
 
 | Code | HTTP Status | Điều kiện |
 |------|-------------|-----------|
+| `AUTH_REQUIRED` | 401 | Thiếu `Authorization: Bearer` header |
+| `INVALID_TOKEN` | 401 | Token không hợp lệ hoặc đã hết hạn |
 | `INVALID_INPUT` | 400 | Thiếu `contact_id` |
 | `NOT_FOUND` | 404 | Contact không tồn tại |
 | `SERVER_ERROR` | 500 | Lỗi server không xác định |
 
 ---
 
-## 6. Order API
+## 5. Order API
 
-### 6.1. Danh sách Đơn hàng
+### 5.1. Danh sách Đơn hàng
 
 > **POST** `/api/v1/zalo/orders/list`
 
@@ -1262,13 +1209,15 @@ Lấy danh sách đơn hàng của một contact (không bao gồm đơn draft).
 
 | Code | HTTP Status | Điều kiện |
 |------|-------------|-----------|
+| `AUTH_REQUIRED` | 401 | Thiếu `Authorization: Bearer` header |
+| `INVALID_TOKEN` | 401 | Token không hợp lệ hoặc đã hết hạn |
 | `INVALID_INPUT` | 400 | Thiếu `contact_id` |
 | `NOT_FOUND` | 404 | Contact không tồn tại |
 | `SERVER_ERROR` | 500 | Lỗi server không xác định |
 
 ---
 
-### 6.2. Chi tiết Đơn hàng
+### 5.2. Chi tiết Đơn hàng
 
 > **POST** `/api/v1/zalo/orders/detail`
 
@@ -1290,19 +1239,21 @@ Lấy thông tin chi tiết của một đơn hàng.
 
 #### Response `data`
 
-Giống cấu trúc order object trong **6.1. Danh sách Đơn hàng**.
+Giống cấu trúc order object trong **5.1. Danh sách Đơn hàng**.
 
 #### Error Codes
 
 | Code | HTTP Status | Điều kiện |
 |------|-------------|-----------|
+| `AUTH_REQUIRED` | 401 | Thiếu `Authorization: Bearer` header |
+| `INVALID_TOKEN` | 401 | Token không hợp lệ hoặc đã hết hạn |
 | `INVALID_INPUT` | 400 | Thiếu `order_id` |
 | `NOT_FOUND` | 404 | Đơn hàng không tồn tại |
 | `SERVER_ERROR` | 500 | Lỗi server không xác định |
 
 ---
 
-### 6.3. Tạo Đơn hàng
+### 5.3. Tạo Đơn hàng
 
 > **POST** `/api/v1/zalo/orders/create`
 
@@ -1342,7 +1293,7 @@ Tạo đơn hàng từ danh sách sản phẩm do frontend gửi lên (frontend 
 
 #### Response `data`
 
-Giống cấu trúc order object trong **6.1. Danh sách Đơn hàng**, bổ sung:
+Giống cấu trúc order object trong **5.1. Danh sách Đơn hàng**, bổ sung:
 
 | Field | Type | Mô tả |
 |-------|------|-------|
@@ -1370,15 +1321,18 @@ Giống cấu trúc order object trong **6.1. Danh sách Đơn hàng**, bổ sun
 
 | Code | HTTP Status | Điều kiện |
 |------|-------------|-----------|
+| `AUTH_REQUIRED` | 401 | Thiếu `Authorization: Bearer` header |
+| `INVALID_TOKEN` | 401 | Token không hợp lệ hoặc đã hết hạn |
 | `INVALID_INPUT` | 400 | Thiếu `contact_id`; Giỏ hàng trống |
 | `NOT_FOUND` | 404 | Contact không tồn tại |
+| `OUT_OF_STOCK` | 400 | Sản phẩm không đủ tồn kho (`free_qty < quantity`) |
 | `VOUCHER_ERROR` | 400 | Mã voucher không hợp lệ, hết hạn, không đủ điều kiện |
 | `ORDER_ERROR` | 400 | Không thể xác nhận đơn hàng (lỗi từ Odoo) |
 | `SERVER_ERROR` | 500 | Lỗi server không xác định |
 
 ---
 
-### 6.4. Hủy Đơn hàng
+### 5.4. Hủy Đơn hàng
 
 > **POST** `/api/v1/zalo/orders/cancel`
 
@@ -1415,10 +1369,83 @@ Hủy đơn hàng. Có thể hủy đơn ở mọi trạng thái ngoại trừ `
 
 | Code | HTTP Status | Điều kiện |
 |------|-------------|-----------|
+| `AUTH_REQUIRED` | 401 | Thiếu `Authorization: Bearer` header |
+| `INVALID_TOKEN` | 401 | Token không hợp lệ hoặc đã hết hạn |
 | `INVALID_INPUT` | 400 | Thiếu `order_id` hoặc `contact_id` |
 | `NOT_FOUND` | 404 | Đơn hàng không tồn tại |
 | `FORBIDDEN` | 403 | Đơn hàng không thuộc về contact này |
 | `INVALID_STATE` | 400 | Đơn hàng đã hoàn thành (`done`) hoặc đã hủy (`cancel`) |
+| `SERVER_ERROR` | 500 | Lỗi server không xác định |
+
+---
+
+## 6. Banner API
+
+### 6.1. Danh sách Banner
+
+> **POST** `/api/v1/zalo/banners/list`
+
+Lấy danh sách banner hiển thị trên trang chủ Zalo Mini App. Banner được lấy từ model `zalo.miniapp.banner`, sắp xếp theo `sequence` tăng dần.
+
+#### Request Body
+
+| Field | Type | Required | Default | Mô tả |
+|-------|------|----------|---------|-------|
+| `limit` | int | Optional | 10 | Số lượng banner tối đa (1-100) |
+| `offset` | int | Optional | 0 | Vị trí bắt đầu lấy dữ liệu |
+
+#### Request Example
+
+```json
+{
+  "limit": 10,
+  "offset": 0
+}
+```
+
+#### Response `data`
+
+| Field | Type | Mô tả |
+|-------|------|-------|
+| `total` | int | Tổng số banner đang active |
+| `limit` | int | Số lượng đã yêu cầu |
+| `offset` | int | Vị trí bắt đầu |
+| `banners` | array[object] | Danh sách banner |
+
+**Mỗi banner object**:
+
+| Field | Type | Mô tả |
+|-------|------|-------|
+| `id` | int | ID của banner |
+| `name` | string | Tên banner |
+| `link` | string | URL đích khi click (deep link hoặc external URL) |
+| `image_url` | string | Relative URL ảnh banner (`/api/v1/zalo/image/zalo.miniapp.banner/{id}/image`) |
+
+#### Response Example
+
+```json
+{
+    "success": true,
+    "data": {
+        "banners": [
+            {
+                "id": 1,
+                "name": "test",
+                "link": "https://images.pexels.com/photos/459225/pexels-photo-459225.jpeg?cs=srgb&dl=daylight-environment-forest-459225.jpg&fm=jpg",
+                "image_url": "/api/v1/zalo/image/zalo.miniapp.banner/1/image"
+            }
+        ],
+        "total": 1,
+        "limit": 10,
+        "offset": 0
+    }
+}
+```
+
+#### Error Codes
+
+| Code | HTTP Status | Điều kiện |
+|------|-------------|-----------|
 | `SERVER_ERROR` | 500 | Lỗi server không xác định |
 
 ---
@@ -1475,12 +1502,68 @@ GET /api/v1/zalo/image/product.multi.image/15/image_1920
 
 | Code | HTTP Status | Điều kiện |
 |------|-------------|-----------|
+| `FORBIDDEN` | 403 | Model không được phép (không nằm trong whitelist) |
 | `NOT_FOUND` | 404 | Model không tồn tại; Bản ghi không tồn tại; Field không tồn tại; Không có ảnh |
 | `SERVER_ERROR` | 500 | Lỗi server không xác định |
 
 ---
 
-## 8. Error Codes
+## 8. Debug API
+
+### 8.1. Verify Token
+
+> **POST** `/api/v1/zalo/debug/verify-token`
+
+**LƯU Ý**: Endpoint này chỉ hoạt động khi config parameter `zalo_api_debug_enabled = True` trong System Parameters.
+
+Kiểm tra chi tiết một token HMAC, hiển thị từng bước verify để debug.
+
+#### Request Body
+
+| Field | Type | Required | Default | Mô tả |
+|-------|------|----------|---------|-------|
+| `token` | string | **Required** | — | Token cần kiểm tra |
+
+#### Request Example
+
+```json
+{
+  "token": "1.1741500000.abc123def456"
+}
+```
+
+#### Response `data`
+
+| Field | Type | Mô tả |
+|-------|------|-------|
+| `token_parts` | int | Số phần của token (phải là 3) |
+| `token_format_ok` | bool | Định dạng token đúng hay không |
+| `partner_id` | int | ID partner từ token |
+| `timestamp` | int | Timestamp từ token |
+| `signature` | string | Chữ ký từ token |
+| `secret_key` | string | 5 ký tự đầu của secret key (ẩn phần còn lại) |
+| `secret_key_length` | int | Độ dài secret key |
+| `partner_exists` | bool | Partner có tồn tại không |
+| `partner_phone_raw` | string | Số điện thoại gốc của partner |
+| `partner_phone_normalized` | string | Số điện thoại đã chuẩn hóa |
+| `age_seconds` | int | Tuổi của token (giây) |
+| `expired` | bool | Token đã hết hạn chưa |
+| `expected_payload` | string | Payload kỳ vọng để tính signature |
+| `expected_signature` | string | Signature kỳ vọng |
+| `signature_match` | bool | Signature có khớp không |
+| `valid` | bool | (chỉ xuất hiện nếu hợp lệ) Token hợp lệ |
+
+#### Error Codes
+
+| Code | HTTP Status | Điều kiện |
+|------|-------------|-----------|
+| `FORBIDDEN` | 403 | Debug mode chưa được bật (`zalo_api_debug_enabled` chưa được set) |
+| `INVALID_INPUT` | 400 | Thiếu `token` |
+| `SERVER_ERROR` | 500 | Lỗi server không xác định |
+
+---
+
+## 9. Error Codes
 
 | Code | HTTP Status | Mô tả |
 |------|-------------|-------|
@@ -1489,6 +1572,7 @@ GET /api/v1/zalo/image/product.multi.image/15/image_1920
 | `AUTH_REQUIRED` | 401 | Thiếu `Authorization: Bearer` header |
 | `INVALID_TOKEN` | 401 | Token không hợp lệ hoặc đã hết hạn |
 | `FORBIDDEN` | 403 | Không có quyền truy cập (đơn hàng không thuộc về bạn) |
+| `OUT_OF_STOCK` | 400 | Sản phẩm không đủ tồn kho |
 | `VOUCHER_ERROR` | 400 | Lỗi voucher (không tồn tại, hết hạn, không đủ điều kiện) |
 | `ORDER_ERROR` | 400 | Lỗi tạo đơn hàng (không thể xác nhận) |
 | `INVALID_STATE` | 400 | Trạng thái đơn hàng không hợp lệ cho thao tác |
@@ -1498,7 +1582,7 @@ GET /api/v1/zalo/image/product.multi.image/15/image_1920
 
 ---
 
-## 9. Luồng sử dụng (User Flow)
+## 10. Luồng sử dụng (User Flow)
 
 ```
 1. AUTH
@@ -1514,7 +1598,7 @@ GET /api/v1/zalo/image/product.multi.image/15/image_1920
    POST /api/v1/zalo/products/list        (tìm kiếm, sắp xếp)
    POST /api/v1/zalo/products/detail      (chi tiết + ảnh phụ)
 
-4. GIỎ HÀNG
+4. GIỎ HÀNG (cần Bearer token)
    POST /api/v1/zalo/cart/get             (xem giỏ)
    POST /api/v1/zalo/cart/add             (thêm SP)
    PUT /api/v1/zalo/cart/update           (sửa SL)
@@ -1527,7 +1611,7 @@ GET /api/v1/zalo/image/product.multi.image/15/image_1920
    PUT /api/v1/zalo/contacts/addresses/update    (sửa địa chỉ)
    POST /api/v1/zalo/contacts/addresses/delete   (xóa địa chỉ)
 
-6. ĐẶT HÀNG
+6. ĐẶT HÀNG (cần Bearer token)
    POST /api/v1/zalo/orders/create       (tạo đơn từ giỏ hàng)
    POST /api/v1/zalo/orders/list         (xem lịch sử đơn)
    POST /api/v1/zalo/orders/detail       (xem chi tiết đơn)
@@ -1536,7 +1620,7 @@ GET /api/v1/zalo/image/product.multi.image/15/image_1920
 
 ---
 
-## 10. Ghi chú kỹ thuật
+## 11. Ghi chú kỹ thuật
 
 ### Tồn kho
 - Sử dụng `product.product.free_qty` - tồn khả dụng, không bao gồm hàng đang giữ chỗ.

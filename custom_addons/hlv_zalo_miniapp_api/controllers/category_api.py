@@ -155,6 +155,8 @@ class ZaloCategoryAPI(ZaloBaseAPI, http.Controller):
         """Trả ảnh dạng binary.
         Security: Chỉ cho phép các model trong ALLOWED_IMAGE_MODELS."""
         try:
+            # Decode model name: product-product -> product.product
+            model = model.replace('-', '.')
             # Whitelist model check
             if model not in self.ALLOWED_IMAGE_MODELS:
                 _logger.warning("Rejected image access for unauthorized model: %s", model)
