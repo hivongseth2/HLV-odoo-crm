@@ -1,4 +1,7 @@
+# -*- coding: utf-8 -*-
+import logging
 from markupsafe import Markup
+
 from odoo import _, fields, http
 from odoo.http import request, Response
 
