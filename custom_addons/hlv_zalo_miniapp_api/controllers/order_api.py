@@ -288,6 +288,15 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             except Exception as me:
                 _logger.warning("Post chatter error on sale.order %s: %s", order.id, me)
 
+            # Tự động dọn dẹp giỏ hàng tạm (zalo.miniapp.cart.line) của khách sau khi tạo đơn thành công
+            try:
+                CartLine = request.env["zalo.miniapp.cart.line"].sudo()
+                cart_lines = CartLine.search([("partner_id", "=", contact_id)])
+                if cart_lines:
+                    cart_lines.unlink()
+            except Exception as cle:
+                _logger.warning("Clear cart after order create error: %s", cle)
+
             result = self._order_to_dict(order)
             if voucher_info:
                 result["voucher_applied"] = voucher_info

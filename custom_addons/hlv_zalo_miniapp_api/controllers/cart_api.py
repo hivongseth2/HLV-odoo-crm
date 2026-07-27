@@ -10,57 +10,33 @@ _logger = logging.getLogger(__name__)
 
 
 class ZaloCartAPI(ZaloBaseAPI, http.Controller):
-    """API Giỏ hàng cho Zalo Mini App — dùng sale.order draft"""
+    """API Giỏ hàng cho Zalo Mini App — lưu thông tin vào zalo.miniapp.cart.line (Không tạo sale.order draft)"""
 
-    def _get_or_create_cart(self, contact_id):
-        Partner = request.env["res.partner"].sudo()
-        SaleOrder = request.env["sale.order"].sudo()
+    def _cart_to_dict(self, contact_id):
+        CartLine = request.env["zalo.miniapp.cart.line"].sudo()
+        cart_lines = CartLine.search([("partner_id", "=", contact_id)], order="id desc")
 
-        partner = Partner.browse(contact_id)
-        if not partner.exists():
-            return None, "Khách hàng không tồn tại"
-
-        cart = SaleOrder.search([
-            ("partner_id", "=", contact_id),
-            ("state", "=", "draft"),
-            ("team_id", "=", False),
-        ], limit=1, order="id desc")
-
-        if not cart:
-            cart = SaleOrder.create({
-                "partner_id": contact_id,
-                "partner_invoice_id": contact_id,
-                "partner_shipping_id": contact_id,
-                "state": "draft",
-            })
-
-        return cart, None
-
-    def _cart_to_dict(self, cart):
         lines = []
-        for line in cart.order_line:
-            if line.product_id and line.product_id.x_active_zalo:
+        for line in cart_lines:
+            if line.product_id and line.product_id.exists() and line.product_id.x_active_zalo:
+                price = line.product_id.x_zalo_price or line.product_id.list_price or 0.0
                 lines.append({
                     "id": line.id,
                     "product_id": line.product_id.id,
                     "product_name": line.product_id.display_name,
-                    "product_code": line.product_id.default_code,
-                    "quantity": line.product_uom_qty,
-                    "price_unit": line.price_unit,
-                    "x_zalo_price": line.product_id.x_zalo_price or 0.0,
-                    "subtotal": line.price_subtotal,
+                    "product_code": line.product_id.default_code or "",
+                    "quantity": line.quantity,
+                    "price_unit": price,
+                    "x_zalo_price": price,
+                    "subtotal": price * line.quantity,
                     "image_url": f"/api/v1/zalo/image/product.product/{line.product_id.id}/image_128" if line.product_id.image_128 else None,
                 })
 
         return {
-            "id": cart.id,
-            "partner_id": cart.partner_id.id,
-            "partner_name": cart.partner_id.name,
-            "state": cart.state,
+            "partner_id": contact_id,
             "lines": lines,
-            "total": sum(l.price_subtotal for l in cart.order_line),
+            "total": sum(l["subtotal"] for l in lines),
             "line_count": len(lines),
-            "create_date": cart.create_date,
         }
 
     # POST /api/v1/zalo/cart/get
@@ -80,10 +56,7 @@ class ZaloCartAPI(ZaloBaseAPI, http.Controller):
             if isinstance(auth_result, Response):
                 return auth_result
 
-            cart, error = self._get_or_create_cart(contact_id)
-            if error:
-                return self._response_error("NOT_FOUND", error, 404)
-            return self._response_success(self._cart_to_dict(cart))
+            return self._response_success(self._cart_to_dict(contact_id))
         except Exception as e:
             _logger.exception("cart_get error")
             return self._response_error("SERVER_ERROR", str(e), 500)
@@ -112,27 +85,25 @@ class ZaloCartAPI(ZaloBaseAPI, http.Controller):
 
             Product = request.env["product.product"].sudo()
             product = Product.browse(product_id)
-            if not product.exists() or not product.active:
-                return self._response_error("NOT_FOUND", "Sản phẩm không tồn tại", 404)
-            if not product.x_active_zalo:
+            if not product.exists() or not product.active or not product.x_active_zalo:
                 return self._response_error("NOT_FOUND", "Sản phẩm không tồn tại", 404)
 
-            cart, error = self._get_or_create_cart(contact_id)
-            if error:
-                return self._response_error("NOT_FOUND", error, 404)
+            CartLine = request.env["zalo.miniapp.cart.line"].sudo()
+            existing_line = CartLine.search([
+                ("partner_id", "=", contact_id),
+                ("product_id", "=", product_id),
+            ], limit=1)
 
-            existing_line = cart.order_line.filtered(lambda l: l.product_id.id == product_id)
             if existing_line:
-                existing_line[0].write({"product_uom_qty": existing_line[0].product_uom_qty + quantity})
+                existing_line.write({"quantity": existing_line.quantity + quantity})
             else:
-                price = product.x_zalo_price or product.list_price
-                request.env["sale.order.line"].sudo().create({
-                    "order_id": cart.id, "product_id": product_id,
-                    "product_uom_qty": quantity, "price_unit": price,
-                    "name": product.display_name,
+                CartLine.create({
+                    "partner_id": contact_id,
+                    "product_id": product_id,
+                    "quantity": quantity,
                 })
 
-            return self._response_success(self._cart_to_dict(cart))
+            return self._response_success(self._cart_to_dict(contact_id))
         except Exception as e:
             _logger.exception("cart_add error")
             return self._response_error("SERVER_ERROR", str(e), 500)
@@ -157,24 +128,17 @@ class ZaloCartAPI(ZaloBaseAPI, http.Controller):
             if isinstance(auth_result, Response):
                 return auth_result
 
-            # Browse trực tiếp sale.order.line để tránh race condition
-            # khi search giỏ hàng draft không chính xác
-            OrderLine = request.env["sale.order.line"].sudo()
-            line = OrderLine.browse(line_id)
-            if not line.exists():
-                return self._response_error("NOT_FOUND", "Dòng sản phẩm không tồn tại", 404)
-
-            # Kiểm tra line thuộc order draft của contact này
-            order = line.order_id
-            if not order or order.state != "draft" or order.partner_id.id != contact_id:
+            CartLine = request.env["zalo.miniapp.cart.line"].sudo()
+            line = CartLine.browse(line_id)
+            if not line.exists() or line.partner_id.id != contact_id:
                 return self._response_error("NOT_FOUND", "Dòng sản phẩm không tồn tại", 404)
 
             if quantity <= 0:
                 line.unlink()
             else:
-                line.write({"product_uom_qty": quantity})
+                line.write({"quantity": quantity})
 
-            return self._response_success(self._cart_to_dict(order))
+            return self._response_success(self._cart_to_dict(contact_id))
         except Exception as e:
             _logger.exception("cart_update error")
             return self._response_error("SERVER_ERROR", str(e), 500)
@@ -198,19 +162,12 @@ class ZaloCartAPI(ZaloBaseAPI, http.Controller):
             if isinstance(auth_result, Response):
                 return auth_result
 
-            # Browse trực tiếp sale.order.line
-            OrderLine = request.env["sale.order.line"].sudo()
-            line = OrderLine.browse(line_id)
-            if not line.exists():
-                return self._response_success({"message": "Đã xóa"})
+            CartLine = request.env["zalo.miniapp.cart.line"].sudo()
+            line = CartLine.browse(line_id)
+            if line.exists() and line.partner_id.id == contact_id:
+                line.unlink()
 
-            # Kiểm tra line thuộc order draft của contact này
-            order = line.order_id
-            if not order or order.state != "draft" or order.partner_id.id != contact_id:
-                return self._response_success({"message": "Đã xóa"})
-
-            line.unlink()
-            return self._response_success(self._cart_to_dict(order))
+            return self._response_success(self._cart_to_dict(contact_id))
         except Exception as e:
             _logger.exception("cart_remove error")
             return self._response_error("SERVER_ERROR", str(e), 500)
@@ -232,11 +189,10 @@ class ZaloCartAPI(ZaloBaseAPI, http.Controller):
             if isinstance(auth_result, Response):
                 return auth_result
 
-            cart, error = self._get_or_create_cart(contact_id)
-            if error:
-                return self._response_error("NOT_FOUND", error, 404)
+            CartLine = request.env["zalo.miniapp.cart.line"].sudo()
+            cart_lines = CartLine.search([("partner_id", "=", contact_id)])
+            cart_lines.unlink()
 
-            cart.order_line.unlink()
             return self._response_success({"message": "Đã xóa giỏ hàng"})
         except Exception as e:
             _logger.exception("cart_clear error")

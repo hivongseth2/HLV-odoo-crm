@@ -77,6 +77,15 @@ hlv_zalo_miniapp_api/
 | `image` | Image | Hình ảnh banner (base64) |
 | `link` | Char | Link khi click vào banner |
 
+### `zalo.miniapp.cart.line` (mới)
+
+| Field | Type | Mô tả |
+|---|---|---|
+| `partner_id` | Many2one (res.partner) | Khách hàng Zalo sở hữu giỏ hàng |
+| `product_id` | Many2one (product.product) | Sản phẩm chọn mua |
+| `quantity` | Float | Số lượng sản phẩm |
+| `price_unit` | Float | Đơn giá hiển thị (tính từ `x_zalo_price` / `list_price`) |
+
 ## API Endpoints
 
 ### Banner API - `/api/v1/zalo/banners/*`

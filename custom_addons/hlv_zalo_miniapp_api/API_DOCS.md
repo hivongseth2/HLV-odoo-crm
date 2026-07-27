@@ -908,7 +908,7 @@ Xóa một địa chỉ giao hàng.
 
 ## 4. Cart API
 
-Giỏ hàng sử dụng `sale.order` với `state = draft` và `team_id = False`. Mỗi contact chỉ có **một** giỏ hàng draft duy nhất.
+Giỏ hàng được lưu trữ tạm trong model nhẹ `zalo.miniapp.cart.line` (liên kết trực tiếp với `res.partner` và `product.product`). Giỏ hàng **KHÔNG tạo `sale.order` draft** trên Odoo để tránh rác dữ liệu đơn hàng. Đơn bán hàng (`sale.order`) chỉ được tạo duy nhất khi khách hàng nhấn Đặt hàng (gọi API `POST /api/v1/zalo/orders/create`).
 
 **Auth**: Tất cả Cart API endpoints đều yêu cầu Bearer token (xác thực quyền sở hữu giỏ hàng).
 
@@ -916,7 +916,7 @@ Giỏ hàng sử dụng `sale.order` với `state = draft` và `team_id = False`
 
 > **POST** `/api/v1/zalo/cart/get`
 
-Lấy thông tin giỏ hàng hiện tại của contact. Tự động tạo giỏ hàng mới nếu chưa có.
+Lấy thông tin giỏ hàng hiện tại của contact.
 
 #### Request Body
 
@@ -936,20 +936,16 @@ Lấy thông tin giỏ hàng hiện tại của contact. Tự động tạo gi�
 
 | Field | Type | Mô tả |
 |-------|------|-------|
-| `id` | int | ID của `sale.order` (giỏ hàng) |
 | `partner_id` | int | ID của contact |
-| `partner_name` | string | Tên contact |
-| `state` | string | Luôn là `"draft"` |
 | `lines` | array[object] | Danh sách dòng sản phẩm (chỉ gồm sản phẩm có `x_active_zalo = True`) |
-| `total` | float | Tổng tiền hàng (chưa thuế) |
-| `line_count` | int | Số dòng sản phẩm |
-| `create_date` | string | Ngày tạo giỏ hàng |
+| `total` | float | Tổng tiền hàng |
+| `line_count` | int | Số dòng sản phẩm trong giỏ |
 
 **Mỗi line object**:
 
 | Field | Type | Mô tả |
 |-------|------|-------|
-| `id` | int | ID của `sale.order.line` |
+| `id` | int | ID của `zalo.miniapp.cart.line` |
 | `product_id` | int | ID của `product.product` |
 | `product_name` | string | Tên sản phẩm |
 | `product_code` | string hoặc null | Mã sản phẩm |
