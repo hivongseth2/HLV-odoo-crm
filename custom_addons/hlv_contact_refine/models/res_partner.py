@@ -116,9 +116,9 @@ class ResPartner(models.Model):
                    WHEN type = 'delivery' THEN 'delivery_address'
                    WHEN type = 'invoice' THEN 'invoice_address'
                    WHEN parent_id IS NOT NULL THEN 'child_contact'
+                   WHEN hlv_has_purchase_order IS TRUE THEN 'supplier'
                    WHEN hlv_has_shopee_order IS TRUE THEN 'customer_shopee'
                    WHEN hlv_has_sale_order IS TRUE THEN 'customer_crm'
-                   WHEN hlv_has_purchase_order IS TRUE THEN 'supplier'
                    ELSE 'other'
                END
         """)
@@ -315,12 +315,12 @@ class ResPartner(models.Model):
                 partner.hlv_business_role = 'invoice_address'
             elif partner.parent_id:
                 partner.hlv_business_role = 'child_contact'
+            elif partner.hlv_has_purchase_order:
+                partner.hlv_business_role = 'supplier'
             elif partner.hlv_has_shopee_order:
                 partner.hlv_business_role = 'customer_shopee'
             elif partner.hlv_has_sale_order:
                 partner.hlv_business_role = 'customer_crm'
-            elif partner.hlv_has_purchase_order:
-                partner.hlv_business_role = 'supplier'
             else:
                 partner.hlv_business_role = 'other'
 
