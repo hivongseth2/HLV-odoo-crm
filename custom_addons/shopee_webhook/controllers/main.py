@@ -48,27 +48,53 @@ class ShopeeWebhookController(http.Controller):
 
     @staticmethod
     def _verify_push_authorization(shop):
-        """Verify Shopee's HMAC-SHA256 Authorization header against the raw body."""
+        """Verify Shopee's HMAC-SHA256 signature for a Live Push request."""
         authorization = request.httprequest.headers.get('Authorization', '').strip()
-        partner_key = getattr(shop.account_id.sudo(), 'partner_key', False)
-        if not authorization or not partner_key:
+        if authorization.lower().startswith('sha256='):
+            authorization = authorization.split('=', 1)[1].strip()
+
+        config = request.env['ir.config_parameter'].sudo()
+        live_push_partner_key = (
+            config.get_param('shopee_webhook.live_push_partner_key') or ''
+        ).strip()
+        if not authorization or not live_push_partner_key:
             _logger.warning(
-                "Shopee Webhook: Missing Authorization header or partner_key for shop %s.",
+                "Shopee Webhook: Missing Authorization header or Live Push Partner "
+                "Key for shop %s. Configure system parameter "
+                "shopee_webhook.live_push_partner_key.",
                 shop.display_name,
             )
             return False
 
-        callback_url = request.env['ir.config_parameter'].sudo().get_param(
-            'shopee_webhook.callback_url'
-        ) or request.httprequest.url
-        raw_body = request.httprequest.get_data(cache=True, as_text=True)
-        base_string = '%s|%s' % (callback_url, raw_body)
+        callback_url = (
+            config.get_param('shopee_webhook.callback_url')
+            or request.httprequest.url
+        ).strip()
+        raw_body = request.httprequest.get_data(cache=True)
+        base_string = callback_url.encode('utf-8') + b'|' + raw_body
         expected = hmac.new(
-            str(partner_key).encode('utf-8'),
-            base_string.encode('utf-8'),
+            live_push_partner_key.encode('utf-8'),
+            base_string,
             hashlib.sha256,
         ).hexdigest()
-        return hmac.compare_digest(expected, authorization)
+        is_valid = hmac.compare_digest(expected, authorization.lower())
+        if not is_valid:
+            _logger.warning(
+                "Shopee Webhook: Authorization HMAC mismatch for shop_id=%s; "
+                "callback_url=%s, body_bytes=%s, authorization_length=%s.",
+                shop.shop_identifier,
+                callback_url,
+                len(raw_body),
+                len(authorization),
+            )
+        else:
+            _logger.info(
+                "Shopee Webhook: Authorization verified for shop_id=%s; "
+                "callback_url=%s.",
+                shop.shop_identifier,
+                callback_url,
+            )
+        return is_valid
 
     @staticmethod
     def _update_tracking_number(orders, tracking_no, package_number=None):

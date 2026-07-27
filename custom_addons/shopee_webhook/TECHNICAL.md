@@ -35,8 +35,11 @@ Shopee statuses are mapped to Vietnamese labels and displayed using badges on Sa
 - Cancelled pickings are never updated. Active PICK pickings are preferred;
   a completed PICK is used only when no active PICK remains.
 - Code 4 requests must pass Shopee's `Authorization` HMAC-SHA256 check using the
-  exact raw request body. Set `shopee_webhook.callback_url` when the public URL
-  configured in Shopee differs from the URL seen by Odoo behind a reverse proxy.
+  exact raw request body. Store the dedicated Shopee **Live Push Partner Key**
+  in system parameter `shopee_webhook.live_push_partner_key`; this is different
+  from the Open API partner key stored on the Shopee account.
+- Set `shopee_webhook.callback_url` to the exact public URL configured in Shopee
+  when that URL differs from the URL seen by Odoo behind a reverse proxy.
 - Operational pushes return HTTP 204 with an empty body. Verification requests
   still return the required `verify_info` JSON value.
 
