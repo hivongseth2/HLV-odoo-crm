@@ -2,8 +2,7 @@
 
 ## Mục đích
 
-Module cung cấp REST API cho Zalo Mini App, thực hiện export data để phát triển mini app.
-Module này **không xây dựng giao diện frontend** - chỉ chứa API endpoints.
+Module cung cấp REST API cho Zalo Mini App đồng thời đóng vai trò là **Ứng dụng quản trị (Main Application)** trung tâm trên Odoo Backend giúp người dùng quản lý, lọc và cấu hình dữ liệu Zalo Mini App (Banners, Sản phẩm, Danh mục, Khách hàng, Đơn hàng).
 
 ## Cấu trúc thư mục
 
@@ -13,15 +12,24 @@ hlv_zalo_miniapp_api/
 ├── __manifest__.py
 ├── models/
 │   ├── __init__.py
+│   ├── banner.py               # Model zalo.miniapp.banner (quản lý banner)
 │   ├── product_product.py      # Mở rộng product.product: x_zalo_price, x_active_zalo
+│   ├── product_template.py     # Mở rộng product.template
 │   └── res_partner.py           # Mở rộng res.partner: x_is_zalo_account
 ├── controllers/
 │   ├── __init__.py
+│   ├── banner_api.py            # API banner (/api/v1/zalo/banners/*)
 │   ├── category_api.py          # API danh mục (pos.category)
 │   ├── product_api.py           # API sản phẩm (product.product variant)
 │   ├── contact_api.py           # API contact (auth, CRUD, addresses)
 │   ├── cart_api.py              # API giỏ hàng (sale.order draft)
 │   └── order_api.py             # API đơn hàng (list/detail/create/cancel)
+├── views/
+│   ├── menu_views.xml          # Menu chính & phân cấp cho Zalo Mini App
+│   ├── banner_views.xml        # View cho Banners
+│   ├── product_product_views.xml # Views & Action filter sản phẩm Zalo
+│   ├── product_template_views.xml# Views bổ sung fields Zalo trên template
+│   └── res_partner_views.xml   # Views & Action filter khách hàng Zalo
 ├── security/
 │   └── ir.model.access.csv
 └── TECHNICAL.md
@@ -58,7 +66,25 @@ hlv_zalo_miniapp_api/
 |---|---|---|
 | `x_is_zalo_account` | Boolean | Đánh dấu contact đã đăng ký Zalo |
 
+### `zalo.miniapp.banner` (mới)
+
+| Field | Type | Mô tả |
+|---|---|---|
+| `name` | Char | Tên Banner (bắt buộc) |
+| `active` | Boolean | Trạng thái kích hoạt (default: True) |
+| `sequence` | Integer | Thứ tự hiển thị (default: 10) |
+| `image` | Image | Hình ảnh banner (base64) |
+| `link` | Char | Link khi click vào banner |
+
 ## API Endpoints
+
+### Banner API - `/api/v1/zalo/banners/*`
+
+| Method | Route | Mô tả |
+|---|---|---|
+| POST | `/api/v1/zalo/banners/list` | Danh sách banner (chỉ lấy active=True) |
+
+Params: `limit`, `offset`
 
 ### Category API - `/api/v1/zalo/categories/*`
 

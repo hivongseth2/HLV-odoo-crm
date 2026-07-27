@@ -14,4 +14,33 @@
             </xpath>
         </field>
     </record>
+
+    <record id="view_res_partner_zalo_search_inherit" model="ir.ui.view">
+        <field name="name">res.partner.zalo.search.inherit</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_res_partner_filter"/>
+        <field name="arch" type="xml">
+            <field name="name" position="after">
+                <field name="x_is_zalo_account"/>
+            </field>
+            <xpath expr="//search" position="inside">
+                <filter string="Khách hàng Zalo App" name="filter_zalo_account" domain="[('x_is_zalo_account', '=', True)]"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="action_zalo_res_partner" model="ir.actions.act_window">
+        <field name="name">Khách hàng Zalo Mini App</field>
+        <field name="res_model">res.partner</field>
+        <field name="view_mode">kanban,list,form</field>
+        <field name="context">{'search_default_filter_zalo_account': 1, 'default_x_is_zalo_account': True}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Chưa có khách hàng Zalo Mini App nào.
+            </p>
+            <p>
+                Danh sách khách hàng đăng ký hoặc liên kết tài khoản từ Zalo Mini App sẽ xuất hiện ở đây.
+            </p>
+        </field>
+    </record>
 </odoo>
