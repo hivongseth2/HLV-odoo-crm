@@ -31,8 +31,12 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
         try:
             for picking in order.picking_ids.filtered(lambda p: p.state != "cancel"):
                 picking_info.append({
-                    "id": picking.id, "type": picking.picking_type_id.name or "",
-                    "state": picking.state, "scheduled_date": picking.scheduled_date,
+                    "id": picking.id,
+                    "name": picking.name or "",
+                    "code": picking.picking_type_id.code or "",
+                    "type": picking.picking_type_id.name or "",
+                    "state": picking.state,
+                    "scheduled_date": picking.scheduled_date,
                 })
         except Exception:
             pass
@@ -115,7 +119,13 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
 
             domain = [("partner_id", "=", contact_id), ("state", "!=", "draft")]
             if state_filter:
-                domain.append(("state", "=", state_filter))
+                if "," in state_filter:
+                    states = [s.strip() for s in state_filter.split(",") if s.strip()]
+                    domain.append(("state", "in", states))
+                elif state_filter in ("sale", "done", "shipping", "processing"):
+                    domain.append(("state", "in", ["sale", "done"]))
+                else:
+                    domain.append(("state", "=", state_filter))
 
             orders = request.env["sale.order"].sudo().search(domain, limit=limit, offset=offset, order="date_order desc")
             total = request.env["sale.order"].sudo().search_count(domain)
