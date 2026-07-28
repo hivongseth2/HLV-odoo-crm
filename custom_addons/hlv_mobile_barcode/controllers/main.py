@@ -331,7 +331,7 @@ def _move_package_quants_to_loose(package):
         raise UserError(_('Kiện "%s" không còn tồn kho để gỡ.', package.name))
 
     conflicts = request.env['stock.move.line'].sudo().search([
-        ('picking_id.state', 'not in', ['done', 'cancel']),
+        ('state', 'not in', ['done', 'cancel']),
         '|',
         ('package_id', '=', package.id),
         ('result_package_id', '=', package.id),
@@ -409,7 +409,7 @@ def _add_exact_package_to_new_transfer(picking, package):
 
     conflicts = request.env['stock.move.line'].sudo().search([
         ('picking_id', '!=', picking.id),
-        ('picking_id.state', 'not in', ['done', 'cancel']),
+        ('state', 'not in', ['done', 'cancel']),
         ('quantity', '>', 0),
         '|',
         ('package_id', '=', package.id),
@@ -491,7 +491,7 @@ def _prepare_partial_packages_for_validation(picking):
     _lock_packages(package_ids)
     conflicts = request.env['stock.move.line'].sudo().search([
         ('picking_id', '!=', picking.id),
-        ('picking_id.state', 'not in', ['done', 'cancel']),
+        ('state', 'not in', ['done', 'cancel']),
         ('quantity', '>', 0),
         '|',
         ('package_id', 'in', package_ids),
@@ -764,7 +764,7 @@ def _reserve_exact_packages(backorder, package_infos):
     MoveLine = request.env['stock.move.line'].sudo().with_context(skip_qty_validation=True)
     package_conflicts = MoveLine.search([
         ('picking_id', '!=', backorder.id),
-        ('picking_id.state', 'not in', ['done', 'cancel']),
+        ('state', 'not in', ['done', 'cancel']),
         ('quantity', '>', 0),
         '|',
         ('package_id', 'in', package_ids),
@@ -869,7 +869,7 @@ def _reserve_exact_packages(backorder, package_infos):
     backorder.move_ids._recompute_state()
     remaining_conflicts = MoveLine.search([
         ('picking_id', '!=', backorder.id),
-        ('picking_id.state', 'not in', ['done', 'cancel']),
+        ('state', 'not in', ['done', 'cancel']),
         ('quantity', '>', 0),
         '|',
         ('package_id', 'in', package_ids),
