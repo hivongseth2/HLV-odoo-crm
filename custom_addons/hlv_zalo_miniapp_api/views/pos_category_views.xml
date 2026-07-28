@@ -1,24 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- Form View Extension -->
-    <record id="view_pos_category_form_zalo" model="ir.ui.view">
-        <field name="name">pos.category.form.zalo</field>
+    <!-- Dedicated Zalo POS Category List View (Primary view) -->
+    <record id="view_zalo_pos_category_tree" model="ir.ui.view">
+        <field name="name">pos.category.tree.zalo.custom</field>
         <field name="model">pos.category</field>
-        <field name="inherit_id" ref="point_of_sale.product_pos_category_form_view"/>
         <field name="arch" type="xml">
-            <xpath expr="//field[@name='parent_id']" position="after">
+            <list string="Danh mục Zalo Mini App">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="parent_id"/>
                 <field name="x_is_featured_zalo"/>
-            </xpath>
+            </list>
         </field>
     </record>
 
-    <!-- Tree/List View Extension -->
-    <record id="view_pos_category_tree_zalo" model="ir.ui.view">
-        <field name="name">pos.category.tree.zalo</field>
+    <!-- Dedicated Zalo POS Category Form View (Primary mode inherit) -->
+    <record id="view_zalo_pos_category_form" model="ir.ui.view">
+        <field name="name">pos.category.form.zalo.custom</field>
         <field name="model">pos.category</field>
-        <field name="inherit_id" ref="point_of_sale.product_pos_category_tree_view"/>
+        <field name="inherit_id" ref="point_of_sale.product_pos_category_form_view"/>
+        <field name="mode">primary</field>
         <field name="arch" type="xml">
-            <xpath expr="/*" position="inside">
+            <xpath expr="//field[@name='parent_id']" position="after">
                 <field name="x_is_featured_zalo"/>
             </xpath>
         </field>
