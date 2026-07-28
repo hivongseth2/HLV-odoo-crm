@@ -1222,12 +1222,17 @@ class SaleOrder(models.Model):
 
         self._sync_misa_header_in_place(data, headers)
         if self.env.context.get('misa_assign_warehouse_from_lines'):
-            if warehouse_changed:
+            # Header sync can recompute warehouse_id from the current user's
+            # default warehouse. Re-assert the warehouse resolved from MISA
+            # even when the bootstrap SO already had that warehouse before
+            # syncing the partner/header.
+            if warehouse and self.warehouse_id != warehouse:
+                warehouse_after_header = self.warehouse_id
                 self.write({'warehouse_id': warehouse.id})
                 _logger.info(
-                    "🏭 Cập nhật kho SO %s: %s → %s",
+                    "🏭 Khôi phục kho MISA cho SO %s sau sync header: %s → %s",
                     self.name,
-                    previous_warehouse.name or "-",
+                    warehouse_after_header.name or "-",
                     warehouse.name,
                 )
             if warehouse:
