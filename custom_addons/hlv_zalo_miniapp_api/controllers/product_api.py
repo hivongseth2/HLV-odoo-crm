@@ -12,6 +12,67 @@ _logger = logging.getLogger(__name__)
 class ZaloProductAPI(ZaloBaseAPI, http.Controller):
     """API Sản phẩm (product.product variant) cho Zalo Mini App"""
 
+    def _get_product_images(self, product):
+        """Thu thập danh sách tất cả URL ảnh của sản phẩm (ảnh chính + ảnh phụ)."""
+        images = []
+        tmpl = product.product_tmpl_id
+
+        # 1. Ảnh chính (Variant hoặc Template)
+        if product.image_1920:
+            images.append(self._get_image_url("product.product", product.id, "image_1920"))
+        elif tmpl and tmpl.image_1920:
+            images.append(self._get_image_url("product.template", tmpl.id, "image_1920"))
+
+        # 2. Ảnh bổ sung của Variant (Odoo standard: product_variant_image_ids)
+        try:
+            if hasattr(product, "product_variant_image_ids"):
+                for img in product.product_variant_image_ids:
+                    if img.image_1920:
+                        url = self._get_image_url("product.image", img.id, "image_1920")
+                        if url not in images:
+                            images.append(url)
+        except Exception:
+            pass
+
+        # 3. Ảnh bổ sung của Template (Odoo standard website/e-commerce: product_template_image_ids)
+        try:
+            if tmpl and hasattr(tmpl, "product_template_image_ids"):
+                for img in tmpl.product_template_image_ids:
+                    if img.image_1920:
+                        url = self._get_image_url("product.image", img.id, "image_1920")
+                        if url not in images:
+                            images.append(url)
+        except Exception:
+            pass
+
+        # 4. Ảnh phụ từ các trường image_1, image_2, image_3, image_4, image_5 (module product_multi_images)
+        if tmpl:
+            for img_field in ["image_1", "image_2", "image_3", "image_4", "image_5"]:
+                try:
+                    if hasattr(tmpl, img_field) and getattr(tmpl, img_field):
+                        url = self._get_image_url("product.template", tmpl.id, img_field)
+                        if url not in images:
+                            images.append(url)
+                except Exception:
+                    pass
+
+        # 5. Ảnh bổ sung từ custom model quan hệ (product_multi_images)
+        try:
+            if tmpl and hasattr(tmpl, "product_multi_images"):
+                for img in tmpl.product_multi_images:
+                    if img.image_1920:
+                        url = self._get_image_url("product.multi.image", img.id, "image_1920")
+                        if url not in images:
+                            images.append(url)
+        except Exception:
+            pass
+
+        # 6. Fallback nếu chưa có ảnh nào: lấy image_128
+        if not images and product.image_128:
+            images.append(self._get_image_url("product.product", product.id, "image_128"))
+
+        return images
+
     def _build_product_data(self, product, batch_prices=None):
         """Build standard product response dict from a product.product record.
         
@@ -76,6 +137,7 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
             "category": category,
             "attributes": attributes,
             "image_url": img_url,
+            "images": self._get_product_images(product),
             "description": product.description_sale or "",
             "description_html": product.description or "",
         }
@@ -230,65 +292,6 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
             data["description_full"] = product.description or ""
             data["standard_price"] = product.standard_price
             data["volume"] = product.volume or 0.0
-
-            images = []
-            tmpl = product.product_tmpl_id
-
-            # 1. Ảnh chính (Variant hoặc Template)
-            if product.image_1920:
-                images.append(self._get_image_url("product.product", product.id, "image_1920"))
-            elif tmpl and tmpl.image_1920:
-                images.append(self._get_image_url("product.template", tmpl.id, "image_1920"))
-
-            # 2. Ảnh bổ sung của Variant (Odoo standard: product_variant_image_ids)
-            try:
-                if hasattr(product, "product_variant_image_ids"):
-                    for img in product.product_variant_image_ids:
-                        if img.image_1920:
-                            url = self._get_image_url("product.image", img.id, "image_1920")
-                            if url not in images:
-                                images.append(url)
-            except Exception:
-                pass
-
-            # 3. Ảnh bổ sung của Template (Odoo standard website/e-commerce: product_template_image_ids)
-            try:
-                if tmpl and hasattr(tmpl, "product_template_image_ids"):
-                    for img in tmpl.product_template_image_ids:
-                        if img.image_1920:
-                            url = self._get_image_url("product.image", img.id, "image_1920")
-                            if url not in images:
-                                images.append(url)
-            except Exception:
-                pass
-
-            # 4. Ảnh phụ từ các trường image_1, image_2, image_3, image_4, image_5 (module product_multi_images)
-            if tmpl:
-                for img_field in ["image_1", "image_2", "image_3", "image_4", "image_5"]:
-                    try:
-                        if hasattr(tmpl, img_field) and getattr(tmpl, img_field):
-                            url = self._get_image_url("product.template", tmpl.id, img_field)
-                            if url not in images:
-                                images.append(url)
-                    except Exception:
-                        pass
-
-            # 5. Ảnh bổ sung từ custom model quan hệ (product_multi_images)
-            try:
-                if tmpl and hasattr(tmpl, "product_multi_images"):
-                    for img in tmpl.product_multi_images:
-                        if img.image_1920:
-                            url = self._get_image_url("product.multi.image", img.id, "image_1920")
-                            if url not in images:
-                                images.append(url)
-            except Exception:
-                pass
-
-            # 6. Fallback nếu chưa có ảnh nào: lấy image_128
-            if not images and product.image_128:
-                images.append(self._get_image_url("product.product", product.id, "image_128"))
-
-            data["images"] = images
 
             return self._response_success_cached(data, max_age=120)
         except Exception as e:
