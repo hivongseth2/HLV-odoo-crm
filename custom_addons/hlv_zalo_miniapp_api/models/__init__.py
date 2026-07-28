@@ -4,3 +4,4 @@ from . import product_product
 from . import res_partner
 from . import banner
 from . import cart
+from . import pos_category
