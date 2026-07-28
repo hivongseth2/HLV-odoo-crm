@@ -34,6 +34,11 @@ _SKIP_MSG_RE = re.compile(
     r'|Đồng bộ MISA thành công'
     r'|Đã đồng bộ SO lines'
     r'|Odoo sẽ tự tạo picking'
+    r'|Đã đồng bộ MISA tại chỗ; giữ nguyên SO và các phiếu kho hiện có'
+    r'|Kho \([^)]+\) đã duyệt thay đổi số lượng MISA cho đơn'
+    r'|thay đổi số lượng trên MISA và đang chờ kho duyệt'
+    r'|Sale bắt đầu chỉnh sửa đơn .+ trên CRM\. Phiếu OUT tạm khóa xác nhận'
+    r'|Đã đồng bộ MISA và tạo lại chuỗi phiếu kho theo kho'
     r'|🖨️'
     r'|👤'
     r'|🔄'
@@ -473,8 +478,10 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#f7f8f9;c
 .kanban-wrapper{width:100%;overflow-x:auto;margin-left:-1rem;margin-right:-1rem;padding-left:1rem;padding-right:1rem;-webkit-overflow-scrolling:touch}
 #kanban-view{display:flex;flex-wrap:nowrap;gap:.75rem;width:fit-content}
 /* SO Cards */
-.so-card{border:1px solid #e5e7eb!important;transition:.15s;box-shadow:none!important}
+.so-card{border:1px solid #e5e7eb!important;transition:.15s;box-shadow:none!important;position:relative;overflow:hidden}
 .so-card:hover{border-color:#a5b4fc!important;box-shadow:0 2px 8px rgba(99,102,241,.1)!important}
+.misa-lock-ribbon{position:absolute;top:0;left:0;right:0;z-index:3;padding:4px 8px;background:#b45309;color:#fff;text-align:center;font-size:.62rem;font-weight:700;letter-spacing:.35px;box-shadow:0 1px 4px rgba(0,0,0,.2)}
+.so-card .misa-lock-card-header{padding-top:2rem!important}
 /* Drawer */
 #drawer{position:fixed;top:0;right:-1020px;width:1000px;height:100vh;background:#fff;
   border-left:1px solid #e5e7eb;box-shadow:-8px 0 32px rgba(0,0,0,.06);z-index:1060;transition:right .3s;overflow-y:auto}
@@ -1018,17 +1025,19 @@ function groupLines(lines){
   var map={},order=[];
   lines.forEach(function(l){
     var pid=l.product_id?l.product_id[0]:0;
-    if(map[pid]){
-      map[pid].product_uom_qty+=l.product_uom_qty||0;
-      map[pid].qty_delivered+=l.qty_delivered||0;
-      map[pid].qty_packed+=l.qty_packed||0;
-      map[pid].qty_reserved_here+=(l.qty_reserved_here||0); // sum reservations across lines
+    // Cùng sản phẩm nhưng khác đơn giá/chiết khấu là các dòng thương mại khác nhau.
+    var key=pid+'|'+String(l.price_unit||0)+'|'+String(l.discount||0);
+    if(map[key]){
+      map[key].product_uom_qty+=l.product_uom_qty||0;
+      map[key].qty_delivered+=l.qty_delivered||0;
+      map[key].qty_packed+=l.qty_packed||0;
+      map[key].qty_reserved_here+=(l.qty_reserved_here||0); // sum reservations across matching commercial lines
       // qty_warehouse_free: keep first (product-level, same for all lines of same product/wh)
-      map[pid].delivered_subtotal+=(l.delivered_subtotal||0);
-      map[pid].delivered_tax+=(l.delivered_tax||0);
-      map[pid].delivered_total+=(l.delivered_total||0);
+      map[key].delivered_subtotal+=(l.delivered_subtotal||0);
+      map[key].delivered_tax+=(l.delivered_tax||0);
+      map[key].delivered_total+=(l.delivered_total||0);
     } else {
-      map[pid]={product_id:l.product_id,product_uom_qty:l.product_uom_qty||0,
+      map[key]={product_id:l.product_id,product_uom_qty:l.product_uom_qty||0,
         qty_delivered:l.qty_delivered||0,qty_packed:l.qty_packed||0,
         qty_available:l.qty_available||0,qty_warehouse_free:l.qty_warehouse_free||0,
         qty_reserved_here:l.qty_reserved_here||0,is_kit:l.is_kit||false,
@@ -1036,10 +1045,10 @@ function groupLines(lines){
         delivered_subtotal:l.delivered_subtotal||0,
         delivered_tax:l.delivered_tax||0,
         delivered_total:l.delivered_total||0};
-      order.push(pid);
+      order.push(key);
     }
   });
-  return order.map(function(pid){return map[pid];});
+  return order.map(function(key){return map[key];});
 }
 
 function partnerName(o){return o.partner_id?o.partner_id[1]:'';}
@@ -1311,9 +1320,11 @@ function renderSOCard(o){
   var rd=o.real_delivery_status||o.delivery_status;
   var reported=S.reportedIds&&S.reportedIds[o.id];
   var ep=o.effective_packing||o.packing_status;
+  var misaLocked=!!o.misa_qty_sync_pending;
   var bgCls=o.has_delivered_today?' so-card-deltoday':(o.stock_status==='ready'?' so-card-ready':(o._is_new?' so-card-new':''));
   var h='<div class="card so-card cursor-pointer '+bc+(reported?' opacity-75':'')+bgCls+'" data-so-id="'+o.id+'">'
-    +'<div class="card-header py-2">'
+    +(misaLocked?'<div class="misa-lock-ribbon"><i class="fa fa-lock me-1"></i>ĐANG KHÓA · CHỜ KHO DUYỆT</div>':'')
+    +'<div class="card-header py-2'+(misaLocked?' misa-lock-card-header':'')+'">'
     +'<div class="d-flex flex-wrap gap-1 mb-1">'
     +b(DC[rd]||'badge-del-pending',DL[rd]||rd)
     +b(SC[o.stock_status]||'badge-stk-out',SL[o.stock_status]||o.stock_status)
