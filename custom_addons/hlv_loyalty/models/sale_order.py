@@ -272,6 +272,12 @@ class SaleOrder(models.Model):
 class SaleOrderLine(models.Model):
     _inherit = 'sale.order.line'
 
+    _LOYALTY_AMOUNT_TRIGGER_FIELDS = {
+        'loyalty_discount_pct',
+        'price_unit',
+        'product_uom_qty',
+    }
+
     is_loyalty_reward_line = fields.Boolean(
         string='Dòng thưởng Loyalty', default=False, copy=False,
     )
@@ -284,3 +290,55 @@ class SaleOrderLine(models.Model):
         digits=(5, 2),
         help='% chiết khấu dùng để tính điểm Loyalty cho dòng hàng này. Không ảnh hưởng giá bán. VD: 5 = 5%.',
     )
+
+    def _get_loyalty_discount_amount(self):
+        """Tính thành tiền CK Loyalty trên toàn bộ số lượng đặt hàng."""
+        self.ensure_one()
+        discount_pct = float(self.loyalty_discount_pct or 0.0)
+        if discount_pct <= 0:
+            return 0.0
+
+        amount = (
+            float(self.price_unit or 0.0)
+            * float(self.product_uom_qty or 0.0)
+            * discount_pct
+            / 100.0
+        )
+        currency = self.currency_id
+        return currency.round(amount) if currency else amount
+
+    def _sync_loyalty_discount_amount(self):
+        """Đồng bộ field Studio thành tiền từ % CK Loyalty."""
+        if 'x_studio_loyalty_discount_amount' not in self._fields:
+            return
+
+        for line in self:
+            amount = line._get_loyalty_discount_amount()
+            current_amount = float(
+                line.x_studio_loyalty_discount_amount or 0.0
+            )
+            if abs(current_amount - amount) >= 0.0001:
+                super(SaleOrderLine, line).write({
+                    'x_studio_loyalty_discount_amount': amount,
+                })
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        lines = super().create(vals_list)
+        lines._sync_loyalty_discount_amount()
+        return lines
+
+    def write(self, vals):
+        result = super().write(vals)
+        if self._LOYALTY_AMOUNT_TRIGGER_FIELDS.intersection(vals):
+            self._sync_loyalty_discount_amount()
+        return result
+
+    @api.onchange('loyalty_discount_pct', 'price_unit', 'product_uom_qty')
+    def _onchange_loyalty_discount_amount(self):
+        if 'x_studio_loyalty_discount_amount' not in self._fields:
+            return
+        for line in self:
+            line.x_studio_loyalty_discount_amount = (
+                line._get_loyalty_discount_amount()
+            )
