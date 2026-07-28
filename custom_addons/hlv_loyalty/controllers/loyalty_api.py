@@ -323,16 +323,27 @@ class LoyaltyExternalAPI(http.Controller):
     # ── Helpers ─────────────────────────────────────────────────────────────
 
     @staticmethod
+    def _cors_headers():
+        return {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
+            'Access-Control-Max-Age': '86400',
+        }
+
+    @staticmethod
     def _json_ok(data, status=200):
         return Response(json.dumps(data, default=str),
-                        status=status, content_type='application/json')
+                        status=status, content_type='application/json',
+                        headers=LoyaltyExternalAPI._cors_headers())
 
     @staticmethod
     def _json_err(msg, status=400, **extra):
         body = {'error': msg}
         body.update(extra)
         return Response(json.dumps(body, default=str),
-                        status=status, content_type='application/json')
+                        status=status, content_type='application/json',
+                        headers=LoyaltyExternalAPI._cors_headers())
 
     @staticmethod
     def _request_json():
@@ -501,24 +512,29 @@ class LoyaltyExternalAPI(http.Controller):
     # ── Endpoints ────────────────────────────────────────────────────────────
 
     @http.route('/api/v1/loyalty/tiers', type='http',
-                auth='public', methods=['GET'], csrf=False, cors='*')
+                auth='public', methods=['GET', 'POST', 'OPTIONS'], csrf=False, cors='*')
     def list_tiers(self, **kwargs):
-        """GET /api/v1/loyalty/tiers
+        """GET/POST /api/v1/loyalty/tiers
         Trả về danh sách hạng thành viên kèm ảnh và quyền lợi.
         """
+        if request.httprequest.method == 'OPTIONS':
+            return Response(status=200, headers=self._cors_headers())
         tiers = request.env['hlv.loyalty.tier'].sudo().search([], order='min_points asc')
         return self._json_ok([self._tier_dict(t) for t in tiers])
 
     @http.route('/api/v1/loyalty/partner/lookup', type='http',
-                auth='public', methods=['GET'], csrf=False, cors='*')
+                auth='public', methods=['GET', 'POST', 'OPTIONS'], csrf=False, cors='*')
     def lookup_partner(self, **kwargs):
-        """GET /api/v1/loyalty/partner/lookup?phone=0901234567
-           GET /api/v1/loyalty/partner/lookup?email=abc@example.com
+        """GET/POST /api/v1/loyalty/partner/lookup?phone=0901234567
+           GET/POST /api/v1/loyalty/partner/lookup?email=abc@example.com
 
         Tìm khách hàng theo SĐT hoặc email, trả về điểm + hạng.
         """
-        phone = self._normalize_vn_phone(kwargs.get('phone') or '')
-        email = (kwargs.get('email') or '').strip().lower()
+        if request.httprequest.method == 'OPTIONS':
+            return Response(status=200, headers=self._cors_headers())
+        body = self._request_json()
+        phone = self._normalize_vn_phone(kwargs.get('phone') or body.get('phone') or '')
+        email = (kwargs.get('email') or body.get('email') or '').strip().lower()
 
         if not phone and not email:
             return self._json_err('Cần truyền phone hoặc email')
@@ -893,16 +909,21 @@ class LoyaltyExternalAPI(http.Controller):
         }
 
     @http.route('/api/v1/loyalty/vouchers/<int:partner_id>', type='http',
-                auth='public', methods=['GET'], csrf=False, cors='*')
+                auth='public', methods=['GET', 'POST', 'OPTIONS'], csrf=False, cors='*')
     def get_partner_vouchers(self, partner_id, **kwargs):
-        """GET /api/v1/loyalty/vouchers/<id>?state=active"""
-        root, portal_phone, error = self._partner_from_portal_phone(partner_id, kwargs.get('phone'))
+        """GET/POST /api/v1/loyalty/vouchers/<id>?state=active"""
+        if request.httprequest.method == 'OPTIONS':
+            return Response(status=200, headers=self._cors_headers())
+        body = self._request_json()
+        phone = kwargs.get('phone') or body.get('phone')
+        state = kwargs.get('state') or body.get('state')
+        root, portal_phone, error = self._partner_from_portal_phone(partner_id, phone)
         if error:
             return error
 
         domain = [('partner_id', '=', root.id)]
-        if kwargs.get('state'):
-            domain.append(('state', '=', kwargs['state']))
+        if state:
+            domain.append(('state', '=', state))
 
         vouchers = request.env['hlv.loyalty.voucher'].sudo().search(
             domain, order='create_date desc')
@@ -987,11 +1008,13 @@ class LoyaltyExternalAPI(http.Controller):
         })
 
     @http.route('/api/v1/loyalty/redeem/packages', type='http',
-                auth='public', methods=['GET'], csrf=False, cors='*')
+                auth='public', methods=['GET', 'POST', 'OPTIONS'], csrf=False, cors='*')
     def list_redeem_packages(self, **kwargs):
-        """GET /api/v1/loyalty/redeem/packages
+        """GET/POST /api/v1/loyalty/redeem/packages
         Danh sách gói quà có thể đổi (active).
         """
+        if request.httprequest.method == 'OPTIONS':
+            return Response(status=200, headers=self._cors_headers())
         packages = request.env['hlv.loyalty.voucher.package'].sudo().search(
             [('active', '=', True)], order='points_required asc'
         )
