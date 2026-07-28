@@ -119,13 +119,17 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
             except Exception:
                 pass
 
+        img_url = None
+        if product.image_128:
+            img_url = self._get_image_url("product.product", product.id, "image_128")
+
         # Sales count từ đơn hàng Zalo Mini App
         sales_count = 0
         if batch_sales_counts and isinstance(batch_sales_counts, dict):
             sales_count = batch_sales_counts.get(product.id, 0)
         else:
             try:
-                counts = self._get_batch_sales_counts(product)
+                counts = self._get_batch_sales_counts([product])
                 sales_count = counts.get(product.id, 0)
             except Exception:
                 sales_count = 0
@@ -180,18 +184,31 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
 
     def _get_batch_sales_counts(self, products):
         """Batch query số lượng đã bán cho tất cả products từ đơn hàng Zalo Mini App.
-        Trả về dict {product_id: sales_count} hoặc {} nếu không có data.
-        Query từ sale.order.line có order state in ('sale', 'done') VÀ thuộc tài khoản Zalo."""
+        Trả về dict {product_id: sales_count} hoặc {} nếu không có data."""
         try:
             if not products:
                 return {}
-            product_ids = [p.id for p in products]
-            # Group by product_id, sum quantity, chỉ lấy đơn đã confirm của tài khoản Zalo
+            if hasattr(products, "id"):
+                product_ids = [products.id]
+            else:
+                product_ids = [p.id for p in products if p and hasattr(p, "id")]
+
+            if not product_ids:
+                return {}
+
+            # 1. Tìm các đơn hàng đã xác nhận thuộc tài khoản Zalo Mini App
+            zalo_orders = request.env["sale.order"].sudo().search([
+                ("state", "in", ["sale", "done"]),
+                ("partner_id.x_is_zalo_account", "=", True),
+            ])
+            if not zalo_orders:
+                return {}
+
+            # 2. Group by product_id trên sale.order.line của các đơn Zalo
             results = request.env["sale.order.line"].sudo().read_group(
                 domain=[
                     ("product_id", "in", product_ids),
-                    ("state", "in", ["sale", "done"]),
-                    ("order_id.partner_id.x_is_zalo_account", "=", True),
+                    ("order_id", "in", zalo_orders.ids),
                 ],
                 fields=["product_id", "product_uom_qty"],
                 groupby=["product_id"],
