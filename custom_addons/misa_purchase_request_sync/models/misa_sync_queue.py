@@ -33,6 +33,83 @@ class MisaSyncQueue(models.Model):
     sequence = fields.Integer(string="Ưu tiên", default=10, index=True)
     processing_started_at = fields.Datetime(string="Bắt đầu xử lý lúc", index=True)
 
+    @api.model
+    def _trigger_queue_processor(self):
+        """Schedule the shared queue cron immediately; the minute cron remains a fallback."""
+        cron = self.env.ref(
+            "misa_purchase_request_sync.ir_cron_misa_sync_queue",
+            raise_if_not_found=False,
+        )
+        if not cron or not cron.active:
+            _logger.warning("MISA Sync Queue: processor cron is missing or inactive")
+            return False
+        try:
+            cron.sudo()._trigger()
+            return True
+        except Exception:
+            # Enqueue must still succeed. The regular one-minute cron will pick it up.
+            _logger.exception("MISA Sync Queue: could not trigger processor immediately")
+            return False
+
+    @api.model
+    def enqueue_sale_order(self, misa_order_id, payload):
+        """Atomically enqueue one active SO job per MISA order and wake the cron."""
+        misa_order_id = str(misa_order_id or "").strip()
+        if not misa_order_id:
+            raise ValueError("Missing MISA sale order ID")
+
+        # Serialize only requests for the same business order. Different SO IDs
+        # can enqueue concurrently, while duplicate browser requests cannot both
+        # pass the active-job check below.
+        self.env.cr.execute(
+            "SELECT pg_advisory_xact_lock(hashtext(%s), hashtext(%s))",
+            ["misa.sync.queue", "so:%s" % misa_order_id],
+        )
+
+        queue = self.sudo().search([
+            ("name", "=", misa_order_id),
+            ("sync_type", "=", "so"),
+            ("state", "in", ["draft", "processing"]),
+        ], order="id desc", limit=1)
+        created = False
+        if queue:
+            vals = {}
+            if queue.state == "draft" and queue.sequence != 1:
+                vals["sequence"] = 1
+            if not queue.misa_id:
+                vals["misa_id"] = misa_order_id
+            if vals:
+                queue.write(vals)
+        else:
+            payload_text = (
+                payload
+                if isinstance(payload, str)
+                else json.dumps(payload or {}, ensure_ascii=False)
+            )
+            queue = self.sudo().create({
+                "name": misa_order_id,
+                "misa_id": misa_order_id,
+                "sync_type": "so",
+                "payload": payload_text,
+                "sequence": 1,
+            })
+            created = True
+
+        triggered = self._trigger_queue_processor()
+        _logger.info(
+            "MISA SO queue %s for %s (id=%s, state=%s, triggered=%s)",
+            "created" if created else "reused",
+            misa_order_id,
+            queue.id,
+            queue.state,
+            triggered,
+        )
+        return {
+            "queue": queue,
+            "created": created,
+            "triggered": triggered,
+        }
+
     def _recover_zombie_records(self):
         """
         Recover records that have been in 'processing' state for too long (e.g. > 10 minutes).
