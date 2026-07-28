@@ -303,7 +303,9 @@
              t-att-class="this.getSOCardColorClass(so) + (so.misa_qty_sync_pending ? ' has-misa-lock' : '')"
              t-att-style="so.has_delivered_today ? 'background:#62b1ff30;' : so.stock_status === 'ready' ? 'background:#21c22f17;' : so.is_new_order ? 'background:#e77d191c;' : ''">
 
-            <div t-if="so.misa_qty_sync_pending" class="hlv-misa-lock-ribbon">
+            <div t-if="so.misa_qty_sync_pending"
+                 class="hlv-misa-lock-ribbon position-absolute top-0 start-0 end-0 text-white text-center fw-bold"
+                 style="z-index: 3; padding: 4px 8px; background: #b45309; font-size: 0.58rem; letter-spacing: 0.35px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);">
                 <i class="fa fa-lock me-1"></i>ĐANG KHÓA · CHỜ KHO DUYỆT
             </div>
 
@@ -314,7 +316,8 @@
                 <i class="fa fa-print me-1"></i>Đã in
             </div>
 
-            <div class="card-body p-2">
+            <div class="card-body p-2"
+                 t-att-style="so.misa_qty_sync_pending ? 'padding-top: 2rem !important;' : ''">
 
                 <!-- Checkbox for selection -->
                 <div class="d-flex align-items-center mb-2">
