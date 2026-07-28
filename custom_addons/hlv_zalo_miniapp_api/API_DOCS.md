@@ -361,7 +361,7 @@ Trả về tất cả các field giống **2.1. Danh sách Sản phẩm**, bổ 
 | `description_full` | string | Mô tả đầy đủ (`description`) |
 | `standard_price` | float | Giá vốn |
 | `volume` | float | Thể tích |
-| `images` | array[string] | Danh sách URL ảnh phụ (từ `product.multi.image` hoặc `product.template.image_1920`) |
+| `images` | array[string] | Danh sách URL ảnh phụ (từ `image_1` đến `image_5` của module `product_multi_images`, `product_template_image_ids`, `product_variant_image_ids`, hoặc `image_1920`) |
 
 #### Response Example
 
