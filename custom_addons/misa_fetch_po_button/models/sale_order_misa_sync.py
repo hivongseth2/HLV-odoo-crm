@@ -550,19 +550,48 @@ class SaleOrder(models.Model):
                     break
         
         
-        # Kiểm tra warning cho SP có qty giảm dưới delivered (không chặn sync)
+        # Không cho dữ liệu CRM ghi đè số lượng đặt hàng xuống thấp hơn số đã
+        # giao thực tế. Kiểm tra toàn bộ trước khi write để tránh đồng bộ dở dang.
+        invalid_delivered_quantities = []
         for misa_data, sol in matched_pairs:
             qty_delivered = float(getattr(sol, 'qty_delivered', 0.0) or 0.0)
             new_qty = float(misa_data['qty'] or 0.0)
-            
+
             if new_qty < qty_delivered - 0.001:  # Cho phép sai số nhỏ
-                # Chỉ cảnh báo. Odoo giữ qty_delivered thực tế; reverse transfer
-                # là nghiệp vụ riêng và không được tạo thủ công trong luồng sync này.
-                _logger.warning(
-                    "⚠️ SP %s: Số lượng mới (%s) < đã giao (%s); cần xử lý reverse transfer riêng nếu có hoàn hàng.",
-                    misa_data['code'], new_qty, qty_delivered
+                invalid_delivered_quantities.append(
+                    _("%(code)s: số lượng MISA %(new_qty)g < đã giao %(delivered_qty)g "
+                      "(CRM line %(crm_line_id)s)") % {
+                        'code': misa_data['code'],
+                        'new_qty': new_qty,
+                        'delivered_qty': qty_delivered,
+                        'crm_line_id': misa_data['crm_line_id'] or '-',
+                    }
                 )
-        
+
+        # Một dòng đã giao nhưng bị xóa khỏi CRM tương đương yêu cầu giảm về 0.
+        for sol in unmatched_sols:
+            if not sol.misa_crm_line_id:
+                continue
+            qty_delivered = float(getattr(sol, 'qty_delivered', 0.0) or 0.0)
+            if qty_delivered > 0.001:
+                invalid_delivered_quantities.append(
+                    _("%(code)s: dòng đã bị xóa khỏi MISA nhưng đã giao %(delivered_qty)g "
+                      "(CRM line %(crm_line_id)s)") % {
+                        'code': sol.product_id.default_code or sol.product_id.display_name,
+                        'delivered_qty': qty_delivered,
+                        'crm_line_id': sol.misa_crm_line_id,
+                    }
+                )
+
+        if invalid_delivered_quantities:
+            raise UserError(_(
+                "Không thể đồng bộ vì số lượng MISA thấp hơn số lượng đã giao:\n- %(details)s\n\n"
+                "Hãy đặt số lượng MISA tối thiểu bằng số đã giao. Nếu khách trả hàng, "
+                "hãy xử lý phiếu trả kho trước rồi đồng bộ lại."
+            ) % {
+                'details': '\n- '.join(invalid_delivered_quantities),
+            })
+
         # Cập nhật các SOL đã match
         for misa_data, sol in matched_pairs:
             old_qty = float(sol.product_uom_qty or 0.0)
