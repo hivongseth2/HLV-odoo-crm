@@ -89,6 +89,16 @@ class SaleOrder(models.Model):
         for line in lines or []:
             # Luồng cũ lưu mã kho ở CustomField2; một số response trả đúng StockIDText.
             candidates = (line.get("CustomField2"), line.get("StockIDText"))
+            _logger.info(
+                "🏭 Warehouse candidates MISA line ID=%s product=%s: "
+                "CustomField2=%r, StockID=%r, StockIDText=%r, candidates=%r",
+                line.get("ID") or line.get("id"),
+                line.get("ProductIDText"),
+                line.get("CustomField2"),
+                line.get("StockID"),
+                line.get("StockIDText"),
+                candidates,
+            )
             for raw_stock_id in candidates:
                 stock_id = str(raw_stock_id or "").strip().upper()
                 if not stock_id:
