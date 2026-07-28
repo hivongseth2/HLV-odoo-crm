@@ -11,135 +11,6 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             return 'full'
         return po.receipt_status if hasattr(po, 'receipt_status') else 'unknown'
 
-    def _compute_transfer_suggestions(self, so, so_lines_data):
-        """
-        Đề xuất chuyển kho: tìm sản phẩm thiếu ở kho hiện tại
-        nhưng có sẵn (chưa bị giữ bởi đơn khác) ở kho khác.
-        Trả về list grouped by product:
-        [{ product_id, product_name, shortage, sources: [{from_warehouse_id, from_warehouse_name, available_qty, suggested_qty}] }]
-        """
-        if not so.warehouse_id:
-            return []
-
-        # Chỉ đề xuất chuyển kho cho sản phẩm còn nằm trong phiếu pick/pack/out đang chờ/xử lý
-        # (loại bỏ sản phẩm đã giao-trả mà không còn phiếu active nào)
-        # Phiếu trả hàng (return_id) không tạo demand thật
-        active_pickings = so.picking_ids.filtered(
-            lambda p: p.state not in ('done', 'cancel')
-            and not p.return_id
-        )
-        products_with_active_demand = set()
-        for pk in active_pickings:
-            for mv in pk.move_ids.filtered(lambda m: m.state not in ('cancel', 'done')):
-                products_with_active_demand.add(mv.product_id.id)
-
-        # Thu thập sản phẩm thiếu (group theo product_id)
-        shortage_map = {}
-        for line_data in so_lines_data:
-            if not line_data.get('product_id') or line_data.get('is_kit'):
-                continue
-            if line_data.get('product_type') == 'service':
-                continue
-            pid = line_data['product_id'][0]
-            # Bỏ qua sản phẩm không còn phiếu active nào (đã giao + trả hàng)
-            if pid not in products_with_active_demand:
-                continue
-            pending = line_data['product_uom_qty'] - line_data['qty_delivered']
-            if pending <= 0:
-                continue
-            eff_stock = (line_data.get('qty_warehouse_free') or 0) + (line_data.get('qty_reserved_here') or 0)
-            shortage = pending - eff_stock
-            if shortage > 0:
-                if pid in shortage_map:
-                    shortage_map[pid]['shortage'] += shortage
-                else:
-                    shortage_map[pid] = {
-                        'product_id': pid,
-                        'product_name': line_data['product_id'][1],
-                        'shortage': shortage,
-                    }
-
-        shortage_products = list(shortage_map.values())
-
-        if not shortage_products:
-            return []
-
-        other_warehouses = self.env['stock.warehouse'].search([
-            ('id', '!=', so.warehouse_id.id),
-        ])
-        other_warehouses = self._order_source_warehouses(so.warehouse_id, other_warehouses)
-        if not other_warehouses:
-            return []
-
-        suggestions = []
-        for sp in shortage_products:
-            remaining = sp['shortage']
-            sources = []
-            for wh in other_warehouses:
-                if remaining <= 0:
-                    break
-                quants = self.env['stock.quant'].sudo().search([
-                    ('product_id', '=', sp['product_id']),
-                    ('location_id', 'child_of', wh.lot_stock_id.id),
-                ])
-                available = sum(
-                    max(float(q.quantity) - float(q.reserved_quantity), 0.0)
-                    for q in quants
-                )
-                # Cộng lại qty bị giữ bởi internal transfers (SO ưu tiên hơn)
-                internal_reserved = self.env['stock.move'].sudo().search_read([
-                    ('product_id', '=', sp['product_id']),
-                    ('state', 'in', ('assigned', 'partially_available')),
-                    ('picking_id.picking_type_code', '=', 'internal'),
-                    ('picking_id.state', 'not in', ('done', 'cancel')),
-                    ('sale_line_id', '=', False),
-                    ('location_id', 'child_of', wh.lot_stock_id.id),
-                ], ['quantity', 'picking_id'])
-                internal_qty = sum(m['quantity'] for m in internal_reserved)
-                available += internal_qty
-
-                # Gom thông tin phiếu internal đang giữ
-                blocking_pickings = []
-                if internal_qty > 0:
-                    seen_pks = {}
-                    for m in internal_reserved:
-                        pk_id = m['picking_id'][0]
-                        pk_name = m['picking_id'][1]
-                        if pk_id in seen_pks:
-                            seen_pks[pk_id]['qty'] += m['quantity']
-                        else:
-                            pk_rec = self.env['stock.picking'].sudo().browse(pk_id)
-                            seen_pks[pk_id] = {
-                                'picking_id': pk_id,
-                                'picking_name': pk_name,
-                                'picking_type': pk_rec.picking_type_id.name or '',
-                                'picking_code': pk_rec.picking_type_id.code or '',
-                                'origin': pk_rec.origin or '',
-                                'qty': m['quantity'],
-                            }
-                    blocking_pickings = list(seen_pks.values())
-
-                if available > 0:
-                    suggest_qty = min(available, remaining)
-                    sources.append({
-                        'from_warehouse_id': wh.id,
-                        'from_warehouse_name': wh.name,
-                        'available_qty': available,
-                        'suggested_qty': suggest_qty,
-                        'blocking_pickings': blocking_pickings,
-                    })
-                    remaining -= suggest_qty
-            if sources:
-                suggestions.append({
-                    'product_id': sp['product_id'],
-                    'product_name': sp['product_name'],
-                    'shortage': sp['shortage'],
-                    'to_warehouse_name': so.warehouse_id.name,
-                    'sources': sources,
-                })
-
-        return suggestions
-
     def _format_dashboard_order(
         self, so, po_by_origin, product_availabilities, product_on_hand,
         att_by_picking, so_packages_dict, so_status_dict,
@@ -600,8 +471,7 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             if p.picking_type_id and p.picking_type_id.warehouse_id
         ]))
 
-        if transfer_suggestions is None:
-            transfer_suggestions = self._compute_transfer_suggestions(so, so_lines_data)
+        transfer_suggestions = transfer_suggestions or []
 
         return {
             'id': so.id, 'name': so.name,

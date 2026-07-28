@@ -84,14 +84,6 @@ class SaleOrder(models.Model):
         order = self.sudo()
         if order.state == 'cancel':
             raise UserError(_("Đơn bán đã hủy nên không thể bắt đầu chỉnh sửa."))
-        done_out = order.picking_ids.filtered(
-            lambda picking: picking.picking_type_id.code == 'outgoing'
-            and picking.state == 'done'
-        )
-        if done_out:
-            raise UserError(_(
-                "Đơn đã hoàn tất phiếu xuất kho %s nên không thể khóa để chỉnh sửa."
-            ) % ', '.join(done_out.mapped('name')))
         if not order.misa_sale_edit_locked:
             now = fields.Datetime.now()
             order.write({
