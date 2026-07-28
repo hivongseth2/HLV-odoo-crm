@@ -126,7 +126,7 @@ class DeliveryPlannerService(models.AbstractModel):
         page_blocking_by_so = self._batch_blocking_moves(page_sales)
 
         # Fix High #2: batch compute transfer suggestions ONCE for all page SOs
-        # Thay vì _compute_transfer_suggestions per-SO (N×M×P queries),
+        # Thay vì tính transfer suggestions per-SO (N×M×P queries),
         # dùng 1 location + 1 quant + 1 moves query cho toàn trang.
         transfer_map = self._batch_transfer_suggestions(page_sales, product_availabilities)
 
@@ -159,7 +159,7 @@ class DeliveryPlannerService(models.AbstractModel):
             self._format_dashboard_order(
                 so, po_by_origin, product_availabilities, product_on_hand,
                 att_by_picking, so_packages_dict, so_status_dict.get(so.id, {}),
-                transfer_suggestions=transfer_map.get(so.id),
+                transfer_suggestions=transfer_map.get(so.id, []),
                 page_kit_tmpl_ids=page_kit_tmpl_ids,
                 page_kit_bom_map=page_kit_bom_map,
                 page_blocking_by_so=page_blocking_by_so,
@@ -361,7 +361,7 @@ class DeliveryPlannerService(models.AbstractModel):
             self._format_dashboard_order(
                 so, po_by_origin, product_availabilities, product_on_hand,
                 att_by_picking, so_packages_dict, so_status_dict.get(so.id, {}),
-                transfer_suggestions=transfer_map.get(so.id),
+                transfer_suggestions=transfer_map.get(so.id, []),
                 page_kit_tmpl_ids=page_kit_tmpl_ids,
                 page_kit_bom_map=page_kit_bom_map,
                 page_blocking_by_so=page_blocking_by_so,
