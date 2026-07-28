@@ -312,7 +312,8 @@
             <!-- Ribbon "Đã in phiếu" -->
             <div t-if="so.has_active_pick_printed"
                  class="hlv-print-ribbon position-absolute bg-success text-center fw-bold"
-                 t-att-class="{'has-misa-lock': so.misa_qty_sync_pending}">
+                 t-att-class="{'has-misa-lock': so.misa_qty_sync_pending}"
+                 t-att-style="'font-size: 0.55rem; padding: 1px 20px; top: ' + (so.misa_qty_sync_pending ? '32px' : '8px') + '; color: #fff; right: -22px; transform: rotate(45deg); z-index: 2; letter-spacing: 0.5px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);'">
                 <i class="fa fa-print me-1"></i>Đã in
             </div>
 
