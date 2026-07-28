@@ -29,7 +29,7 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
 
         picking_info = []
         try:
-            for picking in order.picking_ids.filtered(lambda p: p.state == "done"):
+            for picking in order.picking_ids.filtered(lambda p: p.state != "cancel"):
                 picking_info.append({
                     "id": picking.id, "type": picking.picking_type_id.name or "",
                     "state": picking.state, "scheduled_date": picking.scheduled_date,
@@ -370,3 +370,57 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
         except Exception as e:
             _logger.exception("order_cancel error")
             return self._response_error("SERVER_ERROR", str(e), 500)
+
+    # POST /api/v1/zalo/orders/feedback
+    @http.route("/api/v1/zalo/orders/feedback", type="http", auth="public", methods=["POST", "OPTIONS"], csrf=False)
+    def order_feedback(self, **params):
+        """Body: {"order_id": 1, "contact_id": 1, "action_type": "received" | "return", "note": "Đã nhận hàng"}
+        Phía Odoo chỉ nhận thông tin và ghi chép vào chatter/note, KHÔNG thực hiện action tự động nào khác.
+        """
+        if request.httprequest.method == "OPTIONS":
+            return self._response_options()
+        try:
+            body = self._request_json()
+            order_id = self._parse_int(body.get("order_id"), 0)
+            contact_id = self._parse_int(body.get("contact_id"), 0)
+            action_type = (body.get("action_type") or "received").strip()
+            note = (body.get("note") or "").strip()
+
+            if not order_id or not contact_id:
+                return self._response_error("INVALID_INPUT", "Thiếu order_id hoặc contact_id")
+
+            auth_result = self._auth_and_verify_owner(contact_id)
+            if isinstance(auth_result, Response):
+                return auth_result
+
+            order = request.env["sale.order"].sudo().browse(order_id)
+            if not order.exists():
+                return self._response_error("NOT_FOUND", "Đơn hàng không tồn tại", 404)
+
+            if order.partner_id.id != contact_id:
+                return self._response_error("FORBIDDEN", "Đơn hàng không thuộc về bạn", 403)
+
+            title = "Xác nhận đã nhận được hàng" if action_type == "received" else "Đề nghị Đổi/Trả hàng"
+            formatted_msg = Markup(_("<b>%s từ Zalo Mini App</b>")) % title
+            if note:
+                formatted_msg += Markup(_("<br/>• <b>Ghi chú từ khách hàng:</b> %s")) % note
+
+            current_note = order.note or ""
+            new_entry = f"\n[{fields.Datetime.now().strftime('%Y-%m-%d %H:%M')}] {title}"
+            if note:
+                new_entry += f": {note}"
+            order.write({"note": current_note + new_entry})
+
+            try:
+                order.message_post(body=formatted_msg, message_type="comment", subtype_xmlid="mail.mt_note")
+            except Exception as me:
+                _logger.warning("Post feedback chatter error: %s", me)
+
+            return self._response_success({
+                "id": order.id,
+                "name": order.name,
+                "message": f"Đã gửi thông tin: {title}",
+            })
+        except Exception as e:
+            _logger.exception("order_feedback error")
+            return self._response_error("SERVER_ERROR", str(e), 500)
