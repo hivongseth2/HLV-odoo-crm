@@ -24,16 +24,17 @@ class SaleOrder(models.Model):
         """Tạo headers CRM MISA (dựa vào utils/config của bạn)."""
         misa_utils = self.env['misa.api.utils']
         misa_config = self.env['misa.config']
-        crm_token = misa_utils._fetch_login_crm_token()
+        crm_token = misa_utils._fetch_login_crm_token_cached()
         return misa_config.get_crm_header(crm_token), crm_token
 
-    def _misa_fetch_order(self):
+    def _misa_fetch_order(self, headers=None):
         """Gọi FormDataNew lấy thông tin chung 1 đơn."""
         self.ensure_one()
         if not self.misa_id:
             raise ValueError(_("Thiếu MISA ID trên đơn bán."))
 
-        headers, _crm_token = self._misa_headers()
+        if headers is None:
+            headers, _crm_token = self._misa_headers()
         url = f"https://amisapp.misa.vn/crm/g2/api/business/SaleOrder/FormDataNew/SaleOrder/{self.misa_form_layout_id}/{self.misa_form_type}"
         payload = {
             "ID": str(self.misa_id),
@@ -50,11 +51,12 @@ class SaleOrder(models.Model):
         return js.get("Data", {}).get("CurrentData", {})
 
     @api.model
-    def _misa_fetch_lines(self, misa_order_id):
+    def _misa_fetch_lines(self, misa_order_id, headers=None):
         """Gọi DataSubPaging lấy các dòng sản phẩm (theo cách bạn đang dùng)."""
         misa_utils = self.env['misa.api.utils']
         misa_config = self.env['misa.config']
-        headers, crm_headers = self._misa_headers()
+        if headers is None:
+            headers, _crm_token = self._misa_headers()
 
         # bạn đã có sẵn helper get_crm_sale_order_detail_payload + get_list_product_by_order_crm
         order_detail_url = "https://amisapp.misa.vn/crm/g2/api/business/SaleOrder/DataSubPaging"
@@ -134,12 +136,15 @@ class SaleOrder(models.Model):
         # ===== Helpers lấy/convert UoM từ MISA =====
 
     
-    def _misa_fetch_conversion_units(self, product_id, headers):
+    def _misa_fetch_conversion_units(self, product_id, headers, cache=None):
         """
         Gọi Product/DataSubPaging để lấy quy đổi UoM cho 1 sản phẩm (payload theo yêu cầu của bạn).
         """
         if not product_id:
             return []
+        cache_key = str(product_id)
+        if cache is not None and cache_key in cache:
+            return cache[cache_key]
         url = "https://amisapp.misa.vn/crm/g2/api/business/Product/DataSubPaging"
         payload = {
             "Columns": "SUQsQ29udmVyc2lvblVuaXRJRCxDb252ZXJzaW9uVW5pdElEVGV4dCxDb252ZXJzaW9uUmF0ZSxEZXNjcmlwdGlvbixDb252ZXJzaW9uT3BlcmF0b3JJRCxDb252ZXJzaW9uT3BlcmF0b3JJRFRleHQsQ29udmVyc2lvblVuaXRQcmljZTIsQ29udmVyc2lvblVuaXRQcmljZSxDb252ZXJzaW9uVW5pdFByaWNlMSxDb252ZXJzaW9uVW5pdFByaWNlRml4ZWQ=",
@@ -181,12 +186,18 @@ class SaleOrder(models.Model):
             resp = requests.post(url, headers=headers, json=payload, timeout=30)
             resp.raise_for_status()
             data = resp.json()
-            return data.get("Data", []) or []
+            result = data.get("Data", []) or []
+            if cache is not None:
+                cache[cache_key] = result
+            return result
         except Exception as e:
             _logger.exception("❗ Lỗi gọi Product/DataSubPaging: %s", e)
             return []
 
-    def _convert_qty_price_to_default_uom(self, product, misa_uom_text, qty, price, misa_product_id, headers):
+    def _convert_qty_price_to_default_uom(
+        self, product, misa_uom_text, qty, price, misa_product_id, headers,
+        conversion_cache=None,
+    ):
         """
         Chuyển qty/price từ đơn vị lấy từ MISA (misa_uom_text) về đơn vị mặc định của product (product.uom_id).
         Trả về: (qty_base, price_base, uom_is_default)
@@ -197,7 +208,14 @@ class SaleOrder(models.Model):
             return qty, price, True  # không cần đổi
 
         # Lấy bảng quy đổi theo ProductID
-        conversions = self._misa_fetch_conversion_units(misa_product_id, headers) if misa_product_id else []
+        conversions = (
+            self._misa_fetch_conversion_units(
+                misa_product_id,
+                headers,
+                cache=conversion_cache,
+            )
+            if misa_product_id else []
+        )
         # Tìm dòng conversion khớp với UoM của MISA trên line (theo tên)
         conv = next((
             c for c in (conversions or [])
@@ -319,6 +337,7 @@ class SaleOrder(models.Model):
         odoo_utils = env['odoo.utils']
         SaleLine = env['sale.order.line']
         source_lines = [] if prepared_lines is not None else (lines or [])
+        conversion_cache = {}
 
         def _flt(x, dv=0.0):
             try:
@@ -395,6 +414,7 @@ class SaleOrder(models.Model):
                 price=price,
                 misa_product_id=misa_pid,
                 headers=headers,
+                conversion_cache=conversion_cache,
             )
 
             tax_ids = self._tax_ids_from_misa_line(ln)
@@ -530,19 +550,48 @@ class SaleOrder(models.Model):
                     break
         
         
-        # Kiểm tra warning cho SP có qty giảm dưới delivered (không chặn sync)
+        # Không cho dữ liệu CRM ghi đè số lượng đặt hàng xuống thấp hơn số đã
+        # giao thực tế. Kiểm tra toàn bộ trước khi write để tránh đồng bộ dở dang.
+        invalid_delivered_quantities = []
         for misa_data, sol in matched_pairs:
             qty_delivered = float(getattr(sol, 'qty_delivered', 0.0) or 0.0)
             new_qty = float(misa_data['qty'] or 0.0)
-            
+
             if new_qty < qty_delivered - 0.001:  # Cho phép sai số nhỏ
-                # Chỉ cảnh báo. Odoo giữ qty_delivered thực tế; reverse transfer
-                # là nghiệp vụ riêng và không được tạo thủ công trong luồng sync này.
-                _logger.warning(
-                    "⚠️ SP %s: Số lượng mới (%s) < đã giao (%s); cần xử lý reverse transfer riêng nếu có hoàn hàng.",
-                    misa_data['code'], new_qty, qty_delivered
+                invalid_delivered_quantities.append(
+                    _("%(code)s: số lượng MISA %(new_qty)g < đã giao %(delivered_qty)g "
+                      "(CRM line %(crm_line_id)s)") % {
+                        'code': misa_data['code'],
+                        'new_qty': new_qty,
+                        'delivered_qty': qty_delivered,
+                        'crm_line_id': misa_data['crm_line_id'] or '-',
+                    }
                 )
-        
+
+        # Một dòng đã giao nhưng bị xóa khỏi CRM tương đương yêu cầu giảm về 0.
+        for sol in unmatched_sols:
+            if not sol.misa_crm_line_id:
+                continue
+            qty_delivered = float(getattr(sol, 'qty_delivered', 0.0) or 0.0)
+            if qty_delivered > 0.001:
+                invalid_delivered_quantities.append(
+                    _("%(code)s: dòng đã bị xóa khỏi MISA nhưng đã giao %(delivered_qty)g "
+                      "(CRM line %(crm_line_id)s)") % {
+                        'code': sol.product_id.default_code or sol.product_id.display_name,
+                        'delivered_qty': qty_delivered,
+                        'crm_line_id': sol.misa_crm_line_id,
+                    }
+                )
+
+        if invalid_delivered_quantities:
+            raise UserError(_(
+                "Không thể đồng bộ vì số lượng MISA thấp hơn số lượng đã giao:\n- %(details)s\n\n"
+                "Hãy đặt số lượng MISA tối thiểu bằng số đã giao. Nếu khách trả hàng, "
+                "hãy xử lý phiếu trả kho trước rồi đồng bộ lại."
+            ) % {
+                'details': '\n- '.join(invalid_delivered_quantities),
+            })
+
         # Cập nhật các SOL đã match
         for misa_data, sol in matched_pairs:
             old_qty = float(sol.product_uom_qty or 0.0)
@@ -943,11 +992,34 @@ class SaleOrder(models.Model):
         self.ensure_one()
         env = self.env
         misa_order_id = data.get('ID') or data.get('CustomID') or self.misa_id
-        owner_date = {}
-        try:
-            owner_date = env['misa.api.utils'].get_saleorder_owner_and_date(misa_order_id, headers) or {}
-        except Exception as exc:
-            _logger.warning("Không lấy được header bổ sung MISA cho SO=%s: %s", misa_order_id, exc)
+        raw_owner = str(data.get('OwnerIDText') or '').strip()
+        owner_code = raw_owner
+        if raw_owner.endswith(')') and '(' in raw_owner:
+            owner_code = raw_owner.rsplit('(', 1)[-1][:-1].strip()
+        sale_order_date = data.get('SaleOrderDate')
+        if sale_order_date:
+            try:
+                sale_order_date = dtparse(str(sale_order_date)).date()
+            except Exception:
+                sale_order_date = None
+        owner_date = {
+            'owner_code': owner_code or None,
+            'sale_order_date': sale_order_date,
+            'misa_delivery': (data.get('CustomField14') or '').strip() or None,
+            'shipping_contact': (data.get('ShippingContactIDText') or '').strip() or None,
+            'httt': (data.get('CustomField15') or '').strip() or None,
+            'htgh': (data.get('CustomField16') or '').strip() or None,
+            'misa_note': (data.get('CustomField21') or '').strip() or None,
+        }
+        # Both helpers read the same SaleOrder FormDataNew payload. Only make a
+        # second request for legacy responses that omit all supplemental fields.
+        if not any(owner_date.values()):
+            try:
+                owner_date = env['misa.api.utils'].get_saleorder_owner_and_date(
+                    misa_order_id, headers,
+                ) or {}
+            except Exception as exc:
+                _logger.warning("Không lấy được header bổ sung MISA cho SO=%s: %s", misa_order_id, exc)
 
         partner_name = data.get('AccountIDText') or data.get('BillingAccountIDText') or _('Khách hàng MISA')
         account_id = data.get('AccountID') or data.get('AccountId')
@@ -957,9 +1029,16 @@ class SaleOrder(models.Model):
         if account_id:
             try:
                 partner = env['misa.api.utils']._sync_customer_from_misa_account_api(account_id, headers)
-                identity = env['misa.api.utils'].get_account_identity(account_id, headers) or {}
-                misa_code = identity.get('account_number') or identity.get('id')
-                tax_code = identity.get('taxcode')
+                if partner:
+                    # The account API above already supplies AccountNumber and
+                    # TaxCode and persists them on the partner. Avoid fetching
+                    # Account/FormDataNew again for the same information.
+                    misa_code = partner.ref or partner.company_registry
+                    tax_code = partner.vat
+                else:
+                    identity = env['misa.api.utils'].get_account_identity(account_id, headers) or {}
+                    misa_code = identity.get('account_number') or identity.get('id')
+                    tax_code = identity.get('taxcode')
             except Exception as exc:
                 _logger.warning("Không đồng bộ được khách MISA AccountID=%s: %s", account_id, exc)
         if not partner:
@@ -1041,14 +1120,16 @@ class SaleOrder(models.Model):
         self.write(vals)
         self._misa_sync_open_picking_contact()
 
-    def action_resync_from_misa(self, prefetched_lines=None):
+    def action_resync_from_misa(self, prefetched_lines=None, misa_headers=None):
         """Đồng bộ tại chỗ theo CRM line ID và để Odoo tự quản lý stock moves."""
         self.ensure_one()
         if not self.misa_id:
             raise UserError(_("Thiếu MISA ID trên đơn bán."))
 
-        headers, _crm_token = self._misa_headers()
-        data = self._misa_fetch_order()
+        headers = misa_headers
+        if headers is None:
+            headers, _crm_token = self._misa_headers()
+        data = self._misa_fetch_order(headers=headers)
         misa_order_id = data.get('ID') or data.get('CustomID') or self.misa_id
         status_id = data.get('RevenueStatusID')
         status_text = (data.get('RevenueStatusIDText') or '').strip().lower()
@@ -1088,7 +1169,7 @@ class SaleOrder(models.Model):
         lines = (
             prefetched_lines
             if prefetched_lines is not None
-            else self._misa_fetch_lines(misa_order_id)
+            else self._misa_fetch_lines(misa_order_id, headers=headers)
         )
         if self.env.context.get('misa_assign_warehouse_from_lines'):
             warehouse = self.env['stock.warehouse'].browse(
@@ -1096,21 +1177,79 @@ class SaleOrder(models.Model):
             ).exists()
             if not warehouse:
                 warehouse = self._misa_warehouse_from_sale_lines(lines)
+
+        warehouse_changed = bool(
+            self.env.context.get('misa_assign_warehouse_from_lines')
+            and warehouse
+            and self.warehouse_id != warehouse
+        )
+        touched_pickings = self._misa_warehouse_touched_pickings()
+        pickings_to_rebuild = self.env['stock.picking']
+        previous_warehouse = self.warehouse_id
+
+        if warehouse_changed:
+            if touched_pickings:
+                raise UserError(_(
+                    "Không thể tự động đổi kho từ %(old_warehouse)s sang "
+                    "%(new_warehouse)s vì các phiếu kho sau đã được tác động: %(pickings)s."
+                ) % {
+                    'old_warehouse': previous_warehouse.name or '-',
+                    'new_warehouse': warehouse.name,
+                    'pickings': ', '.join(touched_pickings.mapped('name')),
+                })
+
+            pickings_to_rebuild = self.picking_ids.filtered(
+                lambda picking: picking.state not in ('done', 'cancel')
+            )
+            if pickings_to_rebuild:
+                old_picking_names = ', '.join(pickings_to_rebuild.mapped('name'))
+                pickings_to_rebuild.sudo().action_cancel()
+                _logger.info(
+                    "🏭 Hủy chuỗi phiếu kho cũ chưa tác động của SO %s trước khi đổi kho: %s",
+                    self.name,
+                    old_picking_names,
+                )
+
         self._sync_misa_header_in_place(data, headers)
         if self.env.context.get('misa_assign_warehouse_from_lines'):
-            if warehouse and self.warehouse_id != warehouse:
+            if warehouse_changed:
                 self.write({'warehouse_id': warehouse.id})
+                _logger.info(
+                    "🏭 Cập nhật kho SO %s: %s → %s",
+                    self.name,
+                    previous_warehouse.name or "-",
+                    warehouse.name,
+                )
             if warehouse:
                 _logger.info(
                     "Kho SO %s sau khi dong bo header: %s",
                     self.name, self.warehouse_id.name,
                 )
-        touched_pickings = self._misa_warehouse_touched_pickings()
+
         sync_result = self._sync_so_lines_from_misa_no_picking(
             lines,
             headers,
             defer_quantity=bool(touched_pickings),
         )
+
+        if warehouse_changed and pickings_to_rebuild:
+            old_picking_ids = set(pickings_to_rebuild.ids)
+            stock_lines = self.order_line.filtered(
+                lambda line: not line.display_type and line.product_uom_qty > 0
+            )
+            stock_lines.sudo()._action_launch_stock_rule()
+            self.invalidate_recordset(['picking_ids'])
+            self._misa_sync_open_picking_contact()
+            new_pickings = self.picking_ids.filtered(
+                lambda picking: picking.id not in old_picking_ids
+                and picking.state != 'cancel'
+            )
+            _logger.info(
+                "🏭 Tạo lại chuỗi phiếu kho SO %s theo kho %s: %s",
+                self.name,
+                warehouse.name,
+                ', '.join(new_pickings.mapped('name')) or '-',
+            )
 
         qty_changes = sync_result.get('qty_changes') or []
         history = self._misa_record_sync_snapshot_history(
@@ -1157,7 +1296,14 @@ class SaleOrder(models.Model):
         if self.state in ('draft', 'sent'):
             self.action_confirm()
         self._auto_apply_misa_tags()
-        self.message_post(body=_("Đã đồng bộ MISA tại chỗ; giữ nguyên SO và các phiếu kho hiện có."))
+        if warehouse_changed and pickings_to_rebuild:
+            self.message_post(body=_(
+                "Đã đồng bộ MISA và tạo lại chuỗi phiếu kho theo kho %(warehouse)s."
+            ) % {'warehouse': warehouse.name})
+        else:
+            self.message_post(body=_(
+                "Đã đồng bộ MISA tại chỗ; giữ nguyên SO và các phiếu kho hiện có."
+            ))
         return {
             'type': 'ir.actions.act_window',
             'res_model': 'sale.order',
@@ -1247,11 +1393,35 @@ class SaleOrder(models.Model):
         # 1) Tìm SO hiện hữu theo misa_id
         so = self.search([('misa_id', '=', misa_order_id)], limit=1)
         if so:
-            so.sudo().action_resync_from_misa()
+            misa_headers, _crm_token = self._misa_headers()
+            prefetched_lines = self._misa_fetch_lines(
+                misa_order_id,
+                headers=misa_headers,
+            )
+            if warehouse_id:
+                misa_warehouse = self.env['stock.warehouse'].browse(
+                    int(warehouse_id)
+                ).exists()
+                if not misa_warehouse:
+                    raise UserError(_("Không tìm thấy kho Odoo ID %s") % warehouse_id)
+            else:
+                misa_warehouse = self._misa_warehouse_from_sale_lines(
+                    prefetched_lines
+                )
+
+            so.sudo().with_context(
+                misa_assign_warehouse_from_lines=True,
+                misa_resolved_warehouse_id=misa_warehouse.id or False,
+            ).action_resync_from_misa(
+                prefetched_lines=prefetched_lines,
+                misa_headers=misa_headers,
+            )
             return {
                 'ok': True,
                 'res_id': so.id,
                 'name': so.name,
+                'warehouse_id': so.warehouse_id.id,
+                'warehouse_name': so.warehouse_id.name,
                 'detail': (
                     'cancelled_from_misa' if so.state == 'cancel'
                     else 'waiting_warehouse_approval' if so.misa_qty_sync_pending
@@ -1274,6 +1444,7 @@ class SaleOrder(models.Model):
             'misa_id': misa_order_id,
         }
         prefetched_lines = None
+        misa_headers = None
         misa_warehouse = self.env['stock.warehouse']
         if warehouse_id:
             vals['warehouse_id'] = int(warehouse_id)
@@ -1281,7 +1452,11 @@ class SaleOrder(models.Model):
             # sale.order.warehouse_id is precomputed during create(). Resolve the
             # MISA warehouse first so the bootstrap order never starts at the
             # current user's default warehouse (usually TSN).
-            prefetched_lines = self._misa_fetch_lines(misa_order_id)
+            misa_headers, _crm_token = self._misa_headers()
+            prefetched_lines = self._misa_fetch_lines(
+                misa_order_id,
+                headers=misa_headers,
+            )
             misa_warehouse = self._misa_warehouse_from_sale_lines(prefetched_lines)
             if misa_warehouse:
                 vals['warehouse_id'] = misa_warehouse.id
@@ -1294,7 +1469,10 @@ class SaleOrder(models.Model):
         so_boot.sudo().with_context(
             misa_assign_warehouse_from_lines=not bool(warehouse_id),
             misa_resolved_warehouse_id=misa_warehouse.id or False,
-        ).action_resync_from_misa(prefetched_lines=prefetched_lines)
+        ).action_resync_from_misa(
+            prefetched_lines=prefetched_lines,
+            misa_headers=misa_headers,
+        )
         _logger.info(
             "Hoan tat dong bo SO %s, kho cuoi cung: %s",
             so_boot.name, so_boot.warehouse_id.name,

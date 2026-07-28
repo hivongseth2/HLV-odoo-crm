@@ -113,6 +113,13 @@ class MisaApiSaleOrder(http.Controller):
         misa_order_id = payload.get("misa_order_id")
         warehouse_id = payload.get("warehouse_id")
         create_when_missing = payload.get("create_when_missing", True)
+        misa_order_id = str(misa_order_id or "").strip()
+        if not misa_order_id:
+            return {
+                "ok": False,
+                "error": "missing_misa_order_id",
+                "message": "Thiếu MISA order ID.",
+            }
 
         # ---- Chạy dưới quyền admin ----
         admin_user = request.env.ref("base.user_admin", raise_if_not_found=False)
@@ -124,12 +131,19 @@ class MisaApiSaleOrder(http.Controller):
             env_admin = request.env(user=admin_user)
 
             # Thay vì gọi đồng bộ, đưa vào hàng chờ
-            env_admin["misa.sync.queue"].sudo().create({
-                "name": misa_order_id,
-                "sync_type": "so",
-                "payload": json.dumps(payload, ensure_ascii=False)
-            })
-            return {"ok": True, "message": "Đã đưa Đơn bán hàng vào hàng chờ đồng bộ."}
+            enqueue_result = env_admin["misa.sync.queue"].sudo().enqueue_sale_order(
+                misa_order_id=misa_order_id,
+                payload=payload,
+            )
+            queue = enqueue_result["queue"]
+            return {
+                "ok": True,
+                "queued": True,
+                "queue_id": queue.id,
+                "deduplicated": not enqueue_result["created"],
+                "triggered": enqueue_result["triggered"],
+                "message": "Đã đưa Đơn bán hàng vào hàng chờ đồng bộ.",
+            }
         except Exception as e:
             _logger.exception("MISA API /resync exception: %s", e)
             return {"ok": False, "error": "exception", "message": str(e)}
