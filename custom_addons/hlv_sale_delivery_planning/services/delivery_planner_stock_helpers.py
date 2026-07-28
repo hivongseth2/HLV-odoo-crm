@@ -114,7 +114,7 @@ class DeliveryPlannerServiceStockHelpers(models.AbstractModel):
     def _batch_transfer_suggestions(self, page_sales, product_availabilities):
         """
         Batch version: tính transfer_suggestions cho toàn trang trong 1-2 queries
-        thay vì N × M × P queries của _compute_transfer_suggestions per-SO.
+        thay vì N × M × P queries khi tính riêng từng SO.
         Trả về: {so_id: [{product_id, product_name, shortage, to_warehouse_name, sources}]}
         """
         if not page_sales:
