@@ -73,12 +73,14 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
 
         return images
 
-    def _build_product_data(self, product, batch_prices=None):
+    def _build_product_data(self, product, batch_prices=None, batch_sales_counts=None):
         """Build standard product response dict from a product.product record.
         
         :param product: product.product record
         :param batch_prices: dict {product_id: promotional_price} từ batch query pricelist
                              Nếu None, sẽ query riêng lẻ (fallback cũ)
+        :param batch_sales_counts: dict {product_id: sales_count} từ batch query sale.order.line
+                                   Nếu None, sales_count = 0
         """
         attributes = []
         if hasattr(product, "product_template_attribute_value_ids"):
@@ -121,6 +123,19 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
         if product.image_128:
             img_url = self._get_image_url("product.product", product.id, "image_128")
 
+        # Sales count từ đơn hàng Zalo Mini App
+        sales_count = 0
+        if batch_sales_counts and isinstance(batch_sales_counts, dict):
+            sales_count = batch_sales_counts.get(product.id, 0)
+        else:
+            try:
+                counts = self._get_batch_sales_counts([product])
+                sales_count = counts.get(product.id, 0)
+            except Exception:
+                sales_count = 0
+
+        create_date = fields.Datetime.to_string(product.create_date) if product.create_date else None
+
         return {
             "id": product.id,
             "template_id": product.product_tmpl_id.id,
@@ -134,6 +149,8 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
             "free_qty": product.free_qty or 0.0,
             "uom": product.uom_id.name if product.uom_id else "",
             "weight": product.weight or 0.0,
+            "sales_count": sales_count,
+            "create_date": create_date,
             "category": category,
             "attributes": attributes,
             "image_url": img_url,
@@ -164,6 +181,49 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
         except Exception as e:
             _logger.warning("Batch price error: %s", e)
             return None
+
+    def _get_batch_sales_counts(self, products):
+        """Batch query số lượng đã bán cho tất cả products từ đơn hàng Zalo Mini App.
+        Trả về dict {product_id: sales_count} hoặc {} nếu không có data."""
+        try:
+            if not products:
+                return {}
+            if hasattr(products, "id"):
+                product_ids = [products.id]
+            else:
+                product_ids = [p.id for p in products if p and hasattr(p, "id")]
+
+            if not product_ids:
+                return {}
+
+            # 1. Tìm các đơn hàng đã xác nhận thuộc tài khoản Zalo Mini App
+            zalo_orders = request.env["sale.order"].sudo().search([
+                ("state", "in", ["sale", "done"]),
+                ("partner_id.x_is_zalo_account", "=", True),
+            ])
+            if not zalo_orders:
+                return {}
+
+            # 2. Group by product_id trên sale.order.line của các đơn Zalo
+            results = request.env["sale.order.line"].sudo().read_group(
+                domain=[
+                    ("product_id", "in", product_ids),
+                    ("order_id", "in", zalo_orders.ids),
+                ],
+                fields=["product_id", "product_uom_qty"],
+                groupby=["product_id"],
+            )
+            batch_counts = {}
+            for row in results:
+                pid = row.get("product_id")
+                if pid and isinstance(pid, (list, tuple)) and len(pid) > 0:
+                    pid = pid[0]
+                if pid:
+                    batch_counts[pid] = int(row.get("product_uom_qty", 0))
+            return batch_counts
+        except Exception as e:
+            _logger.warning("Batch sales count error: %s", e)
+            return {}
 
     # =========================================================================
     # POST /api/v1/zalo/products/list
@@ -244,9 +304,13 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
             )
             total = request.env["product.product"].sudo().search_count(domain)
 
-            # Batch query pricelist 1 lần cho tất cả products
+            # Batch query pricelist & sales counts 1 lần cho tất cả products
             batch_prices = self._get_batch_prices(products)
-            data = [self._build_product_data(p, batch_prices=batch_prices) for p in products]
+            batch_sales_counts = self._get_batch_sales_counts(products)
+            data = [
+                self._build_product_data(p, batch_prices=batch_prices, batch_sales_counts=batch_sales_counts)
+                for p in products
+            ]
 
             return self._response_success_cached({
                 "total": total,
