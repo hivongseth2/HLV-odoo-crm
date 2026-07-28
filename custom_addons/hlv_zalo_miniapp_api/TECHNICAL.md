@@ -109,8 +109,9 @@ Params: `limit`, `offset`
 
 | Method | Route | Mô tả |
 |---|---|---|
-| GET | `/api/v1/zalo/products/list` | Danh sách variant |
-| GET | `/api/v1/zalo/products/<id>` | Chi tiết sản phẩm |
+| POST | `/api/v1/zalo/products/list` | Danh sách variant |
+| POST | `/api/v1/zalo/products/detail` | Chi tiết sản phẩm |
+| POST | `/api/v1/zalo/products/update-price` | Cập nhật giá sản phẩm (`x_zalo_price`, `list_price`, `standard_price`) |
 
 Params: `limit`, `offset`, `query` (search), `sort` (name, -name, x_zalo_price, -x_zalo_price, create_date, -create_date, list_price, -list_price), `category_id`
 

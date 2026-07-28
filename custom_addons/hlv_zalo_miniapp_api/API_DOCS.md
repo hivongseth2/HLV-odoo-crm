@@ -396,6 +396,78 @@ Trả về tất cả các field giống **2.1. Danh sách Sản phẩm**, bổ 
 
 ---
 
+### 2.3. Cập nhật Giá Sản phẩm
+
+> **POST** `/api/v1/zalo/products/update-price`
+
+**Auth**: Bearer token required
+
+Cập nhật các trường giá của sản phẩm (`x_zalo_price`, `list_price`, `standard_price`). Cần truyền ít nhất một trường giá trong request body.
+
+#### Request Body
+
+| Field | Type | Required | Default | Mô tả |
+|-------|------|----------|---------|-------|
+| `product_id` | int | **Optional\*** | — | ID của `product.product` (*Cần `product_id` hoặc `template_id`) |
+| `template_id` | int | **Optional\*** | — | ID của `product.template` (*Cần `product_id` hoặc `template_id`) |
+| `x_zalo_price` | float | Optional | — | Giá hiển thị Zalo Mini App mới (>= 0) |
+| `list_price` | float | Optional | — | Giá niêm yết mới (>= 0) |
+| `standard_price` | float | Optional | — | Giá vốn mới (>= 0) |
+
+#### Request Example
+
+```json
+{
+  "product_id": 42,
+  "x_zalo_price": 25000000,
+  "list_price": 26000000,
+  "standard_price": 20000000
+}
+```
+
+#### Response `data`
+
+| Field | Type | Mô tả |
+|-------|------|-------|
+| `id` | int | ID của `product.product` |
+| `template_id` | int | ID của `product.template` |
+| `name` | string | Tên hiển thị sản phẩm |
+| `default_code` | string hoặc null | Mã sản phẩm |
+| `x_zalo_price` | float | Giá Zalo App sau khi cập nhật |
+| `list_price` | float | Giá niêm yết sau khi cập nhật |
+| `standard_price` | float | Giá vốn sau khi cập nhật |
+| `message` | string | "Cập nhật giá sản phẩm thành công" |
+
+#### Response Example
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 42,
+    "template_id": 10,
+    "name": "iPhone 15 128GB",
+    "default_code": "IP15-128",
+    "x_zalo_price": 25000000,
+    "list_price": 26000000,
+    "standard_price": 20000000,
+    "message": "Cập nhật giá sản phẩm thành công"
+  }
+}
+```
+
+#### Error Codes
+
+| Code | HTTP Status | Điều kiện |
+|------|-------------|-----------|
+| `AUTH_REQUIRED` | 401 | Thiếu `Authorization: Bearer` header |
+| `INVALID_TOKEN` | 401 | Token không hợp lệ hoặc đã hết hạn |
+| `INVALID_INPUT` | 400 | Thiếu `product_id`/`template_id`, truyền giá trị âm, hoặc không truyền trường giá nào |
+| `NOT_FOUND` | 404 | Sản phẩm không tồn tại hoặc đã bị vô hiệu hóa |
+| `SERVER_ERROR` | 500 | Lỗi server không xác định |
+
+---
+
 ## 3. Contact API
 
 ### 3.1. Đăng ký / Đăng nhập bằng SĐT
