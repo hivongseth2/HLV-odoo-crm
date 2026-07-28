@@ -2,7 +2,7 @@
 import logging
 
 from odoo import fields, http
-from odoo.http import request
+from odoo.http import request, Response
 
 from .base_api import ZaloBaseAPI
 
@@ -250,4 +250,86 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
             return self._response_success_cached(data, max_age=120)
         except Exception as e:
             _logger.exception("product_detail error")
+            return self._response_error("SERVER_ERROR", str(e), 500)
+
+    # =========================================================================
+    # POST /api/v1/zalo/products/update-price
+    # =========================================================================
+    @http.route(
+        "/api/v1/zalo/products/update-price",
+        type="http",
+        auth="public",
+        methods=["POST", "OPTIONS"],
+        csrf=False,
+    )
+    def product_update_price(self, **params):
+        """Cập nhật giá sản phẩm (x_zalo_price, list_price, standard_price).
+        Auth: Bearer token required.
+        Body: {
+            "product_id": 42,           # hoặc "template_id": 10
+            "x_zalo_price": 25000000,   # optional
+            "list_price": 26000000,     # optional
+            "standard_price": 20000000  # optional
+        }"""
+        if request.httprequest.method == "OPTIONS":
+            return self._response_options()
+        try:
+            auth_res = self._auth_required()
+            if isinstance(auth_res, Response):
+                return auth_res
+
+            body = self._request_json()
+            product_id = self._parse_int(body.get("product_id"), 0)
+            template_id = self._parse_int(body.get("template_id"), 0)
+
+            if product_id:
+                product = request.env["product.product"].sudo().browse(product_id)
+            elif template_id:
+                tmpl = request.env["product.template"].sudo().browse(template_id)
+                product = tmpl.product_variant_id if tmpl.exists() else request.env["product.product"]
+            else:
+                return self._response_error("INVALID_INPUT", "Thiếu product_id hoặc template_id")
+
+            if not product.exists() or not product.active:
+                return self._response_error("NOT_FOUND", "Sản phẩm không tồn tại hoặc đã bị vô hiệu hóa", 404)
+
+            vals = {}
+            if "x_zalo_price" in body:
+                x_zalo_price = self._parse_float(body.get("x_zalo_price"), -1.0)
+                if x_zalo_price < 0:
+                    return self._response_error("INVALID_INPUT", "x_zalo_price không được nhỏ hơn 0")
+                vals["x_zalo_price"] = x_zalo_price
+
+            if "list_price" in body:
+                list_price = self._parse_float(body.get("list_price"), -1.0)
+                if list_price < 0:
+                    return self._response_error("INVALID_INPUT", "list_price không được nhỏ hơn 0")
+                vals["list_price"] = list_price
+
+            if "standard_price" in body:
+                standard_price = self._parse_float(body.get("standard_price"), -1.0)
+                if standard_price < 0:
+                    return self._response_error("INVALID_INPUT", "standard_price không được nhỏ hơn 0")
+                vals["standard_price"] = standard_price
+
+            if not vals:
+                return self._response_error(
+                    "INVALID_INPUT",
+                    "Cần truyền ít nhất một trường giá để cập nhật (x_zalo_price, list_price, standard_price)"
+                )
+
+            product.sudo().write(vals)
+
+            return self._response_success({
+                "id": product.id,
+                "template_id": product.product_tmpl_id.id,
+                "name": product.display_name,
+                "default_code": product.default_code,
+                "x_zalo_price": product.x_zalo_price or 0.0,
+                "list_price": product.list_price or 0.0,
+                "standard_price": product.standard_price or 0.0,
+                "message": "Cập nhật giá sản phẩm thành công",
+            })
+        except Exception as e:
+            _logger.exception("product_update_price error")
             return self._response_error("SERVER_ERROR", str(e), 500)

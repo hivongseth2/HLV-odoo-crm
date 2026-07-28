@@ -8,3 +8,5 @@ access_stock_quant_zalo_api,stock.quant.zalo.api,stock.model_stock_quant,,1,0,0,
 access_hlv_loyalty_portal_account_zalo_api,hlv.loyalty.portal.account.zalo.api,hlv_loyalty.model_hlv_loyalty_portal_account,,1,1,1,0
 access_zalo_miniapp_banner_user,zalo.miniapp.banner.user,model_zalo_miniapp_banner,base.group_user,1,1,1,1
 access_zalo_miniapp_banner_public,zalo.miniapp.banner.public,model_zalo_miniapp_banner,,1,0,0,0
+access_zalo_miniapp_cart_line_user,zalo.miniapp.cart.line.user,model_zalo_miniapp_cart_line,base.group_user,1,1,1,1
+access_zalo_miniapp_cart_line_public,zalo.miniapp.cart.line.public,model_zalo_miniapp_cart_line,,1,1,1,1
