@@ -509,4 +509,5 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             'has_assigned_pick': so_status_dict.get('has_assigned_pick', False),
             'has_shipper_received': so_status_dict.get('has_shipper_received', False),
             'has_unread_message': bool(getattr(so, 'x_plan_unread_message', False)),
+            'misa_qty_sync_pending': bool(getattr(so, 'misa_qty_sync_pending', False)),
         }

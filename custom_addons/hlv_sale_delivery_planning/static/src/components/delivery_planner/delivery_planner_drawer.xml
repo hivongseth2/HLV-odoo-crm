@@ -220,7 +220,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        <t t-foreach="this.groupedLines(state.selectedOrder.lines)" t-as="line" t-key="line.product_id ? line.product_id[0] : line_index">
+                        <t t-foreach="this.groupedLines(state.selectedOrder.lines)" t-as="line" t-key="line._group_key || line.id || line_index">
                             <tr t-att-class="(line.product_uom_qty - line.qty_delivered) > 0 ? 'table-warning' : 'table-success'">
                                 <td class="text-start">
                                     <div class="d-flex flex-column">
