@@ -243,6 +243,40 @@
         &.border-warning-soft { border-left-color: #ffc107 !important; }
     }
 
+    .hlv-misa-lock-ribbon {
+        position: absolute;
+        inset: 0 0 auto 0;
+        z-index: 3;
+        padding: 4px 8px;
+        background: #b45309;
+        color: #fff;
+        text-align: center;
+        font-size: 0.58rem;
+        font-weight: 700;
+        letter-spacing: 0.35px;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .hlv-kanban-card-inner.has-misa-lock .card-body {
+        padding-top: 2rem !important;
+    }
+
+    .hlv-print-ribbon {
+        top: 8px;
+        right: -22px;
+        z-index: 2;
+        padding: 1px 20px;
+        color: #fff;
+        font-size: 0.55rem;
+        letter-spacing: 0.5px;
+        transform: rotate(45deg);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+
+        &.has-misa-lock {
+            top: 30px;
+        }
+    }
+
 } // end .hlv_delivery_planner_dashboard
 
 /* ============================================================

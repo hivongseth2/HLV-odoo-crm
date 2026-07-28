@@ -12,7 +12,7 @@ _NOTIFY_FIELDS = {
     'state', 'picking_ids', 'delivery_status', 'amount_total',
     'commitment_date', 'x_plan_need_cancel', 'x_plan_unread_message',
     'x_picking_slip_printed', 'x_studio_delivery_type', 'x_studio_htgh',
-    'tag_ids', 'order_line',
+    'tag_ids', 'order_line', 'misa_qty_sync_pending',
 }
 
 
