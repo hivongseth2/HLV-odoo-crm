@@ -6,3 +6,4 @@ from . import contact_api
 from . import cart_api
 from . import order_api
 from . import banner_api
+from . import config_api

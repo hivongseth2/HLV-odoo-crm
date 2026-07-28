@@ -69,4 +69,16 @@
               parent="menu_zalo_miniapp_management"
               action="action_zalo_sale_order"
               sequence="50"/>
+
+    <!-- Configuration Submenu Category -->
+    <menuitem id="menu_zalo_miniapp_configuration"
+              name="Cấu hình"
+              parent="menu_zalo_miniapp_root"
+              sequence="20"/>
+
+    <menuitem id="menu_zalo_miniapp_config_settings"
+              name="Cấu hình Zalo OA"
+              parent="menu_zalo_miniapp_configuration"
+              action="action_zalo_config_settings"
+              sequence="10"/>
 </odoo>
