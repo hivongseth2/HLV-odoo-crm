@@ -89,6 +89,16 @@ class SaleOrder(models.Model):
         for line in lines or []:
             # Luồng cũ lưu mã kho ở CustomField2; một số response trả đúng StockIDText.
             candidates = (line.get("CustomField2"), line.get("StockIDText"))
+            _logger.info(
+                "🏭 Warehouse candidates MISA line ID=%s product=%s: "
+                "CustomField2=%r, StockID=%r, StockIDText=%r, candidates=%r",
+                line.get("ID") or line.get("id"),
+                line.get("ProductIDText"),
+                line.get("CustomField2"),
+                line.get("StockID"),
+                line.get("StockIDText"),
+                candidates,
+            )
             for raw_stock_id in candidates:
                 stock_id = str(raw_stock_id or "").strip().upper()
                 if not stock_id:
@@ -390,10 +400,23 @@ class SaleOrder(models.Model):
             qty        = _flt(ln.get("Amount"), 0.0)
             price      = _flt(ln.get("Price"), 0.0)
             discount   = _flt(ln.get("DiscountPercent"), 0.0)
+            loyalty_discount_present = "CustomField10" in ln
+            loyalty_discount_pct = _flt(ln.get("CustomField10"), 0.0)
             uom_name   = (ln.get("UnitIDText") or "Cái").strip()
             misa_pid   = ln.get("ProductID") or ln.get("ProductId")
             note_text  = (ln.get("DescriptionProduct") or ln.get("Note") or "")
             x_studio_product_status = (ln.get("CustomField4") or "").strip()
+
+            _logger.info(
+                "🎯 MISA SO line ID=%s product=%s: "
+                "has_CustomField10=%s, CustomField10=%r "
+                "→ loyalty_discount_pct=%s",
+                ln.get("ID"),
+                code or misa_pid,
+                loyalty_discount_present,
+                ln.get("CustomField10"),
+                loyalty_discount_pct,
+            )
 
             # Lấy / tạo product đúng theo mã
             product = odoo_utils._get_or_create_product(
@@ -427,6 +450,8 @@ class SaleOrder(models.Model):
                 'qty': qty_base,
                 'price': price_base,
                 'discount': discount,
+                'loyalty_discount_present': loyalty_discount_present,
+                'loyalty_discount_pct': loyalty_discount_pct,
                 'note': note_text,
                 'tax_ids': tax_ids,
                 'is_default_uom': is_default,
@@ -455,6 +480,13 @@ class SaleOrder(models.Model):
                     'qty': float(saved.get('qty') or 0.0),
                     'price': float(saved.get('price') or 0.0),
                     'discount': float(saved.get('discount') or 0.0),
+                    'loyalty_discount_present': bool(saved.get(
+                        'loyalty_discount_present',
+                        'loyalty_discount_pct' in saved,
+                    )),
+                    'loyalty_discount_pct': float(
+                        saved.get('loyalty_discount_pct') or 0.0
+                    ),
                     'note': saved.get('note') or '',
                     'tax_ids': [int(tax_id) for tax_id in (saved.get('tax_ids') or [])],
                     'is_default_uom': bool(saved.get('is_default_uom')),
@@ -473,6 +505,8 @@ class SaleOrder(models.Model):
             'qty': item['qty'],
             'price': item['price'],
             'discount': item['discount'],
+            'loyalty_discount_present': item['loyalty_discount_present'],
+            'loyalty_discount_pct': item['loyalty_discount_pct'],
             'note': item['note'],
             'tax_ids': item['tax_ids'],
             'is_default_uom': item['is_default_uom'],
@@ -617,6 +651,18 @@ class SaleOrder(models.Model):
                     "%g" % float(sol.discount or 0.0),
                     "%g" % float(misa_data['discount'] or 0.0),
                 )
+            if (
+                misa_data['loyalty_discount_present']
+                and abs(
+                    float(sol.loyalty_discount_pct or 0.0)
+                    - float(misa_data['loyalty_discount_pct'] or 0.0)
+                ) >= 0.0001
+            ):
+                _audit(
+                    misa_data, sol, _('CK Loyalty (%)'),
+                    "%g" % float(sol.loyalty_discount_pct or 0.0),
+                    "%g" % float(misa_data['loyalty_discount_pct'] or 0.0),
+                )
             if (sol.name or '').strip() != (misa_data['name'] or '').strip():
                 _audit(misa_data, sol, _('Mô tả'), sol.name, misa_data['name'])
             if (sol.note or '').strip() != (misa_data['note'] or '').strip():
@@ -643,6 +689,10 @@ class SaleOrder(models.Model):
                     'note': misa_data['note'],
                     'x_studio_product_status': misa_data['status'],
                 })
+                if misa_data['loyalty_discount_present']:
+                    vals_line['loyalty_discount_pct'] = misa_data[
+                        'loyalty_discount_pct'
+                    ]
             if not (defer_quantity and stock_changed):
                 vals_line['product_id'] = misa_data['product'].id
                 vals_line['product_uom_qty'] = new_qty
@@ -693,6 +743,10 @@ class SaleOrder(models.Model):
                 'note': misa_data['note'],
                 'x_studio_product_status': misa_data['status'],
             }
+            if misa_data['loyalty_discount_present']:
+                vals_line['loyalty_discount_pct'] = misa_data[
+                    'loyalty_discount_pct'
+                ]
             if not misa_data['is_default_uom'] and misa_data['product'].uom_id:
                 vals_line['product_uom'] = misa_data['product'].uom_id.id
             
@@ -1212,12 +1266,17 @@ class SaleOrder(models.Model):
 
         self._sync_misa_header_in_place(data, headers)
         if self.env.context.get('misa_assign_warehouse_from_lines'):
-            if warehouse_changed:
+            # Header sync can recompute warehouse_id from the current user's
+            # default warehouse. Re-assert the warehouse resolved from MISA
+            # even when the bootstrap SO already had that warehouse before
+            # syncing the partner/header.
+            if warehouse and self.warehouse_id != warehouse:
+                warehouse_after_header = self.warehouse_id
                 self.write({'warehouse_id': warehouse.id})
                 _logger.info(
-                    "🏭 Cập nhật kho SO %s: %s → %s",
+                    "🏭 Khôi phục kho MISA cho SO %s sau sync header: %s → %s",
                     self.name,
-                    previous_warehouse.name or "-",
+                    warehouse_after_header.name or "-",
                     warehouse.name,
                 )
             if warehouse:
