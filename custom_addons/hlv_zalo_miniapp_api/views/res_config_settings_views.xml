@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form_zalo" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.zalo</field>
+        <field name="model">res.config.settings</field>
+        <field name="priority" eval="90"/>
+        <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//form" position="inside">
+                <app data-string="Zalo Mini App" string="Zalo Mini App" name="hlv_zalo_miniapp_api">
+                    <block title="Cấu hình Zalo Official Account (OA)">
+                        <setting string="Thông tin Zalo Official Account" help="Cấu hình thông tin OA hiển thị trên Zalo Mini App">
+                            <div className="content-group">
+                                <div className="row mt16">
+                                    <label for="x_zalo_oa_id" className="col-lg-3 o_light_label"/>
+                                    <field name="x_zalo_oa_id"/>
+                                </div>
+                                <div className="row mt8">
+                                    <label for="x_zalo_oa_name" className="col-lg-3 o_light_label"/>
+                                    <field name="x_zalo_oa_name"/>
+                                </div>
+                                <div className="row mt8">
+                                    <label for="x_zalo_oa_subtext" className="col-lg-3 o_light_label"/>
+                                    <field name="x_zalo_oa_subtext"/>
+                                </div>
+                            </div>
+                        </setting>
+                    </block>
+                </app>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="action_zalo_config_settings" model="ir.actions.act_window">
+        <field name="name">Cấu hình Zalo Mini App</field>
+        <field name="res_model">res.config.settings</field>
+        <field name="view_mode">form</field>
+        <field name="target">inline</field>
+        <field name="context">{'module' : 'hlv_zalo_miniapp_api'}</field>
+    </record>
+</odoo>

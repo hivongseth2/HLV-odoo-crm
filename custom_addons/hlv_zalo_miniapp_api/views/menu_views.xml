@@ -17,11 +17,26 @@
         <field name="name">Danh mục Zalo Mini App</field>
         <field name="res_model">pos.category</field>
         <field name="view_mode">list,form</field>
+        <field name="view_id" ref="view_zalo_pos_category_tree"/>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">
                 Tạo danh mục sản phẩm Zalo mới.
             </p>
         </field>
+    </record>
+
+    <record id="action_zalo_pos_category_tree_view" model="ir.actions.act_window.view">
+        <field name="sequence" eval="1"/>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="view_zalo_pos_category_tree"/>
+        <field name="act_window_id" ref="action_zalo_pos_category"/>
+    </record>
+
+    <record id="action_zalo_pos_category_form_view" model="ir.actions.act_window.view">
+        <field name="sequence" eval="2"/>
+        <field name="view_mode">form</field>
+        <field name="view_id" ref="view_zalo_pos_category_form"/>
+        <field name="act_window_id" ref="action_zalo_pos_category"/>
     </record>
 
     <!-- Submenus under Quản lý -->
@@ -54,4 +69,16 @@
               parent="menu_zalo_miniapp_management"
               action="action_zalo_sale_order"
               sequence="50"/>
+
+    <!-- Configuration Submenu Category -->
+    <menuitem id="menu_zalo_miniapp_configuration"
+              name="Cấu hình"
+              parent="menu_zalo_miniapp_root"
+              sequence="20"/>
+
+    <menuitem id="menu_zalo_miniapp_config_settings"
+              name="Cấu hình Zalo OA"
+              parent="menu_zalo_miniapp_configuration"
+              action="action_zalo_config_settings"
+              sequence="10"/>
 </odoo>

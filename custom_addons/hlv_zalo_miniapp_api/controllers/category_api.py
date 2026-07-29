@@ -34,13 +34,23 @@ class ZaloCategoryAPI(ZaloBaseAPI, http.Controller):
             except ValueError as e:
                 return self._response_error("INVALID_INPUT", str(e))
 
+            featured_only = body.get("featured_only", False)
+            if isinstance(featured_only, str):
+                featured_only = featured_only.lower() in ("true", "1", "yes")
+
+            domain = []
+            if featured_only:
+                domain.append(("x_is_featured_zalo", "=", True))
+
+            order = "x_is_featured_zalo desc, sequence, name" if hasattr(request.env["pos.category"], "x_is_featured_zalo") else "sequence, name"
+
             categories = request.env["pos.category"].sudo().search(
-                [],
+                domain,
                 limit=limit,
                 offset=offset,
-                order="sequence, name",
+                order=order,
             )
-            total = request.env["pos.category"].sudo().search_count([])
+            total = request.env["pos.category"].sudo().search_count(domain)
 
             data = []
             for cat in categories:
@@ -52,6 +62,7 @@ class ZaloCategoryAPI(ZaloBaseAPI, http.Controller):
                     "x_misa_id": cat.x_misa_id if hasattr(cat, "x_misa_id") else None,
                     "name": cat.name,
                     "sequence": cat.sequence,
+                    "x_is_featured_zalo": cat.x_is_featured_zalo if hasattr(cat, "x_is_featured_zalo") else False,
                     "parent_id": cat.parent_id.id if cat.parent_id else None,
                     "parent_name": cat.parent_id.name if cat.parent_id else None,
                     "image_url": img_url,

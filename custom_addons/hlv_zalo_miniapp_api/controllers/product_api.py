@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import html
 import logging
 
 from odoo import fields, http
@@ -136,11 +137,47 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
 
         create_date = fields.Datetime.to_string(product.create_date) if product.create_date else None
 
+        # Thu thập thông tin Thương hiệu (Brand) từ các trường thương hiệu Odoo
+        brand_name = ""
+        for b_field in ["brand_id", "product_brand_id", "x_brand_id", "x_brand", "brand", "brand_name"]:
+            try:
+                if hasattr(product, b_field) and getattr(product, b_field):
+                    val = getattr(product, b_field)
+                    brand_name = val.name if hasattr(val, "name") else str(val)
+                    break
+                elif product.product_tmpl_id and hasattr(product.product_tmpl_id, b_field) and getattr(product.product_tmpl_id, b_field):
+                    val = getattr(product.product_tmpl_id, b_field)
+                    brand_name = val.name if hasattr(val, "name") else str(val)
+                    break
+            except Exception:
+                pass
+
+        # Lấy nội dung bài viết HTML / Rich Text trong mục PRODUCT INFORMATION của Odoo
+        product_info_html = ""
+        for html_field in ["website_description", "description", "x_product_information", "x_description", "description_sale"]:
+            try:
+                if hasattr(product, html_field) and getattr(product, html_field):
+                    val = getattr(product, html_field)
+                    if val:
+                        product_info_html = str(val)
+                        break
+                elif product.product_tmpl_id and hasattr(product.product_tmpl_id, html_field) and getattr(product.product_tmpl_id, html_field):
+                    val = getattr(product.product_tmpl_id, html_field)
+                    if val:
+                        product_info_html = str(val)
+                        break
+            except Exception:
+                pass
+
+        if product_info_html:
+            product_info_html = html.unescape(product_info_html)
+
         return {
             "id": product.id,
             "template_id": product.product_tmpl_id.id,
             "name": product.display_name,
             "template_name": product.product_tmpl_id.name,
+            "brand": brand_name,
             "default_code": product.default_code,
             "barcode": product.barcode,
             "x_zalo_price": product.x_zalo_price or 0.0,
@@ -155,6 +192,7 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
             "attributes": attributes,
             "image_url": img_url,
             "images": self._get_product_images(product),
+            "product_info_html": product_info_html,
             "description": product.description_sale or "",
             "description_html": product.description or "",
         }
