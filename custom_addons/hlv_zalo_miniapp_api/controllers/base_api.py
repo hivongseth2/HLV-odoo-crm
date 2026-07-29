@@ -57,14 +57,23 @@ class ZaloBaseAPI:
 
     @staticmethod
     def _cors_headers():
-        """Return CORS headers dict với origin configurable."""
-        origin = ZaloBaseAPI._get_cors_origin()
-        return {
-            "Access-Control-Allow-Origin": origin,
+        """Return CORS headers dict với origin configurable.
+        Tránh trùng lặp Access-Control-Allow-Origin nếu route đã có cors='*'."""
+        headers = {
             "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
             "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With",
             "Access-Control-Max-Age": "86400",
         }
+        has_route_cors = False
+        try:
+            if hasattr(request, "endpoint") and request.endpoint and hasattr(request.endpoint, "routing"):
+                has_route_cors = bool(request.endpoint.routing.get("cors"))
+        except Exception:
+            pass
+
+        if not has_route_cors:
+            headers["Access-Control-Allow-Origin"] = ZaloBaseAPI._get_cors_origin()
+        return headers
 
     @staticmethod
     def _response_options():
