@@ -272,14 +272,34 @@ class SaleOrder(models.Model):
                 for c in (conversions or [])
             ],
         )
-        # Tìm dòng conversion khớp với UoM của MISA trên line (theo tên)
+        requested_uom_key = misa_uom_text.strip().lower()
+        default_uom_key = default_uom_name.strip().lower()
+
+        # Normal direction: the MISA line uses a conversion unit and Odoo uses
+        # the MISA base unit. Example: line=Box, default=Piece.
         conv = next((
             c for c in (conversions or [])
-            if (c.get("ConversionUnitIDText") or "").strip().lower() == misa_uom_text.strip().lower()
+            if (c.get("ConversionUnitIDText") or "").strip().lower() == requested_uom_key
         ), None)
+        reverse_conversion = False
+
+        # Reverse direction: the MISA line uses the base unit while Odoo uses
+        # a conversion unit. Example: line=Piece, default=Bag and
+        # "1 Bag = 100 Pieces".
+        if not conv:
+            conv = next((
+                c for c in (conversions or [])
+                if (c.get("ConversionUnitIDText") or "").strip().lower() == default_uom_key
+            ), None)
+            reverse_conversion = bool(conv)
 
         if not conv:
-            _logger.warning("⚠️ Không tìm thấy mapping UoM cho '%s' -> giữ nguyên số liệu gốc", misa_uom_text)
+            _logger.warning(
+                "⚠️ Không tìm thấy mapping UoM cho '%s' -> '%s' "
+                "-> giữ nguyên số liệu gốc",
+                misa_uom_text,
+                default_uom_name,
+            )
             return qty, price, False
 
         try:
@@ -300,12 +320,34 @@ class SaleOrder(models.Model):
         #   Dòng ở Hộp, default là Cuộn -> qty_base = qty * 60; price_base = price / 60
         # - op_id == 2 (Chia): "1 Mét = 1/50 Cuộn"
         #   Dòng ở Mét,  default là Cuộn -> qty_base = qty / 50; price_base = price * 50
-        if op_id == 1:
+        if reverse_conversion:
+            if op_id == 1:
+                qty_base = qty / rate
+                price_base = price * rate
+            else:
+                qty_base = qty * rate
+                price_base = price / rate
+        elif op_id == 1:
             qty_base = qty * rate
-            price_base = price / rate if rate else price
+            price_base = price / rate
         else:  # op_id == 2 (Chia) hoặc bất kỳ khác coi như "Chia"
             qty_base = qty / rate
             price_base = price * rate
+
+        _logger.warning(
+            "MISA SO UoM converted: product_code=%r direction=%s "
+            "%s %s @ %s -> %s %s @ %s (rate=%s operator=%s)",
+            product.default_code,
+            "base_to_conversion" if reverse_conversion else "conversion_to_base",
+            qty,
+            misa_uom_text,
+            price,
+            qty_base,
+            default_uom_name,
+            price_base,
+            rate,
+            op_id,
+        )
 
         return qty_base, price_base, False
 
