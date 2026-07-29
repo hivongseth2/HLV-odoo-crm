@@ -76,10 +76,9 @@ class HlvProductMergeWizard(
             and source_product
             and base_product != source_product
         ):
-            different_uom = base_product.uom_id != source_product.uom_id
             values["line_ids"] = [
-                Command.create(self._quant_line_values(quant, different_uom))
-                for quant in self._source_quants(source_product)
+                Command.create(self._quant_line_values(quants))
+                for quants in self._source_quant_groups(source_product)
             ]
         return values
 
@@ -111,12 +110,9 @@ class HlvProductMergeWizard(
                 and wizard.source_product_id
                 and wizard.base_product_id != wizard.source_product_id
             ):
-                different_uom = (
-                    wizard.base_product_id.uom_id != wizard.source_product_id.uom_id
-                )
                 commands.extend(
-                    Command.create(wizard._quant_line_values(quant, different_uom))
-                    for quant in wizard._source_quants(wizard.source_product_id)
+                    Command.create(wizard._quant_line_values(quants))
+                    for quants in wizard._source_quant_groups(wizard.source_product_id)
                 )
             wizard.line_ids = commands
 
@@ -174,12 +170,12 @@ class HlvProductMergeWizardLine(models.TransientModel):
         required=True,
         ondelete="cascade",
     )
-    quant_id = fields.Many2one(
+    quant_ids = fields.Many2many(
         "stock.quant",
-        string="Dòng tồn",
-        required=True,
+        string="Các dòng tồn gốc",
         readonly=True,
     )
+    quant_count = fields.Integer(string="Số dòng gốc", readonly=True)
     location_id = fields.Many2one(
         "stock.location",
         string="Vị trí",
@@ -187,12 +183,6 @@ class HlvProductMergeWizardLine(models.TransientModel):
         readonly=True,
     )
     lot_id = fields.Many2one("stock.lot", string="Lô/Serial", readonly=True)
-    package_id = fields.Many2one(
-        "stock.quant.package",
-        string="Kiện",
-        readonly=True,
-    )
-    owner_id = fields.Many2one("res.partner", string="Chủ sở hữu", readonly=True)
     company_id = fields.Many2one("res.company", string="Công ty", readonly=True)
     source_quantity = fields.Float(
         string="Tồn nguồn",

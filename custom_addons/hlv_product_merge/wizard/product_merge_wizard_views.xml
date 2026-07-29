@@ -21,8 +21,9 @@
                 <field name="is_uom_different" invisible="1"/>
                 <div class="alert alert-warning" role="alert"
                      invisible="not is_uom_different">
-                    Hai sản phẩm có đơn vị tính khác nhau. Hãy nhập thủ công số lượng
-                    sau quy đổi cho từng vị trí/lô ở bảng bên dưới.
+                    Hai sản phẩm có đơn vị tính khác nhau. Số lượng đích đã được điền
+                    ban đầu bằng tồn nguồn; hãy kiểm tra và chỉnh lại số quy đổi cho
+                    từng vị trí/lô nếu tỷ lệ không phải 1:1.
                 </div>
                 <div class="alert alert-danger" role="alert"
                      invisible="not blocker_text">
@@ -35,8 +36,7 @@
                     <list editable="bottom" create="0" delete="0">
                         <field name="location_id"/>
                         <field name="lot_id" optional="show"/>
-                        <field name="package_id" optional="hide"/>
-                        <field name="owner_id" optional="hide"/>
+                        <field name="quant_count" optional="hide"/>
                         <field name="company_id" optional="hide"/>
                         <field name="source_quantity"/>
                         <field name="source_uom_id"/>
