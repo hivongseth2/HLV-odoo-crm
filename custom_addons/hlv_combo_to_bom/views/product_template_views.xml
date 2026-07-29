@@ -4,7 +4,8 @@
     <record id="product_template_form_view_combo_bom" model="ir.ui.view">
         <field name="name">product.template.form.combo.bom</field>
         <field name="model">product.template</field>
-        <field name="inherit_id" ref="combo_product.product_template_form_view_combo"/>
+        <field name="inherit_id" ref="product.product_template_only_form_view"/>
+        <field name="priority">100</field>
         <field name="arch" type="xml">
             <xpath expr="//page[@name='combo_product']" position="inside">
                 <group invisible="not is_combo">
