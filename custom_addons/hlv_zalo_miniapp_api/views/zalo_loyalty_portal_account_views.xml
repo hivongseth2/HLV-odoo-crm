@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ── Form view ── -->
+    <record id="hlv_zalo_loyalty_portal_account_form" model="ir.ui.view">
+        <field name="name">hlv.zalo.loyalty.portal.account.form</field>
+        <field name="model">hlv.loyalty.portal.account</field>
+        <field name="arch" type="xml">
+            <form string="Tài khoản Portal Zalo Mini App">
+                <header>
+                    <button name="action_reset_password_wizard"
+                            string="Reset Mật khẩu"
+                            type="object"
+                            class="btn-secondary"
+                            groups="sales_team.group_sale_manager"/>
+                    <button name="action_recalculate_points_wizard"
+                            string="Tính lại điểm"
+                            type="object"
+                            class="btn-secondary"
+                            invisible="not active"
+                            groups="sales_team.group_sale_manager"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <label for="username" string="Tên đăng nhập"/>
+                        <h1><field name="username" placeholder="vd: zalo_0912345678"/></h1>
+                    </div>
+                    <group>
+                        <group string="Thông tin tài khoản Zalo">
+                            <field name="partner_id"
+                                   domain="[('is_company', '=', False), ('x_is_zalo_account', '=', True), ('active', '=', True)]"
+                                   context="{'default_is_company': False, 'default_x_is_zalo_account': True}"/>
+                            <field name="portal_phone" placeholder="vd: 0912345678"/>
+                            <field name="active"/>
+                        </group>
+                        <group string="Mật khẩu">
+                            <field name="password_hash" string="Hash (chỉ đọc)" readonly="1"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- ── List view ── -->
+    <record id="hlv_zalo_loyalty_portal_account_list" model="ir.ui.view">
+        <field name="name">hlv.zalo.loyalty.portal.account.list</field>
+        <field name="model">hlv.loyalty.portal.account</field>
+        <field name="arch" type="xml">
+            <list string="Tài khoản Portal Zalo Mini App" editable="bottom">
+                <field name="partner_id"
+                       domain="[('is_company', '=', False), ('x_is_zalo_account', '=', True), ('active', '=', True)]"
+                       context="{'default_is_company': False, 'default_x_is_zalo_account': True}"/>
+                <field name="username"/>
+                <field name="portal_phone"/>
+                <field name="active"/>
+                <button name="action_reset_password_wizard" string="Reset mật khẩu"
+                        type="object" icon="fa-key" class="btn-sm"
+                        groups="sales_team.group_sale_manager"/>
+                <button name="action_recalculate_points_wizard" string="Tính lại điểm"
+                        type="object" icon="fa-refresh" class="btn-sm"
+                        invisible="not active"
+                        groups="sales_team.group_sale_manager"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ── Search view ── -->
+    <record id="hlv_zalo_loyalty_portal_account_search" model="ir.ui.view">
+        <field name="name">hlv.zalo.loyalty.portal.account.search</field>
+        <field name="model">hlv.loyalty.portal.account</field>
+        <field name="arch" type="xml">
+            <search string="Tìm kiếm Tài khoản Portal Zalo">
+                <field name="username"/>
+                <field name="portal_phone"/>
+                <field name="partner_id"/>
+                <filter string="Đang hoạt động" name="active" domain="[('active', '=', True)]"/>
+                <filter string="Vô hiệu hóa" name="inactive" domain="[('active', '=', False)]"/>
+            </search>
+        </field>
+    </record>
+
+    <!-- ── Action ── -->
+    <record id="action_zalo_loyalty_portal_account" model="ir.actions.act_window">
+        <field name="name">Tài khoản Portal Zalo Mini App</field>
+        <field name="res_model">hlv.loyalty.portal.account</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('partner_id.is_company', '=', False), ('partner_id.x_is_zalo_account', '=', True)]</field>
+        <field name="context">{'active_test': False, 'default_x_is_zalo_account': True, 'default_is_company': False}</field>
+        <field name="search_view_id" ref="hlv_zalo_loyalty_portal_account_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Chưa có tài khoản Portal Zalo Mini App nào.
+            </p>
+            <p>
+                Danh sách tài khoản đăng nhập portal dành riêng cho khách hàng cá nhân Zalo Mini App sẽ xuất hiện tại đây.
+            </p>
+        </field>
+    </record>
+
+    <record id="action_zalo_loyalty_portal_account_list_view" model="ir.actions.act_window.view">
+        <field name="sequence" eval="1"/>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="hlv_zalo_loyalty_portal_account_list"/>
+        <field name="act_window_id" ref="action_zalo_loyalty_portal_account"/>
+    </record>
+
+    <record id="action_zalo_loyalty_portal_account_form_view" model="ir.actions.act_window.view">
+        <field name="sequence" eval="2"/>
+        <field name="view_mode">form</field>
+        <field name="view_id" ref="hlv_zalo_loyalty_portal_account_form"/>
+        <field name="act_window_id" ref="action_zalo_loyalty_portal_account"/>
+    </record>
+
+</odoo>

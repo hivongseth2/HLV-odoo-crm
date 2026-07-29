@@ -324,12 +324,21 @@ class LoyaltyExternalAPI(http.Controller):
 
     @staticmethod
     def _cors_headers():
-        return {
-            'Access-Control-Allow-Origin': '*',
+        headers = {
             'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
             'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
             'Access-Control-Max-Age': '86400',
         }
+        has_route_cors = False
+        try:
+            if hasattr(request, "endpoint") and request.endpoint and hasattr(request.endpoint, "routing"):
+                has_route_cors = bool(request.endpoint.routing.get("cors"))
+        except Exception:
+            pass
+
+        if not has_route_cors:
+            headers['Access-Control-Allow-Origin'] = '*'
+        return headers
 
     @staticmethod
     def _json_ok(data, status=200):

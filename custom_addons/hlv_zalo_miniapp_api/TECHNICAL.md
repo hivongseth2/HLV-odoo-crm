@@ -14,8 +14,8 @@ hlv_zalo_miniapp_api/
 │   ├── __init__.py
 │   ├── banner.py               # Model zalo.miniapp.banner (quản lý banner)
 │   ├── product_product.py      # Mở rộng product.product: x_zalo_price, x_active_zalo
-│   ├── product_template.py     # Mở rộng product.template
-│   └── res_partner.py           # Mở rộng res.partner: x_is_zalo_account
+│   ├── res_partner.py           # Mở rộng res.partner: x_is_zalo_account
+│   └── loyalty_portal_account.py# Mở rộng hlv.loyalty.portal.account cho partner_id domain
 ├── controllers/
 │   ├── __init__.py
 │   ├── banner_api.py            # API banner (/api/v1/zalo/banners/*)
@@ -30,7 +30,8 @@ hlv_zalo_miniapp_api/
 │   ├── product_product_views.xml # Views & Action filter sản phẩm Zalo
 │   ├── product_template_views.xml# Views bổ sung fields Zalo trên template
 │   ├── res_partner_views.xml   # Views & Action filter khách hàng Zalo
-│   └── sale_order_views.xml    # Action filter đơn hàng từ khách hàng Zalo
+│   ├── sale_order_views.xml    # Action filter đơn hàng từ khách hàng Zalo
+│   └── zalo_loyalty_portal_account_views.xml # Form, List, Search views & Action quản lý Tài khoản Portal Zalo Mini App (Khách hàng cá nhân)
 ├── security/
 │   └── ir.model.access.csv
 └── TECHNICAL.md
@@ -170,4 +171,12 @@ Dev mode: nếu chưa config secret, dùng fallback `hlv_zalo_dev_secret_2026` (
 ### CORS & Security
 - Tất cả API routes đều hỗ trợ `OPTIONS` preflight request (`methods=[..., "OPTIONS"]`) và phản hồi 200 OK kèm CORS headers.
 - CORS Origin mặc định là `*` (Configurable qua `ir.config_parameter` `zalo_api_cors_origin`).
-- Xác thực sử dụng HMAC SHA256 Token với format `{partner_id}.{timestamp}.{signature}`.
+- Xác thực sử dụng HMAC SHA256 Token với format `{partner_id}.{timestamp}.{signature}`.
+
+### Quản lý Tài khoản Portal Zalo Mini App (Khách hàng cá nhân)
+- **Model sử dụng**: `hlv.loyalty.portal.account` (kế thừa từ `hlv_loyalty`).
+- **Phân biệt đối tượng**: Đóng vai trò là trang quản lý riêng biệt cho các khách hàng cá nhân (`is_company = False` và `x_is_zalo_account = True`). Trang Portal Loyalty ở module `hlv_loyalty` dành riêng cho doanh nghiệp (`is_company = True`).
+- **Vị trí Menu**:
+  - `Loyalty > Cấu hình > Tài khoản Portal Zalo` (`menu_loyalty_zalo_portal_account`)
+  - `Zalo Mini App > Quản lý > Tài khoản Portal Zalo` (`menu_zalo_miniapp_portal_account_app`)
+- **Tính năng**: Quản lý thông tin đăng nhập (username, portal_phone), Reset mật khẩu (`action_reset_password_wizard`), và Tính lại điểm Loyalty (`action_recalculate_points_wizard`).

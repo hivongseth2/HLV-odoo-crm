@@ -64,6 +64,12 @@
               action="action_zalo_res_partner"
               sequence="40"/>
 
+    <menuitem id="menu_zalo_miniapp_portal_account_app"
+              name="Tài khoản Portal Zalo"
+              parent="menu_zalo_miniapp_management"
+              action="action_zalo_loyalty_portal_account"
+              sequence="45"/>
+
     <menuitem id="menu_zalo_miniapp_order_app"
               name="Đơn hàng Zalo"
               parent="menu_zalo_miniapp_management"
@@ -81,4 +87,12 @@
               parent="menu_zalo_miniapp_configuration"
               action="action_zalo_config_settings"
               sequence="10"/>
+
+    <!-- Menu item dưới Loyalty > Cấu hình -->
+    <menuitem id="menu_loyalty_zalo_portal_account"
+              name="Tài khoản Portal Zalo"
+              parent="hlv_loyalty.menu_loyalty_config"
+              action="action_zalo_loyalty_portal_account"
+              sequence="25"
+              groups="sales_team.group_sale_manager"/>
 </odoo>
