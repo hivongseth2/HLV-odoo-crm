@@ -239,6 +239,10 @@ class AmisCallbackLogLine(models.Model):
             actual_refid = (
                 voucher_data.get('refid') or item.get('refid') or item.get('misa_refid') or org_refid
             )
+            if voucher_type == 13 and data_type in (1, 3):
+                line._apply_sa_voucher_result(org_refid, success)
+                continue
+
             picking = line._misa_callback_find_inward_picking(org_refid, item_refno, voucher_type)
             is_inward_callback = voucher_type in (7, 18) or bool(picking) or line._misa_refno_looks_like_inward(item_refno)
             po = self.env['purchase.order'].sudo()
@@ -445,6 +449,78 @@ class AmisCallbackLogLine(models.Model):
                         )
                     else:
                         picking.write({'misa_inward_synced': success})
+
+    def _apply_sa_voucher_result(self, org_refid, success):
+        """Apply asynchronous save result for SAVoucher (voucher_type=13)."""
+        self.ensure_one()
+        sale_order = self.env['sale.order'].sudo().search([
+            ('misa_sa_voucher_org_refid', '=', org_refid),
+        ], limit=1)
+        if not sale_order:
+            _logger.warning(
+                'Khong tim thay sale.order cho callback SAVoucher org_refid=%s.',
+                org_refid,
+            )
+            return False
+
+        error_message = (
+            self.error_message
+            or self.error_call_back_message
+            or self.error_code
+            or 'MISA callback SAVoucher failed'
+        )
+        sale_order.sudo().write({'misa_sa_voucher_synced': bool(success)})
+
+        job = self.env['amis.sync.job'].sudo().search([
+            ('sale_order_id', '=', sale_order.id),
+            ('direction', '=', 'outgoing'),
+        ], order='id desc', limit=1)
+
+        if success:
+            if job:
+                job.sudo().write({
+                    'status': 'done',
+                    'error_msg': False,
+                    'processed_at': fields.Datetime.now(),
+                })
+            _logger.info(
+                'MISA callback xac nhan SAVoucher thanh cong cho SO %s (%s).',
+                sale_order.name,
+                org_refid,
+            )
+            return True
+
+        retry_scheduled = False
+        if job:
+            retry_scheduled = job._schedule_retry_after_callback_error(error_message)
+        else:
+            picking = self.env['stock.picking'].sudo().search([
+                ('state', '=', 'done'),
+                ('picking_type_code', '=', 'outgoing'),
+                ('move_ids_without_package.sale_line_id.order_id', '=', sale_order.id),
+            ], order='date_done desc, id desc', limit=1)
+            if picking:
+                picking._enqueue_misa_sync('outgoing')
+                retry_scheduled = bool(self.env['amis.sync.job'].sudo().search([
+                    ('sale_order_id', '=', sale_order.id),
+                    ('direction', '=', 'outgoing'),
+                    ('status', '=', 'pending'),
+                ], limit=1))
+            else:
+                _logger.error(
+                    'Callback SAVoucher loi cho SO %s nhung khong tim thay outgoing job/picking de retry: %s',
+                    sale_order.name,
+                    error_message,
+                )
+
+        _logger.warning(
+            'MISA callback bao loi SAVoucher cho SO %s (%s); retry_scheduled=%s: %s',
+            sale_order.name,
+            org_refid,
+            retry_scheduled,
+            error_message,
+        )
+        return retry_scheduled
 
     def _misa_callback_voucher_type(self, item=None):
         self.ensure_one()

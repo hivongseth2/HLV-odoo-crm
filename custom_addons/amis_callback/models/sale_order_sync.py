@@ -36,7 +36,7 @@ class SaleOrderAmisSync(models.Model):
         string='Đã sync SAVoucher MISA',
         default=False,
         copy=False,
-        help='SAVoucher (đơn bán hàng, voucher_type=13) đã được đẩy lên MISA.',
+        help='Callback MISA đã xác nhận SAVoucher (voucher_type=13) được xử lý thành công.',
     )
     misa_sa_voucher_org_refid = fields.Char(
         string='MISA org_refid SAVoucher',
