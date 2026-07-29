@@ -88,6 +88,9 @@ class ZaloCartAPI(ZaloBaseAPI, http.Controller):
             if not product.exists() or not product.active or not product.x_active_zalo:
                 return self._response_error("NOT_FOUND", "Sản phẩm không tồn tại", 404)
 
+            if product.free_qty <= 0:
+                return self._response_error("OUT_OF_STOCK", f"Sản phẩm '{product.display_name}' hiện đang tạm hết hàng. Vui lòng liên hệ Zalo OA để nhận tư vấn & báo giá.", 400)
+
             CartLine = request.env["zalo.miniapp.cart.line"].sudo()
             existing_line = CartLine.search([
                 ("partner_id", "=", contact_id),
