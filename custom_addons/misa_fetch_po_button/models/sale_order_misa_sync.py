@@ -151,9 +151,17 @@ class SaleOrder(models.Model):
         Gọi Product/DataSubPaging để lấy quy đổi UoM cho 1 sản phẩm (payload theo yêu cầu của bạn).
         """
         if not product_id:
+            _logger.warning(
+                "MISA SO UoM conversions: missing product_id, skip DataSubPaging"
+            )
             return []
         cache_key = str(product_id)
         if cache is not None and cache_key in cache:
+            _logger.warning(
+                "MISA SO UoM conversions cache hit: product_id=%r conversions=%s",
+                product_id,
+                cache[cache_key],
+            )
             return cache[cache_key]
         url = "https://amisapp.misa.vn/crm/g2/api/business/Product/DataSubPaging"
         payload = {
@@ -193,10 +201,20 @@ class SaleOrder(models.Model):
             "AISearchKeyword": ""
         }
         try:
+            _logger.warning(
+                "MISA SO UoM conversions fetch: product_id=%r table=product_conversion_unit",
+                product_id,
+            )
             resp = requests.post(url, headers=headers, json=payload, timeout=30)
             resp.raise_for_status()
             data = resp.json()
             result = data.get("Data", []) or []
+            _logger.warning(
+                "MISA SO UoM conversions fetched: product_id=%r count=%s conversions=%s",
+                product_id,
+                len(result),
+                result,
+            )
             if cache is not None:
                 cache[cache_key] = result
             return result
@@ -214,10 +232,26 @@ class SaleOrder(models.Model):
         - uom_is_default = True nếu misa_uom_text trùng default (không cần convert)
         """
         default_uom_name = (product.uom_id and product.uom_id.name) or ""
+        _logger.warning(
+            "MISA SO UoM conversion check: product_code=%r product_id=%r "
+            "requested_uom=%r default_uom=%r",
+            product.default_code,
+            misa_product_id,
+            misa_uom_text,
+            default_uom_name,
+        )
         if not misa_uom_text or misa_uom_text.strip().lower() == default_uom_name.strip().lower():
+            _logger.warning(
+                "MISA SO UoM conversion skip: requested UoM already matches default UoM"
+            )
             return qty, price, True  # không cần đổi
 
         # Lấy bảng quy đổi theo ProductID
+        if not misa_product_id:
+            _logger.warning(
+                "MISA SO UoM conversion skip fetch: product_code=%r has no MISA ProductID",
+                product.default_code,
+            )
         conversions = (
             self._misa_fetch_conversion_units(
                 misa_product_id,
@@ -225,6 +259,18 @@ class SaleOrder(models.Model):
                 cache=conversion_cache,
             )
             if misa_product_id else []
+        )
+        _logger.warning(
+            "MISA SO UoM conversion lookup: product_code=%r product_id=%r "
+            "requested_uom=%r default_uom=%r candidates=%r",
+            product.default_code,
+            misa_product_id,
+            misa_uom_text,
+            default_uom_name,
+            [
+                c.get("ConversionUnitIDText")
+                for c in (conversions or [])
+            ],
         )
         # Tìm dòng conversion khớp với UoM của MISA trên line (theo tên)
         conv = next((
