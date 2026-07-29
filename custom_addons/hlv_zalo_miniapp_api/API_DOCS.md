@@ -46,7 +46,7 @@ Vào Settings > Technical > System Parameters:
 
 > **POST** `/api/v1/zalo/categories/list`
 
-Lấy danh sách danh mục sản phẩm từ `pos.category`, sắp xếp theo `sequence, name`.
+Lấy danh sách danh mục sản phẩm từ `pos.category` (chỉ lấy các danh mục có `x_active_zalo = True`), sắp xếp theo `sequence, name`.
 
 #### Request Body
 
@@ -54,13 +54,15 @@ Lấy danh sách danh mục sản phẩm từ `pos.category`, sắp xếp theo `
 |-------|------|----------|---------|-------|
 | `limit` | int | Optional | 20 | Số lượng danh mục tối đa (1-100) |
 | `offset` | int | Optional | 0 | Vị trí bắt đầu lấy dữ liệu |
+| `featured_only` | bool | Optional | false | `true` để chỉ lấy danh mục nổi bật (`x_is_featured_zalo = True`) |
 
 #### Request Example
 
 ```json
 {
   "limit": 20,
-  "offset": 0
+  "offset": 0,
+  "featured_only": false
 }
 ```
 
@@ -81,6 +83,8 @@ Lấy danh sách danh mục sản phẩm từ `pos.category`, sắp xếp theo `
 | `x_misa_id` | int hoặc null | ID từ MISA (nếu có field `x_misa_id`) |
 | `name` | string | Tên danh mục |
 | `sequence` | int | Thứ tự sắp xếp |
+| `x_active_zalo` | bool | Trạng thái hiển thị trên Zalo Mini App (default: true) |
+| `x_is_featured_zalo` | bool | Trạng thái danh mục nổi bật Zalo Mini App |
 | `parent_id` | int hoặc null | ID danh mục cha |
 | `parent_name` | string hoặc null | Tên danh mục cha |
 | `image_url` | string hoặc null | Relative URL ảnh danh mục (`/api/v1/zalo/image/pos-category/{id}/image_128`) |
@@ -100,6 +104,8 @@ Lấy danh sách danh mục sản phẩm từ `pos.category`, sắp xếp theo `
         "x_misa_id": 100,
         "name": "Điện thoại",
         "sequence": 1,
+        "x_active_zalo": true,
+        "x_is_featured_zalo": true,
         "parent_id": null,
         "parent_name": null,
         "image_url": "/api/v1/zalo/image/pos-category/5/image_128"
@@ -203,7 +209,7 @@ Lấy danh sách sản phẩm (variant) thuộc một danh mục. Sản phẩm �
 | Code | HTTP Status | Điều kiện |
 |------|-------------|-----------|
 | `INVALID_INPUT` | 400 | Thiếu `category_id` |
-| `NOT_FOUND` | 404 | Danh mục không tồn tại |
+| `NOT_FOUND` | 404 | Danh mục không tồn tại hoặc `x_active_zalo = False` |
 | `SERVER_ERROR` | 500 | Lỗi server không xác định |
 
 ---

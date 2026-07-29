@@ -62,6 +62,13 @@ hlv_zalo_miniapp_api/
 | `x_active_zalo` | Boolean | Chỉ sản phẩm có flag = True mới xuất hiện |
 | `x_zalo_categ_ids` | Many2many (pos.category) | Danh mục Zalo riêng, kế thừa từ POS category. Không phụ thuộc `available_in_pos` |
 
+### `pos.category` (kế thừa)
+
+| Field | Type | Mô tả |
+|---|---|---|
+| `x_active_zalo` | Boolean | Hiển thị trên Zalo Mini App (default: True). Lọc ẩn/hiện danh mục trên API |
+| `x_is_featured_zalo` | Boolean | Danh mục nổi bật Zalo Mini App |
+
 ### `res.partner` (kế thừa)
 
 | Field | Type | Mô tả |

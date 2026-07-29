@@ -9,6 +9,7 @@
                 <field name="sequence" widget="handle"/>
                 <field name="name"/>
                 <field name="parent_id"/>
+                <field name="x_active_zalo"/>
                 <field name="x_is_featured_zalo"/>
             </list>
         </field>
@@ -22,6 +23,7 @@
         <field name="mode">primary</field>
         <field name="arch" type="xml">
             <xpath expr="//field[@name='parent_id']" position="after">
+                <field name="x_active_zalo"/>
                 <field name="x_is_featured_zalo"/>
             </xpath>
         </field>

@@ -38,7 +38,7 @@ class ZaloCategoryAPI(ZaloBaseAPI, http.Controller):
             if isinstance(featured_only, str):
                 featured_only = featured_only.lower() in ("true", "1", "yes")
 
-            domain = []
+            domain = [("x_active_zalo", "=", True)] if hasattr(request.env["pos.category"], "x_active_zalo") else []
             if featured_only:
                 domain.append(("x_is_featured_zalo", "=", True))
 
@@ -62,6 +62,7 @@ class ZaloCategoryAPI(ZaloBaseAPI, http.Controller):
                     "x_misa_id": cat.x_misa_id if hasattr(cat, "x_misa_id") else None,
                     "name": cat.name,
                     "sequence": cat.sequence,
+                    "x_active_zalo": cat.x_active_zalo if hasattr(cat, "x_active_zalo") else True,
                     "x_is_featured_zalo": cat.x_is_featured_zalo if hasattr(cat, "x_is_featured_zalo") else False,
                     "parent_id": cat.parent_id.id if cat.parent_id else None,
                     "parent_name": cat.parent_id.name if cat.parent_id else None,
@@ -113,6 +114,8 @@ class ZaloCategoryAPI(ZaloBaseAPI, http.Controller):
                 category = request.env["pos.category"].sudo().browse(category_id)
             if not category.exists():
                 return self._response_error("NOT_FOUND", "Danh mục không tồn tại", 404)
+            if hasattr(category, "x_active_zalo") and not category.x_active_zalo:
+                return self._response_error("NOT_FOUND", "Danh mục này đã bị tắt hiển thị trên Zalo Mini App", 404)
 
             domain = [
                 ("x_zalo_categ_ids", "in", [category.id]),
