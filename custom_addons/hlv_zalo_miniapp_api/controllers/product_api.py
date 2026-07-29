@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import html
 import logging
 
 from odoo import fields, http
@@ -167,6 +168,9 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
                         break
             except Exception:
                 pass
+
+        if product_info_html:
+            product_info_html = html.unescape(product_info_html)
 
         return {
             "id": product.id,
