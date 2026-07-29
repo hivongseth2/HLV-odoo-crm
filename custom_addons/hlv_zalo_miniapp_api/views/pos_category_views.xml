@@ -5,12 +5,12 @@
         <field name="name">pos.category.tree.zalo.custom</field>
         <field name="model">pos.category</field>
         <field name="arch" type="xml">
-            <list string="Danh mục Zalo Mini App">
+            <list string="Danh mục Zalo Mini App" editable="bottom">
                 <field name="sequence" widget="handle"/>
                 <field name="name"/>
                 <field name="parent_id"/>
-                <field name="x_active_zalo"/>
-                <field name="x_is_featured_zalo"/>
+                <field name="x_active_zalo" widget="boolean_toggle"/>
+                <field name="x_is_featured_zalo" widget="boolean_toggle"/>
             </list>
         </field>
     </record>
