@@ -508,7 +508,7 @@
                         </field>
                     </page>
                     <page string="MISA" name="misa_info"
-                          invisible="not misa_sa_voucher_synced and not misa_sa_invoice_synced and not misa_meinvoice_synced">
+                          invisible="not misa_sa_voucher_org_refid and not misa_sa_invoice_synced and not misa_meinvoice_synced">
                         <group>
                             <group string="SAVoucher (Bán hàng)">
                                 <field name="misa_sa_voucher_synced" readonly="1"/>

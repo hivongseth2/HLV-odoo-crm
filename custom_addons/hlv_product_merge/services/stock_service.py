@@ -1,11 +1,22 @@
 # -*- coding: utf-8 -*-
 
-from odoo import _, fields
+import unicodedata
+
+from odoo import _, Command, fields
 from odoo.exceptions import UserError
-from odoo.tools.float_utils import float_compare
+from odoo.tools.float_utils import float_compare, float_round
 
 
 class ProductMergeStockMixin:
+    def _normalized_uom_name(self, uom):
+        name = unicodedata.normalize("NFKC", str(uom.name or ""))
+        return " ".join(name.split()).casefold()
+
+    def _uoms_require_manual_conversion(self, base_uom, source_uom):
+        if not base_uom or not source_uom or base_uom == source_uom:
+            return False
+        return self._normalized_uom_name(base_uom) != self._normalized_uom_name(source_uom)
+
     def _source_quants(self, product):
         if not product:
             return self.env["stock.quant"]
@@ -18,16 +29,31 @@ class ProductMergeStockMixin:
             order="location_id, lot_id, package_id, owner_id, id",
         )
 
-    def _quant_line_values(self, quant, different_uom):
+    def _source_quant_groups(self, product):
+        grouped_ids = {}
+        for quant in self._source_quants(product):
+            sign = 1 if quant.quantity > 0 else -1
+            key = (
+                quant.location_id.id,
+                quant.lot_id.id or 0,
+                quant.company_id.id,
+                sign,
+            )
+            grouped_ids.setdefault(key, []).append(quant.id)
+        quant_model = self.env["stock.quant"]
+        return [quant_model.browse(quant_ids) for quant_ids in grouped_ids.values()]
+
+    def _quant_line_values(self, quants):
+        first_quant = quants[:1]
+        source_quantity = sum(quants.mapped("quantity"))
         return {
-            "quant_id": quant.id,
-            "location_id": quant.location_id.id,
-            "lot_id": quant.lot_id.id,
-            "package_id": quant.package_id.id,
-            "owner_id": quant.owner_id.id,
-            "company_id": quant.company_id.id,
-            "source_quantity": quant.quantity,
-            "target_quantity": 0.0 if different_uom else quant.quantity,
+            "quant_ids": [Command.set(quants.ids)],
+            "quant_count": len(quants),
+            "location_id": first_quant.location_id.id,
+            "lot_id": first_quant.lot_id.id,
+            "company_id": first_quant.company_id.id,
+            "source_quantity": source_quantity,
+            "target_quantity": source_quantity,
         }
 
     def _validate_company_scope(self):
@@ -62,36 +88,38 @@ class ProductMergeStockMixin:
     def _validate_quant_snapshot(self):
         self.ensure_one()
         current_quants = self._source_quants(self.source_product_id)
-        current_by_id = {quant.id: quant for quant in current_quants}
-        line_by_quant_id = {line.quant_id.id: line for line in self.line_ids if line.quant_id}
-        if len(line_by_quant_id) != len(self.line_ids):
+        line_quant_ids = self.line_ids.mapped("quant_ids").ids
+        listed_quant_count = sum(len(line.quant_ids) for line in self.line_ids)
+        if len(line_quant_ids) != listed_quant_count:
             raise UserError(_("Danh sách tồn kho không hợp lệ. Hãy đóng và mở lại cửa sổ gộp."))
-        if set(current_by_id) != set(line_by_quant_id):
+        if set(current_quants.ids) != set(line_quant_ids):
             raise UserError(_(
                 "Tồn kho của sản phẩm nguồn đã thay đổi sau khi mở cửa sổ. "
                 "Hãy đóng và mở lại chức năng gộp để lấy số liệu mới nhất."
             ))
-        for quant_id, quant in current_by_id.items():
-            line = line_by_quant_id[quant_id]
-            if quant.product_id != self.source_product_id:
+        for line in self.line_ids:
+            if any(quant.product_id != self.source_product_id for quant in line.quant_ids):
                 raise UserError(_("Có dòng tồn kho không còn thuộc sản phẩm nguồn."))
             if float_compare(
-                quant.quantity,
+                sum(line.quant_ids.mapped("quantity")),
                 line.source_quantity,
                 precision_rounding=self.source_product_id.uom_id.rounding,
             ):
                 raise UserError(_(
-                    "Tồn tại %(location)s đã đổi từ %(old)s thành %(new)s. "
+                    "Tổng tồn tại %(location)s đã đổi từ %(old)s thành %(new)s. "
                     "Hãy đóng và mở lại chức năng gộp."
                 ) % {
-                    "location": quant.location_id.display_name,
+                    "location": line.location_id.display_name,
                     "old": self._format_qty(line.source_quantity),
-                    "new": self._format_qty(quant.quantity),
+                    "new": self._format_qty(sum(line.quant_ids.mapped("quantity"))),
                 })
 
     def _validate_target_quantities(self):
         self.ensure_one()
-        different_uom = self.base_product_id.uom_id != self.source_product_id.uom_id
+        different_uom = self._uoms_require_manual_conversion(
+            self.base_product_id.uom_id,
+            self.source_product_id.uom_id,
+        )
         target_rounding = self.base_product_id.uom_id.rounding or 0.00001
         for line in self.line_ids:
             if not different_uom:
@@ -158,13 +186,39 @@ class ProductMergeStockMixin:
             key=lambda item: (item.location_id.complete_name or "", item.id)
         ):
             target_lot = self._copy_lot(line.lot_id)
+            self._transfer_quant_group(quant_model, line, target_lot)
+            details.append({
+                "location": line.location_id.display_name,
+                "lot": line.lot_id.name if line.lot_id else "",
+                "source_qty": line.source_quantity,
+                "target_qty": line.target_quantity,
+            })
+        return details
+
+    def _transfer_quant_group(self, quant_model, line, target_lot):
+        source_total = sum(line.quant_ids.mapped("quantity"))
+        target_remaining = line.target_quantity
+        target_rounding = self.base_product_id.uom_id.rounding or 0.00001
+        ordered_quants = line.quant_ids.sorted(
+            key=lambda quant: (quant.package_id.id, quant.owner_id.id, quant.id)
+        )
+        for index, quant in enumerate(ordered_quants):
+            is_last = index == len(ordered_quants) - 1
+            if is_last:
+                target_quantity = target_remaining
+            else:
+                target_quantity = float_round(
+                    line.target_quantity * quant.quantity / source_total,
+                    precision_rounding=target_rounding,
+                )
+                target_remaining -= target_quantity
             remaining_source_qty, _in_date = quant_model._update_available_quantity(
                 self.source_product_id,
-                line.location_id,
-                -line.source_quantity,
-                lot_id=line.lot_id,
-                package_id=line.package_id,
-                owner_id=line.owner_id,
+                quant.location_id,
+                -quant.quantity,
+                lot_id=quant.lot_id,
+                package_id=quant.package_id,
+                owner_id=quant.owner_id,
             )
             if float_compare(
                 remaining_source_qty,
@@ -174,22 +228,16 @@ class ProductMergeStockMixin:
                 raise UserError(_(
                     "Tồn tại %(location)s vừa thay đổi trong lúc gộp. "
                     "Toàn bộ thao tác đã được hủy; hãy thực hiện lại."
-                ) % {"location": line.location_id.display_name})
-            quant_model._update_available_quantity(
-                self.base_product_id,
-                line.location_id,
-                line.target_quantity,
-                lot_id=target_lot,
-                package_id=line.package_id,
-                owner_id=line.owner_id,
-            )
-            details.append({
-                "location": line.location_id.display_name,
-                "lot": line.lot_id.name if line.lot_id else "",
-                "source_qty": line.source_quantity,
-                "target_qty": line.target_quantity,
-            })
-        return details
+                ) % {"location": quant.location_id.display_name})
+            if float_compare(target_quantity, 0.0, precision_rounding=target_rounding):
+                quant_model._update_available_quantity(
+                    self.base_product_id,
+                    quant.location_id,
+                    target_quantity,
+                    lot_id=target_lot,
+                    package_id=quant.package_id,
+                    owner_id=quant.owner_id,
+                )
 
     def _archive_source(self):
         self.ensure_one()

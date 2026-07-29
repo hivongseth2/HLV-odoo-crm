@@ -334,13 +334,14 @@ class StockPickingAmisSync(models.Model):
             _logger.info('Skip outgoing sync for %s: không tìm được đơn bán hàng.', self.name)
             return
 
+        config = self.env['amis.callback.config'].sudo().ensure_singleton()
+
         # Lọc theo cấu hình: chỉ sync đơn Shopee hoặc tất cả đơn
         has_shopee_ref = bool(getattr(sales_order, 'shopee_order_ref', None))
         if config.sync_shopee_only and not has_shopee_ref:
             _logger.info('Skip outgoing sync for %s: đơn %s không có shopee_order_ref (chế độ chỉ sync Shopee).', self.name, sales_order.name)
             return
 
-        config = self.env['amis.callback.config'].sudo().ensure_singleton()
         if not config.sync_outgoing_so_enabled:
             return
 
@@ -386,11 +387,14 @@ class StockPickingAmisSync(models.Model):
             (result or {}).get('ErrorMessage', ''),
         )
 
-        sales_order.sudo().write({
-            'misa_sa_voucher_synced': True,
-            'misa_sa_voucher_org_refid': org_refid,
-        })
-        _logger.info('SAVoucher synced for SO %s (picking %s), org_refid=%s', sales_order.name, self.name, org_refid)
+        # ACT OpenAPI xử lý save bất đồng bộ. Chỉ callback data_type=1,
+        # voucher_type=13 mới xác nhận đề nghị đã được xử lý thành công.
+        _logger.info(
+            'SAVoucher request accepted for SO %s (picking %s), org_refid=%s; waiting for callback.',
+            sales_order.name,
+            self.name,
+            org_refid,
+        )
 
     def _prepare_misa_sa_voucher_payload(self, config, sales_order):
         """Chuẩn bị payload SAVoucher (voucher_type=13) kèm in_outward (voucher_type=8)."""
@@ -420,9 +424,6 @@ class StockPickingAmisSync(models.Model):
         if not outward_refid:
             outward_refid = str(uuid.uuid4())
             self.sudo().write({'misa_outward_org_refid': outward_refid})
-
-        # Pre-calculate SAInvoice refid (deterministic từ SO.id) để link 2 chiều
-        sa_invoice_refid_link = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'sa_invoice|%d' % sales_order.id))
 
         detail = []
         total_gross = 0.0
@@ -482,10 +483,15 @@ class StockPickingAmisSync(models.Model):
             # Không gọi get_dictionary lúc sync (tránh 429). MISA match theo inventory_item_code nếu id trống.
 
             ref_detail_id = self._misa_move_ref_detail_id(move, 'sa_v_detail')
+            outward_ref_detail_id = str(
+                uuid.uuid5(uuid.NAMESPACE_DNS, 'outward_detail|%d|%d' % (self.id, move.id))
+            )
 
             detail.append({
                 'ref_detail_id': ref_detail_id,
                 'refid': sa_voucher_refid,
+                'outward_refid': outward_refid,
+                'outward_ref_detail_id': outward_ref_detail_id,
                 'inventory_item_id': inventory_item_id,
                 'unit_id': unit_id,
                 'main_unit_id': unit_id,
@@ -518,7 +524,10 @@ class StockPickingAmisSync(models.Model):
                 'description': re.sub(r'^\[.*?\]\s*', '', product.name or ''),
                 'debit_account': '131',
                 'credit_account': '5111',
+                'discount_account': '5211',
                 'vat_account': '3331',
+                'cost_account': '632',
+                'stock_account': '1561',
                 'exchange_rate_operator': '*',
                 'vat_description': 'Thue GTGT - %s' % re.sub(r'^\[.*?\]\s*', '', product.name or ''),
                 'account_object_name': account_object_name,
@@ -715,7 +724,6 @@ class StockPickingAmisSync(models.Model):
             'is_remind_debt': True,
             'is_un_limit': False,
             'outward_refid': outward_refid,
-            'sa_invoice_refid': sa_invoice_refid_link,
             'reftype': 3530,
             'auto_refno': False,
             'state': 0,

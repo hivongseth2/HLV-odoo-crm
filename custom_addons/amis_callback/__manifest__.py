@@ -1,10 +1,10 @@
 {
     "name": "AMIS Callback Verified",
-    "version": "1.7",
+    "version": "1.8",
     "category": "Custom",
     "summary": "Nhận callback từ MISA, xác thực chữ ký SHA256 HMAC và xem log trong Odoo",
     "author": "ChatGPT",
-    "depends": ["base", "stock", "purchase", "sale", "mail", "hlv_loyalty"],
+    "depends": ["base", "stock", "purchase", "sale", "sale_stock", "mail", "hlv_loyalty"],
     "pre_init_hook": "pre_init_hook",
     "data": [
         "security/res_groups.xml",

@@ -10,8 +10,12 @@ Người thuộc nhóm **Quản lý kho** mở danh sách Sản phẩm hoặc Bi
 1. Chọn một sản phẩm, vào **Hành động → Gộp sản phẩm**, rồi chọn sản phẩm nguồn;
    hoặc chọn sẵn đúng hai sản phẩm trước khi mở hành động.
 2. Kiểm tra lại sản phẩm gốc và sản phẩm sẽ được gộp.
-3. Nếu hai ĐVT khác nhau, nhập số lượng sau quy đổi trên từng dòng vị trí/lô.
+3. Nếu hai ĐVT khác nhau, kiểm tra số lượng đích đã được điền ban đầu bằng tồn
+   nguồn và chỉnh lại trên từng dòng vị trí/lô khi tỷ lệ không phải 1:1.
 4. Đánh dấu xác nhận và bấm **Gộp sản phẩm**.
+
+Hai bản ghi ĐVT có tên giống nhau sau khi chuẩn hóa được xem là cùng ĐVT và dùng
+tỷ lệ 1:1, kể cả khi chúng thuộc hai category/group Odoo khác nhau.
 
 ## Điều kiện chặn
 
@@ -35,6 +39,10 @@ Tồn được chuyển theo đúng các chiều:
 - kiện;
 - chủ sở hữu;
 - công ty.
+
+Wizard gom các quant có cùng vị trí và lô/serial thành một dòng. Khi xác nhận,
+số lượng đích của dòng được phân bổ theo tỷ lệ về các package/owner gốc để vẫn
+giữ đúng các chiều tồn kho bên dưới.
 
 Nếu sản phẩm gốc theo dõi lô, module tạo/tái sử dụng lô cùng tên cho sản phẩm
 gốc. Với serial, mỗi dòng chỉ được quy đổi thành một đơn vị.
