@@ -14,6 +14,9 @@ Người thuộc nhóm **Quản lý kho** mở danh sách Sản phẩm hoặc Bi
    nguồn và chỉnh lại trên từng dòng vị trí/lô khi tỷ lệ không phải 1:1.
 4. Đánh dấu xác nhận và bấm **Gộp sản phẩm**.
 
+Hai bản ghi ĐVT có tên giống nhau sau khi chuẩn hóa được xem là cùng ĐVT và dùng
+tỷ lệ 1:1, kể cả khi chúng thuộc hai category/group Odoo khác nhau.
+
 ## Điều kiện chặn
 
 Sản phẩm nguồn không được còn:

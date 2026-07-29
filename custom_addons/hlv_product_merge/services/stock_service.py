@@ -1,11 +1,22 @@
 # -*- coding: utf-8 -*-
 
+import unicodedata
+
 from odoo import _, Command, fields
 from odoo.exceptions import UserError
 from odoo.tools.float_utils import float_compare, float_round
 
 
 class ProductMergeStockMixin:
+    def _normalized_uom_name(self, uom):
+        name = unicodedata.normalize("NFKC", str(uom.name or ""))
+        return " ".join(name.split()).casefold()
+
+    def _uoms_require_manual_conversion(self, base_uom, source_uom):
+        if not base_uom or not source_uom or base_uom == source_uom:
+            return False
+        return self._normalized_uom_name(base_uom) != self._normalized_uom_name(source_uom)
+
     def _source_quants(self, product):
         if not product:
             return self.env["stock.quant"]
@@ -105,7 +116,10 @@ class ProductMergeStockMixin:
 
     def _validate_target_quantities(self):
         self.ensure_one()
-        different_uom = self.base_product_id.uom_id != self.source_product_id.uom_id
+        different_uom = self._uoms_require_manual_conversion(
+            self.base_product_id.uom_id,
+            self.source_product_id.uom_id,
+        )
         target_rounding = self.base_product_id.uom_id.rounding or 0.00001
         for line in self.line_ids:
             if not different_uom:

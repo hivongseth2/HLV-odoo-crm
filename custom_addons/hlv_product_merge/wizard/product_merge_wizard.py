@@ -85,10 +85,9 @@ class HlvProductMergeWizard(
     @api.depends("base_product_id", "source_product_id")
     def _compute_is_uom_different(self):
         for wizard in self:
-            wizard.is_uom_different = bool(
-                wizard.base_product_id
-                and wizard.source_product_id
-                and wizard.base_product_id.uom_id != wizard.source_product_id.uom_id
+            wizard.is_uom_different = wizard._uoms_require_manual_conversion(
+                wizard.base_product_id.uom_id,
+                wizard.source_product_id.uom_id,
             )
 
     @api.depends("source_product_id")
