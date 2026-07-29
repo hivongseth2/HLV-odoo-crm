@@ -133,8 +133,17 @@ class HlvProductMergeWizard(
             raise UserError(_("Không thể gộp hai sản phẩm thuộc hai công ty khác nhau."))
         self._validate_company_scope()
 
+    def _discard_incomplete_lines(self):
+        self.ensure_one()
+        incomplete_lines = self.line_ids.filtered(
+            lambda line: not line.location_id or not line.quant_ids
+        )
+        if incomplete_lines:
+            incomplete_lines.unlink()
+
     def action_confirm_merge(self):
         self.ensure_one()
+        self._discard_incomplete_lines()
         self._validate_products()
         if not self.confirm:
             raise UserError(_("Bạn phải xác nhận trước khi gộp sản phẩm."))
@@ -178,7 +187,6 @@ class HlvProductMergeWizardLine(models.TransientModel):
     location_id = fields.Many2one(
         "stock.location",
         string="Vị trí",
-        required=True,
         readonly=True,
     )
     lot_id = fields.Many2one("stock.lot", string="Lô/Serial", readonly=True)
