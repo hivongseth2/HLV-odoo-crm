@@ -6,6 +6,8 @@ import uuid
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 
+from .amis_sync_exceptions import MisaCatalogPending
+
 _logger = logging.getLogger(__name__)
 
 ZERO_UUID = '00000000-0000-0000-0000-000000000000'
@@ -349,6 +351,11 @@ class PurchaseOrderAmisSync(models.Model):
         if not lines:
             raise UserError('Don mua hang "%s" khong co dong hang hoa de sync MISA.' % self.name)
 
+        # Product IDs must come from the Accounting catalog mirror. Do this
+        # preflight before preparing vendor/unit dictionaries so a waiting PO
+        # cannot commit unrelated provisional mappings.
+        self._ensure_misa_purchase_products_mapped(config, lines)
+
         missing_dictionary_items = []
         org_refid = (self.misa_purchase_order_org_refid or '').strip()
         if not org_refid:
@@ -390,7 +397,6 @@ class PurchaseOrderAmisSync(models.Model):
             discount_rate = float(getattr(line, 'discount', 0.0) or 0.0)
             amount = float(getattr(line, 'price_subtotal', qty * unit_price) or 0.0)
             tax_amount = float(getattr(line, 'price_tax', 0.0) or 0.0)
-            total_line = float(getattr(line, 'price_total', amount + tax_amount) or 0.0)
             gross_amount = qty * unit_price
             discount_amount = max(gross_amount - amount, 0.0)
             vat_rate = self._misa_purchase_line_vat_rate(line)
@@ -402,11 +408,13 @@ class PurchaseOrderAmisSync(models.Model):
             total_sale_amount += amount
             total_discount_amount += discount_amount
             total_vat_amount += tax_amount
-            total_amount += total_line
+            # pu_order expects total_amount before VAT and adds
+            # total_vat_amount itself when calculating the payment total.
+            total_amount += amount
 
             unit = self._ensure_misa_unit(config, line.product_uom, missing_dictionary_items)
             inventory_item = self._ensure_misa_inventory_item(
-                config, product, line.product_uom, unit, unit_price, missing_dictionary_items
+                config, product, line.product_uom, unit
             )
             inventory_item_id = inventory_item.get('inventory_item_id') or ''
             inventory_item_code = inventory_item.get('inventory_item_code') or (product.default_code or str(product.id))
@@ -858,7 +866,105 @@ class PurchaseOrderAmisSync(models.Model):
         _logger.info('Prepared MISA unit dictionary item for %s', name)
         return {'unit_id': unit_id, 'unit_name': name}
 
-    def _ensure_misa_inventory_item(self, config, product, uom, unit, unit_price, dictionary_items):
+    def _map_misa_inventory_cache(self, product, uom, cache):
+        product.sudo().write({'misa_inventory_item_id': cache.inventory_item_id})
+        if cache.product_id.id != product.id:
+            cache.sudo().write({'product_id': product.id})
+        cache_unit_name = (cache.unit_name or cache.main_unit_name or '').strip()
+        if (
+            cache.unit_id
+            and uom
+            and not (getattr(uom, 'misa_unit_id', '') or '').strip()
+            and cache_unit_name
+            and (uom.name or '').strip().casefold() == cache_unit_name.casefold()
+        ):
+            uom.sudo().write({'misa_unit_id': cache.unit_id})
+
+    def _trigger_misa_product_mirror(self, config):
+        """Ensure the Accounting product mirror is queued and wake its cron."""
+        try:
+            with self.env.cr.savepoint():
+                Job = self.env['amis.catalog.sync.job'].sudo()
+                job = Job.search([
+                    ('config_id', '=', config.id),
+                    ('direction', '=', 'from_misa'),
+                    ('scope', '=', 'product'),
+                    ('mirror_operation', '=', 'changed'),
+                    ('status', 'in', ('pending', 'running')),
+                ], limit=1)
+                if not job:
+                    mode = 'incremental' if config._misa_mirror_all_cursors_ready() else 'full'
+                    job = Job.enqueue_mirror(
+                        config,
+                        scope='product',
+                        operation='changed',
+                        mode=mode,
+                        trigger='cron',
+                    )
+                cron = self.env.ref(
+                    'amis_callback.ir_cron_amis_catalog_sync_queue',
+                    raise_if_not_found=False,
+                )
+                if cron:
+                    cron.sudo()._trigger()
+                _logger.info(
+                    'PO %s is waiting for MISA product mapping; mirror job=%s',
+                    self.name,
+                    job.id if job else 'existing',
+                )
+        except Exception:
+            # The regular two-minute mirror cron remains the fallback. A
+            # scheduling failure must not turn a catalog wait into a PO error.
+            _logger.exception('Could not trigger MISA product mirror for PO %s', self.name)
+
+    def _ensure_misa_purchase_products_mapped(self, config, lines):
+        """Map official IDs already mirrored; defer the PO for missing ones."""
+        missing_codes = []
+        seen_product_ids = set()
+        Cache = self.env['amis.misa.inventory.cache'].sudo()
+
+        for line in lines:
+            product = line.product_id
+            if not product or product.id in seen_product_ids:
+                continue
+            seen_product_ids.add(product.id)
+            if (getattr(product, 'misa_inventory_item_id', '') or '').strip():
+                continue
+
+            cache, stale = Cache.lookup_for_product(config, product)
+            if cache:
+                self._map_misa_inventory_cache(product, line.product_uom, cache)
+                _logger.info(
+                    'Mapped product %s to official MISA inventory ID %s',
+                    product.default_code or product.id,
+                    cache.inventory_item_id,
+                )
+                continue
+            if stale:
+                state = 'da xoa' if stale.is_deleted else 'ngung su dung'
+                raise UserError(
+                    'San pham "%s" co ma "%s" trung voi hang hoa MISA %s (%s). '
+                    'Vui long xu ly cache truoc khi sync.'
+                    % (
+                        product.display_name,
+                        product.default_code or product.id,
+                        state,
+                        stale.inventory_item_id,
+                    )
+                )
+            missing_codes.append(product.default_code or product.display_name or str(product.id))
+
+        if missing_codes:
+            self._trigger_misa_product_mirror(config)
+            raise MisaCatalogPending(
+                'Cho ID hang hoa MISA chinh thuc cho: %s. '
+                'Don mua se tu dong sync lai sau khi mirror danh muc.'
+                % ', '.join(missing_codes)
+            )
+
+    def _ensure_misa_inventory_item(
+        self, config, product, uom, unit, unit_price=None, dictionary_items=None,
+    ):
         existing_id = (getattr(product, 'misa_inventory_item_id', '') or '').strip()
         code = self._misa_required_code(product.default_code or '', fallback_prefix='VT', fallback_id=product.id)
         name = (product.display_name or product.name or code).strip()
@@ -904,18 +1010,7 @@ class PurchaseOrderAmisSync(models.Model):
 
         cache, stale = self.env['amis.misa.inventory.cache'].sudo().lookup_for_product(config, product)
         if cache:
-            product.sudo().write({'misa_inventory_item_id': cache.inventory_item_id})
-            if cache.product_id.id != product.id:
-                cache.sudo().write({'product_id': product.id})
-            cache_unit_name = (cache.unit_name or cache.main_unit_name or '').strip()
-            if (
-                cache.unit_id
-                and uom
-                and not (getattr(uom, 'misa_unit_id', '') or '').strip()
-                and cache_unit_name
-                and (uom.name or '').strip().casefold() == cache_unit_name.casefold()
-            ):
-                uom.sudo().write({'misa_unit_id': cache.unit_id})
+            self._map_misa_inventory_cache(product, uom, cache)
             _logger.info('Mapped product %s to MISA inventory cache %s (%s)', code, cache.inventory_item_id, cache.inventory_item_name)
             return cache.to_misa_item()
         if stale:
@@ -925,40 +1020,12 @@ class PurchaseOrderAmisSync(models.Model):
                 % (product.display_name, code, state, stale.inventory_item_id)
             )
 
-        item_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'misa_inventory_item|%d' % product.id))
-        unit_id = unit_id or ''
-        unit_name = unit_name or ''
-        item = {
-            'dictionary_type': 3,
-            'inventory_item_id': item_id,
-            'inventory_item_code': code,
-            'inventory_item_name': name,
-            'inventory_item_type': 0,
-            'unit_id': unit_id,
-            'unit_name': unit_name,
-            'main_unit_id': unit_id,
-            'main_unit_name': unit_name,
-            'unit_list': json.dumps([{
-                'unit_id': unit_id,
-                'unit_name': unit_name,
-                'convert_rate': 1.0,
-                'is_main_unit': True,
-            }], ensure_ascii=False),
-            'sale_price1': float(unit_price or 0.0),
-            'purchase_price': float(unit_price or 0.0),
-            'stock_id': (config.misa_stock_id or '').strip(),
-            'stock_code': 'HLV',
-            'inactive': False,
-            'state': 1,
-        }
-        dictionary_items.append(item)
-        product.sudo().write({'misa_inventory_item_id': item_id})
-        _logger.info('Prepared MISA inventory dictionary item for %s (%s)', name, code)
-        return dict(item, **{
-            'inventory_item_id': item_id,
-            'inventory_item_code': code,
-            'inventory_item_name': name,
-        })
+        self._trigger_misa_product_mirror(config)
+        raise MisaCatalogPending(
+            'Cho ID hang hoa MISA chinh thuc cho: %s. '
+            'Don mua se tu dong sync lai sau khi mirror danh muc.'
+            % code
+        )
 
     def _find_pending_dictionary_item(self, dictionary_items, id_field, id_value):
         id_value = (id_value or '').strip().lower()

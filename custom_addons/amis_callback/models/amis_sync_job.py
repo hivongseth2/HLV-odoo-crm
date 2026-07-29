@@ -2,6 +2,8 @@
 import logging
 from odoo import api, fields, models
 
+from .amis_sync_exceptions import MisaCatalogPending
+
 _logger = logging.getLogger(__name__)
 
 MAX_RETRY = 5
@@ -127,6 +129,20 @@ class AmisSyncJob(models.Model):
                 'error_msg': False,
                 'processed_at': fields.Datetime.now(),
             })
+        except MisaCatalogPending as e:
+            message = str(e)[:2000]
+            if self.direction == 'purchase_order' and po:
+                po.with_context(skip_misa_purchase_order_lifecycle=True).sudo().write({
+                    'misa_purchase_order_state': 'queued',
+                    'misa_purchase_order_last_error': message,
+                    'misa_purchase_order_state_updated_at': fields.Datetime.now(),
+                })
+            self.write({
+                'status': 'pending',
+                'error_msg': message,
+                'processed_at': fields.Datetime.now(),
+            })
+            _logger.info('AMIS sync job %d remains pending: %s', self.id, message)
         except Exception as e:
             if self.direction in ('purchase_order', 'purchase_order_revoke') and po:
                 error_text = str(e)[:2000]
