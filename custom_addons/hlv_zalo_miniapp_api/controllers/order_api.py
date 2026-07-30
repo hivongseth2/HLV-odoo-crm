@@ -349,31 +349,18 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             order_id = self._parse_int(body.get("order_id"), 0)
             reason = (body.get("reason") or "").strip()
 
-            # DEBUG: log raw request info
-            _logger.info(
-                "CANCEL_DEBUG: order_id=%s body=%s headers=%s",
-                order_id,
-                body,
-                dict(request.httprequest.headers),
-            )
-
             if not order_id:
                 return self._response_error("INVALID_INPUT", "Thiếu order_id")
 
             # Auth: xác thực token (không cần contact_id từ client)
             auth_result = self._auth_required()
             if isinstance(auth_result, Response):
-                _logger.warning("CANCEL_DEBUG: auth_required failed with status=%s", getattr(auth_result, 'status', '?'))
                 return auth_result
             token_partner_id = auth_result
-
-            _logger.info("CANCEL_DEBUG: token_partner_id=%s", token_partner_id)
 
             order = request.env["sale.order"].sudo().browse(order_id)
             if not order.exists():
                 return self._response_error("NOT_FOUND", "Đơn hàng không tồn tại", 404)
-
-            _logger.info("CANCEL_DEBUG: order.partner_id.id=%s, token_partner_id=%s", order.partner_id.id, token_partner_id)
 
             # Ownership check: order phải thuộc về partner từ token
             if order.partner_id.id != token_partner_id:
@@ -385,20 +372,20 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             if reason:
                 order.write({"note": (order.note or "") + f"\nLý do hủy: {reason}"})
 
-            # Gọi action_cancel, nếu thất bại thì force cancel
+            # Gọi action_cancel với sudo để bypass ACL stock.picking
             try:
-                order.action_cancel()
+                order.sudo().action_cancel()
             except Exception:
                 pass
 
             # Kiểm tra state thực tế, nếu chưa về "cancel" thì force
             if order.state != "cancel":
-                # Hủy các picking liên quan trước
+                # Hủy các picking liên quan trước (cần sudo để truy cập stock.picking)
                 try:
-                    order.picking_ids.filtered(lambda p: p.state not in ('done', 'cancel')).action_cancel()
+                    order.sudo().picking_ids.filtered(lambda p: p.state not in ('done', 'cancel')).action_cancel()
                 except Exception:
                     pass
-                order.write({"state": "cancel"})
+                order.sudo().write({"state": "cancel"})
 
             # Ghi log Chatter thông báo đơn hàng bị hủy từ Zalo Mini App
             try:
