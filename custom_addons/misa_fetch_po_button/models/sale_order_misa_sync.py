@@ -609,6 +609,21 @@ class SaleOrder(models.Model):
         existing_sols = list(self.order_line.filtered(lambda line: not line.display_type))
         qty_changes = []
         audit_changes = []
+        approved_legacy_removal_ids = {
+            int(line_id)
+            for line_id in (
+                self.env.context.get('misa_approved_legacy_removal_line_ids') or []
+            )
+        }
+        has_sync_history = bool(self.misa_sync_snapshot_ids)
+
+        def _is_removed_misa_line(sol):
+            """Nhận diện cả dòng legacy của đơn chưa từng có snapshot MISA."""
+            return bool(
+                sol.misa_crm_line_id
+                or not has_sync_history
+                or sol.id in approved_legacy_removal_ids
+            )
 
         def _audit(misa_data, sol, field_name, old_value, new_value, change_type='update'):
             change = {
@@ -692,7 +707,7 @@ class SaleOrder(models.Model):
 
         # Một dòng đã giao nhưng bị xóa khỏi CRM tương đương yêu cầu giảm về 0.
         for sol in unmatched_sols:
-            if not sol.misa_crm_line_id:
+            if not _is_removed_misa_line(sol):
                 continue
             qty_delivered = float(getattr(sol, 'qty_delivered', 0.0) or 0.0)
             if qty_delivered > 0.001:
@@ -701,7 +716,7 @@ class SaleOrder(models.Model):
                       "(CRM line %(crm_line_id)s)") % {
                         'code': sol.product_id.default_code or sol.product_id.display_name,
                         'delivered_qty': qty_delivered,
-                        'crm_line_id': sol.misa_crm_line_id,
+                        'crm_line_id': sol.misa_crm_line_id or _('legacy/chưa có lịch sử'),
                     }
                 )
 
@@ -854,9 +869,14 @@ class SaleOrder(models.Model):
         for sol in unmatched_sols:
             code = sol.product_id.default_code or sol.product_id.name
 
-            # Không tự đưa về 0 dòng thủ công hoặc dòng legacy chưa nhận diện được.
-            if not sol.misa_crm_line_id:
-                _logger.info("Giữ nguyên dòng Odoo chưa có CRM Line ID: %s", code)
+            # Dòng có CRM Line ID luôn là dòng MISA. Với dữ liệu legacy chưa có
+            # ID, chỉ xem là dòng bị xóa ở lần đồng bộ đầu tiên của đơn chưa có
+            # snapshot, hoặc khi snapshot chờ duyệt đã ghi nhận chính dòng đó.
+            if not _is_removed_misa_line(sol):
+                _logger.info(
+                    "Giữ nguyên dòng Odoo chưa có CRM Line ID vì đơn đã có lịch sử: %s",
+                    code,
+                )
                 continue
             
             qty_delivered = float(getattr(sol, 'qty_delivered', 0.0) or 0.0)
@@ -882,13 +902,13 @@ class SaleOrder(models.Model):
             if defer_quantity:
                 _logger.info(
                     "Chờ kho duyệt trước khi đưa CRM line %s (%s) từ %s về %s",
-                    sol.misa_crm_line_id, code, old_qty, new_qty,
+                    sol.misa_crm_line_id or 'legacy', code, old_qty, new_qty,
                 )
                 continue
             sol.write({'product_uom_qty': new_qty})
             _logger.info(
                 "↘️ Set qty=0 cho CRM line %s (%s) không còn trong MISA; qty_delivered=%s được giữ nguyên.",
-                sol.misa_crm_line_id, code, qty_delivered,
+                sol.misa_crm_line_id or 'legacy', code, qty_delivered,
             )
 
         return {
@@ -1478,7 +1498,20 @@ class SaleOrder(models.Model):
         order = self.sudo()
         pending_summary = order.misa_qty_sync_pending_summary
         pending_history = order.misa_qty_sync_pending_history_id
-        order._sync_so_lines_from_misa_no_picking(
+        legacy_removal_line_ids = (
+            pending_history.line_ids.filtered(
+                lambda line: (
+                    line.change_type == 'remove'
+                    and not line.crm_line_id
+                    and line.sale_order_line_id
+                )
+            ).mapped('sale_order_line_id').ids
+            if pending_history
+            else []
+        )
+        order.with_context(
+            misa_approved_legacy_removal_line_ids=legacy_removal_line_ids,
+        )._sync_so_lines_from_misa_no_picking(
             lines=[],
             headers={},
             defer_quantity=False,
