@@ -1,9 +1,13 @@
 # -*- coding: utf-8 -*-
+import json
 import logging
 import pytz
 from datetime import datetime
 
 from odoo import api, fields, models
+from odoo.exceptions import UserError
+
+from .amis_sync_exceptions import MeInvoiceDuplicateRefError
 
 _logger = logging.getLogger(__name__)
 
@@ -46,6 +50,7 @@ class AmisWebhookQueue(models.Model):
             ('processing', 'Đang xử lý'),
             ('deferred', 'Ngoài khung giờ'),
             ('done', 'Hoàn thành'),
+            ('duplicate', 'Nghi trùng HĐ - cần đối soát'),
             ('error', 'Lỗi'),
             ('skipped', 'Bỏ qua'),
         ],
@@ -53,6 +58,14 @@ class AmisWebhookQueue(models.Model):
     )
     attempts = fields.Integer(string='Số lần thử', default=0)
     error_msg = fields.Text(string='Lỗi gần nhất', readonly=True)
+    attempt_history = fields.Text(
+        string='Lịch sử xử lý',
+        readonly=True,
+        copy=False,
+        help='Lưu từng lần phát hành, RefID và lỗi để không mất nguyên nhân sau khi retry thành công.',
+    )
+    last_attempt_at = fields.Datetime(string='Lần thử cuối', readonly=True, copy=False)
+    last_attempt_ref_id = fields.Char(string='RefID lần thử cuối', readonly=True, copy=False)
     processed_at = fields.Datetime(string='Xử lý lúc', readonly=True)
     meinvoice_invoice_id = fields.Many2one(
         'meinvoice.invoice', string='Hóa đơn đã phát hành', readonly=True,
@@ -61,6 +74,48 @@ class AmisWebhookQueue(models.Model):
     # ── Cron entry point ─────────────────────────────────────────────────────
 
     # ── Helpers ──────────────────────────────────────────────────────────────
+
+    def _attempt_invoice_and_ref(self):
+        self.ensure_one()
+        invoice = self.meinvoice_invoice_id
+        if not invoice and self.sale_order_id:
+            invoice = self.env['meinvoice.invoice'].sudo().search([
+                ('sale_order_id', '=', self.sale_order_id.id),
+            ], order='id desc', limit=1)
+        ref_id = ''
+        if invoice and invoice.invoice_data_json:
+            try:
+                payload = json.loads(invoice.invoice_data_json)
+            except Exception:
+                payload = {}
+            if isinstance(payload, dict):
+                ref_id = (payload.get('RefID') or '').strip()
+        if not ref_id and self.sale_order_id:
+            ref_id = (self.sale_order_id.misa_meinvoice_ref_id or '').strip()
+        return invoice, ref_id
+
+    def _append_attempt_history(self, event, message=''):
+        self.ensure_one()
+        invoice, ref_id = self._attempt_invoice_and_ref()
+        now = fields.Datetime.now()
+        line = (
+            '[%s] attempt=%s event=%s ref_id=%s invoice_id=%s message=%s'
+            % (
+                fields.Datetime.to_string(now),
+                self.attempts,
+                event,
+                ref_id or '-',
+                invoice.id if invoice else '-',
+                ' '.join(str(message or '').split())[:1000] or '-',
+            )
+        )
+        history = '\n'.join(filter(None, [self.attempt_history or '', line]))
+        self.sudo().write({
+            'attempt_history': history[-12000:],
+            'last_attempt_at': now,
+            'last_attempt_ref_id': ref_id or False,
+        })
+        return line
 
     @api.model
     def _format_float_time(self, value):
@@ -147,6 +202,7 @@ class AmisWebhookQueue(models.Model):
         """Xử lý 1 bản ghi queue. Gọi action_publish_meinvoice_invoice trên SO."""
         self.ensure_one()
         self.sudo().write({'state': 'processing', 'attempts': self.attempts + 1})
+        self._append_attempt_history('START')
 
         try:
             so = self.sale_order_id
@@ -159,6 +215,9 @@ class AmisWebhookQueue(models.Model):
                     self.sudo().write({'sale_order_id': so.id})
 
             if not so:
+                self._append_attempt_history(
+                    'SKIPPED', 'Không tìm thấy sale.order: %s' % self.order_ref,
+                )
                 self.sudo().write({
                     'state': 'error',
                     'error_msg': 'Không tìm thấy sale.order với mã Shopee: %s' % self.order_ref,
@@ -166,6 +225,9 @@ class AmisWebhookQueue(models.Model):
                 return
 
             if so.state not in ('sale', 'done'):
+                self._append_attempt_history(
+                    'SKIPPED', 'Đơn hàng chưa xác nhận (state=%s)' % so.state,
+                )
                 self.sudo().write({
                     'state': 'skipped',
                     'error_msg': 'Đơn hàng chưa xác nhận (state=%s).' % so.state,
@@ -179,6 +241,9 @@ class AmisWebhookQueue(models.Model):
                 ('state', 'not in', ('draft', 'cancelled')),
             ], limit=1)
             if published:
+                self._append_attempt_history(
+                    'SKIPPED', 'Đã có HĐĐT id=%s state=%s' % (published.id, published.state),
+                )
                 self.sudo().write({
                     'state': 'skipped',
                     'error_msg': 'Đã có HĐĐT ở trạng thái %s.' % published.state,
@@ -194,6 +259,7 @@ class AmisWebhookQueue(models.Model):
             ], order='id desc')
 
             if not drafts:
+                self._append_attempt_history('SKIPPED', 'Không có HĐĐT nháp để phát hành')
                 self.sudo().write({
                     'state': 'skipped',
                     'error_msg': 'Không có HĐĐT nháp để phát hành.',
@@ -203,6 +269,9 @@ class AmisWebhookQueue(models.Model):
 
             if len(drafts) > 1:
                 ids_str = ', '.join(str(d.id) for d in drafts)
+                self._append_attempt_history(
+                    'ERROR', 'Có nhiều HĐĐT nháp: %s' % ids_str,
+                )
                 self.sudo().write({
                     'state': 'error',
                     'error_msg': 'Có %d HĐĐT nháp (id: %s). Vui lòng xóa bớt và chỉ giữ 1 nháp.' % (len(drafts), ids_str),
@@ -225,6 +294,11 @@ class AmisWebhookQueue(models.Model):
             # Submit nháp lên CQT
             draft.sudo().action_publish()
 
+            self._append_attempt_history(
+                'DONE',
+                'inv_no=%s inv_code=%s transaction=%s'
+                % (draft.inv_no or '', draft.inv_code or '', draft.transaction_id or ''),
+            )
             self.sudo().write({
                 'state': 'done',
                 'error_msg': False,
@@ -236,8 +310,22 @@ class AmisWebhookQueue(models.Model):
                 self.id, so.name, self.order_ref,
             )
 
+        except MeInvoiceDuplicateRefError as e:
+            err = str(e)
+            self._append_attempt_history('DUPLICATE_REF_STOPPED', err)
+            _logger.error(
+                'WebhookQueue [%d]: duplicate RefID stopped for order_ref=%s: %s',
+                self.id, self.order_ref, err,
+            )
+            self.sudo().write({
+                'state': 'duplicate',
+                'error_msg': err,
+                'processed_at': fields.Datetime.now(),
+            })
+
         except Exception as e:
             err = str(e)
+            self._append_attempt_history('ERROR', err)
             _logger.error(
                 'WebhookQueue [%d]: error publishing for order_ref=%s: %s',
                 self.id, self.order_ref, err,
@@ -252,7 +340,15 @@ class AmisWebhookQueue(models.Model):
 
     def action_retry(self):
         """Thử lại thủ công (kể cả đơn deferred)."""
+        duplicate = self.filtered(lambda rec: rec.state == 'duplicate')
+        if duplicate:
+            raise UserError(
+                'Không thể retry queue nghi trùng hóa đơn: %s. '
+                'Phải đối soát RefID/hóa đơn trên meInvoice trước.'
+                % ', '.join(duplicate.mapped('order_ref'))
+            )
         for rec in self:
+            rec._append_attempt_history('MANUAL_RETRY')
             rec.sudo().write({'state': 'pending', 'attempts': 0, 'error_msg': False})
 
     def action_skip(self):
