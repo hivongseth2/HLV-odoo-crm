@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
+import re
+from datetime import timedelta, timezone
 from markupsafe import Markup
 
 from odoo import _, fields, http
@@ -9,9 +11,17 @@ from .base_api import ZaloBaseAPI
 
 _logger = logging.getLogger(__name__)
 
+# GMT+7 timezone
+GMT7 = timezone(timedelta(hours=7))
+
 
 class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
     """API Đơn hàng cho Zalo Mini App"""
+
+    @staticmethod
+    def _now_gmt7():
+        """Return current datetime in GMT+7 as string."""
+        return fields.Datetime.now().astimezone(GMT7).strftime("%Y-%m-%d %H:%M:%S")
 
     def _order_to_dict(self, order):
         lines = []
@@ -170,9 +180,10 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
     # POST /api/v1/zalo/orders/create
     @http.route("/api/v1/zalo/orders/create", type="http", auth="public", methods=["POST", "OPTIONS"], csrf=False)
     def order_create(self, **params):
-        """Body: {"contact_id":1, "items":[{"product_id":42,"quantity":2}], "address_id":2, "note":"...", "voucher_code":"VHQ-XXXXX"}
+        """Body: {"contact_id":1, "items":[{"product_id":42,"quantity":2}], "address_id":2, "note":"...", "voucher_code":"VHQ-XXXXX", "payment_method":"cod|zalopay"}
         
         items: Danh sách sản phẩm từ frontend (frontend tự quản lý giỏ hàng)
+        payment_method: để ghi log, không ảnh hưởng flow xử lý
         """
         if request.httprequest.method == "OPTIONS":
             return self._response_options()
@@ -183,6 +194,7 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             address_id = self._parse_int(body.get("address_id"), 0)
             note = (body.get("note") or "").strip()
             voucher_code = (body.get("voucher_code") or "").strip()
+            payment_method = (body.get("payment_method") or "cod").strip().lower()
 
             if not contact_id:
                 return self._response_error("INVALID_INPUT", "Thiếu contact_id")
@@ -267,7 +279,7 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
                     _logger.warning("Voucher apply error: %s", ve)
                     order.write({"note": (order.note or "") + f"\nVoucher: {voucher_code}"})
 
-            # Confirm đơn hàng
+            # Luôn confirm đơn hàng ngay sau khi tạo (COD: user đã xác nhận, ZaloPay: đã thanh toán thành công)
             try:
                 order.action_confirm()
             except Exception as ce:
@@ -275,22 +287,32 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
                 order.unlink()
                 return self._response_error("ORDER_ERROR", f"Không thể xác nhận đơn: {str(ce)}", 400)
 
-            # Không cần write state="sale" vì action_confirm() đã chuyển state
             order.write({"date_order": fields.Datetime.now()})
+
+            # Parse customer note: extract real note text (remove [PTTT: ...] prefix added by frontend)
+            customer_note = ""
+            if note:
+                # Frontend sends: "[PTTT: COD] - Ghi chú: abc..." or "[PTTT: ZaloPay] abc..."
+                # Extract only the actual customer note part
+                customer_note = re.sub(r'^\[PTTT:\s*[^\]]+\]\s*(?:-\s*Ghi chú:\s*)?', '', note).strip()
+                if customer_note.startswith("- Ghi chú: "):
+                    customer_note = customer_note[10:].strip()
 
             # Ghi log Chatter thông báo đơn hàng được tạo từ Zalo Mini App
             try:
                 chatter_msg = Markup(_(
                     "<b>Đơn hàng được tạo từ Zalo Mini App</b><br/>"
                     "• <b>Khách hàng:</b> %s (SĐT: %s)<br/>"
-                    "• <b>Thời gian tạo:</b> %s"
+                    "• <b>Thời gian tạo:</b> %s<br/>"
+                    "• <b>Phương thức thanh toán:</b> %s"
                 )) % (
                     partner.name,
                     partner.phone or partner.mobile or "N/A",
-                    fields.Datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    self._now_gmt7(),
+                    payment_method.upper(),
                 )
-                if note:
-                    chatter_msg += Markup(_("<br/>• <b>Ghi chú:</b> %s")) % note
+                if customer_note:
+                    chatter_msg += Markup(_("<br/>• <b>Ghi chú từ khách hàng:</b> %s")) % customer_note
                 if voucher_code:
                     chatter_msg += Markup(_("<br/>• <b>Voucher:</b> %s")) % voucher_code
 
@@ -319,28 +341,29 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
     # POST /api/v1/zalo/orders/cancel
     @http.route("/api/v1/zalo/orders/cancel", type="http", auth="public", methods=["POST", "OPTIONS"], csrf=False)
     def order_cancel(self, **params):
-        """Body: {"order_id": 1, "contact_id": 1, "reason": "Đổi ý"}"""
+        """Body: {"order_id": 1, "reason": "Đổi ý"}"""
         if request.httprequest.method == "OPTIONS":
             return self._response_options()
         try:
             body = self._request_json()
             order_id = self._parse_int(body.get("order_id"), 0)
-            contact_id = self._parse_int(body.get("contact_id"), 0)
             reason = (body.get("reason") or "").strip()
 
-            if not order_id or not contact_id:
-                return self._response_error("INVALID_INPUT", "Thiếu order_id hoặc contact_id")
+            if not order_id:
+                return self._response_error("INVALID_INPUT", "Thiếu order_id")
 
-            # Auth + ownership check
-            auth_result = self._auth_and_verify_owner(contact_id)
+            # Auth: xác thực token (không cần contact_id từ client)
+            auth_result = self._auth_required()
             if isinstance(auth_result, Response):
                 return auth_result
+            token_partner_id = auth_result
 
             order = request.env["sale.order"].sudo().browse(order_id)
             if not order.exists():
                 return self._response_error("NOT_FOUND", "Đơn hàng không tồn tại", 404)
 
-            if order.partner_id.id != contact_id:
+            # Ownership check: order phải thuộc về partner từ token
+            if order.partner_id.id != token_partner_id:
                 return self._response_error("FORBIDDEN", "Đơn hàng không thuộc về bạn", 403)
 
             if order.state in ("done", "cancel"):
@@ -384,7 +407,7 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
     # POST /api/v1/zalo/orders/feedback
     @http.route("/api/v1/zalo/orders/feedback", type="http", auth="public", methods=["POST", "OPTIONS"], csrf=False)
     def order_feedback(self, **params):
-        """Body: {"order_id": 1, "contact_id": 1, "action_type": "received" | "return", "note": "Đã nhận hàng"}
+        """Body: {"order_id": 1, "action_type": "received" | "return", "note": "Đã nhận hàng"}
         Phía Odoo chỉ nhận thông tin và ghi chép vào chatter/note, KHÔNG thực hiện action tự động nào khác.
         """
         if request.httprequest.method == "OPTIONS":
@@ -392,22 +415,24 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
         try:
             body = self._request_json()
             order_id = self._parse_int(body.get("order_id"), 0)
-            contact_id = self._parse_int(body.get("contact_id"), 0)
             action_type = (body.get("action_type") or "received").strip()
             note = (body.get("note") or "").strip()
 
-            if not order_id or not contact_id:
-                return self._response_error("INVALID_INPUT", "Thiếu order_id hoặc contact_id")
+            if not order_id:
+                return self._response_error("INVALID_INPUT", "Thiếu order_id")
 
-            auth_result = self._auth_and_verify_owner(contact_id)
+            # Auth: xác thực token (không cần contact_id từ client)
+            auth_result = self._auth_required()
             if isinstance(auth_result, Response):
                 return auth_result
+            token_partner_id = auth_result
 
             order = request.env["sale.order"].sudo().browse(order_id)
             if not order.exists():
                 return self._response_error("NOT_FOUND", "Đơn hàng không tồn tại", 404)
 
-            if order.partner_id.id != contact_id:
+            # Ownership check: order phải thuộc về partner từ token
+            if order.partner_id.id != token_partner_id:
                 return self._response_error("FORBIDDEN", "Đơn hàng không thuộc về bạn", 403)
 
             title = "Xác nhận đã nhận được hàng" if action_type == "received" else "Đề nghị Đổi/Trả hàng"
@@ -416,7 +441,7 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
                 formatted_msg += Markup(_("<br/>• <b>Ghi chú từ khách hàng:</b> %s")) % note
 
             current_note = order.note or ""
-            new_entry = f"\n[{fields.Datetime.now().strftime('%Y-%m-%d %H:%M')}] {title}"
+            new_entry = f"\n[{self._now_gmt7()}] {title}"
             if note:
                 new_entry += f": {note}"
             order.write({"note": current_note + new_entry})
@@ -433,4 +458,4 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             })
         except Exception as e:
             _logger.exception("order_feedback error")
-            return self._response_error("SERVER_ERROR", str(e), 500)
+            return self._response_error("SERVER_ERROR", str(e), 500)
