@@ -8,7 +8,7 @@
             <list string="Hàng đợi Webhook → meInvoice"
                   default_order="create_date desc"
                   decoration-success="state == 'done'"
-                  decoration-danger="state == 'error'"
+                  decoration-danger="state in ('error', 'duplicate')"
                   decoration-warning="state == 'processing'"
                   decoration-info="state == 'deferred'"
                   decoration-muted="state in ('skipped',)">
@@ -18,11 +18,13 @@
                 <field name="trigger_status" string="Trạng thái kích hoạt"/>
                 <field name="state" widget="badge"
                        decoration-success="state == 'done'"
-                       decoration-danger="state == 'error'"
+                       decoration-danger="state in ('error', 'duplicate')"
                        decoration-warning="state in ('pending', 'processing')"
                        decoration-info="state == 'deferred'"
                        decoration-muted="state == 'skipped'"/>
                 <field name="attempts" string="Số lần thử"/>
+                <field name="last_attempt_at" optional="hide"/>
+                <field name="last_attempt_ref_id" optional="hide"/>
                 <field name="meinvoice_invoice_id" optional="show"/>
                 <field name="processed_at" optional="show"/>
                 <field name="error_msg" optional="hide"/>
@@ -44,7 +46,7 @@
             <form string="Chi tiết Webhook Queue">
                 <header>
                     <field name="state" widget="statusbar"
-                           statusbar_visible="pending,deferred,processing,done,error,skipped"/>
+                           statusbar_visible="pending,deferred,processing,done,duplicate,error,skipped"/>
                     <button name="action_retry" string="Thử lại" type="object"
                             class="btn-primary"
                             invisible="state not in ('error', 'skipped', 'deferred')"/>
@@ -63,12 +65,18 @@
                         <group string="Kết quả xử lý">
                             <field name="state"/>
                             <field name="attempts"/>
+                            <field name="last_attempt_at"/>
+                            <field name="last_attempt_ref_id"/>
                             <field name="processed_at"/>
                             <field name="meinvoice_invoice_id"/>
                         </group>
                     </group>
                     <group invisible="not error_msg">
                         <field name="error_msg" string="Lỗi gần nhất" readonly="1"/>
+                    </group>
+                    <group invisible="not attempt_history">
+                        <field name="attempt_history" string="Lịch sử xử lý"
+                               readonly="1" widget="text"/>
                     </group>
                     <group invisible="not raw_payload">
                         <field name="raw_payload" string="Payload raw" readonly="1" widget="text"/>
@@ -89,6 +97,8 @@
                 <filter string="Chờ xử lý" name="pending" domain="[('state','=','pending')]"/>
                 <filter string="Ngoài khung giờ" name="deferred" domain="[('state','=','deferred')]"/>
                 <filter string="Lỗi" name="error" domain="[('state','=','error')]"/>
+                <filter string="Nghi trùng HĐ" name="duplicate"
+                        domain="[('state','=','duplicate')]"/>
                 <filter string="Hoàn thành" name="done" domain="[('state','=','done')]"/>
                 <filter string="Bỏ qua" name="skipped" domain="[('state','=','skipped')]"/>
                 <separator/>

@@ -548,6 +548,22 @@ class SaleOrderAmisSync(models.Model):
         if not config.meinvoice_enabled:
             raise UserError('Tính năng phát hành HĐĐT meInvoice chưa được bật trong cấu hình.')
 
+        existing_published = self.env['meinvoice.invoice'].sudo().search([
+            ('sale_order_id', '=', self.id),
+            ('state', 'in', ('submitted', 'accepted')),
+        ], limit=1)
+        if existing_published or self.misa_meinvoice_synced:
+            invoice_label = (
+                existing_published.name
+                if existing_published
+                else self.misa_meinvoice_inv_no or self.misa_meinvoice_transaction_id or '(không rõ số)'
+            )
+            raise UserError(
+                'Đơn hàng %s đã có hóa đơn meInvoice đã gửi CQT (%s). '
+                'Không thể tạo hóa đơn nháp mới để tránh phát hành trùng.'
+                % (self.name, invoice_label)
+            )
+
         # Kiểm tra hóa đơn nháp chưa xử lý
         existing_draft = self.env['meinvoice.invoice'].search([
             ('sale_order_id', '=', self.id),
@@ -701,6 +717,25 @@ class SaleOrderAmisSync(models.Model):
 
     def action_reset_meinvoice_invoice(self):
         """Reset cờ meInvoice để phát hành lại (dùng khi phát hành lỗi)."""
+        unsafe = self.filtered(
+            lambda order: (
+                order.misa_meinvoice_synced
+                or bool(order.misa_meinvoice_transaction_id)
+                or bool(order.misa_meinvoice_inv_no)
+                or bool(order.misa_meinvoice_inv_code)
+                or bool(self.env['meinvoice.invoice'].sudo().search([
+                    ('sale_order_id', '=', order.id),
+                    ('state', 'in', ('submitted', 'accepted')),
+                ], limit=1))
+            )
+        )
+        if unsafe:
+            raise UserError(
+                'Không thể reset cờ meInvoice vì các đơn sau đã có dấu vết phát '
+                'hành: %s. Vui lòng đối soát/hủy hóa đơn trên meInvoice/CQT trước.'
+                % ', '.join(unsafe.mapped('name'))
+            )
+
         for order in self:
             order.sudo().write({
                 'misa_meinvoice_synced': False,
