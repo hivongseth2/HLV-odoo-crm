@@ -101,64 +101,6 @@ class PublicInventory(http.Controller):
         headers = [('Content-Type', mimetype), ('Cache-Control', 'public, max-age=604800')]
         return request.make_response(image_data, headers)
 
-    def _get_breakdown_details(self, env, product, warehouse_id, company_ids):
-        Quant = env["stock.quant"].sudo().with_context(allowed_company_ids=company_ids)
-        Warehouse = env["stock.warehouse"].sudo().with_context(allowed_company_ids=company_ids)
-        
-        def _get_qty(pid, wh):
-             domain = [("product_id", "=", pid), ("location_id", "child_of", wh.view_location_id.id), ("location_id.usage", "=", "internal")]
-             grps = Quant.read_group(domain, ["product_id", "quantity:sum", "reserved_quantity:sum"], ["product_id"], lazy=False)
-             if grps:
-                 g = grps[0]
-                 return _rg_sum(g, "quantity"), _rg_sum(g, "reserved_quantity")
-             return 0.0, 0.0
-
-        tmpl = product.product_tmpl_id
-        is_combo = _is_combo_product(env, tmpl)
-        
-        if warehouse_id: wh = Warehouse.browse(int(warehouse_id)).exists(); warehouses = wh if wh else Warehouse.browse([])
-        else: warehouses = _get_allowed_warehouses() or Warehouse.search([])
-
-        if is_combo:
-            lines = []
-            bom = env['mrp.bom'].sudo().search([
-                ('product_tmpl_id', '=', tmpl.id),
-                ('active', '=', True),
-                ('type', '=', 'phantom')
-            ], limit=1)
-            if bom:
-                lines = bom.bom_line_ids
-            
-            rows = []
-            for line in lines:
-                child = line.product_id
-                if not child: continue
-                wh_rows = []
-                for wh in warehouses:
-                    qt, qr = _get_qty(child.id, wh)
-                    fc = self.forecast_details(product_id=child.id, warehouse_id=wh.id)
-                    qf = fc.get("qty_forecast", qt - qr) if isinstance(fc, dict) and fc.get("ok") else (qt - qr)
-                    wh_rows.append({"warehouse_id": wh.id, "warehouse_name": wh.name, "qty_total": qt, "qty_reserved": qr, "qty_available": qt - qr, "qty_forecast": qf})
-                
-                rows.append({
-                    "child_product_id": child.id,
-                    "default_code": child.default_code or "",
-                    "name": child.name or "",
-                    "uom": child.uom_id.name or "",
-                    "image_url": _get_product_image_url(child),
-                    "component_qty_in_combo": float(line.product_qty or 1.0),
-                    "warehouses": wh_rows
-                })
-            return {"mode": "components_by_warehouse", "rows": rows}
-        else:
-            rows = []
-            for wh in warehouses:
-                qt, qr = _get_qty(product.id, wh)
-                fc = self.forecast_details(product_id=product.id, warehouse_id=wh.id)
-                qf = fc.get("qty_forecast", qt - qr) if isinstance(fc, dict) and fc.get("ok") else (qt - qr)
-                rows.append({"warehouse_id": wh.id, "warehouse_name": wh.name, "qty_available": qt - qr, "qty_total": qt, "qty_reserved": qr, "qty_forecast": qf})
-            return {"mode": "warehouses", "rows": rows}
-
     @http.route(["/search_stock"], type="http", auth="public", website=True, sitemap=True)
     def inventory_page(self, q="", warehouse_id=None, page=1, **kw):
         # 1. AUTH
@@ -226,46 +168,51 @@ class PublicInventory(http.Controller):
                 final_search_dom = expression.OR(domains_per_group)
                 domain = expression.AND([domain, final_search_dom])
 
-        # 4. SEARCH
-        found_products = Product.search(domain, order="name asc") 
-        final_product_ids = set()
-        
-        # Pre-fetch BoM status for found products to avoid N+1 queries loop
-        # Map tmpl_id -> is_combo
-        found_tmpl_ids = found_products.mapped('product_tmpl_id').ids
-        # Find which of these are combos
-        boms = env['mrp.bom'].sudo().search([
-            ('product_tmpl_id', 'in', found_tmpl_ids),
-            ('type', '=', 'phantom'), 
-            ('active', '=', True)
-        ])
-        combo_tmpl_ids = set(boms.mapped('product_tmpl_id').ids)
+        # 4-5. SEARCH + PAGINATION
+        # Keep the normal search inside PostgreSQL. Loading every matching
+        # product before slicing a 25-row page made broad searches needlessly
+        # scale with the complete product catalogue.
+        if combo_search_mode:
+            # Combo mode can add BoM components which did not directly match
+            # the product domain, so this path still expands the complete list.
+            found_products = Product.search(domain, order="name asc, id asc")
+            final_product_ids = set(found_products.ids)
+            found_tmpl_ids = found_products.mapped("product_tmpl_id").ids
+            boms = env["mrp.bom"].sudo().search([
+                ("product_tmpl_id", "in", found_tmpl_ids),
+                ("type", "=", "phantom"),
+                ("active", "=", True),
+            ])
+            bom_by_tmpl_id = {
+                bom.product_tmpl_id.id: bom
+                for bom in boms
+                if bom.product_tmpl_id
+            }
+            for product in found_products:
+                bom = bom_by_tmpl_id.get(product.product_tmpl_id.id)
+                if bom:
+                    final_product_ids.update(
+                        bom.bom_line_ids.mapped("product_id").ids
+                    )
 
-        for p in found_products:
-            final_product_ids.add(p.id)
-            if combo_search_mode:
-                is_combo = p.product_tmpl_id.id in combo_tmpl_ids
-                # Nếu là combo (và đang bật search combo), bung children (nếu cần show con)
-                # Logic cũ bung con từ combo.product. Logic mới lấy từ BoM.
-                if is_combo:
-                    # Find children for this specific product
-                    # Optimized: filter boms in memory
-                    product_bom = next((b for b in boms if b.product_tmpl_id.id == p.product_tmpl_id.id), None)
-                    if product_bom:
-                         child_ids = product_bom.bom_line_ids.mapped('product_id').ids
-                         final_product_ids.update(child_ids)
-
-        sorted_pids = sorted(list(final_product_ids))
-        
-        # 5. PAGINATION
-        total = len(sorted_pids)
-        pages = max(1, math.ceil(total / PAGE_SIZE)) if total else 1
-        if page > pages: page = pages
-        start = (page - 1) * PAGE_SIZE
-        end = start + PAGE_SIZE
-        
-        page_pids = sorted_pids[start:end]
-        products_to_display = Product.browse(page_pids)
+            result_pids = sorted(final_product_ids)
+            total = len(result_pids)
+            pages = max(1, math.ceil(total / PAGE_SIZE)) if total else 1
+            page = min(max(page, 1), pages)
+            start = (page - 1) * PAGE_SIZE
+            page_pids = result_pids[start:start + PAGE_SIZE]
+            products_to_display = Product.browse(page_pids)
+        else:
+            total = Product.search_count(domain)
+            pages = max(1, math.ceil(total / PAGE_SIZE)) if total else 1
+            page = min(max(page, 1), pages)
+            products_to_display = Product.search(
+                domain,
+                order="name asc, id asc",
+                limit=PAGE_SIZE,
+                offset=(page - 1) * PAGE_SIZE,
+            )
+            page_pids = products_to_display.ids
 
         quant_domain = [
             ("product_id", "in", page_pids),
@@ -292,6 +239,20 @@ class PublicInventory(http.Controller):
         ])
         page_combo_tmpl_ids = set(page_boms.mapped('product_tmpl_id').ids)
 
+        # Read the computed forecast for the complete page recordset so Odoo
+        # can prefetch and calculate quantities in a batch.
+        forecast_products = (
+            products_to_display.with_context(warehouse=wid)
+            if wid
+            else products_to_display
+        )
+        forecast_qty_by_pid = dict(
+            zip(
+                forecast_products.ids,
+                forecast_products.mapped("virtual_available"),
+            )
+        )
+
         # 6. BUILD ROWS
         rows = []
         for p in products_to_display:
@@ -306,8 +267,7 @@ class PublicInventory(http.Controller):
 
             qty_forecasted = 0.0
             if not is_combo:
-                p_ctx = p.with_context(warehouse=wid) if wid else p
-                qty_forecasted = p_ctx.virtual_available
+                qty_forecasted = forecast_qty_by_pid.get(pid, 0.0)
             else: qty_forecasted = qty_total
 
             rows.append({
@@ -327,7 +287,6 @@ class PublicInventory(http.Controller):
                 "image_url": _get_product_image_url(p),
                 "website_url": getattr(p.product_tmpl_id, "website_url", "") or "",
                 "is_combo": is_combo,
-                "breakdown": self._get_breakdown_details(env, p, wid, company_ids),
             })
 
         return request.render(
