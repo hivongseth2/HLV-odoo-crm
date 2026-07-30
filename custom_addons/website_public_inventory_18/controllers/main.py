@@ -104,7 +104,7 @@ class PublicInventory(http.Controller):
     def _get_breakdown_details(self, env, product, warehouse_id, company_ids):
         Quant = env["stock.quant"].sudo().with_context(allowed_company_ids=company_ids)
         Warehouse = env["stock.warehouse"].sudo().with_context(allowed_company_ids=company_ids)
-        
+
         def _get_qty(pid, wh):
              domain = [("product_id", "=", pid), ("location_id", "child_of", wh.view_location_id.id), ("location_id.usage", "=", "internal")]
              grps = Quant.read_group(domain, ["product_id", "quantity:sum", "reserved_quantity:sum"], ["product_id"], lazy=False)
@@ -115,7 +115,7 @@ class PublicInventory(http.Controller):
 
         tmpl = product.product_tmpl_id
         is_combo = _is_combo_product(env, tmpl)
-        
+
         if warehouse_id: wh = Warehouse.browse(int(warehouse_id)).exists(); warehouses = wh if wh else Warehouse.browse([])
         else: warehouses = _get_allowed_warehouses() or Warehouse.search([])
 
@@ -128,7 +128,7 @@ class PublicInventory(http.Controller):
             ], limit=1)
             if bom:
                 lines = bom.bom_line_ids
-            
+
             rows = []
             for line in lines:
                 child = line.product_id
@@ -139,7 +139,7 @@ class PublicInventory(http.Controller):
                     fc = self.forecast_details(product_id=child.id, warehouse_id=wh.id)
                     qf = fc.get("qty_forecast", qt - qr) if isinstance(fc, dict) and fc.get("ok") else (qt - qr)
                     wh_rows.append({"warehouse_id": wh.id, "warehouse_name": wh.name, "qty_total": qt, "qty_reserved": qr, "qty_available": qt - qr, "qty_forecast": qf})
-                
+
                 rows.append({
                     "child_product_id": child.id,
                     "default_code": child.default_code or "",
@@ -227,16 +227,16 @@ class PublicInventory(http.Controller):
                 domain = expression.AND([domain, final_search_dom])
 
         # 4. SEARCH
-        found_products = Product.search(domain, order="name asc") 
+        found_products = Product.search(domain, order="name asc")
         final_product_ids = set()
-        
+
         # Pre-fetch BoM status for found products to avoid N+1 queries loop
         # Map tmpl_id -> is_combo
         found_tmpl_ids = found_products.mapped('product_tmpl_id').ids
         # Find which of these are combos
         boms = env['mrp.bom'].sudo().search([
             ('product_tmpl_id', 'in', found_tmpl_ids),
-            ('type', '=', 'phantom'), 
+            ('type', '=', 'phantom'),
             ('active', '=', True)
         ])
         combo_tmpl_ids = set(boms.mapped('product_tmpl_id').ids)
@@ -256,14 +256,14 @@ class PublicInventory(http.Controller):
                          final_product_ids.update(child_ids)
 
         sorted_pids = sorted(list(final_product_ids))
-        
+
         # 5. PAGINATION
         total = len(sorted_pids)
         pages = max(1, math.ceil(total / PAGE_SIZE)) if total else 1
         if page > pages: page = pages
         start = (page - 1) * PAGE_SIZE
         end = start + PAGE_SIZE
-        
+
         page_pids = sorted_pids[start:end]
         products_to_display = Product.browse(page_pids)
 
@@ -327,7 +327,6 @@ class PublicInventory(http.Controller):
                 "image_url": _get_product_image_url(p),
                 "website_url": getattr(p.product_tmpl_id, "website_url", "") or "",
                 "is_combo": is_combo,
-                "breakdown": self._get_breakdown_details(env, p, wid, company_ids),
             })
 
         return request.render(

@@ -8,6 +8,8 @@ from markupsafe import Markup, escape
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 
+from .amis_sync_exceptions import MeInvoiceDuplicateRefError
+
 _logger = logging.getLogger(__name__)
 
 
@@ -269,19 +271,41 @@ class MeinvoiceInvoice(models.Model):
         config = self.env['amis.callback.config'].sudo().ensure_singleton()
         results = config.push_meinvoice_invoice([invoice_data])
 
-        # Nếu DuplicateInvoiceRefID → tự sinh RefID mới và retry 1 lần
+        # DuplicateInvoiceRefID means MISA already accepted this logical invoice.
+        # Never switch to a new RefID here: that can issue a second invoice when
+        # the first HTTP response was lost or timed out.
         if results and isinstance(results, list):
             first_check = results[0] if results else {}
-            if (first_check.get('ErrorCode') or '') == 'DuplicateInvoiceRefID':
-                new_ref_id = str(uuid.uuid4())
-                invoice_data['RefID'] = new_ref_id
-                self.write({'invoice_data_json': json.dumps(invoice_data, ensure_ascii=False)})
-                if self.sale_order_id:
-                    self.sale_order_id.sudo().write({'misa_meinvoice_ref_id': new_ref_id})
-                _logger.info(
-                    'meInvoice DuplicateInvoiceRefID — auto-retry với RefID mới: %s', new_ref_id,
+            duplicate_error = (
+                first_check.get('ErrorCode')
+                or first_check.get('errorCode')
+                or ''
+            )
+            if duplicate_error == 'DuplicateInvoiceRefID':
+                ref_id = (invoice_data.get('RefID') or '').strip()
+                description = (
+                    first_check.get('DescriptionErrorCode')
+                    or first_check.get('descriptionErrorCode')
+                    or first_check.get('ErrorMessage')
+                    or first_check.get('errorMessage')
+                    or ''
                 )
-                results = config.push_meinvoice_invoice([invoice_data])
+                _logger.error(
+                    'meInvoice duplicate RefID stopped for SO %s: RefID=%s result=%s',
+                    self.sale_order_id.name,
+                    ref_id,
+                    first_check,
+                )
+                raise MeInvoiceDuplicateRefError(
+                    'MISA báo RefID %s đã có hóa đơn. Hệ thống đã DỪNG, không tự '
+                    'đổi RefID và không phát hành lại để tránh trùng hóa đơn.%s '
+                    'Vui lòng đối soát hóa đơn đã tồn tại trên meInvoice/CQT rồi '
+                    'cập nhật kết quả về Odoo.'
+                    % (
+                        ref_id or '(trống)',
+                        (' Chi tiết: %s.' % description) if description else '',
+                    )
+                )
 
         transaction_id = ''
         inv_no = ''
@@ -536,10 +560,14 @@ class MeinvoiceInvoice(models.Model):
         return {'type': 'ir.actions.act_url', 'url': view_url, 'target': 'new'}
 
     def action_cancel(self):
-        for rec in self:
-            if rec.state in ('accepted',):
-                raise UserError('Không thể hủy hóa đơn đã được CQT chấp nhận.')
-            rec.write({'state': 'cancelled', 'cqt_check_queued': False})
+        invalid = self.filtered(lambda rec: rec.state != 'draft')
+        if invalid:
+            raise UserError(
+                'Chỉ được hủy bản nháp chưa gửi CQT. Không thể hủy cục bộ hóa '
+                'đơn đã gửi vì hóa đơn có thể vẫn tồn tại trên meInvoice/CQT: %s'
+                % ', '.join(invalid.mapped('name'))
+            )
+        self.write({'state': 'cancelled', 'cqt_check_queued': False})
         return True
 
     def action_reset_to_draft(self):
@@ -549,6 +577,22 @@ class MeinvoiceInvoice(models.Model):
         - Xóa misa_meinvoice_ref_id trên SO để lần gửi tiếp theo cũng dùng RefID mới
         - Xóa các kết quả cũ (transaction_id, inv_no, inv_code, ...)
         """
+        invalid = self.filtered(
+            lambda rec: (
+                rec.state not in ('rejected', 'cancelled')
+                or (
+                    rec.state == 'cancelled'
+                    and bool(rec.transaction_id or rec.inv_no or rec.inv_code)
+                )
+            )
+        )
+        if invalid:
+            raise UserError(
+                'Chỉ được gửi lại hóa đơn CQT đã từ chối hoặc bản nháp đã hủy '
+                'mà chưa từng được phát hành. Không thể đặt lại: %s'
+                % ', '.join(invalid.mapped('name'))
+            )
+
         for rec in self:
             # Sinh RefID mới
             new_ref_id = str(uuid.uuid4())
@@ -587,6 +631,17 @@ class MeinvoiceInvoice(models.Model):
                 new_ref_id,
             )
         return True
+
+    def unlink(self):
+        protected = self.filtered(lambda rec: rec.state != 'draft')
+        if protected:
+            raise UserError(
+                'Không thể xóa hóa đơn không còn ở trạng thái Nháp: %s. '
+                'Hóa đơn đã gửi CQT phải được giữ lại để đối soát.'
+                % ', '.join(protected.mapped('name'))
+            )
+        return super().unlink()
+
     # ── Mail compose: gợi ý người nhận ─────────────────────────────────────
 
     def message_get_suggested_recipients(self):

@@ -9,7 +9,7 @@
         <field name="name">meinvoice.invoice.form</field>
         <field name="model">meinvoice.invoice</field>
         <field name="arch" type="xml">
-            <form string="Hóa đơn điện tử meInvoice">
+            <form string="Hóa đơn điện tử meInvoice" delete="false">
                 <header>
                     <button name="action_publish" type="object"
                             string="Gửi lên Cơ quan Thuế"
@@ -47,7 +47,7 @@
                             invisible="state == 'cancelled'"/>
                     <button name="action_cancel" type="object"
                             string="Hủy"
-                            invisible="state not in ('draft','submitted','rejected')"
+                            invisible="state != 'draft'"
                             groups="amis_callback.group_meinvoice_accountant"
                             confirm="Hủy hóa đơn này?"/>
                     <field name="state" widget="statusbar"
@@ -159,6 +159,7 @@
         <field name="model">meinvoice.invoice</field>
         <field name="arch" type="xml">
             <list string="Hóa đơn điện tử meInvoice" default_order="create_date desc"
+                  delete="false"
                   decoration-info="state == 'draft'"
                   decoration-warning="state == 'submitted'"
                   decoration-success="state == 'accepted'"
