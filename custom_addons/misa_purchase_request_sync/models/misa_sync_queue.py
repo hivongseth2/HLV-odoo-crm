@@ -52,8 +52,15 @@ class MisaSyncQueue(models.Model):
             return False
 
     @api.model
-    def enqueue_sale_order(self, misa_order_id, payload):
-        """Atomically enqueue one active SO job per MISA order and wake the cron."""
+    def enqueue_sale_order(self, misa_order_id, payload, trigger_processor=True):
+        """
+        Atomically enqueue one active SO job per MISA order.
+
+        ``trigger_processor=False`` is used by the edit-lock endpoint so the
+        lock and the draft queue commit together before any worker can process
+        the job. The normal resync request will reuse this queue and wake the
+        cron; the regular one-minute cron remains the reload fallback.
+        """
         misa_order_id = str(misa_order_id or "").strip()
         if not misa_order_id:
             raise ValueError("Missing MISA sale order ID")
@@ -78,6 +85,26 @@ class MisaSyncQueue(models.Model):
                 vals["sequence"] = 1
             if not queue.misa_id:
                 vals["misa_id"] = misa_order_id
+            if (
+                queue.state == "draft"
+                and isinstance(payload, dict)
+                and payload.get("notify_sale_edit_lock")
+            ):
+                try:
+                    queued_payload = json.loads(queue.payload or "{}")
+                except Exception:
+                    queued_payload = {
+                        "misa_order_id": misa_order_id,
+                        "create_when_missing": False,
+                    }
+                queued_payload.setdefault("misa_order_id", misa_order_id)
+                if not queued_payload.get("notify_sale_edit_lock"):
+                    queued_payload["notify_sale_edit_lock"] = True
+                    queued_payload.setdefault("source", "sale_edit_lock")
+                    vals["payload"] = json.dumps(
+                        queued_payload,
+                        ensure_ascii=False,
+                    )
             if vals:
                 queue.write(vals)
         else:
@@ -95,7 +122,11 @@ class MisaSyncQueue(models.Model):
             })
             created = True
 
-        triggered = self._trigger_queue_processor()
+        triggered = (
+            self._trigger_queue_processor()
+            if trigger_processor
+            else False
+        )
         _logger.info(
             "MISA SO queue %s for %s (id=%s, state=%s, triggered=%s)",
             "created" if created else "reused",
@@ -232,7 +263,20 @@ class MisaSyncQueue(models.Model):
         misa_order_id = payload.get("misa_order_id")
         warehouse_id = payload.get("warehouse_id")
         create_when_missing = payload.get("create_when_missing", True)
-        
+
+        if payload.get("notify_sale_edit_lock"):
+            order = self.env["sale.order"].sudo().search([
+                ("misa_id", "=", str(misa_order_id or "").strip()),
+                ("state", "!=", "cancel"),
+            ], limit=1)
+            if order:
+                order._misa_notify_warehouse(
+                    _(
+                        "Sale bắt đầu chỉnh sửa đơn %s trên CRM. Phiếu OUT tạm "
+                        "khóa xác nhận; PICK/PACK vẫn xử lý bình thường."
+                    ) % order.name
+                )
+
         self.env["sale.order"].sudo().api_resync_by_misa(
             misa_order_id=misa_order_id,
             warehouse_id=warehouse_id,
