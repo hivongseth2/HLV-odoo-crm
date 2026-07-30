@@ -341,28 +341,29 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
     # POST /api/v1/zalo/orders/cancel
     @http.route("/api/v1/zalo/orders/cancel", type="http", auth="public", methods=["POST", "OPTIONS"], csrf=False)
     def order_cancel(self, **params):
-        """Body: {"order_id": 1, "contact_id": 1, "reason": "Đổi ý"}"""
+        """Body: {"order_id": 1, "reason": "Đổi ý"}"""
         if request.httprequest.method == "OPTIONS":
             return self._response_options()
         try:
             body = self._request_json()
             order_id = self._parse_int(body.get("order_id"), 0)
-            contact_id = self._parse_int(body.get("contact_id"), 0)
             reason = (body.get("reason") or "").strip()
 
-            if not order_id or not contact_id:
-                return self._response_error("INVALID_INPUT", "Thiếu order_id hoặc contact_id")
+            if not order_id:
+                return self._response_error("INVALID_INPUT", "Thiếu order_id")
 
-            # Auth + ownership check
-            auth_result = self._auth_and_verify_owner(contact_id)
+            # Auth: xác thực token (không cần contact_id từ client)
+            auth_result = self._auth_required()
             if isinstance(auth_result, Response):
                 return auth_result
+            token_partner_id = auth_result
 
             order = request.env["sale.order"].sudo().browse(order_id)
             if not order.exists():
                 return self._response_error("NOT_FOUND", "Đơn hàng không tồn tại", 404)
 
-            if order.partner_id.id != contact_id:
+            # Ownership check: order phải thuộc về partner từ token
+            if order.partner_id.id != token_partner_id:
                 return self._response_error("FORBIDDEN", "Đơn hàng không thuộc về bạn", 403)
 
             if order.state in ("done", "cancel"):
@@ -406,7 +407,7 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
     # POST /api/v1/zalo/orders/feedback
     @http.route("/api/v1/zalo/orders/feedback", type="http", auth="public", methods=["POST", "OPTIONS"], csrf=False)
     def order_feedback(self, **params):
-        """Body: {"order_id": 1, "contact_id": 1, "action_type": "received" | "return", "note": "Đã nhận hàng"}
+        """Body: {"order_id": 1, "action_type": "received" | "return", "note": "Đã nhận hàng"}
         Phía Odoo chỉ nhận thông tin và ghi chép vào chatter/note, KHÔNG thực hiện action tự động nào khác.
         """
         if request.httprequest.method == "OPTIONS":
@@ -414,22 +415,24 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
         try:
             body = self._request_json()
             order_id = self._parse_int(body.get("order_id"), 0)
-            contact_id = self._parse_int(body.get("contact_id"), 0)
             action_type = (body.get("action_type") or "received").strip()
             note = (body.get("note") or "").strip()
 
-            if not order_id or not contact_id:
-                return self._response_error("INVALID_INPUT", "Thiếu order_id hoặc contact_id")
+            if not order_id:
+                return self._response_error("INVALID_INPUT", "Thiếu order_id")
 
-            auth_result = self._auth_and_verify_owner(contact_id)
+            # Auth: xác thực token (không cần contact_id từ client)
+            auth_result = self._auth_required()
             if isinstance(auth_result, Response):
                 return auth_result
+            token_partner_id = auth_result
 
             order = request.env["sale.order"].sudo().browse(order_id)
             if not order.exists():
                 return self._response_error("NOT_FOUND", "Đơn hàng không tồn tại", 404)
 
-            if order.partner_id.id != contact_id:
+            # Ownership check: order phải thuộc về partner từ token
+            if order.partner_id.id != token_partner_id:
                 return self._response_error("FORBIDDEN", "Đơn hàng không thuộc về bạn", 403)
 
             title = "Xác nhận đã nhận được hàng" if action_type == "received" else "Đề nghị Đổi/Trả hàng"
