@@ -372,20 +372,24 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             if reason:
                 order.write({"note": (order.note or "") + f"\nLý do hủy: {reason}"})
 
-            # Gọi action_cancel với sudo để bypass ACL stock.picking
+            # Force cancel với sudo() toàn diện để bypass ACL stock.picking / stock.move
+            order_sudo = order.sudo()
             try:
-                order.sudo().action_cancel()
-            except Exception:
-                pass
+                # Hủy tất cả picking chưa done/cancel
+                pickings_to_cancel = order_sudo.picking_ids.filtered(
+                    lambda p: p.state not in ('done', 'cancel')
+                )
+                if pickings_to_cancel:
+                    # Hủy stock.move trước để tránh constraint
+                    pickings_to_cancel.move_ids.filtered(
+                        lambda m: m.state not in ('done', 'cancel')
+                    ).write({'state': 'cancel'})
+                    pickings_to_cancel.write({'state': 'cancel'})
+            except Exception as e:
+                _logger.warning("Force cancel pickings error: %s", e)
 
-            # Kiểm tra state thực tế, nếu chưa về "cancel" thì force
-            if order.state != "cancel":
-                # Hủy các picking liên quan trước (cần sudo để truy cập stock.picking)
-                try:
-                    order.sudo().picking_ids.filtered(lambda p: p.state not in ('done', 'cancel')).action_cancel()
-                except Exception:
-                    pass
-                order.sudo().write({"state": "cancel"})
+            # Set trực tiếp order state về cancel
+            order_sudo.write({"state": "cancel"})
 
             # Ghi log Chatter thông báo đơn hàng bị hủy từ Zalo Mini App
             try:
