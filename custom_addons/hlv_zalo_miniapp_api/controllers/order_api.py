@@ -170,9 +170,10 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
     # POST /api/v1/zalo/orders/create
     @http.route("/api/v1/zalo/orders/create", type="http", auth="public", methods=["POST", "OPTIONS"], csrf=False)
     def order_create(self, **params):
-        """Body: {"contact_id":1, "items":[{"product_id":42,"quantity":2}], "address_id":2, "note":"...", "voucher_code":"VHQ-XXXXX"}
+        """Body: {"contact_id":1, "items":[{"product_id":42,"quantity":2}], "address_id":2, "note":"...", "voucher_code":"VHQ-XXXXX", "payment_method":"cod|zalopay"}
         
         items: Danh sách sản phẩm từ frontend (frontend tự quản lý giỏ hàng)
+        payment_method: để ghi log, không ảnh hưởng flow xử lý
         """
         if request.httprequest.method == "OPTIONS":
             return self._response_options()
@@ -183,6 +184,7 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             address_id = self._parse_int(body.get("address_id"), 0)
             note = (body.get("note") or "").strip()
             voucher_code = (body.get("voucher_code") or "").strip()
+            payment_method = (body.get("payment_method") or "cod").strip().lower()
 
             if not contact_id:
                 return self._response_error("INVALID_INPUT", "Thiếu contact_id")
@@ -267,7 +269,7 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
                     _logger.warning("Voucher apply error: %s", ve)
                     order.write({"note": (order.note or "") + f"\nVoucher: {voucher_code}"})
 
-            # Confirm đơn hàng
+            # Luôn confirm đơn hàng ngay sau khi tạo (COD: user đã xác nhận, ZaloPay: đã thanh toán thành công)
             try:
                 order.action_confirm()
             except Exception as ce:
@@ -275,7 +277,6 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
                 order.unlink()
                 return self._response_error("ORDER_ERROR", f"Không thể xác nhận đơn: {str(ce)}", 400)
 
-            # Không cần write state="sale" vì action_confirm() đã chuyển state
             order.write({"date_order": fields.Datetime.now()})
 
             # Ghi log Chatter thông báo đơn hàng được tạo từ Zalo Mini App
@@ -283,11 +284,13 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
                 chatter_msg = Markup(_(
                     "<b>Đơn hàng được tạo từ Zalo Mini App</b><br/>"
                     "• <b>Khách hàng:</b> %s (SĐT: %s)<br/>"
-                    "• <b>Thời gian tạo:</b> %s"
+                    "• <b>Thời gian tạo:</b> %s<br/>"
+                    "• <b>Phương thức thanh toán:</b> %s"
                 )) % (
                     partner.name,
                     partner.phone or partner.mobile or "N/A",
-                    fields.Datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    fields.Datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    payment_method.upper(),
                 )
                 if note:
                     chatter_msg += Markup(_("<br/>• <b>Ghi chú:</b> %s")) % note
@@ -433,4 +436,4 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             })
         except Exception as e:
             _logger.exception("order_feedback error")
-            return self._response_error("SERVER_ERROR", str(e), 500)
+            return self._response_error("SERVER_ERROR", str(e), 500)
