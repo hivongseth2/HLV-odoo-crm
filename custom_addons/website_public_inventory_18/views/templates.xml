@@ -312,7 +312,7 @@
                               </td>
                               <td>
                                 <div class="position-relative" style="width: 50px; height: 50px;">
-                                    <img t-att-src="r['image_url']" loading="lazy" decoding="async" class="" style="width:100%; height:100%; object-fit:cover;"/>
+                                    <img t-att-src="r['image_url']" class="" style="width:100%; height:100%; object-fit:cover;"/>
                                 </div>
                               </td>
                               <td class="fw-bold text-primary"><t t-esc="r['default_code']"/></td>
@@ -354,7 +354,7 @@
                               </td>
                             </tr>
                             <!-- Legacy server-rendered fallback; normal pages load this row on demand. -->
-                            <tr t-if="r.get('breakdown')" class="detail-row">
+                            <tr t-if="r.get('breakdown')" class="detail-row" t-att-data-parent-pid="r['id']">
                                 <td colspan="14" style="padding:0; border:none;">
                                     <t t-set="bk" t-value="r.get('breakdown', {})"/>
                                     <!-- COMBO LAYOUT -->
@@ -645,12 +645,16 @@
                    var isCombo = String($btn.data('is-combo')) === 'true';
                    var $row = $btn.closest('tr'); 
                    
-                   // Kiểm tra nếu đã có detail-row rồi thì thôi, không tải nữa (tránh trùng)
+                   // Chỉ tái sử dụng detail-row thuộc đúng sản phẩm hiện tại.
                    var $next = $row.next();
-                   if ($next.length && $next.hasClass('detail-row')) return;
+                   if (
+                       $next.length
+                       && $next.hasClass('detail-row')
+                       && String($next.attr('data-parent-pid')) === String(pid)
+                   ) return;
 
                    var colCount = $row.children('td').length;
-                   var $detail = $('<tr class="detail-row"><td colspan="' + colCount + '"><div class="p-3 bg-light text-center"><span class="spinner-border spinner-border-sm me-2"></span>Đang tải...</div></td></tr>');
+                   var $detail = $('<tr class="detail-row" data-parent-pid="' + pid + '"><td colspan="' + colCount + '"><div class="p-3 bg-light text-center"><span class="spinner-border spinner-border-sm me-2"></span>Đang tải...</div></td></tr>');
                    $row.after($detail);
                    $btn.html('<i class="fa fa-minus"></i>');
 
@@ -663,10 +667,10 @@
                       data: JSON.stringify({jsonrpc: "2.0", method: "call", params: { product_id: pid, warehouse_id: currentWid, detail_mode: detailMode }, id: 1}),
                        success: function(resp) {
                            var res = (resp && resp.result) ? resp.result : {};
-                           if(res.ok) {
+                           if(res.ok && String(res.product_id) === String(pid)) {
                                $detail.find('td').html(buildDetailTable(res));
                            } else {
-                               $detail.find('td').html('<div class="text-danger small p-3">Lỗi: ' + (res.error || 'Unknown') + '</div>');
+                               $detail.find('td').html('<div class="text-danger small p-3">Lỗi: ' + (res.error || 'Dữ liệu sản phẩm không khớp') + '</div>');
                            }
                        },
                        error: function() {
@@ -694,15 +698,23 @@
                 // Khi bấm tay thì giữ logic Toggle: Đang mở -> Đóng, Đang đóng -> Mở
                 $(document).on('click', '.btn-expand', function () {
                    var $btn = $(this);
+                   var pid = String($btn.data('pid'));
                    var $row = $btn.closest('tr');
                    var $next = $row.next();
+                   var isOwnDetail = (
+                       $next.length
+                       && $next.hasClass('detail-row')
+                       && String($next.attr('data-parent-pid')) === pid
+                   );
 
-                    if ($next.is(':visible')) {
-                        $next.hide();
-                        $btn.html('<i class="fa fa-plus"></i>');
-                    } else if ($next.length && $next.hasClass('detail-row')) {
-                        $next.show();
-                        $btn.html('<i class="fa fa-minus"></i>');
+                    if (isOwnDetail) {
+                        if ($next.is(':visible')) {
+                            $next.hide();
+                            $btn.html('<i class="fa fa-plus"></i>');
+                        } else {
+                            $next.show();
+                            $btn.html('<i class="fa fa-minus"></i>');
+                        }
                     } else {
                         loadDetailRow($btn);
                     }
@@ -780,7 +792,7 @@
                           html += '<div class="col-12 col-md-12">';
                           html += '  <div class="card h-100 border shadow-sm">';
                           html += '    <div class="card-header bg-white d-flex align-items-center py-2">';
-                          html += '      <img src="' + imgUrl + '" loading="lazy" decoding="async" class=" me-3" style="width:40px; height:40px; object-fit:contain;">';
+                          html += '      <img src="' + imgUrl + '" class=" me-3" style="width:40px; height:40px; object-fit:contain;">';
                           html += '      <div class="flex-grow-1">';
                           html += '        <div class="fw-bold text-primary">' + c.name + '</div>';
                           html += '        <div class="small text-muted">SL Combo: <b>' + fmt(c.component_qty_in_combo) + '</b></div>';
