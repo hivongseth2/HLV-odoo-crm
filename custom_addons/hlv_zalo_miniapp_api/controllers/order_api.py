@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
+import re
+from datetime import timedelta, timezone
 from markupsafe import Markup
 
 from odoo import _, fields, http
@@ -9,9 +11,17 @@ from .base_api import ZaloBaseAPI
 
 _logger = logging.getLogger(__name__)
 
+# GMT+7 timezone
+GMT7 = timezone(timedelta(hours=7))
+
 
 class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
     """API Đơn hàng cho Zalo Mini App"""
+
+    @staticmethod
+    def _now_gmt7():
+        """Return current datetime in GMT+7 as string."""
+        return fields.Datetime.now().astimezone(GMT7).strftime("%Y-%m-%d %H:%M:%S")
 
     def _order_to_dict(self, order):
         lines = []
@@ -279,6 +289,15 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
 
             order.write({"date_order": fields.Datetime.now()})
 
+            # Parse customer note: extract real note text (remove [PTTT: ...] prefix added by frontend)
+            customer_note = ""
+            if note:
+                # Frontend sends: "[PTTT: COD] - Ghi chú: abc..." or "[PTTT: ZaloPay] abc..."
+                # Extract only the actual customer note part
+                customer_note = re.sub(r'^\[PTTT:\s*[^\]]+\]\s*(?:-\s*Ghi chú:\s*)?', '', note).strip()
+                if customer_note.startswith("- Ghi chú: "):
+                    customer_note = customer_note[10:].strip()
+
             # Ghi log Chatter thông báo đơn hàng được tạo từ Zalo Mini App
             try:
                 chatter_msg = Markup(_(
@@ -289,11 +308,11 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
                 )) % (
                     partner.name,
                     partner.phone or partner.mobile or "N/A",
-                    fields.Datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    self._now_gmt7(),
                     payment_method.upper(),
                 )
-                if note:
-                    chatter_msg += Markup(_("<br/>• <b>Ghi chú:</b> %s")) % note
+                if customer_note:
+                    chatter_msg += Markup(_("<br/>• <b>Ghi chú từ khách hàng:</b> %s")) % customer_note
                 if voucher_code:
                     chatter_msg += Markup(_("<br/>• <b>Voucher:</b> %s")) % voucher_code
 
@@ -419,7 +438,7 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
                 formatted_msg += Markup(_("<br/>• <b>Ghi chú từ khách hàng:</b> %s")) % note
 
             current_note = order.note or ""
-            new_entry = f"\n[{fields.Datetime.now().strftime('%Y-%m-%d %H:%M')}] {title}"
+            new_entry = f"\n[{self._now_gmt7()}] {title}"
             if note:
                 new_entry += f": {note}"
             order.write({"note": current_note + new_entry})
