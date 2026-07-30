@@ -489,7 +489,10 @@ class MisaExtensionController(http.Controller):
                     }
                     sync_baseline_lines = []
                     for line in lines_data:
-                        if not line.get("misa_line_id") or not line.get("qty"):
+                        # Giữ cả dòng legacy chưa có CRM Line ID trong baseline.
+                        # Extension sẽ fallback theo mã sản phẩm và nhận ra dòng
+                        # bị xóa ở đơn cũ chưa từng có lịch sử đồng bộ.
+                        if not line.get("qty"):
                             continue
                         baseline_line = dict(line)
                         applied = applied_by_line_id.get(str(line["misa_line_id"]))
