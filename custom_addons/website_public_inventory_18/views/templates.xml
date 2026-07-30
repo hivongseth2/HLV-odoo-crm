@@ -312,7 +312,7 @@
                               </td>
                               <td>
                                 <div class="position-relative" style="width: 50px; height: 50px;">
-                                    <img t-att-src="r['image_url']" class="" style="width:100%; height:100%; object-fit:cover;"/>
+                                    <img t-att-src="r['image_url']" loading="lazy" decoding="async" class="" style="width:100%; height:100%; object-fit:cover;"/>
                                 </div>
                               </td>
                               <td class="fw-bold text-primary"><t t-esc="r['default_code']"/></td>
@@ -353,8 +353,8 @@
                                 <t t-if="r['website_url']"><a t-att-href="r['website_url']" target="_blank" class="text-decoration-none"><i class="fa fa-external-link"></i></a></t>
                               </td>
                             </tr>
-                            <!-- DETAIL ROW (Server-Side Rendered) -->
-                            <tr class="detail-row">
+                            <!-- Legacy server-rendered fallback; normal pages load this row on demand. -->
+                            <tr t-if="r.get('breakdown')" class="detail-row">
                                 <td colspan="14" style="padding:0; border:none;">
                                     <t t-set="bk" t-value="r.get('breakdown', {})"/>
                                     <!-- COMBO LAYOUT -->
@@ -661,15 +661,18 @@
                       url: "/search_stock/product_breakdown",
                       type: "POST", dataType: "json", contentType: "application/json",
                       data: JSON.stringify({jsonrpc: "2.0", method: "call", params: { product_id: pid, warehouse_id: currentWid, detail_mode: detailMode }, id: 1}),
-                      success: function(resp) {
-                          var res = (resp && resp.result) ? resp.result : {};
-                          if(res.ok) {
-                              $detail.find('td').html(buildDetailTable(res));
-                          } else {
-                              $detail.find('td').html('<div class="text-danger small p-3">Lỗi: ' + (res.error || 'Unknown') + '</div>');
-                          }
-                      }
-                   });
+                       success: function(resp) {
+                           var res = (resp && resp.result) ? resp.result : {};
+                           if(res.ok) {
+                               $detail.find('td').html(buildDetailTable(res));
+                           } else {
+                               $detail.find('td').html('<div class="text-danger small p-3">Lỗi: ' + (res.error || 'Unknown') + '</div>');
+                           }
+                       },
+                       error: function() {
+                           $detail.find('td').html('<div class="text-danger small p-3">Lỗi kết nối. Vui lòng thử lại.</div>');
+                       }
+                    });
               }
 
               $(document).ready(function() {
@@ -694,14 +697,16 @@
                    var $row = $btn.closest('tr');
                    var $next = $row.next();
 
-                   if ($next.is(':visible')) { 
-                       $next.hide(); 
-                       $btn.html('<i class="fa fa-plus"></i>'); 
-                   } else {
-                       $next.show();
-                       $btn.html('<i class="fa fa-minus"></i>');
-                   }
-                });
+                    if ($next.is(':visible')) {
+                        $next.hide();
+                        $btn.html('<i class="fa fa-plus"></i>');
+                    } else if ($next.length && $next.hasClass('detail-row')) {
+                        $next.show();
+                        $btn.html('<i class="fa fa-minus"></i>');
+                    } else {
+                        loadDetailRow($btn);
+                    }
+                 });
 
                 // --- VIEW LOCATION DETAILS ---
                 $(document).on('click', '.btn-view-location', function(e) {
@@ -775,17 +780,20 @@
                           html += '<div class="col-12 col-md-12">';
                           html += '  <div class="card h-100 border shadow-sm">';
                           html += '    <div class="card-header bg-white d-flex align-items-center py-2">';
-                          html += '      <img src="' + imgUrl + '" class=" me-3" style="width:40px; height:40px; object-fit:contain;">';
+                          html += '      <img src="' + imgUrl + '" loading="lazy" decoding="async" class=" me-3" style="width:40px; height:40px; object-fit:contain;">';
                           html += '      <div class="flex-grow-1">';
                           html += '        <div class="fw-bold text-primary">' + c.name + '</div>';
                           html += '        <div class="small text-muted">SL Combo: <b>' + fmt(c.component_qty_in_combo) + '</b></div>';
                           html += '      </div>';
                           html += '    </div>';
-                          html += '    <div class="card-body p-0">';
-                          (c.warehouses||[]).forEach(function(w){
-                              html += '<div class="border-bottom p-2">';
-                              html += '  <div class="fw-bold small mb-1">' + w.warehouse_name + '</div>';
-                              html += '  <div class="d-flex">';
+                           html += '    <div class="card-body p-0">';
+                           (c.warehouses||[]).forEach(function(w){
+                               html += '<div class="border-bottom p-2">';
+                               html += '  <div class="fw-bold small mb-1 d-flex justify-content-between align-items-center">';
+                               html += '    <span>' + w.warehouse_name + '</span>';
+                               html += '    <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2 btn-view-location" data-pid="' + c.child_product_id + '" data-wid="' + w.warehouse_id + '" data-name="' + c.name + '"><i class="fa fa-map-marker"></i> Vị trí</button>';
+                               html += '  </div>';
+                               html += '  <div class="d-flex">';
                               html += '    <div class="flex-fill text-center border-end"><div class="small text-muted">Sẵn sàng</div><div class="fw-bold text-success">' + fmt(w.qty_available) + '</div></div>';
                               html += '    <div class="flex-fill text-center"><div class="small text-muted">Thực tế</div><div>' + fmt(w.qty_total) + '</div></div>';
                               html += '  </div>';
@@ -798,23 +806,24 @@
                   
                   // CASE 2: SẢN PHẨM THƯỜNG
                   else {
-                      html += '<div class="detail-container-mobile">';
-                      html += '<div class="d-none d-md-block p-3 bg-white">';
-                      html += '<table class="table table-sm mb-0"><thead><tr><th>Kho hàng</th><th class="text-end">Tồn</th><th class="text-end">Giữ</th><th class="text-end">Sẵn sàng</th><th class="text-end">Dự báo</th></tr></thead><tbody>';
-                      rows.forEach(function(r){
-                          var availClass = (r.qty_available > 0) ? 'text-success fw-bold' : 'text-muted';
-                          var fcVal = fmt(r.qty_forecast || 0);
-                          var fcLink = '<a href="#" class="text-primary text-decoration-none btn-forecast-detail fw-bold" data-pid="' + (data.product_id || '') + '" data-wid="' + r.warehouse_id + '" data-name="' + (data.product_name || '') + ' (' + r.warehouse_name + ')">' + fcVal + '</a>';
-                          html += '<tr><td>' + r.warehouse_name + '</td><td class="text-end">' + fmt(r.qty_total) + '</td><td class="text-end">' + fmt(r.qty_reserved) + '</td><td class="text-end ' + availClass + '">' + fmt(r.qty_available) + '</td><td class="text-end">' + fcLink + '</td></tr>';
-                      });
+                       html += '<div class="detail-container-mobile">';
+                       html += '<div class="d-none d-md-block p-3 bg-white">';
+                       html += '<table class="table table-sm mb-0"><thead><tr><th>Kho hàng</th><th class="text-end">Tồn</th><th class="text-end">Giữ</th><th class="text-end">Sẵn sàng</th><th class="text-end">Dự báo</th><th class="text-center">Vị trí</th></tr></thead><tbody>';
+                       rows.forEach(function(r){
+                           var availClass = (r.qty_available > 0) ? 'text-success fw-bold' : 'text-muted';
+                           var fcVal = fmt(r.qty_forecast || 0);
+                           var fcLink = '<a href="#" class="text-primary text-decoration-none btn-forecast-detail fw-bold" data-pid="' + (data.product_id || '') + '" data-wid="' + r.warehouse_id + '" data-name="' + (data.product_name || '') + ' (' + r.warehouse_name + ')">' + fcVal + '</a>';
+                           var locationButton = '<button type="button" class="btn btn-sm btn-light text-primary btn-view-location border py-0 px-2" data-pid="' + (data.product_id || '') + '" data-wid="' + r.warehouse_id + '" data-name="' + (data.product_name || '') + '"><i class="fa fa-map-marker"></i></button>';
+                           html += '<tr><td>' + r.warehouse_name + '</td><td class="text-end">' + fmt(r.qty_total) + '</td><td class="text-end">' + fmt(r.qty_reserved) + '</td><td class="text-end ' + availClass + '">' + fmt(r.qty_available) + '</td><td class="text-end">' + fcLink + '</td><td class="text-center">' + locationButton + '</td></tr>';
+                       });
                       html += '</tbody></table></div>';
 
                       html += '<div class="d-md-none">';
                       rows.forEach(function(r){
-                           var fcVal = fmt(r.qty_forecast || 0);
-                           var fcLink = '<a href="#" class="text-primary text-decoration-none btn-forecast-detail fw-bold" data-pid="' + (data.product_id || '') + '" data-wid="' + r.warehouse_id + '" data-name="' + (data.product_name || '') + ' (' + r.warehouse_name + ')">' + fcVal + '</a>';
-                           html += '<div class="wh-card">';
-                           html += '  <div class="wh-header">' + r.warehouse_name + '</div>';
+                            var fcVal = fmt(r.qty_forecast || 0);
+                            var fcLink = '<a href="#" class="text-primary text-decoration-none btn-forecast-detail fw-bold" data-pid="' + (data.product_id || '') + '" data-wid="' + r.warehouse_id + '" data-name="' + (data.product_name || '') + ' (' + r.warehouse_name + ')">' + fcVal + '</a>';
+                            html += '<div class="wh-card">';
+                            html += '  <div class="wh-header d-flex justify-content-between align-items-center"><span>' + r.warehouse_name + '</span><button type="button" class="btn btn-sm btn-outline-primary py-0 px-2 btn-view-location" data-pid="' + (data.product_id || '') + '" data-wid="' + r.warehouse_id + '" data-name="' + (data.product_name || '') + '"><i class="fa fa-map-marker"></i> Vị trí</button></div>';
                            html += '  <div class="wh-stats">';
                            html += '    <div class="wh-stat-col ' + (r.qty_total==0 ? 'dim':'') + '"><div class="wh-label">Tổng</div><div class="wh-val">' + fmt(r.qty_total) + '</div></div>';
                            html += '    <div class="wh-stat-col ' + (r.qty_reserved==0 ? 'dim':'') + '"><div class="wh-label">Đã giữ</div><div class="wh-val text-muted">' + fmt(r.qty_reserved) + '</div></div>';
