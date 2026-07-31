@@ -82,8 +82,8 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
                 now = fields.Datetime.now()
                 if voucher.date_expiry < now:
                     return {"valid": False, "error": "Voucher đã hết hạn"}
-            if order_amount < voucher.min_amount:
-                return {"valid": False, "error": f"Đơn hàng tối thiểu {voucher.min_amount:,.0f}₫"}
+            if order_amount < voucher.min_order_amount:
+                return {"valid": False, "error": f"Đơn hàng tối thiểu {voucher.min_order_amount:,.0f}₫"}
 
             discount_value = 0
             if voucher.discount_type == "percent":
