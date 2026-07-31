@@ -274,7 +274,8 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
                     return self._response_error("VOUCHER_ERROR", voucher_result["error"], 400)
                 voucher_info = voucher_result
                 try:
-                    order.action_apply_loyalty_voucher(voucher_code)
+                    order.loyalty_voucher_code = voucher_code
+                    order.action_apply_loyalty_voucher()
                 except Exception as ve:
                     _logger.warning("Voucher apply error: %s", ve)
                     order.write({"note": (order.note or "") + f"\nVoucher: {voucher_code}"})
