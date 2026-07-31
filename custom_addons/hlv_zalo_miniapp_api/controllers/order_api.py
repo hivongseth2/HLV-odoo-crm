@@ -25,17 +25,34 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
 
     def _order_to_dict(self, order):
         lines = []
+        voucher_discount_total = 0.0
         for line in order.order_line:
-            lines.append({
-                "id": line.id,
-                "product_id": line.product_id.id if line.product_id else None,
-                "product_name": line.product_id.display_name if line.product_id else "",
-                "default_code": line.product_id.default_code if line.product_id else "",
-                "quantity": line.product_uom_qty,
-                "price_unit": line.price_unit,
-                "subtotal": line.price_subtotal,
-                "discount": line.discount or 0.0,
-            })
+            is_voucher_line = False
+            code = (line.product_id.default_code or "").upper() if line.product_id else ""
+            name = (line.name or "").lower()
+            if code in ("LOYALTY_VOUCHER_DISCOUNT", "VOUCHER_DISCOUNT") or "voucher" in name or "giảm giá" in name:
+                is_voucher_line = True
+            elif line.price_subtotal < 0 or line.price_unit < 0:
+                is_voucher_line = True
+
+            if is_voucher_line:
+                voucher_discount_total += abs(line.price_subtotal or (line.price_unit * line.product_uom_qty))
+            else:
+                line_dict = {
+                    "id": line.id,
+                    "product_id": line.product_id.id if line.product_id else None,
+                    "product_name": line.product_id.display_name if line.product_id else "",
+                    "default_code": line.product_id.default_code if line.product_id else "",
+                    "quantity": line.product_uom_qty,
+                    "price_unit": line.price_unit,
+                    "subtotal": line.price_subtotal,
+                    "discount": line.discount or 0.0,
+                }
+                if hasattr(line, "loyalty_discount_pct"):
+                    line_dict["loyalty_discount_pct"] = getattr(line, "loyalty_discount_pct", 0.0) or 0.0
+                if hasattr(line, "x_studio_loyalty_discount_amount"):
+                    line_dict["x_studio_loyalty_discount_amount"] = getattr(line, "x_studio_loyalty_discount_amount", 0.0) or 0.0
+                lines.append(line_dict)
 
         picking_info = []
         try:
@@ -58,6 +75,8 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             "state": order.state, "date_order": order.date_order,
             "amount_untaxed": order.amount_untaxed, "amount_tax": order.amount_tax,
             "amount_total": order.amount_total, "note": order.note or "",
+            "voucher_discount": voucher_discount_total,
+            "loyalty_voucher_code": getattr(order, "loyalty_voucher_code", "") or "",
             "lines": lines, "picking_info": picking_info,
             "shipping_address": {
                 "street": order.partner_shipping_id.street or "",
