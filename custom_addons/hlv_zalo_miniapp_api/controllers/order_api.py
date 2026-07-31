@@ -388,8 +388,11 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             except Exception as e:
                 _logger.warning("Force cancel pickings error: %s", e)
 
-            # Set trực tiếp order state về cancel
-            order_sudo.write({"state": "cancel"})
+            # Set trực tiếp order state về cancel và tự động bật Cần hủy (x_plan_need_cancel)
+            cancel_vals = {"state": "cancel"}
+            if "x_plan_need_cancel" in order_sudo._fields:
+                cancel_vals["x_plan_need_cancel"] = True
+            order_sudo.write(cancel_vals)
 
             # Ghi log Chatter thông báo đơn hàng bị hủy từ Zalo Mini App
             try:

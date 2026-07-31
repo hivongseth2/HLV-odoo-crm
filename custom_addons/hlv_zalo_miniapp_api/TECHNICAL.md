@@ -30,7 +30,7 @@ hlv_zalo_miniapp_api/
 │   ├── product_product_views.xml # Views & Action filter sản phẩm Zalo
 │   ├── product_template_views.xml# Views bổ sung fields Zalo trên template
 │   ├── res_partner_views.xml   # Views & Action filter khách hàng Zalo
-│   ├── sale_order_views.xml    # Action filter đơn hàng từ khách hàng Zalo
+│   ├── sale_order_views.xml    # Custom List View (view_order_zalo_tree) & Action filter đơn hàng Zalo Mini App
 │   └── zalo_loyalty_portal_account_views.xml # Form, List, Search views & Action quản lý Tài khoản Portal Zalo Mini App (Khách hàng cá nhân)
 ├── security/
 │   └── ir.model.access.csv
@@ -172,8 +172,10 @@ Token format: `{partner_id}.{timestamp}.{signature}`
 Secret key: lưu trong `ir.config_parameter` key `zalo_api_secret`
 Dev mode: nếu chưa config secret, dùng fallback `hlv_zalo_dev_secret_2026` (bỏ qua expiry check)
 
-### Order Chatter
+### Order Chatter & Hủy Đơn
 - Đơn hàng tạo mới hoặc bị hủy từ Zalo Mini App sẽ tự động ghi log vào **Chatter (message_post)** trên `sale.order` với thông tin chi tiết (Tên khách hàng, SĐT, Thời gian, Ghi chú, Voucher, Lý do hủy) sử dụng `markupsafe.Markup`.
+- Khi đơn hàng bị hủy từ Zalo Mini App (`/api/v1/zalo/orders/cancel`), hệ thống tự động bật cờ `x_plan_need_cancel = True` ("Cần hủy") trên `sale.order` để bộ phận kho/sales dễ dàng nhận biết và lọc đơn cần hủy.
+- Giao diện danh sách "Đơn hàng Zalo Mini App" (`view_order_zalo_tree`) được tối ưu với đầy đủ các cột trạng thái: **Cần hủy**, **Số báo giá**, **Ngày đặt hàng**, **Ngày giao hàng**, **Khách hàng**, **Chuyên viên sales**, **Hoạt động**, **Tổng**, **Trạng thái đơn hàng**, **Trạng thái giao hàng**, **Trạng thái hóa đơn**, và **Thẻ**.
 
 ### CORS & Security
 - Tất cả API routes đều hỗ trợ `OPTIONS` preflight request (`methods=[..., "OPTIONS"]`) và phản hồi 200 OK kèm CORS headers.

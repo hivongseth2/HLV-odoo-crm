@@ -1,9 +1,46 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <record id="view_order_zalo_tree" model="ir.ui.view">
+        <field name="name">sale.order.zalo.list</field>
+        <field name="model">sale.order</field>
+        <field name="priority">20</field>
+        <field name="arch" type="xml">
+            <list string="Đơn hàng Zalo Mini App" sample="1" decoration-muted="state == 'cancel'">
+                <field name="x_plan_need_cancel" string="Cần hủy" widget="boolean_toggle" optional="show"/>
+                <field name="name" string="Số báo giá" readonly="1" decoration-bf="1"/>
+                <field name="date_order" string="Ngày đặt hàng" readonly="1" widget="datetime" optional="show"/>
+                <field name="commitment_date" string="Ngày giao hàng" widget="datetime" optional="show"/>
+                <field name="partner_id" string="Khách hàng" readonly="1"/>
+                <field name="user_id" string="Chuyên viên sales" widget="many2one_avatar_user" optional="show"/>
+                <field name="activity_ids" string="Hoạt động" widget="list_activity" optional="show"/>
+                <field name="amount_total" string="Tổng" sum="Total Tax Included" widget="monetary" decoration-bf="1"/>
+                <field name="state" string="Trạng thái đơn hàng" widget="badge"
+                       decoration-info="state in ('draft', 'sent')"
+                       decoration-success="state == 'sale'"
+                       decoration-primary="state == 'done'"
+                       decoration-danger="state == 'cancel'"
+                       optional="show"/>
+                <field name="delivery_status" string="Trạng thái giao hàng" widget="badge"
+                       decoration-info="delivery_status in ('to_delivery', 'started')"
+                       decoration-warning="delivery_status == 'partial'"
+                       decoration-success="delivery_status == 'full'"
+                       decoration-muted="not delivery_status or delivery_status == 'clear'"
+                       optional="show"/>
+                <field name="invoice_status" string="Trạng thái hóa đơn" widget="badge"
+                       decoration-success="invoice_status == 'invoiced'"
+                       decoration-info="invoice_status == 'to invoice'"
+                       decoration-muted="invoice_status == 'no'"
+                       optional="show"/>
+                <field name="tag_ids" string="Thẻ" widget="many2many_tags" options="{'color_field': 'color'}" optional="show"/>
+            </list>
+        </field>
+    </record>
+
     <record id="action_zalo_sale_order" model="ir.actions.act_window">
         <field name="name">Đơn hàng Zalo Mini App</field>
         <field name="res_model">sale.order</field>
         <field name="view_mode">list,kanban,form,calendar,pivot,graph,activity</field>
+        <field name="view_id" ref="view_order_zalo_tree"/>
         <field name="domain">[('partner_id.x_is_zalo_account', '=', True)]</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">
@@ -13,5 +50,12 @@
                 Danh sách các đơn hàng được tạo bởi tài khoản khách hàng Zalo Mini App sẽ xuất hiện ở đây.
             </p>
         </field>
+    </record>
+
+    <record id="action_zalo_sale_order_view_list" model="ir.actions.act_window.view">
+        <field name="sequence" eval="1"/>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="view_order_zalo_tree"/>
+        <field name="act_window_id" ref="action_zalo_sale_order"/>
     </record>
 </odoo>
