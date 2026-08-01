@@ -49,6 +49,15 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
         return Partner.search(["|", ("phone", "in", formats), ("mobile", "in", formats)], limit=1)
 
     @staticmethod
+    def _is_default_address(a):
+        try:
+            if hasattr(a, "x_is_default_delivery") and "x_is_default_delivery" in a._fields:
+                return bool(a.x_is_default_delivery)
+        except Exception:
+            pass
+        return False
+
+    @staticmethod
     def _get_secret_key():
         Param = request.env["ir.config_parameter"].sudo()
         key = Param.get_param("zalo_api_secret", "")
@@ -383,8 +392,9 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
             }
 
             addresses = partner.child_ids.filtered(lambda c: c.type in ("delivery", "other", "invoice"))
-            # Sort: địa chỉ mặc định (sequence = 0) lên đầu, tiếp theo là sequence khác và id
-            addresses = addresses.sorted(key=lambda a: (a.sequence if a.sequence is not None and a.sequence is not False else 9999, a.id))
+            # Sort: địa chỉ x_is_default_delivery = True lên đầu, sau đó theo ID giảm dần
+            addresses = addresses.sorted(key=lambda a: (0 if self._is_default_address(a) else 1, -a.id))
+            has_explicit_default = any(self._is_default_address(a) for a in addresses)
             data["addresses"] = [{
                 "id": a.id, "name": a.name or "",
                 "street": a.street or "", "street2": a.street2 or "",
@@ -392,7 +402,7 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
                 "country": a.country_id.name if a.country_id else "",
                 "zip": a.zip or "", "phone": a.phone or (partner.phone or ""),
                 "type": a.type,
-                "is_default": idx == 0,
+                "is_default": self._is_default_address(a) if has_explicit_default else (idx == 0),
             } for idx, a in enumerate(addresses)]
 
             return self._response_success(data)
@@ -469,15 +479,17 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
                 return self._response_error("NOT_FOUND", "Khách hàng không tồn tại", 404)
 
             addresses = partner.child_ids.filtered(lambda c: c.type in ("delivery", "other", "invoice"))
-            # Sort: địa chỉ mặc định (sequence = 0) lên đầu, tiếp theo là sequence khác và id
-            addresses = addresses.sorted(key=lambda a: (a.sequence if a.sequence is not None and a.sequence is not False else 9999, a.id))
+            # Sort: địa chỉ x_is_default_delivery = True lên đầu, sau đó theo ID giảm dần
+            addresses = addresses.sorted(key=lambda a: (0 if self._is_default_address(a) else 1, -a.id))
+            has_explicit_default = any(self._is_default_address(a) for a in addresses)
             data = [{
                 "id": a.id, "name": a.name or "",
                 "street": a.street or "", "street2": a.street2 or "",
                 "city": a.city or "", "state": a.state_id.name if a.state_id else "",
                 "country": a.country_id.name if a.country_id else "",
                 "zip": a.zip or "", "phone": a.phone or "",
-                "type": a.type, "is_default": idx == 0,
+                "type": a.type,
+                "is_default": self._is_default_address(a) if has_explicit_default else (idx == 0),
             } for idx, a in enumerate(addresses)]
 
             return self._response_success({"addresses": data})
@@ -614,17 +626,16 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
             if isinstance(auth_result, Response):
                 return auth_result
 
-            # Lấy tất cả địa chỉ cùng parent ngoại trừ addr_id, cấp lại sequence tăng dần từ 1
+            # Đặt x_is_default_delivery = False cho tất cả địa chỉ anh em
             sibling_addresses = request.env["res.partner"].sudo().search([
                 ("parent_id", "=", contact_id),
                 ("type", "in", ("delivery", "other", "invoice")),
                 ("id", "!=", addr_id),
-            ], order="sequence asc, id asc")
-            for idx, sib in enumerate(sibling_addresses, start=1):
-                sib.write({"sequence": idx})
+            ])
 
-            # Đặt sequence của địa chỉ được chọn = 0 (mặc định)
-            address.write({"sequence": 0})
+            if "x_is_default_delivery" in request.env["res.partner"]._fields:
+                sibling_addresses.write({"x_is_default_delivery": False})
+                address.write({"x_is_default_delivery": True})
 
             # Cập nhật địa chỉ chính của contact theo địa chỉ mặc định mới
             parent_partner = address.parent_id
