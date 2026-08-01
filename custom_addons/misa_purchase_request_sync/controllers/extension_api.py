@@ -1409,7 +1409,17 @@ class MisaExtensionController(http.Controller):
             date_from_utc = datetime.strptime(date_from_str, "%Y-%m-%d").strftime('%Y-%m-%d 00:00:00')
             date_to_utc = datetime.strptime(date_to_str, "%Y-%m-%d").strftime('%Y-%m-%d 23:59:59')
             
-            # Lấy các phiếu nhập kho đã hoàn thành
+            # Lấy các Đơn mua hàng được tạo/duyệt trong khoảng ngày HOẶC có phiếu nhập kho hoàn tất trong khoảng ngày
+            odoo_pos_approved = env_admin['purchase.order'].search([
+                ('date_approve', '>=', date_from_utc),
+                ('date_approve', '<=', date_to_utc),
+                ('state', 'in', ['purchase', 'done'])
+            ])
+            odoo_pos_ordered = env_admin['purchase.order'].search([
+                ('date_order', '>=', date_from_utc),
+                ('date_order', '<=', date_to_utc),
+                ('state', 'in', ['purchase', 'done'])
+            ])
             pickings = env_admin['stock.picking'].search([
                 ('date_done', '>=', date_from_utc),
                 ('date_done', '<=', date_to_utc),
@@ -1417,9 +1427,12 @@ class MisaExtensionController(http.Controller):
                 ('picking_type_id.code', '=', 'incoming'),
                 ('purchase_id', '!=', False)
             ])
+            odoo_pos_from_pickings = pickings.mapped('purchase_id').filtered(
+                lambda p: p.state in ['purchase', 'done']
+            )
             
-            # Lấy các Đơn mua hàng liên quan
-            odoo_pos = pickings.mapped('purchase_id')
+            # Kết hợp các Đơn mua hàng từ cả 2 nguồn (tự động loại bỏ trùng lặp)
+            odoo_pos = odoo_pos_approved | odoo_pos_ordered | odoo_pos_from_pickings
             
             if not odoo_pos:
                 return json_response({
@@ -1811,7 +1824,7 @@ class MisaExtensionController(http.Controller):
     )
     def api_extension_po_reconcile_only(self, **kwargs):
         """
-        Đối chiếu Đơn mua hàng (PO) dựa trên NGÀY LẬP ĐƠN (với cross-check).
+        Đối chiếu Đơn mua hàng (PO) dựa trên ĐƠN ĐƯỢC TẠO/DUYỆT VÀ ĐƠN CÓ PHIẾU NHẬP KHO HOÀN TẤT trong khoảng ngày (với cross-check).
         Tìm ra các PO bị thiếu ở MISA hoặc Odoo thực sự (bằng cách search ngược không giới hạn ngày).
         """
         if request.httprequest.method == "OPTIONS":
@@ -1858,12 +1871,30 @@ class MisaExtensionController(http.Controller):
             date_from_iso = date_from_dt.strftime('%Y-%m-%dT00:00:00.00Z')
             date_to_iso = date_to_dt.strftime('%Y-%m-%dT23:59:59.00Z')
             
-            # Lấy Odoo POs created/approved in date range
-            odoo_pos = env_admin['purchase.order'].search([
+            # Lấy các Đơn mua hàng được tạo/duyệt trong khoảng ngày HOẶC có phiếu nhập kho hoàn tất trong khoảng ngày
+            odoo_pos_approved = env_admin['purchase.order'].search([
                 ('date_approve', '>=', date_from_utc),
                 ('date_approve', '<=', date_to_utc),
                 ('state', 'in', ['purchase', 'done'])
             ])
+            odoo_pos_ordered = env_admin['purchase.order'].search([
+                ('date_order', '>=', date_from_utc),
+                ('date_order', '<=', date_to_utc),
+                ('state', 'in', ['purchase', 'done'])
+            ])
+            pickings_done = env_admin['stock.picking'].search([
+                ('date_done', '>=', date_from_utc),
+                ('date_done', '<=', date_to_utc),
+                ('state', '=', 'done'),
+                ('picking_type_id.code', '=', 'incoming'),
+                ('purchase_id', '!=', False)
+            ])
+            odoo_pos_from_pickings = pickings_done.mapped('purchase_id').filtered(
+                lambda p: p.state in ['purchase', 'done']
+            )
+            
+            # Kết hợp các Đơn mua hàng từ cả 2 nguồn (tự động loại bỏ trùng lặp)
+            odoo_pos = odoo_pos_approved | odoo_pos_ordered | odoo_pos_from_pickings
             odoo_pos_list = list(odoo_pos)
             
             # Tìm kiếm ALL POs trong MISA AMIS theo Date
