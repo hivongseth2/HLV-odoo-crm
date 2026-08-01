@@ -383,8 +383,8 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
             }
 
             addresses = partner.child_ids.filtered(lambda c: c.type in ("delivery", "other", "invoice"))
-            # Sort: địa chỉ mặc định (sequence thấp nhất) lên đầu
-            addresses = addresses.sorted(key=lambda a: a.sequence or 0)
+            # Sort: địa chỉ mặc định (sequence = 0) lên đầu, tiếp theo là sequence khác và id
+            addresses = addresses.sorted(key=lambda a: (a.sequence if a.sequence is not None and a.sequence is not False else 9999, a.id))
             data["addresses"] = [{
                 "id": a.id, "name": a.name or "",
                 "street": a.street or "", "street2": a.street2 or "",
@@ -469,8 +469,8 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
                 return self._response_error("NOT_FOUND", "Khách hàng không tồn tại", 404)
 
             addresses = partner.child_ids.filtered(lambda c: c.type in ("delivery", "other", "invoice"))
-            # Sort: địa chỉ mặc định (sequence thấp nhất) lên đầu
-            addresses = addresses.sorted(key=lambda a: a.sequence or 0)
+            # Sort: địa chỉ mặc định (sequence = 0) lên đầu, tiếp theo là sequence khác và id
+            addresses = addresses.sorted(key=lambda a: (a.sequence if a.sequence is not None and a.sequence is not False else 9999, a.id))
             data = [{
                 "id": a.id, "name": a.name or "",
                 "street": a.street or "", "street2": a.street2 or "",
@@ -614,17 +614,25 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
             if isinstance(auth_result, Response):
                 return auth_result
 
-            # Lấy tất cả địa chỉ cùng parent, tăng sequence lên 1 để nhường chỗ
+            # Lấy tất cả địa chỉ cùng parent ngoại trừ addr_id, cấp lại sequence tăng dần từ 1
             sibling_addresses = request.env["res.partner"].sudo().search([
                 ("parent_id", "=", contact_id),
                 ("type", "in", ("delivery", "other", "invoice")),
                 ("id", "!=", addr_id),
-            ])
-            for sib in sibling_addresses:
-                sib.write({"sequence": (sib.sequence or 0) + 1})
+            ], order="sequence asc, id asc")
+            for idx, sib in enumerate(sibling_addresses, start=1):
+                sib.write({"sequence": idx})
 
             # Đặt sequence của địa chỉ được chọn = 0 (mặc định)
             address.write({"sequence": 0})
+
+            # Cập nhật địa chỉ chính của contact theo địa chỉ mặc định mới
+            parent_partner = address.parent_id
+            if parent_partner.exists():
+                parent_partner.write({
+                    "street": address.street or parent_partner.street,
+                    "city": address.city or parent_partner.city,
+                })
 
             return self._response_success({
                 "id": address.id, "name": address.name or "",
