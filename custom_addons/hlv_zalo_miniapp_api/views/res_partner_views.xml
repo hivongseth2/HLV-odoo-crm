@@ -9,6 +9,7 @@
                 <page name="zalo_mini_app" string="Zalo Mini App">
                     <group>
                         <field name="x_is_zalo_account"/>
+                        <field name="x_is_default_delivery"/>
                     </group>
                 </page>
             </xpath>
