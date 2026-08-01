@@ -383,6 +383,8 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
             }
 
             addresses = partner.child_ids.filtered(lambda c: c.type in ("delivery", "other", "invoice"))
+            # Sort: địa chỉ mặc định (sequence thấp nhất) lên đầu
+            addresses = addresses.sorted(key=lambda a: a.sequence or 0)
             data["addresses"] = [{
                 "id": a.id, "name": a.name or "",
                 "street": a.street or "", "street2": a.street2 or "",
@@ -390,7 +392,8 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
                 "country": a.country_id.name if a.country_id else "",
                 "zip": a.zip or "", "phone": a.phone or (partner.phone or ""),
                 "type": a.type,
-            } for a in addresses]
+                "is_default": idx == 0,
+            } for idx, a in enumerate(addresses)]
 
             return self._response_success(data)
         except Exception as e:
@@ -466,14 +469,16 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
                 return self._response_error("NOT_FOUND", "Khách hàng không tồn tại", 404)
 
             addresses = partner.child_ids.filtered(lambda c: c.type in ("delivery", "other", "invoice"))
+            # Sort: địa chỉ mặc định (sequence thấp nhất) lên đầu
+            addresses = addresses.sorted(key=lambda a: a.sequence or 0)
             data = [{
                 "id": a.id, "name": a.name or "",
                 "street": a.street or "", "street2": a.street2 or "",
                 "city": a.city or "", "state": a.state_id.name if a.state_id else "",
                 "country": a.country_id.name if a.country_id else "",
                 "zip": a.zip or "", "phone": a.phone or "",
-                "type": a.type,
-            } for a in addresses]
+                "type": a.type, "is_default": idx == 0,
+            } for idx, a in enumerate(addresses)]
 
             return self._response_success({"addresses": data})
         except Exception as e:
@@ -581,6 +586,52 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
             })
         except Exception as e:
             _logger.exception("address_update error")
+            return self._response_error("SERVER_ERROR", str(e), 500)
+
+    # PUT /api/v1/zalo/contacts/addresses/set-default
+    @http.route("/api/v1/zalo/contacts/addresses/set-default", type="http", auth="public", methods=["PUT", "OPTIONS"], csrf=False)
+    def address_set_default(self, **params):
+        """Body: {"address_id": 12}
+        Đặt địa chỉ này làm mặc định: gán sequence = 0, các địa chỉ khác tăng sequence lên 1.
+        """
+        if request.httprequest.method == "OPTIONS":
+            return self._response_options()
+        try:
+            body = self._request_json()
+            addr_id = self._parse_int(body.get("address_id"), 0)
+            if not addr_id:
+                return self._response_error("INVALID_INPUT", "Thiếu address_id")
+
+            address = request.env["res.partner"].sudo().browse(addr_id)
+            if not address.exists():
+                return self._response_error("NOT_FOUND", "Địa chỉ không tồn tại", 404)
+
+            # Ownership check: address phải thuộc về contact trong token
+            contact_id = address.parent_id.id
+            if not contact_id:
+                return self._response_error("FORBIDDEN", "Địa chỉ không hợp lệ", 403)
+            auth_result = self._auth_and_verify_owner(contact_id)
+            if isinstance(auth_result, Response):
+                return auth_result
+
+            # Lấy tất cả địa chỉ cùng parent, tăng sequence lên 1 để nhường chỗ
+            sibling_addresses = request.env["res.partner"].sudo().search([
+                ("parent_id", "=", contact_id),
+                ("type", "in", ("delivery", "other", "invoice")),
+                ("id", "!=", addr_id),
+            ])
+            for sib in sibling_addresses:
+                sib.write({"sequence": (sib.sequence or 0) + 1})
+
+            # Đặt sequence của địa chỉ được chọn = 0 (mặc định)
+            address.write({"sequence": 0})
+
+            return self._response_success({
+                "id": address.id, "name": address.name or "",
+                "message": "Đã đặt làm địa chỉ mặc định",
+            })
+        except Exception as e:
+            _logger.exception("address_set_default error")
             return self._response_error("SERVER_ERROR", str(e), 500)
 
     # POST /api/v1/zalo/contacts/addresses/delete
