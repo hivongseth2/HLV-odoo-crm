@@ -79,6 +79,8 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             "loyalty_voucher_code": getattr(order, "loyalty_voucher_code", "") or "",
             "lines": lines, "picking_info": picking_info,
             "shipping_address": {
+                "name": order.partner_shipping_id.name or "",
+                "phone": order.partner_shipping_id.phone or "",
                 "street": order.partner_shipping_id.street or "",
                 "city": order.partner_shipping_id.city or "",
             } if order.partner_shipping_id else None,
