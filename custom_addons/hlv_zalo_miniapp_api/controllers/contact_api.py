@@ -275,6 +275,41 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
                 return self._response_error("INVALID_INPUT", "Thiếu token hoặc access_token")
 
             Param = request.env["ir.config_parameter"].sudo()
+            relay_url = (Param.get_param("hlv_loyalty.zalo_phone_relay_url") or "").strip()
+            relay_key = (Param.get_param("hlv_loyalty.zalo_phone_relay_key") or "").strip()
+            if relay_url:
+                if not relay_key:
+                    _logger.error("Zalo phone exchange blocked: missing hlv_loyalty.zalo_phone_relay_key")
+                    return self._response_error(
+                        "CONFIG_ERROR",
+                        "Zalo Phone Relay Key is not configured on Odoo",
+                        503,
+                    )
+
+                zalo_res = requests.post(
+                    relay_url,
+                    headers={
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
+                        "x-relay-key": relay_key,
+                        "Authorization": "Bearer %s" % relay_key,
+                    },
+                    json={
+                        "token": phone_token,
+                        "access_token": access_token,
+                    },
+                    timeout=10,
+                )
+                zalo_res.raise_for_status()
+                zalo_data = zalo_res.json()
+                if zalo_data.get("error") not in (0, "0", None):
+                    return self._response_error("ZALO_ERROR", zalo_data.get("message") or "Zalo rejected token")
+
+                raw_number = ((zalo_data.get("data") or {}).get("number") or zalo_data.get("number") or "")
+                normalized = self._normalize_vn_phone(raw_number)
+                if not normalized:
+                    return self._response_error("ZALO_ERROR", "Zalo did not return a phone number")
+                return self._do_auth_for_phone(normalized)
             secret_key = Param.get_param("hlv_loyalty.zalo_secret_key") or Param.get_param("zalo.secret_key", "").strip()
             if not secret_key:
                 return self._response_error("CONFIG_ERROR", "Thiếu cấu hình Zalo Secret Key trên Odoo", 503)
