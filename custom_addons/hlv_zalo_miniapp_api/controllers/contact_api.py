@@ -300,6 +300,7 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
                     },
                     timeout=10,
                 )
+                _logger.info("Zalo phone relay response status=%s body=%s", zalo_res.status_code, (zalo_res.text or "")[:500])
                 zalo_res.raise_for_status()
                 zalo_data = zalo_res.json()
                 if zalo_data.get("error") not in (0, "0", None):
@@ -310,6 +311,7 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
                 if not normalized:
                     return self._response_error("ZALO_ERROR", "Zalo did not return a phone number")
                 return self._do_auth_for_phone(normalized)
+
             secret_key = Param.get_param("hlv_loyalty.zalo_secret_key") or Param.get_param("zalo.secret_key", "").strip()
             if not secret_key:
                 return self._response_error("CONFIG_ERROR", "Thiếu cấu hình Zalo Secret Key trên Odoo", 503)
@@ -323,6 +325,7 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
                 },
                 timeout=10,
             )
+            _logger.info("Zalo graph api response status=%s body=%s", zalo_res.status_code, (zalo_res.text or "")[:500])
             zalo_data = zalo_res.json()
             if zalo_data.get("error") not in (0, "0", None):
                 return self._response_error("ZALO_ERROR", zalo_data.get("message") or "Zalo từ chối token")
@@ -334,11 +337,16 @@ class ZaloContactAPI(ZaloBaseAPI, http.Controller):
 
             return self._do_auth_for_phone(normalized)
 
+        except requests.exceptions.HTTPError as e:
+            resp_text = (e.response.text or "")[:500] if e.response is not None else str(e)
+            status_code = e.response.status_code if e.response is not None else 502
+            _logger.exception("Zalo graph/relay api HTTPError: status=%s, body=%s", status_code, resp_text)
+            return self._response_error("SERVER_ERROR", f"Lỗi kết nối Zalo (HTTP {status_code}): {resp_text}", 502)
         except requests.exceptions.RequestException as e:
-            _logger.exception("Zalo graph api error")
-            return self._response_error("SERVER_ERROR", "Lỗi kết nối Zalo", 502)
+            _logger.exception("Zalo graph/relay api RequestException: %s", e)
+            return self._response_error("SERVER_ERROR", f"Lỗi kết nối Zalo: {str(e)}", 502)
         except Exception as e:
-            _logger.exception("contact_auth_zalo_phone error")
+            _logger.exception("contact_auth_zalo_phone error: %s", e)
             return self._response_error("SERVER_ERROR", str(e), 500)
 
     # =========================================================================
