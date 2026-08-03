@@ -60,6 +60,51 @@ class TestMisaSaleValidation(TransactionCase):
         self.assertEqual(result["unit_id"], 4)
         self.assertEqual(fake_api.session.payload["Filters"][0]["Operator"], 1)
 
+    def test_exact_crm_product_lookup_reads_second_page(self):
+        class FakeResponse:
+            ok = True
+            status_code = 200
+            text = "ok"
+
+            def __init__(self, data, total):
+                self.data = data
+                self.total = total
+
+            def json(self):
+                return {"Success": True, "Data": self.data, "Total": self.total}
+
+        class FakeSession:
+            pages = []
+
+            def post(self, _url, headers, json, timeout):
+                self.pages.append((json["Page"], json["Start"]))
+                if json["Page"] == 1:
+                    return FakeResponse([
+                        {"ID": index, "ProductCode": "CB-M18B5-%03d" % index}
+                        for index in range(1, 101)
+                    ], 101)
+                return FakeResponse([{
+                    "ID": 31383,
+                    "ProductCode": "M18B5",
+                    "ProductName": "Pin 18V 5.0Ah",
+                    "UsageUnitID": 4,
+                    "UsageUnitIDText": "Cái",
+                }], 101)
+
+        class FakeApi:
+            session = FakeSession()
+
+            def _get_retry_session(self):
+                return self.session
+
+        fake_api = FakeApi()
+        result = MisaApiUtils._find_exact_crm_product_by_code(
+            fake_api, "M18B5", headers={"Authorization": "Bearer test"},
+        )
+
+        self.assertEqual(result["misa_id"], 31383)
+        self.assertEqual(fake_api.session.pages, [(1, 0), (2, 100)])
+
     def test_build_crm_combo_payload(self):
         payload = _build_crm_combo_payload({
             "code": "CB-TEST",
