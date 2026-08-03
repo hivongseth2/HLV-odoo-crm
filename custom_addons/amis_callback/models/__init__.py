@@ -21,4 +21,5 @@ from . import meinvoice_publish_wizard
 from . import meinvoice_invoice
 from . import meinvoice_mail_queue
 from . import shopee_wallet_import_wizard
+from . import misa_sale_validation_wizard
 from . import shopee_meinvoice_reconcile_wizard

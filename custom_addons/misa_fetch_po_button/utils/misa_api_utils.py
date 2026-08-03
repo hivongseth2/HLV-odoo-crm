@@ -11,6 +11,106 @@ from http.cookiejar import Cookie
 _logger = logging.getLogger(__name__)
 import json
 
+
+def _build_crm_combo_payload(combo, components):
+    """Build the CRM Product payload for the Combo hàng hóa layout."""
+    component_rows = []
+    amount_summary = 0.0
+    for component in components:
+        quantity = float(component.get("quantity") or 0.0)
+        amount_summary += quantity
+        component_rows.append({
+            "ProductID": component["misa_id"],
+            "ProductIDText": component["code"],
+            "TableName": "set_product",
+            "ProductCode": component["code"],
+            "Description": component.get("name") or component["code"],
+            "UnitID": component["unit_id"],
+            "UnitIDText": component.get("unit_name") or "",
+            "Amount": quantity,
+            "ID": None,
+            "MISAEntityState": 1,
+            "AsyncID": "",
+            "OwnerID": "",
+            "PromotionMasterRowID": "",
+            "PromotionRowID": "",
+            "ProductSetID": "",
+            "ProductSetMasterID": "",
+            "ProductInSetMasterID": "",
+            "IsSetProduct": False,
+            "IsChildProduct": "",
+            "ProductIDInSet": "",
+            "ExcludeCurrentRecord": "",
+            "ExchangeID": 0,
+            "IsExchangeProduct": None,
+            "ExchangePoint": 0,
+            "TotalAmountBasedUPriceAndDATax": False,
+            "AmountBasedOnPriceAfterTax": False,
+        })
+
+    return {
+        "Fields": [],
+        "FieldsCustom": [],
+        "DataCustom": {"Avatar": ""},
+        "ProductCode": combo["code"],
+        "ProductCategoryID": str(combo["category_id"]),
+        "ProductCategoryIDText": combo["category_name"],
+        "UsageUnitID": combo["unit_id"],
+        "UsageUnitIDText": combo["unit_name"],
+        "MinimumStock": 0,
+        "ProductName": combo["name"],
+        "SaleDescription": combo.get("sale_description"),
+        "BrandID": None,
+        "BrandIDText": "",
+        "UnitPrice": float(combo.get("sale_price") or 0.0),
+        "UnitPrice2": 0,
+        "PurchasedPrice": float(combo.get("cost_price") or 0.0),
+        "TaxID": str(combo["tax_id"]),
+        "TaxIDText": combo["tax_name"],
+        "UnitCost": float(combo.get("cost_price") or 0.0),
+        "UnitPrice1": 0,
+        "UnitPriceFixed": float(combo.get("sale_price") or 0.0),
+        "PriceAfterTax": False,
+        "IsUseTax": False,
+        "WarrantyPeriodTypeID": 2,
+        "WarrantyPeriodTypeIDText": "Tháng",
+        "WarrantyPeriodText": "0 Tháng",
+        "WarrantyPeriod": 0,
+        "WarrantyDescription": None,
+        "Height": 0,
+        "Length": 0,
+        "Weight": 0,
+        "Width": 0,
+        "Radius": 0,
+        "Description": combo.get("description"),
+        "IsPublic": False,
+        "SearchKeywords": None,
+        "Inactive": False,
+        "FormLayoutID": combo.get("form_layout_id", 128),
+        "FormLayoutIDText": combo.get("form_layout_name", "Combo hàng hóa"),
+        "MappingDatas": [],
+        "MISAEntityState": 1,
+        "ModifiedDate": None,
+        "FormModeState": 1,
+        "IsGetFieldFormLayout": True,
+        "IsSetProduct": "1",
+        "CustomTables": [{
+            "IsSystem": True,
+            "DataFields": [],
+            "Summary": {"AmountSummary": amount_summary},
+            "Data": component_rows,
+            "OldData": [],
+            "SummaryFields": [],
+            "GroupBoxText": "Thông tin hàng hóa",
+            "IsRequired": True,
+            "ParentIDKey": "CustomID",
+            "TableName": "set_product",
+            "IsProductChange": True,
+        }],
+        "IsProductChange": True,
+        "IsMultiCurrency": False,
+    }
+
 class MisaApiUtils(models.AbstractModel):
     _name = 'misa.api.utils'
     _description = 'MISA API Utilities'
@@ -1532,6 +1632,256 @@ class MisaApiUtils(models.AbstractModel):
         if not product.exists():
             raise Exception(f"Không tìm thấy sản phẩm có ID {product_id} trong Odoo")
         return self._process_create_product(product)
+
+    def _find_exact_crm_product_by_code(self, code, headers=None):
+        """Return one exact CRM product match using the cached CRM session."""
+        import uuid
+
+        clean_code = str(code or "").strip()
+        if not clean_code:
+            return None
+        request_headers = dict(headers or self._get_cached_crm_headers())
+        request_headers.update({"layoutcode": "product", "x-misa-language": "vi-VN"})
+        payload = {
+            "Columns": (
+                "SUQsUHJvZHVjdENvZGUsUHJvZHVjdE5hbWUsUHJvZHVjdENhdGVnb3J5SUQs"
+                "UHJvZHVjdENhdGVnb3J5SURUZXh0LFVzYWdlVW5pdElELFVzYWdlVW5pdElEVGV4"
+                "dCxEZWZhdWx0U3RvY2tJRCxEZWZhdWx0U3RvY2tJRFRleHQsUHJvZHVjdFByb3Bl"
+                "cnRpZXNJRCxQcm9kdWN0UHJvcGVydGllc0lEVGV4dCxGb3JtTGF5b3V0SUQsRm9y"
+                "bUxheW91dElEVGV4dCxJc1NldFByb2R1Y3Q="
+            ),
+            "Sorts": [],
+            "Start": 0,
+            "Page": 1,
+            "PageSize": 20,
+            "Filters": [{
+                # MISA operator 1 is the proven "contains" search used by the
+                # Product screen. We still require an exact code client-side.
+                "Operator": 1,
+                "Value": clean_code,
+                "Property": "ProductCode",
+                "InputType": 1,
+                "Group": "",
+                "Addition": 1,
+                "IsFromFormula": False,
+                "FromFilterCustom": True,
+            }],
+            "Formula": "",
+            "LayoutCode": "Product",
+            "DefaultTotal": False,
+            "IsMappingData": False,
+            "IsApproved": False,
+            "CustomPagingData": {},
+            "IsUsedELTS": True,
+            "ListGmailPage": [],
+            "ListFacebookPage": {},
+            "IsGetCache": False,
+            "IsCheckInactive": False,
+            "IsConverted": False,
+            "SessionID": str(uuid.uuid4()),
+            "LayoutCodeCheckPermission": "Product",
+            "AISearchKeyword": "",
+            "SkipNormalSearch": False,
+        }
+        url = "https://amisapp.misa.vn/crm/g1/api/business/Product/Grid"
+        session = self._get_retry_session()
+        response = session.post(url, headers=request_headers, json=payload, timeout=30)
+        if response.status_code in (401, 403):
+            refreshed_headers = self._get_cached_crm_headers(force_refresh=True)
+            refreshed_headers.update({"layoutcode": "product", "x-misa-language": "vi-VN"})
+            if headers is not None:
+                headers.clear()
+                headers.update(refreshed_headers)
+            request_headers = refreshed_headers
+            response = session.post(
+                url, headers=request_headers, json=payload, timeout=30,
+            )
+        try:
+            response_data = response.json()
+        except Exception as exc:
+            raise Exception(
+                f"Không đọc được kết quả tra mã CRM <{clean_code}>"
+            ) from exc
+        if not response.ok or not response_data.get("Success"):
+            raise Exception(
+                f"Lỗi tra mã CRM <{clean_code}>: "
+                f"{response_data.get('UserMessage') or response.text[:300]}"
+            )
+        matches = response_data.get("Data") or []
+        clean_casefold = clean_code.casefold()
+        product_data = next((
+            item for item in matches
+            if str(item.get("ProductCode") or "").strip().casefold() == clean_casefold
+        ), None)
+        if not product_data:
+            return None
+        return {
+            "misa_id": product_data.get("ID") or product_data.get("ProductID"),
+            "code": product_data.get("ProductCode"),
+            "name": product_data.get("ProductName"),
+            "unit": product_data.get("UsageUnitIDText"),
+            "unit_id": product_data.get("UsageUnitID"),
+            "is_combo": bool(
+                product_data.get("IsSetProduct")
+                or product_data.get("ProductPropertiesID") == 6
+                or product_data.get("FormLayoutID") == 128
+                or str(product_data.get("ProductPropertiesIDText") or "").strip().casefold() == "combo"
+            ),
+        }
+
+    def create_combo_product_misa(self, product_id, components=None):
+        """
+        Create an Odoo combo on MISA CRM using layout 128 (Combo hàng hóa).
+
+        ``product_id`` is a product.product ID. ``components`` comes from the
+        Odoo Combo Kit/BOM and contains code, name, quantity and uom.
+        The CRM IDs and unit IDs are always resolved again by exact product
+        code; caller-supplied IDs are intentionally ignored.
+        """
+        product = self.env["product.product"].sudo().with_context(active_test=False).browse(product_id)
+        if not product.exists():
+            raise Exception(f"Không tìm thấy sản phẩm Odoo ID {product_id}")
+
+        code = str(product.default_code or "").strip()
+        if not code:
+            raise Exception("Combo Odoo chưa có Mã nội bộ")
+        if not components:
+            raise Exception(f"Combo {code} không có sản phẩm con")
+
+        headers = self._get_cached_crm_headers()
+        existing = self._find_exact_crm_product_by_code(code, headers=headers)
+        if existing:
+            if not existing.get("is_combo"):
+                raise Exception(
+                    f"Mã {code} đã tồn tại trên CRM nhưng không phải Combo"
+                )
+            return {"id": str(existing["misa_id"]), "created": False}
+
+        # Merge repeated component lines before resolving them on CRM.
+        component_by_code = {}
+        component_order = []
+        for item in components:
+            component_code = str(item.get("code") or "").strip()
+            quantity = float(item.get("quantity") or 0.0)
+            if not component_code:
+                raise Exception(f"Combo {code} có sản phẩm con chưa có Mã nội bộ")
+            if quantity <= 0:
+                raise Exception(f"Số lượng của sản phẩm con {component_code} phải lớn hơn 0")
+            key = component_code.casefold()
+            if key not in component_by_code:
+                component_by_code[key] = dict(item, code=component_code, quantity=0.0)
+                component_order.append(key)
+            component_by_code[key]["quantity"] += quantity
+
+        resolved_components = []
+        for key in component_order:
+            item = component_by_code[key]
+            crm_product = self._find_exact_crm_product_by_code(item["code"], headers=headers)
+            if not crm_product:
+                raise Exception(
+                    f"Sản phẩm con <{item['code']}> không có trên MISA CRM"
+                )
+            unit_id = crm_product.get("unit_id")
+            unit_name = crm_product.get("unit") or item.get("uom") or ""
+            if not unit_id:
+                unit_id, resolved_unit_name = self._find_dictionary_item(
+                    headers, "UsageUnitID", unit_name,
+                )
+                unit_name = resolved_unit_name or unit_name
+            if not unit_id:
+                raise Exception(
+                    f"Không xác định được ĐVT CRM của sản phẩm con <{item['code']}>"
+                )
+            resolved_components.append({
+                "misa_id": crm_product["misa_id"],
+                "code": crm_product["code"],
+                "name": crm_product.get("name") or item.get("name") or item["code"],
+                "quantity": item["quantity"],
+                "unit_id": unit_id,
+                "unit_name": unit_name,
+            })
+
+        headers.update({"layoutcode": "product", "x-misa-language": "vi-VN"})
+
+        template = product.product_tmpl_id
+        ICP = self.env["ir.config_parameter"].sudo()
+        default_category_id = int(ICP.get_param("misa.crm.combo_category_id", "164"))
+        default_category_name = ICP.get_param(
+            "misa.crm.combo_category_name",
+            "MÁY, PHỤ KIỆN, PHỤ TÙNG, CCDC MILWAUKEE",
+        )
+        category_name = product.categ_id.name or default_category_name
+        category_id = self._get_category_id_by_name(headers, category_name)
+        if not category_id:
+            category_id = default_category_id
+            category_name = default_category_name
+
+        unit_name = product.uom_id.name or "Bộ"
+        unit_id, crm_unit_name = self._find_dictionary_item(
+            headers, "UsageUnitID", unit_name,
+        )
+        if not unit_id:
+            unit_id = int(ICP.get_param("misa.crm.combo_unit_id", "3"))
+            crm_unit_name = ICP.get_param("misa.crm.combo_unit_name", "Bộ")
+
+        default_tax = float(ICP.get_param("misa.crm.combo_tax_percent", "8"))
+        tax_amount = product.taxes_id[:1].amount if product.taxes_id else default_tax
+        tax_name = product.taxes_id[:1].name if product.taxes_id else ""
+        tax_id, crm_tax_name = self._find_tax_id_smart(
+            headers, tax_amount, tax_name,
+        )
+
+        combo_data = {
+            "code": code,
+            "name": product.name or code,
+            "category_id": category_id,
+            "category_name": category_name,
+            "unit_id": unit_id,
+            "unit_name": crm_unit_name or unit_name,
+            "tax_id": tax_id,
+            "tax_name": crm_tax_name,
+            "sale_price": product.list_price or 0.0,
+            "cost_price": product.standard_price or 0.0,
+            "sale_description": template.description_sale or None,
+            "description": template.description or None,
+            "form_layout_id": int(ICP.get_param("misa.crm.combo_form_layout_id", "128")),
+            "form_layout_name": ICP.get_param(
+                "misa.crm.combo_form_layout_name", "Combo hàng hóa",
+            ),
+        }
+        payload = _build_crm_combo_payload(combo_data, resolved_components)
+        url = "https://amisapp.misa.vn/crm/g2/api/business/Product"
+        session = self._get_retry_session()
+
+        def _post(request_headers):
+            return session.post(url, headers=request_headers, json=payload, timeout=30)
+
+        response = _post(headers)
+        if response.status_code in (401, 403):
+            headers = self._get_cached_crm_headers(force_refresh=True)
+            headers.update({"layoutcode": "product", "x-misa-language": "vi-VN"})
+            response = _post(headers)
+
+        try:
+            response_data = response.json()
+        except Exception as exc:
+            raise Exception(
+                f"MISA CRM trả về dữ liệu không hợp lệ (HTTP {response.status_code})"
+            ) from exc
+        if not response.ok or not response_data.get("Success"):
+            validation_messages = [
+                str(item.get("ErrorMessage") or "").strip()
+                for item in response_data.get("ValidateInfo", [])
+                if item.get("ErrorMessage")
+            ]
+            error_message = "; ".join(validation_messages) or response_data.get("UserMessage") or response.text[:500]
+            raise Exception(f"MISA CRM từ chối combo {code}: {error_message}")
+
+        misa_id = self._parse_misa_id(response_data, code, headers)
+        if not misa_id:
+            raise Exception(f"MISA CRM báo thành công nhưng không trả ID cho combo {code}")
+        _logger.info("Tạo combo CRM thành công: %s (ID=%s)", code, misa_id)
+        return {"id": str(misa_id), "created": True}
     
     def _find_dictionary_item_unit(self, headers, search_text):
         """
@@ -2088,9 +2438,18 @@ class MisaApiUtils(models.AbstractModel):
                     "price": p.get("UnitPrice") or 0,
                     "cost": p.get("PurchasedPrice") or 0,
                     "unit": p.get("UsageUnitIDText"),
+                    "unit_id": p.get("UsageUnitID"),
                     "category": p.get("ProductCategoryIDText"),
+                    "category_id": p.get("ProductCategoryID"),
                     "tax": p.get("TaxIDText"),
+                    "tax_id": p.get("TaxID"),
                     "type": p.get("ProductPropertiesIDText"),
+                    "is_combo": bool(
+                        p.get("IsSetProduct")
+                        or p.get("ProductPropertiesID") == 6
+                        or p.get("FormLayoutID") == 128
+                        or str(p.get("ProductPropertiesIDText") or "").strip().casefold() == "combo"
+                    ),
                     "active": p.get("Active", True),
                     "description": p.get("CustomField17", ""),
                 })

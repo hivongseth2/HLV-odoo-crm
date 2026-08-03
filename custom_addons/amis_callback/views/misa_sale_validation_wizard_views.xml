@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_misa_sale_validation_wizard_form" model="ir.ui.view">
+        <field name="name">misa.sale.validation.wizard.form</field>
+        <field name="model">misa.sale.validation.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Xử lý lỗi Phiếu bán hàng MISA">
+                <sheet>
+                    <div class="oe_title">
+                        <h1>Xử lý Kết quả kiểm tra MISA</h1>
+                    </div>
+                    <group invisible="result_file">
+                        <group string="File từ MISA">
+                            <field name="file_data" filename="file_name" widget="binary"/>
+                            <field name="file_name" invisible="1"/>
+                            <field name="sync_missing_combos"/>
+                        </group>
+                        <group string="Hệ thống sẽ xử lý">
+                            <div class="alert alert-info" role="alert">
+                                <ul class="mb-0 ps-3">
+                                    <li>Tạo combo CRM cho lỗi mã hàng chưa có trong danh mục.</li>
+                                    <li>Sửa ĐVT <b>Bộ</b> thành <b>Bộ.</b> khi MISA báo lệch ĐVT.</li>
+                                    <li>Giữ combo đầu tiên; chuyển các combo trùng và dòng con sang sheet riêng.</li>
+                                    <li>Các thông báo “Lỗi liên quan đến dòng ...” không được xử lý.</li>
+                                </ul>
+                            </div>
+                        </group>
+                    </group>
+                    <group invisible="not result_file">
+                        <group string="Tải file đã xử lý">
+                            <field name="result_file" filename="result_file_name" widget="binary" readonly="1"/>
+                            <field name="result_file_name" invisible="1"/>
+                        </group>
+                        <group string="Kết quả">
+                            <field name="result_summary" readonly="1" nolabel="1" widget="text"/>
+                        </group>
+                    </group>
+                </sheet>
+                <footer>
+                    <button name="action_process" string="Xử lý file" type="object"
+                            class="btn-primary" icon="fa-cogs" invisible="result_file"/>
+                    <button string="Đóng" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_misa_sale_validation_wizard" model="ir.actions.act_window">
+        <field name="name">Xử lý lỗi Phiếu BH MISA</field>
+        <field name="res_model">misa.sale.validation.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+    <menuitem id="menu_misa_sale_validation_wizard"
+              name="Xử lý lỗi Phiếu BH MISA"
+              parent="menu_amis_callback_root"
+              action="action_misa_sale_validation_wizard"
+              sequence="17"
+              groups="amis_callback.group_meinvoice_accountant,amis_callback.group_meinvoice_manager"/>
+</odoo>
