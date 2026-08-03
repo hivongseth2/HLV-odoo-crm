@@ -57,5 +57,6 @@
               parent="menu_amis_callback_root"
               action="action_misa_sale_validation_wizard"
               sequence="17"
+              active="False"
               groups="amis_callback.group_meinvoice_accountant,amis_callback.group_meinvoice_manager"/>
 </odoo>

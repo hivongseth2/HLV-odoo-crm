@@ -83,15 +83,28 @@ MISA_COLUMNS = [
 
 class ShopeeWalletImportWizard(models.TransientModel):
     _name = 'shopee.wallet.import.wizard'
-    _description = 'Import Báo Cáo Ví Shopee → Xuất Phiếu Bán Hàng MISA'
+    _description = 'Xuất và xử lý Phiếu Bán Hàng MISA'
+
+    operation_type = fields.Selection([
+        ('export_shopee', 'Xuất phiếu BH từ Ví Shopee'),
+        ('process_validation', 'Xử lý file kiểm tra lỗi MISA'),
+    ], string='Chức năng', required=True, default='export_shopee')
 
     file_data = fields.Binary(
-        string='File báo cáo ví Shopee',
+        string='File Excel đầu vào',
         required=True,
         attachment=False,
-        help='Upload file Excel xuất từ Shopee Seller Center (Báo cáo tài chính / Ví Shopee).',
+        help='File Báo cáo Ví Shopee hoặc file Kết quả kiểm tra Phiếu bán hàng từ MISA.',
     )
     file_name = fields.Char(string='Tên file')
+    sync_missing_combos = fields.Boolean(
+        string='Tạo combo thiếu trên CRM',
+        default=True,
+    )
+    result_file = fields.Binary(
+        string='File đã xử lý', readonly=True, attachment=False,
+    )
+    result_file_name = fields.Char(string='Tên file kết quả', readonly=True)
     result_summary = fields.Text(string='Kết quả', readonly=True)
 
     # ── Đọc file ────────────────────────────────────────────────────────────
@@ -540,5 +553,27 @@ class ShopeeWalletImportWizard(models.TransientModel):
         return {
             'type': 'ir.actions.act_url',
             'url': '/web/content/%d?download=true' % attachment.id,
+            'target': 'new',
+        }
+
+    def action_process_validation(self):
+        """Run the MISA validation repair in this unified wizard."""
+        self.ensure_one()
+        helper = self.env['misa.sale.validation.wizard'].create({
+            'file_data': self.file_data,
+            'file_name': self.file_name,
+            'sync_missing_combos': self.sync_missing_combos,
+        })
+        helper.action_process()
+        self.write({
+            'result_file': helper.result_file,
+            'result_file_name': helper.result_file_name,
+            'result_summary': helper.result_summary,
+        })
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': self._name,
+            'res_id': self.id,
+            'view_mode': 'form',
             'target': 'new',
         }

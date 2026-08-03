@@ -1653,7 +1653,7 @@ class MisaApiUtils(models.AbstractModel):
             "Sorts": [],
             "Start": 0,
             "Page": 1,
-            "PageSize": 20,
+            "PageSize": 100,
             "Filters": [{
                 # MISA operator 1 is the proven "contains" search used by the
                 # Product screen. We still require an exact code client-side.
@@ -1685,49 +1685,86 @@ class MisaApiUtils(models.AbstractModel):
         }
         url = "https://amisapp.misa.vn/crm/g1/api/business/Product/Grid"
         session = self._get_retry_session()
-        response = session.post(url, headers=request_headers, json=payload, timeout=30)
-        if response.status_code in (401, 403):
-            refreshed_headers = self._get_cached_crm_headers(force_refresh=True)
-            refreshed_headers.update({"layoutcode": "product", "x-misa-language": "vi-VN"})
-            if headers is not None:
-                headers.clear()
-                headers.update(refreshed_headers)
-            request_headers = refreshed_headers
+        page_size = payload["PageSize"]
+        page = 1
+        start = 0
+        seen_page_signatures = set()
+        clean_casefold = clean_code.casefold()
+        while page <= 1000:
+            payload["Page"] = page
+            payload["Start"] = start
             response = session.post(
                 url, headers=request_headers, json=payload, timeout=30,
             )
-        try:
-            response_data = response.json()
-        except Exception as exc:
-            raise Exception(
-                f"Không đọc được kết quả tra mã CRM <{clean_code}>"
-            ) from exc
-        if not response.ok or not response_data.get("Success"):
-            raise Exception(
-                f"Lỗi tra mã CRM <{clean_code}>: "
-                f"{response_data.get('UserMessage') or response.text[:300]}"
+            if response.status_code in (401, 403):
+                refreshed_headers = self._get_cached_crm_headers(force_refresh=True)
+                refreshed_headers.update({"layoutcode": "product", "x-misa-language": "vi-VN"})
+                if headers is not None:
+                    headers.clear()
+                    headers.update(refreshed_headers)
+                request_headers = refreshed_headers
+                response = session.post(
+                    url, headers=request_headers, json=payload, timeout=30,
+                )
+            try:
+                response_data = response.json()
+            except Exception as exc:
+                raise Exception(
+                    f"Không đọc được kết quả tra mã CRM <{clean_code}> trang {page}"
+                ) from exc
+            if not response.ok or not response_data.get("Success"):
+                raise Exception(
+                    f"Lỗi tra mã CRM <{clean_code}> trang {page}: "
+                    f"{response_data.get('UserMessage') or response.text[:300]}"
+                )
+
+            matches = response_data.get("Data") or []
+            product_data = next((
+                item for item in matches
+                if str(item.get("ProductCode") or "").strip().casefold() == clean_casefold
+            ), None)
+            if product_data:
+                return {
+                    "misa_id": product_data.get("ID") or product_data.get("ProductID"),
+                    "code": product_data.get("ProductCode"),
+                    "name": product_data.get("ProductName"),
+                    "unit": product_data.get("UsageUnitIDText"),
+                    "unit_id": product_data.get("UsageUnitID"),
+                    "is_combo": bool(
+                        product_data.get("IsSetProduct")
+                        or product_data.get("ProductPropertiesID") == 6
+                        or product_data.get("FormLayoutID") == 128
+                        or str(product_data.get("ProductPropertiesIDText") or "").strip().casefold() == "combo"
+                    ),
+                }
+
+            if not matches:
+                break
+            page_signature = (
+                len(matches),
+                matches[0].get("ID") or matches[0].get("ProductID"),
+                matches[-1].get("ID") or matches[-1].get("ProductID"),
             )
-        matches = response_data.get("Data") or []
-        clean_casefold = clean_code.casefold()
-        product_data = next((
-            item for item in matches
-            if str(item.get("ProductCode") or "").strip().casefold() == clean_casefold
-        ), None)
-        if not product_data:
-            return None
-        return {
-            "misa_id": product_data.get("ID") or product_data.get("ProductID"),
-            "code": product_data.get("ProductCode"),
-            "name": product_data.get("ProductName"),
-            "unit": product_data.get("UsageUnitIDText"),
-            "unit_id": product_data.get("UsageUnitID"),
-            "is_combo": bool(
-                product_data.get("IsSetProduct")
-                or product_data.get("ProductPropertiesID") == 6
-                or product_data.get("FormLayoutID") == 128
-                or str(product_data.get("ProductPropertiesIDText") or "").strip().casefold() == "combo"
-            ),
-        }
+            if page_signature in seen_page_signatures:
+                _logger.warning(
+                    "MISA CRM lặp lại trang khi tra mã %s; dừng ở trang %s",
+                    clean_code, page,
+                )
+                break
+            seen_page_signatures.add(page_signature)
+
+            try:
+                total = int(response_data.get("Total") or 0)
+            except (TypeError, ValueError):
+                total = 0
+            if total:
+                if start + len(matches) >= total:
+                    break
+            elif len(matches) < page_size:
+                break
+            start += len(matches)
+            page += 1
+        return None
 
     def create_combo_product_misa(self, product_id, components=None):
         """

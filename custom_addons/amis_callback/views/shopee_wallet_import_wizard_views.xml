@@ -6,39 +6,66 @@
         <field name="name">shopee.wallet.import.wizard.form</field>
         <field name="model">shopee.wallet.import.wizard</field>
         <field name="arch" type="xml">
-            <form string="Xuất Phiếu Bán Hàng từ Báo Cáo Ví Shopee">
+            <form string="Xuất và xử lý Phiếu Bán Hàng MISA">
                 <sheet>
                     <div class="oe_title">
-                        <h1>Xuất Phiếu Bán Hàng MISA từ Ví Shopee</h1>
+                        <h1>Xuất &amp; xử lý Phiếu Bán Hàng MISA</h1>
                     </div>
-                    <group>
-                        <group string="Upload file báo cáo ví Shopee">
-                            <field name="file_data" filename="file_name" widget="binary"
-                                   required="1"
-                                   help="File Excel xuất từ Shopee Seller Center → Tài chính → Báo cáo ví. Cột D (từ row 19) chứa mã đơn hàng Shopee."/>
-                            <field name="file_name" invisible="1"/>
+                    <group invisible="result_file">
+                        <group string="Thao tác">
+                            <field name="operation_type" widget="radio" options="{'horizontal': false}"/>
                         </group>
-                        <group string="Hướng dẫn">
-                            <div class="alert alert-info" role="alert" style="margin:8px 0">
+                        <group string="File Excel đầu vào">
+                            <field name="file_data" filename="file_name" widget="binary"
+                                   required="1"/>
+                            <field name="file_name" invisible="1"/>
+                            <field name="sync_missing_combos"
+                                   invisible="operation_type != 'process_validation'"/>
+                        </group>
+                        <group string="Hướng dẫn"
+                               invisible="operation_type != 'export_shopee'">
+                            <div class="alert alert-info" role="alert">
                                 <ul style="margin-bottom:0; padding-left:18px">
                                     <li>Upload file Excel từ Shopee (Báo cáo Ví)</li>
                                     <li>Hệ thống đọc <b>cột D</b> (Mã đơn hàng) từ row 19</li>
                                     <li>Tìm đơn bán Odoo tương ứng theo <b>shopee_order_ref</b></li>
-                                    <li>Xuất ra <b>Phiếu Bán Hàng MISA</b> (52 cột)</li>
+                                    <li>Xuất ra <b>Phiếu Bán Hàng MISA</b> (53 cột)</li>
                                     <li>Cột <i>Diễn giải</i>: Đơn bán Odoo | Shopee code | Shop</li>
                                     <li>Cột <i>Lý do xuất</i>: Đơn xuất kho Odoo</li>
                                 </ul>
                             </div>
                         </group>
+                        <group string="Hệ thống sẽ xử lý"
+                               invisible="operation_type != 'process_validation'">
+                            <div class="alert alert-info" role="alert">
+                                <ul style="margin-bottom:0; padding-left:18px">
+                                    <li>Tạo combo CRM cho mã hàng chưa có trong danh mục.</li>
+                                    <li>Sửa ĐVT <b>Bộ</b> thành <b>Bộ.</b> khi MISA báo lệch ĐVT.</li>
+                                    <li>Giữ combo đầu tiên; chuyển combo trùng và dòng con sang sheet riêng.</li>
+                                    <li>Bỏ qua thông báo “Lỗi liên quan đến dòng ...”.</li>
+                                </ul>
+                            </div>
+                        </group>
                     </group>
-                    <group string="Kết quả" invisible="not result_summary">
-                        <field name="result_summary" readonly="1" nolabel="1"
-                               widget="text" style="white-space: pre-wrap; font-family: monospace;"/>
+                    <group invisible="not result_file">
+                        <group string="Tải file đã xử lý">
+                            <field name="result_file" filename="result_file_name"
+                                   widget="binary" readonly="1"/>
+                            <field name="result_file_name" invisible="1"/>
+                        </group>
+                        <group string="Kết quả">
+                            <field name="result_summary" readonly="1" nolabel="1"
+                                   widget="text" style="white-space: pre-wrap; font-family: monospace;"/>
+                        </group>
                     </group>
                 </sheet>
                 <footer>
                     <button name="action_export" string="Xuất Phiếu Bán Hàng"
-                            type="object" class="btn-primary" icon="fa-download"/>
+                            type="object" class="btn-primary" icon="fa-download"
+                            invisible="result_file or operation_type != 'export_shopee'"/>
+                    <button name="action_process_validation" string="Xử lý file kiểm tra"
+                            type="object" class="btn-primary" icon="fa-cogs"
+                            invisible="result_file or operation_type != 'process_validation'"/>
                     <button string="Đóng" class="btn-secondary" special="cancel"/>
                 </footer>
             </form>
@@ -47,7 +74,7 @@
 
     <!-- Action -->
     <record id="action_shopee_wallet_import_wizard" model="ir.actions.act_window">
-        <field name="name">Xuất Phiếu BH từ Ví Shopee</field>
+        <field name="name">Xuất &amp; xử lý Phiếu BH MISA</field>
         <field name="res_model">shopee.wallet.import.wizard</field>
         <field name="view_mode">form</field>
         <field name="target">new</field>
@@ -56,7 +83,7 @@
     <!-- Menu -->
     <menuitem
         id="menu_shopee_wallet_import"
-        name="Xuất Phiếu BH từ Ví Shopee"
+        name="Xuất &amp; xử lý Phiếu BH MISA"
         parent="menu_amis_callback_root"
         action="action_shopee_wallet_import_wizard"
         sequence="16"
