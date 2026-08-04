@@ -1,0 +1,102 @@
+$hlv-chatter-toggle-size: 40px;
+
+@media screen {
+    // Odoo caps the sheet background width even after the side chatter shrinks.
+    // Remove that cap so notebooks and x2many lists can use the released space.
+    .o_form_sheet_bg:has(
+        + .o-mail-Form-chatter.o-aside > .o-mail-Chatter.o-hlv-chatter-collapsed
+    ) {
+        --formView-sheetBg-padding-right: 0px;
+
+        flex: 1 1 0 !important;
+        width: auto !important;
+        max-width: none !important;
+        padding-right: 0 !important;
+    }
+
+    .o-mail-Form-chatter.o-aside {
+        transition: width 160ms ease, flex-basis 160ms ease;
+
+        // Keep the aside flush with its container. Some backend themes add
+        // margins to Chatter and its sticky top bar.
+        > .o-mail-Chatter,
+        .o-mail-Chatter-top {
+            margin: 0 !important;
+        }
+
+        &:has(> .o-mail-Chatter.o-hlv-chatter-collapsed) {
+            position: relative !important;
+            flex: 0 0 0 !important;
+            flex-grow: 0 !important;
+            flex-shrink: 0 !important;
+            width: 0 !important;
+            min-width: 0 !important;
+            max-width: 0 !important;
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+            padding: 0 !important;
+            overflow: visible !important;
+
+            .o-mail-Chatter {
+                flex: 0 0 0 !important;
+                width: 0 !important;
+                min-width: 0 !important;
+                max-width: 0 !important;
+                margin: 0 !important;
+                overflow: visible !important;
+                pointer-events: none;
+            }
+
+            .o-mail-Chatter-top {
+                width: 0 !important;
+                margin: 0 !important;
+                overflow: visible !important;
+            }
+
+            .o-mail-Chatter-topbar {
+                position: relative;
+                width: 0 !important;
+                min-height: 0;
+                overflow: visible !important;
+
+                > :not(.o-hlv-Chatter-toggle) {
+                    display: none !important;
+                }
+            }
+
+            .o-mail-Chatter-top > :not(.o-mail-Chatter-topbar),
+            .o-mail-Chatter-content {
+                display: none !important;
+            }
+
+            .o-hlv-Chatter-toggle {
+                position: absolute;
+                top: 12px;
+                right: 12px;
+                z-index: 20;
+                width: $hlv-chatter-toggle-size;
+                height: $hlv-chatter-toggle-size;
+                margin-right: 0 !important;
+                padding: 0;
+                border: 2px solid $white !important;
+                border-radius: 50%;
+                background: $o-brand-primary !important;
+                color: $white !important;
+                box-shadow: 0 3px 10px rgba($black, 0.3);
+                pointer-events: auto;
+                transition: transform 120ms ease, background-color 120ms ease;
+
+                .fa {
+                    font-size: 16px;
+                }
+
+                &:hover,
+                &:focus-visible {
+                    background: darken($o-brand-primary, 8%) !important;
+                    color: $white !important;
+                    transform: scale(1.06);
+                }
+            }
+        }
+    }
+}
