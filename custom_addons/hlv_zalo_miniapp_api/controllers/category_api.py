@@ -217,7 +217,13 @@ class ZaloCategoryAPI(ZaloBaseAPI, http.Controller):
 
             image_data = record[field] if hasattr(record, field) else None
             if not image_data:
-                return self._response_error("NOT_FOUND", "Không có ảnh", 404)
+                headers = {
+                    "Cache-Control": "public, max-age=86400, immutable",
+                    **self._cors_headers(),
+                }
+                payload = json.dumps({"success": False, "error": {"code": "NOT_FOUND", "message": "Không có ảnh"}})
+                return Response(payload, status=404, content_type="application/json", headers=headers)
+
 
             headers = {
                 "Cache-Control": "public, max-age=2592000, immutable",
