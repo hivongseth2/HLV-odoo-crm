@@ -4,13 +4,23 @@ $hlv-chatter-collapsed-width: 48px;
     // Odoo caps the sheet background width even after the side chatter shrinks.
     // Remove that cap so notebooks and x2many lists can use the released space.
     .o_form_sheet_bg:has(+ .o-mail-Form-chatter.o-aside.o-hlv-chatter-collapsed) {
+        --formView-sheetBg-padding-right: 0px;
+
         flex: 1 1 0 !important;
         width: auto !important;
         max-width: none !important;
+        padding-right: 0 !important;
     }
 
     .o-mail-Form-chatter.o-aside {
         transition: width 160ms ease, flex-basis 160ms ease;
+
+        // Keep the aside flush with its container. Some backend themes add
+        // margins to Chatter and its sticky top bar.
+        > .o-mail-Chatter,
+        .o-mail-Chatter-top {
+            margin: 0 !important;
+        }
 
         &.o-hlv-chatter-collapsed {
             flex: 0 0 $hlv-chatter-collapsed-width !important;
@@ -56,6 +66,7 @@ $hlv-chatter-collapsed-width: 48px;
             .o-hlv-Chatter-toggle {
                 width: $hlv-chatter-collapsed-width;
                 min-height: 44px;
+                margin-right: 0 !important;
                 padding-left: 0;
                 padding-right: 0;
             }

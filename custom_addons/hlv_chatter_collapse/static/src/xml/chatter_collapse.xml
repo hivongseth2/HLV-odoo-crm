@@ -5,11 +5,11 @@
         t-inherit="mail.Chatter"
         t-inherit-mode="extension"
     >
-        <xpath expr="//button[hasclass('o-mail-Chatter-close')]" position="before">
+        <xpath expr="//button[hasclass('o-mail-Chatter-sendMessage')]" position="before">
             <button
                 t-if="props.isChatterAside"
                 type="button"
-                class="o-hlv-Chatter-toggle btn btn-link text-action flex-shrink-0"
+                class="o-hlv-Chatter-toggle btn btn-secondary text-action flex-shrink-0 me-1"
                 t-att-title="hlvChatterToggleTitle"
                 t-att-aria-label="hlvChatterToggleTitle"
                 t-att-aria-expanded="!hlvChatterCollapse.collapsed"
