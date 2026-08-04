@@ -77,9 +77,9 @@
               sequence="50"/>
 
     <menuitem id="menu_zalo_miniapp_snapshot_app"
-              name="Version &amp; Snapshot"
+              name="Lịch sử Version Snapshot"
               parent="menu_zalo_miniapp_management"
-              action="action_zalo_config_settings"
+              action="action_zalo_miniapp_snapshot_log"
               sequence="60"/>
 
     <!-- Configuration Submenu Category -->
@@ -94,11 +94,6 @@
               action="action_zalo_config_settings"
               sequence="10"/>
 
-    <menuitem id="menu_zalo_miniapp_snapshot_config"
-              name="Quản lý Version Snapshot"
-              parent="menu_zalo_miniapp_configuration"
-              action="action_zalo_config_settings"
-              sequence="20"/>
 
 
 
