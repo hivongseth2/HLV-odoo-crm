@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import base64
+import json
 import logging
+
 
 from odoo import fields, http
 from odoo.http import request, Response
