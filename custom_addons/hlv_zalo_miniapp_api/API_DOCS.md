@@ -40,7 +40,34 @@ Vào Settings > Technical > System Parameters:
 
 ---
 
+## 0. Sync / Version API
+
+### 0.1. Kiểm tra Version Catalog & Banner
+
+> **POST** `/api/v1/zalo/sync/version` hoặc **GET** `/api/v1/zalo/sync/version`
+
+Trả về version hiện tại của dữ liệu Danh mục/Sản phẩm (`catalog_version`) và Banner (`banner_version`).
+
+- **Quy tắc Versioning**: `catalog_version` chỉ thay đổi khi các bản ghi có `x_active_zalo = True` (hoặc tồn kho của sản phẩm Zalo) có thay đổi. Thêm sản phẩm ngoài Zalo, tạo đơn hàng hay sửa thông tin cá nhân KHÔNG làm thay đổi version.
+- **Frontend Usage**: Frontend gọi API này khi khởi chạy app để đối chiếu `catalog_version` với `localStorage`. Nếu trùng, dùng lại bản local snapshot mà không cần gọi API lấy lại danh mục/sản phẩm.
+
+#### Response `data` Example
+
+```json
+{
+  "success": true,
+  "data": {
+    "catalog_version": "1722749821",
+    "banner_version": "1722745000",
+    "timestamp": 1722749900
+  }
+}
+```
+
+---
+
 ## 1. Category API
+
 
 ### 1.1. Danh sách Danh mục
 

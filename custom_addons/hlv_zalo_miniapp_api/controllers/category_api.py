@@ -56,7 +56,7 @@ class ZaloCategoryAPI(ZaloBaseAPI, http.Controller):
             for cat in categories:
                 img_url = None
                 if hasattr(cat, "image_128") and cat.image_128:
-                    img_url = self._get_image_url("pos.category", cat.id, "image_128")
+                    img_url = self._get_image_url("pos.category", cat.id, "image_128", write_date=cat.write_date or cat.create_date)
                 zalo_display_name = (getattr(cat, "x_zalo_display_name", "") or "").strip()
                 display_name = zalo_display_name if zalo_display_name else cat.name
                 parent_display_name = None
@@ -207,14 +207,29 @@ class ZaloCategoryAPI(ZaloBaseAPI, http.Controller):
             if not record.exists():
                 return self._response_error("NOT_FOUND", "Bản ghi không tồn tại", 404)
 
+            wdate = getattr(record, "write_date", None) or getattr(record, "create_date", None)
+            wdate_ts = int(fields.Datetime.to_datetime(wdate).timestamp()) if wdate else 0
+            etag = f'"{safe_model}-{rec_id}-{field}-{wdate_ts}"'
+
+            if_none_match = request.httprequest.headers.get("If-None-Match")
+            if if_none_match and if_none_match.strip() == etag:
+                return Response(status=304)
+
             image_data = record[field] if hasattr(record, field) else None
             if not image_data:
                 return self._response_error("NOT_FOUND", "Không có ảnh", 404)
 
+            headers = {
+                "Cache-Control": "public, max-age=2592000, immutable",
+                "ETag": etag,
+            }
+
             return Response(
                 base64.b64decode(image_data),
                 content_type="image/png",
+                headers=headers,
             )
+
         except Exception as e:
             _logger.exception("get_image_by_path error")
             return self._response_error("SERVER_ERROR", str(e), 500)

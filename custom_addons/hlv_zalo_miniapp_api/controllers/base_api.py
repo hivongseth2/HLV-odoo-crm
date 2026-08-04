@@ -140,15 +140,40 @@ class ZaloBaseAPI:
             return default
 
     @staticmethod
-    def _get_image_url(model, rec_id, field="image_128"):
-        """Return a relative URL for the image.
+    def _get_record_timestamp(record):
+        if not record or not record.exists():
+            return None
+        try:
+            from odoo import fields
+            wdate = getattr(record, "write_date", None) or getattr(record, "create_date", None)
+            if wdate:
+                return int(fields.Datetime.to_datetime(wdate).timestamp())
+        except Exception:
+            pass
+        return None
+
+    @staticmethod
+    def _get_image_url(model, rec_id, field="image_128", write_date=None):
+        """Return a relative URL for the image with versioning.
         Uses safe model name (dots replaced with dashes) for GET endpoint.
         Frontend can use this URL directly in <img> tags.
-        Example: /api/v1/zalo/image/product-product/123/image_128"""
+        Example: /api/v1/zalo/image/product-product/123/image_128?v=1722749821"""
         if not rec_id:
             return None
         safe_model = model.replace(".", "-")
-        return f"/api/v1/zalo/image/{safe_model}/{rec_id}/{field}"
+        url = f"/api/v1/zalo/image/{safe_model}/{rec_id}/{field}"
+        if write_date:
+            try:
+                from odoo import fields
+                if isinstance(write_date, (int, float)):
+                    ts = int(write_date)
+                else:
+                    ts = int(fields.Datetime.to_datetime(write_date).timestamp())
+                url += f"?v={ts}"
+            except Exception:
+                pass
+        return url
+
 
     @staticmethod
     def _request_json():
