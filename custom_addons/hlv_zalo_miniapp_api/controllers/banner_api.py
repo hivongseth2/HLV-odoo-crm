@@ -38,8 +38,9 @@ class ZaloMiniAppBannerAPI(ZaloBaseAPI, http.Controller):
                     "id": b.id,
                     "name": b.name,
                     "link": b.link or "",
-                    "image_url": self._get_image_url("zalo.miniapp.banner", b.id, "image"),
+                    "image_url": self._get_image_url("zalo.miniapp.banner", b.id, "image", write_date=b.write_date or b.create_date),
                 })
+
 
             return self._response_success_cached({
                 "banners": data,

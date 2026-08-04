@@ -17,19 +17,20 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
         """Thu thập danh sách tất cả URL ảnh của sản phẩm (ảnh chính + ảnh phụ)."""
         images = []
         tmpl = product.product_tmpl_id
+        p_wdate = product.write_date or product.create_date
 
         # 1. Ảnh chính (Variant hoặc Template)
         if product.image_1920:
-            images.append(self._get_image_url("product.product", product.id, "image_1920"))
+            images.append(self._get_image_url("product.product", product.id, "image_1920", write_date=p_wdate))
         elif tmpl and tmpl.image_1920:
-            images.append(self._get_image_url("product.template", tmpl.id, "image_1920"))
+            images.append(self._get_image_url("product.template", tmpl.id, "image_1920", write_date=tmpl.write_date or tmpl.create_date))
 
         # 2. Ảnh bổ sung của Variant (Odoo standard: product_variant_image_ids)
         try:
             if hasattr(product, "product_variant_image_ids"):
                 for img in product.product_variant_image_ids:
                     if img.image_1920:
-                        url = self._get_image_url("product.image", img.id, "image_1920")
+                        url = self._get_image_url("product.image", img.id, "image_1920", write_date=img.write_date or img.create_date)
                         if url not in images:
                             images.append(url)
         except Exception:
@@ -40,7 +41,7 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
             if tmpl and hasattr(tmpl, "product_template_image_ids"):
                 for img in tmpl.product_template_image_ids:
                     if img.image_1920:
-                        url = self._get_image_url("product.image", img.id, "image_1920")
+                        url = self._get_image_url("product.image", img.id, "image_1920", write_date=img.write_date or img.create_date)
                         if url not in images:
                             images.append(url)
         except Exception:
@@ -51,7 +52,7 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
             for img_field in ["image_1", "image_2", "image_3", "image_4", "image_5"]:
                 try:
                     if hasattr(tmpl, img_field) and getattr(tmpl, img_field):
-                        url = self._get_image_url("product.template", tmpl.id, img_field)
+                        url = self._get_image_url("product.template", tmpl.id, img_field, write_date=tmpl.write_date or tmpl.create_date)
                         if url not in images:
                             images.append(url)
                 except Exception:
@@ -62,7 +63,7 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
             if tmpl and hasattr(tmpl, "product_multi_images"):
                 for img in tmpl.product_multi_images:
                     if img.image_1920:
-                        url = self._get_image_url("product.multi.image", img.id, "image_1920")
+                        url = self._get_image_url("product.multi.image", img.id, "image_1920", write_date=img.write_date or img.create_date)
                         if url not in images:
                             images.append(url)
         except Exception:
@@ -70,9 +71,10 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
 
         # 6. Fallback nếu chưa có ảnh nào: lấy image_128
         if not images and product.image_128:
-            images.append(self._get_image_url("product.product", product.id, "image_128"))
+            images.append(self._get_image_url("product.product", product.id, "image_128", write_date=p_wdate))
 
         return images
+
 
     def _build_product_data(self, product, batch_prices=None, batch_sales_counts=None):
         """Build standard product response dict from a product.product record.
@@ -122,7 +124,8 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
 
         img_url = None
         if product.image_128:
-            img_url = self._get_image_url("product.product", product.id, "image_128")
+            img_url = self._get_image_url("product.product", product.id, "image_128", write_date=product.write_date or product.create_date)
+
 
         # Sales count từ đơn hàng Zalo Mini App
         sales_count = 0
