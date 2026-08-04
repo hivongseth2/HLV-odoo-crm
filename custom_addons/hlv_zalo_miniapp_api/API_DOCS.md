@@ -81,7 +81,8 @@ Lấy danh sách danh mục sản phẩm từ `pos.category` (chỉ lấy các d
 |-------|------|-------|
 | `id` | int | ID nội bộ Odoo của `pos.category` |
 | `x_misa_id` | int hoặc null | ID từ MISA (nếu có field `x_misa_id`) |
-| `name` | string | Tên danh mục |
+| `name` | string | Tên danh mục (ưu tiên `x_zalo_display_name`, nếu trống sẽ fallback về tên POS gốc) |
+| `x_zalo_display_name` | string hoặc null | Tên hiển thị riêng trên Zalo Mini App |
 | `sequence` | int | Thứ tự sắp xếp |
 | `x_active_zalo` | bool | Trạng thái hiển thị trên Zalo Mini App (default: true) |
 | `x_is_featured_zalo` | bool | Trạng thái danh mục nổi bật Zalo Mini App |

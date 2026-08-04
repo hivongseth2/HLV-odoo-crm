@@ -5,6 +5,10 @@ from odoo import models, fields
 class PosCategory(models.Model):
     _inherit = 'pos.category'
 
+    x_zalo_display_name = fields.Char(
+        string='Tên hiển thị Zalo',
+        help='Tên hiển thị của danh mục trên Zalo Mini App. Nếu để trống, sẽ tự động dùng tên danh mục POS.',
+    )
     x_active_zalo = fields.Boolean(
         string='Hiển thị trên Zalo Mini App',
         default=True,

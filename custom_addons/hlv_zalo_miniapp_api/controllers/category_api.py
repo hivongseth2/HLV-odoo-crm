@@ -57,15 +57,23 @@ class ZaloCategoryAPI(ZaloBaseAPI, http.Controller):
                 img_url = None
                 if hasattr(cat, "image_128") and cat.image_128:
                     img_url = self._get_image_url("pos.category", cat.id, "image_128")
+                zalo_display_name = (getattr(cat, "x_zalo_display_name", "") or "").strip()
+                display_name = zalo_display_name if zalo_display_name else cat.name
+                parent_display_name = None
+                if cat.parent_id:
+                    p_zalo_name = (getattr(cat.parent_id, "x_zalo_display_name", "") or "").strip()
+                    parent_display_name = p_zalo_name if p_zalo_name else cat.parent_id.name
+
                 data.append({
                     "id": cat.id,
                     "x_misa_id": cat.x_misa_id if hasattr(cat, "x_misa_id") else None,
-                    "name": cat.name,
+                    "name": display_name,
+                    "x_zalo_display_name": getattr(cat, "x_zalo_display_name", None),
                     "sequence": cat.sequence,
                     "x_active_zalo": cat.x_active_zalo if hasattr(cat, "x_active_zalo") else True,
                     "x_is_featured_zalo": cat.x_is_featured_zalo if hasattr(cat, "x_is_featured_zalo") else False,
                     "parent_id": cat.parent_id.id if cat.parent_id else None,
-                    "parent_name": cat.parent_id.name if cat.parent_id else None,
+                    "parent_name": parent_display_name,
                     "image_url": img_url,
                 })
 
@@ -147,9 +155,10 @@ class ZaloCategoryAPI(ZaloBaseAPI, http.Controller):
                     "image_url": img_url,
                 })
 
+            cat_display_name = (getattr(category, "x_zalo_display_name", "") or "").strip() or category.name
             return self._response_success({
                 "category_id": category.id,
-                "category_name": category.name,
+                "category_name": cat_display_name,
                 "total": total,
                 "limit": limit,
                 "offset": offset,

@@ -66,6 +66,7 @@ hlv_zalo_miniapp_api/
 
 | Field | Type | Mô tả |
 |---|---|---|
+| `x_zalo_display_name` | Char | Tên hiển thị riêng trên Zalo Mini App (nếu để trống sẽ fallback về name POS) |
 | `x_active_zalo` | Boolean | Hiển thị trên Zalo Mini App (default: True). Lọc ẩn/hiện danh mục trên API |
 | `x_is_featured_zalo` | Boolean | Danh mục nổi bật Zalo Mini App |
 
