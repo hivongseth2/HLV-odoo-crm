@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "HLV Chatter Collapse",
-    "version": "18.0.1.0.5",
+    "version": "18.0.1.0.9",
     "category": "Productivity",
     "summary": "Collapse and expand the form chatter sidebar",
     "author": "HLV",

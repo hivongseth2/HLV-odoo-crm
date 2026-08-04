@@ -1,36 +1,24 @@
 /** @odoo-module **/
 
 import { Chatter } from "@mail/chatter/web_portal/chatter";
-import { useEffect, useState } from "@odoo/owl";
-import { browser } from "@web/core/browser/browser";
+import { onWillUpdateProps, useState } from "@odoo/owl";
 import { _t } from "@web/core/l10n/translation";
 import { patch } from "@web/core/utils/patch";
 
 
-const COLLAPSED_CLASS = "o-hlv-chatter-collapsed";
-const STORAGE_KEY = "hlv.chatter.aside.collapsed";
-
 patch(Chatter.prototype, {
     setup() {
         super.setup();
-        this.hlvChatterCollapse = useState({
-            collapsed: browser.localStorage.getItem(STORAGE_KEY) === "1",
-        });
+        this.hlvChatterCollapse = useState({ collapsed: true });
 
-        useEffect(
-            () => {
-                const container = this.rootRef.el?.parentElement;
-                if (!container) {
-                    return;
-                }
-                container.classList.toggle(
-                    COLLAPSED_CLASS,
-                    Boolean(this.props.isChatterAside && this.hlvChatterCollapse.collapsed)
-                );
-                return () => container.classList.remove(COLLAPSED_CLASS);
-            },
-            () => [this.props.isChatterAside, this.hlvChatterCollapse.collapsed]
-        );
+        onWillUpdateProps((nextProps) => {
+            if (
+                this.props.threadId !== nextProps.threadId ||
+                this.props.threadModel !== nextProps.threadModel
+            ) {
+                this.hlvChatterCollapse.collapsed = true;
+            }
+        });
     },
 
     get hlvChatterToggleTitle() {
@@ -41,9 +29,5 @@ patch(Chatter.prototype, {
 
     toggleHlvChatter() {
         this.hlvChatterCollapse.collapsed = !this.hlvChatterCollapse.collapsed;
-        browser.localStorage.setItem(
-            STORAGE_KEY,
-            this.hlvChatterCollapse.collapsed ? "1" : "0"
-        );
     },
 });
