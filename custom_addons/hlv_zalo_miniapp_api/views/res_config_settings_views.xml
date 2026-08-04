@@ -26,6 +26,78 @@
                             </div>
                         </setting>
                     </block>
+
+                    <block title="Quản lý &amp; Theo dõi Version Snapshot Zalo">
+                        <setting string="Trạng thái Version Snapshot Hiện tại" help="Theo dõi version dữ liệu và điều khiển ép buộc làm mới trên Mini App">
+                            <div className="content-group">
+                                <div className="row mt16">
+                                    <label for="x_zalo_catalog_version" className="col-lg-3 o_light_label"/>
+                                    <field name="x_zalo_catalog_version" class="font-weight-bold"/>
+                                </div>
+                                <div className="row mt8">
+                                    <label for="x_zalo_catalog_version_dt" className="col-lg-3 o_light_label"/>
+                                    <field name="x_zalo_catalog_version_dt"/>
+                                </div>
+                                <div className="row mt8">
+                                    <label for="x_zalo_banner_version" className="col-lg-3 o_light_label"/>
+                                    <field name="x_zalo_banner_version"/>
+                                </div>
+                                <div className="row mt8">
+                                    <label for="x_zalo_forced_catalog_version" className="col-lg-3 o_light_label"/>
+                                    <field name="x_zalo_forced_catalog_version"/>
+                                </div>
+
+                                <div className="mt16">
+                                    <button name="action_force_bump_catalog_version"
+                                            type="object"
+                                            string="🚀 Buộc làm mới Catalog Version (Tất cả Client)"
+                                            class="btn-primary mr8"/>
+                                    <button name="action_force_bump_banner_version"
+                                            type="object"
+                                            string="🖼️ Buộc làm mới Banner Version"
+                                            class="btn-secondary mr8"/>
+                                    <button name="action_reset_forced_version"
+                                            type="object"
+                                            string="🔄 Khôi phục tự động theo write_date"
+                                            class="btn-link"/>
+                                </div>
+                            </div>
+                        </setting>
+
+                        <setting string="Thống kê Dữ liệu Zalo Active" help="Tổng số lượng bản ghi hiển thị trên Zalo Mini App">
+                            <div className="content-group">
+                                <div className="row mt16">
+                                    <label for="x_zalo_total_categories" className="col-lg-4 o_light_label"/>
+                                    <field name="x_zalo_total_categories"/>
+                                </div>
+                                <div className="row mt8">
+                                    <label for="x_zalo_total_products" className="col-lg-4 o_light_label"/>
+                                    <field name="x_zalo_total_products"/>
+                                </div>
+                                <div className="row mt8">
+                                    <label for="x_zalo_total_banners" className="col-lg-4 o_light_label"/>
+                                    <field name="x_zalo_total_banners"/>
+                                </div>
+                            </div>
+                        </setting>
+
+                        <setting string="Bản ghi vừa chỉnh sửa gần nhất" help="Chi tiết bản ghi làm thay đổi Version Snapshot gần nhất">
+                            <div className="content-group">
+                                <div className="row mt16">
+                                    <label for="x_zalo_latest_category_info" className="col-lg-4 o_light_label"/>
+                                    <field name="x_zalo_latest_category_info"/>
+                                </div>
+                                <div className="row mt8">
+                                    <label for="x_zalo_latest_product_info" className="col-lg-4 o_light_label"/>
+                                    <field name="x_zalo_latest_product_info"/>
+                                </div>
+                                <div className="row mt8">
+                                    <label for="x_zalo_latest_quant_info" className="col-lg-4 o_light_label"/>
+                                    <field name="x_zalo_latest_quant_info"/>
+                                </div>
+                            </div>
+                        </setting>
+                    </block>
                 </app>
             </xpath>
         </field>

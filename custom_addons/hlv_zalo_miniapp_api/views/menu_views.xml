@@ -79,7 +79,7 @@
     <menuitem id="menu_zalo_miniapp_snapshot_app"
               name="Version &amp; Snapshot"
               parent="menu_zalo_miniapp_management"
-              action="action_zalo_miniapp_snapshot"
+              action="action_zalo_config_settings"
               sequence="60"/>
 
     <!-- Configuration Submenu Category -->
@@ -97,8 +97,9 @@
     <menuitem id="menu_zalo_miniapp_snapshot_config"
               name="Quản lý Version Snapshot"
               parent="menu_zalo_miniapp_configuration"
-              action="action_zalo_miniapp_snapshot"
+              action="action_zalo_config_settings"
               sequence="20"/>
+
 
 
     <!-- Menu item dưới Loyalty > Cấu hình -->
