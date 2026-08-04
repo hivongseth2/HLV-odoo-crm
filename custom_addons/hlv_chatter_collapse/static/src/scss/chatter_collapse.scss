@@ -1,6 +1,14 @@
 $hlv-chatter-collapsed-width: 48px;
 
 @media screen {
+    // Odoo caps the sheet background width even after the side chatter shrinks.
+    // Remove that cap so notebooks and x2many lists can use the released space.
+    .o_form_sheet_bg:has(+ .o-mail-Form-chatter.o-aside.o-hlv-chatter-collapsed) {
+        flex: 1 1 0 !important;
+        width: auto !important;
+        max-width: none !important;
+    }
+
     .o-mail-Form-chatter.o-aside {
         transition: width 160ms ease, flex-basis 160ms ease;
 
