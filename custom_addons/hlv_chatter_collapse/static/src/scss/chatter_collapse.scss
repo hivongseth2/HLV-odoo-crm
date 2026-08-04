@@ -3,7 +3,9 @@ $hlv-chatter-toggle-size: 40px;
 @media screen {
     // Odoo caps the sheet background width even after the side chatter shrinks.
     // Remove that cap so notebooks and x2many lists can use the released space.
-    .o_form_sheet_bg:has(+ .o-mail-Form-chatter.o-aside.o-hlv-chatter-collapsed) {
+    .o_form_sheet_bg:has(
+        + .o-mail-Form-chatter.o-aside > .o-mail-Chatter.o-hlv-chatter-collapsed
+    ) {
         --formView-sheetBg-padding-right: 0px;
 
         flex: 1 1 0 !important;
@@ -22,7 +24,7 @@ $hlv-chatter-toggle-size: 40px;
             margin: 0 !important;
         }
 
-        &.o-hlv-chatter-collapsed {
+        &:has(> .o-mail-Chatter.o-hlv-chatter-collapsed) {
             position: relative !important;
             flex: 0 0 0 !important;
             flex-grow: 0 !important;

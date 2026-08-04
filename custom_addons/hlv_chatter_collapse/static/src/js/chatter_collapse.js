@@ -1,12 +1,10 @@
 /** @odoo-module **/
 
 import { Chatter } from "@mail/chatter/web_portal/chatter";
-import { onWillUpdateProps, useEffect, useState } from "@odoo/owl";
+import { onWillUpdateProps, useState } from "@odoo/owl";
 import { _t } from "@web/core/l10n/translation";
 import { patch } from "@web/core/utils/patch";
 
-
-const COLLAPSED_CLASS = "o-hlv-chatter-collapsed";
 
 patch(Chatter.prototype, {
     setup() {
@@ -21,25 +19,6 @@ patch(Chatter.prototype, {
                 this.hlvChatterCollapse.collapsed = true;
             }
         });
-
-        useEffect(
-            () => {
-                const container = this.rootRef.el?.parentElement;
-                if (!container) {
-                    return;
-                }
-                container.classList.toggle(
-                    COLLAPSED_CLASS,
-                    Boolean(this.props.isChatterAside && this.hlvChatterCollapse.collapsed)
-                );
-                return () => container.classList.remove(COLLAPSED_CLASS);
-            },
-            () => [
-                this.props.isChatterAside,
-                this.hlvChatterCollapse.collapsed,
-                this.state.thread,
-            ]
-        );
     },
 
     get hlvChatterToggleTitle() {
