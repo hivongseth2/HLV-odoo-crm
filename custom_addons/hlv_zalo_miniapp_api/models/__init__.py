@@ -7,3 +7,4 @@ from . import cart
 from . import pos_category
 from . import res_config_settings
 from . import loyalty_portal_account
+from . import snapshot

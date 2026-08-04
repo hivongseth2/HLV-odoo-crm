@@ -76,6 +76,12 @@
               action="action_zalo_sale_order"
               sequence="50"/>
 
+    <menuitem id="menu_zalo_miniapp_snapshot_app"
+              name="Version &amp; Snapshot"
+              parent="menu_zalo_miniapp_management"
+              action="action_zalo_miniapp_snapshot"
+              sequence="60"/>
+
     <!-- Configuration Submenu Category -->
     <menuitem id="menu_zalo_miniapp_configuration"
               name="Cấu hình"
@@ -87,6 +93,13 @@
               parent="menu_zalo_miniapp_configuration"
               action="action_zalo_config_settings"
               sequence="10"/>
+
+    <menuitem id="menu_zalo_miniapp_snapshot_config"
+              name="Quản lý Version Snapshot"
+              parent="menu_zalo_miniapp_configuration"
+              action="action_zalo_miniapp_snapshot"
+              sequence="20"/>
+
 
     <!-- Menu item dưới Loyalty > Cấu hình -->
     <menuitem id="menu_loyalty_zalo_portal_account"
