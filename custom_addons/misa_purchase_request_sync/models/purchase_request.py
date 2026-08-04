@@ -15,6 +15,7 @@ import json
 import logging
 import re
 
+import requests
 from markupsafe import Markup
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
@@ -386,6 +387,334 @@ class PurchaseRequest(models.Model):
         return default_pt.id if default_pt else False
 
     @api.model
+    def _misa_fetch_conversion_units(self, product_id, headers, cache=None):
+        """Fetch the MISA conversion UoMs configured for one product."""
+        if not product_id:
+            _logger.warning(
+                "MISA PR UoM conversions: missing product_id, skip DataSubPaging"
+            )
+            return []
+
+        cache_key = str(product_id)
+        if cache is not None and cache_key in cache:
+            return cache[cache_key]
+
+        url = "https://amisapp.misa.vn/crm/g2/api/business/Product/DataSubPaging"
+        payload = {
+            "Columns": "SUQsQ29udmVyc2lvblVuaXRJRCxDb252ZXJzaW9uVW5pdElEVGV4dCxDb252ZXJzaW9uUmF0ZSxEZXNjcmlwdGlvbixDb252ZXJzaW9uT3BlcmF0b3JJRCxDb252ZXJzaW9uT3BlcmF0b3JJRFRleHQsQ29udmVyc2lvblVuaXRQcmljZTIsQ29udmVyc2lvblVuaXRQcmljZSxDb252ZXJzaW9uVW5pdFByaWNlMSxDb252ZXJzaW9uVW5pdFByaWNlRml4ZWQ=",
+            "Sorts": [],
+            "Start": 0,
+            "Page": 1,
+            "PageSize": 20,
+            "Filters": [],
+            "DefaultTotal": False,
+            "IsMappingData": False,
+            "MappingValueObject": {
+                "MasterID": str(product_id),
+                "TableName": "product_conversion_unit",
+                "MasterKey": "ProductID",
+                "SumColumn": "",
+            },
+            "IsApproved": False,
+            "CustomPagingData": {
+                "SubFormConfig": {
+                    "ColumnFieldSubForm": "",
+                    "ColumnAggregateSubForm": "",
+                    "TableName": "product_conversion_unit",
+                    "ParentIDKey": "ProductID",
+                    "IsBringSerialType": False,
+                    "AggregateField": [],
+                }
+            },
+            "IsUsedELTS": True,
+            "ListGmailPage": [],
+            "ListFacebookPage": {},
+            "IsListPaging": True,
+            "IsGetCache": True,
+            "IsCheckInactive": False,
+            "IsConverted": False,
+            "SessionID": "864e2811-5edd-5ccc-6b85-178b59007e93",
+            "AISearchKeyword": "",
+        }
+        try:
+            response = requests.post(url, headers=headers, json=payload, timeout=30)
+            response.raise_for_status()
+            result = response.json().get("Data", []) or []
+            if cache is not None:
+                cache[cache_key] = result
+            _logger.info(
+                "MISA PR UoM conversions fetched: product_id=%r count=%s",
+                product_id,
+                len(result),
+            )
+            return result
+        except Exception as exc:
+            _logger.exception(
+                "MISA PR: loi goi Product/DataSubPaging cho product_id=%r: %s",
+                product_id,
+                exc,
+            )
+            return []
+
+    @api.model
+    def _convert_qty_price_to_default_uom(
+        self,
+        product,
+        misa_uom_text,
+        qty,
+        price,
+        misa_product_id,
+        headers,
+        conversion_cache=None,
+    ):
+        """Convert MISA quantity/unit price to ``product.uom_id``."""
+        default_uom_name = (product.uom_id and product.uom_id.name) or ""
+        requested_uom_key = (misa_uom_text or "").strip().lower()
+        default_uom_key = default_uom_name.strip().lower()
+
+        if not requested_uom_key or requested_uom_key == default_uom_key:
+            return qty, price, True
+
+        if not misa_product_id:
+            _logger.warning(
+                "MISA PR: san pham %r khong co MISA ProductID, "
+                "khong the lay bang quy doi UoM",
+                product.default_code,
+            )
+        conversions = self._misa_fetch_conversion_units(
+            misa_product_id,
+            headers,
+            cache=conversion_cache,
+        ) if misa_product_id else []
+
+        # Normal: MISA line uses a conversion UoM, Odoo uses the base UoM.
+        conversion = next((
+            item for item in conversions
+            if (item.get("ConversionUnitIDText") or "").strip().lower()
+            == requested_uom_key
+        ), None)
+        reverse_conversion = False
+
+        # Reverse: MISA line uses the base UoM, Odoo's default is a conversion UoM.
+        if not conversion:
+            conversion = next((
+                item for item in conversions
+                if (item.get("ConversionUnitIDText") or "").strip().lower()
+                == default_uom_key
+            ), None)
+            reverse_conversion = bool(conversion)
+
+        if not conversion:
+            _logger.warning(
+                "MISA PR: khong tim thay quy doi UoM %r -> %r cho san pham %r; "
+                "giu nguyen so lieu",
+                misa_uom_text,
+                default_uom_name,
+                product.default_code,
+            )
+            return qty, price, False
+
+        try:
+            rate = float(conversion.get("ConversionRate") or 0.0)
+        except (TypeError, ValueError):
+            rate = 0.0
+        try:
+            operator_id = int(conversion.get("ConversionOperatorID") or 1)
+        except (TypeError, ValueError):
+            operator_id = 1
+
+        if rate <= 0:
+            _logger.warning(
+                "MISA PR: ConversionRate khong hop le cho san pham %r, UoM %r",
+                product.default_code,
+                misa_uom_text,
+            )
+            return qty, price, False
+
+        if reverse_conversion:
+            if operator_id == 1:
+                qty_base = qty / rate
+                price_base = price * rate
+            else:
+                qty_base = qty * rate
+                price_base = price / rate
+        elif operator_id == 1:
+            qty_base = qty * rate
+            price_base = price / rate
+        else:
+            qty_base = qty / rate
+            price_base = price * rate
+
+        _logger.info(
+            "MISA PR UoM converted: product=%r %s %s @ %s -> %s %s @ %s "
+            "(rate=%s operator=%s)",
+            product.default_code,
+            qty,
+            misa_uom_text,
+            price,
+            qty_base,
+            default_uom_name,
+            price_base,
+            rate,
+            operator_id,
+        )
+        return qty_base, price_base, False
+
+    @api.model
+    def _misa_fetch_latest_purchase_request(self, raw_data):
+        """Return the latest MISA PR header by ID, or an empty dict on failure.
+
+        The browser extension can hold a stale ``FormDataNew`` response while
+        users edit header fields inline. Fetching the entity again in the queue
+        worker makes MISA the source of truth for those fields.
+        """
+        raw_data = raw_data if isinstance(raw_data, dict) else {}
+        purchase_request_id = (
+            raw_data.get("PurchaseRequestID")
+            or raw_data.get("PurchaseRequestId")
+            or raw_data.get("ID")
+            or raw_data.get("id")
+        )
+        if not purchase_request_id:
+            _logger.warning(
+                "MISA PR: payload khong co PurchaseRequestID/ID; "
+                "khong the tai lai header moi nhat"
+            )
+            return {}
+
+        try:
+            headers = (
+                self.env["misa.api.utils"]
+                .sudo()
+                ._get_cached_crm_headers()
+            )
+        except Exception as exc:
+            _logger.exception(
+                "MISA PR: khong lay duoc CRM headers de tai lai PR %r: %s",
+                purchase_request_id,
+                exc,
+            )
+            return {}
+
+        def _unwrap_response(response_data):
+            if not isinstance(response_data, dict):
+                return {}
+            if response_data.get("Success") is False:
+                return {}
+            data = response_data.get("Data", response_data)
+            if isinstance(data, str):
+                try:
+                    data = json.loads(data)
+                except (TypeError, ValueError):
+                    return {}
+            if isinstance(data, dict):
+                data = (
+                    data.get("CurrentData")
+                    or data.get("FormData")
+                    or data.get("Data")
+                    or data
+                )
+            return data if isinstance(data, dict) else {}
+
+        def _contains_description(data):
+            return any(
+                key in data
+                for key in ("Description", "description", "Note", "note", "Reason")
+            )
+
+        entity_url = (
+            "https://amisapp.misa.vn/crm/g2/api/business/"
+            "PurchaseRequest/%s/" % purchase_request_id
+        )
+        columns = ";".join([
+            "ID",
+            "PurchaseRequestID",
+            "PurchaseRequestName",
+            "Description",
+            "Note",
+            "Reason",
+            "FormLayoutID",
+        ])
+        try:
+            response = requests.get(
+                entity_url,
+                headers=headers,
+                params={"columns": columns},
+                timeout=30,
+            )
+            response.raise_for_status()
+            latest_data = _unwrap_response(response.json())
+            if _contains_description(latest_data):
+                _logger.info(
+                    "MISA PR: da tai header moi nhat bang entity API, ID=%r",
+                    purchase_request_id,
+                )
+                return latest_data
+        except Exception as exc:
+            _logger.warning(
+                "MISA PR: entity API khong doc duoc PR %r, "
+                "thu fallback FormDataNew: %s",
+                purchase_request_id,
+                exc,
+            )
+
+        form_layout_id = (
+            raw_data.get("FormLayoutID")
+            or raw_data.get("FormLayoutId")
+            or raw_data.get("LayoutID")
+            or raw_data.get("LayoutId")
+        )
+        if not form_layout_id:
+            _logger.warning(
+                "MISA PR: PR %r khong co FormLayoutID; "
+                "khong the fallback FormDataNew",
+                purchase_request_id,
+            )
+            return {}
+
+        form_url = (
+            "https://amisapp.misa.vn/crm/g2/api/business/PurchaseRequest/"
+            "FormDataNew/PurchaseRequest/%s/4" % form_layout_id
+        )
+        form_payload = {
+            "ID": str(purchase_request_id),
+            "MISAEntityState": 2,
+            "ActiveLayoutCode": None,
+            "CustomDicData": None,
+        }
+        try:
+            response = requests.post(
+                form_url,
+                headers=headers,
+                json=form_payload,
+                timeout=30,
+            )
+            response.raise_for_status()
+            latest_data = _unwrap_response(response.json())
+            if _contains_description(latest_data):
+                _logger.info(
+                    "MISA PR: da tai header moi nhat bang FormDataNew, ID=%r",
+                    purchase_request_id,
+                )
+                return latest_data
+        except Exception as exc:
+            _logger.exception(
+                "MISA PR: khong tai lai duoc header PR %r tu MISA: %s",
+                purchase_request_id,
+                exc,
+            )
+        return {}
+
+    @staticmethod
+    def _misa_latest_description(latest_data, fallback=""):
+        """Read a description while preserving an intentionally empty value."""
+        for key in ("Description", "description", "Note", "note", "Reason"):
+            if key in latest_data:
+                value = latest_data.get(key)
+                return "" if value is None else str(value)
+        return fallback
+
+    @api.model
     def api_create_from_misa_payload(self, payload):
         """
         Tạo PR từ JSON payload của MISA (đã trích xuất từ controller extension_api)
@@ -411,7 +740,12 @@ class PurchaseRequest(models.Model):
             if so:
                 sale_order_id = so.id
 
-        raw_data = payload.get("rawData", {})
+        raw_data = payload.get("rawData") or {}
+        latest_misa_data = self._misa_fetch_latest_purchase_request(raw_data)
+        description = self._misa_latest_description(
+            latest_misa_data,
+            fallback=payload.get("description") or "",
+        )
         picking_type_id = self._resolve_misa_picking_type(raw_data, self.env.company.id)
         date_start = False
         create_date = False
@@ -455,7 +789,7 @@ class PurchaseRequest(models.Model):
             
             write_vals = {
                 "requested_by": user_id,
-                "description": payload.get("description") or "",
+                "description": description,
                 "delivery_address": payload.get("DeliveryAddress") or "",
                 "sale_order_id": sale_order_id,
                 "origin": origin_val,
@@ -475,7 +809,7 @@ class PurchaseRequest(models.Model):
                 "assigned_to": self.env.ref("base.user_admin", raise_if_not_found=False).id if self.env.ref("base.user_admin", raise_if_not_found=False) else False,
                 "state": "to_approve",
                 "origin": origin_val,
-                "description": payload.get("description") or "",
+                "description": description,
                 "delivery_address": payload.get("DeliveryAddress") or "",
                 "sale_order_id": sale_order_id,
                 "x_misa_requested_by": payload.get("OwnerIDText") or "",
@@ -492,10 +826,17 @@ class PurchaseRequest(models.Model):
         product_model = self.env["product.product"]
         uom_model = self.env["uom.uom"]
         line_model = self.env["purchase.request.line"]
+        conversion_cache = {}
+        crm_headers = None
 
         def _resolve_product_and_uom(line_data):
             pcode = (line_data.get("product_code") or "").strip()
-            uom_name = (line_data.get("uom") or "").strip()
+            line_raw_data = line_data.get("rawData") or {}
+            uom_name = (
+                line_data.get("uom")
+                or line_raw_data.get("UnitIDText")
+                or ""
+            ).strip()
             product = False
             if pcode:
                 product = product_model.search([("default_code", "=", pcode)], limit=1)
@@ -554,7 +895,7 @@ class PurchaseRequest(models.Model):
             ).strip()
             try:
                 qty = float(line.get("qty", 1.0))
-            except ValueError:
+            except (ValueError, TypeError):
                 qty = 1.0
 
             misa_supplier_id = None
@@ -569,7 +910,7 @@ class PurchaseRequest(models.Model):
                 except (ValueError, TypeError):
                     misa_supplier_id = None
             
-            raw = line.get("rawData", {})
+            raw = line.get("rawData") or {}
             custom_field_6 = raw.get("CustomField6")
             if custom_field_6 is None:
                 custom_field_6 = line.get("CustomField6")
@@ -587,6 +928,50 @@ class PurchaseRequest(models.Model):
                 except (ValueError, TypeError):
                     return default
 
+            price_before_tax = _float_val("misa_price_before_tax")
+            price_after_tax = _float_val("misa_price_after_tax")
+
+            # PR lines are always stored in the product's default Odoo UoM.
+            # Normalize MISA quantity and unit prices before creating/updating
+            # the line so its monetary totals remain unchanged.
+            misa_uom_text = (
+                line.get("uom")
+                or raw.get("UnitIDText")
+                or ""
+            ).strip()
+            misa_product_id = (
+                line.get("misa_product_id")
+                or line.get("ProductID")
+                or line.get("ProductId")
+                or raw.get("ProductID")
+                or raw.get("ProductId")
+            )
+            if (
+                product
+                and misa_uom_text
+                and misa_uom_text.strip().lower()
+                != ((product.uom_id and product.uom_id.name) or "").strip().lower()
+            ):
+                if crm_headers is None and misa_product_id:
+                    crm_headers = (
+                        self.env["misa.api.utils"]
+                        .sudo()
+                        ._get_cached_crm_headers()
+                    )
+                qty, unit_price_factor, _is_default_uom = (
+                    self._convert_qty_price_to_default_uom(
+                        product=product,
+                        misa_uom_text=misa_uom_text,
+                        qty=qty,
+                        price=1.0,
+                        misa_product_id=misa_product_id,
+                        headers=crm_headers or {},
+                        conversion_cache=conversion_cache,
+                    )
+                )
+                price_before_tax *= unit_price_factor
+                price_after_tax *= unit_price_factor
+
             line_vals = {
                 "request_id": pr.id,
                 "name": line_name,
@@ -599,8 +984,8 @@ class PurchaseRequest(models.Model):
                 "misa_note": misa_note_val,
                 # Các trường giá trị từ MISA
                 "misa_amount": _float_val("misa_amount"),
-                "misa_price_before_tax": _float_val("misa_price_before_tax"),
-                "misa_price_after_tax": _float_val("misa_price_after_tax"),
+                "misa_price_before_tax": price_before_tax,
+                "misa_price_after_tax": price_after_tax,
                 "misa_tax_rate": _float_val("misa_tax_rate"),
                 "misa_tax_amount": _float_val("misa_tax_amount"),
                 "misa_discount_rate": _float_val("misa_discount_rate"),
