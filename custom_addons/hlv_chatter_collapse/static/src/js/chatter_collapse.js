@@ -34,7 +34,11 @@ patch(Chatter.prototype, {
                 );
                 return () => container.classList.remove(COLLAPSED_CLASS);
             },
-            () => [this.props.isChatterAside, this.hlvChatterCollapse.collapsed]
+            () => [
+                this.props.isChatterAside,
+                this.hlvChatterCollapse.collapsed,
+                this.state.thread,
+            ]
         );
     },
 
