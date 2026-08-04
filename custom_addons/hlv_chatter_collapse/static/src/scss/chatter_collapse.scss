@@ -1,0 +1,40 @@
+$hlv-chatter-collapsed-width: 48px;
+
+@media screen {
+    .o-mail-Form-chatter.o-aside {
+        transition: width 160ms ease, flex-basis 160ms ease;
+
+        &.o-hlv-chatter-collapsed {
+            flex: 0 0 $hlv-chatter-collapsed-width;
+            width: $hlv-chatter-collapsed-width;
+            min-width: $hlv-chatter-collapsed-width;
+            max-width: $hlv-chatter-collapsed-width;
+            overflow: hidden;
+
+            .o-mail-Chatter {
+                min-width: $hlv-chatter-collapsed-width;
+            }
+
+            .o-mail-Chatter-topbar {
+                justify-content: center;
+                overflow: hidden !important;
+
+                > :not(.o-hlv-Chatter-toggle) {
+                    display: none !important;
+                }
+            }
+
+            .o-mail-Chatter-top > :not(.o-mail-Chatter-topbar),
+            .o-mail-Chatter-content {
+                display: none !important;
+            }
+
+            .o-hlv-Chatter-toggle {
+                width: $hlv-chatter-collapsed-width;
+                min-height: 44px;
+                padding-left: 0;
+                padding-right: 0;
+            }
+        }
+    }
+}
