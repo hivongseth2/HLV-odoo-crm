@@ -112,7 +112,33 @@ class ZaloSyncAPI(ZaloBaseAPI, http.Controller):
                 "timestamp": int(time.time()),
             }
 
+            # Auto-sync log entry in zalo.miniapp.snapshot.log
+            try:
+                Log = request.env["zalo.miniapp.snapshot.log"].sudo()
+                existing = Log.search([("snapshot_type", "=", "catalog"), ("version_code", "=", str(catalog_ts))], limit=1)
+                if not existing:
+                    Log.search([("snapshot_type", "=", "catalog"), ("state", "=", "active")]).write({"state": "historical"})
+                    affected_name = "Khởi tạo version tự động"
+                    if latest_prod and latest_prod.exists():
+                        affected_name = f"Sản phẩm: {latest_prod.display_name}"
+                    elif latest_cat and latest_cat.exists():
+                        affected_name = f"Danh mục: {latest_cat.name}"
+
+                    Log.create({
+                        "name": f"Catalog Snapshot #{catalog_ts}",
+                        "snapshot_type": "catalog",
+                        "version_code": str(catalog_ts),
+                        "version_datetime": fields.Datetime.now(),
+                        "trigger_source": "auto_prod" if (latest_prod and latest_prod.exists()) else "auto_cat",
+                        "trigger_reason": "Tự động phát hiện thay đổi dữ liệu Zalo",
+                        "affected_record_name": affected_name,
+                        "state": "active",
+                    })
+            except Exception as log_err:
+                _logger.warning("Error auto-syncing snapshot log: %s", log_err)
+
             return self._response_success(data)
+
         except Exception as e:
             _logger.exception("sync_version error")
             return self._response_error("SERVER_ERROR", str(e), 500)

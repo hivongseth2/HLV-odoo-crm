@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- List View -->
+    <record id="view_zalo_miniapp_snapshot_log_list" model="ir.ui.view">
+        <field name="name">zalo.miniapp.snapshot.log.list</field>
+        <field name="model">zalo.miniapp.snapshot.log</field>
+        <field name="arch" type="xml">
+            <list string="Lịch sử Version Snapshot Zalo"
+                  decoration-success="state == 'active'"
+                  decoration-info="trigger_source == 'manual'"
+                  decoration-muted="state == 'historical'">
+                <field name="version_datetime" string="Thời gian" optional="show"/>
+                <field name="version_code" string="Mã Version" optional="show"/>
+                <field name="snapshot_type" string="Loại Version" widget="badge" optional="show"/>
+                <field name="trigger_source" string="Nguồn kích hoạt" widget="badge"
+                       decoration-info="trigger_source == 'manual'"
+                       decoration-warning="trigger_source == 'auto_quant'"
+                       decoration-success="trigger_source in ('auto_prod', 'auto_cat')"
+                       optional="show"/>
+                <field name="affected_record_name" string="Bản ghi tác động" optional="show"/>
+                <field name="user_id" string="Người thực hiện" optional="show"/>
+                <field name="state" string="Trạng thái" widget="badge"
+                       decoration-success="state == 'active'"
+                       decoration-muted="state == 'historical'"
+                       optional="show"/>
+                <field name="active_products_count" string="Số SP Zalo" optional="hide"/>
+                <field name="active_categories_count" string="Số Danh mục Zalo" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Form View -->
+    <record id="view_zalo_miniapp_snapshot_log_form" model="ir.ui.view">
+        <field name="name">zalo.miniapp.snapshot.log.form</field>
+        <field name="model">zalo.miniapp.snapshot.log</field>
+        <field name="arch" type="xml">
+            <form string="Chi tiết Nhật ký Version Snapshot">
+                <header>
+                    <button name="action_force_bump_catalog"
+                            type="object"
+                            string="🚀 Buộc sinh Catalog Version mới"
+                            class="btn-primary"
+                            help="Tạo một Version Snapshot mới ngay lập tức. Tất cả Zalo Mini App client sẽ nạp lại dữ liệu!"/>
+                    <button name="action_force_bump_banner"
+                            type="object"
+                            string="🖼️ Buộc sinh Banner Version mới"
+                            class="btn-secondary"/>
+                    <button name="action_make_active"
+                            type="object"
+                            string="✅ Áp dụng Version này"
+                            class="btn-success"
+                            invisible="state == 'active'"/>
+                    <field name="state" widget="statusbar" statusbar_visible="active,historical"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" placeholder="Tiêu đề nhật ký..."/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group string="Thông tin Version Snapshot">
+                            <field name="version_code" readonly="1"/>
+                            <field name="version_datetime" readonly="1"/>
+                            <field name="snapshot_type" readonly="1"/>
+                            <field name="state" widget="badge"
+                                   decoration-success="state == 'active'"
+                                   decoration-muted="state == 'historical'"
+                                   readonly="1"/>
+                        </group>
+                        <group string="Chi tiết Kích hoạt">
+                            <field name="trigger_source" widget="badge" readonly="1"/>
+                            <field name="trigger_reason" readonly="1"/>
+                            <field name="affected_model" readonly="1"/>
+                            <field name="affected_record_name" readonly="1"/>
+                            <field name="user_id" readonly="1"/>
+                        </group>
+                    </group>
+
+                    <group string="Thống kê Dữ liệu tại thời điểm đó">
+                        <group>
+                            <field name="active_products_count" readonly="1"/>
+                            <field name="active_categories_count" readonly="1"/>
+                        </group>
+                    </group>
+
+                    <group string="Ghi chú thêm">
+                        <field name="note" placeholder="Nhập ghi chú bổ sung..."/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Search View -->
+    <record id="view_zalo_miniapp_snapshot_log_search" model="ir.ui.view">
+        <field name="name">zalo.miniapp.snapshot.log.search</field>
+        <field name="model">zalo.miniapp.snapshot.log</field>
+        <field name="arch" type="xml">
+            <search string="Tìm kiếm Lịch sử Version Snapshot">
+                <field name="version_code" string="Mã Version"/>
+                <field name="name" string="Tiêu đề"/>
+                <field name="affected_record_name" string="Bản ghi tác động"/>
+                <field name="user_id" string="Người thực hiện"/>
+                <separator/>
+                <filter name="filter_active" string="✅ Đang áp dụng" domain="[('state','=','active')]"/>
+                <filter name="filter_historical" string="📜 Phiên bản cũ" domain="[('state','=','historical')]"/>
+                <separator/>
+                <filter name="filter_manual" string="🚀 Admin làm mới thủ công" domain="[('trigger_source','=','manual')]"/>
+                <filter name="filter_auto" string="🔄 Thay đổi tự động" domain="[('trigger_source','!=','manual')]"/>
+                <separator/>
+                <filter name="filter_catalog" string="📦 Catalog Version" domain="[('snapshot_type','=','catalog')]"/>
+                <filter name="filter_banner" string="🖼️ Banner Version" domain="[('snapshot_type','=','banner')]"/>
+                <separator/>
+                <filter name="filter_today" string="Hôm nay"
+                        domain="[('version_datetime','&gt;=', (context_today()).strftime('%Y-%m-%d 00:00:00'))]"/>
+                <group expand="0" string="Nhóm theo">
+                    <filter name="group_snapshot_type" string="Loại Version" context="{'group_by': 'snapshot_type'}"/>
+                    <filter name="group_trigger_source" string="Nguồn kích hoạt" context="{'group_by': 'trigger_source'}"/>
+                    <filter name="group_state" string="Trạng thái" context="{'group_by': 'state'}"/>
+                    <filter name="group_date" string="Ngày tạo" context="{'group_by': 'version_datetime:day'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Action Window -->
+    <record id="action_zalo_miniapp_snapshot_log" model="ir.actions.act_window">
+        <field name="name">Lịch sử Version Snapshot Zalo</field>
+        <field name="res_model">zalo.miniapp.snapshot.log</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_zalo_miniapp_snapshot_log_search"/>
+        <field name="context">{'search_default_filter_active': 0}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Chưa có nhật ký Version Snapshot nào.
+            </p>
+            <p>
+                Hệ thống sẽ tự động ghi vết khi có thay đổi dữ liệu Zalo hoặc khi Admin bấm làm mới Version.
+            </p>
+        </field>
+    </record>
+
+</odoo>

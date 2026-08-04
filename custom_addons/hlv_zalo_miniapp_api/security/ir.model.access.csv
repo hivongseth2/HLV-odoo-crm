@@ -10,4 +10,7 @@ access_zalo_miniapp_banner_user,zalo.miniapp.banner.user,model_zalo_miniapp_bann
 access_zalo_miniapp_banner_public,zalo.miniapp.banner.public,model_zalo_miniapp_banner,,1,0,0,0
 access_zalo_miniapp_cart_line_user,zalo.miniapp.cart.line.user,model_zalo_miniapp_cart_line,base.group_user,1,1,1,1
 access_zalo_miniapp_cart_line_public,zalo.miniapp.cart.line.public,model_zalo_miniapp_cart_line,,1,1,1,1
+access_zalo_miniapp_snapshot_log_user,zalo.miniapp.snapshot.log.user,model_zalo_miniapp_snapshot_log,base.group_user,1,1,1,1
+access_zalo_miniapp_snapshot_log_public,zalo.miniapp.snapshot.log.public,model_zalo_miniapp_snapshot_log,,1,0,0,0
+
 
