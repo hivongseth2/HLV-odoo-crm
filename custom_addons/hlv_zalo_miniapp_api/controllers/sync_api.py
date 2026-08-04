@@ -92,6 +92,20 @@ class ZaloSyncAPI(ZaloBaseAPI, http.Controller):
             except Exception as e:
                 _logger.warning("Error calculating banner max write_date: %s", e)
 
+            # Check forced version overrides from System Parameters (Zalo Snapshot Manager)
+            try:
+                Param = request.env["ir.config_parameter"].sudo()
+                forced_cat = Param.get_param("zalo_miniapp_forced_catalog_version", "")
+                if forced_cat and forced_cat.isdigit():
+                    catalog_ts = max(catalog_ts, int(forced_cat))
+
+                forced_ban = Param.get_param("zalo_miniapp_forced_banner_version", "")
+                if forced_ban and forced_ban.isdigit():
+                    banner_ts = max(banner_ts, int(forced_ban))
+            except Exception:
+                pass
+
+
             data = {
                 "catalog_version": str(catalog_ts),
                 "banner_version": str(banner_ts),

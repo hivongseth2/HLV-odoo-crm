@@ -30,8 +30,10 @@
         "views/pos_category_views.xml",
         "views/res_config_settings_views.xml",
         "views/zalo_loyalty_portal_account_views.xml",
+        "views/snapshot_views.xml",
         "views/menu_views.xml",
     ],
+
     "installable": True,
     "application": True,
     "license": "LGPL-3",

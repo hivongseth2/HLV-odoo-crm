@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Form View -->
+    <record id="view_zalo_miniapp_snapshot_form" model="ir.ui.view">
+        <field name="name">zalo.miniapp.snapshot.form</field>
+        <field name="model">zalo.miniapp.snapshot</field>
+        <field name="arch" type="xml">
+            <form string="Quản lý &amp; Theo dõi Version Snapshot" create="false" edit="false" delete="false">
+                <header>
+                    <button name="action_force_bump_catalog_version"
+                            type="object"
+                            string="🚀 Buộc làm mới Catalog Version"
+                            class="btn-primary"
+                            help="Tạo một Version Snapshot mới ngay lập tức. Tất cả khách hàng mở Zalo Mini App sẽ được cập nhật lại danh mục &amp; sản phẩm!"/>
+                    <button name="action_force_bump_banner_version"
+                            type="object"
+                            string="🖼️ Buộc làm mới Banner Version"
+                            class="btn-secondary"/>
+                    <button name="action_reset_forced_version"
+                            type="object"
+                            string="🔄 Trở về tự động (Auto write_date)"
+                            confirm="Bạn có chắc chắn muốn huỷ ép buộc version và quay lại chế độ tự động?"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" readonly="1"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group string="Trạng thái Version Snapshot">
+                            <field name="catalog_version" readonly="1"/>
+                            <field name="catalog_version_datetime" readonly="1"/>
+                            <field name="banner_version" readonly="1"/>
+                            <field name="banner_version_datetime" readonly="1"/>
+                        </group>
+                        <group string="Cấu hình Ép buộc làm mới">
+                            <field name="forced_catalog_version" readonly="1"/>
+                            <field name="forced_banner_version" readonly="1"/>
+                        </group>
+                    </group>
+
+                    <notebook>
+                        <page string="Thống kê dữ liệu Zalo" name="stats">
+                            <group>
+                                <group string="Số lượng bản ghi Active trên Zalo">
+                                    <field name="total_zalo_categories" readonly="1"/>
+                                    <field name="total_zalo_products" readonly="1"/>
+                                    <field name="total_zalo_banners" readonly="1"/>
+                                </group>
+                            </group>
+                        </page>
+                        <page string="Chi tiết cập nhật mới nhất" name="details">
+                            <group>
+                                <group string="Danh mục mới sửa">
+                                    <field name="latest_category_id" readonly="1"/>
+                                    <field name="latest_category_write_date" readonly="1"/>
+                                </group>
+                                <group string="Sản phẩm mới sửa">
+                                    <field name="latest_product_id" readonly="1"/>
+                                    <field name="latest_product_write_date" readonly="1"/>
+                                </group>
+                                <group string="Tồn kho mới đổi">
+                                    <field name="latest_quant_id" readonly="1"/>
+                                    <field name="latest_quant_write_date" readonly="1"/>
+                                </group>
+                                <group string="Banner mới sửa">
+                                    <field name="latest_banner_id" readonly="1"/>
+                                    <field name="latest_banner_write_date" readonly="1"/>
+                                </group>
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Tree/List View -->
+    <record id="view_zalo_miniapp_snapshot_tree" model="ir.ui.view">
+        <field name="name">zalo.miniapp.snapshot.tree</field>
+        <field name="model">zalo.miniapp.snapshot</field>
+        <field name="arch" type="xml">
+            <list string="Version Snapshot Zalo Mini App" create="false" delete="false">
+                <field name="name"/>
+                <field name="catalog_version"/>
+                <field name="catalog_version_datetime"/>
+                <field name="total_zalo_categories"/>
+                <field name="total_zalo_products"/>
+                <field name="latest_product_id"/>
+                <field name="latest_product_write_date"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Action Window -->
+    <record id="action_zalo_miniapp_snapshot" model="ir.actions.act_window">
+        <field name="name">Quản lý Version &amp; Snapshot</field>
+        <field name="res_model">zalo.miniapp.snapshot</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Bảng quản lý &amp; theo dõi Version Snapshot dữ liệu Zalo Mini App.
+            </p>
+        </field>
+    </record>
+
+</odoo>
