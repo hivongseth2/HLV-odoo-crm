@@ -1,4 +1,4 @@
-$hlv-chatter-collapsed-width: 48px;
+$hlv-chatter-toggle-size: 36px;
 
 @media screen {
     // Odoo caps the sheet background width even after the side chatter shrinks.
@@ -23,35 +23,39 @@ $hlv-chatter-collapsed-width: 48px;
         }
 
         &.o-hlv-chatter-collapsed {
-            flex: 0 0 $hlv-chatter-collapsed-width !important;
+            position: relative !important;
+            flex: 0 0 0 !important;
             flex-grow: 0 !important;
             flex-shrink: 0 !important;
-            width: $hlv-chatter-collapsed-width !important;
-            min-width: $hlv-chatter-collapsed-width !important;
-            max-width: $hlv-chatter-collapsed-width !important;
+            width: 0 !important;
+            min-width: 0 !important;
+            max-width: 0 !important;
             margin-left: 0 !important;
             margin-right: 0 !important;
             padding: 0 !important;
-            overflow: hidden !important;
+            overflow: visible !important;
 
             .o-mail-Chatter {
-                flex: 0 0 $hlv-chatter-collapsed-width !important;
-                width: $hlv-chatter-collapsed-width !important;
-                min-width: $hlv-chatter-collapsed-width !important;
-                max-width: $hlv-chatter-collapsed-width !important;
+                flex: 0 0 0 !important;
+                width: 0 !important;
+                min-width: 0 !important;
+                max-width: 0 !important;
                 margin: 0 !important;
-                overflow: hidden !important;
+                overflow: visible !important;
+                pointer-events: none;
             }
 
             .o-mail-Chatter-top {
-                width: $hlv-chatter-collapsed-width !important;
+                width: 0 !important;
                 margin: 0 !important;
+                overflow: visible !important;
             }
 
             .o-mail-Chatter-topbar {
-                width: $hlv-chatter-collapsed-width !important;
-                justify-content: center;
-                overflow: hidden !important;
+                position: relative;
+                width: 0 !important;
+                min-height: 0;
+                overflow: visible !important;
 
                 > :not(.o-hlv-Chatter-toggle) {
                     display: none !important;
@@ -64,11 +68,24 @@ $hlv-chatter-collapsed-width: 48px;
             }
 
             .o-hlv-Chatter-toggle {
-                width: $hlv-chatter-collapsed-width;
-                min-height: 44px;
+                position: absolute;
+                top: 8px;
+                right: 8px;
+                z-index: 5;
+                width: $hlv-chatter-toggle-size;
+                height: $hlv-chatter-toggle-size;
                 margin-right: 0 !important;
-                padding-left: 0;
-                padding-right: 0;
+                padding: 0;
+                border: 1px solid rgba($black, 0.15);
+                border-radius: 50%;
+                background: $white;
+                box-shadow: 0 2px 8px rgba($black, 0.18);
+                pointer-events: auto;
+
+                &:hover,
+                &:focus-visible {
+                    background: $gray-100;
+                }
             }
         }
     }

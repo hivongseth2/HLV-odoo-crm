@@ -9,7 +9,7 @@
             <button
                 t-if="props.isChatterAside"
                 type="button"
-                class="o-hlv-Chatter-toggle btn btn-secondary text-action flex-shrink-0 me-1"
+                class="o-hlv-Chatter-toggle btn btn-link text-action flex-shrink-0 me-1"
                 t-att-title="hlvChatterToggleTitle"
                 t-att-aria-label="hlvChatterToggleTitle"
                 t-att-aria-expanded="!hlvChatterCollapse.collapsed"
