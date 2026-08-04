@@ -14,7 +14,8 @@ patch(Chatter.prototype, {
     setup() {
         super.setup();
         this.hlvChatterCollapse = useState({
-            collapsed: browser.localStorage.getItem(STORAGE_KEY) === "1",
+            // Start collapsed until the user explicitly chooses to keep it expanded.
+            collapsed: browser.localStorage.getItem(STORAGE_KEY) !== "0",
         });
 
         useEffect(

@@ -3,6 +3,7 @@
 Adds a collapse/expand button to the right-hand chatter in Odoo 18 form views.
 
 - Fully collapses the chatter and leaves a floating button to restore it.
+- Starts collapsed by default for users who have not selected a preference yet.
 - Remembers the selected state in browser local storage.
 - Only affects the side chatter; bottom/mobile chatter layouts remain unchanged.
 
