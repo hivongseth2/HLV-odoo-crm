@@ -5,17 +5,33 @@ $hlv-chatter-collapsed-width: 48px;
         transition: width 160ms ease, flex-basis 160ms ease;
 
         &.o-hlv-chatter-collapsed {
-            flex: 0 0 $hlv-chatter-collapsed-width;
-            width: $hlv-chatter-collapsed-width;
-            min-width: $hlv-chatter-collapsed-width;
-            max-width: $hlv-chatter-collapsed-width;
-            overflow: hidden;
+            flex: 0 0 $hlv-chatter-collapsed-width !important;
+            flex-grow: 0 !important;
+            flex-shrink: 0 !important;
+            width: $hlv-chatter-collapsed-width !important;
+            min-width: $hlv-chatter-collapsed-width !important;
+            max-width: $hlv-chatter-collapsed-width !important;
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+            padding: 0 !important;
+            overflow: hidden !important;
 
             .o-mail-Chatter {
-                min-width: $hlv-chatter-collapsed-width;
+                flex: 0 0 $hlv-chatter-collapsed-width !important;
+                width: $hlv-chatter-collapsed-width !important;
+                min-width: $hlv-chatter-collapsed-width !important;
+                max-width: $hlv-chatter-collapsed-width !important;
+                margin: 0 !important;
+                overflow: hidden !important;
+            }
+
+            .o-mail-Chatter-top {
+                width: $hlv-chatter-collapsed-width !important;
+                margin: 0 !important;
             }
 
             .o-mail-Chatter-topbar {
+                width: $hlv-chatter-collapsed-width !important;
                 justify-content: center;
                 overflow: hidden !important;
 
