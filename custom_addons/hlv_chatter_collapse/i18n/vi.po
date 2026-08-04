@@ -1,0 +1,22 @@
+# Translation of Odoo Server.
+# This file contains the translation of the following modules:
+# 	* hlv_chatter_collapse
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Server 18.0\n"
+"Language: vi\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#. module: hlv_chatter_collapse
+#. odoo-javascript
+msgid "Collapse chatter"
+msgstr "Thu gọn chatter"
+
+#. module: hlv_chatter_collapse
+#. odoo-javascript
+msgid "Expand chatter"
+msgstr "Mở rộng chatter"
