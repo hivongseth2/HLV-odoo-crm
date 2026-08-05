@@ -249,11 +249,14 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
                     return self._response_error("OUT_OF_STOCK",
                         f"Sản phẩm '{product.display_name}' chỉ còn {product.free_qty} {product.uom_id.name}", 400)
 
-                price = product.x_zalo_price or product.list_price
+                # Ưu tiên dùng price_unit từ frontend (giá Zalo đã bao gồm VAT)
+                # Nếu frontend không gửi, fallback về x_zalo_price hoặc list_price
+                price = item.get("price_unit") or product.x_zalo_price or product.list_price
                 order_line_vals.append((0, 0, {
                     "product_id": product_id,
                     "product_uom_qty": quantity,
                     "price_unit": price,
+                    "tax_id": [(5, 0, 0)],  # Không áp thuế - giá Zalo đã bao gồm VAT
                     "name": product.display_name,
                 }))
 
