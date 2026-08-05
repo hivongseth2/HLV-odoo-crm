@@ -47,6 +47,7 @@
     </record>
 
     <!-- Form view riêng cho đơn Zalo - kế thừa form gốc, thêm tab Đổi trả -->
+    <!-- Odoo 17: dùng invisible trực tiếp thay vì attrs -->
     <record id="view_order_zalo_form" model="ir.ui.view">
         <field name="name">sale.order.zalo.form</field>
         <field name="model">sale.order</field>
@@ -54,7 +55,8 @@
         <field name="priority">20</field>
         <field name="arch" type="xml">
             <xpath expr="//notebook" position="inside">
-                <page string="Đổi trả Zalo" name="zalo_return" attrs="{'invisible': [('partner_id.x_is_zalo_account', '=', False)]}">
+                <page string="Đổi trả Zalo" name="zalo_return"
+                      invisible="not partner_id.x_is_zalo_account">
                     <group string="Thông tin yêu cầu đổi/trả" colspan="4" col="2">
                         <field name="x_return_requested" string="Khách đề nghị đổi/trả"/>
                         <field name="x_return_state" string="Trạng thái đổi/trả"
@@ -63,30 +65,30 @@
                         <field name="x_return_type" string="Loại đổi/trả"/>
                         <field name="x_return_refund_amount" string="Số tiền hoàn lại" widget="monetary"/>
                         <field name="x_return_rejected_reason" string="Lý do từ chối"
-                               attrs="{'invisible': [('x_return_state', '!=', 'rejected')]}"/>
+                               invisible="x_return_state != 'rejected'"/>
                     </group>
                     <group string="Phiếu trả hàng" colspan="4" col="2"
-                           attrs="{'invisible': [('x_return_picking_id', '=', False)]}">
+                           invisible="not x_return_picking_id">
                         <field name="x_return_picking_id" string="Phiếu trả hàng"/>
                         <field name="x_return_completed_date" string="Ngày hoàn tất"/>
                     </group>
                     <group string="Hành động xử lý" colspan="4" col="4"
-                           attrs="{'invisible': [('x_return_requested', '=', False)]}">
+                           invisible="not x_return_requested">
                         <button name="action_approve_return" type="object" string="Phê duyệt"
                                 class="btn-primary"
-                                attrs="{'invisible': [('x_return_state', 'not in', [False, 'pending'])]}"
+                                invisible="x_return_state and x_return_state != 'pending'"
                                 confirm="Xác nhận phê duyệt yêu cầu đổi/trả này?"/>
                         <button name="action_reject_return" type="object" string="Từ chối"
                                 class="btn-danger"
-                                attrs="{'invisible': [('x_return_state', 'not in', [False, 'pending', 'approved'])]}"
+                                invisible="x_return_state and x_return_state not in ('pending', 'approved')"
                                 context="{'default_reject_reason': True}"/>
                         <button name="action_create_return_picking" type="object" string="Tạo phiếu trả hàng"
                                 class="btn-secondary"
-                                attrs="{'invisible': ['|', ('x_return_state', '!=', 'approved'), ('x_return_picking_id', '!=', False)]}"
+                                invisible="x_return_state != 'approved' or x_return_picking_id"
                                 confirm="Xác nhận tạo phiếu trả hàng?"/>
                         <button name="action_complete_return" type="object" string="Hoàn tất đổi/trả"
                                 class="btn-success"
-                                attrs="{'invisible': [('x_return_state', 'not in', ['approved', 'processing'])]}"
+                                invisible="x_return_state not in ('approved', 'processing')"
                                 confirm="Xác nhận hoàn tất xử lý đổi/trả?"/>
                     </group>
                 </page>
