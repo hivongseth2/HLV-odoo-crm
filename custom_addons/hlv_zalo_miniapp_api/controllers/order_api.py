@@ -68,6 +68,25 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
         except Exception:
             pass
 
+        # Return info (chỉ cho đơn Zalo)
+        is_zalo = bool(order.partner_id.x_is_zalo_account)
+        return_info = {}
+        if is_zalo and getattr(order, "x_return_requested", False):
+            return_info = {
+                "return_requested": True,
+                "return_state": order.x_return_state or "pending",
+                "return_type": order.x_return_type or None,
+                "return_refund_amount": order.x_return_refund_amount or 0,
+                "return_rejected_reason": order.x_return_rejected_reason or "",
+                "return_picking_name": order.x_return_picking_id.name or None,
+                "return_picking_state": order.x_return_picking_id.state or None,
+                "return_completed_date": order.x_return_completed_date or None,
+            }
+        else:
+            return_info = {
+                "return_requested": getattr(order, "x_return_requested", False) or False,
+            }
+
         return {
             "id": order.id, "name": order.name,
             "partner_id": order.partner_id.id, "partner_name": order.partner_id.name,
@@ -77,7 +96,7 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             "amount_total": order.amount_total, "note": order.note or "",
             "voucher_discount": voucher_discount_total,
             "loyalty_voucher_code": getattr(order, "loyalty_voucher_code", "") or "",
-            "return_requested": getattr(order, "x_return_requested", False) or False,
+            **return_info,
             "lines": lines, "picking_info": picking_info,
             "shipping_address": {
                 "name": order.partner_shipping_id.name or "",
