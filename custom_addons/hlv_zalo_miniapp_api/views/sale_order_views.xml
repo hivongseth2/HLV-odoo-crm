@@ -67,9 +67,25 @@
                         <field name="x_return_rejected_reason" string="Lý do từ chối"
                                invisible="x_return_state != 'rejected'"/>
                     </group>
-                    <group string="Phiếu trả hàng" colspan="4" col="2"
+                    <group string="Phiếu giao hàng & Trả hàng" colspan="4" col="2">
+                        <field name="picking_ids" string="Phiếu giao/nhận"
+                               domain="[('state', '!=', 'cancel')]"
+                               context="{'tree_view_ref': 'stock.vpicktree'}">
+                            <tree string="Phiếu kho">
+                                <field name="name"/>
+                                <field name="picking_type_id"/>
+                                <field name="state" widget="badge"
+                                       decoration-success="state == 'done'"
+                                       decoration-warning="state == 'assigned'"
+                                       decoration-info="state in ('waiting', 'confirmed')"
+                                       decoration-danger="state == 'cancel'"/>
+                                <field name="scheduled_date"/>
+                            </tree>
+                        </field>
+                    </group>
+                    <group string="Phiếu trả hàng Zalo" colspan="4" col="2"
                            invisible="not x_return_picking_id">
-                        <field name="x_return_picking_id" string="Phiếu trả hàng"/>
+                        <field name="x_return_picking_id" string="Phiếu trả hàng (WH/IN)"/>
                         <field name="x_return_completed_date" string="Ngày hoàn tất"/>
                     </group>
                     <group string="Hành động xử lý" colspan="4" col="4"
@@ -82,10 +98,6 @@
                                 class="btn-danger"
                                 invisible="x_return_state and x_return_state not in ('pending', 'approved')"
                                 context="{'default_reject_reason': True}"/>
-                        <button name="action_create_return_picking" type="object" string="Tạo phiếu trả hàng"
-                                class="btn-secondary"
-                                invisible="x_return_state != 'approved' or x_return_picking_id"
-                                confirm="Xác nhận tạo phiếu trả hàng?"/>
                         <button name="action_complete_return" type="object" string="Hoàn tất đổi/trả"
                                 class="btn-success"
                                 invisible="x_return_state not in ('approved', 'processing')"

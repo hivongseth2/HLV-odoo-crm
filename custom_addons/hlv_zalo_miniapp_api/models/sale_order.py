@@ -107,53 +107,6 @@ class SaleOrder(models.Model):
             msg += _("<br/>• <b>Lý do:</b> %s") % reason
         self.message_post(body=msg, message_type="comment", subtype_xmlid="mail.mt_note")
 
-    def action_create_return_picking(self):
-        """Tạo phiếu trả hàng (chỉ cho đơn Zalo)."""
-        self.ensure_one()
-        if not self._is_zalo_order():
-            raise UserError(_("Chức năng này chỉ áp dụng cho đơn hàng Zalo Mini App."))
-        if self.x_return_state != "approved":
-            raise UserError(_("Cần phê duyệt yêu cầu đổi/trả trước khi tạo phiếu trả hàng."))
-        if self.x_return_picking_id:
-            raise UserError(_("Đã tạo phiếu trả hàng %s.") % self.x_return_picking_id.name)
-
-        # Tìm picking giao hàng đã hoàn thành
-        outgoing_picking = self.picking_ids.filtered(
-            lambda p: p.picking_type_id.code == "outgoing" and p.state == "done"
-        )
-        if not outgoing_picking:
-            raise UserError(_("Không tìm thấy phiếu giao hàng đã hoàn thành để tạo phiếu trả."))
-
-        # Tạo return picking từ phiếu giao hàng đầu tiên
-        try:
-            return_wizard = self.env["stock.return.picking"].with_context(
-                active_id=outgoing_picking[0].id,
-                active_model="stock.picking",
-            ).create({
-                "picking_id": outgoing_picking[0].id,
-            })
-
-            # Tự động chọn tất cả các dòng sản phẩm để trả
-            for line in return_wizard.product_return_moves:
-                line.write({"quantity": line.product_id and line.quantity or 0.0, "to_refund": True})
-
-            return_picking = return_wizard.create_returns()
-            if return_picking:
-                picking = self.env["stock.picking"].browse(return_picking.get("res_id", 0))
-                if picking:
-                    self.write({
-                        "x_return_state": "processing",
-                        "x_return_picking_id": picking.id,
-                    })
-                    self.message_post(
-                        body=_("<b>Đã tạo phiếu trả hàng %s từ Zalo Mini App</b>") % picking.name,
-                        message_type="comment",
-                        subtype_xmlid="mail.mt_note",
-                    )
-        except Exception as e:
-            _logger.exception("Create return picking error for order %s: %s", self.name, e)
-            raise UserError(_("Không thể tạo phiếu trả hàng: %s") % str(e))
-
     def action_complete_return(self):
         """Hoàn tất đổi/trả (chỉ cho đơn Zalo)."""
         self.ensure_one()
