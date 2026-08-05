@@ -67,7 +67,7 @@
                         <field name="x_return_rejected_reason" string="Lý do từ chối"
                                invisible="x_return_state != 'rejected'"/>
                     </group>
-                    <group string="Phiếu giao hàng & Trả hàng" colspan="4" col="2">
+                    <group string="Phiếu giao hàng và Trả hàng" colspan="4" col="2">
                         <field name="picking_ids" string="Phiếu giao/nhận"
                                domain="[('state', '!=', 'cancel')]"
                                context="{'tree_view_ref': 'stock.vpicktree'}">
