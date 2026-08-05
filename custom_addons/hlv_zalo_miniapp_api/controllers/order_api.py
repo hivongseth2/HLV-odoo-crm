@@ -77,6 +77,7 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             "amount_total": order.amount_total, "note": order.note or "",
             "voucher_discount": voucher_discount_total,
             "loyalty_voucher_code": getattr(order, "loyalty_voucher_code", "") or "",
+            "return_requested": getattr(order, "x_return_requested", False) or False,
             "lines": lines, "picking_info": picking_info,
             "shipping_address": {
                 "name": order.partner_shipping_id.name or "",

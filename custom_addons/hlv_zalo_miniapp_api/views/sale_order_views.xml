@@ -7,6 +7,7 @@
         <field name="arch" type="xml">
             <list string="Đơn hàng Zalo Mini App" sample="1" decoration-muted="state == 'cancel'">
                 <field name="x_plan_need_cancel" string="Cần hủy" widget="boolean_toggle" optional="show"/>
+                <field name="x_return_requested" string="Khách đề nghị đổi/trả" widget="boolean_toggle" optional="show"/>
                 <field name="name" string="Số báo giá" readonly="1" decoration-bf="1"/>
                 <field name="date_order" string="Ngày đặt hàng" readonly="1" widget="datetime" optional="show"/>
                 <field name="commitment_date" string="Ngày giao hàng" widget="datetime" optional="show"/>
