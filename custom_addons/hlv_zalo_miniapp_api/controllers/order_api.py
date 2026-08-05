@@ -477,7 +477,10 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             new_entry = f"\n[{self._now_gmt7()}] {title}"
             if note:
                 new_entry += f": {note}"
-            order.write({"note": current_note + new_entry})
+            write_vals = {"note": current_note + new_entry}
+            if action_type == "return":
+                write_vals["x_return_requested"] = True
+            order.write(write_vals)
 
             try:
                 order.message_post(body=formatted_msg, message_type="comment", subtype_xmlid="mail.mt_note")
