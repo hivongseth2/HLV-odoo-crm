@@ -292,17 +292,25 @@ class SaleOrderLine(models.Model):
     )
 
     def _get_loyalty_discount_amount(self):
-        """Tính thành tiền CK Loyalty trên toàn bộ số lượng đặt hàng."""
+        """Tính thành tiền CK Loyalty trên toàn bộ số lượng đặt hàng.
+
+        `loyalty_discount_pct` được nhập theo 1 trong 2 cách: số phần trăm
+        (VD: 5 = 5%) hoặc tỷ lệ thập phân (VD: 0.05 = 5%). Giá trị <= 1.0
+        được hiểu là tỷ lệ thập phân sẵn có; giá trị > 1.0 được hiểu là số
+        phần trăm cần chia 100. Phải khớp với logic ở
+        `stock.picking._get_loyalty_discount_detail_for_line()` vì đó là
+        nơi fallback về % nếu field Studio này chưa có giá trị.
+        """
         self.ensure_one()
         discount_pct = float(self.loyalty_discount_pct or 0.0)
         if discount_pct <= 0:
             return 0.0
 
+        discount_rate = discount_pct if discount_pct <= 1.0 else discount_pct / 100.0
         amount = (
             float(self.price_unit or 0.0)
             * float(self.product_uom_qty or 0.0)
-            * discount_pct
-            / 100.0
+            * discount_rate
         )
         currency = self.currency_id
         return currency.round(amount) if currency else amount
