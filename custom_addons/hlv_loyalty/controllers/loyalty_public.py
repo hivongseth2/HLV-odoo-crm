@@ -29,6 +29,18 @@ def _get_current_account():
     return account
 
 
+def _get_payment_status_map(reward_requests):
+    """Return {request_id: is_paid} for cash-type reward requests.
+
+    'misa_payment_is_paid' is only added by the amis_callback module - trả
+    dict rỗng nếu module đó chưa cài để trang portal không lỗi.
+    """
+    cash_requests = reward_requests.filtered(lambda r: r.request_type == 'cash')
+    if not cash_requests or 'misa_payment_is_paid' not in cash_requests._fields:
+        return {}
+    return {r.id: r.misa_payment_is_paid for r in cash_requests}
+
+
 def _load_partner_data(partner):
     """Load dashboard data for a partner — recent 5 rows for history/vouchers."""
     root = partner._get_loyalty_root()
@@ -242,6 +254,16 @@ class LoyaltyPublicPortal(http.Controller):
         all_history = request.env['hlv.loyalty.history'].sudo().search(
             domain, order='date desc'
         )
+
+        # Với các giao dịch 'redeem' phát sinh từ yêu cầu đổi thưởng của khách
+        # (không phải do admin đổi trực tiếp), tìm lại yêu cầu gốc qua
+        # history_id để hiện tình trạng thanh toán + link xem chi tiết.
+        redeem_history_ids = all_history.filtered(lambda h: h.transaction_type == 'redeem').ids
+        reward_requests = request.env['hlv.loyalty.reward.request'].sudo().search([
+            ('history_id', 'in', redeem_history_ids),
+        ]) if redeem_history_ids else request.env['hlv.loyalty.reward.request']
+        request_by_history_id = {rr.history_id.id: rr for rr in reward_requests}
+
         data = _load_partner_data(account.partner_id)
         data['account'] = account
         if account.portal_phone:
@@ -249,6 +271,8 @@ class LoyaltyPublicPortal(http.Controller):
         data['all_history'] = all_history
         data['active_pt'] = active_pt
         data['active_st'] = active_st
+        data['request_by_history_id'] = request_by_history_id
+        data['payment_status_by_request'] = _get_payment_status_map(reward_requests)
         return request.render('hlv_loyalty.loyalty_portal_history_full', data)
 
     # ── Reward redemption page ────────────────────────────────────────────
@@ -284,6 +308,7 @@ class LoyaltyPublicPortal(http.Controller):
             'program': program,
             'packages': packages,
             'my_requests': my_requests,
+            'payment_status_by_request': _get_payment_status_map(my_requests),
             'success_msg': kwargs.get('success_msg', ''),
             'error_msg': kwargs.get('error_msg', ''),
             'form_vals': {},
@@ -460,9 +485,7 @@ class LoyaltyPublicPortal(http.Controller):
         if not rq.exists() or rq.partner_id.id not in root._get_loyalty_family_partner_ids():
             return request.redirect('/loyalty/redeem?tab=history&error_msg=Không tìm thấy yêu cầu.')
 
-        # 'misa_payment_is_paid' chỉ tồn tại khi module amis_callback được cài -
-        # đọc an toàn để trang chi tiết vẫn hoạt động khi thiếu module đó.
-        payment_is_paid = getattr(rq, 'misa_payment_is_paid', False) if 'misa_payment_is_paid' in rq._fields else None
+        payment_is_paid = _get_payment_status_map(rq).get(rq.id)
 
         data = {
             'account': account,

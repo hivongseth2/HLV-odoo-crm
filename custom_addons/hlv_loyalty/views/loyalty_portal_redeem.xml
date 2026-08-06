@@ -323,7 +323,7 @@
                     <t t-if="my_requests">
                         <div class="sr-req-list">
                             <t t-foreach="my_requests" t-as="rq">
-                                <div t-att-class="'sr-req-card sr-rq-' + rq.state">
+                                <div class="sr-req-card">
                                     <div class="sr-rq-head">
                                         <div class="sr-rq-name">
                                             <span class="ms">
@@ -352,6 +352,20 @@
                                             <div class="sr-rq-row">
                                                 <span class="sr-rq-lbl">Gói quà:</span>
                                                 <span class="sr-rq-val"><t t-out="rq.package_id.name"/></span>
+                                            </div>
+                                        </t>
+                                        <t t-if="rq.request_type == 'cash'">
+                                            <div class="sr-rq-row">
+                                                <span class="sr-rq-lbl">Thanh toán:</span>
+                                                <t t-set="is_paid" t-value="payment_status_by_request.get(rq.id)"/>
+                                                <span t-att-class="'sr-pay-badge ' + ('sr-pay-done' if is_paid else 'sr-pay-pending')">
+                                                    <span class="ms" style="font-size:14px">
+                                                        <t t-if="is_paid">check_circle</t>
+                                                        <t t-else="">schedule</t>
+                                                    </span>
+                                                    <t t-if="is_paid">Đã thanh toán</t>
+                                                    <t t-else="">Chưa thanh toán</t>
+                                                </span>
                                             </div>
                                         </t>
                                         <t t-if="rq.state == 'done' and rq.voucher_id">
