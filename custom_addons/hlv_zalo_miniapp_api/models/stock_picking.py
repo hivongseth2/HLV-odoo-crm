@@ -12,9 +12,23 @@ class StockPicking(models.Model):
 
     x_is_zalo_picking = fields.Boolean(
         string="Phiếu giao hàng Zalo",
-        compute="_compute_x_is_zalo_picking",
+        compute="_compute_x_is_zalo_picking_types",
         store=True,
-        help="Đánh dấu phiếu kho này thuộc đơn hàng Zalo Mini App",
+        help="Đánh dấu phiếu kho này thuộc quy trình đơn hàng Zalo Mini App",
+    )
+
+    x_is_zalo_outgoing_picking = fields.Boolean(
+        string="Phiếu xuất kho Zalo",
+        compute="_compute_x_is_zalo_picking_types",
+        store=True,
+        help="Đánh dấu phiếu kho này là phiếu xuất kho (OUT) thuộc đơn hàng Zalo Mini App",
+    )
+
+    x_is_zalo_incoming_return_picking = fields.Boolean(
+        string="Phiếu nhập trả hàng Zalo",
+        compute="_compute_x_is_zalo_picking_types",
+        store=True,
+        help="Đánh dấu phiếu kho này là phiếu nhập kho trả hàng (IN) từ phiếu xuất Zalo",
     )
 
     x_zalo_return_requested = fields.Boolean(
@@ -80,15 +94,27 @@ class StockPicking(models.Model):
         help="Thời điểm hoàn tất xử lý đổi/trả phiếu kho Zalo",
     )
 
-    @api.depends("sale_id", "sale_id.partner_id.x_is_zalo_account", "partner_id.x_is_zalo_account", "picking_type_id.code")
-    def _compute_x_is_zalo_picking(self):
+    @api.depends("sale_id", "sale_id.partner_id.x_is_zalo_account", "partner_id.x_is_zalo_account", "picking_type_id.code", "origin")
+    def _compute_x_is_zalo_picking_types(self):
         for picking in self:
-            is_zalo = False
+            is_zalo_account = False
             if picking.sale_id and picking.sale_id.partner_id.x_is_zalo_account:
-                is_zalo = True
+                is_zalo_account = True
             elif picking.partner_id and picking.partner_id.x_is_zalo_account:
-                is_zalo = True
-            picking.x_is_zalo_picking = is_zalo
+                is_zalo_account = True
+
+            code = picking.picking_type_id.code or ""
+            is_outgoing = is_zalo_account and code == "outgoing"
+
+            is_incoming_return = False
+            if code == "incoming":
+                origin_picking = picking._get_origin_outgoing_picking()
+                if origin_picking and (origin_picking.x_is_zalo_outgoing_picking or origin_picking.sale_id.partner_id.x_is_zalo_account):
+                    is_incoming_return = True
+
+            picking.x_is_zalo_outgoing_picking = is_outgoing
+            picking.x_is_zalo_incoming_return_picking = is_incoming_return
+            picking.x_is_zalo_picking = is_outgoing or is_incoming_return
 
     def _get_origin_outgoing_picking(self):
         """Tìm phiếu xuất kho OUT gốc của return picking này."""
@@ -103,12 +129,12 @@ class StockPicking(models.Model):
         return origin_picking
 
     def action_approve_zalo_return(self):
-        """Phê duyệt yêu cầu đổi/trả Zalo & mở wizard stock.return.picking chuẩn Odoo."""
+        """Phê duyệt yêu cầu đổi/trả Zalo & mở wizard stock.return.picking chuẩn Odoo (chỉ trên phiếu OUT)."""
         self.ensure_one()
-        if not self.x_is_zalo_picking:
-            raise UserError(_("Chức năng này chỉ áp dụng cho phiếu kho thuộc đơn hàng Zalo Mini App."))
+        if not self.x_is_zalo_outgoing_picking:
+            raise UserError(_("Chức năng này chỉ áp dụng cho phiếu xuất kho thuộc đơn hàng Zalo Mini App."))
         if not self.x_zalo_return_requested:
-            raise UserError(_("Phiếu kho này chưa có yêu cầu đổi/trả từ khách Zalo."))
+            raise UserError(_("Phiếu xuất kho này chưa có yêu cầu đổi/trả từ khách Zalo."))
         if self.x_zalo_return_state and self.x_zalo_return_state not in ("pending", "draft"):
             state_label = dict(self._fields["x_zalo_return_state"].selection).get(self.x_zalo_return_state, self.x_zalo_return_state)
             raise UserError(_("Yêu cầu đổi/trả đã được xử lý (trạng thái: %s).") % state_label)
@@ -131,12 +157,12 @@ class StockPicking(models.Model):
         }
 
     def action_reject_zalo_return(self, reason=""):
-        """Từ chối yêu cầu đổi/trả Zalo."""
+        """Từ chối yêu cầu đổi/trả Zalo (chỉ trên phiếu OUT)."""
         self.ensure_one()
-        if not self.x_is_zalo_picking:
-            raise UserError(_("Chức năng này chỉ áp dụng cho phiếu kho Zalo Mini App."))
+        if not self.x_is_zalo_outgoing_picking:
+            raise UserError(_("Chức năng này chỉ áp dụng cho phiếu xuất kho Zalo Mini App."))
         if not self.x_zalo_return_requested:
-            raise UserError(_("Phiếu kho này chưa có yêu cầu đổi/trả từ khách."))
+            raise UserError(_("Phiếu xuất kho này chưa có yêu cầu đổi/trả từ khách."))
         if self.x_zalo_return_state and self.x_zalo_return_state not in ("pending", "approved"):
             state_label = dict(self._fields["x_zalo_return_state"].selection).get(self.x_zalo_return_state, self.x_zalo_return_state)
             raise UserError(_("Yêu cầu đổi/trả đã được xử lý (trạng thái: %s).") % state_label)
@@ -154,10 +180,10 @@ class StockPicking(models.Model):
             self.sale_id.message_post(body=msg, message_type="comment", subtype_xmlid="mail.mt_note")
 
     def action_complete_zalo_return(self):
-        """Hoàn tất đổi/trả Zalo thủ công."""
+        """Hoàn tất đổi/trả Zalo thủ công (chỉ trên phiếu OUT)."""
         self.ensure_one()
-        if not self.x_is_zalo_picking:
-            raise UserError(_("Chức năng này chỉ áp dụng cho phiếu kho Zalo Mini App."))
+        if not self.x_is_zalo_outgoing_picking:
+            raise UserError(_("Chức năng này chỉ áp dụng cho phiếu xuất kho Zalo Mini App."))
         if self.x_zalo_return_state not in ("approved", "processing"):
             raise UserError(_("Yêu cầu đổi/trả chưa được phê duyệt hoặc đang xử lý."))
         self.write({
@@ -190,20 +216,37 @@ class StockPicking(models.Model):
         return picking
 
     def write(self, vals):
-        """Khi phiếu return picking được validate (done), tự động complete return trên phiếu OUT Zalo."""
+        """Khi phiếu return picking được validate (done) hoặc hủy (cancel), tự động cập nhật trạng thái phiếu OUT Zalo."""
         res = super().write(vals)
-        if "state" in vals and vals["state"] == "done":
+        if "state" in vals:
+            new_state = vals["state"]
             for picking in self:
                 if picking.picking_type_id.code != "incoming":
                     continue
                 origin_picking = picking._get_origin_outgoing_picking()
-                if origin_picking and origin_picking.x_zalo_return_requested and origin_picking.x_zalo_return_state in ("processing", "approved"):
+                if not origin_picking or not origin_picking.x_zalo_return_requested:
+                    continue
+
+                if new_state == "done" and origin_picking.x_zalo_return_state in ("processing", "approved"):
                     origin_picking.write({
                         "x_zalo_return_state": "completed",
                         "x_zalo_return_completed_date": fields.Datetime.now(),
                     })
                     msg = Markup(_(
                         "<b>Phiếu trả hàng %s đã hoàn tất - Đổi/trả Zalo hoàn thành cho phiếu xuất %s</b>"
+                    )) % (picking.name, origin_picking.name)
+                    origin_picking.message_post(body=msg, message_type="comment", subtype_xmlid="mail.mt_note")
+                    if origin_picking.sale_id:
+                        origin_picking.sale_id.message_post(body=msg, message_type="comment", subtype_xmlid="mail.mt_note")
+
+                elif new_state == "cancel" and origin_picking.x_zalo_return_state in ("processing", "approved"):
+                    reason = _("Phiếu kho nhập trả %s đã bị hủy.") % picking.name
+                    origin_picking.write({
+                        "x_zalo_return_state": "rejected",
+                        "x_zalo_return_rejected_reason": reason,
+                    })
+                    msg = Markup(_(
+                        "<b>Phiếu kho trả hàng %s bị hủy - Tự động chuyển Đổi/trả Zalo sang Từ chối cho phiếu xuất %s</b>"
                     )) % (picking.name, origin_picking.name)
                     origin_picking.message_post(body=msg, message_type="comment", subtype_xmlid="mail.mt_note")
                     if origin_picking.sale_id:

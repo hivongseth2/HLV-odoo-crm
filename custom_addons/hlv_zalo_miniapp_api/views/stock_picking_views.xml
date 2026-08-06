@@ -7,19 +7,21 @@
         <field name="inherit_id" ref="stock.view_picking_form"/>
         <field name="priority">25</field>
         <field name="arch" type="xml">
-            <!-- Nút bấm xử lý Đổi/Trả Zalo trên Header -->
+            <!-- Nút bấm xử lý Đổi/Trả Zalo trên Header (Chỉ xuất hiện trên Phiếu Xuất OUT) -->
             <xpath expr="//header" position="inside">
                 <field name="x_is_zalo_picking" invisible="1"/>
+                <field name="x_is_zalo_outgoing_picking" invisible="1"/>
+                <field name="x_is_zalo_incoming_return_picking" invisible="1"/>
                 <button name="action_approve_zalo_return" type="object" string="Phê duyệt Đổi/Trả Zalo"
                         class="btn-primary"
-                        invisible="not x_is_zalo_picking or not x_zalo_return_requested or (x_zalo_return_state and x_zalo_return_state not in ('pending', 'draft'))"
+                        invisible="not x_is_zalo_outgoing_picking or not x_zalo_return_requested or (x_zalo_return_state and x_zalo_return_state not in ('pending', 'draft'))"
                         confirm="Xác nhận phê duyệt yêu cầu đổi/trả Zalo và mở wizard trả hàng?"/>
                 <button name="action_reject_zalo_return" type="object" string="Từ chối Đổi/Trả Zalo"
                         class="btn-danger"
-                        invisible="not x_is_zalo_picking or not x_zalo_return_requested or (x_zalo_return_state and x_zalo_return_state not in ('pending', 'approved'))"/>
+                        invisible="not x_is_zalo_outgoing_picking or not x_zalo_return_requested or (x_zalo_return_state and x_zalo_return_state not in ('pending', 'approved'))"/>
                 <button name="action_complete_zalo_return" type="object" string="Hoàn tất Đổi/Trả Zalo"
                         class="btn-success"
-                        invisible="not x_is_zalo_picking or x_zalo_return_state not in ('approved', 'processing')"
+                        invisible="not x_is_zalo_outgoing_picking or x_zalo_return_state not in ('approved', 'processing')"
                         confirm="Xác nhận hoàn tất đổi/trả Zalo cho phiếu xuất kho này?"/>
             </xpath>
 
@@ -27,7 +29,9 @@
             <xpath expr="//notebook" position="inside">
                 <page string="Đổi/Trả Zalo" name="zalo_return_page"
                       invisible="not x_is_zalo_picking">
-                    <group string="Thông tin yêu cầu đổi/trả từ Zalo Mini App" colspan="4" col="2">
+                    <!-- Giao diện hiển thị trên Phiếu Xuất (OUT) -->
+                    <group string="Thông tin yêu cầu đổi/trả từ Zalo Mini App" colspan="4" col="2"
+                           invisible="not x_is_zalo_outgoing_picking">
                         <field name="x_zalo_return_requested" string="Khách đề nghị đổi/trả"/>
                         <field name="x_zalo_return_state" string="Trạng thái đổi/trả"
                                widget="statusbar"
@@ -43,9 +47,19 @@
                                invisible="x_zalo_return_state != 'rejected'"/>
                     </group>
                     <group string="Thông tin phiếu nhập kho trả hàng (WH/IN)" colspan="4" col="2"
-                           invisible="not x_zalo_return_picking_id">
+                           invisible="not x_is_zalo_outgoing_picking or not x_zalo_return_picking_id">
                         <field name="x_zalo_return_picking_id" string="Phiếu trả hàng (WH/IN)"/>
                         <field name="x_zalo_return_completed_date" string="Ngày hoàn tất"/>
+                    </group>
+
+                    <!-- Giao diện hiển thị trên Phiếu Nhập Trả Hàng (WH/IN) -->
+                    <group string="Phiếu nhập kho trả hàng Zalo Mini App" colspan="4" col="2"
+                           invisible="not x_is_zalo_incoming_return_picking">
+                        <div class="alert alert-info" role="alert" colspan="2">
+                            <b>Phiếu kho nhận hàng trả Zalo</b> được tạo tự động từ phiếu xuất kho 
+                            <field name="origin" readonly="1" class="oe_inline fw-bold"/>.
+                            <br/>Kho kiểm đếm số lượng thực tế và bấm nút <b>Xác nhận (Validate)</b> chuẩn Odoo để hoàn tất nhập kho.
+                        </div>
                     </group>
                 </page>
             </xpath>
