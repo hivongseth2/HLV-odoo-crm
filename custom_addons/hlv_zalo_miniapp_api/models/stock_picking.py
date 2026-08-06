@@ -45,11 +45,24 @@ class StockPicking(models.Model):
             ("processing", "Đang xử lý"),
             ("completed", "Hoàn tất"),
             ("rejected", "Từ chối"),
+            ("cancelled", "Đã thu hồi"),
         ],
         string="Trạng thái đổi/trả Zalo",
         default=False,
         tracking=True,
         help="Trạng thái xử lý yêu cầu đổi/trả của phiếu xuất kho Zalo",
+    )
+
+    x_zalo_return_count = fields.Integer(
+        string="Số lần gửi đổi/trả",
+        default=0,
+        help="Số lần khách hàng đã gửi yêu cầu đổi/trả cho phiếu xuất này",
+    )
+
+    x_zalo_return_revoke_count = fields.Integer(
+        string="Số lần thu hồi đổi/trả",
+        default=0,
+        help="Số lần khách hàng đã thu hồi yêu cầu đổi/trả cho phiếu xuất này",
     )
 
     x_zalo_return_type = fields.Selection(
