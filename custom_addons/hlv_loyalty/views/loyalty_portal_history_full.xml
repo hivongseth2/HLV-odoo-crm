@@ -91,7 +91,7 @@
                                     <th class="th-pts-ranking"><span class="ms" style="font-size:14px">trending_up</span> Điểm TL</th>
                                     <th class="th-pts-exchange"><span class="ms" style="font-size:14px">swap_horiz</span> Điểm ĐT</th>
                                     <th style="text-align:right">Trạng thái</th>
-                                    <th>Thanh toán</th>
+                                    <th style="min-width:120px">Thanh toán</th>
                                 </tr>
                             </thead>
                             <tbody>
