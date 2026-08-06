@@ -428,6 +428,26 @@ class LoyaltyPublicPortal(http.Controller):
 
         return request.redirect('/loyalty/redeem?tab=history&success_msg=Yêu cầu đổi thưởng đã được hủy.')
 
+    @http.route('/loyalty/redeem/request/<int:request_id>/update-bank', type='http',
+                auth='public', website=True, sitemap=False, methods=['POST'])
+    def loyalty_update_redeem_bank(self, request_id, **post):
+        account = _get_current_account()
+        if not account:
+            return request.redirect('/loyalty')
+
+        root = account.partner_id._get_loyalty_root()
+        req = request.env['hlv.loyalty.reward.request'].sudo().browse(request_id)
+        if not req.exists() or req.partner_id.id not in root._get_loyalty_family_partner_ids():
+            return request.redirect('/loyalty/redeem?tab=history&error_msg=Không tìm thấy yêu cầu cần cập nhật.')
+        try:
+            req.action_update_bank_info(
+                post.get('bank_name'), post.get('account_number'), post.get('account_name'),
+            )
+        except UserError as exc:
+            return request.redirect(f'/loyalty/redeem?tab=history&error_msg={exc.args[0]}')
+
+        return request.redirect('/loyalty/redeem?tab=history&success_msg=Đã cập nhật thông tin nhận tiền.')
+
     @http.route('/loyalty/vouchers', type='http', auth='public', website=True,
                 sitemap=False)
     def loyalty_vouchers_full(self, **kwargs):

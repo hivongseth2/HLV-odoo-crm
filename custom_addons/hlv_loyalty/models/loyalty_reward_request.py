@@ -37,9 +37,9 @@ class HlvLoyaltyRewardRequest(models.Model):
 
     # ── Cash fields ────────────────────────────────────────────────────────
     points_to_redeem = fields.Integer(string='Số điểm muốn đổi', default=0)
-    bank_name = fields.Char(string='Ngân hàng')
-    account_number = fields.Char(string='Số tài khoản')
-    account_name = fields.Char(string='Chủ tài khoản')
+    bank_name = fields.Char(string='Ngân hàng', tracking=True)
+    account_number = fields.Char(string='Số tài khoản', tracking=True)
+    account_name = fields.Char(string='Chủ tài khoản', tracking=True)
 
     # ── Computed ───────────────────────────────────────────────────────────
     points_required = fields.Integer(
@@ -445,3 +445,29 @@ class HlvLoyaltyRewardRequest(models.Model):
             rec._mark_loyalty_reward_activities_done(
                 _('Yêu cầu đổi thưởng %(name)s đã bị hủy.', name=rec.name)
             )
+
+    def action_update_bank_info(self, bank_name, account_number, account_name):
+        """Khách tự đổi lại STK nhận tiền trên yêu cầu đang chờ duyệt.
+
+        Chỉ cho phép khi còn 'pending' (chưa xử lý/chuyển tiền). Các field
+        bank_name/account_number/account_name có tracking=True (model đã
+        _inherit mail.thread) nên write() sẽ tự log vào chatter thời điểm
+        và giá trị cũ/mới - phục vụ truy vết khi cần đối soát.
+        """
+        self.ensure_one()
+        if self.request_type != 'cash':
+            raise UserError('Chỉ có thể đổi thông tin nhận tiền cho yêu cầu đổi tiền mặt.')
+        if self.state != 'pending':
+            raise UserError('Chỉ có thể đổi thông tin nhận tiền khi yêu cầu đang Chờ duyệt.')
+
+        bank_name = (bank_name or '').strip()
+        account_number = (account_number or '').strip()
+        account_name = (account_name or '').strip()
+        if not bank_name or not account_number or not account_name:
+            raise UserError('Vui lòng nhập đầy đủ Ngân hàng, Số tài khoản và Tên chủ tài khoản.')
+
+        self.write({
+            'bank_name': bank_name,
+            'account_number': account_number,
+            'account_name': account_name,
+        })
