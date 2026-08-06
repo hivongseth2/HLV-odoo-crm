@@ -448,6 +448,34 @@ class LoyaltyPublicPortal(http.Controller):
 
         return request.redirect('/loyalty/redeem?tab=history&success_msg=Đã cập nhật thông tin nhận tiền.')
 
+    @http.route('/loyalty/redeem/request/<int:request_id>', type='http', auth='public',
+                website=True, sitemap=False)
+    def loyalty_redeem_request_detail(self, request_id, **kwargs):
+        account = _get_current_account()
+        if not account:
+            return request.redirect('/loyalty')
+
+        root = account.partner_id._get_loyalty_root()
+        rq = request.env['hlv.loyalty.reward.request'].sudo().browse(request_id)
+        if not rq.exists() or rq.partner_id.id not in root._get_loyalty_family_partner_ids():
+            return request.redirect('/loyalty/redeem?tab=history&error_msg=Không tìm thấy yêu cầu.')
+
+        # 'misa_payment_is_paid' chỉ tồn tại khi module amis_callback được cài -
+        # đọc an toàn để trang chi tiết vẫn hoạt động khi thiếu module đó.
+        payment_is_paid = getattr(rq, 'misa_payment_is_paid', False) if 'misa_payment_is_paid' in rq._fields else None
+
+        data = {
+            'account': account,
+            'partner': root,
+            'rq': rq,
+            'payment_is_paid': payment_is_paid,
+            'success_msg': kwargs.get('success_msg', ''),
+            'error_msg': kwargs.get('error_msg', ''),
+            'fmt_vn_date': lambda dt: _vn_datetime(dt, '%d Thg %m, %Y'),
+            'fmt_vn_time': lambda dt: _vn_datetime(dt, '%H:%M'),
+        }
+        return request.render('hlv_loyalty.loyalty_portal_request_detail', data)
+
     @http.route('/loyalty/vouchers', type='http', auth='public', website=True,
                 sitemap=False)
     def loyalty_vouchers_full(self, **kwargs):
