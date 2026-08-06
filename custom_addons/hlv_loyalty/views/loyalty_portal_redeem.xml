@@ -356,17 +356,52 @@
                                         </t>
                                         <t t-if="rq.request_type == 'cash'">
                                             <div class="sr-rq-row">
-                                                <span class="sr-rq-lbl">Giá trị:</span>
-                                                <span class="sr-rq-val" style="font-weight:700;color:#198754">
-                                                    <t t-out="'{:,.0f}'.format(rq.cash_value)"/>đ
-                                                </span>
+                                                <button type="button" class="sr-rq-toggle-btn"
+                                                        t-attf-data-target="bank-detail-#{rq.id}">
+                                                    <span class="ms" style="font-size:15px">account_balance</span> Đổi
+                                                </button>
                                             </div>
-                                            <div class="sr-rq-row">
-                                                <span class="sr-rq-lbl">Ngân hàng:</span>
-                                                <span class="sr-rq-val">
-                                                    <t t-out="rq.bank_name or ''"/> – <t t-out="rq.account_number or ''"/>
-                                                    (<t t-out="rq.account_name or ''"/>)
-                                                </span>
+                                            <div class="sr-rq-bank-detail" t-attf-id="bank-detail-#{rq.id}">
+                                                <div class="sr-rq-row">
+                                                    <span class="sr-rq-lbl">Giá trị:</span>
+                                                    <span class="sr-rq-val" style="font-weight:700;color:#198754">
+                                                        <t t-out="'{:,.0f}'.format(rq.cash_value)"/>đ
+                                                    </span>
+                                                </div>
+                                                <t t-if="rq.state == 'pending'">
+                                                    <form t-att-action="'/loyalty/redeem/request/%s/update-bank' % rq.id"
+                                                          method="post" class="sr-rq-bank-form">
+                                                        <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                                                        <div class="sr-rq-bank-field">
+                                                            <label>Ngân hàng</label>
+                                                            <input type="text" name="bank_name" required="required"
+                                                                   t-att-value="rq.bank_name or ''"/>
+                                                        </div>
+                                                        <div class="sr-rq-bank-field">
+                                                            <label>Số tài khoản</label>
+                                                            <input type="text" name="account_number" required="required"
+                                                                   t-att-value="rq.account_number or ''"/>
+                                                        </div>
+                                                        <div class="sr-rq-bank-field">
+                                                            <label>Tên chủ tài khoản</label>
+                                                            <input type="text" name="account_name" required="required"
+                                                                   t-att-value="rq.account_name or ''"/>
+                                                        </div>
+                                                        <button type="submit" class="sr-rq-bank-save"
+                                                                onclick="return confirm('Xác nhận đổi STK nhận tiền cho yêu cầu này?')">
+                                                            <span class="ms" style="font-size:15px">save</span> Lưu STK
+                                                        </button>
+                                                    </form>
+                                                </t>
+                                                <t t-else="">
+                                                    <div class="sr-rq-row">
+                                                        <span class="sr-rq-lbl">Ngân hàng:</span>
+                                                        <span class="sr-rq-val">
+                                                            <t t-out="rq.bank_name or ''"/> – <t t-out="rq.account_number or ''"/>
+                                                            (<t t-out="rq.account_name or ''"/>)
+                                                        </span>
+                                                    </div>
+                                                </t>
                                             </div>
                                         </t>
                                         <t t-if="rq.state == 'done' and rq.voucher_id">
@@ -414,6 +449,16 @@
                         </div>
                     </t>
                 </div>
+                <script>
+                (function(){
+                    document.querySelectorAll('.sr-rq-toggle-btn').forEach(function(btn){
+                        btn.addEventListener('click', function(){
+                            var panel = document.getElementById(btn.dataset.target);
+                            if (panel) panel.classList.toggle('sr-rq-bank-open');
+                        });
+                    });
+                })();
+                </script>
             </t>
 
         </div><!-- /sr-rdm-body -->
