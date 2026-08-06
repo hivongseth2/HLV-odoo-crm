@@ -452,7 +452,11 @@ class HlvLoyaltyRewardRequest(models.Model):
         Chỉ cho phép khi còn 'pending' (chưa xử lý/chuyển tiền). Các field
         bank_name/account_number/account_name có tracking=True (model đã
         _inherit mail.thread) nên write() sẽ tự log vào chatter thời điểm
-        và giá trị cũ/mới - phục vụ truy vết khi cần đối soát.
+        và giá trị cũ/mới. Route gọi hàm này luôn chạy dưới sudo() (portal
+        công khai, không có user Odoo riêng) nên log tracking tự động sẽ
+        hiện tên user kỹ thuật (VD: Administrator) - dễ gây hiểu lầm là
+        nhân viên tự sửa. Vì vậy post thêm 1 message rõ ràng, gắn tác giả
+        là chính khách hàng, để phân biệt đây là khách tự đổi qua Portal.
         """
         self.ensure_one()
         if self.request_type != 'cash':
@@ -466,8 +470,35 @@ class HlvLoyaltyRewardRequest(models.Model):
         if not bank_name or not account_number or not account_name:
             raise UserError('Vui lòng nhập đầy đủ Ngân hàng, Số tài khoản và Tên chủ tài khoản.')
 
+        old_bank, old_number, old_name = self.bank_name, self.account_number, self.account_name
         self.write({
             'bank_name': bank_name,
             'account_number': account_number,
             'account_name': account_name,
         })
+
+        if (old_bank, old_number, old_name) != (bank_name, account_number, account_name):
+            rows = [
+                (label, old, new)
+                for label, old, new in (
+                    ('Ngân hàng', old_bank, bank_name),
+                    ('Số tài khoản', old_number, account_number),
+                    ('Tên chủ tài khoản', old_name, account_name),
+                )
+                if (old or '') != new
+            ]
+            body = Markup(
+                '<p><strong>🔄 Khách hàng tự đổi thông tin nhận tiền qua Portal Loyalty.</strong></p>'
+                '<ul>%s</ul>'
+            ) % Markup('').join(
+                Markup('<li>%s: %s → <strong>%s</strong></li>') % (
+                    label, old or '(trống)', new,
+                )
+                for label, old, new in rows
+            )
+            self.message_post(
+                body=body,
+                author_id=self.partner_id.id,
+                message_type='comment',
+                subtype_xmlid='mail.mt_comment',
+            )
