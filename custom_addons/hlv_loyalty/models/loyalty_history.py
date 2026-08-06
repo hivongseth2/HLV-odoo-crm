@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 from odoo import models, fields, api
+from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
 
@@ -100,3 +101,24 @@ class HlvLoyaltyHistory(models.Model):
         for rec in self:
             if rec.state == 'pending':
                 rec.state = 'cancelled'
+
+    def action_recalculate_points(self):
+        """Tính lại điểm đổi thưởng đang chờ xác nhận, theo dữ liệu mới
+        nhất của phiếu giao / dòng bán hàng.
+
+        Dùng khi phiếu đã giao nhưng điểm chưa được xác nhận, và sau đó
+        sale sửa lại % CK loyalty trên dòng bán hàng (hoặc khi số liệu
+        combo/kit vừa được tính đúng lại) - điểm pending vẫn cần khớp với
+        công thức hiện tại vì chưa cộng vào số dư khách hàng.
+        """
+        for rec in self:
+            if rec.point_type != 'exchange' or rec.transaction_type != 'earn':
+                raise UserError('Chỉ có thể tính lại điểm đổi thưởng của giao dịch tích điểm.')
+            if rec.state != 'pending':
+                raise UserError(
+                    'Chỉ có thể tính lại điểm khi đang ở trạng thái Chờ xác nhận '
+                    '(điểm đã xác nhận đã cộng vào số dư khách hàng).'
+                )
+            if not rec.picking_id:
+                raise UserError('Bản ghi này không gắn với phiếu kho nào để tính lại điểm.')
+            rec.picking_id._loyalty_earn_points()
