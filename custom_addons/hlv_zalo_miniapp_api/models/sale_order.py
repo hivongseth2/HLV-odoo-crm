@@ -113,12 +113,17 @@ class SaleOrder(models.Model):
 
             latest = return_pickings[0]
             order.x_return_type = latest.x_zalo_return_type
-            order.x_return_picking_id = latest.x_zalo_return_picking_id
-            order.x_return_refund_amount = sum(return_pickings.mapped("x_zalo_return_refund_amount"))
-            order.x_return_rejected_reason = "\n".join(filter(None, return_pickings.mapped("x_zalo_return_rejected_reason"))) or False
 
-            completed_dates = return_pickings.mapped("x_zalo_return_completed_date")
-            order.x_return_completed_date = max(completed_dates) if any(completed_dates) else False
+            valid_return_pickings = return_pickings.filtered(lambda p: p.x_zalo_return_picking_id)
+            order.x_return_picking_id = valid_return_pickings[0].x_zalo_return_picking_id if valid_return_pickings else False
+
+            order.x_return_refund_amount = sum(return_pickings.mapped("x_zalo_return_refund_amount"))
+
+            reasons = [r for r in return_pickings.mapped("x_zalo_return_rejected_reason") if r]
+            order.x_return_rejected_reason = "\n".join(reasons) if reasons else False
+
+            completed_dates = [d for d in return_pickings.mapped("x_zalo_return_completed_date") if d]
+            order.x_return_completed_date = max(completed_dates) if completed_dates else False
 
     def _search_x_return_requested(self, operator, value):
         if operator in ("=", "!=") and isinstance(value, bool):
