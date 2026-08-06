@@ -376,7 +376,6 @@
                                                 <span style="margin:0 4px">→</span> Xử lý: <t t-out="fmt_vn_date(rq.date_done)"/>
                                             </t>
                                         </div>
-                                        <t t-if="rq.state == 'pending'">
                                         <div class="sr-rq-actions">
                                             <a t-att-href="'/loyalty/redeem/request/%s' % rq.id" class="sr-rq-detail-link">
                                                 <span class="ms" style="font-size:15px">visibility</span> Xem chi tiết
