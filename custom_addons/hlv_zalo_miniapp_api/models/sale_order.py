@@ -30,10 +30,23 @@ class SaleOrder(models.Model):
             ("processing", "Đang xử lý"),
             ("completed", "Hoàn tất"),
             ("rejected", "Từ chối"),
+            ("cancelled", "Đã thu hồi"),
         ],
         string="Trạng thái đổi/trả",
         compute="_compute_zalo_return_summary",
         help="Trạng thái tổng hợp của các phiếu đổi/trả thuộc đơn Zalo",
+    )
+
+    x_return_count = fields.Integer(
+        string="Số lần gửi đổi/trả",
+        compute="_compute_zalo_return_summary",
+        help="Tổng số lần gửi yêu cầu đổi/trả của các phiếu kho",
+    )
+
+    x_return_revoke_count = fields.Integer(
+        string="Số lần thu hồi đổi/trả",
+        compute="_compute_zalo_return_summary",
+        help="Tổng số lần thu hồi đổi/trả của các phiếu kho",
     )
 
     x_return_type = fields.Selection(
@@ -106,20 +119,31 @@ class SaleOrder(models.Model):
         compute="_compute_zalo_return_summary",
     )
 
-    @api.depends("picking_ids.state", "picking_ids.date_done", "state", "write_date")
+    @api.depends(
+        "write_date",
+        "picking_ids.state",
+        "picking_ids.date_done",
+        "picking_ids.x_zalo_return_count",
+        "picking_ids.x_zalo_return_revoke_count",
+        "state",
+    )
     def _compute_zalo_return_eligibility(self):
         now = fields.Datetime.now()
         for order in self:
+            ret_count = sum(order.picking_ids.mapped("x_zalo_return_count"))
+            revoke_count = sum(order.picking_ids.mapped("x_zalo_return_revoke_count"))
+            limit_reached = (revoke_count >= 2) or (revoke_count >= 1 and ret_count >= 2)
+
             out_pickings = order.picking_ids.filtered(lambda p: p.picking_type_id.code == "outgoing" and p.state == "done")
             if out_pickings:
                 done_dates = [p.date_done for p in out_pickings if p.date_done]
                 last_done = max(done_dates) if done_dates else order.write_date
                 delta = (now - last_done).days if last_done else 0
                 order.x_days_since_delivery = max(0, delta)
-                order.x_is_returnable = delta <= 7
+                order.x_is_returnable = (delta <= 7) and not limit_reached
             elif order.state in ("sale", "done"):
                 order.x_days_since_delivery = 0
-                order.x_is_returnable = True
+                order.x_is_returnable = not limit_reached
             else:
                 order.x_days_since_delivery = 0
                 order.x_is_returnable = False
@@ -135,9 +159,14 @@ class SaleOrder(models.Model):
         "picking_ids.x_zalo_return_completed_date",
         "picking_ids.x_zalo_return_category",
         "picking_ids.x_zalo_product_condition",
+        "picking_ids.x_zalo_return_count",
+        "picking_ids.x_zalo_return_revoke_count",
     )
     def _compute_zalo_return_summary(self):
         for order in self:
+            order.x_return_count = sum(order.picking_ids.mapped("x_zalo_return_count"))
+            order.x_return_revoke_count = sum(order.picking_ids.mapped("x_zalo_return_revoke_count"))
+
             return_pickings = order.picking_ids.filtered(
                 lambda p: p.picking_type_id.code == "outgoing" and p.x_zalo_return_requested
             )

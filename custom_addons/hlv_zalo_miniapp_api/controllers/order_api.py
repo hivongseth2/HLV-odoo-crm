@@ -74,6 +74,8 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             "return_requested": getattr(order, "x_return_requested", False) or False,
             "is_returnable": getattr(order, "x_is_returnable", True),
             "days_since_delivery": getattr(order, "x_days_since_delivery", 0),
+            "return_count": getattr(order, "x_return_count", 0),
+            "return_revoke_count": getattr(order, "x_return_revoke_count", 0),
         }
         if is_zalo and getattr(order, "x_return_requested", False):
             return_info.update({
@@ -526,6 +528,7 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
                 target_picking.sudo().write({
                     "x_zalo_return_requested": False,
                     "x_zalo_return_state": "cancelled",
+                    "x_zalo_return_revoke_count": (target_picking.x_zalo_return_revoke_count or 0) + 1,
                 })
 
                 try:
@@ -583,6 +586,7 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
                     target_picking.sudo().write({
                         "x_zalo_return_requested": True,
                         "x_zalo_return_state": "pending",
+                        "x_zalo_return_count": (target_picking.x_zalo_return_count or 0) + 1,
                         "x_zalo_return_type": return_type if return_type in ("return", "exchange", "refund") else "return",
                         "x_zalo_return_category": return_category if return_category in ("supplier_fault", "customer_demand") else "supplier_fault",
                         "x_zalo_product_condition": product_condition if product_condition in ("unused", "used") else "unused",
