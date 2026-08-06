@@ -499,6 +499,55 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
                 new_entry += f": {note}"
             order.write({"note": current_note + new_entry})
 
+            if action_type in ("cancel_return", "revoke_return"):
+                target_picking = order.picking_ids.filtered(
+                    lambda p: p.picking_type_id.code == "outgoing" and p.x_zalo_return_requested
+                )[:1]
+                if not target_picking:
+                    return self._response_error("NOT_FOUND", "Không tìm thấy yêu cầu đổi/trả hàng cần thu hồi", 404)
+
+                if target_picking.x_zalo_return_state and target_picking.x_zalo_return_state not in ("pending",):
+                    state_label = dict(target_picking._fields["x_zalo_return_state"].selection).get(
+                        target_picking.x_zalo_return_state, target_picking.x_zalo_return_state
+                    )
+                    return self._response_error(
+                        "INVALID_STATE",
+                        f"Không thể thu hồi yêu cầu đổi/trả đã được xử lý (Trạng thái: {state_label})",
+                        400
+                    )
+
+                target_picking.sudo().write({
+                    "x_zalo_return_requested": False,
+                    "x_zalo_return_state": "cancelled",
+                })
+
+                try:
+                    activities = request.env["mail.activity"].sudo().search([
+                        ("res_model", "=", "stock.picking"),
+                        ("res_id", "=", target_picking.id),
+                        ("summary", "ilike", "Yêu cầu Đổi/Trả Zalo"),
+                    ])
+                    if activities:
+                        activities.unlink()
+                except Exception as ae:
+                    _logger.warning("Error removing activities for picking %s: %s", target_picking.id, ae)
+
+                try:
+                    cancel_msg = Markup(_("<b>Khách hàng đã THU HỒI yêu cầu Đổi/Trả hàng từ Zalo Mini App.</b>"))
+                    if note:
+                        cancel_msg += Markup(_("<br/>• <b>Lý do thu hồi:</b> %s")) % note
+                    target_picking.message_post(body=cancel_msg, message_type="comment", subtype_xmlid="mail.mt_note")
+                    order.message_post(body=cancel_msg, message_type="comment", subtype_xmlid="mail.mt_note")
+                except Exception as cme:
+                    _logger.warning("Post cancel return chatter error: %s", cme)
+
+                return self._response_success({
+                    "id": order.id,
+                    "name": order.name,
+                    "action_type": "cancel_return",
+                    "message": "Đã thu hồi yêu cầu đổi/trả hàng thành công",
+                })
+
             if action_type == "return":
                 if hasattr(order, "x_is_returnable") and not order.x_is_returnable:
                     return self._response_error("EXPIRED_RETURN", "Đơn hàng đã quá thời hạn 7 ngày đổi/trả theo chính sách của Hoàng Long Vũ", 400)

@@ -306,7 +306,7 @@ class StockPicking(models.Model):
             except Exception as e:
                 _logger.exception("Lỗi khi tạo Activity đổi/trả Zalo cho user %s: %s", user.id, e)
 
-        # ===== KÊNH 2: Odoo Bus Live Pop-up Toast & Notification Bell =====
+        # ===== KÊNH 2: Odoo Bus Live Pop-up Toast (Sticky) & Notification Bell =====
         target_partners = target_users.mapped("partner_id")
         if target_partners:
             chatter_msg = Markup(_(
@@ -324,6 +324,28 @@ class StockPicking(models.Model):
                 message_type="notification",
                 subtype_xmlid="mail.mt_comment",
             )
+
+            # Bắn Pop-Up Notification (Hiển thị 8-10s đủ thời gian đọc rồi tự động ẩn, không bắt tắt thủ công)
+            bus = self.env["bus.bus"].sudo()
+            toast_title = _("🚨 YÊU CẦU ĐỔI/TRẢ ZALO: %s") % so_name
+            toast_message = _(
+                "Khách hàng: %s (%s)\n"
+                "Phiếu kho: %s | Nguyên nhân: %s\n"
+                "Tình trạng SP: %s\n"
+                "Ghi chú: %s"
+            ) % (cust_name, cust_phone, self.name, cat_label, cond_label, self.x_zalo_return_note or "Không có")
+
+            toast_payload = {
+                "type": "warning",
+                "title": toast_title,
+                "message": toast_message,
+                "sticky": False,  # Tự động ẩn sau 8-10s đủ thời gian đọc
+            }
+            for partner in target_partners:
+                try:
+                    bus._sendone(partner, "simple_notification", toast_payload)
+                except Exception as bse:
+                    _logger.debug("Failed to send bus notification to partner %s: %s", partner.id, bse)
 
         # ===== KÊNH 3: Instant Zalo Mobile Push (`hlv.zalo.stock.notification`) =====
         try:
