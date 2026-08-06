@@ -178,6 +178,15 @@ Dev mode: nếu chưa config secret, dùng fallback `hlv_zalo_dev_secret_2026` (
 - Khi đơn hàng bị hủy từ Zalo Mini App (`/api/v1/zalo/orders/cancel`), hệ thống tự động bật cờ `x_plan_need_cancel = True` ("Cần hủy") trên `sale.order` để bộ phận kho/sales dễ dàng nhận biết và lọc đơn cần hủy.
 - Giao diện danh sách "Đơn hàng Zalo Mini App" (`view_order_zalo_tree`) được tối ưu với đầy đủ các cột trạng thái: **Cần hủy**, **Số báo giá**, **Ngày đặt hàng**, **Ngày giao hàng**, **Khách hàng**, **Chuyên viên sales**, **Hoạt động**, **Tổng**, **Trạng thái đơn hàng**, **Trạng thái giao hàng**, **Trạng thái hóa đơn**, và **Thẻ**.
 
+### Quản lý Đổi/Trả Hàng Zalo Mini App (`stock.picking`)
+- **Tận dụng logic trả hàng Odoo tiêu chuẩn**: Mở rộng trực tiếp model `stock.picking` ở bước xuất kho (`outgoing`) để quản lý các trường đổi/trả (`x_zalo_return_requested`, `x_zalo_return_state`, `x_zalo_return_type`, `x_zalo_return_refund_amount`, `x_zalo_return_note`...).
+- **Độ chính xác cao cho Đơn hàng nhiều phiếu giao (Multi-picking)**: Khi một đơn hàng `sale.order` có nhiều phiếu giao (`picking_ids`), từng phiếu giao hàng được quản lý trạng thái đổi/trả độc lập.
+- **Kích hoạt Wizard Trả Hàng Standard (`stock.return.picking`)**: Khi CSKH/Kho bấm **Phê duyệt Đổi/Trả Zalo** trên phiếu kho, hệ thống tự động trả về action mở wizard `stock.return.picking` chuẩn Odoo cho đúng phiếu kho đó.
+- **Tự động hoàn tất (Auto Complete)**: Khi phiếu kho nhập lại hàng (WH/IN) hoàn thành (`state = 'done'`), hệ thống tự động cập nhật `x_zalo_return_state = 'completed'` và ghi log Chatter bằng `markupsafe.Markup`.
+- **Phân quyền hiển thị (Visibility Scope)**: Tab "Đổi/Trả Zalo" và các nút action chỉ xuất hiện khi phiếu kho/đơn hàng thuộc tài khoản Zalo (`sale_id.partner_id.x_is_zalo_account = True`).
+- **Menu quản lý tập trung**: `Zalo Mini App` -> `Quản lý` -> `Phiếu kho Đổi/Trả Zalo` (`action_zalo_return_picking`).
+- **Computed Fields trên `sale.order`**: Các trường `x_return_*` trên `sale.order` được tính toán tự động từ `picking_ids` đảm bảo 100% tương thích ngược với REST API.
+
 ### CORS & Security
 - Tất cả API routes đều hỗ trợ `OPTIONS` preflight request (`methods=[..., "OPTIONS"]`) và phản hồi 200 OK kèm CORS headers.
 - CORS Origin mặc định là `*` (Configurable qua `ir.config_parameter` `zalo_api_cors_origin`).

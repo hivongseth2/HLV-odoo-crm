@@ -46,62 +46,68 @@
         </field>
     </record>
 
-    <!-- Form view riêng cho đơn Zalo - kế thừa form gốc, thêm tab Đổi trả -->
-    <!-- Odoo 17: dùng invisible trực tiếp thay vì attrs -->
+    <!-- Form view riêng cho đơn Zalo - kế thừa form gốc, thêm tab Đổi trả và Smart Button -->
     <record id="view_order_zalo_form" model="ir.ui.view">
         <field name="name">sale.order.zalo.form</field>
         <field name="model">sale.order</field>
         <field name="inherit_id" ref="sale.view_order_form"/>
         <field name="priority">20</field>
         <field name="arch" type="xml">
+            <!-- Smart Button xem danh sách phiếu kho Đổi/Trả Zalo -->
+            <xpath expr="//div[name='button_box']" position="inside">
+                <button name="action_view_zalo_return_pickings" type="object"
+                        class="oe_stat_button" icon="fa-retweet"
+                        invisible="not partner_id.x_is_zalo_account or x_return_picking_count == 0">
+                    <field name="x_return_picking_count" widget="statinfo" string="Đổi trả Zalo"/>
+                </button>
+            </xpath>
+
+            <!-- Tab Đổi/Trả Zalo trong notebook -->
             <xpath expr="//notebook" position="inside">
                 <page string="Đổi trả Zalo" name="zalo_return"
                       invisible="not partner_id.x_is_zalo_account">
-                    <group string="Thông tin yêu cầu đổi/trả" colspan="4" col="2">
+                    <group string="Tổng quan đổi/trả hàng Zalo Mini App" colspan="4" col="2">
                         <field name="x_return_requested" string="Khách đề nghị đổi/trả"/>
-                        <field name="x_return_state" string="Trạng thái đổi/trả"
-                               widget="statusbar"
-                               statusbar_visible="pending,approved,processing,completed,rejected"/>
-                        <field name="x_return_type" string="Loại đổi/trả"/>
-                        <field name="x_return_refund_amount" string="Số tiền hoàn lại" widget="monetary"/>
+                        <field name="x_return_state" string="Trạng thái tổng hợp"
+                               widget="badge"
+                               decoration-warning="x_return_state == 'pending'"
+                               decoration-info="x_return_state == 'approved'"
+                               decoration-success="x_return_state in ('processing', 'completed')"
+                               decoration-danger="x_return_state == 'rejected'"
+                               invisible="not x_return_requested"/>
+                        <field name="x_return_type" string="Loại đổi/trả gần nhất"
+                               invisible="not x_return_requested"/>
+                        <field name="x_return_refund_amount" string="Tổng số tiền hoàn lại" widget="monetary"
+                               invisible="not x_return_requested"/>
                         <field name="x_return_rejected_reason" string="Lý do từ chối"
                                invisible="x_return_state != 'rejected'"/>
+                        <field name="x_return_picking_id" string="Phiếu trả kho (IN) gần nhất"
+                               invisible="not x_return_picking_id"/>
+                        <field name="x_return_completed_date" string="Ngày hoàn tất gần nhất"
+                               invisible="not x_return_completed_date"/>
                     </group>
-                    <group string="Phiếu giao hàng và Trả hàng" colspan="4" col="2">
-                        <field name="picking_ids" string="Phiếu giao/nhận"
+                    <group string="Danh sách phiếu xuất kho &amp; Trạng thái đổi/trả chi tiết" colspan="4" col="2">
+                        <field name="picking_ids" string="Phiếu xuất kho"
                                domain="[('state', '!=', 'cancel')]"
-                               context="{'tree_view_ref': 'stock.vpicktree'}">
-                            <tree string="Phiếu kho">
-                                <field name="name"/>
-                                <field name="picking_type_id"/>
-                                <field name="state" widget="badge"
+                               readonly="1">
+                            <list string="Danh sách phiếu xuất kho" decoration-info="x_zalo_return_requested == True">
+                                <field name="name" string="Mã phiếu kho"/>
+                                <field name="picking_type_id" string="Loại phiếu"/>
+                                <field name="state" string="Trạng thái phiếu" widget="badge"
                                        decoration-success="state == 'done'"
                                        decoration-warning="state == 'assigned'"
                                        decoration-info="state in ('waiting', 'confirmed')"
                                        decoration-danger="state == 'cancel'"/>
-                                <field name="scheduled_date"/>
-                            </tree>
+                                <field name="x_zalo_return_requested" string="Yêu cầu đổi/trả" widget="boolean_toggle"/>
+                                <field name="x_zalo_return_state" string="TT Đổi/Trả" widget="badge"
+                                       decoration-warning="x_zalo_return_state == 'pending'"
+                                       decoration-info="x_zalo_return_state == 'approved'"
+                                       decoration-success="x_zalo_return_state in ('processing', 'completed')"
+                                       decoration-danger="x_zalo_return_state == 'rejected'"/>
+                                <field name="x_zalo_return_type" string="Loại đổi/trả"/>
+                                <field name="x_zalo_return_picking_id" string="Phiếu trả hàng (WH/IN)"/>
+                            </list>
                         </field>
-                    </group>
-                    <group string="Phiếu trả hàng Zalo" colspan="4" col="2"
-                           invisible="not x_return_picking_id">
-                        <field name="x_return_picking_id" string="Phiếu trả hàng (WH/IN)"/>
-                        <field name="x_return_completed_date" string="Ngày hoàn tất"/>
-                    </group>
-                    <group string="Hành động xử lý" colspan="4" col="4"
-                           invisible="not x_return_requested">
-                        <button name="action_approve_return" type="object" string="Phê duyệt"
-                                class="btn-primary"
-                                invisible="x_return_state and x_return_state != 'pending'"
-                                confirm="Xác nhận phê duyệt yêu cầu đổi/trả này?"/>
-                        <button name="action_reject_return" type="object" string="Từ chối"
-                                class="btn-danger"
-                                invisible="x_return_state and x_return_state not in ('pending', 'approved')"
-                                context="{'default_reject_reason': True}"/>
-                        <button name="action_complete_return" type="object" string="Hoàn tất đổi/trả"
-                                class="btn-success"
-                                invisible="x_return_state not in ('approved', 'processing')"
-                                confirm="Xác nhận hoàn tất xử lý đổi/trả?"/>
                     </group>
                 </page>
             </xpath>
@@ -131,3 +137,4 @@
         <field name="act_window_id" ref="action_zalo_sale_order"/>
     </record>
 </odoo>
+

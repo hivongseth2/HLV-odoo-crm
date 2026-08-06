@@ -496,10 +496,42 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             new_entry = f"\n[{self._now_gmt7()}] {title}"
             if note:
                 new_entry += f": {note}"
-            write_vals = {"note": current_note + new_entry}
+            order.write({"note": current_note + new_entry})
+
             if action_type == "return":
-                write_vals["x_return_requested"] = True
-            order.write(write_vals)
+                # Tìm phiếu giao hàng (OUT) cụ thể để gắn yêu cầu đổi/trả
+                target_picking_id = self._parse_int(body.get("picking_id"), 0)
+                target_picking = None
+                if target_picking_id:
+                    target_picking = order.picking_ids.filtered(lambda p: p.id == target_picking_id)
+                if not target_picking:
+                    # Lấy phiếu xuất kho (outgoing) đã done mới nhất
+                    target_picking = order.picking_ids.filtered(
+                        lambda p: p.picking_type_id.code == "outgoing" and p.state == "done"
+                    )[:1]
+                if not target_picking:
+                    # Fallback lấy phiếu xuất kho bất kỳ chưa bị hủy
+                    target_picking = order.picking_ids.filtered(
+                        lambda p: p.picking_type_id.code == "outgoing" and p.state != "cancel"
+                    )[:1]
+
+                if target_picking:
+                    return_type = (body.get("return_type") or "return").strip()
+                    target_picking.sudo().write({
+                        "x_zalo_return_requested": True,
+                        "x_zalo_return_state": "pending",
+                        "x_zalo_return_type": return_type if return_type in ("return", "exchange", "refund") else "return",
+                        "x_zalo_return_note": note,
+                    })
+                    try:
+                        picking_msg = Markup(_(
+                            "<b>Yêu cầu Đổi/Trả hàng từ Zalo Mini App cho phiếu xuất %s</b>"
+                        )) % target_picking.name
+                        if note:
+                            picking_msg += Markup(_("<br/>• <b>Ghi chú:</b> %s")) % note
+                        target_picking.message_post(body=picking_msg, message_type="comment", subtype_xmlid="mail.mt_note")
+                    except Exception as pme:
+                        _logger.warning("Post chatter error on stock.picking %s: %s", target_picking.id, pme)
 
             try:
                 order.message_post(body=formatted_msg, message_type="comment", subtype_xmlid="mail.mt_note")
