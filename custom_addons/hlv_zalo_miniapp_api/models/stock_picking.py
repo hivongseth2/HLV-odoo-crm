@@ -69,6 +69,24 @@ class StockPicking(models.Model):
         help="Số tiền sẽ hoàn lại cho khách (chỉ áp dụng cho phiếu Zalo)",
     )
 
+    x_zalo_return_category = fields.Selection(
+        [
+            ("supplier_fault", "Lỗi nhà cung cấp / Vận chuyển"),
+            ("customer_demand", "Đổi trả theo nhu cầu"),
+        ],
+        string="Nhóm nguyên nhân đổi/trả",
+        tracking=True,
+    )
+
+    x_zalo_product_condition = fields.Selection(
+        [
+            ("unused", "Chưa qua sử dụng (nguyên tem)"),
+            ("used", "Đã qua sử dụng"),
+        ],
+        string="Tình trạng sản phẩm",
+        tracking=True,
+    )
+
     x_zalo_return_note = fields.Text(
         string="Ghi chú đổi/trả Zalo",
         tracking=True,

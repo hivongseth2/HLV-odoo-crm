@@ -53,11 +53,16 @@
         <field name="inherit_id" ref="sale.view_order_form"/>
         <field name="priority">20</field>
         <field name="arch" type="xml">
+            <!-- Field x_is_zalo_order để OWL view đọc trực tiếp -->
+            <xpath expr="//field[@name='partner_id']" position="after">
+                <field name="x_is_zalo_order" invisible="1"/>
+            </xpath>
+
             <!-- Smart Button xem danh sách phiếu kho Đổi/Trả Zalo -->
             <xpath expr="//div[@name='button_box']" position="inside">
                 <button name="action_view_zalo_return_pickings" type="object"
                         class="oe_stat_button" icon="fa-retweet"
-                        invisible="not partner_id.x_is_zalo_account or x_return_picking_count == 0">
+                        invisible="not x_is_zalo_order or x_return_picking_count == 0">
                     <field name="x_return_picking_count" widget="statinfo" string="Đổi trả Zalo"/>
                 </button>
             </xpath>
@@ -65,7 +70,7 @@
             <!-- Tab Đổi/Trả Zalo trong notebook -->
             <xpath expr="//notebook" position="inside">
                 <page string="Đổi trả Zalo" name="zalo_return"
-                      invisible="not partner_id.x_is_zalo_account">
+                      invisible="not x_is_zalo_order">
                     <group string="Tổng quan đổi/trả hàng Zalo Mini App" colspan="4" col="2">
                         <field name="x_return_requested" string="Khách đề nghị đổi/trả"/>
                         <field name="x_return_state" string="Trạng thái tổng hợp"
