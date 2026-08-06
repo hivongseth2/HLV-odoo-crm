@@ -729,6 +729,42 @@ class SaleOrder(models.Model):
                 'details': '\n- '.join(invalid_delivered_quantities),
             })
 
+        # Odoo core chặn write product_id lên order line khi đơn đã khóa hoặc dòng đã
+        # giao/xuất hóa đơn một phần (sale.order.line.product_updatable = False). Kiểm tra
+        # trước khi write để báo lỗi rõ ràng thay vì để Odoo raise "You cannot modify the
+        # product of this order line" giữa chừng, gây đồng bộ dở dang.
+        blocked_product_changes = []
+        for misa_data, sol in matched_pairs:
+            product_changed = sol.product_id != misa_data['product']
+            if not product_changed or defer_quantity:
+                continue
+            if sol.product_updatable:
+                continue
+            if sol.order_id.locked:
+                reason = _('đơn bán đã bị khóa')
+            elif float(getattr(sol, 'qty_invoiced', 0.0) or 0.0) > 0.001:
+                reason = _('dòng đã xuất hóa đơn')
+            else:
+                reason = _('dòng đã giao %g') % float(getattr(sol, 'qty_delivered', 0.0) or 0.0)
+            blocked_product_changes.append(
+                _("%(old)s → %(new)s: %(reason)s (CRM line %(crm_line_id)s)") % {
+                    'old': sol.product_id.display_name,
+                    'new': misa_data['product'].display_name,
+                    'reason': reason,
+                    'crm_line_id': misa_data['crm_line_id'] or '-',
+                }
+            )
+
+        if blocked_product_changes:
+            raise UserError(_(
+                "Không thể đồng bộ vì Odoo không cho đổi sản phẩm trên dòng đã khóa/đã "
+                "giao/đã xuất hóa đơn:\n- %(details)s\n\n"
+                "Hãy xử lý thủ công: mở khóa đơn (nếu phù hợp) rồi thêm dòng mới với sản "
+                "phẩm đúng, hoặc sửa lại trên MISA để giữ nguyên sản phẩm cũ."
+            ) % {
+                'details': '\n- '.join(blocked_product_changes),
+            })
+
         # Cập nhật các SOL đã match
         for misa_data, sol in matched_pairs:
             old_qty = float(sol.product_uom_qty or 0.0)
