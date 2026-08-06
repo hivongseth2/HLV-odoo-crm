@@ -38,8 +38,7 @@
                     </div>
                 </t>
 
-                <!-- Request summary card -->
-                <div t-att-class="'sr-req-card sr-rq-' + rq.state">
+                <div class="sr-req-card">
                     <div class="sr-rq-head">
                         <div class="sr-rq-name">
                             <span class="ms">
@@ -111,70 +110,81 @@
                                 <span style="margin:0 4px">→</span> Xử lý: <t t-out="fmt_vn_date(rq.date_done)"/>
                             </t>
                         </div>
-                        <t t-if="rq.state == 'pending'">
-                            <form t-att-action="'/loyalty/redeem/request/%s/cancel' % rq.id"
-                                  method="post"
-                                  class="sr-rq-cancel-form"
-                                  onsubmit="return confirm('Hủy yêu cầu đổi thưởng này?')">
-                                <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
-                                <button type="submit" class="sr-rq-cancel-btn">
-                                    Hủy yêu cầu
+
+                        <!-- STK ẩn theo mặc định, chỉ hiện khi khách bấm "Xem" -->
+                        <t t-if="rq.request_type == 'cash'">
+                            <div class="sr-rq-bank-block">
+                                <button type="button" class="sr-rq-toggle-btn" data-target="sr-bank-panel">
+                                    <span class="ms" style="font-size:15px">visibility</span> Xem thông tin nhận tiền
                                 </button>
-                            </form>
+                                <div class="sr-rq-bank-detail" id="sr-bank-panel">
+                                    <t t-if="rq.state == 'pending'">
+                                        <form t-att-action="'/loyalty/redeem/request/%s/update-bank' % rq.id"
+                                              method="post" class="sr-rq-bank-form">
+                                            <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                                            <div class="sr-rq-bank-field">
+                                                <label>Ngân hàng</label>
+                                                <input type="text" name="bank_name" required="required"
+                                                       t-att-value="rq.bank_name or ''"/>
+                                            </div>
+                                            <div class="sr-rq-bank-field">
+                                                <label>Số tài khoản</label>
+                                                <input type="text" name="account_number" required="required"
+                                                       t-att-value="rq.account_number or ''"/>
+                                            </div>
+                                            <div class="sr-rq-bank-field">
+                                                <label>Tên chủ tài khoản</label>
+                                                <input type="text" name="account_name" required="required"
+                                                       t-att-value="rq.account_name or ''"/>
+                                            </div>
+                                            <button type="submit" class="sr-rq-bank-save"
+                                                    onclick="return confirm('Xác nhận đổi STK nhận tiền cho yêu cầu này?')">
+                                                <span class="ms" style="font-size:15px">save</span> Lưu STK
+                                            </button>
+                                        </form>
+                                    </t>
+                                    <t t-else="">
+                                        <div class="sr-rq-row">
+                                            <span class="sr-rq-lbl">Ngân hàng:</span>
+                                            <span class="sr-rq-val">
+                                                <t t-out="rq.bank_name or ''"/> – <t t-out="rq.account_number or ''"/>
+                                                (<t t-out="rq.account_name or ''"/>)
+                                            </span>
+                                        </div>
+                                    </t>
+                                </div>
+                            </div>
+                        </t>
+
+                        <t t-if="rq.state == 'pending'">
+                            <div class="sr-rq-actions">
+                                <form t-att-action="'/loyalty/redeem/request/%s/cancel' % rq.id"
+                                      method="post"
+                                      class="sr-rq-cancel-form"
+                                      onsubmit="return confirm('Hủy yêu cầu đổi thưởng này?')">
+                                    <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                                    <button type="submit" class="sr-rq-cancel-btn">
+                                        Hủy yêu cầu
+                                    </button>
+                                </form>
+                            </div>
                         </t>
                     </div>
                 </div>
 
-                <!-- Bank account card (cash requests only) -->
-                <t t-if="rq.request_type == 'cash'">
-                    <div class="sr-req-card">
-                        <div class="sr-rq-head">
-                            <div class="sr-rq-name">
-                                <span class="ms">account_balance</span>
-                                <strong>Thông tin nhận tiền</strong>
-                            </div>
-                        </div>
-                        <div class="sr-rq-body">
-                            <t t-if="rq.state == 'pending'">
-                                <form t-att-action="'/loyalty/redeem/request/%s/update-bank' % rq.id"
-                                      method="post" class="sr-rq-bank-form">
-                                    <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
-                                    <div class="sr-rq-bank-field">
-                                        <label>Ngân hàng</label>
-                                        <input type="text" name="bank_name" required="required"
-                                               t-att-value="rq.bank_name or ''"/>
-                                    </div>
-                                    <div class="sr-rq-bank-field">
-                                        <label>Số tài khoản</label>
-                                        <input type="text" name="account_number" required="required"
-                                               t-att-value="rq.account_number or ''"/>
-                                    </div>
-                                    <div class="sr-rq-bank-field">
-                                        <label>Tên chủ tài khoản</label>
-                                        <input type="text" name="account_name" required="required"
-                                               t-att-value="rq.account_name or ''"/>
-                                    </div>
-                                    <button type="submit" class="sr-rq-bank-save"
-                                            onclick="return confirm('Xác nhận đổi STK nhận tiền cho yêu cầu này?')">
-                                        <span class="ms" style="font-size:15px">save</span> Lưu STK
-                                    </button>
-                                </form>
-                            </t>
-                            <t t-else="">
-                                <div class="sr-rq-row">
-                                    <span class="sr-rq-lbl">Ngân hàng:</span>
-                                    <span class="sr-rq-val">
-                                        <t t-out="rq.bank_name or ''"/> – <t t-out="rq.account_number or ''"/>
-                                        (<t t-out="rq.account_name or ''"/>)
-                                    </span>
-                                </div>
-                            </t>
-                        </div>
-                    </div>
-                </t>
-
             </div>
         </div>
+
+        <script>
+        (function(){
+            document.querySelectorAll('.sr-rq-toggle-btn').forEach(function(btn){
+                btn.addEventListener('click', function(){
+                    var panel = document.getElementById(btn.dataset.target);
+                    if (panel) panel.classList.toggle('sr-rq-bank-open');
+                });
+            });
+        })();
+        </script>
 
     </t>
 </template>

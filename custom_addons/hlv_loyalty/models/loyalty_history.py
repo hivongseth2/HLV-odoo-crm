@@ -23,7 +23,7 @@ class HlvLoyaltyHistory(models.Model):
     point_amount = fields.Integer(string='Số điểm', required=True)
     transaction_type = fields.Selection([
         ('earn', 'Tích điểm'),
-        ('redeem', 'Đổi Voucher'),
+        ('redeem', 'Đổi thưởng'),
         ('return', 'Hoàn hàng'),
         ('manual', 'Điều chỉnh thủ công'),
     ], string='Loại giao dịch', required=True, index=True)

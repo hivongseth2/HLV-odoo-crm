@@ -190,7 +190,7 @@
                 <separator/>
                 <filter string="Tích điểm" name="filter_earn"
                         domain="[('transaction_type', '=', 'earn')]"/>
-                <filter string="Đổi Voucher" name="filter_redeem"
+                <filter string="Đổi thưởng" name="filter_redeem"
                         domain="[('transaction_type', '=', 'redeem')]"/>
                 <filter string="Hoàn hàng" name="filter_return"
                         domain="[('transaction_type', '=', 'return')]"/>
