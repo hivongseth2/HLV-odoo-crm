@@ -272,6 +272,12 @@ class SaleOrder(models.Model):
 class SaleOrderLine(models.Model):
     _inherit = 'sale.order.line'
 
+    _LOYALTY_AMOUNT_TRIGGER_FIELDS = {
+        'loyalty_discount_pct',
+        'price_unit',
+        'product_uom_qty',
+    }
+
     is_loyalty_reward_line = fields.Boolean(
         string='Dòng thưởng Loyalty', default=False, copy=False,
     )
