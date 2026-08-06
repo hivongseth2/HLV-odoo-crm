@@ -11,7 +11,7 @@
     "version": "18.0.1.7.0",
     "category": "Sales",
     "author": "HLV",
-    "depends": ["sale_management", "stock", "mail", "website"],
+    "depends": ["sale_management", "stock", "mail", "website", "mrp"],
     "external_dependencies": {
         "python": ["bs4"],
     },

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import logging
+from collections import defaultdict
 from html import escape
 from odoo import models, fields, api
 
@@ -54,11 +55,9 @@ class StockPicking(models.Model):
             return
 
         # Tính tổng tiền hàng thực giao trong phiếu này (cho điểm xếp hạng)
+        delivered_lines = self._get_loyalty_delivered_lines()
         delivered_subtotal = sum(
-            (move.sale_line_id.price_unit if move.sale_line_id
-             else move.product_id.lst_price) * move.quantity
-            for move in self.move_ids
-            if move.state == 'done'
+            (line['price_unit'] or 0.0) * (line['qty'] or 0.0) for line in delivered_lines
         )
 
         # ── Điểm xếp hạng: mỗi earning_amount tiền hàng = earning_points điểm ──
@@ -83,49 +82,8 @@ class StockPicking(models.Model):
         )
 
         # ── Điểm đổi thưởng: dựa trên tiền chiết khấu ──
-        discount_details = [
-            self._get_loyalty_discount_detail_for_move(move)
-            for move in self.move_ids
-            if move.state == 'done' and move.sale_line_id
-        ]
-        discount_amount = sum(item['discount_amount'] for item in discount_details)
-        discount_formula_source = 'Tổng chiết khấu loyalty theo dòng giao'
-        # Fallback: không có dòng nào có amount/% loyalty → dùng % mặc định của contact
-        if discount_amount <= 0:
-            root_partner_lookup = partner._get_loyalty_root()
-            # loyalty_default_discount lưu dạng 0-1 (Odoo convention: 0.05 = 5%)
-            fallback_pct = root_partner_lookup.loyalty_default_discount or 0.0
-            discount_amount = delivered_subtotal * fallback_pct
-            discount_details = [
-                self._get_loyalty_discount_detail_for_move(move, fallback_pct=fallback_pct)
-                for move in self.move_ids
-                if move.state == 'done'
-            ]
-            discount_formula_source = (
-                'Doanh số giao x % chiết khấu mặc định KH '
-                f'({fallback_pct:.2%})'
-            )
-
-        exchange_points = 0
-        if discount_amount > 0 and program.discount_per_point > 0:
-            exchange_points = int(discount_amount / program.discount_per_point)
-        exchange_formula = self._format_loyalty_point_formula(
-            'Điểm đổi thưởng',
-            discount_amount,
-            program.discount_per_point,
-            1,
-            exchange_points,
-            source_label=discount_formula_source,
-            detail_lines=discount_details,
-        )
-        exchange_formula_html = self._format_loyalty_point_formula_html(
-            'Điểm đổi thưởng',
-            discount_amount,
-            program.discount_per_point,
-            1,
-            exchange_points,
-            source_label=discount_formula_source,
-            detail_lines=discount_details,
+        exchange_points, exchange_formula, exchange_formula_html = (
+            self._compute_loyalty_exchange_points(program, delivered_lines, delivered_subtotal, partner)
         )
 
         if ranking_points <= 0 and exchange_points <= 0:
@@ -140,11 +98,26 @@ class StockPicking(models.Model):
             ranking_hist = existing.filtered(lambda hist: hist.point_type == 'ranking')[:1]
             exchange_hist = existing.filtered(lambda hist: hist.point_type == 'exchange')[:1]
             if ranking_hist:
+                # Điểm xếp hạng luôn tự động confirmed ngay khi tạo (đã vào
+                # số dư) → chỉ cập nhật công thức để đối chiếu, không tự
+                # sửa point_amount đã chốt.
                 ranking_hist.write({
                     'point_formula': ranking_formula,
                     'point_formula_html': ranking_formula_html,
                 })
-            if exchange_hist:
+            if exchange_hist and exchange_hist.state == 'pending':
+                # Điểm đổi thưởng đang chờ xác nhận: CHƯA vào số dư khách
+                # hàng → an toàn để tính lại đúng số điểm mới nhất (VD:
+                # sale vừa sửa % CK loyalty trên dòng bán hàng, hoặc dữ
+                # liệu combo/kit vừa được tính đúng lại).
+                exchange_hist.write({
+                    'point_amount': exchange_points,
+                    'point_formula': exchange_formula,
+                    'point_formula_html': exchange_formula_html,
+                })
+            elif exchange_hist:
+                # Đã xác nhận (đã vào số dư) → chỉ cập nhật công thức để
+                # đối chiếu, không tự sửa point_amount đã chốt.
                 exchange_hist.write({
                     'point_formula': exchange_formula,
                     'point_formula_html': exchange_formula_html,
@@ -194,16 +167,160 @@ class StockPicking(models.Model):
             ranking_points, exchange_points, partner.name, self.name, sale_order.name,
         )
 
-    def _get_loyalty_discount_amount_for_move(self, move):
-        """Return loyalty discount amount for one delivered move."""
-        return self._get_loyalty_discount_detail_for_move(move)['discount_amount']
+    def _get_loyalty_delivered_lines(self):
+        """Gom các stock.move đã giao (state=done) của phiếu này thành các
+        'dòng giao' logic, mỗi sale.order.line chỉ tính đúng 1 lần.
 
-    def _get_loyalty_discount_detail_for_move(self, move, fallback_pct=None):
-        """Return loyalty discount detail for one delivered move."""
-        sale_line = move.sale_line_id
-        product_name = move.product_id.display_name or ''
-        qty = move.quantity or 0.0
-        price_unit = sale_line.price_unit if sale_line else move.product_id.lst_price
+        Sản phẩm combo/kit (BOM loại Kit - phantom) không có move riêng cho
+        chính nó: khi giao hàng, Odoo nổ nhu cầu thành nhiều move theo từng
+        thành phần, nhưng TẤT CẢ các move thành phần đó đều trỏ về CÙNG 1
+        sale_line_id (dòng combo) - dòng duy nhất có price_unit là giá của
+        cả combo. Nếu lấy giá đó gán cho từng move thành phần rồi cộng dồn
+        theo move như trước, thành tiền loyalty sẽ bị nhân lên theo số
+        lượng thành phần trong combo (VD combo có 3 thành phần → tính tiền
+        x3). Vì vậy các move thành phần của cùng 1 dòng combo phải được
+        gộp lại và quy đổi về số lượng combo thực giao theo tỷ lệ BOM (xem
+        `_get_loyalty_kit_qty_delivered`), rồi chỉ tính price_unit x qty
+        combo đúng 1 lần cho cả dòng.
+        """
+        self.ensure_one()
+        done_moves = self.move_ids.filtered(lambda m: m.state == 'done')
+
+        moves_by_line = defaultdict(list)
+        loose_moves = []
+        for move in done_moves:
+            if move.sale_line_id:
+                moves_by_line[move.sale_line_id].append(move)
+            else:
+                loose_moves.append(move)
+
+        kit_tmpl_ids = set()
+        if moves_by_line:
+            tmpl_ids = [sale_line.product_id.product_tmpl_id.id for sale_line in moves_by_line]
+            kit_tmpl_ids = set(self.env['mrp.bom'].sudo().search([
+                ('product_tmpl_id', 'in', tmpl_ids),
+                ('type', '=', 'phantom'),
+            ]).mapped('product_tmpl_id').ids)
+
+        result = []
+        for sale_line, moves in moves_by_line.items():
+            product = sale_line.product_id
+            has_own_product_move = any(m.product_id == product for m in moves)
+            if product.product_tmpl_id.id in kit_tmpl_ids and not has_own_product_move:
+                qty = self._get_loyalty_kit_qty_delivered(product, moves)
+            else:
+                qty = sum(m.quantity or 0.0 for m in moves)
+            result.append({
+                'sale_line': sale_line,
+                'product': product,
+                'qty': qty,
+                'price_unit': sale_line.price_unit,
+            })
+
+        for move in loose_moves:
+            result.append({
+                'sale_line': False,
+                'product': move.product_id,
+                'qty': move.quantity or 0.0,
+                'price_unit': move.product_id.lst_price,
+            })
+        return result
+
+    def _get_loyalty_kit_qty_delivered(self, kit_product, moves):
+        """Suy ra số lượng combo/kit thực giao từ các move thành phần, theo
+        đúng tỷ lệ khai báo trên BOM (Kit) của sản phẩm combo.
+
+        Dùng min() trên tất cả thành phần: nếu 1 thành phần giao thiếu so
+        với tỷ lệ combo, số combo được tính là chưa giao đủ (tránh đếm dư
+        điểm khi combo giao chưa trọn bộ).
+        """
+        bom = self.env['mrp.bom'].sudo().search([
+            ('product_tmpl_id', '=', kit_product.product_tmpl_id.id),
+            ('type', '=', 'phantom'),
+        ], limit=1)
+        if not bom or not bom.bom_line_ids:
+            return sum(m.quantity or 0.0 for m in moves)
+
+        bom_qty = bom.product_qty or 1.0
+        qty_per_kit_by_product = defaultdict(float)
+        for bom_line in bom.bom_line_ids:
+            if bom_line.product_id and bom_line.product_qty:
+                qty_per_kit_by_product[bom_line.product_id.id] += bom_line.product_qty / bom_qty
+
+        if not qty_per_kit_by_product:
+            return sum(m.quantity or 0.0 for m in moves)
+
+        delivered_by_product = defaultdict(float)
+        for move in moves:
+            delivered_by_product[move.product_id.id] += move.quantity or 0.0
+
+        ratios = [
+            delivered_by_product.get(product_id, 0.0) / qty_per_kit
+            for product_id, qty_per_kit in qty_per_kit_by_product.items()
+            if qty_per_kit > 0
+        ]
+        return min(ratios) if ratios else 0.0
+
+    def _compute_loyalty_exchange_points(self, program, delivered_lines, delivered_subtotal, partner):
+        """Tính điểm đổi thưởng + công thức từ danh sách dòng giao đã gộp
+        (xem `_get_loyalty_delivered_lines`). Tách riêng để dùng lại được
+        khi tính lại điểm cho 1 bản ghi lịch sử đang chờ xác nhận.
+
+        Trả về (exchange_points, exchange_formula, exchange_formula_html).
+        """
+        self.ensure_one()
+        discount_details = [
+            self._get_loyalty_discount_detail_for_line(line)
+            for line in delivered_lines
+            if line['sale_line']
+        ]
+        discount_amount = sum(item['discount_amount'] for item in discount_details)
+        discount_formula_source = 'Tổng chiết khấu loyalty theo dòng giao'
+        # Fallback: không có dòng nào có amount/% loyalty → dùng % mặc định của contact
+        if discount_amount <= 0:
+            root_partner_lookup = partner._get_loyalty_root()
+            # loyalty_default_discount lưu dạng 0-1 (Odoo convention: 0.05 = 5%)
+            fallback_pct = root_partner_lookup.loyalty_default_discount or 0.0
+            discount_amount = delivered_subtotal * fallback_pct
+            discount_details = [
+                self._get_loyalty_discount_detail_for_line(line, fallback_pct=fallback_pct)
+                for line in delivered_lines
+            ]
+            discount_formula_source = (
+                'Doanh số giao x % chiết khấu mặc định KH '
+                f'({fallback_pct:.2%})'
+            )
+
+        exchange_points = 0
+        if discount_amount > 0 and program.discount_per_point > 0:
+            exchange_points = int(discount_amount / program.discount_per_point)
+        exchange_formula = self._format_loyalty_point_formula(
+            'Điểm đổi thưởng',
+            discount_amount,
+            program.discount_per_point,
+            1,
+            exchange_points,
+            source_label=discount_formula_source,
+            detail_lines=discount_details,
+        )
+        exchange_formula_html = self._format_loyalty_point_formula_html(
+            'Điểm đổi thưởng',
+            discount_amount,
+            program.discount_per_point,
+            1,
+            exchange_points,
+            source_label=discount_formula_source,
+            detail_lines=discount_details,
+        )
+        return exchange_points, exchange_formula, exchange_formula_html
+
+    def _get_loyalty_discount_detail_for_line(self, line, fallback_pct=None):
+        """Return loyalty discount detail for one delivered line (đã gộp
+        theo sale_line, xem `_get_loyalty_delivered_lines`)."""
+        sale_line = line['sale_line']
+        product_name = line['product'].display_name if line['product'] else ''
+        qty = line['qty'] or 0.0
+        price_unit = line['price_unit'] or 0.0
         subtotal = price_unit * qty
         detail = {
             'product': product_name,
