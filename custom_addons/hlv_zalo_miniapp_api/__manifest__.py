@@ -32,6 +32,7 @@
         "views/res_config_settings_views.xml",
         "views/zalo_loyalty_portal_account_views.xml",
         "views/snapshot_log_views.xml",
+        "wizard/zalo_return_reject_wizard_views.xml",
         "views/menu_views.xml",
     ],
 

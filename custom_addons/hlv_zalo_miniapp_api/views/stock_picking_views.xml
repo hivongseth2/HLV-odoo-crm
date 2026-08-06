@@ -16,7 +16,7 @@
                         class="btn-primary"
                         invisible="not x_is_zalo_outgoing_picking or not x_zalo_return_requested or (x_zalo_return_state and x_zalo_return_state not in ('pending', 'draft'))"
                         confirm="Xác nhận phê duyệt yêu cầu đổi/trả Zalo và mở wizard trả hàng?"/>
-                <button name="action_reject_zalo_return" type="object" string="Từ chối Đổi/Trả Zalo"
+                <button name="action_open_reject_wizard" type="object" string="Từ chối Đổi/Trả Zalo"
                         class="btn-danger"
                         invisible="not x_is_zalo_outgoing_picking or not x_zalo_return_requested or (x_zalo_return_state and x_zalo_return_state not in ('pending', 'approved'))"/>
                 <button name="action_complete_zalo_return" type="object" string="Hoàn tất Đổi/Trả Zalo"

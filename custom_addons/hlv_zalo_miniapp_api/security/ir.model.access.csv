@@ -12,5 +12,6 @@ access_zalo_miniapp_cart_line_user,zalo.miniapp.cart.line.user,model_zalo_miniap
 access_zalo_miniapp_cart_line_public,zalo.miniapp.cart.line.public,model_zalo_miniapp_cart_line,,1,1,1,1
 access_zalo_miniapp_snapshot_log_user,zalo.miniapp.snapshot.log.user,model_zalo_miniapp_snapshot_log,base.group_user,1,1,1,1
 access_zalo_miniapp_snapshot_log_public,zalo.miniapp.snapshot.log.public,model_zalo_miniapp_snapshot_log,,1,0,0,0
+access_zalo_return_reject_wizard,zalo.return.reject.wizard,model_zalo_return_reject_wizard,base.group_user,1,1,1,1
 
 

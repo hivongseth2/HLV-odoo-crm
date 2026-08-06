@@ -174,6 +174,29 @@ class StockPicking(models.Model):
             "context": dict(self.env.context, active_id=self.id, active_model="stock.picking"),
         }
 
+    def action_open_reject_wizard(self):
+        """Mở wizard nhập lý do từ chối yêu cầu đổi/trả Zalo."""
+        self.ensure_one()
+        if not self.x_is_zalo_outgoing_picking:
+            raise UserError(_("Chức năng này chỉ áp dụng cho phiếu xuất kho Zalo Mini App."))
+        if not self.x_zalo_return_requested:
+            raise UserError(_("Phiếu xuất kho này chưa có yêu cầu đổi/trả từ khách."))
+        if self.x_zalo_return_state and self.x_zalo_return_state not in ("pending", "approved"):
+            state_label = dict(self._fields["x_zalo_return_state"].selection).get(self.x_zalo_return_state, self.x_zalo_return_state)
+            raise UserError(_("Yêu cầu đổi/trả đã được xử lý (trạng thái: %s).") % state_label)
+
+        return {
+            "name": _("Từ chối Yêu cầu Đổi/Trả Zalo"),
+            "type": "ir.actions.act_window",
+            "res_model": "zalo.return.reject.wizard",
+            "view_mode": "form",
+            "target": "new",
+            "context": {
+                "default_picking_id": self.id,
+                "default_reason": self.x_zalo_return_rejected_reason or "",
+            },
+        }
+
     def action_reject_zalo_return(self, reason=""):
         """Từ chối yêu cầu đổi/trả Zalo (chỉ trên phiếu OUT)."""
         self.ensure_one()
