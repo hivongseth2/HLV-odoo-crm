@@ -27,6 +27,21 @@
                         </setting>
                     </block>
 
+                    <block title="Thông Báo Yêu Cầu Đổi/Trả Zalo">
+                        <setting string="Người Nhận Thông Báo Đổi/Trả Zalo" help="Cấu hình tài khoản Odoo và Zalo UID nhận thông báo chủ động khi khách hàng yêu cầu đổi/trả">
+                            <div className="content-group">
+                                <div className="row mt16">
+                                    <label for="x_zalo_return_notify_user_ids" className="col-lg-3 o_light_label"/>
+                                    <field name="x_zalo_return_notify_user_ids" widget="many2many_tags" options="{'no_create': True}"/>
+                                </div>
+                                <div className="row mt8">
+                                    <label for="x_zalo_return_zalo_uids" className="col-lg-3 o_light_label"/>
+                                    <field name="x_zalo_return_zalo_uids" placeholder="Ví dụ: 123456789,987654321"/>
+                                </div>
+                            </div>
+                        </setting>
+                    </block>
+
                     <block title="Quản lý &amp; Theo dõi Version Snapshot Zalo">
                         <setting string="Trạng thái Version Snapshot Hiện tại" help="Theo dõi version dữ liệu và điều khiển ép buộc làm mới trên Mini App">
                             <div className="content-group">

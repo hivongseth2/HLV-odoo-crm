@@ -236,6 +236,130 @@ class StockPicking(models.Model):
         if self.sale_id:
             self.sale_id.message_post(body=msg, message_type="comment", subtype_xmlid="mail.mt_note")
 
+    def _send_zalo_return_notifications(self):
+        """
+        Gửi thông báo chủ động Đa Kênh khi có Yêu cầu Đổi/Trả Zalo Mini App:
+        1. Odoo Activity Schedule (`mail.activity`): Giao task cho Salesperson & Managers (hiển thị trên nút Đồng Hồ Odoo).
+        2. Direct Chatter Tagging & Live Toast: Tag partner_ids để bắn chuông notification bell Odoo.
+        3. Instant Zalo Message Push (`hlv.zalo.stock.notification`): Gửi tin nhắn Zalo về di động cho người quản lý.
+        """
+        self.ensure_one()
+        Param = self.env["ir.config_parameter"].sudo()
+
+        # Lấy danh sách Users được cấu hình nhận thông báo
+        configured_user_ids = []
+        raw_user_ids = Param.get_param("hlv_zalo_miniapp.return_notify_user_ids", "")
+        if raw_user_ids:
+            try:
+                clean_ids = raw_user_ids.replace("[", "").replace("]", "").split(",")
+                configured_user_ids = [int(u.strip()) for u in clean_ids if u.strip().isdigit()]
+            except Exception:
+                pass
+
+        target_users = self.env["res.users"].sudo().browse(configured_user_ids).filtered(lambda u: u.active)
+
+        # Fallback 1: Nếu không cấu hình user nào, ưu tiên giao cho Sale phụ trách đơn hàng
+        if not target_users and self.sale_id and self.sale_id.user_id:
+            target_users = self.sale_id.user_id
+
+        # Fallback 2: Nếu vẫn chưa có, lấy admin user
+        if not target_users:
+            admin_user = self.env.ref("base.user_admin", raise_if_not_found=False) or self.env.user
+            target_users = admin_user if admin_user else self.env.user
+
+        # Labels
+        cat_label = "Lỗi nhà cung cấp / Vận chuyển" if self.x_zalo_return_category == "supplier_fault" else "Theo nhu cầu khách hàng"
+        cond_label = "Chưa qua sử dụng (nguyên tem)" if self.x_zalo_product_condition == "unused" else "Đã qua sử dụng"
+        cust_name = self.partner_id.name if self.partner_id else "Khách hàng Zalo"
+        cust_phone = self.partner_id.phone or self.partner_id.mobile or ""
+        so_name = self.sale_id.name if self.sale_id else self.origin or ""
+
+        # ===== KÊNH 1: Odoo Activity Schedule (`mail.activity`) =====
+        activity_type = self.env.ref("mail.mail_activity_data_todo", raise_if_not_found=False)
+        for user in target_users:
+            try:
+                existing_activity = self.env["mail.activity"].sudo().search([
+                    ("res_model", "=", "stock.picking"),
+                    ("res_id", "=", self.id),
+                    ("user_id", "=", user.id),
+                    ("summary", "ilike", "Yêu cầu Đổi/Trả Zalo"),
+                ], limit=1)
+
+                if not existing_activity and activity_type:
+                    self.env["mail.activity"].sudo().create({
+                        "activity_type_id": activity_type.id,
+                        "note": Markup(_(
+                            "<b>Yêu cầu Đổi/Trả Hàng từ Zalo Mini App</b><br/>"
+                            "• <b>Đơn hàng:</b> %s<br/>"
+                            "• <b>Phiếu xuất:</b> %s<br/>"
+                            "• <b>Khách hàng:</b> %s (%s)<br/>"
+                            "• <b>Phân loại:</b> %s<br/>"
+                            "• <b>Tình trạng SP:</b> %s<br/>"
+                            "• <b>Ghi chú:</b> %s"
+                        )) % (so_name, self.name, cust_name, cust_phone, cat_label, cond_label, self.x_zalo_return_note or "Không có"),
+                        "res_id": self.id,
+                        "res_model_id": self.env.ref("stock.model_stock_picking").id,
+                        "summary": _("⚠️ Yêu cầu Đổi/Trả Zalo: %s") % so_name,
+                        "user_id": user.id,
+                        "date_deadline": fields.Date.today(),
+                    })
+            except Exception as e:
+                _logger.exception("Lỗi khi tạo Activity đổi/trả Zalo cho user %s: %s", user.id, e)
+
+        # ===== KÊNH 2: Odoo Bus Live Pop-up Toast & Notification Bell =====
+        target_partners = target_users.mapped("partner_id")
+        if target_partners:
+            chatter_msg = Markup(_(
+                "🚨 <b>YÊU CẦU ĐỔI/TRẢ HÀNG ZALO MINI APP MỚI</b><br/>"
+                "• <b>Đơn hàng:</b> %s<br/>"
+                "• <b>Phiếu xuất kho:</b> %s<br/>"
+                "• <b>Khách hàng:</b> %s (%s)<br/>"
+                "• <b>Phân loại nguyên nhân:</b> %s<br/>"
+                "• <b>Tình trạng sản phẩm:</b> %s<br/>"
+                "• <b>Ghi chú từ khách:</b> %s"
+            )) % (so_name, self.name, cust_name, cust_phone, cat_label, cond_label, self.x_zalo_return_note or "Không có")
+            self.message_post(
+                body=chatter_msg,
+                partner_ids=target_partners.ids,
+                message_type="notification",
+                subtype_xmlid="mail.mt_comment",
+            )
+
+        # ===== KÊNH 3: Instant Zalo Mobile Push (`hlv.zalo.stock.notification`) =====
+        try:
+            raw_zalo_uids = Param.get_param("hlv_zalo_miniapp.return_zalo_uids", "")
+            zalo_recipients = [u.strip() for u in raw_zalo_uids.split(",") if u.strip()]
+
+            # Tìm Zalo Stock Notification Config active
+            zalo_config = False
+            if "hlv.zalo.stock.notification" in self.env:
+                zalo_config = self.env["hlv.zalo.stock.notification"].sudo()._get_active_config()
+
+            if zalo_config and zalo_recipients:
+                base_url = Param.get_param("web.base.url", "")
+                action_id = self.env.ref("stock.action_picking_tree_all", raise_if_not_found=False)
+                action_param = f"/odoo/action-{action_id.id}" if action_id else "/odoo"
+                picking_url = f"{base_url}{action_param}/{self.id}"
+
+                zalo_msg = f"🔔 YÊU CẦU ĐỔI/TRẢ HÀNG ZALO MINI APP MỚI\n"
+                zalo_msg += f"  • Mã Đơn: {so_name}\n"
+                zalo_msg += f"  • Phiếu xuất: {self.name}\n"
+                zalo_msg += f"  • Khách hàng: {cust_name} ({cust_phone})\n"
+                zalo_msg += f"  • Phân loại: {cat_label}\n"
+                zalo_msg += f"  • Tình trạng SP: {cond_label}\n"
+                if self.x_zalo_return_note:
+                    zalo_msg += f"  • Ghi chú: {self.x_zalo_return_note}\n"
+                zalo_msg += f"👉 Mở xem trên Odoo: {picking_url}"
+
+                for uid in zalo_recipients:
+                    try:
+                        zalo_config.send_notification_message(uid, zalo_msg)
+                        _logger.info("✓ Zalo Return Notification sent to UID %s for picking %s", uid, self.name)
+                    except Exception as ze:
+                        _logger.error("✗ Lỗi gửi Zalo Return Notification tới %s: %s", uid, ze)
+        except Exception as ex:
+            _logger.exception("Lỗi khi gửi Zalo Return Notification cho picking %s: %s", self.name, ex)
+
     @api.model
     def create(self, vals):
         """Khi tạo phiếu nhập kho (return picking), tự động link về phiếu xuất kho Zalo gốc."""

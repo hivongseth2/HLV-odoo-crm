@@ -546,6 +546,11 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
                     except Exception as pme:
                         _logger.warning("Post chatter error on stock.picking %s: %s", target_picking.id, pme)
 
+                    try:
+                        target_picking.sudo()._send_zalo_return_notifications()
+                    except Exception as ne:
+                        _logger.exception("Error triggering return notifications for picking %s: %s", target_picking.id, ne)
+
             try:
                 order.message_post(body=formatted_msg, message_type="comment", subtype_xmlid="mail.mt_note")
             except Exception as me:
