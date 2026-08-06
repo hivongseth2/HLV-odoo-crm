@@ -227,12 +227,12 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
         """Batch query số lượng đã bán cho tất cả products từ đơn hàng Zalo Mini App.
         Trả về dict {product_id: sales_count} hoặc {} nếu không có data."""
         try:
-            if not products:
-                return {}
-            if hasattr(products, "id"):
-                product_ids = [products.id]
+            if isinstance(products, models.BaseModel):
+                product_ids = products.ids
+            elif isinstance(products, (list, tuple)):
+                product_ids = [p.id for p in products if p]
             else:
-                product_ids = [p.id for p in products if p and hasattr(p, "id")]
+                product_ids = []
 
             if not product_ids:
                 return {}
