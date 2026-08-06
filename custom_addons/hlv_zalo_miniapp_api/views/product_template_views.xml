@@ -32,4 +32,20 @@
             </field>
         </field>
     </record>
+
+    <record id="action_zalo_product_template" model="ir.actions.act_window">
+        <field name="name">Sản phẩm Zalo Mini App</field>
+        <field name="res_model">product.template</field>
+        <field name="view_mode">kanban,list,form</field>
+        <field name="domain">[('x_active_zalo', '=', True)]</field>
+        <field name="context">{'default_x_active_zalo': True}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Chưa có sản phẩm nào được kích hoạt trên Zalo Mini App.
+            </p>
+            <p>
+                Bật tùy chọn "Hiển thị trên Zalo" trên sản phẩm để cho phép hiển thị và bán trên ứng dụng Zalo.
+            </p>
+        </field>
+    </record>
 </odoo>
