@@ -43,6 +43,7 @@
         "views/loyalty_portal_vouchers_full.xml",
         "views/loyalty_reward_request_views.xml",
         "views/loyalty_portal_redeem.xml",
+        "views/loyalty_portal_request_detail.xml",
         "views/menu_views.xml",
         "data/loyalty_tier_data.xml",
     ],
