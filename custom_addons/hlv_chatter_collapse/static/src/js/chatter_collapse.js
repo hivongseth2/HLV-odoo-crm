@@ -9,14 +9,14 @@ import { patch } from "@web/core/utils/patch";
 patch(Chatter.prototype, {
     setup() {
         super.setup();
-        this.hlvChatterCollapse = useState({ collapsed: true });
+        this.hlvChatterCollapse = useState({ collapsed: false });
 
         onWillUpdateProps((nextProps) => {
             if (
                 this.props.threadId !== nextProps.threadId ||
                 this.props.threadModel !== nextProps.threadModel
             ) {
-                this.hlvChatterCollapse.collapsed = true;
+                this.hlvChatterCollapse.collapsed = false;
             }
         });
     },

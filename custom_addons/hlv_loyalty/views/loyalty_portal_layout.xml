@@ -15,7 +15,10 @@
             <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800;900&amp;family=Inter:wght@400;500;600&amp;display=swap"/>
             <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"/>
             <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css"/>
-            <link rel="stylesheet" href="/hlv_loyalty/static/src/css/loyalty_portal.css"/>
+            <!-- ?v= là cache-buster thủ công: TĂNG số này mỗi khi sửa
+                 loyalty_portal.css, nếu không trình duyệt/CDN có thể tiếp
+                 tục phục vụ bản CSS cũ đã cache dù server đã có bản mới. -->
+            <link rel="stylesheet" href="/hlv_loyalty/static/src/css/loyalty_portal.css?v=2"/>
         </t>
         <t t-out="0"/>
         <script>
