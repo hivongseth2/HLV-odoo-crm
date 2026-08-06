@@ -49,7 +49,7 @@
     <menuitem id="menu_zalo_miniapp_product_app"
               name="Sản phẩm Zalo"
               parent="menu_zalo_miniapp_management"
-              action="action_zalo_product_product"
+              action="action_zalo_product_template"
               sequence="20"/>
 
     <menuitem id="menu_zalo_miniapp_category_app"

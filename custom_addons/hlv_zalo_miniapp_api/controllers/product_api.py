@@ -224,43 +224,35 @@ class ZaloProductAPI(ZaloBaseAPI, http.Controller):
             return None
 
     def _get_batch_sales_counts(self, products):
-        """Batch query số lượng đã bán cho tất cả products từ đơn hàng Zalo Mini App.
+        """Batch query số lượng đã bán cho tất cả products từ các đơn hàng không bị hủy.
         Trả về dict {product_id: sales_count} hoặc {} nếu không có data."""
         try:
-            if not products:
-                return {}
-            if hasattr(products, "id"):
-                product_ids = [products.id]
+            if hasattr(products, "ids"):
+                product_ids = products.ids
+            elif isinstance(products, (list, tuple)):
+                product_ids = [p.id if hasattr(p, "id") else p for p in products if p]
             else:
-                product_ids = [p.id for p in products if p and hasattr(p, "id")]
+                product_ids = []
 
             if not product_ids:
                 return {}
 
-            # 1. Tìm các đơn hàng đã xác nhận thuộc tài khoản Zalo Mini App
-            zalo_orders = request.env["sale.order"].sudo().search([
-                ("state", "in", ["sale", "done"]),
-                ("partner_id.x_is_zalo_account", "=", True),
-            ])
-            if not zalo_orders:
-                return {}
-
-            # 2. Group by product_id trên sale.order.line của các đơn Zalo
-            results = request.env["sale.order.line"].sudo().read_group(
-                domain=[
-                    ("product_id", "in", product_ids),
-                    ("order_id", "in", zalo_orders.ids),
-                ],
-                fields=["product_id", "product_uom_qty"],
-                groupby=["product_id"],
-            )
             batch_counts = {}
-            for row in results:
-                pid = row.get("product_id")
-                if pid and isinstance(pid, (list, tuple)) and len(pid) > 0:
-                    pid = pid[0]
+            lines = request.env["sale.order.line"].sudo().search([
+                ("product_id", "in", product_ids),
+                ("order_id.state", "!=", "cancel"),
+            ])
+            for line in lines:
+                pid = line.product_id.id
                 if pid:
-                    batch_counts[pid] = int(row.get("product_uom_qty", 0))
+                    batch_counts[pid] = batch_counts.get(pid, 0) + int(line.product_uom_qty)
+
+            for p in products:
+                pid = p.id if hasattr(p, "id") else p
+                if pid not in batch_counts or batch_counts[pid] == 0:
+                    if hasattr(p, "sales_count") and p.sales_count:
+                        batch_counts[pid] = int(p.sales_count)
+
             return batch_counts
         except Exception as e:
             _logger.warning("Batch sales count error: %s", e)
