@@ -501,8 +501,15 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
 
             if action_type in ("cancel_return", "revoke_return"):
                 target_picking = order.picking_ids.filtered(
-                    lambda p: p.picking_type_id.code == "outgoing" and p.x_zalo_return_requested
+                    lambda p: p.x_zalo_return_requested or (p.x_zalo_return_state and p.x_zalo_return_state == "pending")
                 )[:1]
+                if not target_picking:
+                    target_picking = order.picking_ids.filtered(
+                        lambda p: p.picking_type_id.code == "outgoing" and p.state != "cancel"
+                    )[:1]
+                if not target_picking:
+                    target_picking = order.picking_ids[:1]
+
                 if not target_picking:
                     return self._response_error("NOT_FOUND", "Không tìm thấy yêu cầu đổi/trả hàng cần thu hồi", 404)
 
