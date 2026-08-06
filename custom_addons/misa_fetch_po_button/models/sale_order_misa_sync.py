@@ -729,10 +729,15 @@ class SaleOrder(models.Model):
                 'details': '\n- '.join(invalid_delivered_quantities),
             })
 
-        # Odoo core chặn write product_id lên order line khi đơn đã khóa hoặc dòng đã
-        # giao/xuất hóa đơn một phần (sale.order.line.product_updatable = False). Kiểm tra
-        # trước khi write để báo lỗi rõ ràng thay vì để Odoo raise "You cannot modify the
-        # product of this order line" giữa chừng, gây đồng bộ dở dang.
+        # Odoo core chặn write product_id lên order line khi
+        # sale.order.line.product_updatable = False. Field này bị False vì 1 trong 4 lý
+        # do: (1) đơn đã khóa, (2) dòng đã xuất hóa đơn, (3) dòng đã giao hàng thật, hoặc
+        # (4, do sale_stock) dòng còn phiếu giao (stock.move) chưa done/cancel — dù chưa
+        # giao gì cả, đây chỉ là phiếu treo tham chiếu sản phẩm cũ từ lúc xác nhận đơn.
+        # Case (4) chưa có tác động kho thật nên có thể tự hủy phiếu treo đó rồi cho ghi
+        # tiếp; Odoo sẽ tự tạo phiếu giao mới đúng sản phẩm khi write product_uom_qty bên
+        # dưới (sale_stock.SaleOrderLine.write gọi _action_launch_stock_rule). Case
+        # (1)-(3) là có tác động thật, phải chặn và để người dùng xử lý thủ công.
         blocked_product_changes = []
         for misa_data, sol in matched_pairs:
             product_changed = sol.product_id != misa_data['product']
@@ -740,12 +745,29 @@ class SaleOrder(models.Model):
                 continue
             if sol.product_updatable:
                 continue
-            if sol.order_id.locked:
+
+            qty_delivered = float(getattr(sol, 'qty_delivered', 0.0) or 0.0)
+            qty_invoiced = float(getattr(sol, 'qty_invoiced', 0.0) or 0.0)
+            is_locked = bool(sol.order_id.locked)
+            pending_moves = sol.move_ids.filtered(lambda m: m.state not in ('done', 'cancel'))
+
+            if not is_locked and qty_invoiced <= 0.001 and qty_delivered <= 0.001 and pending_moves:
+                _logger.info(
+                    "Hủy %s phiếu giao treo (sản phẩm cũ %s) để đổi sang %s trên CRM line %s",
+                    len(pending_moves), sol.product_id.display_name,
+                    misa_data['product'].display_name, misa_data['crm_line_id'],
+                )
+                pending_moves._action_cancel()
+                continue
+
+            if is_locked:
                 reason = _('đơn bán đã bị khóa')
-            elif float(getattr(sol, 'qty_invoiced', 0.0) or 0.0) > 0.001:
+            elif qty_invoiced > 0.001:
                 reason = _('dòng đã xuất hóa đơn')
+            elif qty_delivered > 0.001:
+                reason = _('dòng đã giao %g') % qty_delivered
             else:
-                reason = _('dòng đã giao %g') % float(getattr(sol, 'qty_delivered', 0.0) or 0.0)
+                reason = _('dòng không cho sửa sản phẩm (product_updatable=False)')
             blocked_product_changes.append(
                 _("%(old)s → %(new)s: %(reason)s (CRM line %(crm_line_id)s)") % {
                     'old': sol.product_id.display_name,
