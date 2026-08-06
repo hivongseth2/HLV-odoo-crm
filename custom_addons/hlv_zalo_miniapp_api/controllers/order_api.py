@@ -68,6 +68,26 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
         except Exception:
             pass
 
+        # Return info (chỉ cho đơn Zalo)
+        is_zalo = bool(order.partner_id.x_is_zalo_account)
+        return_info = {
+            "return_requested": getattr(order, "x_return_requested", False) or False,
+            "is_returnable": getattr(order, "x_is_returnable", True),
+            "days_since_delivery": getattr(order, "x_days_since_delivery", 0),
+        }
+        if is_zalo and getattr(order, "x_return_requested", False):
+            return_info.update({
+                "return_state": order.x_return_state or "pending",
+                "return_type": order.x_return_type or None,
+                "return_category": getattr(order, "x_return_category", False) or None,
+                "product_condition": getattr(order, "x_product_condition", False) or None,
+                "return_refund_amount": order.x_return_refund_amount or 0,
+                "return_rejected_reason": order.x_return_rejected_reason or "",
+                "return_picking_name": order.x_return_picking_id.name if order.x_return_picking_id else None,
+                "return_picking_state": order.x_return_picking_id.state if order.x_return_picking_id else None,
+                "return_completed_date": order.x_return_completed_date or None,
+            })
+
         return {
             "id": order.id, "name": order.name,
             "partner_id": order.partner_id.id, "partner_name": order.partner_id.name,
@@ -77,6 +97,7 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             "amount_total": order.amount_total, "note": order.note or "",
             "voucher_discount": voucher_discount_total,
             "loyalty_voucher_code": getattr(order, "loyalty_voucher_code", "") or "",
+            **return_info,
             "lines": lines, "picking_info": picking_info,
             "shipping_address": {
                 "name": order.partner_shipping_id.name or "",
@@ -249,11 +270,14 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
                     return self._response_error("OUT_OF_STOCK",
                         f"Sản phẩm '{product.display_name}' chỉ còn {product.free_qty} {product.uom_id.name}", 400)
 
-                price = product.x_zalo_price or product.list_price
+                # Ưu tiên dùng price_unit từ frontend (giá Zalo đã bao gồm VAT)
+                # Nếu frontend không gửi, fallback về x_zalo_price hoặc list_price
+                price = item.get("price_unit") or product.x_zalo_price or product.list_price
                 order_line_vals.append((0, 0, {
                     "product_id": product_id,
                     "product_uom_qty": quantity,
                     "price_unit": price,
+                    "tax_id": [(5, 0, 0)],  # Không áp thuế - giá Zalo đã bao gồm VAT
                     "name": product.display_name,
                 }))
 
@@ -474,6 +498,53 @@ class ZaloOrderAPI(ZaloBaseAPI, http.Controller):
             if note:
                 new_entry += f": {note}"
             order.write({"note": current_note + new_entry})
+
+            if action_type == "return":
+                if hasattr(order, "x_is_returnable") and not order.x_is_returnable:
+                    return self._response_error("EXPIRED_RETURN", "Đơn hàng đã quá thời hạn 7 ngày đổi/trả theo chính sách của Hoàng Long Vũ", 400)
+
+                # Tìm phiếu giao hàng (OUT) cụ thể để gắn yêu cầu đổi/trả
+                target_picking_id = self._parse_int(body.get("picking_id"), 0)
+                target_picking = None
+                if target_picking_id:
+                    target_picking = order.picking_ids.filtered(lambda p: p.id == target_picking_id)
+                if not target_picking:
+                    # Lấy phiếu xuất kho (outgoing) đã done mới nhất
+                    target_picking = order.picking_ids.filtered(
+                        lambda p: p.picking_type_id.code == "outgoing" and p.state == "done"
+                    )[:1]
+                if not target_picking:
+                    # Fallback lấy phiếu xuất kho bất kỳ chưa bị hủy
+                    target_picking = order.picking_ids.filtered(
+                        lambda p: p.picking_type_id.code == "outgoing" and p.state != "cancel"
+                    )[:1]
+
+                if target_picking:
+                    return_type = (body.get("return_type") or "return").strip()
+                    return_category = (body.get("return_category") or "supplier_fault").strip()
+                    product_condition = (body.get("product_condition") or "unused").strip()
+
+                    target_picking.sudo().write({
+                        "x_zalo_return_requested": True,
+                        "x_zalo_return_state": "pending",
+                        "x_zalo_return_type": return_type if return_type in ("return", "exchange", "refund") else "return",
+                        "x_zalo_return_category": return_category if return_category in ("supplier_fault", "customer_demand") else "supplier_fault",
+                        "x_zalo_product_condition": product_condition if product_condition in ("unused", "used") else "unused",
+                        "x_zalo_return_note": note,
+                    })
+                    try:
+                        cat_label = "Lỗi nhà cung cấp / Vận chuyển" if return_category == "supplier_fault" else "Theo nhu cầu khách hàng"
+                        cond_label = "Chưa qua sử dụng (nguyên tem)" if product_condition == "unused" else "Đã qua sử dụng"
+                        picking_msg = Markup(_(
+                            "<b>Yêu cầu Đổi/Trả hàng từ Zalo Mini App cho phiếu xuất %s</b><br/>"
+                            "• <b>Phân loại:</b> %s<br/>"
+                            "• <b>Tình trạng sản phẩm:</b> %s"
+                        )) % (target_picking.name, cat_label, cond_label)
+                        if note:
+                            picking_msg += Markup(_("<br/>• <b>Ghi chú:</b> %s")) % note
+                        target_picking.message_post(body=picking_msg, message_type="comment", subtype_xmlid="mail.mt_note")
+                    except Exception as pme:
+                        _logger.warning("Post chatter error on stock.picking %s: %s", target_picking.id, pme)
 
             try:
                 order.message_post(body=formatted_msg, message_type="comment", subtype_xmlid="mail.mt_note")

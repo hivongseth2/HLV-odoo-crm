@@ -1730,8 +1730,11 @@ class MisaExtensionController(http.Controller):
                             "discount_amount": float(aline.get("discount_amount") or aline.get("discount_amount_oc") or 0),
                         })
                     
+                    acc_obj_code = (amis_header.get("account_object_code") or (amis_po.get("account_object_code") if amis_po else "") or "").strip()
+                    reconciled_item["account_object_code"] = acc_obj_code
                     reconciled_item["amis"] = {
-                        "partner": amis_po.get("account_object_name", ""),
+                        "partner": (amis_header.get("account_object_name") or (amis_po.get("account_object_name") if amis_po else "") or "").strip(),
+                        "account_object_code": acc_obj_code,
                         "refid": refid,
                         "refno": amis_po.get("refno", ""),
                         "amount_total": amis_total,
@@ -2166,8 +2169,11 @@ class MisaExtensionController(http.Controller):
                             "vat_rate": float(aline.get("vat_rate") or 0)
                         })
                     
+                    acc_obj_code = (amis_header.get("account_object_code") or (amis_po.get("account_object_code") if amis_po else "") or "").strip()
+                    reconciled_item["account_object_code"] = acc_obj_code
                     reconciled_item["amis"] = {
-                        "partner": amis_header.get("account_object_name") or amis_po.get("account_object_name") or "",
+                        "partner": (amis_header.get("account_object_name") or (amis_po.get("account_object_name") if amis_po else "") or "").strip(),
+                        "account_object_code": acc_obj_code,
                         "date_order": amis_po.get("refdate", "")[:10],
                         "amount_total": amis_total_oc,
                         "lines": amis_lines_detail
@@ -2196,14 +2202,17 @@ class MisaExtensionController(http.Controller):
                 refno = apo.get("refno", "").strip()
                 if refno not in processed_misa_refnos:
                     # MISA Only item
+                    misa_code = (apo.get("account_object_code") or "").strip()
                     reconciled_item = {
                         "po_name": refno,
                         "po_origin": "",
                         "partner": apo.get("account_object_name") or "",
+                        "account_object_code": misa_code,
                         "date_order": apo.get("refdate", "")[:10],
                         "odoo": None,
                         "amis": {
                             "partner": apo.get("account_object_name") or "",
+                            "account_object_code": misa_code,
                             "date_order": apo.get("refdate", "")[:10],
                             "amount_total": float(apo.get("total_amount_oc", apo.get("total_amount") or 0)),
                             "lines": []

@@ -12,6 +12,50 @@ class ZaloMiniAppSnapshotLog(models.Model):
     _description = "Lịch sử Version Snapshot Zalo Mini App"
     _order = "id desc"
 
+    @staticmethod
+    def _bump_catalog_version(env, trigger_source, affected_model, affected_record_name, trigger_reason, user=None):
+        """Tự động bump catalog version khi dữ liệu Zalo thay đổi.
+        Được gọi từ các model override (product, category, stock_quant, ...).
+        """
+        new_v = str(int(time.time()))
+        Log = env["zalo.miniapp.snapshot.log"]
+        Log.search([("snapshot_type", "=", "catalog"), ("state", "=", "active")]).write({"state": "historical"})
+        Log.create({
+            "name": f"Catalog Snapshot #{new_v} (Auto)",
+            "snapshot_type": "catalog",
+            "version_code": new_v,
+            "version_datetime": fields.Datetime.now(),
+            "trigger_source": trigger_source,
+            "trigger_reason": trigger_reason,
+            "affected_model": affected_model,
+            "affected_record_name": affected_record_name,
+            "user_id": user.id if user else env.user.id,
+            "state": "active",
+        })
+        env["ir.config_parameter"].sudo().set_param("zalo_miniapp_forced_catalog_version", new_v)
+        _logger.info("[VersionBump] Catalog version bumped to %s by %s (%s)", new_v, trigger_source, affected_record_name)
+
+    @staticmethod
+    def _bump_banner_version(env, trigger_source, affected_model, affected_record_name, trigger_reason, user=None):
+        """Tự động bump banner version khi banner thay đổi."""
+        new_v = str(int(time.time()))
+        Log = env["zalo.miniapp.snapshot.log"]
+        Log.search([("snapshot_type", "=", "banner"), ("state", "=", "active")]).write({"state": "historical"})
+        Log.create({
+            "name": f"Banner Snapshot #{new_v} (Auto)",
+            "snapshot_type": "banner",
+            "version_code": new_v,
+            "version_datetime": fields.Datetime.now(),
+            "trigger_source": trigger_source,
+            "trigger_reason": trigger_reason,
+            "affected_model": affected_model,
+            "affected_record_name": affected_record_name,
+            "user_id": user.id if user else env.user.id,
+            "state": "active",
+        })
+        env["ir.config_parameter"].sudo().set_param("zalo_miniapp_forced_banner_version", new_v)
+        _logger.info("[VersionBump] Banner version bumped to %s by %s (%s)", new_v, trigger_source, affected_record_name)
+
     name = fields.Char(string="Tiêu đề nhật ký", required=True, default="Snapshot Log")
     snapshot_type = fields.Selection(
         [

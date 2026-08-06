@@ -76,6 +76,12 @@
               action="action_zalo_sale_order"
               sequence="50"/>
 
+    <menuitem id="menu_zalo_miniapp_return_picking_app"
+              name="Phiếu kho Đổi/Trả Zalo"
+              parent="menu_zalo_miniapp_management"
+              action="action_zalo_return_picking"
+              sequence="55"/>
+
     <menuitem id="menu_zalo_miniapp_snapshot_app"
               name="Lịch sử Version Snapshot"
               parent="menu_zalo_miniapp_management"
