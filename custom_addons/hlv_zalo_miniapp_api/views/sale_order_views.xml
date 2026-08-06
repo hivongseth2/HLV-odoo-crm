@@ -93,7 +93,7 @@
                     </group>
                     <group string="Danh sách phiếu xuất kho &amp; Trạng thái đổi/trả chi tiết" colspan="4" col="2">
                         <field name="picking_ids" string="Phiếu xuất kho"
-                               domain="[('state', '!=', 'cancel')]"
+                               domain="[('picking_type_id.code', '=', 'outgoing'), ('state', '!=', 'cancel')]"
                                readonly="1">
                             <list string="Danh sách phiếu xuất kho" decoration-info="x_zalo_return_requested == True">
                                 <field name="name" string="Mã phiếu kho"/>

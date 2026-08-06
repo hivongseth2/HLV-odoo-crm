@@ -125,6 +125,7 @@ class SaleOrder(models.Model):
                 order.x_is_returnable = False
 
     @api.depends(
+        "picking_ids.picking_type_id.code",
         "picking_ids.x_zalo_return_requested",
         "picking_ids.x_zalo_return_state",
         "picking_ids.x_zalo_return_type",
@@ -137,7 +138,9 @@ class SaleOrder(models.Model):
     )
     def _compute_zalo_return_summary(self):
         for order in self:
-            return_pickings = order.picking_ids.filtered(lambda p: p.x_zalo_return_requested)
+            return_pickings = order.picking_ids.filtered(
+                lambda p: p.picking_type_id.code == "outgoing" and p.x_zalo_return_requested
+            )
             order.x_return_requested = bool(return_pickings)
             order.x_return_picking_count = len(return_pickings)
 
@@ -185,9 +188,9 @@ class SaleOrder(models.Model):
     def _search_x_return_requested(self, operator, value):
         if operator in ("=", "!=") and isinstance(value, bool):
             if (operator == "=" and value) or (operator == "!=" and not value):
-                return [("picking_ids.x_zalo_return_requested", "=", True)]
+                return [("picking_ids.picking_type_id.code", "=", "outgoing"), ("picking_ids.x_zalo_return_requested", "=", True)]
             else:
-                return [("picking_ids.x_zalo_return_requested", "=", False)]
+                return [("picking_ids.picking_type_id.code", "=", "outgoing"), ("picking_ids.x_zalo_return_requested", "=", False)]
         return []
 
     def _is_zalo_order(self):
@@ -199,7 +202,9 @@ class SaleOrder(models.Model):
         """Smart button xem danh sách các phiếu xuất kho Zalo có yêu cầu đổi/trả."""
         self.ensure_one()
         action = self.env.ref("stock.action_picking_tree_all").read()[0]
-        return_pickings = self.picking_ids.filtered(lambda p: p.x_zalo_return_requested)
+        return_pickings = self.picking_ids.filtered(
+            lambda p: p.picking_type_id.code == "outgoing" and p.x_zalo_return_requested
+        )
         action["domain"] = [("id", "in", return_pickings.ids)]
         action["context"] = {"default_sale_id": self.id}
         return action
