@@ -136,7 +136,7 @@
                                         </td>
                                         <td>
                                             <t t-if="linked_request">
-                                                <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap">
+                                                <div class="sr-hist-pay-cell">
                                                     <t t-if="linked_request.request_type == 'cash'">
                                                         <t t-set="is_paid" t-value="payment_status_by_request.get(linked_request.id)"/>
                                                         <span t-att-class="'sr-pay-badge ' + ('sr-pay-done' if is_paid else 'sr-pay-pending')">
@@ -184,7 +184,7 @@
                                             </span>
                                         </div>
                                         <t t-if="linked_request">
-                                            <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-top:6px">
+                                            <div class="sr-hist-pay-cell" style="margin-top:6px">
                                                 <t t-if="linked_request.request_type == 'cash'">
                                                     <t t-set="is_paid" t-value="payment_status_by_request.get(linked_request.id)"/>
                                                     <span t-att-class="'sr-pay-badge ' + ('sr-pay-done' if is_paid else 'sr-pay-pending')">

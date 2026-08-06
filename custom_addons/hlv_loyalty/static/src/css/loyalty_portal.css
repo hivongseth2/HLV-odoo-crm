@@ -210,6 +210,7 @@ a { color:inherit; }
              letter-spacing:2px; color:var(--c-ink-v); background:var(--c-surf-lo); text-align:left; white-space:nowrap; }
 .sr-tbl td { padding:18px 24px; border-top:1px solid var(--c-surf-hi); }
 .sr-tbl tr:hover td { background:var(--c-surf); }
+.sr-hist-pay-cell { display:flex; flex-direction:column; align-items:flex-start; gap:8px; }
 .td-date { font-weight:700; color:var(--c-ink); }
 .td-time { font-size:.75rem; color:var(--c-ink-v); margin-top:2px; }
 .sr-badge { display:inline-flex; align-items:center; gap:5px;
