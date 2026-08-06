@@ -1284,6 +1284,18 @@ Lấy danh sách đơn hàng của một contact (không bao gồm đơn draft).
 | `lines` | array[object] | Danh sách dòng sản phẩm |
 | `picking_info` | array[object] | Thông tin picking đã hoàn thành (`state = done`) |
 | `shipping_address` | object hoặc null | Địa chỉ giao hàng: `{street, city}` |
+| `return_requested` | bool | `true` nếu đơn hàng có gửi yêu cầu đổi/trả |
+| `is_returnable` | bool | `true` nếu đơn hàng đã giao thành công và còn trong thời hạn 7 ngày đổi/trả |
+| `days_since_delivery` | int | Số ngày kể từ khi đơn hàng giao hoàn thành |
+| `return_state` | string hoặc null | Trạng thái đổi/trả: `"pending"`, `"approved"`, `"processing"`, `"completed"`, `"rejected"` |
+| `return_type` | string hoặc null | Loại đổi/trả: `"return"`, `"exchange"`, `"refund"` |
+| `return_category` | string hoặc null | Phân loại nguyên nhân: `"supplier_fault"` (Lỗi NCC/Vận chuyển), `"customer_demand"` (Đổi trả theo nhu cầu) |
+| `product_condition` | string hoặc null | Tình trạng sản phẩm: `"unused"` (Chưa qua sử dụng), `"used"` (Đã qua sử dụng) |
+| `return_refund_amount` | float | Tổng số tiền hoàn lại |
+| `return_rejected_reason` | string | Lý do từ chối (nếu `return_state` = `"rejected"`) |
+| `return_picking_name` | string hoặc null | Mã phiếu kho nhận hàng trả (`WH/IN/...`) |
+| `return_picking_state` | string hoặc null | Trạng thái phiếu kho nhận hàng trả |
+| `return_completed_date` | string hoặc null | Ngày hoàn tất xử lý đổi/trả |
 
 **Mỗi line object**:
 
@@ -1477,6 +1489,63 @@ Hủy đơn hàng. Có thể hủy đơn ở mọi trạng thái ngoại trừ `
 | `NOT_FOUND` | 404 | Đơn hàng không tồn tại |
 | `FORBIDDEN` | 403 | Đơn hàng không thuộc về contact này |
 | `INVALID_STATE` | 400 | Đơn hàng đã hoàn thành (`done`) hoặc đã hủy (`cancel`) |
+| `SERVER_ERROR` | 500 | Lỗi server không xác định |
+
+---
+
+### 5.5. Phản hồi Đơn hàng & Yêu cầu Đổi/Trả
+
+> **POST** `/api/v1/zalo/orders/feedback`
+
+**Auth**: Bearer token required
+
+Gửi phản hồi nhận hàng hoặc gửi Yêu cầu Đổi/Trả hàng trực tiếp từ Zalo Mini App cho đơn hàng đã mua.
+
+#### Request Body
+
+| Field | Type | Required | Default | Mô tả |
+|-------|------|----------|---------|-------|
+| `order_id` | int | **Required** | — | ID của `sale.order` |
+| `action_type` | string | **Required** | — | Hành động: `"received"` (Xác nhận đã nhận hàng) hoặc `"return"` (Gửi yêu cầu Đổi/Trả) |
+| `picking_id` | int | Optional | 0 | ID phiếu xuất kho (`stock.picking` outgoing) cụ thể |
+| `return_type` | string | Optional | `"return"` | Loại đổi trả: `"return"` (Trả hàng hoàn tiền), `"exchange"` (Đổi hàng), `"refund"` (Hoàn tiền) |
+| `return_category` | string | Optional | `"supplier_fault"` | Nhóm nguyên nhân: `"supplier_fault"` (Lỗi nhà cung cấp/vận chuyển), `"customer_demand"` (Đổi trả theo nhu cầu) |
+| `product_condition` | string | Optional | `"unused"` | Tình trạng sản phẩm: `"unused"` (Chưa qua sử dụng - nguyên tem), `"used"` (Đã qua sử dụng) |
+| `note` | string | Optional | "" | Ghi chú hoặc lý do chi tiết từ khách hàng |
+
+#### Request Example (Gửi Yêu cầu Đổi/Trả)
+
+```json
+{
+  "order_id": 152,
+  "action_type": "return",
+  "picking_id": 45,
+  "return_type": "return",
+  "return_category": "supplier_fault",
+  "product_condition": "unused",
+  "note": "Sản phẩm bị vỡ vỏ trong quá trình vận chuyển"
+}
+```
+
+#### Response `data`
+
+| Field | Type | Mô tả |
+|-------|------|-------|
+| `id` | int | ID của `sale.order` |
+| `name` | string | Mã đơn hàng |
+| `action_type` | string | `"received"` hoặc `"return"` |
+| `message` | string | Thông báo xác nhận kết quả |
+
+#### Error Codes
+
+| Code | HTTP Status | Điều kiện |
+|------|-------------|-----------|
+| `AUTH_REQUIRED` | 401 | Thiếu `Authorization: Bearer` header |
+| `INVALID_TOKEN` | 401 | Token không hợp lệ hoặc đã hết hạn |
+| `INVALID_INPUT` | 400 | Thiếu `order_id` hoặc `action_type` không hợp lệ |
+| `EXPIRED_RETURN` | 400 | Đơn hàng đã quá thời hạn 7 ngày đổi/trả theo chính sách của Hoàng Long Vũ |
+| `NOT_FOUND` | 404 | Đơn hàng không tồn tại |
+| `FORBIDDEN` | 403 | Đơn hàng không thuộc về contact trong token |
 | `SERVER_ERROR` | 500 | Lỗi server không xác định |
 
 ---

@@ -29,6 +29,23 @@ class ResConfigSettings(models.TransientModel):
         help='Mô tả ngắn hiển thị trên thẻ kết nối OA',
     )
 
+    # ===== Cấu hình Thông báo Yêu cầu Đổi/Trả Zalo =====
+    x_zalo_return_notify_user_ids = fields.Many2many(
+        "res.users",
+        "res_config_settings_zalo_return_user_rel",
+        "config_id",
+        "user_id",
+        string="Người dùng nhận Activity Đổi/Trả Zalo",
+        config_parameter="hlv_zalo_miniapp.return_notify_user_ids",
+        help="Danh sách người dùng Odoo sẽ được giao Activity Task và nhận chuông thông báo khi có yêu cầu đổi/trả từ Zalo Mini App",
+    )
+
+    x_zalo_return_zalo_uids = fields.Char(
+        string="Zalo User ID nhận tin nhắn Zalo",
+        config_parameter="hlv_zalo_miniapp.return_zalo_uids",
+        help="Danh sách Zalo User ID (phân cách bằng dấu phẩy) nhận tin nhắn Zalo trực tiếp về điện thoại khi có yêu cầu đổi/trả",
+    )
+
     # ===== Snapshot Version Monitoring & Controls =====
     x_zalo_catalog_version = fields.Char(
         string="Catalog Version hiện tại",
