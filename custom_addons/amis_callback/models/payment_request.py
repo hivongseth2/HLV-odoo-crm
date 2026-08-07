@@ -509,6 +509,12 @@ class HlvLoyaltyRewardRequestAmisPayment(models.Model):
     misa_payment_request_can_revoke = fields.Boolean(
         compute='_compute_misa_payment_request_can_revoke', compute_sudo=True,
     )
+    misa_payment_is_paid = fields.Boolean(
+        string='Đã thanh toán (MISA)',
+        compute='_compute_misa_payment_is_paid', compute_sudo=True,
+        help='Kế toán đã duyệt chi trên MISA (approved) hoặc chứng từ đã đồng bộ '
+             'thành công (synced) - dùng để báo trạng thái thanh toán cho khách trên Portal.',
+    )
 
     @api.depends('misa_payment_request_ids')
     def _compute_misa_payment_request_id(self):
@@ -523,6 +529,12 @@ class HlvLoyaltyRewardRequestAmisPayment(models.Model):
             request.misa_payment_request_can_revoke = bool(
                 payment_request.org_refid and payment_request.state in allowed_states
             )
+
+    @api.depends('misa_payment_request_state')
+    def _compute_misa_payment_is_paid(self):
+        paid_states = {'approved', 'synced'}
+        for request in self:
+            request.misa_payment_is_paid = request.misa_payment_request_state in paid_states
 
     def action_done(self):
         cash_requests = self.filtered(
