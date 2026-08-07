@@ -225,10 +225,7 @@
                                 <t t-else=""><p class="tc-pop-empty">Chưa có quyền lợi.</p></t>
                             </div>
                         </div>
-                        <div class="tc-card-label">
-                            <t t-out="tier.name"/>
-                            <t t-if="is_current"><span class="sr-tier-you-tag">Hạng của bạn</span></t>
-                        </div>
+                        <div class="tc-card-label"><t t-out="tier.name"/></div>
                     </div>
                 </t>
             </div>

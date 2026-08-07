@@ -133,7 +133,6 @@ a { color:inherit; }
 .tc-badge.popular { background:var(--c-sec-c); color:#5c420c; }
 .tc-badge.you     { background:var(--c-sec);   color:#fff; }
 .tc-card-label { margin-top:10px; font-size:.95rem; font-weight:800; color:var(--c-ink); text-align:left; }
-.sr-tier-you-tag { display:none; }
 
 /* ── Result / Dashboard Hero ── */
 .sr-result-hero {
@@ -671,24 +670,20 @@ a { color:inherit; }
         font-size: 0.68rem !important;
         margin-top: 2px !important;
     }
-    /* Tiers – render dạng list trên mobile thay vì lưới thẻ lật; vẫn giữ ảnh
-       thẻ gốc nhưng thu nhỏ ĐÚNG tỷ lệ (không bóp méo thành hình vuông) */
+    /* Tiers – render dạng list trên mobile: thẻ full-width, ảnh thẻ đã tự
+       hiển thị đủ tên hạng + tag "BẠN" nên bỏ hẳn label chữ bên ngoài */
     .sr-tier-grid { grid-template-columns:1fr; gap:12px; }
     .sr-tier-card {
-        display:flex; align-items:center; gap:16px; cursor:default;
-        background:var(--c-surf-0); border-radius:16px; padding:16px;
+        display:block; cursor:default;
+        background:var(--c-surf-0); border-radius:16px; padding:10px;
         box-shadow:0 2px 10px rgba(0,6,102,.05);
     }
     .sr-tier-card .tc-flip-inner {
-        width:130px; height:auto; aspect-ratio:1.68/1; flex-shrink:0; transform:none !important;
+        width:100%; aspect-ratio:1.68/1; transform:none !important;
     }
     .sr-tier-card .tc-flip-front { position:static; width:100%; height:100%; }
     .sr-tier-card .tc-flip-back { display:none; }
-    .sr-tier-card .tc-card-label {
-        margin-top:0; font-size:1.15rem; flex:1; display:flex; align-items:center; gap:8px;
-    }
-    .sr-tier-you-tag { display:inline-block; font-size:.62rem; font-weight:800; color:#fff;
-        background:var(--c-sec); padding:2px 9px; border-radius:99px; white-space:nowrap; }
+    .sr-tier-card .tc-card-label { display:none; }
     /* Tiêu đề section — thu nhỏ trên mobile để không vỡ dòng */
     .sr-sec-title { font-size:1.3rem; }
     .sr-divider { margin-bottom:20px; }
