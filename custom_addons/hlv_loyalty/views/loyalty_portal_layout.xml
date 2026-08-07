@@ -18,6 +18,27 @@
             <link rel="stylesheet" href="/hlv_loyalty/static/src/css/loyalty_portal.css"/>
         </t>
         <t t-out="0"/>
+
+        <!-- Bottom navigation (mobile only) — chỉ hiện khi đã đăng nhập Portal -->
+        <t t-if="request.session.get('hlv_loyalty_account_id')">
+            <t t-set="_p" t-value="request.httprequest.path"/>
+            <div class="sr-bottom-nav-spacer"/>
+            <nav class="sr-bottom-nav">
+                <a href="/loyalty/dashboard" t-att-class="'sr-bn-item' + (' active' if _p == '/loyalty/dashboard' else '')">
+                    <span class="ms ms-fill">home</span><span>Trang chủ</span>
+                </a>
+                <a href="/loyalty/history" t-att-class="'sr-bn-item' + (' active' if _p.startswith('/loyalty/history') else '')">
+                    <span class="ms">history</span><span>Lịch sử</span>
+                </a>
+                <a href="/loyalty/redeem" class="sr-bn-item sr-bn-item-cta">
+                    <span class="ms ms-fill">redeem</span><span>Đổi thưởng</span>
+                </a>
+                <a href="/loyalty/vouchers" t-att-class="'sr-bn-item' + (' active' if _p.startswith('/loyalty/vouchers') else '')">
+                    <span class="ms">confirmation_number</span><span>Voucher</span>
+                </a>
+            </nav>
+        </t>
+
         <script>
 (function () {
     function init() {
