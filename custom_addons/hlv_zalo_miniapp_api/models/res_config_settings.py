@@ -36,7 +36,6 @@ class ResConfigSettings(models.TransientModel):
         "config_id",
         "user_id",
         string="Người dùng nhận Activity Đổi/Trả Zalo",
-        config_parameter="hlv_zalo_miniapp.return_notify_user_ids",
         help="Danh sách người dùng Odoo sẽ được giao Activity Task và nhận chuông thông báo khi có yêu cầu đổi/trả từ Zalo Mini App",
     )
 
@@ -45,6 +44,29 @@ class ResConfigSettings(models.TransientModel):
         config_parameter="hlv_zalo_miniapp.return_zalo_uids",
         help="Danh sách Zalo User ID (phân cách bằng dấu phẩy) nhận tin nhắn Zalo trực tiếp về điện thoại khi có yêu cầu đổi/trả",
     )
+
+    @api.model
+    def get_values(self):
+        res = super(ResConfigSettings, self).get_values()
+        ICP = self.env["ir.config_parameter"].sudo()
+        raw_user_ids = ICP.get_param("hlv_zalo_miniapp.return_notify_user_ids", "")
+        user_ids = []
+        if raw_user_ids:
+            try:
+                clean_ids = raw_user_ids.replace("[", "").replace("]", "").split(",")
+                user_ids = [int(u.strip()) for u in clean_ids if u.strip().isdigit()]
+            except Exception:
+                pass
+        res.update(
+            x_zalo_return_notify_user_ids=[fields.Command.set(user_ids)],
+        )
+        return res
+
+    def set_values(self):
+        super(ResConfigSettings, self).set_values()
+        ICP = self.env["ir.config_parameter"].sudo()
+        user_ids_str = ",".join(str(u_id) for u_id in self.x_zalo_return_notify_user_ids.ids)
+        ICP.set_param("hlv_zalo_miniapp.return_notify_user_ids", user_ids_str)
 
     # ===== Snapshot Version Monitoring & Controls =====
     x_zalo_catalog_version = fields.Char(
