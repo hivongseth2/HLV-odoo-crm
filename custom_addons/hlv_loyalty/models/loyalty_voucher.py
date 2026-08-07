@@ -24,6 +24,11 @@ class HlvLoyaltyVoucher(models.Model):
         ondelete='restrict', index=True,
         domain="[('parent_id', '=', False)]",
     )
+    account_id = fields.Many2one(
+        'hlv.loyalty.portal.account', string='Tài khoản Loyalty',
+        ondelete='restrict', index=True,
+        help='Tài khoản Loyalty đã đổi điểm lấy voucher này.',
+    )
     package_id = fields.Many2one(
         'hlv.loyalty.voucher.package', string='Gói Voucher',
         required=True, ondelete='restrict',

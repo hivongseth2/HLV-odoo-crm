@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_loyalty_point_transfer_wizard_form" model="ir.ui.view">
+        <field name="name">hlv.loyalty.point.transfer.wizard.form</field>
+        <field name="model">hlv.loyalty.point.transfer.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Chuyển điểm đổi thưởng">
+                <group>
+                    <field name="source_partner_id" readonly="1"/>
+                    <field name="source_account_id" readonly="1"/>
+                    <field name="source_available_points" widget="integer"/>
+                    <field name="destination_account_id" options="{'no_create': True}"/>
+                    <field name="points"/>
+                    <field name="note"/>
+                </group>
+                <footer>
+                    <button name="action_transfer" string="Chuyển điểm" type="object"
+                            class="btn-primary"
+                            confirm="Bạn có chắc chắn muốn chuyển điểm? Thao tác này không thể hoàn tác."/>
+                    <button string="Hủy" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

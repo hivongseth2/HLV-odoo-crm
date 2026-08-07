@@ -24,6 +24,12 @@ class HlvLoyaltyRewardRequest(models.Model):
         'res.partner', string='Khách hàng', required=True,
         index=True, ondelete='restrict', tracking=True,
     )
+    account_id = fields.Many2one(
+        'hlv.loyalty.portal.account', string='Tài khoản Loyalty',
+        index=True, ondelete='restrict', tracking=True,
+        help='Tài khoản Loyalty thực hiện yêu cầu đổi thưởng này. Điểm bị trừ '
+             'trực tiếp ở tài khoản này, không phải ở công ty.',
+    )
     request_type = fields.Selection([
         ('gift', 'Đổi quà (Voucher)'),
         ('cash', 'Đổi tiền mặt'),
@@ -145,17 +151,25 @@ class HlvLoyaltyRewardRequest(models.Model):
 
     def write(self, vals):
         res = super().write(vals)
-        if {'partner_id', 'request_type', 'package_id', 'points_to_redeem', 'state'} & set(vals):
+        if {'partner_id', 'account_id', 'request_type', 'package_id', 'points_to_redeem', 'state'} & set(vals):
             self._lock_loyalty_root_rows()
             self._validate_pending_reward_points()
             self._invalidate_loyalty_reward_point_cache()
         return res
 
     def _invalidate_loyalty_reward_point_cache(self):
+        accounts = self.env['hlv.loyalty.portal.account'].browse()
         roots = self.env['res.partner'].browse()
         for rec in self:
+            if rec.account_id:
+                accounts |= rec.account_id
             if rec.partner_id:
                 roots |= rec.partner_id._get_loyalty_root()
+        if accounts:
+            accounts.invalidate_recordset([
+                'loyalty_reward_pending_points',
+                'loyalty_exchange_available_points',
+            ])
         if roots:
             roots.invalidate_recordset([
                 'loyalty_reward_pending_points',
@@ -163,6 +177,12 @@ class HlvLoyaltyRewardRequest(models.Model):
             ])
 
     def _lock_loyalty_root_rows(self):
+        account_ids = {rec.account_id.id for rec in self if rec.account_id}
+        if account_ids:
+            self.env.cr.execute(
+                'SELECT id FROM hlv_loyalty_portal_account WHERE id = ANY(%s) FOR UPDATE',
+                [list(account_ids)],
+            )
         root_ids = {
             rec.partner_id._get_loyalty_root().id
             for rec in self
@@ -175,10 +195,15 @@ class HlvLoyaltyRewardRequest(models.Model):
             )
 
     def _validate_pending_reward_points(self):
-        for rec in self.filtered(lambda item: item.state == 'pending' and item.partner_id):
-            root = rec.partner_id._get_loyalty_root()
-            exchange_points = root.loyalty_exchange_points or 0
-            pending_points = root._get_loyalty_pending_reward_points(exclude_request=rec)
+        for rec in self.filtered(lambda item: item.state == 'pending' and (item.account_id or item.partner_id)):
+            if rec.account_id:
+                exchange_points = rec.account_id.loyalty_exchange_points or 0
+                pending_points = rec.account_id._get_loyalty_pending_reward_points(exclude_request=rec)
+            else:
+                # Legacy fallback: chưa gắn tài khoản (dữ liệu cũ trước khi tách theo account).
+                root = rec.partner_id._get_loyalty_root()
+                exchange_points = root.loyalty_exchange_points or 0
+                pending_points = root._get_loyalty_pending_reward_points(exclude_request=rec)
             available_points = max(exchange_points - pending_points, 0)
             required_points = rec.points_required or 0
             if required_points > available_points:
@@ -371,10 +396,11 @@ class HlvLoyaltyRewardRequest(models.Model):
     # ── Business logic ─────────────────────────────────────────────────────
 
     def _deduct_exchange_points(self, description):
-        """Deduct exchange points from partner, return history record."""
+        """Deduct exchange points from the account (or legacy root partner), return history record."""
         self.ensure_one()
         root = self.partner_id._get_loyalty_root()
-        avail = root.loyalty_exchange_points
+        account = self.account_id
+        avail = account.loyalty_exchange_points if account else root.loyalty_exchange_points
         if avail < self.points_required:
             raise UserError(
                 f'Không đủ điểm đổi thưởng.\n'
@@ -382,6 +408,7 @@ class HlvLoyaltyRewardRequest(models.Model):
             )
         history = self.env['hlv.loyalty.history'].sudo().create({
             'partner_id': root.id,
+            'account_id': account.id if account else False,
             'point_amount': -self.points_required,
             'point_type': 'exchange',
             'transaction_type': 'redeem',
@@ -389,6 +416,12 @@ class HlvLoyaltyRewardRequest(models.Model):
             'description': description,
             'company_id': self.company_id.id,
         })
+        if account:
+            account.invalidate_recordset([
+                'loyalty_exchange_points',
+                'loyalty_reward_pending_points',
+                'loyalty_exchange_available_points',
+            ])
         root.invalidate_recordset([
             'loyalty_exchange_points',
             'loyalty_reward_pending_points',
@@ -406,6 +439,7 @@ class HlvLoyaltyRewardRequest(models.Model):
         root = self.partner_id._get_loyalty_root()
         return self.env['hlv.loyalty.voucher'].sudo().create({
             'partner_id': root.id,
+            'account_id': self.account_id.id if self.account_id else False,
             'package_id': pkg.id,
             'date_expiry': expiry,
         })

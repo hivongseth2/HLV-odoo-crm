@@ -8,6 +8,7 @@
                 <group>
                     <group string="Thông tin Khách hàng">
                         <field name="partner_id"/>
+                        <field name="account_id" options="{'no_create': True}"/>
                         <field name="current_points" widget="integer"/>
                         <field name="reward_pending_points" widget="integer"/>
                         <field name="available_points" widget="integer"/>

@@ -10,6 +10,11 @@ class HlvLoyaltyPointAdjustmentWizard(models.TransientModel):
     partner_id = fields.Many2one(
         'res.partner', string='Khách hàng', required=True, readonly=True,
     )
+    account_id = fields.Many2one(
+        'hlv.loyalty.portal.account', string='Tài khoản Loyalty', required=True,
+        domain="[('partner_id', '=', partner_id), ('active', '=', True)]",
+        help='Điểm được cộng/trừ trực tiếp ở tài khoản này (mỗi công ty có thể có nhiều tài khoản).',
+    )
     point_type = fields.Selection([
         ('ranking', 'Điểm xếp hạng'),
         ('exchange', 'Điểm đổi thưởng'),
@@ -24,6 +29,15 @@ class HlvLoyaltyPointAdjustmentWizard(models.TransientModel):
         placeholder='VD: Tặng điểm sự kiện, Thu hồi điểm sai,...',
     )
 
+    @api.onchange('partner_id')
+    def _onchange_partner_id_default_account(self):
+        if self.partner_id:
+            root = self.partner_id._get_loyalty_root()
+            self.account_id = (
+                root.loyalty_portal_account_ids.filtered('is_default')[:1]
+                or root.loyalty_portal_account_ids[:1]
+            )
+
     @api.constrains('point_amount')
     def _check_point_amount(self):
         for rec in self:
@@ -32,8 +46,10 @@ class HlvLoyaltyPointAdjustmentWizard(models.TransientModel):
 
     def action_adjust(self):
         self.ensure_one()
+        root = self.partner_id._get_loyalty_root()
         self.env['hlv.loyalty.history'].sudo().create({
-            'partner_id': self.partner_id.id,
+            'partner_id': root.id,
+            'account_id': self.account_id.id,
             'transaction_type': 'manual',
             'point_type': self.point_type,
             'point_amount': self.point_amount,

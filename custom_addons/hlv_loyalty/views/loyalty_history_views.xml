@@ -34,7 +34,8 @@
                                    decoration-success="transaction_type == 'earn'"
                                    decoration-warning="transaction_type == 'redeem'"
                                    decoration-danger="transaction_type == 'return'"
-                                   decoration-info="transaction_type == 'manual'"
+                                   decoration-info="transaction_type == 'transfer'"
+                                   decoration-muted="transaction_type == 'manual'"
                                    nolabel="1"/>
                         </div>
                         <div class="col text-center p-4 border border-start-0"
@@ -59,6 +60,7 @@
                     <group>
                         <group string="Thông tin giao dịch">
                             <field name="partner_id"/>
+                            <field name="account_id"/>
                             <field name="date"/>
                             <field name="point_amount"/>
                             <field name="point_type" widget="badge"
@@ -68,7 +70,8 @@
                                    decoration-success="transaction_type == 'earn'"
                                    decoration-warning="transaction_type == 'redeem'"
                                    decoration-danger="transaction_type == 'return'"
-                                   decoration-info="transaction_type == 'manual'"/>
+                                   decoration-info="transaction_type == 'transfer'"
+                                   decoration-muted="transaction_type == 'manual'"/>
                             <field name="description"/>
                         </group>
                         <group string="Tham chiếu">
@@ -105,6 +108,7 @@
                   decoration-danger="point_amount &lt; 0 and state == 'confirmed'">
                 <field name="date"/>
                 <field name="partner_id"/>
+                <field name="account_id" optional="show"/>
                 <field name="point_type" widget="badge"
                        decoration-info="point_type == 'ranking'"
                        decoration-success="point_type == 'exchange'"/>
@@ -116,7 +120,8 @@
                        decoration-success="transaction_type == 'earn'"
                        decoration-warning="transaction_type == 'redeem'"
                        decoration-danger="transaction_type == 'return'"
-                       decoration-info="transaction_type == 'manual'"/>
+                       decoration-info="transaction_type == 'transfer'"
+                       decoration-muted="transaction_type == 'manual'"/>
                 <field name="point_amount" sum="Tổng điểm"/>
                 <field name="description"/>
                 <field name="point_formula" optional="hide"/>
@@ -175,6 +180,7 @@
         <field name="arch" type="xml">
             <search string="Tìm kiếm lịch sử điểm">
                 <field name="partner_id"/>
+                <field name="account_id"/>
                 <field name="picking_id"/>
                 <field name="sale_order_id"/>
                 <field name="description"/>
@@ -194,6 +200,8 @@
                         domain="[('transaction_type', '=', 'redeem')]"/>
                 <filter string="Hoàn hàng" name="filter_return"
                         domain="[('transaction_type', '=', 'return')]"/>
+                <filter string="Chuyển điểm" name="filter_transfer"
+                        domain="[('transaction_type', '=', 'transfer')]"/>
                 <filter string="Thủ công" name="filter_manual"
                         domain="[('transaction_type', '=', 'manual')]"/>
                 <separator/>
@@ -205,6 +213,8 @@
                 <group expand="0" string="Nhóm theo">
                     <filter string="Khách hàng" name="group_partner"
                             context="{'group_by': 'partner_id'}"/>
+                    <filter string="Tài khoản Loyalty" name="group_account"
+                            context="{'group_by': 'account_id'}"/>
                     <filter string="Loại giao dịch" name="group_type"
                             context="{'group_by': 'transaction_type'}"/>
                     <filter string="Chi nhánh" name="group_company"
