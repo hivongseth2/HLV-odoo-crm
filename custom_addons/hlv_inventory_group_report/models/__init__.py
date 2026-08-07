@@ -1,5 +1,6 @@
 from . import product_report_group
 from . import product_product
+from . import product_template
 from . import purchase_order
 from . import inventory_report_config
 from . import inventory_report_line

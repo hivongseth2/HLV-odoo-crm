@@ -91,10 +91,12 @@
                                     <th class="th-pts-ranking"><span class="ms" style="font-size:14px">trending_up</span> Điểm TL</th>
                                     <th class="th-pts-exchange"><span class="ms" style="font-size:14px">swap_horiz</span> Điểm ĐT</th>
                                     <th style="text-align:right">Trạng thái</th>
+                                    <th style="min-width:120px">Thanh toán</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <t t-foreach="all_history" t-as="h">
+                                    <t t-set="linked_request" t-value="request_by_history_id.get(h.id)"/>
                                     <tr t-att-class="'row-pt-ranking' if h.point_type == 'ranking' else 'row-pt-exchange'">
                                         <td>
                                             <div class="td-date"><t t-out="fmt_vn_date(h.date)"/></div>
@@ -105,7 +107,7 @@
                                                 <span class="sr-badge badge-earn"><span class="ms">shopping_bag</span> Mua hàng</span>
                                             </t>
                                             <t t-elif="h.transaction_type == 'redeem'">
-                                                <span class="sr-badge badge-redeem"><span class="ms">redeem</span> Đổi Voucher</span>
+                                                <span class="sr-badge badge-redeem"><span class="ms">redeem</span> Đổi thưởng</span>
                                             </t>
                                             <t t-elif="h.transaction_type == 'return'">
                                                 <span class="sr-badge badge-return"><span class="ms">undo</span> Hoàn hàng</span>
@@ -132,6 +134,27 @@
                                         <td class="td-status">
                                             <t t-out="dict(pending='Chờ XN', confirmed='Hoàn tất', cancelled='Đã hủy').get(h.state, h.state)"/>
                                         </td>
+                                        <td>
+                                            <t t-if="linked_request">
+                                                <div class="sr-hist-pay-cell">
+                                                    <t t-if="linked_request.request_type == 'cash'">
+                                                        <t t-set="is_paid" t-value="payment_status_by_request.get(linked_request.id)"/>
+                                                        <span t-att-class="'sr-pay-badge ' + ('sr-pay-done' if is_paid else 'sr-pay-pending')">
+                                                            <span class="ms" style="font-size:13px">
+                                                                <t t-if="is_paid">check_circle</t>
+                                                                <t t-else="">schedule</t>
+                                                            </span>
+                                                            <t t-if="is_paid">Đã TT</t>
+                                                            <t t-else="">Chưa TT</t>
+                                                        </span>
+                                                    </t>
+                                                    <a t-att-href="'/loyalty/redeem/request/%s' % linked_request.id" class="sr-rq-detail-link">
+                                                        <span class="ms" style="font-size:14px">visibility</span> Xem chi tiết
+                                                    </a>
+                                                </div>
+                                            </t>
+                                            <t t-else=""><span class="td-dash">–</span></t>
+                                        </td>
                                     </tr>
                                 </t>
                             </tbody>
@@ -139,6 +162,7 @@
                         <!-- Mobile card view (hidden on desktop) -->
                         <div class="sr-hist-cards">
                             <t t-foreach="all_history" t-as="h">
+                                <t t-set="linked_request" t-value="request_by_history_id.get(h.id)"/>
                                 <div t-att-class="'sr-hist-card ' + ('row-pt-ranking' if h.point_type == 'ranking' else 'row-pt-exchange')">
                                     <div class="shc-left">
                                         <span t-att-class="'shc-pts ' + ('pos' if h.point_amount > 0 else 'neg')">
@@ -159,6 +183,24 @@
                                                 <t t-out="dict(pending='Chờ XN', confirmed='Hoàn tất', cancelled='Đã hủy').get(h.state, h.state)"/>
                                             </span>
                                         </div>
+                                        <t t-if="linked_request">
+                                            <div class="sr-hist-pay-cell" style="margin-top:6px">
+                                                <t t-if="linked_request.request_type == 'cash'">
+                                                    <t t-set="is_paid" t-value="payment_status_by_request.get(linked_request.id)"/>
+                                                    <span t-att-class="'sr-pay-badge ' + ('sr-pay-done' if is_paid else 'sr-pay-pending')">
+                                                        <span class="ms" style="font-size:13px">
+                                                            <t t-if="is_paid">check_circle</t>
+                                                            <t t-else="">schedule</t>
+                                                        </span>
+                                                        <t t-if="is_paid">Đã TT</t>
+                                                        <t t-else="">Chưa TT</t>
+                                                    </span>
+                                                </t>
+                                                <a t-att-href="'/loyalty/redeem/request/%s' % linked_request.id" class="sr-rq-detail-link">
+                                                    <span class="ms" style="font-size:14px">visibility</span> Xem chi tiết
+                                                </a>
+                                            </div>
+                                        </t>
                                     </div>
                                 </div>
                             </t>

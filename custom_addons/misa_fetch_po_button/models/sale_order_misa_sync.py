@@ -729,187 +729,267 @@ class SaleOrder(models.Model):
                 'details': '\n- '.join(invalid_delivered_quantities),
             })
 
-        # Cập nhật các SOL đã match
-        for misa_data, sol in matched_pairs:
-            old_qty = float(sol.product_uom_qty or 0.0)
-            new_qty = float(misa_data['qty'] or 0.0)
-            product_changed = sol.product_id != misa_data['product']
-            stock_changed = product_changed or abs(old_qty - new_qty) >= 0.01
-            if product_changed:
-                _audit(
-                    misa_data, sol, _('Sản phẩm'),
-                    sol.product_id.display_name, misa_data['product'].display_name,
-                )
-            if abs(old_qty - new_qty) >= 0.01:
-                _audit(misa_data, sol, _('Số lượng'), "%g" % old_qty, "%g" % new_qty)
-            if abs(float(sol.price_unit or 0.0) - float(misa_data['price'] or 0.0)) >= 0.01:
-                _audit(
-                    misa_data, sol, _('Đơn giá'),
-                    "%g" % float(sol.price_unit or 0.0),
-                    "%g" % float(misa_data['price'] or 0.0),
-                )
-            if abs(float(sol.discount or 0.0) - float(misa_data['discount'] or 0.0)) >= 0.0001:
-                _audit(
-                    misa_data, sol, _('Chiết khấu (%)'),
-                    "%g" % float(sol.discount or 0.0),
-                    "%g" % float(misa_data['discount'] or 0.0),
-                )
-            if (
-                misa_data['loyalty_discount_present']
-                and abs(
-                    float(sol.loyalty_discount_pct or 0.0)
-                    - float(misa_data['loyalty_discount_pct'] or 0.0)
-                ) >= 0.0001
-            ):
-                _audit(
-                    misa_data, sol, _('CK Loyalty (%)'),
-                    "%g" % float(sol.loyalty_discount_pct or 0.0),
-                    "%g" % float(misa_data['loyalty_discount_pct'] or 0.0),
-                )
-            if (sol.name or '').strip() != (misa_data['name'] or '').strip():
-                _audit(misa_data, sol, _('Mô tả'), sol.name, misa_data['name'])
-            if (sol.note or '').strip() != (misa_data['note'] or '').strip():
-                _audit(misa_data, sol, _('Ghi chú dòng'), sol.note, misa_data['note'])
-            if stock_changed:
-                qty_changes.append({
-                    'crm_line_id': misa_data['crm_line_id'],
-                    'code': (
-                        "%s → %s" % (sol.product_id.default_code or sol.product_id.display_name, misa_data['code'])
-                        if product_changed else misa_data['code']
-                    ),
-                    'old_qty': old_qty,
-                    'new_qty': new_qty,
-                })
-            defer_product_change = bool(defer_quantity and product_changed)
-            vals_line = {
-                'misa_crm_line_id': misa_data['crm_line_id'] or sol.misa_crm_line_id,
-            }
-            if not defer_product_change:
-                vals_line.update({
+        # Odoo core chặn write product_id lên order line khi
+        # sale.order.line.product_updatable = False. Field này bị False vì: (1) đơn đã
+        # khóa, (2) dòng đã xuất hóa đơn, (3) dòng đã giao hàng thật, hoặc (4, do
+        # sale_stock) dòng còn phiếu giao (stock.move) chưa done/cancel — dù chưa giao gì
+        # cả, đây chỉ là phiếu treo tham chiếu sản phẩm cũ từ lúc xác nhận đơn.
+        # - Case (1) đơn khóa nhưng chưa tác động gì khác: mở khóa tạm để ghi, khóa lại
+        #   ở cuối hàm.
+        # - Case (4) chưa có tác động kho thật: tự hủy phiếu treo đó rồi cho ghi tiếp;
+        #   Odoo sẽ tự tạo phiếu giao mới đúng sản phẩm khi write product_uom_qty
+        #   (sale_stock.SaleOrderLine.write gọi _action_launch_stock_rule).
+        # - Case (2)-(3) có tác động thật (đã giao/đã xuất hóa đơn): không thể sửa dòng
+        #   cũ, phải tách dòng — đưa dòng cũ về SL 0 (giữ lịch sử) và tạo dòng mới cho
+        #   sản phẩm mới, đi theo đúng luồng "chờ kho duyệt" hiện có cho dòng mới.
+        was_locked = bool(self.locked)
+        needs_temp_unlock = (
+            was_locked
+            and not defer_quantity
+            and any(sol.product_id != misa_data['product'] for misa_data, sol in matched_pairs)
+        )
+        if needs_temp_unlock:
+            _logger.info("🔓 Tạm mở khóa SO %s để đồng bộ đổi sản phẩm từ MISA", self.name)
+            self.action_unlock()
+
+        try:
+            # Cập nhật các SOL đã match
+            for misa_data, sol in matched_pairs:
+                old_qty = float(sol.product_uom_qty or 0.0)
+                new_qty = float(misa_data['qty'] or 0.0)
+                product_changed = sol.product_id != misa_data['product']
+
+                if product_changed and not defer_quantity and not sol.product_updatable:
+                    qty_delivered_now = float(getattr(sol, 'qty_delivered', 0.0) or 0.0)
+                    qty_invoiced_now = float(getattr(sol, 'qty_invoiced', 0.0) or 0.0)
+                    has_real_impact = qty_invoiced_now > 0.001 or qty_delivered_now > 0.001
+                    pending_moves = sol.move_ids.filtered(lambda m: m.state not in ('done', 'cancel'))
+
+                    if not has_real_impact and pending_moves:
+                        _logger.info(
+                            "Hủy %s phiếu giao treo (sản phẩm cũ %s) để đổi sang %s trên CRM line %s",
+                            len(pending_moves), sol.product_id.display_name,
+                            misa_data['product'].display_name, misa_data['crm_line_id'],
+                        )
+                        pending_moves._action_cancel()
+                        # move_ids_without_package không lọc theo state nên phiếu pick
+                        # vẫn hiển thị move đã cancel; unlink hẳn vì move này chưa giao
+                        # gì (qty_delivered=0) nên không có giá trị lưu vết.
+                        pending_moves.unlink()
+                        # product_updatable giờ recompute lại thành True, rơi xuống xử lý
+                        # write bình thường bên dưới.
+                    elif has_real_impact:
+                        # Không thể set thẳng về 0 nếu đã giao: sale_stock chặn hạ
+                        # product_uom_qty xuống dưới qty_delivered ("cannot be decreased
+                        # below the amount already delivered"). Hạ về đúng mức đã giao —
+                        # tức không còn gì phải giao thêm cho sản phẩm cũ.
+                        old_line_floor_qty = max(qty_delivered_now, 0.0)
+                        _audit(
+                            misa_data, sol, _('Sản phẩm'),
+                            _("%s (giữ lại SL %g, đã tác động kho/hóa đơn)") % (
+                                sol.product_id.display_name, old_line_floor_qty,
+                            ),
+                            _("Tách dòng mới: %s, chờ kho duyệt") % misa_data['product'].display_name,
+                        )
+                        qty_changes.append({
+                            'crm_line_id': misa_data['crm_line_id'],
+                            'code': "%s → %s" % (
+                                sol.product_id.default_code or sol.product_id.display_name,
+                                misa_data['code'],
+                            ),
+                            'old_qty': old_qty,
+                            'new_qty': new_qty,
+                        })
+                        sol.write({'product_uom_qty': old_line_floor_qty, 'misa_crm_line_id': False})
+                        _logger.info(
+                            "🔀 Tách CRM line %s: giữ %s ở SL %g (đã tác động), chuyển sang "
+                            "sản phẩm mới %s chờ kho duyệt",
+                            misa_data['crm_line_id'], sol.product_id.display_name,
+                            old_line_floor_qty, misa_data['product'].display_name,
+                        )
+                        unmatched_misa.append(misa_data)
+                        continue
+
+                stock_changed = product_changed or abs(old_qty - new_qty) >= 0.01
+                if product_changed:
+                    _audit(
+                        misa_data, sol, _('Sản phẩm'),
+                        sol.product_id.display_name, misa_data['product'].display_name,
+                    )
+                if abs(old_qty - new_qty) >= 0.01:
+                    _audit(misa_data, sol, _('Số lượng'), "%g" % old_qty, "%g" % new_qty)
+                if abs(float(sol.price_unit or 0.0) - float(misa_data['price'] or 0.0)) >= 0.01:
+                    _audit(
+                        misa_data, sol, _('Đơn giá'),
+                        "%g" % float(sol.price_unit or 0.0),
+                        "%g" % float(misa_data['price'] or 0.0),
+                    )
+                if abs(float(sol.discount or 0.0) - float(misa_data['discount'] or 0.0)) >= 0.0001:
+                    _audit(
+                        misa_data, sol, _('Chiết khấu (%)'),
+                        "%g" % float(sol.discount or 0.0),
+                        "%g" % float(misa_data['discount'] or 0.0),
+                    )
+                if (
+                    misa_data['loyalty_discount_present']
+                    and abs(
+                        float(sol.loyalty_discount_pct or 0.0)
+                        - float(misa_data['loyalty_discount_pct'] or 0.0)
+                    ) >= 0.0001
+                ):
+                    _audit(
+                        misa_data, sol, _('CK Loyalty (%)'),
+                        "%g" % float(sol.loyalty_discount_pct or 0.0),
+                        "%g" % float(misa_data['loyalty_discount_pct'] or 0.0),
+                    )
+                if (sol.name or '').strip() != (misa_data['name'] or '').strip():
+                    _audit(misa_data, sol, _('Mô tả'), sol.name, misa_data['name'])
+                if (sol.note or '').strip() != (misa_data['note'] or '').strip():
+                    _audit(misa_data, sol, _('Ghi chú dòng'), sol.note, misa_data['note'])
+                if stock_changed:
+                    qty_changes.append({
+                        'crm_line_id': misa_data['crm_line_id'],
+                        'code': (
+                            "%s → %s" % (sol.product_id.default_code or sol.product_id.display_name, misa_data['code'])
+                            if product_changed else misa_data['code']
+                        ),
+                        'old_qty': old_qty,
+                        'new_qty': new_qty,
+                    })
+                defer_product_change = bool(defer_quantity and product_changed)
+                vals_line = {
+                    'misa_crm_line_id': misa_data['crm_line_id'] or sol.misa_crm_line_id,
+                }
+                if not defer_product_change:
+                    vals_line.update({
+                        'name': misa_data['name'],
+                        'price_unit': misa_data['price'],
+                        'discount': misa_data['discount'],
+                        'note': misa_data['note'],
+                        'x_studio_product_status': misa_data['status'],
+                    })
+                    if misa_data['loyalty_discount_present']:
+                        vals_line['loyalty_discount_pct'] = misa_data[
+                            'loyalty_discount_pct'
+                        ]
+                if not (defer_quantity and stock_changed):
+                    vals_line['product_id'] = misa_data['product'].id
+                    vals_line['product_uom_qty'] = new_qty
+                    if product_changed and misa_data['product'].uom_id:
+                        vals_line['product_uom'] = misa_data['product'].uom_id.id
+                if (not defer_quantity or not stock_changed) and not product_changed and not misa_data['is_default_uom'] and misa_data['product'].uom_id:
+                    vals_line['product_uom'] = misa_data['product'].uom_id.id
+
+                if not defer_product_change:
+                    if misa_data['tax_ids']:
+                        vals_line['tax_id'] = [(6, 0, misa_data['tax_ids'])]
+                    else:
+                        vals_line['tax_id'] = [(5, 0, 0)]
+
+                sol.write(vals_line)
+                _logger.info("✏️ Cập nhật SOL %s: qty=%.2f", misa_data['code'], misa_data['qty'])
+
+            # Tạo mới SOL cho các dòng MISA chưa match (bao gồm cả dòng vừa tách ở trên)
+            for misa_data in unmatched_misa:
+                new_qty = float(misa_data['qty'] or 0.0)
+                new_line_audit = False
+                if abs(new_qty) >= 0.01:
+                    new_line_audit = _audit(
+                        misa_data, None, _('Dòng sản phẩm'), '',
+                        _("SL %g; đơn giá %g") % (new_qty, float(misa_data['price'] or 0.0)),
+                        change_type='add',
+                    )
+                    qty_changes.append({
+                        'crm_line_id': misa_data['crm_line_id'],
+                        'code': misa_data['code'],
+                        'old_qty': 0.0,
+                        'new_qty': new_qty,
+                    })
+                if defer_quantity and abs(new_qty) >= 0.01:
+                    _logger.info(
+                        "Chờ kho duyệt trước khi thêm CRM line %s (%s), qty=%s",
+                        misa_data['crm_line_id'], misa_data['code'], new_qty,
+                    )
+                    continue
+                vals_line = {
+                    'order_id': self.id,
+                    'misa_crm_line_id': misa_data['crm_line_id'] or False,
+                    'product_id': misa_data['product'].id,
                     'name': misa_data['name'],
+                    'product_uom_qty': misa_data['qty'],
                     'price_unit': misa_data['price'],
                     'discount': misa_data['discount'],
                     'note': misa_data['note'],
                     'x_studio_product_status': misa_data['status'],
-                })
+                }
                 if misa_data['loyalty_discount_present']:
                     vals_line['loyalty_discount_pct'] = misa_data[
                         'loyalty_discount_pct'
                     ]
-            if not (defer_quantity and stock_changed):
-                vals_line['product_id'] = misa_data['product'].id
-                vals_line['product_uom_qty'] = new_qty
-                if product_changed and misa_data['product'].uom_id:
+                if not misa_data['is_default_uom'] and misa_data['product'].uom_id:
                     vals_line['product_uom'] = misa_data['product'].uom_id.id
-            if (not defer_quantity or not stock_changed) and not product_changed and not misa_data['is_default_uom'] and misa_data['product'].uom_id:
-                vals_line['product_uom'] = misa_data['product'].uom_id.id
-            
-            if not defer_product_change:
+
                 if misa_data['tax_ids']:
                     vals_line['tax_id'] = [(6, 0, misa_data['tax_ids'])]
                 else:
                     vals_line['tax_id'] = [(5, 0, 0)]
-            
-            sol.write(vals_line)
-            _logger.info("✏️ Cập nhật SOL %s: qty=%.2f", misa_data['code'], misa_data['qty'])
-        
-        # Tạo mới SOL cho các dòng MISA chưa match
-        for misa_data in unmatched_misa:
-            new_qty = float(misa_data['qty'] or 0.0)
-            new_line_audit = False
-            if abs(new_qty) >= 0.01:
-                new_line_audit = _audit(
-                    misa_data, None, _('Dòng sản phẩm'), '',
-                    _("SL %g; đơn giá %g") % (new_qty, float(misa_data['price'] or 0.0)),
-                    change_type='add',
-                )
-                qty_changes.append({
-                    'crm_line_id': misa_data['crm_line_id'],
-                    'code': misa_data['code'],
-                    'old_qty': 0.0,
-                    'new_qty': new_qty,
-                })
-            if defer_quantity and abs(new_qty) >= 0.01:
-                _logger.info(
-                    "Chờ kho duyệt trước khi thêm CRM line %s (%s), qty=%s",
-                    misa_data['crm_line_id'], misa_data['code'], new_qty,
-                )
-                continue
-            vals_line = {
-                'order_id': self.id,
-                'misa_crm_line_id': misa_data['crm_line_id'] or False,
-                'product_id': misa_data['product'].id,
-                'name': misa_data['name'],
-                'product_uom_qty': misa_data['qty'],
-                'price_unit': misa_data['price'],
-                'discount': misa_data['discount'],
-                'note': misa_data['note'],
-                'x_studio_product_status': misa_data['status'],
-            }
-            if misa_data['loyalty_discount_present']:
-                vals_line['loyalty_discount_pct'] = misa_data[
-                    'loyalty_discount_pct'
-                ]
-            if not misa_data['is_default_uom'] and misa_data['product'].uom_id:
-                vals_line['product_uom'] = misa_data['product'].uom_id.id
-            
-            if misa_data['tax_ids']:
-                vals_line['tax_id'] = [(6, 0, misa_data['tax_ids'])]
-            else:
-                vals_line['tax_id'] = [(5, 0, 0)]
-            
-            new_sale_line = SaleLine.create(vals_line)
-            if new_line_audit:
-                new_line_audit['sale_order_line_id'] = new_sale_line.id
-            _logger.info("➕ Tạo mới SOL %s: qty=%.2f", misa_data['code'], misa_data['qty'])
-        
-        # ===== XỬ LÝ SẢN PHẨM BỊ XÓA KHỎI MISA =====
-        # KHÔNG xóa SOL, chỉ set qty = 0 để giữ lịch sử và cho Odoo xử lý
-        
-        for sol in unmatched_sols:
-            code = sol.product_id.default_code or sol.product_id.name
 
-            # Dòng có CRM Line ID luôn là dòng MISA. Với dữ liệu legacy chưa có
-            # ID, chỉ xem là dòng bị xóa ở lần đồng bộ đầu tiên của đơn chưa có
-            # snapshot, hoặc khi snapshot chờ duyệt đã ghi nhận chính dòng đó.
-            if not _is_removed_misa_line(sol):
-                _logger.info(
-                    "Giữ nguyên dòng Odoo chưa có CRM Line ID vì đơn đã có lịch sử: %s",
-                    code,
-                )
-                continue
-            
-            qty_delivered = float(getattr(sol, 'qty_delivered', 0.0) or 0.0)
+                new_sale_line = SaleLine.create(vals_line)
+                if new_line_audit:
+                    new_line_audit['sale_order_line_id'] = new_sale_line.id
+                _logger.info("➕ Tạo mới SOL %s: qty=%.2f", misa_data['code'], misa_data['qty'])
 
-            # CRM Line ID đã biến mất khỏi response mới = sale đã xóa dòng trên MISA.
-            # Giữ record SOL để truy vết nhưng đưa ordered quantity về đúng 0,
-            # kể cả khi đã giao/xuất hóa đơn; qty_delivered/qty_invoiced vẫn giữ số thực tế.
-            new_qty = 0.0
-            old_qty = float(sol.product_uom_qty or 0.0)
-            if abs(old_qty - new_qty) >= 0.01:
-                _audit(
-                    None, sol, _('Dòng sản phẩm'),
-                    _("SL %g; đơn giá %g") % (old_qty, float(sol.price_unit or 0.0)),
-                    _("SL %g") % new_qty,
-                    change_type='remove',
-                )
-                qty_changes.append({
-                    'crm_line_id': sol.misa_crm_line_id,
-                    'code': code,
-                    'old_qty': old_qty,
-                    'new_qty': new_qty,
-                })
-            if defer_quantity:
+            # ===== XỬ LÝ SẢN PHẨM BỊ XÓA KHỎI MISA =====
+            # KHÔNG xóa SOL, chỉ set qty = 0 để giữ lịch sử và cho Odoo xử lý
+
+            for sol in unmatched_sols:
+                code = sol.product_id.default_code or sol.product_id.name
+
+                # Dòng có CRM Line ID luôn là dòng MISA. Với dữ liệu legacy chưa có
+                # ID, chỉ xem là dòng bị xóa ở lần đồng bộ đầu tiên của đơn chưa có
+                # snapshot, hoặc khi snapshot chờ duyệt đã ghi nhận chính dòng đó.
+                if not _is_removed_misa_line(sol):
+                    _logger.info(
+                        "Giữ nguyên dòng Odoo chưa có CRM Line ID vì đơn đã có lịch sử: %s",
+                        code,
+                    )
+                    continue
+
+                qty_delivered = float(getattr(sol, 'qty_delivered', 0.0) or 0.0)
+
+                # CRM Line ID đã biến mất khỏi response mới = sale đã xóa dòng trên MISA.
+                # Giữ record SOL để truy vết nhưng đưa ordered quantity về đúng 0,
+                # kể cả khi đã giao/xuất hóa đơn; qty_delivered/qty_invoiced vẫn giữ số thực tế.
+                new_qty = 0.0
+                old_qty = float(sol.product_uom_qty or 0.0)
+                if abs(old_qty - new_qty) >= 0.01:
+                    _audit(
+                        None, sol, _('Dòng sản phẩm'),
+                        _("SL %g; đơn giá %g") % (old_qty, float(sol.price_unit or 0.0)),
+                        _("SL %g") % new_qty,
+                        change_type='remove',
+                    )
+                    qty_changes.append({
+                        'crm_line_id': sol.misa_crm_line_id,
+                        'code': code,
+                        'old_qty': old_qty,
+                        'new_qty': new_qty,
+                    })
+                if defer_quantity:
+                    _logger.info(
+                        "Chờ kho duyệt trước khi đưa CRM line %s (%s) từ %s về %s",
+                        sol.misa_crm_line_id or 'legacy', code, old_qty, new_qty,
+                    )
+                    continue
+                sol.write({'product_uom_qty': new_qty})
                 _logger.info(
-                    "Chờ kho duyệt trước khi đưa CRM line %s (%s) từ %s về %s",
-                    sol.misa_crm_line_id or 'legacy', code, old_qty, new_qty,
+                    "↘️ Set qty=0 cho CRM line %s (%s) không còn trong MISA; qty_delivered=%s được giữ nguyên.",
+                    sol.misa_crm_line_id or 'legacy', code, qty_delivered,
                 )
-                continue
-            sol.write({'product_uom_qty': new_qty})
-            _logger.info(
-                "↘️ Set qty=0 cho CRM line %s (%s) không còn trong MISA; qty_delivered=%s được giữ nguyên.",
-                sol.misa_crm_line_id or 'legacy', code, qty_delivered,
-            )
+        finally:
+            if needs_temp_unlock:
+                self.action_lock()
+                _logger.info("🔒 Khóa lại SO %s sau khi đồng bộ MISA", self.name)
 
         return {
             'qty_changes': qty_changes,

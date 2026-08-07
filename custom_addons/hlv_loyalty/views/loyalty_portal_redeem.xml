@@ -323,7 +323,7 @@
                     <t t-if="my_requests">
                         <div class="sr-req-list">
                             <t t-foreach="my_requests" t-as="rq">
-                                <div t-att-class="'sr-req-card sr-rq-' + rq.state">
+                                <div class="sr-req-card">
                                     <div class="sr-rq-head">
                                         <div class="sr-rq-name">
                                             <span class="ms">
@@ -356,16 +356,15 @@
                                         </t>
                                         <t t-if="rq.request_type == 'cash'">
                                             <div class="sr-rq-row">
-                                                <span class="sr-rq-lbl">Giá trị:</span>
-                                                <span class="sr-rq-val" style="font-weight:700;color:#198754">
-                                                    <t t-out="'{:,.0f}'.format(rq.cash_value)"/>đ
-                                                </span>
-                                            </div>
-                                            <div class="sr-rq-row">
-                                                <span class="sr-rq-lbl">Ngân hàng:</span>
-                                                <span class="sr-rq-val">
-                                                    <t t-out="rq.bank_name or ''"/> – <t t-out="rq.account_number or ''"/>
-                                                    (<t t-out="rq.account_name or ''"/>)
+                                                <span class="sr-rq-lbl">Thanh toán:</span>
+                                                <t t-set="is_paid" t-value="payment_status_by_request.get(rq.id)"/>
+                                                <span t-att-class="'sr-pay-badge ' + ('sr-pay-done' if is_paid else 'sr-pay-pending')">
+                                                    <span class="ms" style="font-size:14px">
+                                                        <t t-if="is_paid">check_circle</t>
+                                                        <t t-else="">schedule</t>
+                                                    </span>
+                                                    <t t-if="is_paid">Đã thanh toán</t>
+                                                    <t t-else="">Chưa thanh toán</t>
                                                 </span>
                                             </div>
                                         </t>
@@ -391,17 +390,22 @@
                                                 <span style="margin:0 4px">→</span> Xử lý: <t t-out="fmt_vn_date(rq.date_done)"/>
                                             </t>
                                         </div>
-                                        <t t-if="rq.state == 'pending'">
-                                            <form t-att-action="'/loyalty/redeem/request/%s/cancel' % rq.id"
-                                                  method="post"
-                                                  class="sr-rq-cancel-form"
-                                                  onsubmit="return confirm('Hủy yêu cầu đổi thưởng này?')">
-                                                <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
-                                                <button type="submit" class="sr-rq-cancel-btn">
-                                                    Hủy yêu cầu
-                                                </button>
-                                            </form>
-                                        </t>
+                                        <div class="sr-rq-actions">
+                                            <a t-att-href="'/loyalty/redeem/request/%s' % rq.id" class="sr-rq-detail-link">
+                                                <span class="ms" style="font-size:15px">visibility</span> Xem chi tiết
+                                            </a>
+                                            <t t-if="rq.state == 'pending'">
+                                                <form t-att-action="'/loyalty/redeem/request/%s/cancel' % rq.id"
+                                                      method="post"
+                                                      class="sr-rq-cancel-form"
+                                                      onsubmit="return confirm('Hủy yêu cầu đổi thưởng này?')">
+                                                    <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                                                    <button type="submit" class="sr-rq-cancel-btn">
+                                                        Hủy yêu cầu
+                                                    </button>
+                                                </form>
+                                            </t>
+                                        </div>
                                     </div>
                                 </div>
                             </t>

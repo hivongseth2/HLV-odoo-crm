@@ -118,7 +118,7 @@
                                         <span class="sr-badge badge-earn"><span class="ms">shopping_bag</span> Mua hàng</span>
                                     </t>
                                     <t t-elif="h.transaction_type == 'redeem'">
-                                        <span class="sr-badge badge-redeem"><span class="ms">redeem</span> Đổi Voucher</span>
+                                        <span class="sr-badge badge-redeem"><span class="ms">redeem</span> Đổi thưởng</span>
                                     </t>
                                     <t t-elif="h.transaction_type == 'return'">
                                         <span class="sr-badge badge-return"><span class="ms">undo</span> Hoàn hàng</span>

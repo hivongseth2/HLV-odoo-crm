@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_product_template_search_report_group" model="ir.ui.view">
+        <field name="name">product.template.search.report.group</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_search_view"/>
+        <field name="arch" type="xml">
+            <field name="name" position="after">
+                <field name="report_group_ids" string="Nhóm báo cáo tồn kho"/>
+            </field>
+        </field>
+    </record>
+
+    <record id="view_product_search_report_group" model="ir.ui.view">
+        <field name="name">product.product.search.report.group</field>
+        <field name="model">product.product</field>
+        <field name="inherit_id" ref="product.product_search_form_view"/>
+        <field name="arch" type="xml">
+            <field name="name" position="after">
+                <field name="report_group_ids" string="Nhóm báo cáo tồn kho"/>
+            </field>
+        </field>
+    </record>
+
+</odoo>

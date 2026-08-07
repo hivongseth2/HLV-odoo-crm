@@ -29,6 +29,18 @@ def _get_current_account():
     return account
 
 
+def _get_payment_status_map(reward_requests):
+    """Return {request_id: is_paid} for cash-type reward requests.
+
+    'misa_payment_is_paid' is only added by the amis_callback module - trả
+    dict rỗng nếu module đó chưa cài để trang portal không lỗi.
+    """
+    cash_requests = reward_requests.filtered(lambda r: r.request_type == 'cash')
+    if not cash_requests or 'misa_payment_is_paid' not in cash_requests._fields:
+        return {}
+    return {r.id: r.misa_payment_is_paid for r in cash_requests}
+
+
 def _load_partner_data(partner):
     """Load dashboard data for a partner — recent 5 rows for history/vouchers."""
     root = partner._get_loyalty_root()
@@ -242,6 +254,16 @@ class LoyaltyPublicPortal(http.Controller):
         all_history = request.env['hlv.loyalty.history'].sudo().search(
             domain, order='date desc'
         )
+
+        # Với các giao dịch 'redeem' phát sinh từ yêu cầu đổi thưởng của khách
+        # (không phải do admin đổi trực tiếp), tìm lại yêu cầu gốc qua
+        # history_id để hiện tình trạng thanh toán + link xem chi tiết.
+        redeem_history_ids = all_history.filtered(lambda h: h.transaction_type == 'redeem').ids
+        reward_requests = request.env['hlv.loyalty.reward.request'].sudo().search([
+            ('history_id', 'in', redeem_history_ids),
+        ]) if redeem_history_ids else request.env['hlv.loyalty.reward.request']
+        request_by_history_id = {rr.history_id.id: rr for rr in reward_requests}
+
         data = _load_partner_data(account.partner_id)
         data['account'] = account
         if account.portal_phone:
@@ -249,6 +271,8 @@ class LoyaltyPublicPortal(http.Controller):
         data['all_history'] = all_history
         data['active_pt'] = active_pt
         data['active_st'] = active_st
+        data['request_by_history_id'] = request_by_history_id
+        data['payment_status_by_request'] = _get_payment_status_map(reward_requests)
         return request.render('hlv_loyalty.loyalty_portal_history_full', data)
 
     # ── Reward redemption page ────────────────────────────────────────────
@@ -284,6 +308,7 @@ class LoyaltyPublicPortal(http.Controller):
             'program': program,
             'packages': packages,
             'my_requests': my_requests,
+            'payment_status_by_request': _get_payment_status_map(my_requests),
             'success_msg': kwargs.get('success_msg', ''),
             'error_msg': kwargs.get('error_msg', ''),
             'form_vals': {},
@@ -427,6 +452,52 @@ class LoyaltyPublicPortal(http.Controller):
             return request.redirect(f'/loyalty/redeem?tab=history&error_msg={exc.args[0]}')
 
         return request.redirect('/loyalty/redeem?tab=history&success_msg=Yêu cầu đổi thưởng đã được hủy.')
+
+    @http.route('/loyalty/redeem/request/<int:request_id>/update-bank', type='http',
+                auth='public', website=True, sitemap=False, methods=['POST'])
+    def loyalty_update_redeem_bank(self, request_id, **post):
+        account = _get_current_account()
+        if not account:
+            return request.redirect('/loyalty')
+
+        root = account.partner_id._get_loyalty_root()
+        req = request.env['hlv.loyalty.reward.request'].sudo().browse(request_id)
+        if not req.exists() or req.partner_id.id not in root._get_loyalty_family_partner_ids():
+            return request.redirect('/loyalty/redeem?tab=history&error_msg=Không tìm thấy yêu cầu cần cập nhật.')
+        try:
+            req.action_update_bank_info(
+                post.get('bank_name'), post.get('account_number'), post.get('account_name'),
+            )
+        except UserError as exc:
+            return request.redirect(f'/loyalty/redeem?tab=history&error_msg={exc.args[0]}')
+
+        return request.redirect('/loyalty/redeem?tab=history&success_msg=Đã cập nhật thông tin nhận tiền.')
+
+    @http.route('/loyalty/redeem/request/<int:request_id>', type='http', auth='public',
+                website=True, sitemap=False)
+    def loyalty_redeem_request_detail(self, request_id, **kwargs):
+        account = _get_current_account()
+        if not account:
+            return request.redirect('/loyalty')
+
+        root = account.partner_id._get_loyalty_root()
+        rq = request.env['hlv.loyalty.reward.request'].sudo().browse(request_id)
+        if not rq.exists() or rq.partner_id.id not in root._get_loyalty_family_partner_ids():
+            return request.redirect('/loyalty/redeem?tab=history&error_msg=Không tìm thấy yêu cầu.')
+
+        payment_is_paid = _get_payment_status_map(rq).get(rq.id)
+
+        data = {
+            'account': account,
+            'partner': root,
+            'rq': rq,
+            'payment_is_paid': payment_is_paid,
+            'success_msg': kwargs.get('success_msg', ''),
+            'error_msg': kwargs.get('error_msg', ''),
+            'fmt_vn_date': lambda dt: _vn_datetime(dt, '%d Thg %m, %Y'),
+            'fmt_vn_time': lambda dt: _vn_datetime(dt, '%H:%M'),
+        }
+        return request.render('hlv_loyalty.loyalty_portal_request_detail', data)
 
     @http.route('/loyalty/vouchers', type='http', auth='public', website=True,
                 sitemap=False)
