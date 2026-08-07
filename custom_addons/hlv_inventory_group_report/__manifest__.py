@@ -10,10 +10,11 @@
         Xuất báo cáo dạng PDF hoặc xem trực tiếp trên trình duyệt.
     """,
     'author': 'HLV',
-    'depends': ['stock', 'purchase'],
+    'depends': ['product', 'stock', 'purchase'],
     'data': [
         'security/ir.model.access.csv',
         'views/product_report_group_views.xml',
+        'views/product_search_views.xml',
         'views/inventory_report_config_views.xml',
         'views/inventory_report_wizard_views.xml',
         'views/inventory_report_result_views.xml',
