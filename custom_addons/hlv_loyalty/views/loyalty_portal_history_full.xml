@@ -33,31 +33,26 @@
                         </h3>
                     </div>
 
-                    <!-- Filter bar -->
+                    <!-- Filter bar: 2 dropdown gọn kiểu "6 tháng gần nhất ▾" -->
                     <div class="sr-filter-bar">
-                        <div class="sr-filter-group">
-                            <span class="sr-filter-label">Loại điểm:</span>
-                            <a t-att-href="'/loyalty/history?pt=all&amp;st=' + active_st"
-                               t-att-class="'sr-filter-pill' + (' active' if active_pt == 'all' else '')">Tất cả</a>
-                            <a t-att-href="'/loyalty/history?pt=ranking&amp;st=' + active_st"
-                               t-att-class="'sr-filter-pill sr-fp-ranking' + (' active' if active_pt == 'ranking' else '')">
-                                <span class="ms" style="font-size:14px">trending_up</span> Tích lũy
-                            </a>
-                            <a t-att-href="'/loyalty/history?pt=exchange&amp;st=' + active_st"
-                               t-att-class="'sr-filter-pill sr-fp-exchange' + (' active' if active_pt == 'exchange' else '')">
-                                <span class="ms" style="font-size:14px">swap_horiz</span> Đổi thưởng
-                            </a>
+                        <div class="sr-filter-select-wrap">
+                            <select class="sr-filter-select"
+                                    t-attf-onchange="location.href='/loyalty/history?pt='+this.value+'&amp;st=#{active_st}'">
+                                <option value="all" t-att-selected="active_pt == 'all'">Tất cả loại điểm</option>
+                                <option value="ranking" t-att-selected="active_pt == 'ranking'">Tích lũy</option>
+                                <option value="exchange" t-att-selected="active_pt == 'exchange'">Đổi thưởng</option>
+                            </select>
+                            <span class="ms sr-filter-select-chevron">expand_more</span>
                         </div>
-                        <div class="sr-filter-group">
-                            <span class="sr-filter-label">Trạng thái:</span>
-                            <a t-att-href="'/loyalty/history?pt=' + active_pt + '&amp;st=all'"
-                               t-att-class="'sr-filter-pill' + (' active' if active_st == 'all' else '')">Tất cả</a>
-                            <a t-att-href="'/loyalty/history?pt=' + active_pt + '&amp;st=pending'"
-                               t-att-class="'sr-filter-pill' + (' active' if active_st == 'pending' else '')">Chờ XN</a>
-                            <a t-att-href="'/loyalty/history?pt=' + active_pt + '&amp;st=confirmed'"
-                               t-att-class="'sr-filter-pill' + (' active' if active_st == 'confirmed' else '')">Hoàn tất</a>
-                            <a t-att-href="'/loyalty/history?pt=' + active_pt + '&amp;st=cancelled'"
-                               t-att-class="'sr-filter-pill' + (' active' if active_st == 'cancelled' else '')">Đã hủy</a>
+                        <div class="sr-filter-select-wrap">
+                            <select class="sr-filter-select"
+                                    t-attf-onchange="location.href='/loyalty/history?pt=#{active_pt}&amp;st='+this.value">
+                                <option value="all" t-att-selected="active_st == 'all'">Tất cả trạng thái</option>
+                                <option value="pending" t-att-selected="active_st == 'pending'">Chờ xác nhận</option>
+                                <option value="confirmed" t-att-selected="active_st == 'confirmed'">Hoàn tất</option>
+                                <option value="cancelled" t-att-selected="active_st == 'cancelled'">Đã hủy</option>
+                            </select>
+                            <span class="ms sr-filter-select-chevron">expand_more</span>
                         </div>
                     </div>
                 </div>

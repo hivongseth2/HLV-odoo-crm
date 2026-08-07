@@ -196,10 +196,6 @@
                     <t t-set="is_current" t-value="partner.loyalty_tier_id and tier.id == partner.loyalty_tier_id.id"/>
                     <t t-set="card_folder" t-value="'classic_tier_card' if tier.color == 'brown' else ('silver_tier_card' if tier.color == 'silver' else ('gold_tier_card' if tier.color == 'gold' else 'diamond_tier_card'))"/>
                     <div t-att-class="'sr-tier-card' + (' current' if is_current else '')">
-                        <!-- Mobile: icon màu theo hạng thay cho ảnh thẻ thu nhỏ -->
-                        <div t-att-class="'sr-tier-icon-swatch tc-pop-' + (tier.color or 'brown')">
-                            <span class="ms ms-fill">workspace_premium</span>
-                        </div>
                         <div class="tc-flip-inner">
                             <!-- Front face: card image -->
                             <div class="tc-flip-front">
