@@ -4,10 +4,11 @@
         <field name="name">hlv.loyalty.point.transfer.wizard.form</field>
         <field name="model">hlv.loyalty.point.transfer.wizard</field>
         <field name="arch" type="xml">
-            <form string="Chuyển điểm đổi thưởng">
+            <form string="Chuyển điểm Loyalty">
                 <group>
                     <field name="source_partner_id" readonly="1"/>
                     <field name="source_account_id" readonly="1"/>
+                    <field name="point_type" widget="radio"/>
                     <field name="source_available_points" widget="integer"/>
                     <field name="destination_account_id" options="{'no_create': True}"/>
                     <field name="points"/>

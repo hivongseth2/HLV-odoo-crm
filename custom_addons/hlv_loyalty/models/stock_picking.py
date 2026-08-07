@@ -269,8 +269,18 @@ class StockPicking(models.Model):
         scale = 1.0
         if total_raw > 0 and discount_amount > 0 and total_raw > discount_amount:
             scale = discount_amount / total_raw
+        is_scaled = scale < 0.999999
 
         total_pct = sum(pct for _, pct, _ in raw_amounts) or 1.0
+
+        # Bảng tham chiếu chung (giống hệt trường hợp 1 tài khoản) để mọi
+        # tài khoản đều thấy rõ tổng chiết khấu 105.000đ kia đến từ đâu
+        # (dòng nào, % bao nhiêu) trước khi bị chia nhỏ theo % riêng.
+        reference_note = (
+            f'Doanh số giao của cả đơn: {delivered_subtotal:,.0f}đ. '
+            f'{discount_formula_source} → tổng chiết khấu tham chiếu (trần) '
+            f'= {discount_amount:,.0f}đ.'
+        )
 
         shares = []
         ranking_running_total = 0
@@ -287,22 +297,31 @@ class StockPicking(models.Model):
                 account_ranking_points = round(ranking_points * pct / total_pct)
             ranking_running_total += account_ranking_points
 
-            source_label = (
-                f'{discount_formula_source} — Tài khoản "{account.display_name}" nhận {pct:g}% '
-                f'doanh số giao (đã giới hạn không vượt quá tổng chiết khấu tính từ % dòng đơn).'
+            account_line = (
+                f'Tài khoản "{account.display_name}" áp dụng {pct:g}% lên doanh số giao '
+                f'({delivered_subtotal:,.0f}đ) = {raw_amount:,.0f}đ'
             )
+            if is_scaled:
+                account_line += (
+                    f' → do tổng % các tài khoản trên đơn vượt trần tham chiếu, quy đổi về '
+                    f'{account_discount_amount:,.0f}đ (tỷ lệ giới hạn {scale:.2%})'
+                )
+            account_line += '.'
+            source_label = f'{reference_note} {account_line}'
+
             exchange_formula = self._format_loyalty_point_formula(
                 'Điểm đổi thưởng', account_discount_amount, program.discount_per_point, 1,
-                account_exchange_points, source_label=source_label,
+                account_exchange_points, source_label=source_label, detail_lines=discount_details,
             )
             exchange_formula_html = self._format_loyalty_point_formula_html(
                 'Điểm đổi thưởng', account_discount_amount, program.discount_per_point, 1,
-                account_exchange_points, source_label=source_label,
+                account_exchange_points, source_label=source_label, detail_lines=discount_details,
             )
             ranking_formula = (
-                f'Điểm xếp hạng tài khoản "{account.display_name}" = '
-                f'round({ranking_points:,} x {pct:g}% / {total_pct:g}%) = {account_ranking_points:,} điểm '
-                f'(tổng điểm xếp hạng cả đơn: {ranking_points:,}).'
+                f'Điểm xếp hạng tài khoản "{account.display_name}": tổng điểm xếp hạng cả đơn '
+                f'{ranking_points:,} điểm (tính từ doanh số giao {delivered_subtotal:,.0f}đ), '
+                f'chia theo tỷ lệ % được phân bổ trên đơn = '
+                f'round({ranking_points:,} x {pct:g}% / {total_pct:g}%) = {account_ranking_points:,} điểm.'
             )
             ranking_formula_html = f'<p><strong>{escape(ranking_formula)}</strong></p>'
 

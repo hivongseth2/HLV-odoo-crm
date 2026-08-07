@@ -32,6 +32,12 @@ class HlvLoyaltyPortalAccount(models.Model):
     username = fields.Char(
         string='Tên đăng nhập', required=True, copy=False, index=True,
     )
+    display_name = fields.Char(
+        string='Tên hiển thị', compute='_compute_display_name', store=True,
+        help='Lưu cứng (store=True) để mọi nơi (list, search, name_search, '
+             'string dùng trong mô tả/công thức điểm) luôn ra đúng tên, '
+             'không phụ thuộc việc client có gọi đúng compute hay không.',
+    )
     password_hash = fields.Char(string='Mật khẩu (hash)', copy=False)
     active = fields.Boolean(default=True)
 
@@ -258,12 +264,21 @@ class HlvLoyaltyPortalAccount(models.Model):
 
     # ── Display ───────────────────────────────────────────────────────────────
 
-    def name_get(self):
-        result = []
+    @api.depends('partner_id.name', 'buyer_name', 'username')
+    def _compute_display_name(self):
+        """Tên hiển thị dùng ở mọi Many2one/dropdown (VD wizard chuyển điểm).
+
+        Ghi đè bằng field compute+store chuẩn Odoo 17+ thay vì name_get()
+        kiểu cũ — name_get() đôi khi không được web client mới resolve
+        đúng, khiến ô chọn hiện text thô dạng "hlv.loyalty.portal.account,69"
+        thay vì tên. Định dạng: "Công ty - Tên thu mua (username)", hoặc
+        "Công ty (username)" nếu chưa nhập tên thu mua.
+        """
         for acc in self:
-            name = f'{acc.partner_id.name} ({acc.username})'
-            result.append((acc.id, name))
-        return result
+            label = acc.partner_id.name or ''
+            if acc.buyer_name:
+                label = f'{label} - {acc.buyer_name}' if label else acc.buyer_name
+            acc.display_name = f'{label} ({acc.username})' if acc.username else label
 
     def action_reset_password_wizard(self):
         self.ensure_one()
@@ -291,7 +306,7 @@ class HlvLoyaltyPortalAccount(models.Model):
         self.ensure_one()
         return {
             'type': 'ir.actions.act_window',
-            'name': 'Chuyển điểm đổi thưởng',
+            'name': 'Chuyển điểm Loyalty',
             'res_model': 'hlv.loyalty.point.transfer.wizard',
             'view_mode': 'form',
             'target': 'new',
