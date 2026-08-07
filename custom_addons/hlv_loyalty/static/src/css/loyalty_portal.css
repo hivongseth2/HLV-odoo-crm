@@ -578,7 +578,8 @@ a { color:inherit; }
     .sr-hero-actions { margin-top:12px; }
     .sr-hero-btn { font-size:.8rem; padding:7px 14px; }
     /* Body */
-    .sr-body { padding:0 12px 60px; margin-top:-40px; }
+    .sr-body { padding:0 12px 60px; }
+    .sr-body-hero { margin-top:-40px; }
     .sr-card, .sr-actions { padding:18px 14px; }
     .sr-hist-header { flex-direction:column; align-items:flex-start; gap:10px; }
     /* Toolbar (tiêu đề + bộ lọc) — dạng thẻ */
@@ -672,23 +673,26 @@ a { color:inherit; }
     }
     /* Tiers – render dạng list trên mobile thay vì lưới thẻ lật; vẫn giữ ảnh
        thẻ gốc nhưng thu nhỏ ĐÚNG tỷ lệ (không bóp méo thành hình vuông) */
-    .sr-tier-grid { grid-template-columns:1fr; gap:10px; }
+    .sr-tier-grid { grid-template-columns:1fr; gap:12px; }
     .sr-tier-card {
-        display:flex; align-items:center; gap:14px; cursor:default;
-        background:var(--c-surf-0); border-radius:14px; padding:12px 14px;
+        display:flex; align-items:center; gap:16px; cursor:default;
+        background:var(--c-surf-0); border-radius:16px; padding:16px;
         box-shadow:0 2px 10px rgba(0,6,102,.05);
     }
     .sr-tier-card .tc-flip-inner {
-        width:92px; height:auto; aspect-ratio:1.68/1; flex-shrink:0; transform:none !important;
+        width:130px; height:auto; aspect-ratio:1.68/1; flex-shrink:0; transform:none !important;
     }
     .sr-tier-card .tc-flip-front { position:static; width:100%; height:100%; }
-    .sr-tier-card .tc-flip-front .tc-badge { transform:scale(.7); top:4px; right:4px; }
     .sr-tier-card .tc-flip-back { display:none; }
     .sr-tier-card .tc-card-label {
-        margin-top:0; font-size:1rem; flex:1; display:flex; align-items:center; gap:8px;
+        margin-top:0; font-size:1.15rem; flex:1; display:flex; align-items:center; gap:8px;
     }
     .sr-tier-you-tag { display:inline-block; font-size:.62rem; font-weight:800; color:#fff;
         background:var(--c-sec); padding:2px 9px; border-radius:99px; white-space:nowrap; }
+    /* Tiêu đề section — thu nhỏ trên mobile để không vỡ dòng */
+    .sr-sec-title { font-size:1.3rem; }
+    .sr-divider { margin-bottom:20px; }
+    .sr-hist-title { font-size:1.05rem; }
     /* Top bar full pages */
     .sr-topbar { padding:10px 14px; }
     .sr-topbar-name { display:none; }
