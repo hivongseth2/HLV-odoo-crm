@@ -76,6 +76,16 @@ hlv_zalo_miniapp_api/
 |---|---|---|
 | `x_is_zalo_account` | Boolean | Đánh dấu contact đã đăng ký Zalo |
 
+### `res.config.settings` (kế thừa)
+
+| Field | Type | Mô tả |
+|---|---|---|
+| `x_zalo_oa_id` | Char | ID tài khoản Zalo OA |
+| `x_zalo_oa_name` | Char | Tên Zalo OA |
+| `x_zalo_oa_subtext` | Char | Mô tả ngắn OA |
+| `x_zalo_return_notify_user_ids` | Many2many (res.users) | Danh sách User nhận thông báo & activity đổi/trả Zalo (quản lý via `get_values`/`set_values`) |
+| `x_zalo_return_zalo_uids` | Char | Zalo User ID nhận tin nhắn Zalo trực tiếp |
+
 ### `zalo.miniapp.banner` (mới)
 
 | Field | Type | Mô tả |
