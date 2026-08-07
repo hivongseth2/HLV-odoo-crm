@@ -133,6 +133,7 @@ a { color:inherit; }
 .tc-badge.popular { background:var(--c-sec-c); color:#5c420c; }
 .tc-badge.you     { background:var(--c-sec);   color:#fff; }
 .tc-card-label { margin-top:10px; font-size:.95rem; font-weight:800; color:var(--c-ink); text-align:left; }
+.sr-tier-icon-swatch, .sr-tier-you-tag { display:none; }
 
 /* ── Result / Dashboard Hero ── */
 .sr-result-hero {
@@ -617,6 +618,11 @@ a { color:inherit; }
     .sr-tbl-wrap { background:transparent; box-shadow:none; overflow:visible; border-radius:0; }
     .sr-tbl { display:none; }
     .sr-hist-cards { display:flex; flex-direction:column; gap:8px; }
+    /* Trạng thái trống — bọc trong thẻ để không "trôi" giữa nền xám trống */
+    .sr-empty, .sr-rdm-empty {
+        background:var(--c-surf-0); border-radius:16px; padding:40px 20px;
+        box-shadow:0 2px 10px rgba(0,6,102,.05);
+    }
     /* Vouchers full width & compact styling on mobile */
     .sr-voucher-section { padding: 18px 14px; }
     .sr-voucher-card, .sr-voucher-pill {
@@ -685,20 +691,25 @@ a { color:inherit; }
         font-size: 0.68rem !important;
         margin-top: 2px !important;
     }
-    /* Tiers – render dạng list trên mobile thay vì lưới thẻ lật */
+    /* Tiers – render dạng list trên mobile thay vì lưới thẻ lật (ảnh thẻ thu nhỏ
+       nhìn vỡ hình/khó đọc nên thay bằng icon màu theo hạng) */
     .sr-tier-grid { grid-template-columns:1fr; gap:10px; }
     .sr-tier-card {
-        display:flex; align-items:center; gap:14px; perspective:none; cursor:default;
-        background:var(--c-surf-0); border-radius:14px; padding:10px 14px;
+        display:flex; align-items:center; gap:14px; cursor:default;
+        background:var(--c-surf-0); border-radius:14px; padding:12px 14px;
         box-shadow:0 2px 10px rgba(0,6,102,.05);
     }
-    .sr-tier-card .tc-flip-inner {
-        width:64px; height:40px; aspect-ratio:auto; flex-shrink:0; transform:none !important;
+    .sr-tier-card .tc-flip-inner { display:none; }
+    .sr-tier-icon-swatch {
+        display:flex; align-items:center; justify-content:center; flex-shrink:0;
+        width:44px; height:44px; border-radius:12px;
     }
-    .sr-tier-card .tc-flip-front { position:static; width:100%; height:100%; }
-    .sr-tier-card .tc-flip-back { display:none; }
-    .sr-tier-card .tc-card-label { margin-top:0; font-size:1rem; flex:1; }
-    .sr-tier-card .tc-badge.you { position:static; margin-left:auto; flex-shrink:0; }
+    .sr-tier-icon-swatch .ms { font-size:22px; color:inherit; }
+    .sr-tier-card .tc-card-label {
+        margin-top:0; font-size:1rem; flex:1; display:flex; align-items:center; gap:8px;
+    }
+    .sr-tier-you-tag { display:inline-block; font-size:.62rem; font-weight:800; color:#fff;
+        background:var(--c-sec); padding:2px 9px; border-radius:99px; white-space:nowrap; }
     /* Top bar full pages */
     .sr-topbar { padding:10px 14px; }
     .sr-topbar-name { display:none; }
@@ -1243,9 +1254,5 @@ button.sr-rq-cancel-btn .ms { display:none; }
         text-decoration:none; color:var(--c-ink-v); font-size:.64rem; font-weight:700; padding:4px 0; }
     .sr-bn-item .ms { font-size:22px; }
     .sr-bn-item.active { color:var(--c-pri); }
-    .sr-bn-item-cta .ms { background:var(--c-surf-hi); color:var(--c-ink-v); border-radius:50%;
-        width:38px; height:38px; display:flex; align-items:center; justify-content:center; font-size:20px;
-        transition:background .2s,color .2s; }
-    .sr-bn-item-cta.active .ms { background:var(--c-pri); color:#fff; }
 }
 

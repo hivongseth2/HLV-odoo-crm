@@ -30,7 +30,7 @@
                 <a href="/loyalty/history" t-att-class="'sr-bn-item' + (' active' if _p.startswith('/loyalty/history') else '')">
                     <span class="ms">history</span><span>Lịch sử</span>
                 </a>
-                <a href="/loyalty/redeem" t-att-class="'sr-bn-item sr-bn-item-cta' + (' active' if _p.startswith('/loyalty/redeem') else '')">
+                <a href="/loyalty/redeem" t-att-class="'sr-bn-item' + (' active' if _p.startswith('/loyalty/redeem') else '')">
                     <span class="ms ms-fill">redeem</span><span>Đổi thưởng</span>
                 </a>
                 <a href="/loyalty/vouchers" t-att-class="'sr-bn-item' + (' active' if _p.startswith('/loyalty/vouchers') else '')">
