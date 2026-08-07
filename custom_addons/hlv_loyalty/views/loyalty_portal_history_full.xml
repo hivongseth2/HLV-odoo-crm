@@ -23,40 +23,42 @@
         <div class="sr-body" style="padding-top:32px">
             <div class="sr-hist-section">
 
-                <div class="sr-hist-header">
-                    <h3 class="sr-hist-title">
-                        Toàn bộ lịch sử tích lũy
-                        <t t-if="all_history">
-                            (<t t-out="len(all_history)"/> giao dịch)
-                        </t>
-                    </h3>
-                </div>
-
-                <!-- Filter bar -->
-                <div class="sr-filter-bar">
-                    <div class="sr-filter-group">
-                        <span class="sr-filter-label">Loại điểm:</span>
-                        <a t-att-href="'/loyalty/history?pt=all&amp;st=' + active_st"
-                           t-att-class="'sr-filter-pill' + (' active' if active_pt == 'all' else '')">Tất cả</a>
-                        <a t-att-href="'/loyalty/history?pt=ranking&amp;st=' + active_st"
-                           t-att-class="'sr-filter-pill sr-fp-ranking' + (' active' if active_pt == 'ranking' else '')">
-                            <span class="ms" style="font-size:14px">trending_up</span> Tích lũy
-                        </a>
-                        <a t-att-href="'/loyalty/history?pt=exchange&amp;st=' + active_st"
-                           t-att-class="'sr-filter-pill sr-fp-exchange' + (' active' if active_pt == 'exchange' else '')">
-                            <span class="ms" style="font-size:14px">swap_horiz</span> Đổi thưởng
-                        </a>
+                <div class="sr-hist-toolbar">
+                    <div class="sr-hist-header">
+                        <h3 class="sr-hist-title">
+                            Toàn bộ lịch sử tích lũy
+                            <t t-if="all_history">
+                                (<t t-out="len(all_history)"/> giao dịch)
+                            </t>
+                        </h3>
                     </div>
-                    <div class="sr-filter-group">
-                        <span class="sr-filter-label">Trạng thái:</span>
-                        <a t-att-href="'/loyalty/history?pt=' + active_pt + '&amp;st=all'"
-                           t-att-class="'sr-filter-pill' + (' active' if active_st == 'all' else '')">Tất cả</a>
-                        <a t-att-href="'/loyalty/history?pt=' + active_pt + '&amp;st=pending'"
-                           t-att-class="'sr-filter-pill' + (' active' if active_st == 'pending' else '')">Chờ XN</a>
-                        <a t-att-href="'/loyalty/history?pt=' + active_pt + '&amp;st=confirmed'"
-                           t-att-class="'sr-filter-pill' + (' active' if active_st == 'confirmed' else '')">Hoàn tất</a>
-                        <a t-att-href="'/loyalty/history?pt=' + active_pt + '&amp;st=cancelled'"
-                           t-att-class="'sr-filter-pill' + (' active' if active_st == 'cancelled' else '')">Đã hủy</a>
+
+                    <!-- Filter bar -->
+                    <div class="sr-filter-bar">
+                        <div class="sr-filter-group">
+                            <span class="sr-filter-label">Loại điểm:</span>
+                            <a t-att-href="'/loyalty/history?pt=all&amp;st=' + active_st"
+                               t-att-class="'sr-filter-pill' + (' active' if active_pt == 'all' else '')">Tất cả</a>
+                            <a t-att-href="'/loyalty/history?pt=ranking&amp;st=' + active_st"
+                               t-att-class="'sr-filter-pill sr-fp-ranking' + (' active' if active_pt == 'ranking' else '')">
+                                <span class="ms" style="font-size:14px">trending_up</span> Tích lũy
+                            </a>
+                            <a t-att-href="'/loyalty/history?pt=exchange&amp;st=' + active_st"
+                               t-att-class="'sr-filter-pill sr-fp-exchange' + (' active' if active_pt == 'exchange' else '')">
+                                <span class="ms" style="font-size:14px">swap_horiz</span> Đổi thưởng
+                            </a>
+                        </div>
+                        <div class="sr-filter-group">
+                            <span class="sr-filter-label">Trạng thái:</span>
+                            <a t-att-href="'/loyalty/history?pt=' + active_pt + '&amp;st=all'"
+                               t-att-class="'sr-filter-pill' + (' active' if active_st == 'all' else '')">Tất cả</a>
+                            <a t-att-href="'/loyalty/history?pt=' + active_pt + '&amp;st=pending'"
+                               t-att-class="'sr-filter-pill' + (' active' if active_st == 'pending' else '')">Chờ XN</a>
+                            <a t-att-href="'/loyalty/history?pt=' + active_pt + '&amp;st=confirmed'"
+                               t-att-class="'sr-filter-pill' + (' active' if active_st == 'confirmed' else '')">Hoàn tất</a>
+                            <a t-att-href="'/loyalty/history?pt=' + active_pt + '&amp;st=cancelled'"
+                               t-att-class="'sr-filter-pill' + (' active' if active_st == 'cancelled' else '')">Đã hủy</a>
+                        </div>
                     </div>
                 </div>
 

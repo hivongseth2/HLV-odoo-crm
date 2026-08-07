@@ -12,9 +12,7 @@
 
         <!-- Top bar -->
         <div style="background:#fff;border-bottom:1px solid #e7e8e9;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px">
-            <a href="/loyalty" style="font-weight:700;font-size:1.1rem;color:var(--c-pri);font-family:'Manrope',sans-serif;text-decoration:none">
-                🏆 Members Portal
-            </a>
+            <a href="/loyalty" style="font-weight:700;font-size:1.1rem;color:var(--c-pri);font-family:'Manrope',sans-serif;text-decoration:none"></a>
             <div style="display:flex;align-items:center;gap:12px">
                 <span style="font-size:.88rem;color:#666">
                     Xin chào, <strong><t t-out="partner.name"/></strong>
