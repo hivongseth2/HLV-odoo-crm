@@ -1140,13 +1140,35 @@ button.sr-rq-cancel-btn .ms { display:none; }
     .sr-rdm-stat-val { font-size: 1.05rem; }
     .sr-rdm-stat-lbl { font-size: 0.55rem; letter-spacing: 0; }
     .sr-rdm-stat-unit { font-size: 0.55rem; }
-    
+
     .sr-rdm-tab-strip { padding: 0 4px; }
     .sr-rdm-tab { padding: 10px 4px; font-size: 0.72rem; gap: 3px; }
     .sr-rdm-tab .ms { font-size: 14px; }
     .sr-rdm-tab-badge { font-size: 0.6rem; padding: 1px 5px; min-width: 14px; }
-    
+
     .sr-pkg-grid { grid-template-columns:1fr; }
     .sr-rq-lbl { min-width:90px; }
+}
+
+/* ── Mã QR tài khoản (hero profile) ── */
+.sr-qr-mini { display:flex; flex-direction:column; align-items:center; gap:4px;
+              background:rgba(255,255,255,.14); border-radius:12px; padding:8px; flex-shrink:0; }
+.sr-qr-mini img { width:76px; height:76px; border-radius:6px; background:#fff; display:block; }
+.sr-qr-mini-code { font-size:.68rem; font-weight:700; color:#fff; opacity:.9; letter-spacing:.5px; }
+
+/* ── Mobile VIP-style dashboard: lưới thao tác tối giản ── */
+.sr-mobile-util-grid { display:none; }
+.sr-mobile-util-tile { display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:6px; background:var(--c-surf-0); border-radius:12px; padding:16px 8px; text-decoration:none;
+    color:var(--c-ink); font-size:.78rem; font-weight:700; text-align:center;
+    box-shadow:0 2px 10px rgba(0,6,102,.05); }
+.sr-mobile-util-tile .ms { color:var(--c-pri); font-size:26px; }
+
+@media (max-width:768px) {
+    .sr-qr-mini-code { display:none; }
+    .sr-qr-mini img { width:60px; height:60px; }
+    .sr-main-row { display:none; }
+    #loyalty-vouchers, #loyalty-history { display:none; }
+    .sr-mobile-util-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:20px 0; }
 }
 

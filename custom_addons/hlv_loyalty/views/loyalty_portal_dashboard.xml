@@ -67,6 +67,12 @@
                                 </t>
                             </div>
                         </div>
+                        <!-- QR định danh tài khoản -->
+                        <div class="sr-qr-mini" title="Mã QR tài khoản">
+                            <img t-att-src="'/report/barcode/QR/%s?width=100&amp;height=100' % account.username"
+                                 t-att-alt="account.username"/>
+                            <span class="sr-qr-mini-code"><t t-out="account.username"/></span>
+                        </div>
                     </div>
                     <!-- Balance pill -->
                     <div class="sr-bal-pill">
@@ -82,18 +88,16 @@
                             </t>
                         </div>
                         <div>
-                            <div class="sr-bal-lbl">Điểm hiện tại</div>
+                            <div class="sr-bal-lbl">Điểm khả dụng</div>
                             <div>
-                                <span class="sr-bal-num"><t t-out="'{:,}'.format(partner.loyalty_total_points)"/></span>
-                                <span class="sr-bal-unit"> PTS xếp hạng</span>
+                                <span class="sr-bal-num"><t t-out="'{:,}'.format(exchange_available_points)"/></span>
+                                <span class="sr-bal-unit"> điểm đổi thưởng</span>
                             </div>
-                            <div style="margin-top:6px;font-size:.82rem;opacity:.85"  class="badge-pt-exchange sr-badge">
-                                <span style="font-weight:700"><t t-out="'{:,}'.format(exchange_points)"/></span>
-                                <span> PTS đổi thưởng</span>
-                                <t t-if="pending_points &gt; 0">
-                                    <span style="opacity:.7"> (+<t t-out="'{:,}'.format(pending_points)"/> chờ XN)</span>
-                                </t>
-                            </div>
+                            <t t-if="reward_pending_points &gt; 0">
+                                <div style="margin-top:6px;font-size:.82rem;opacity:.85" class="badge-pt-exchange sr-badge">
+                                    <span style="opacity:.85">Đang treo <t t-out="'{:,}'.format(reward_pending_points)"/> điểm ở yêu cầu chờ xử lý</span>
+                                </div>
+                            </t>
                         </div>
                     </div>
                 </div>
@@ -173,7 +177,28 @@
                 </div>
             </div>
 
-            <!-- Shared sections -->
+            <!-- Mobile: lưới thao tác tối giản (thay thế "Thao tác nhanh" + voucher/lịch sử
+                 hiện sẵn trên màn hình rộng) — chỉ hiện icon, khách bấm vào mới xem chi tiết -->
+            <div class="sr-mobile-util-grid">
+                <a href="/loyalty/redeem" class="sr-mobile-util-tile">
+                    <span class="ms ms-fill">redeem</span><span>Đổi thưởng</span>
+                </a>
+                <a href="/loyalty/history" class="sr-mobile-util-tile">
+                    <span class="ms">history</span><span>Xem lịch sử</span>
+                </a>
+                <a href="/loyalty/vouchers" class="sr-mobile-util-tile">
+                    <span class="ms">confirmation_number</span>
+                    <t t-if="active_vouchers_count"><span><t t-out="active_vouchers_count"/> Voucher</span></t>
+                    <t t-else=""><span>Voucher</span></t>
+                </a>
+                <a href="#loyalty-tiers" class="sr-mobile-util-tile">
+                    <span class="ms ms-fill">workspace_premium</span>
+                    <t t-if="partner.loyalty_tier_id"><span><t t-out="partner.loyalty_tier_id.name"/></span></t>
+                    <t t-else=""><span>Ưu đãi hạng</span></t>
+                </a>
+            </div>
+
+            <!-- Shared sections (ẩn trên mobile qua CSS) -->
             <t t-call="hlv_loyalty.loyalty_portal_vouchers_section"/>
             <t t-call="hlv_loyalty.loyalty_portal_history_section"/>
         </div>

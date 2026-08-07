@@ -23,26 +23,6 @@
         <div class="sr-body" style="padding-top:32px">
             <div class="sr-hist-section">
 
-                <!-- Info box: điểm tích lũy vs đổi thưởng -->
-                <t t-if="program">
-                    <div class="sr-pts-info-box">
-                        <div class="sr-pts-info-card sr-pts-info-ranking">
-                            <div class="sr-pts-info-icon"><span class="ms ms-fill">trending_up</span></div>
-                            <div>
-                                <div class="sr-pts-info-label">Điểm Tích lũy <span class="sr-badge badge-pt-ranking" style="font-size:.65rem;padding:2px 8px;vertical-align:middle">Ranking</span></div>
-                                <div class="sr-pts-info-desc"><t t-out="program.portal_ranking_desc or ''"/></div>
-                            </div>
-                        </div>
-                        <div class="sr-pts-info-card sr-pts-info-exchange">
-                            <div class="sr-pts-info-icon"><span class="ms ms-fill">swap_horiz</span></div>
-                            <div>
-                                <div class="sr-pts-info-label">Điểm Đổi thưởng <span class="sr-badge badge-pt-exchange" style="font-size:.65rem;padding:2px 8px;vertical-align:middle">Exchange</span></div>
-                                <div class="sr-pts-info-desc"><t t-out="program.portal_exchange_desc or ''"/></div>
-                            </div>
-                        </div>
-                    </div>
-                </t>
-
                 <div class="sr-hist-header">
                     <h3 class="sr-hist-title">
                         Toàn bộ lịch sử tích lũy
@@ -91,12 +71,10 @@
                                     <th class="th-pts-ranking"><span class="ms" style="font-size:14px">trending_up</span> Điểm TL</th>
                                     <th class="th-pts-exchange"><span class="ms" style="font-size:14px">swap_horiz</span> Điểm ĐT</th>
                                     <th style="text-align:right">Trạng thái</th>
-                                    <th style="min-width:120px">Thanh toán</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <t t-foreach="all_history" t-as="h">
-                                    <t t-set="linked_request" t-value="request_by_history_id.get(h.id)"/>
                                     <tr t-att-class="'row-pt-ranking' if h.point_type == 'ranking' else 'row-pt-exchange'">
                                         <td>
                                             <div class="td-date"><t t-out="fmt_vn_date(h.date)"/></div>
@@ -134,27 +112,6 @@
                                         <td class="td-status">
                                             <t t-out="dict(pending='Chờ XN', confirmed='Hoàn tất', cancelled='Đã hủy').get(h.state, h.state)"/>
                                         </td>
-                                        <td>
-                                            <t t-if="linked_request">
-                                                <div class="sr-hist-pay-cell">
-                                                    <t t-if="linked_request.request_type == 'cash'">
-                                                        <t t-set="is_paid" t-value="payment_status_by_request.get(linked_request.id)"/>
-                                                        <span t-att-class="'sr-pay-badge ' + ('sr-pay-done' if is_paid else 'sr-pay-pending')">
-                                                            <span class="ms" style="font-size:13px">
-                                                                <t t-if="is_paid">check_circle</t>
-                                                                <t t-else="">schedule</t>
-                                                            </span>
-                                                            <t t-if="is_paid">Đã TT</t>
-                                                            <t t-else="">Chưa TT</t>
-                                                        </span>
-                                                    </t>
-                                                    <a t-att-href="'/loyalty/redeem/request/%s' % linked_request.id" class="sr-rq-detail-link">
-                                                        <span class="ms" style="font-size:14px">visibility</span> Xem chi tiết
-                                                    </a>
-                                                </div>
-                                            </t>
-                                            <t t-else=""><span class="td-dash">–</span></t>
-                                        </td>
                                     </tr>
                                 </t>
                             </tbody>
@@ -162,7 +119,6 @@
                         <!-- Mobile card view (hidden on desktop) -->
                         <div class="sr-hist-cards">
                             <t t-foreach="all_history" t-as="h">
-                                <t t-set="linked_request" t-value="request_by_history_id.get(h.id)"/>
                                 <div t-att-class="'sr-hist-card ' + ('row-pt-ranking' if h.point_type == 'ranking' else 'row-pt-exchange')">
                                     <div class="shc-left">
                                         <span t-att-class="'shc-pts ' + ('pos' if h.point_amount > 0 else 'neg')">
@@ -183,24 +139,6 @@
                                                 <t t-out="dict(pending='Chờ XN', confirmed='Hoàn tất', cancelled='Đã hủy').get(h.state, h.state)"/>
                                             </span>
                                         </div>
-                                        <t t-if="linked_request">
-                                            <div class="sr-hist-pay-cell" style="margin-top:6px">
-                                                <t t-if="linked_request.request_type == 'cash'">
-                                                    <t t-set="is_paid" t-value="payment_status_by_request.get(linked_request.id)"/>
-                                                    <span t-att-class="'sr-pay-badge ' + ('sr-pay-done' if is_paid else 'sr-pay-pending')">
-                                                        <span class="ms" style="font-size:13px">
-                                                            <t t-if="is_paid">check_circle</t>
-                                                            <t t-else="">schedule</t>
-                                                        </span>
-                                                        <t t-if="is_paid">Đã TT</t>
-                                                        <t t-else="">Chưa TT</t>
-                                                    </span>
-                                                </t>
-                                                <a t-att-href="'/loyalty/redeem/request/%s' % linked_request.id" class="sr-rq-detail-link">
-                                                    <span class="ms" style="font-size:14px">visibility</span> Xem chi tiết
-                                                </a>
-                                            </div>
-                                        </t>
                                     </div>
                                 </div>
                             </t>
