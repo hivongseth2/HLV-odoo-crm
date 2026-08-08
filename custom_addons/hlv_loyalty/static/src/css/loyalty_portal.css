@@ -391,7 +391,7 @@ a { color:inherit; }
     border-color: rgba(46, 125, 50, 0.45);
 }
 .sr-v-code {
-    font-family: 'Manrope', monospace;
+    font-family: 'Manrope', 'Segoe UI', sans-serif;
     font-weight: 800;
     font-size: 0.92rem;
     color: #1b5e20;
@@ -535,6 +535,19 @@ a { color:inherit; }
 .sr-topbar-name { font-size:.88rem; color:#666; }
 .sr-topbar-logout { padding:7px 16px; background:#f3f4f5; border-radius:20px;
                     font-size:.82rem; font-weight:600; color:#454652; text-decoration:none; }
+
+/* ── Tóm tắt điểm trên trang lịch sử ── */
+.sr-hist-pts-summary { display:flex; gap:14px; margin-bottom:16px; }
+.sr-hist-pts-item { flex:1; display:flex; align-items:center; gap:12px;
+    background:var(--c-surf-0); border-radius:14px; padding:14px 16px;
+    box-shadow:0 2px 10px rgba(0,6,102,.05); }
+.sr-hist-pts-item .ms { font-size:26px; color:#198754; flex-shrink:0; }
+.sr-hist-pts-item:nth-child(2) .ms { color:var(--c-pri); }
+.sr-hist-pts-num { font-family:'Manrope',sans-serif; font-weight:900; font-size:1.3rem; color:var(--c-ink); line-height:1.1; }
+.sr-hist-pts-lbl { font-size:.72rem; color:var(--c-ink-v); font-weight:600; margin-top:2px; }
+@media (max-width:480px) {
+    .sr-hist-pts-summary { flex-direction:column; gap:10px; }
+}
 
 /* ── Filter bar: dropdown gọn kiểu pill (giống "6 tháng gần nhất ▾") ── */
 .sr-filter-bar {
@@ -1167,10 +1180,11 @@ button.sr-rq-cancel-btn .ms { display:none; }
 }
 
 /* ── Mã QR tài khoản (hero profile — desktop) ── */
-.sr-qr-mini { display:flex; flex-direction:column; align-items:center; gap:4px;
-              background:rgba(255,255,255,.14); border-radius:12px; padding:8px; flex-shrink:0; }
-.sr-qr-mini img { width:76px; height:76px; border-radius:6px; background:#fff; display:block; }
-.sr-qr-mini-code { font-size:.68rem; font-weight:700; color:#fff; opacity:.9; letter-spacing:.5px; }
+.sr-qr-mini { display:flex; flex-direction:column; align-items:center; gap:6px;
+              background:#fff; border-radius:14px; padding:10px 12px; flex-shrink:0;
+              box-shadow:0 8px 24px rgba(0,0,0,.18); }
+.sr-qr-mini img { width:88px; height:88px; border-radius:4px; background:#fff; display:block; }
+.sr-qr-mini-code { font-size:.66rem; font-weight:700; color:var(--c-ink-v); letter-spacing:.5px; }
 
 /* ── Mobile member card (kiểu thẻ VIP) ── */
 .sr-mcard-wrap { display:none; }
@@ -1202,6 +1216,7 @@ button.sr-rq-cancel-btn .ms { display:none; }
 .sr-mcard-stat-row + .sr-mcard-stat-row { border-top:1px solid var(--c-surf-hi); }
 .sr-mcard-stat-num { font-family:'Manrope',sans-serif; font-weight:900; font-size:1.3rem; color:var(--c-pri); }
 .sr-mcard-stat-num span { font-family:'Inter',sans-serif; font-weight:600; font-size:.85rem; color:var(--c-ink-v); }
+.sr-mcard-stat-plain { font-family:'Manrope',sans-serif; font-weight:800; font-size:1rem; color:var(--c-ink); }
 .sr-mcard-stat-link { font-size:.78rem; font-weight:700; color:var(--c-ink-v); display:flex; align-items:center; }
 .sr-mcard-stat-link .ms { font-size:18px; }
 

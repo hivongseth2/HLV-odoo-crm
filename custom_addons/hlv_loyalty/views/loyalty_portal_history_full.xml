@@ -23,6 +23,24 @@
         <div class="sr-body" style="padding-top:32px">
             <div class="sr-hist-section">
 
+                <!-- Tóm tắt 2 loại điểm — chỉ hiện khi khách bấm vào xem lịch sử -->
+                <div class="sr-hist-pts-summary">
+                    <div class="sr-hist-pts-item">
+                        <span class="ms ms-fill">swap_horiz</span>
+                        <div>
+                            <div class="sr-hist-pts-num"><t t-out="'{:,}'.format(exchange_available_points)"/></div>
+                            <div class="sr-hist-pts-lbl">Điểm đổi thưởng khả dụng</div>
+                        </div>
+                    </div>
+                    <div class="sr-hist-pts-item">
+                        <span class="ms ms-fill">trending_up</span>
+                        <div>
+                            <div class="sr-hist-pts-num"><t t-out="'{:,}'.format(partner.loyalty_total_points)"/></div>
+                            <div class="sr-hist-pts-lbl">Điểm xếp hạng</div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="sr-hist-toolbar">
                     <div class="sr-hist-header">
                         <h3 class="sr-hist-title">
