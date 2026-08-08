@@ -82,30 +82,6 @@
         </field>
     </record>
 
-    <!-- ============ Report: pivot ============ -->
-    <record id="view_misa_invoice_status_report_pivot" model="ir.ui.view">
-        <field name="name">stock.picking.misa.invoice.status.pivot</field>
-        <field name="model">stock.picking</field>
-        <field name="arch" type="xml">
-            <pivot string="Đối soát xuất hóa đơn MISA">
-                <field name="picking_type_id" type="row"/>
-                <field name="misa_invoice_state" type="col"/>
-                <field name="misa_invoice_amount" type="measure"/>
-            </pivot>
-        </field>
-    </record>
-
-    <!-- ============ Report: graph ============ -->
-    <record id="view_misa_invoice_status_report_graph" model="ir.ui.view">
-        <field name="name">stock.picking.misa.invoice.status.graph</field>
-        <field name="model">stock.picking</field>
-        <field name="arch" type="xml">
-            <graph string="Đối soát xuất hóa đơn MISA" type="bar">
-                <field name="misa_invoice_state"/>
-            </graph>
-        </field>
-    </record>
-
     <!-- ============ Report: search ============ -->
     <record id="view_misa_invoice_status_report_search" model="ir.ui.view">
         <field name="name">stock.picking.misa.invoice.status.search</field>
@@ -138,11 +114,11 @@
         </field>
     </record>
 
-    <!-- ============ Action + menu ============ -->
+    <!-- ============ Action (danh sách chi tiết) ============ -->
     <record id="action_misa_invoice_status_report" model="ir.actions.act_window">
-        <field name="name">Đối soát xuất hóa đơn MISA</field>
+        <field name="name">Danh sách phiếu</field>
         <field name="res_model">stock.picking</field>
-        <field name="view_mode">list,pivot,graph</field>
+        <field name="view_mode">list,form</field>
         <field name="view_id" ref="view_misa_invoice_status_report_list"/>
         <field name="search_view_id" ref="view_misa_invoice_status_report_search"/>
         <field name="domain">[('picking_type_id.code', '=', 'outgoing'), ('state', '=', 'done')]</field>
@@ -155,12 +131,6 @@
             </p>
         </field>
     </record>
-
-    <menuitem id="menu_misa_invoice_status_report"
-              name="Đối soát xuất hóa đơn MISA"
-              parent="stock.menu_warehouse_report"
-              action="action_misa_invoice_status_report"
-              sequence="160"/>
 
     <!-- ============ Bulk manual refresh từ menu ⚙ Hành động ============ -->
     <record id="action_server_misa_invoice_status_refresh" model="ir.actions.server">
