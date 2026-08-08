@@ -74,6 +74,11 @@ class StockPickingMisaInvoiceStatus(models.Model):
     misa_invoice_exception_by_id = fields.Many2one('res.users', string='Người đánh dấu', copy=False)
     misa_invoice_exception_date = fields.Datetime(string='Ngày đánh dấu', copy=False)
 
+    # Đơn Shopee dùng luồng hóa đơn meInvoice riêng (amis_callback) — loại khỏi đối soát MISA này.
+    misa_invoice_is_shopee = fields.Boolean(
+        string='Thuộc đơn Shopee', compute='_compute_misa_invoice_is_shopee', store=True,
+    )
+
     @api.depends('move_ids_without_package.sale_line_id.order_id', 'origin')
     def _compute_misa_invoice_sale_order_ids(self):
         SaleOrder = self.env['sale.order']
@@ -96,6 +101,13 @@ class StockPickingMisaInvoiceStatus(models.Model):
                     break
             picking.misa_invoice_saler_code = code
 
+    @api.depends('misa_invoice_sale_order_ids.shopee_order_ref')
+    def _compute_misa_invoice_is_shopee(self):
+        for picking in self:
+            picking.misa_invoice_is_shopee = any(
+                getattr(order, 'shopee_order_ref', False) for order in picking.misa_invoice_sale_order_ids
+            )
+
     @api.depends('misa_invoice_state', 'misa_invoice_amount', 'x_studio_tng_tin_sau_thu')
     def _compute_misa_invoice_amount_mismatch(self):
         for picking in self:
@@ -110,8 +122,11 @@ class StockPickingMisaInvoiceStatus(models.Model):
 
     def action_check_misa_invoice_status(self):
         """Gọi MISA kiểm tra tình trạng xuất hóa đơn cho các phiếu đang chọn.
-        Dùng chung cho nút thủ công (form/list) và cron quét định kỳ."""
+        Dùng chung cho nút thủ công (form/list), cron quét định kỳ, và vòng lặp
+        hiện tiến trình trên dashboard. Trả về kết quả từng phiếu để hiển thị ngay
+        (không bắt buộc caller nào phải dùng)."""
         misa_utils = self.env['misa.api.utils']
+        results = []
         for picking in self:
             if picking.picking_type_code != 'outgoing':
                 continue
@@ -124,6 +139,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 picking.message_post(
                     body=Markup("<b>Kiểm tra hóa đơn MISA thất bại:</b><br/>%s") % str(e)
                 )
+                results.append({'id': picking.id, 'name': picking.name, 'error': str(e)})
                 continue
 
             vals = {
@@ -158,7 +174,13 @@ class StockPickingMisaInvoiceStatus(models.Model):
                         picking.misa_invoice_amount_diff,
                     )
                 )
-        return True
+            results.append({
+                'id': picking.id,
+                'name': picking.name,
+                'state': picking.misa_invoice_state,
+                'state_label': MISA_INVOICE_STATE_LABELS.get(picking.misa_invoice_state, picking.misa_invoice_state),
+            })
+        return results
 
     def action_mark_misa_invoice_exception(self):
         self.ensure_one()
@@ -180,12 +202,15 @@ class StockPickingMisaInvoiceStatus(models.Model):
         self.message_post(body=Markup("Đã bỏ đánh dấu ngoại lệ xuất hóa đơn MISA."))
         return True
 
+    def _misa_invoice_scan_domain(self):
+        return self._misa_invoice_dashboard_base_domain() + [
+            ('misa_invoice_state', '!=', 'invoiced'),
+            ('misa_invoice_exception', '=', False),
+        ]
+
     def _cron_scan_misa_invoice_status(self):
         pickings = self.search(
-            self._misa_invoice_dashboard_base_domain() + [
-                ('misa_invoice_state', '!=', 'invoiced'),
-                ('misa_invoice_exception', '=', False),
-            ],
+            self._misa_invoice_scan_domain(),
             order='misa_invoice_last_checked asc nulls first',
             limit=MISA_INVOICE_SCAN_BATCH_SIZE,
         )
@@ -197,6 +222,17 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 _logger.exception(
                     "❌ [MISA INVOICE STATUS CRON] Lỗi xử lý phiếu %s", picking.name
                 )
+
+    @api.model
+    def get_misa_invoice_scan_candidates(self, limit=MISA_INVOICE_SCAN_BATCH_SIZE):
+        """Danh sách phiếu SẼ được quét (chưa gọi MISA) — dùng để dashboard chạy
+        từng phiếu một và hiện tiến trình thực (thay vì 1 lệnh lớn chạy âm thầm)."""
+        pickings = self.sudo().search(
+            self._misa_invoice_scan_domain(),
+            order='misa_invoice_last_checked asc nulls first',
+            limit=limit,
+        )
+        return [{'id': picking.id, 'name': picking.name} for picking in pickings]
 
     # ==================== Mốc ngày đối soát (cấu hình được) ====================
 
@@ -245,6 +281,9 @@ class StockPickingMisaInvoiceStatus(models.Model):
             ('picking_type_id.code', '=', 'outgoing'),
             ('state', '=', 'done'),
             ('date_done', '>=', fields.Datetime.to_string(datetime.combine(lower, dt_time.min))),
+            # Đơn Shopee dùng luồng meInvoice riêng; phiếu trả hàng không cần xuất HĐ mới.
+            ('misa_invoice_is_shopee', '=', False),
+            ('origin', 'not ilike', 'trả hàng'),
         ]
         if date_to:
             try:
@@ -367,16 +406,68 @@ class StockPickingMisaInvoiceStatus(models.Model):
 
     @api.model
     def get_misa_invoice_picking_lines(self, picking_id):
-        """Chi tiết sản phẩm/số lượng đã xuất của 1 phiếu — dùng khi expand dòng trên dashboard."""
+        """Chi tiết sản phẩm/số lượng/giá trị xuất kho của 1 phiếu, dùng cho drawer chi tiết.
+
+        Giá trị xuất kho = qty * đơn giá trên dòng đơn bán tương ứng (prorate theo
+        qty đã giao trên dòng đó). Riêng combo/kit (BOM phantom): các dòng move con do
+        Odoo tự nổ ra khi giao hàng đều trỏ về CÙNG 1 sale.order.line của sản phẩm combo,
+        và giá chỉ nằm ở đó (giá sản phẩm con = 0) — nên gán toàn bộ price_subtotal của
+        dòng combo cho 1 dòng đại diện, còn các sản phẩm con hiển thị giá trị = 0.
+        """
         picking = self.sudo().browse(picking_id)
         if not picking.exists():
             return []
+
         moves = picking.move_ids_without_package.filtered(lambda m: m.quantity > 0)
-        return [{
-            'product_name': move.product_id.display_name,
-            'qty': move.quantity,
-            'uom_name': move.product_uom.name,
-        } for move in moves]
+        groups = {}
+        order = []
+        for move in moves:
+            key = move.sale_line_id.id
+            if key not in groups:
+                groups[key] = self.env['stock.move']
+                order.append(key)
+            groups[key] |= move
+
+        Bom = self.env['mrp.bom'].sudo()
+        lines = []
+        for key in order:
+            group_moves = groups[key]
+            sale_line = group_moves[0].sale_line_id
+            is_kit = bool(sale_line and Bom.search_count([
+                ('product_tmpl_id', '=', sale_line.product_id.product_tmpl_id.id),
+                ('type', '=', 'phantom'),
+                ('active', '=', True),
+            ]))
+
+            if sale_line and is_kit:
+                lines.append({
+                    'product_name': sale_line.product_id.display_name,
+                    'qty': sale_line.product_uom_qty,
+                    'uom_name': sale_line.product_uom.name,
+                    'value': sale_line.price_subtotal,
+                    'is_combo': True,
+                })
+                for move in group_moves:
+                    lines.append({
+                        'product_name': move.product_id.display_name,
+                        'qty': move.quantity,
+                        'uom_name': move.product_uom.name,
+                        'value': 0.0,
+                        'is_component': True,
+                    })
+                continue
+
+            for move in group_moves:
+                value = 0.0
+                if sale_line and sale_line.product_uom_qty:
+                    value = move.quantity * (sale_line.price_subtotal / sale_line.product_uom_qty)
+                lines.append({
+                    'product_name': move.product_id.display_name,
+                    'qty': move.quantity,
+                    'uom_name': move.product_uom.name,
+                    'value': value,
+                })
+        return lines
 
     @api.model
     def get_misa_invoice_report_action(
@@ -402,9 +493,3 @@ class StockPickingMisaInvoiceStatus(models.Model):
             domain.append(('misa_invoice_amount_mismatch', '=', True))
         action['domain'] = domain
         return action
-
-    @api.model
-    def action_misa_invoice_dashboard_scan_now(self):
-        """Bấm nút 'Kiểm tra MISA ngay' trên dashboard: chạy đúng batch của cron rồi trả số liệu mới."""
-        self._cron_scan_misa_invoice_status()
-        return self.get_misa_invoice_dashboard_data()

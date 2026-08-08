@@ -33,10 +33,15 @@ export class MisaInvoiceDashboard extends Component {
             urgent: [],
             cutoffDraft: "",
             monthFilter: "", // "" = tất cả (kể từ mốc đối soát); "YYYY-MM" = lọc theo tháng
-            expandedPickingId: null,
-            expandedLines: [],
-            expandedLoading: false,
+            activeTab: "urgent", // "urgent" | "warehouse" | "saler"
             salerPage: 1,
+            showScanPanel: false,
+            scanProgress: { done: 0, total: 0 },
+            scanLog: [],
+            drawerOpen: false,
+            drawerPicking: null,
+            drawerLines: [],
+            drawerLoading: false,
         });
 
         onWillStart(async () => {
@@ -80,6 +85,10 @@ export class MisaInvoiceDashboard extends Component {
         };
     }
 
+    switchTab(tab) {
+        this.state.activeTab = tab;
+    }
+
     async loadAll() {
         this.state.isLoading = true;
         try {
@@ -104,8 +113,6 @@ export class MisaInvoiceDashboard extends Component {
         this.state.data = data;
         this.state.cutoffDraft = data.cutoff_date || "";
         this.state.salerPage = 1;
-        this.state.expandedPickingId = null;
-        this.state.expandedLines = [];
     }
 
     async onMonthChange(ev) {
@@ -119,19 +126,59 @@ export class MisaInvoiceDashboard extends Component {
         this.state.isLoading = false;
     }
 
+    /** Quét từng phiếu một (thay vì 1 lệnh lớn chạy âm thầm) để thấy tiến trình thật. */
     async scanNow() {
         if (this.state.isScanning) {
             return;
         }
         this.state.isScanning = true;
+        this.state.showScanPanel = true;
+        this.state.scanLog = [];
+        this.state.scanProgress = { done: 0, total: 0 };
         try {
-            await this.orm.call("stock.picking", "action_misa_invoice_dashboard_scan_now", [], {});
+            const candidates = await this.orm.call(
+                "stock.picking", "get_misa_invoice_scan_candidates", [], { limit: 50 }
+            );
+            this.state.scanProgress.total = candidates.length;
+            for (const candidate of candidates) {
+                const entry = { name: candidate.name, statusLabel: "Đang kiểm tra...", loading: true, error: false };
+                this.state.scanLog.unshift(entry);
+                try {
+                    const results = await this.orm.call(
+                        "stock.picking", "action_check_misa_invoice_status", [[candidate.id]], {}
+                    );
+                    const result = results && results[0];
+                    if (result && result.error) {
+                        entry.statusLabel = "Lỗi: " + result.error;
+                        entry.error = true;
+                    } else if (result) {
+                        entry.statusLabel = result.state_label;
+                    } else {
+                        entry.statusLabel = "Bỏ qua";
+                    }
+                } catch (e) {
+                    entry.statusLabel = "Lỗi: " + (e.message || e);
+                    entry.error = true;
+                }
+                entry.loading = false;
+                this.state.scanProgress.done += 1;
+            }
             await this._reload();
-            this.notification.add("Đã kiểm tra lại với MISA.", { type: "success" });
+            if (candidates.length) {
+                this.notification.add(`Đã kiểm tra xong ${candidates.length} phiếu.`, { type: "success" });
+            } else {
+                this.notification.add("Không có phiếu nào cần kiểm tra.", { type: "info" });
+            }
         } catch (e) {
             this.notification.add("Lỗi kiểm tra MISA: " + (e.message || e), { type: "danger" });
         }
         this.state.isScanning = false;
+    }
+
+    closeScanPanel() {
+        if (!this.state.isScanning) {
+            this.state.showScanPanel = false;
+        }
     }
 
     onCutoffChange(ev) {
@@ -202,25 +249,37 @@ export class MisaInvoiceDashboard extends Component {
         });
     }
 
-    /** Mở/đóng dòng chi tiết sản phẩm ngay trong bảng "Phiếu cần hối gấp nhất". */
-    async toggleExpand(pickingId, ev) {
-        ev.stopPropagation();
-        if (this.state.expandedPickingId === pickingId) {
-            this.state.expandedPickingId = null;
-            this.state.expandedLines = [];
-            return;
-        }
-        this.state.expandedPickingId = pickingId;
-        this.state.expandedLines = [];
-        this.state.expandedLoading = true;
+    /** Mở drawer bên phải: chi tiết 1 phiếu + sản phẩm/giá trị đã xuất, thay vì rời trang. */
+    async openDrawer(row) {
+        this.state.drawerOpen = true;
+        this.state.drawerPicking = row;
+        this.state.drawerLines = [];
+        this.state.drawerLoading = true;
         try {
-            this.state.expandedLines = await this.orm.call(
-                "stock.picking", "get_misa_invoice_picking_lines", [pickingId], {}
+            this.state.drawerLines = await this.orm.call(
+                "stock.picking", "get_misa_invoice_picking_lines", [row.id], {}
             );
         } catch (e) {
             this.notification.add("Lỗi tải chi tiết phiếu: " + (e.message || e), { type: "danger" });
         }
-        this.state.expandedLoading = false;
+        this.state.drawerLoading = false;
+    }
+
+    closeDrawer() {
+        this.state.drawerOpen = false;
+        this.state.drawerPicking = null;
+        this.state.drawerLines = [];
+    }
+
+    /** Chỉ đóng drawer khi bấm đúng vùng nền mờ (overlay), không đóng khi bấm bên trong drawer. */
+    onDrawerOverlayClick(ev) {
+        if (ev.target === ev.currentTarget) {
+            this.closeDrawer();
+        }
+    }
+
+    get drawerLinesTotal() {
+        return this.state.drawerLines.reduce((sum, line) => sum + (line.value || 0), 0);
     }
 
     // ===== Phân trang bảng "Theo nhân viên sale" (client-side, dữ liệu đã tải sẵn) =====

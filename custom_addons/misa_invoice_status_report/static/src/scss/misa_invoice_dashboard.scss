@@ -354,36 +354,6 @@
         .miv-cell-critical { color: var(--miv-critical-text); font-weight: 700; }
         .miv-cell-warning { color: var(--miv-warning-text); font-weight: 700; }
         .miv-cell-good { color: var(--miv-good-text); font-weight: 700; }
-
-        .miv-expand-col {
-            width: 28px;
-            padding: 10px 0 10px 10px;
-
-            i {
-                cursor: pointer;
-                color: var(--miv-ink-muted);
-                width: 16px;
-                display: inline-block;
-                text-align: center;
-
-                &:hover { color: var(--miv-ink); }
-            }
-        }
-    }
-
-    .miv-expand-row {
-        cursor: default !important;
-        background: var(--miv-plane);
-
-        &:hover { background: var(--miv-plane) !important; }
-
-        > td { padding: 10px 10px 14px 38px; }
-    }
-
-    .miv-expand-loading {
-        padding: 10px 0;
-        color: var(--miv-ink-muted);
-        font-size: 12.5px;
     }
 
     .miv-subtable {
@@ -464,5 +434,228 @@
         &.miv-badge-warning, &.miv-badge-state-requested { background: rgba(250, 178, 25, 0.18); color: var(--miv-warning-text); }
         &.miv-badge-state-invoiced { background: rgba(12, 163, 12, 0.12); color: var(--miv-good-text); }
         &.miv-badge-state-not_checked { background: rgba(137, 135, 129, 0.14); color: var(--miv-ink-muted); }
+    }
+
+    // ===== Scan progress panel =====
+    .miv-scan-panel {
+        background: var(--miv-surface);
+        border: 1px solid var(--miv-grid);
+        border-radius: 12px;
+        padding: 14px 18px;
+        margin-bottom: 24px;
+        font-size: 12.5px;
+
+        .miv-scan-panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            color: var(--miv-ink-2);
+
+            i.fa-bolt { color: var(--miv-warning-text); margin-right: 4px; }
+
+            .miv-scan-panel-close {
+                cursor: pointer;
+                color: var(--miv-ink-muted);
+                &:hover { color: var(--miv-ink); }
+            }
+        }
+
+        .miv-scan-progress-bar {
+            height: 6px;
+            border-radius: 999px;
+            background: var(--miv-grid);
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+
+        .miv-scan-progress-fill {
+            height: 100%;
+            background: var(--miv-good);
+            transition: width 0.2s ease;
+        }
+
+        .miv-scan-log {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            max-height: 160px;
+            overflow-y: auto;
+
+            li {
+                padding: 3px 0;
+                color: var(--miv-ink-2);
+
+                i { width: 14px; display: inline-block; text-align: center; margin-right: 4px; }
+
+                &.miv-scan-log-error { color: var(--miv-critical-text); }
+            }
+        }
+
+        .miv-scan-done {
+            margin-top: 8px;
+            color: var(--miv-good-text);
+            font-weight: 600;
+
+            i { margin-right: 4px; }
+        }
+    }
+
+    // ===== Tabs (Cần hối / Theo kho / Theo sale) =====
+    .miv-tabbed-section {
+        padding-top: 8px;
+    }
+
+    .miv-tabs {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        border-bottom: 1px solid var(--miv-grid);
+        margin: -18px -20px 16px;
+        padding: 0 20px;
+        flex-wrap: wrap;
+    }
+
+    .miv-tab {
+        background: none;
+        border: none;
+        border-bottom: 2px solid transparent;
+        padding: 12px 6px;
+        margin-right: 18px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--miv-ink-muted);
+        cursor: pointer;
+
+        &:hover { color: var(--miv-ink-2); }
+
+        &.active {
+            color: var(--miv-ink);
+            border-bottom-color: var(--miv-ink);
+        }
+
+        .miv-tab-count {
+            display: inline-block;
+            margin-left: 6px;
+            padding: 1px 7px;
+            border-radius: 999px;
+            background: var(--miv-plane);
+            color: var(--miv-ink-muted);
+            font-size: 11px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        &.active .miv-tab-count { background: rgba(11, 11, 11, 0.08); color: var(--miv-ink); }
+    }
+
+    .miv-tab-viewall {
+        margin-left: auto;
+        font-size: 12.5px;
+        font-weight: 600;
+        text-decoration: none;
+        white-space: nowrap;
+
+        i { margin-left: 4px; }
+    }
+
+    .miv-tab-panel {
+        min-height: 80px;
+    }
+
+    // ===== Drawer chi tiết phiếu =====
+    .miv-drawer-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(11, 11, 11, 0.35);
+        z-index: 1050;
+        display: flex;
+        justify-content: flex-end;
+    }
+
+    .miv-drawer {
+        width: 480px;
+        max-width: 92vw;
+        height: 100%;
+        background: var(--miv-surface);
+        box-shadow: -8px 0 24px rgba(11, 11, 11, 0.18);
+        display: flex;
+        flex-direction: column;
+        animation: miv-drawer-slide-in 0.18s ease-out;
+    }
+
+    @keyframes miv-drawer-slide-in {
+        from { transform: translateX(24px); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+    }
+
+    .miv-drawer-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        padding: 18px 20px;
+        border-bottom: 1px solid var(--miv-grid);
+
+        .miv-drawer-title { font-size: 16px; font-weight: 700; }
+        .miv-drawer-subtitle { font-size: 12.5px; color: var(--miv-ink-2); margin-top: 2px; }
+
+        .miv-drawer-close {
+            cursor: pointer;
+            color: var(--miv-ink-muted);
+            font-size: 16px;
+            &:hover { color: var(--miv-ink); }
+        }
+    }
+
+    .miv-drawer-body {
+        padding: 18px 20px;
+        overflow-y: auto;
+        flex: 1;
+    }
+
+    .miv-drawer-meta {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+        margin-bottom: 20px;
+        font-size: 12.5px;
+
+        .miv-drawer-meta-label {
+            display: block;
+            color: var(--miv-ink-muted);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            margin-bottom: 3px;
+        }
+    }
+
+    .miv-drawer-section-title {
+        font-size: 13px;
+        font-weight: 700;
+        margin: 0 0 10px;
+    }
+
+    .miv-drawer-loading {
+        color: var(--miv-ink-muted);
+        font-size: 12.5px;
+        padding: 12px 0;
+    }
+
+    .miv-drawer-table {
+        max-width: none;
+
+        tfoot td {
+            border-top: 2px solid var(--miv-grid);
+            padding-top: 8px;
+        }
+
+        .miv-combo-row { background: rgba(74, 58, 167, 0.06); font-weight: 600; }
+        .miv-component-row td:first-child { padding-left: 22px; color: var(--miv-ink-2); }
+    }
+
+    .miv-drawer-footer {
+        padding: 14px 20px;
+        border-top: 1px solid var(--miv-grid);
+        text-align: right;
     }
 }

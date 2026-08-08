@@ -11,7 +11,7 @@
         - Cho phép đánh dấu phiếu là ngoại lệ (chấp nhận chờ xuất hóa đơn).
     """,
     'author': 'Luan',
-    'depends': ['base', 'stock', 'sale', 'sale_stock', 'misa_fetch_po_button'],
+    'depends': ['base', 'stock', 'sale', 'sale_stock', 'mrp', 'misa_fetch_po_button'],
     'data': [
         'security/misa_invoice_security.xml',
         'security/ir.model.access.csv',
