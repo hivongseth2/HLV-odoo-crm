@@ -49,13 +49,24 @@
                     </div>
                     <div class="miv-month-bar">
                         <i class="fa fa-calendar"/>
-                        <span>Xem theo tháng</span>
-                        <select class="miv-cutoff-input" t-on-change="onMonthChange">
-                            <option value="" t-att-selected="!state.monthFilter">Tất cả</option>
+                        <span>Ngày xuất kho</span>
+                        <select class="miv-cutoff-input" t-on-change="onMonthPick">
+                            <option value="" t-att-selected="!monthDropdownValue">Tất cả</option>
                             <t t-foreach="monthOptions" t-as="opt" t-key="opt.value">
-                                <option t-att-value="opt.value" t-att-selected="opt.value === state.monthFilter" t-esc="opt.label"/>
+                                <option t-att-value="opt.value" t-att-selected="opt.value === monthDropdownValue" t-esc="opt.label"/>
                             </t>
                         </select>
+                        <span class="miv-filter-sep">hoặc</span>
+                        <input type="date" class="miv-cutoff-input" t-att-value="state.shipFrom" t-on-change="onShipFromChange" title="Từ ngày"/>
+                        <span>→</span>
+                        <input type="date" class="miv-cutoff-input" t-att-value="state.shipTo" t-on-change="onShipToChange" title="Đến ngày"/>
+                    </div>
+                    <div class="miv-month-bar">
+                        <i class="fa fa-file-text-o"/>
+                        <span>Ngày xuất hóa đơn</span>
+                        <input type="date" class="miv-cutoff-input" t-att-value="state.invFrom" t-on-change="onInvFromChange" title="Từ ngày"/>
+                        <span>→</span>
+                        <input type="date" class="miv-cutoff-input" t-att-value="state.invTo" t-on-change="onInvToChange" title="Đến ngày"/>
                     </div>
                 </div>
 
@@ -176,6 +187,14 @@
                                 t-on-click="() => this.switchTab('saler')">
                             Theo nhân viên sale <span class="miv-tab-count"><t t-esc="state.data.by_saler.length"/></span>
                         </button>
+                        <button t-attf-class="miv-tab {{ state.activeTab === 'customer' ? 'active' : '' }}"
+                                t-on-click="() => this.switchTab('customer')">
+                            Theo khách hàng <span class="miv-tab-count"><t t-esc="state.data.by_customer.length"/></span>
+                        </button>
+                        <button t-attf-class="miv-tab {{ state.activeTab === 'orders' ? 'active' : '' }}"
+                                t-on-click="() => this.switchTab('orders')">
+                            Đơn hàng <span class="miv-tab-count"><t t-esc="state.orders.total"/></span>
+                        </button>
                         <a href="#" class="miv-link miv-tab-viewall" t-on-click.prevent="openFullList">
                             Xem tất cả <i class="fa fa-arrow-right"/>
                         </a>
@@ -284,6 +303,95 @@
                             </button>
                         </div>
                         <div class="miv-empty" t-else="">Chưa có dữ liệu.</div>
+                    </div>
+
+                    <!-- === Tab: Theo khách hàng === -->
+                    <div t-if="state.activeTab === 'customer'" class="miv-tab-panel">
+                        <table class="miv-table" t-if="state.data.by_customer.length">
+                            <thead>
+                                <tr>
+                                    <th>Khách hàng</th>
+                                    <th class="miv-col-num">Tổng phiếu xuất kho</th>
+                                    <th class="miv-col-num">Chưa xuất HĐ</th>
+                                    <th class="miv-col-num">Đã xuất HĐ</th>
+                                    <th class="miv-col-num">Tiền thực xuất</th>
+                                    <th class="miv-col-num">Tiền đã xuất HĐ</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr t-foreach="pagedCustomers" t-as="cust" t-key="cust.partner_id or cust.partner_name"
+                                    t-on-click="() => this.openCustomerRow(cust.partner_id)">
+                                    <td><b><t t-esc="cust.partner_name"/></b></td>
+                                    <td class="miv-col-num"><t t-esc="cust.total"/></td>
+                                    <td class="miv-col-num miv-cell-critical"><t t-esc="cust.pending"/></td>
+                                    <td class="miv-col-num miv-cell-good"><t t-esc="cust.invoiced"/></td>
+                                    <td class="miv-col-num"><t t-esc="formatCurrency(cust.actual_amount_total)"/></td>
+                                    <td class="miv-col-num"><t t-esc="formatCurrency(cust.invoice_amount_total)"/></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <div class="miv-pagination" t-if="state.data.by_customer.length > 10">
+                            <button class="btn btn-sm miv-page-btn" t-on-click="customerPrevPage" t-att-disabled="state.customerPage &lt;= 1">
+                                <i class="fa fa-chevron-left"/>
+                            </button>
+                            <span class="miv-page-label">Trang <t t-esc="state.customerPage"/> / <t t-esc="customerTotalPages"/></span>
+                            <button class="btn btn-sm miv-page-btn" t-on-click="customerNextPage" t-att-disabled="state.customerPage &gt;= customerTotalPages">
+                                <i class="fa fa-chevron-right"/>
+                            </button>
+                        </div>
+                        <div class="miv-empty" t-else="">Chưa có dữ liệu.</div>
+                    </div>
+
+                    <!-- === Tab: Đơn hàng (phẳng, không group) === -->
+                    <div t-if="state.activeTab === 'orders'" class="miv-tab-panel">
+                        <div class="miv-loading" t-if="state.orders.loading">
+                            <i class="fa fa-spinner fa-spin"/> Đang tải...
+                        </div>
+                        <t t-else="">
+                            <table class="miv-table" t-if="state.orders.rows.length">
+                                <thead>
+                                    <tr>
+                                        <th>Phiếu</th>
+                                        <th>Khách hàng</th>
+                                        <th>Đơn bán</th>
+                                        <th>Ngày xuất kho</th>
+                                        <th class="miv-col-num">Tiền thực xuất</th>
+                                        <th class="miv-col-num">Tiền đã xuất HĐ</th>
+                                        <th class="miv-col-num">Tiền chưa xuất HĐ</th>
+                                        <th>Trạng thái</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr t-foreach="state.orders.rows" t-as="row" t-key="row.id" t-on-click="() => this.openDrawer(row)">
+                                        <td><b><t t-esc="row.name"/></b></td>
+                                        <td><t t-esc="row.partner_name"/></td>
+                                        <td><t t-esc="row.sale_order_name"/></td>
+                                        <td class="miv-col-num"><t t-esc="row.date_done"/></td>
+                                        <td class="miv-col-num"><t t-esc="formatCurrency(row.actual_amount)"/></td>
+                                        <td class="miv-col-num"><t t-esc="formatCurrency(row.invoice_amount)"/></td>
+                                        <td class="miv-col-num miv-cell-critical"><t t-esc="formatCurrency(row.outstanding_amount)"/></td>
+                                        <td>
+                                            <span t-attf-class="miv-badge miv-badge-state-{{ row.state }}">
+                                                <t t-esc="row.state_label"/>
+                                            </span>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <div class="miv-pagination" t-if="state.orders.total > state.orders.pageSize">
+                                <button class="btn btn-sm miv-page-btn" t-on-click="ordersPrevPage" t-att-disabled="state.orders.page &lt;= 1">
+                                    <i class="fa fa-chevron-left"/>
+                                </button>
+                                <span class="miv-page-label">
+                                    Trang <t t-esc="state.orders.page"/> / <t t-esc="ordersTotalPages"/>
+                                    (<t t-esc="state.orders.total"/> phiếu)
+                                </span>
+                                <button class="btn btn-sm miv-page-btn" t-on-click="ordersNextPage" t-att-disabled="state.orders.page &gt;= ordersTotalPages">
+                                    <i class="fa fa-chevron-right"/>
+                                </button>
+                            </div>
+                            <div class="miv-empty" t-if="!state.orders.rows.length">Chưa có dữ liệu.</div>
+                        </t>
                     </div>
                 </div>
             </t>

@@ -202,8 +202,8 @@ class StockPickingMisaInvoiceStatus(models.Model):
         self.message_post(body=Markup("Đã bỏ đánh dấu ngoại lệ xuất hóa đơn MISA."))
         return True
 
-    def _misa_invoice_scan_domain(self):
-        return self._misa_invoice_dashboard_base_domain() + [
+    def _misa_invoice_scan_domain(self, date_from=False, date_to=False):
+        return self._misa_invoice_dashboard_base_domain(date_from, date_to) + [
             ('misa_invoice_state', '!=', 'invoiced'),
             ('misa_invoice_exception', '=', False),
         ]
@@ -224,15 +224,21 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 )
 
     @api.model
-    def get_misa_invoice_scan_candidates(self, limit=MISA_INVOICE_SCAN_BATCH_SIZE):
+    def get_misa_invoice_scan_candidates(self, limit=MISA_INVOICE_SCAN_BATCH_SIZE, date_from=False, date_to=False):
         """Danh sách phiếu SẼ được quét (chưa gọi MISA) — dùng để dashboard chạy
-        từng phiếu một và hiện tiến trình thực (thay vì 1 lệnh lớn chạy âm thầm)."""
-        pickings = self.sudo().search(
-            self._misa_invoice_scan_domain(),
-            order='misa_invoice_last_checked asc nulls first',
-            limit=limit,
-        )
-        return [{'id': picking.id, 'name': picking.name} for picking in pickings]
+        từng phiếu một và hiện tiến trình thực (thay vì 1 lệnh lớn chạy âm thầm).
+
+        Khi có date_from/date_to (đang xem theo 1 khoảng ngày xuất kho cụ thể), JS sẽ
+        lặp gọi hàm này nhiều lần (mỗi lần 1 batch) cho tới khi quét hết `total` — nhờ
+        vậy vẫn chia nhỏ từng lệnh gọi MISA nhưng làm trọn được cả khoảng đang cần gấp,
+        thay vì luôn chỉ dừng ở 1 batch như khi không chọn khoảng ngày nào."""
+        domain = self._misa_invoice_scan_domain(date_from, date_to)
+        Picking = self.sudo()
+        pickings = Picking.search(domain, order='misa_invoice_last_checked asc nulls first', limit=limit)
+        return {
+            'candidates': [{'id': picking.id, 'name': picking.name} for picking in pickings],
+            'total': Picking.search_count(domain),
+        }
 
     # ==================== Mốc ngày đối soát (cấu hình được) ====================
 
@@ -264,10 +270,14 @@ class StockPickingMisaInvoiceStatus(models.Model):
 
     # ==================== Dữ liệu cho Dashboard OWL ====================
 
-    def _misa_invoice_dashboard_base_domain(self, date_from=False, date_to=False):
+    def _misa_invoice_dashboard_base_domain(
+        self, date_from=False, date_to=False, invoice_date_from=False, invoice_date_to=False,
+    ):
         """Domain nền cho mọi truy vấn đối soát: phiếu xuất kho đã done, từ mốc
-        đối soát trở đi. date_from/date_to (nếu có) chỉ dùng để THU HẸP thêm
-        (bộ lọc theo tháng trên dashboard) — không bao giờ vượt ra ngoài mốc đối soát."""
+        đối soát trở đi. date_from/date_to lọc theo NGÀY XUẤT KHO (date_done, có thể
+        là 1 ngày cụ thể nếu from=to, hoặc 1 khoảng) — chỉ dùng để THU HẸP thêm, không
+        bao giờ vượt ra ngoài mốc đối soát. invoice_date_from/to lọc theo NGÀY XUẤT
+        HÓA ĐƠN (misa_invoice_date) — độc lập với ngày xuất kho."""
         lower = self._get_misa_invoice_cutoff_date()
         if date_from:
             try:
@@ -294,6 +304,10 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 domain.append(
                     ('date_done', '<=', fields.Datetime.to_string(datetime.combine(parsed_to, dt_time.max)))
                 )
+        if invoice_date_from:
+            domain.append(('misa_invoice_date', '>=', invoice_date_from))
+        if invoice_date_to:
+            domain.append(('misa_invoice_date', '<=', invoice_date_to))
         return domain
 
     def _misa_invoice_state_breakdown(self, domain):
@@ -310,10 +324,14 @@ class StockPickingMisaInvoiceStatus(models.Model):
         }
 
     @api.model
-    def get_misa_invoice_dashboard_data(self, date_from=False, date_to=False):
-        """Số liệu tổng quan cho dashboard OWL (KPI tiles + bảng theo kho/theo sale)."""
+    def get_misa_invoice_dashboard_data(
+        self, date_from=False, date_to=False, invoice_date_from=False, invoice_date_to=False,
+    ):
+        """Số liệu tổng quan cho dashboard OWL (KPI tiles + bảng theo kho/sale/khách hàng)."""
         Picking = self.sudo()
-        base_domain = self._misa_invoice_dashboard_base_domain(date_from, date_to)
+        base_domain = self._misa_invoice_dashboard_base_domain(
+            date_from, date_to, invoice_date_from, invoice_date_to
+        )
 
         counts = {}
         for state in MISA_INVOICE_STATE_LABELS:
@@ -359,6 +377,29 @@ class StockPickingMisaInvoiceStatus(models.Model):
             by_saler.append(row)
         by_saler.sort(key=lambda row: row['pending'], reverse=True)
 
+        by_customer = []
+        customer_groups = Picking.read_group(base_domain, ['id'], ['partner_id'])
+        for grp in customer_groups:
+            partner = grp['partner_id']  # False, hoặc (id, display_name)
+            partner_id = partner[0] if partner else False
+            customer_domain = base_domain + [('partner_id', '=', partner_id)]
+            customer_pickings = Picking.search(customer_domain)
+            row = self._misa_invoice_state_breakdown(customer_domain)
+            row.update({
+                'partner_id': partner_id,
+                'partner_name': partner[1] if partner else 'Chưa có khách hàng',
+                'total': grp['partner_id_count'],
+                'pending': row['missing'] + row['requested'],
+                'actual_amount_total': sum(customer_pickings.mapped('x_studio_tng_tin_sau_thu')),
+                'invoice_amount_total': sum(
+                    customer_pickings.filtered(lambda p: p.misa_invoice_state == 'invoiced').mapped(
+                        'misa_invoice_amount'
+                    )
+                ),
+            })
+            by_customer.append(row)
+        by_customer.sort(key=lambda row: row['pending'], reverse=True)
+
         cron = self.env.ref('misa_invoice_status_report.ir_cron_misa_invoice_status_scan', raise_if_not_found=False)
         last_scan_at = False
         if cron and cron.sudo().lastcall:
@@ -372,37 +413,63 @@ class StockPickingMisaInvoiceStatus(models.Model):
             'invoiced_amount': invoiced_amount,
             'by_warehouse': by_warehouse,
             'by_saler': by_saler,
+            'by_customer': by_customer,
             'last_scan_at': last_scan_at,
             'cutoff_date': fields.Date.to_string(self._get_misa_invoice_cutoff_date()),
             'can_configure': self.env.user.has_group(MISA_INVOICE_RECONCILE_GROUP),
         }
 
+    def _misa_invoice_picking_to_row(self, picking, today):
+        done_date = picking.date_done.date() if picking.date_done else False
+        return {
+            'id': picking.id,
+            'name': picking.name,
+            'partner_name': picking.partner_id.display_name or '',
+            'sale_order_name': ', '.join(picking.misa_invoice_sale_order_ids.mapped('name')),
+            'saler_code': picking.misa_invoice_saler_code or '',
+            'date_done': fields.Date.to_string(done_date) if done_date else '',
+            'days_pending': (today - done_date).days if done_date else 0,
+            'state': picking.misa_invoice_state,
+            'state_label': MISA_INVOICE_STATE_LABELS.get(picking.misa_invoice_state, picking.misa_invoice_state),
+            'actual_amount': picking.x_studio_tng_tin_sau_thu or 0.0,
+            'invoice_amount': picking.misa_invoice_amount or 0.0,
+            'outstanding_amount': 0.0 if picking.misa_invoice_state == 'invoiced' else (
+                picking.x_studio_tng_tin_sau_thu or 0.0
+            ),
+        }
+
     @api.model
-    def get_misa_invoice_urgent_list(self, limit=10, date_from=False, date_to=False):
+    def get_misa_invoice_urgent_list(
+        self, limit=10, date_from=False, date_to=False, invoice_date_from=False, invoice_date_to=False,
+    ):
         """Top phiếu cần hối gấp nhất: chưa xuất HĐ, không ngoại lệ, xuất kho lâu nhất."""
-        domain = self._misa_invoice_dashboard_base_domain(date_from, date_to) + [
+        domain = self._misa_invoice_dashboard_base_domain(
+            date_from, date_to, invoice_date_from, invoice_date_to
+        ) + [
             ('misa_invoice_state', 'in', ('missing', 'requested')),
             ('misa_invoice_exception', '=', False),
         ]
         pickings = self.sudo().search(domain, order='date_done asc', limit=limit)
         today = fields.Date.context_today(self)
-        rows = []
-        for picking in pickings:
-            done_date = picking.date_done.date() if picking.date_done else False
-            rows.append({
-                'id': picking.id,
-                'name': picking.name,
-                'partner_name': picking.partner_id.display_name or '',
-                'sale_order_name': ', '.join(picking.misa_invoice_sale_order_ids.mapped('name')),
-                'saler_code': picking.misa_invoice_saler_code or '',
-                'date_done': fields.Date.to_string(done_date) if done_date else '',
-                'days_pending': (today - done_date).days if done_date else 0,
-                'state': picking.misa_invoice_state,
-                'state_label': MISA_INVOICE_STATE_LABELS.get(picking.misa_invoice_state, picking.misa_invoice_state),
-                'actual_amount': picking.x_studio_tng_tin_sau_thu or 0.0,
-                'invoice_amount': picking.misa_invoice_amount or 0.0,
-            })
-        return rows
+        return [self._misa_invoice_picking_to_row(picking, today) for picking in pickings]
+
+    @api.model
+    def get_misa_invoice_picking_list(
+        self, limit=20, offset=0, date_from=False, date_to=False, invoice_date_from=False, invoice_date_to=False,
+    ):
+        """Danh sách phiếu 'phẳng' (mọi trạng thái, không group) — tab 'Đơn hàng' trên
+        dashboard. Có phân trang server-side vì có thể lên tới hàng nghìn dòng."""
+        Picking = self.sudo()
+        domain = self._misa_invoice_dashboard_base_domain(
+            date_from, date_to, invoice_date_from, invoice_date_to
+        )
+        total = Picking.search_count(domain)
+        pickings = Picking.search(domain, order='date_done desc', limit=limit, offset=offset)
+        today = fields.Date.context_today(self)
+        return {
+            'rows': [self._misa_invoice_picking_to_row(picking, today) for picking in pickings],
+            'total': total,
+        }
 
     @api.model
     def get_misa_invoice_picking_lines(self, picking_id):
@@ -471,7 +538,8 @@ class StockPickingMisaInvoiceStatus(models.Model):
 
     @api.model
     def get_misa_invoice_report_action(
-        self, state=False, exception=None, saler_code=False, mismatch=False, date_from=False, date_to=False,
+        self, state=False, exception=None, saler_code=False, mismatch=False, partner_id=False,
+        date_from=False, date_to=False, invoice_date_from=False, invoice_date_to=False,
     ):
         """Trả action list đã có sẵn (action_misa_invoice_status_report), lọc theo tile/dòng được bấm.
         exception=None: không ép domain, để search view tự quyết định (dùng cho "Xem tất cả").
@@ -479,7 +547,9 @@ class StockPickingMisaInvoiceStatus(models.Model):
         action = self.env['ir.actions.actions']._for_xml_id(
             'misa_invoice_status_report.action_misa_invoice_status_report'
         )
-        domain = self._misa_invoice_dashboard_base_domain(date_from, date_to)
+        domain = self._misa_invoice_dashboard_base_domain(
+            date_from, date_to, invoice_date_from, invoice_date_to
+        )
         if state:
             domain.append(('misa_invoice_state', '=', state))
             if exception is None:
@@ -489,6 +559,8 @@ class StockPickingMisaInvoiceStatus(models.Model):
         if saler_code:
             value = False if saler_code == MISA_INVOICE_UNASSIGNED_SALER else saler_code
             domain.append(('misa_invoice_saler_code', '=', value))
+        if partner_id:
+            domain.append(('partner_id', '=', partner_id))
         if mismatch:
             domain.append(('misa_invoice_amount_mismatch', '=', True))
         action['domain'] = domain
