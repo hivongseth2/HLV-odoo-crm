@@ -33,11 +33,16 @@
                                        readonly="1"/>
                                 <field name="misa_invoice_last_checked" readonly="1"/>
                                 <field name="misa_invoice_request_refid" readonly="1"/>
+                                <field name="misa_invoice_sale_order_ids" widget="many2many_tags" readonly="1"/>
+                                <field name="misa_invoice_saler_code" readonly="1"/>
                             </group>
                             <group string="Hóa đơn (nếu đã xuất)">
                                 <field name="misa_invoice_no" readonly="1"/>
                                 <field name="misa_invoice_date" readonly="1"/>
                                 <field name="misa_invoice_amount" readonly="1"/>
+                                <field name="misa_invoice_amount_diff" readonly="1"
+                                       invisible="misa_invoice_state != 'invoiced'"
+                                       decoration-danger="misa_invoice_amount_mismatch"/>
                             </group>
                         </group>
                         <group string="Ngoại lệ" invisible="not misa_invoice_exception">
@@ -59,11 +64,12 @@
             <list string="Đối soát xuất hóa đơn MISA" create="0" delete="0"
                   decoration-danger="misa_invoice_state == 'missing' and not misa_invoice_exception"
                   decoration-warning="misa_invoice_state == 'requested' and not misa_invoice_exception"
-                  decoration-success="misa_invoice_state == 'invoiced'"
+                  decoration-success="misa_invoice_state == 'invoiced' and not misa_invoice_amount_mismatch"
                   decoration-muted="misa_invoice_exception">
                 <field name="name"/>
                 <field name="partner_id"/>
-                <field name="misa_invoice_sale_order_id"/>
+                <field name="misa_invoice_sale_order_ids" widget="many2many_tags" optional="show"/>
+                <field name="misa_invoice_saler_code" optional="show"/>
                 <field name="picking_type_id" optional="hide"/>
                 <field name="date_done" string="Ngày xuất kho"/>
                 <field name="misa_invoice_state" widget="badge"
@@ -74,6 +80,7 @@
                 <field name="misa_invoice_no" optional="show"/>
                 <field name="misa_invoice_date" optional="show"/>
                 <field name="misa_invoice_amount" optional="show" sum="Tổng tiền HĐ"/>
+                <field name="misa_invoice_amount_mismatch" widget="boolean_toggle" readonly="1" optional="show"/>
                 <field name="misa_invoice_last_checked"/>
                 <field name="misa_invoice_exception" widget="boolean_toggle" readonly="1"/>
                 <button name="action_check_misa_invoice_status" type="object"
@@ -90,8 +97,10 @@
             <search string="Tìm kiếm đối soát xuất hóa đơn MISA">
                 <field name="name"/>
                 <field name="partner_id"/>
-                <field name="misa_invoice_sale_order_id"/>
+                <field name="misa_invoice_sale_order_ids"/>
+                <field name="misa_invoice_saler_code"/>
                 <field name="misa_invoice_no"/>
+                <field name="date_done"/>
                 <filter string="Chưa có đề nghị" name="filter_missing"
                         domain="[('misa_invoice_state', '=', 'missing')]"/>
                 <filter string="Đã đề nghị, chờ HĐ" name="filter_requested"
@@ -99,16 +108,21 @@
                 <filter string="Đã xuất HĐ" name="filter_invoiced"
                         domain="[('misa_invoice_state', '=', 'invoiced')]"/>
                 <separator/>
+                <filter string="Lệch tiền với MISA" name="filter_mismatch"
+                        domain="[('misa_invoice_amount_mismatch', '=', True)]"/>
                 <filter string="Đã đánh dấu ngoại lệ" name="filter_exception"
                         domain="[('misa_invoice_exception', '=', True)]"/>
                 <filter string="Chưa đánh dấu ngoại lệ" name="filter_no_exception"
                         domain="[('misa_invoice_exception', '=', False)]"/>
                 <separator/>
+                <filter string="Ngày xuất kho" name="filter_date_done" date="date_done"/>
+                <separator/>
                 <group expand="1" string="Nhóm theo">
                     <filter string="Trạng thái" name="groupby_state" context="{'group_by': 'misa_invoice_state'}"/>
                     <filter string="Kho" name="groupby_warehouse" context="{'group_by': 'picking_type_id'}"/>
-                    <filter string="Đơn bán liên quan" name="groupby_sale_order" context="{'group_by': 'misa_invoice_sale_order_id'}"/>
+                    <filter string="Nhân viên sale" name="groupby_saler" context="{'group_by': 'misa_invoice_saler_code'}"/>
                     <filter string="Khách hàng" name="groupby_partner" context="{'group_by': 'partner_id'}"/>
+                    <filter string="Tháng xuất kho" name="groupby_date_done" context="{'group_by': 'date_done:month'}"/>
                 </group>
             </search>
         </field>

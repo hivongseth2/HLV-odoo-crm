@@ -27,24 +27,34 @@
                     </button>
                 </div>
 
-                <!-- ===== Cutoff config ===== -->
-                <div class="miv-cutoff-bar">
-                    <i class="fa fa-filter"/>
-                    <span>Chỉ đối soát phiếu xuất kho từ ngày</span>
-                    <t t-if="state.data.can_configure">
-                        <input type="date" class="miv-cutoff-input" t-att-value="state.cutoffDraft" t-on-change="onCutoffChange"/>
-                        <button class="btn btn-sm miv-cutoff-save"
-                                t-on-click="saveCutoff"
-                                t-att-disabled="state.isSavingCutoff or state.cutoffDraft === state.data.cutoff_date">
-                            <i class="fa fa-check" t-if="!state.isSavingCutoff"/>
-                            <i class="fa fa-spinner fa-spin" t-if="state.isSavingCutoff"/>
-                            Lưu
+                <!-- ===== Cutoff config + month filter ===== -->
+                <div class="miv-toolbar">
+                    <div class="miv-cutoff-bar">
+                        <i class="fa fa-filter"/>
+                        <span>Chỉ đối soát phiếu xuất kho từ ngày</span>
+                        <t t-if="state.data.can_configure">
+                            <input type="date" class="miv-cutoff-input" t-att-value="state.cutoffDraft" t-on-change="onCutoffChange"/>
+                            <button class="btn btn-sm miv-cutoff-save"
+                                    t-on-click="saveCutoff"
+                                    t-att-disabled="state.isSavingCutoff or state.cutoffDraft === state.data.cutoff_date">
+                                <i class="fa fa-check" t-if="!state.isSavingCutoff"/>
+                                <i class="fa fa-spinner fa-spin" t-if="state.isSavingCutoff"/>
+                                Lưu
+                            </button>
+                        </t>
+                        <t t-else="">
+                            <b><t t-esc="state.data.cutoff_date"/></b>
+                            <span class="miv-cutoff-hint">(chỉ nhóm "Đối soát XHD" mới đổi được)</span>
+                        </t>
+                    </div>
+                    <div class="miv-month-bar">
+                        <i class="fa fa-calendar"/>
+                        <span>Xem theo tháng</span>
+                        <input type="month" class="miv-cutoff-input" t-att-value="state.monthFilter" t-on-change="onMonthChange"/>
+                        <button class="btn btn-sm miv-cutoff-save" t-if="state.monthFilter" t-on-click="clearMonthFilter">
+                            <i class="fa fa-times"/> Bỏ lọc
                         </button>
-                    </t>
-                    <t t-else="">
-                        <b><t t-esc="state.data.cutoff_date"/></b>
-                        <span class="miv-cutoff-hint">(chỉ nhóm "Đối soát XHD" mới đổi được)</span>
-                    </t>
+                    </div>
                 </div>
 
                 <!-- ===== Hero: donut + tiles ===== -->
@@ -109,6 +119,13 @@
                             <div class="miv-tile-body">
                                 <div class="miv-tile-value"><t t-esc="state.data.exception_count"/></div>
                                 <div class="miv-tile-label">Đã đánh dấu ngoại lệ</div>
+                            </div>
+                        </div>
+                        <div class="miv-tile miv-tile-critical" t-on-click="openMismatchTile">
+                            <div class="miv-tile-icon"><i class="fa fa-balance-scale"/></div>
+                            <div class="miv-tile-body">
+                                <div class="miv-tile-value"><t t-esc="state.data.mismatch_count"/></div>
+                                <div class="miv-tile-label">Lệch tiền với MISA</div>
                             </div>
                         </div>
                     </div>
@@ -177,6 +194,35 @@
                                 <td class="miv-col-num miv-cell-good"><t t-esc="wh.invoiced"/></td>
                                 <td class="miv-col-num"><t t-esc="wh.exception"/></td>
                                 <td class="miv-col-num"><b><t t-esc="wh.total"/></b></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="miv-empty" t-else="">Chưa có dữ liệu.</div>
+                </div>
+
+                <!-- ===== By saler ===== -->
+                <div class="miv-section">
+                    <h3>Theo nhân viên sale</h3>
+                    <table class="miv-table" t-if="state.data.by_saler.length">
+                        <thead>
+                            <tr>
+                                <th>Nhân viên sale</th>
+                                <th class="miv-col-num">Chưa đề nghị</th>
+                                <th class="miv-col-num">Chờ HĐ</th>
+                                <th class="miv-col-num">Đã xuất HĐ</th>
+                                <th class="miv-col-num">Ngoại lệ</th>
+                                <th class="miv-col-num">Tổng</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr t-foreach="state.data.by_saler" t-as="saler" t-key="saler.saler_code"
+                                t-on-click="() => this.openSalerRow(saler.saler_code)">
+                                <td><b><t t-esc="saler.saler_code"/></b></td>
+                                <td class="miv-col-num miv-cell-critical"><t t-esc="saler.missing"/></td>
+                                <td class="miv-col-num miv-cell-warning"><t t-esc="saler.requested"/></td>
+                                <td class="miv-col-num miv-cell-good"><t t-esc="saler.invoiced"/></td>
+                                <td class="miv-col-num"><t t-esc="saler.exception"/></td>
+                                <td class="miv-col-num"><b><t t-esc="saler.total"/></b></td>
                             </tr>
                         </tbody>
                     </table>

@@ -23,6 +23,11 @@ MISA_INVOICE_CUTOFF_PARAM = 'misa_invoice_status_report.cutoff_date'
 MISA_INVOICE_CUTOFF_DEFAULT = '2026-01-01'
 MISA_INVOICE_RECONCILE_GROUP = 'misa_invoice_status_report.group_misa_invoice_reconciliation'
 
+# Sai số cho phép khi so tiền hóa đơn MISA với tiền thực xuất trên phiếu kho (làm tròn).
+MISA_INVOICE_AMOUNT_TOLERANCE = 1.0
+
+MISA_INVOICE_UNASSIGNED_SALER = 'Chưa gán mã sale'
+
 
 class StockPickingMisaInvoiceStatus(models.Model):
     _inherit = 'stock.picking'
@@ -44,23 +49,64 @@ class StockPickingMisaInvoiceStatus(models.Model):
     misa_invoice_no = fields.Char(string='Số hóa đơn MISA', copy=False)
     misa_invoice_date = fields.Date(string='Ngày hóa đơn MISA', copy=False)
     misa_invoice_amount = fields.Float(string='Tiền hóa đơn MISA', copy=False)
-    misa_invoice_sale_order_id = fields.Many2one(
+
+    # 1 phiếu xuất kho có thể gộp nhiều đơn bán (MISA trả "order_code": "DH1, DH2"
+    # cho cùng 1 refno), và 1 đơn bán có thể được xuất bởi nhiều phiếu (giao nhiều đợt)
+    # => quan hệ nhiều-nhiều, không thể rút gọn về 1 đơn duy nhất.
+    misa_invoice_sale_order_ids = fields.Many2many(
         'sale.order', string='Đơn bán liên quan',
-        compute='_compute_misa_invoice_sale_order_id', store=True,
+        compute='_compute_misa_invoice_sale_order_ids', store=True,
     )
+    # Lấy từ sale.order.x_studio_misa_saler_code (field Studio, đã có sẵn trên hệ thống).
+    misa_invoice_saler_code = fields.Char(
+        string='Mã sale MISA', compute='_compute_misa_invoice_saler_code', store=True, index=True,
+    )
+    # So tiền hóa đơn MISA với tiền thực xuất trên phiếu (field Studio x_studio_tng_tin_sau_thu).
+    misa_invoice_amount_diff = fields.Float(
+        string='Chênh lệch tiền (Odoo - MISA)', compute='_compute_misa_invoice_amount_mismatch', store=True,
+    )
+    misa_invoice_amount_mismatch = fields.Boolean(
+        string='Lệch tiền so với MISA', compute='_compute_misa_invoice_amount_mismatch', store=True,
+    )
+
     misa_invoice_exception = fields.Boolean(string='Ngoại lệ (chấp nhận chờ xuất HĐ)', copy=False)
     misa_invoice_exception_reason = fields.Text(string='Lý do ngoại lệ', copy=False)
     misa_invoice_exception_by_id = fields.Many2one('res.users', string='Người đánh dấu', copy=False)
     misa_invoice_exception_date = fields.Datetime(string='Ngày đánh dấu', copy=False)
 
     @api.depends('move_ids_without_package.sale_line_id.order_id', 'origin')
-    def _compute_misa_invoice_sale_order_id(self):
+    def _compute_misa_invoice_sale_order_ids(self):
         SaleOrder = self.env['sale.order']
         for picking in self:
-            order = picking.move_ids_without_package.mapped('sale_line_id.order_id')[:1]
-            if not order and picking.origin:
-                order = SaleOrder.search([('name', '=', picking.origin)], limit=1)
-            picking.misa_invoice_sale_order_id = order.id if order else False
+            orders = picking.move_ids_without_package.mapped('sale_line_id.order_id')
+            if not orders and picking.origin:
+                names = [name.strip() for name in picking.origin.split(',') if name.strip()]
+                if names:
+                    orders = SaleOrder.search([('name', 'in', names)])
+            picking.misa_invoice_sale_order_ids = orders
+
+    @api.depends('misa_invoice_sale_order_ids.x_studio_misa_saler_code')
+    def _compute_misa_invoice_saler_code(self):
+        for picking in self:
+            code = False
+            for order in picking.misa_invoice_sale_order_ids:
+                value = getattr(order, 'x_studio_misa_saler_code', False)
+                if value:
+                    code = value
+                    break
+            picking.misa_invoice_saler_code = code
+
+    @api.depends('misa_invoice_state', 'misa_invoice_amount', 'x_studio_tng_tin_sau_thu')
+    def _compute_misa_invoice_amount_mismatch(self):
+        for picking in self:
+            actual_amount = getattr(picking, 'x_studio_tng_tin_sau_thu', False) or 0.0
+            if picking.misa_invoice_state == 'invoiced' and actual_amount:
+                diff = actual_amount - (picking.misa_invoice_amount or 0.0)
+                picking.misa_invoice_amount_diff = diff
+                picking.misa_invoice_amount_mismatch = abs(diff) > MISA_INVOICE_AMOUNT_TOLERANCE
+            else:
+                picking.misa_invoice_amount_diff = 0.0
+                picking.misa_invoice_amount_mismatch = False
 
     def action_check_misa_invoice_status(self):
         """Gọi MISA kiểm tra tình trạng xuất hóa đơn cho các phiếu đang chọn.
@@ -102,6 +148,14 @@ class StockPickingMisaInvoiceStatus(models.Model):
                     body=Markup("<b>Tình trạng xuất hóa đơn MISA:</b> %s → %s") % (
                         MISA_INVOICE_STATE_LABELS.get(old_state, old_state),
                         MISA_INVOICE_STATE_LABELS.get(status['state'], status['state']),
+                    )
+                )
+            if picking.misa_invoice_amount_mismatch:
+                picking.message_post(
+                    body=Markup("<b>⚠️ Lệch tiền với MISA:</b> Odoo %.0f đ vs MISA %.0f đ (chênh %.0f đ)") % (
+                        getattr(picking, 'x_studio_tng_tin_sau_thu', 0.0) or 0.0,
+                        picking.misa_invoice_amount or 0.0,
+                        picking.misa_invoice_amount_diff,
                     )
                 )
         return True
@@ -174,20 +228,53 @@ class StockPickingMisaInvoiceStatus(models.Model):
 
     # ==================== Dữ liệu cho Dashboard OWL ====================
 
-    def _misa_invoice_dashboard_base_domain(self):
-        cutoff = self._get_misa_invoice_cutoff_date()
-        cutoff_dt = fields.Datetime.to_string(datetime.combine(cutoff, dt_time.min))
-        return [
+    def _misa_invoice_dashboard_base_domain(self, date_from=False, date_to=False):
+        """Domain nền cho mọi truy vấn đối soát: phiếu xuất kho đã done, từ mốc
+        đối soát trở đi. date_from/date_to (nếu có) chỉ dùng để THU HẸP thêm
+        (bộ lọc theo tháng trên dashboard) — không bao giờ vượt ra ngoài mốc đối soát."""
+        lower = self._get_misa_invoice_cutoff_date()
+        if date_from:
+            try:
+                parsed_from = fields.Date.from_string(date_from)
+            except Exception:
+                parsed_from = False
+            if parsed_from and parsed_from > lower:
+                lower = parsed_from
+
+        domain = [
             ('picking_type_id.code', '=', 'outgoing'),
             ('state', '=', 'done'),
-            ('date_done', '>=', cutoff_dt),
+            ('date_done', '>=', fields.Datetime.to_string(datetime.combine(lower, dt_time.min))),
         ]
+        if date_to:
+            try:
+                parsed_to = fields.Date.from_string(date_to)
+            except Exception:
+                parsed_to = False
+            if parsed_to:
+                domain.append(
+                    ('date_done', '<=', fields.Datetime.to_string(datetime.combine(parsed_to, dt_time.max)))
+                )
+        return domain
+
+    def _misa_invoice_state_breakdown(self, domain):
+        Picking = self.sudo()
+        return {
+            'missing': Picking.search_count(
+                domain + [('misa_invoice_state', '=', 'missing'), ('misa_invoice_exception', '=', False)]
+            ),
+            'requested': Picking.search_count(
+                domain + [('misa_invoice_state', '=', 'requested'), ('misa_invoice_exception', '=', False)]
+            ),
+            'invoiced': Picking.search_count(domain + [('misa_invoice_state', '=', 'invoiced')]),
+            'exception': Picking.search_count(domain + [('misa_invoice_exception', '=', True)]),
+        }
 
     @api.model
-    def get_misa_invoice_dashboard_data(self):
-        """Số liệu tổng quan cho dashboard OWL (KPI tiles + bảng theo kho)."""
+    def get_misa_invoice_dashboard_data(self, date_from=False, date_to=False):
+        """Số liệu tổng quan cho dashboard OWL (KPI tiles + bảng theo kho/theo sale)."""
         Picking = self.sudo()
-        base_domain = self._misa_invoice_dashboard_base_domain()
+        base_domain = self._misa_invoice_dashboard_base_domain(date_from, date_to)
 
         counts = {}
         for state in MISA_INVOICE_STATE_LABELS:
@@ -195,6 +282,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 base_domain + [('misa_invoice_state', '=', state), ('misa_invoice_exception', '=', False)]
             )
         exception_count = Picking.search_count(base_domain + [('misa_invoice_exception', '=', True)])
+        mismatch_count = Picking.search_count(base_domain + [('misa_invoice_amount_mismatch', '=', True)])
         total = sum(counts.values()) + exception_count
 
         invoiced_pickings = Picking.search(base_domain + [('misa_invoice_state', '=', 'invoiced')])
@@ -207,20 +295,22 @@ class StockPickingMisaInvoiceStatus(models.Model):
             wh_total = Picking.search_count(wh_domain)
             if not wh_total:
                 continue
-            by_warehouse.append({
-                'warehouse_id': wh.id,
-                'warehouse_name': wh.name,
-                'missing': Picking.search_count(
-                    wh_domain + [('misa_invoice_state', '=', 'missing'), ('misa_invoice_exception', '=', False)]
-                ),
-                'requested': Picking.search_count(
-                    wh_domain + [('misa_invoice_state', '=', 'requested'), ('misa_invoice_exception', '=', False)]
-                ),
-                'invoiced': Picking.search_count(wh_domain + [('misa_invoice_state', '=', 'invoiced')]),
-                'exception': Picking.search_count(wh_domain + [('misa_invoice_exception', '=', True)]),
-                'total': wh_total,
-            })
+            row = self._misa_invoice_state_breakdown(wh_domain)
+            row.update({'warehouse_id': wh.id, 'warehouse_name': wh.name, 'total': wh_total})
+            by_warehouse.append(row)
         by_warehouse.sort(key=lambda row: row['missing'], reverse=True)
+
+        by_saler = []
+        saler_groups = Picking.read_group(base_domain, ['id'], ['misa_invoice_saler_code'])
+        for grp in saler_groups:
+            saler_domain = base_domain + [('misa_invoice_saler_code', '=', grp['misa_invoice_saler_code'])]
+            row = self._misa_invoice_state_breakdown(saler_domain)
+            row.update({
+                'saler_code': grp['misa_invoice_saler_code'] or MISA_INVOICE_UNASSIGNED_SALER,
+                'total': grp['misa_invoice_saler_code_count'],
+            })
+            by_saler.append(row)
+        by_saler.sort(key=lambda row: row['missing'], reverse=True)
 
         cron = self.env.ref('misa_invoice_status_report.ir_cron_misa_invoice_status_scan', raise_if_not_found=False)
         last_scan_at = False
@@ -230,18 +320,20 @@ class StockPickingMisaInvoiceStatus(models.Model):
         return {
             'counts': counts,
             'exception_count': exception_count,
+            'mismatch_count': mismatch_count,
             'total': total,
             'invoiced_amount': invoiced_amount,
             'by_warehouse': by_warehouse,
+            'by_saler': by_saler,
             'last_scan_at': last_scan_at,
             'cutoff_date': fields.Date.to_string(self._get_misa_invoice_cutoff_date()),
             'can_configure': self.env.user.has_group(MISA_INVOICE_RECONCILE_GROUP),
         }
 
     @api.model
-    def get_misa_invoice_urgent_list(self, limit=10):
+    def get_misa_invoice_urgent_list(self, limit=10, date_from=False, date_to=False):
         """Top phiếu cần hối gấp nhất: chưa xuất HĐ, không ngoại lệ, xuất kho lâu nhất."""
-        domain = self._misa_invoice_dashboard_base_domain() + [
+        domain = self._misa_invoice_dashboard_base_domain(date_from, date_to) + [
             ('misa_invoice_state', 'in', ('missing', 'requested')),
             ('misa_invoice_exception', '=', False),
         ]
@@ -254,7 +346,8 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 'id': picking.id,
                 'name': picking.name,
                 'partner_name': picking.partner_id.display_name or '',
-                'sale_order_name': picking.misa_invoice_sale_order_id.name or '',
+                'sale_order_name': ', '.join(picking.misa_invoice_sale_order_ids.mapped('name')),
+                'saler_code': picking.misa_invoice_saler_code or '',
                 'date_done': fields.Date.to_string(done_date) if done_date else '',
                 'days_pending': (today - done_date).days if done_date else 0,
                 'state': picking.misa_invoice_state,
@@ -263,20 +356,27 @@ class StockPickingMisaInvoiceStatus(models.Model):
         return rows
 
     @api.model
-    def get_misa_invoice_report_action(self, state=False, exception=None):
-        """Trả action list đã có sẵn (action_misa_invoice_status_report), lọc theo tile được bấm.
+    def get_misa_invoice_report_action(
+        self, state=False, exception=None, saler_code=False, mismatch=False, date_from=False, date_to=False,
+    ):
+        """Trả action list đã có sẵn (action_misa_invoice_status_report), lọc theo tile/dòng được bấm.
         exception=None: không ép domain, để search view tự quyết định (dùng cho "Xem tất cả").
         exception=True/False: ép domain đúng theo tile."""
         action = self.env['ir.actions.actions']._for_xml_id(
             'misa_invoice_status_report.action_misa_invoice_status_report'
         )
-        domain = self._misa_invoice_dashboard_base_domain()
+        domain = self._misa_invoice_dashboard_base_domain(date_from, date_to)
         if state:
             domain.append(('misa_invoice_state', '=', state))
             if exception is None:
                 exception = False
         if exception is not None:
             domain.append(('misa_invoice_exception', '=', bool(exception)))
+        if saler_code:
+            value = False if saler_code == MISA_INVOICE_UNASSIGNED_SALER else saler_code
+            domain.append(('misa_invoice_saler_code', '=', value))
+        if mismatch:
+            domain.append(('misa_invoice_amount_mismatch', '=', True))
         action['domain'] = domain
         return action
 

@@ -31,6 +31,7 @@ export class MisaInvoiceDashboard extends Component {
             data: null,
             urgent: [],
             cutoffDraft: "",
+            monthFilter: "", // "" = tất cả (kể từ mốc đối soát); "YYYY-MM" = lọc theo tháng
         });
 
         onWillStart(async () => {
@@ -38,24 +39,68 @@ export class MisaInvoiceDashboard extends Component {
         });
     }
 
+    /** Chuyển "YYYY-MM" thành {date_from, date_to} (đầu/cuối tháng). "" => không lọc. */
+    get monthRange() {
+        if (!this.state.monthFilter) {
+            return { date_from: false, date_to: false };
+        }
+        const [year, month] = this.state.monthFilter.split("-").map(Number);
+        const lastDay = new Date(year, month, 0).getDate();
+        const pad = (n) => String(n).padStart(2, "0");
+        return {
+            date_from: `${year}-${pad(month)}-01`,
+            date_to: `${year}-${pad(month)}-${pad(lastDay)}`,
+        };
+    }
+
     async loadAll() {
         this.state.isLoading = true;
         try {
-            const [data, urgent] = await Promise.all([
-                this.orm.call("stock.picking", "get_misa_invoice_dashboard_data", [], {}),
-                this.orm.call("stock.picking", "get_misa_invoice_urgent_list", [], { limit: 10 }),
-            ]);
-            this._applyData(data);
-            this.state.urgent = urgent;
+            await this._reload();
         } catch (e) {
             this.notification.add("Lỗi tải dữ liệu: " + (e.message || e), { type: "danger" });
         }
         this.state.isLoading = false;
     }
 
+    async _reload() {
+        const range = this.monthRange;
+        const [data, urgent] = await Promise.all([
+            this.orm.call("stock.picking", "get_misa_invoice_dashboard_data", [], { ...range }),
+            this.orm.call("stock.picking", "get_misa_invoice_urgent_list", [], { limit: 10, ...range }),
+        ]);
+        this._applyData(data);
+        this.state.urgent = urgent;
+    }
+
     _applyData(data) {
         this.state.data = data;
         this.state.cutoffDraft = data.cutoff_date || "";
+    }
+
+    async onMonthChange(ev) {
+        this.state.monthFilter = ev.target.value || "";
+        this.state.isLoading = true;
+        try {
+            await this._reload();
+        } catch (e) {
+            this.notification.add("Lỗi lọc theo tháng: " + (e.message || e), { type: "danger" });
+        }
+        this.state.isLoading = false;
+    }
+
+    async clearMonthFilter() {
+        if (!this.state.monthFilter) {
+            return;
+        }
+        this.state.monthFilter = "";
+        this.state.isLoading = true;
+        try {
+            await this._reload();
+        } catch (e) {
+            this.notification.add("Lỗi tải dữ liệu: " + (e.message || e), { type: "danger" });
+        }
+        this.state.isLoading = false;
     }
 
     async scanNow() {
@@ -64,11 +109,8 @@ export class MisaInvoiceDashboard extends Component {
         }
         this.state.isScanning = true;
         try {
-            const data = await this.orm.call("stock.picking", "action_misa_invoice_dashboard_scan_now", [], {});
-            this._applyData(data);
-            this.state.urgent = await this.orm.call(
-                "stock.picking", "get_misa_invoice_urgent_list", [], { limit: 10 }
-            );
+            await this.orm.call("stock.picking", "action_misa_invoice_dashboard_scan_now", [], {});
+            await this._reload();
             this.notification.add("Đã kiểm tra lại với MISA.", { type: "success" });
         } catch (e) {
             this.notification.add("Lỗi kiểm tra MISA: " + (e.message || e), { type: "danger" });
@@ -86,13 +128,10 @@ export class MisaInvoiceDashboard extends Component {
         }
         this.state.isSavingCutoff = true;
         try {
-            const data = await this.orm.call(
+            await this.orm.call(
                 "stock.picking", "set_misa_invoice_cutoff_date", [], { date_str: this.state.cutoffDraft }
             );
-            this._applyData(data);
-            this.state.urgent = await this.orm.call(
-                "stock.picking", "get_misa_invoice_urgent_list", [], { limit: 10 }
-            );
+            await this._reload();
             this.notification.add("Đã cập nhật mốc đối soát.", { type: "success" });
         } catch (e) {
             this.notification.add("Lỗi lưu cấu hình: " + (e.message || e), { type: "danger" });
@@ -103,14 +142,32 @@ export class MisaInvoiceDashboard extends Component {
     /** invoiceState falsy (false/undefined) => không lọc trạng thái, dùng cho "Xem tất cả". */
     async openTile(invoiceState) {
         const action = await this.orm.call(
-            "stock.picking", "get_misa_invoice_report_action", [], { state: invoiceState || false }
+            "stock.picking", "get_misa_invoice_report_action", [],
+            { state: invoiceState || false, ...this.monthRange }
         );
         this.action.doAction(action);
     }
 
     async openExceptionTile() {
         const action = await this.orm.call(
-            "stock.picking", "get_misa_invoice_report_action", [], { state: false, exception: true }
+            "stock.picking", "get_misa_invoice_report_action", [],
+            { state: false, exception: true, ...this.monthRange }
+        );
+        this.action.doAction(action);
+    }
+
+    async openMismatchTile() {
+        const action = await this.orm.call(
+            "stock.picking", "get_misa_invoice_report_action", [],
+            { state: false, mismatch: true, ...this.monthRange }
+        );
+        this.action.doAction(action);
+    }
+
+    async openSalerRow(salerCode) {
+        const action = await this.orm.call(
+            "stock.picking", "get_misa_invoice_report_action", [],
+            { state: false, saler_code: salerCode, ...this.monthRange }
         );
         this.action.doAction(action);
     }
