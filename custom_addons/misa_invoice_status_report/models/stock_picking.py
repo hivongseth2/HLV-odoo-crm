@@ -134,3 +134,107 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 _logger.exception(
                     "❌ [MISA INVOICE STATUS CRON] Lỗi xử lý phiếu %s", picking.name
                 )
+
+    # ==================== Dữ liệu cho Dashboard OWL ====================
+
+    def _misa_invoice_dashboard_base_domain(self):
+        return [('picking_type_id.code', '=', 'outgoing'), ('state', '=', 'done')]
+
+    @api.model
+    def get_misa_invoice_dashboard_data(self):
+        """Số liệu tổng quan cho dashboard OWL (KPI tiles + bảng theo kho)."""
+        Picking = self.sudo()
+        base_domain = self._misa_invoice_dashboard_base_domain()
+
+        counts = {}
+        for state, _label in MISA_INVOICE_STATE_LABELS.items():
+            counts[state] = Picking.search_count(
+                base_domain + [('misa_invoice_state', '=', state), ('misa_invoice_exception', '=', False)]
+            )
+        exception_count = Picking.search_count(base_domain + [('misa_invoice_exception', '=', True)])
+        total = sum(counts.values()) + exception_count
+
+        invoiced_pickings = Picking.search(base_domain + [('misa_invoice_state', '=', 'invoiced')])
+        invoiced_amount = sum(invoiced_pickings.mapped('misa_invoice_amount'))
+
+        by_warehouse = []
+        warehouses = self.env['stock.warehouse'].sudo().search([])
+        for wh in warehouses:
+            wh_domain = base_domain + [('picking_type_id.warehouse_id', '=', wh.id)]
+            wh_total = Picking.search_count(wh_domain)
+            if not wh_total:
+                continue
+            by_warehouse.append({
+                'warehouse_id': wh.id,
+                'warehouse_name': wh.name,
+                'missing': Picking.search_count(
+                    wh_domain + [('misa_invoice_state', '=', 'missing'), ('misa_invoice_exception', '=', False)]
+                ),
+                'requested': Picking.search_count(
+                    wh_domain + [('misa_invoice_state', '=', 'requested'), ('misa_invoice_exception', '=', False)]
+                ),
+                'invoiced': Picking.search_count(wh_domain + [('misa_invoice_state', '=', 'invoiced')]),
+                'exception': Picking.search_count(wh_domain + [('misa_invoice_exception', '=', True)]),
+                'total': wh_total,
+            })
+        by_warehouse.sort(key=lambda row: row['missing'], reverse=True)
+
+        cron = self.env.ref('misa_invoice_status_report.ir_cron_misa_invoice_status_scan', raise_if_not_found=False)
+        last_scan_at = False
+        if cron and cron.sudo().lastcall:
+            last_scan_at = fields.Datetime.to_string(cron.sudo().lastcall)
+
+        return {
+            'counts': counts,
+            'exception_count': exception_count,
+            'total': total,
+            'invoiced_amount': invoiced_amount,
+            'by_warehouse': by_warehouse,
+            'last_scan_at': last_scan_at,
+        }
+
+    @api.model
+    def get_misa_invoice_urgent_list(self, limit=10):
+        """Top phiếu cần hối gấp nhất: chưa xuất HĐ, không ngoại lệ, xuất kho lâu nhất."""
+        domain = self._misa_invoice_dashboard_base_domain() + [
+            ('misa_invoice_state', 'in', ('missing', 'requested')),
+            ('misa_invoice_exception', '=', False),
+        ]
+        pickings = self.sudo().search(domain, order='date_done asc', limit=limit)
+        today = fields.Date.context_today(self)
+        rows = []
+        for picking in pickings:
+            done_date = picking.date_done.date() if picking.date_done else False
+            rows.append({
+                'id': picking.id,
+                'name': picking.name,
+                'partner_name': picking.partner_id.display_name or '',
+                'sale_order_name': picking.misa_invoice_sale_order_id.name or '',
+                'date_done': fields.Date.to_string(done_date) if done_date else '',
+                'days_pending': (today - done_date).days if done_date else 0,
+                'state': picking.misa_invoice_state,
+                'state_label': MISA_INVOICE_STATE_LABELS.get(picking.misa_invoice_state, picking.misa_invoice_state),
+            })
+        return rows
+
+    @api.model
+    def get_misa_invoice_report_action(self, state=False, exception=False):
+        """Trả action list đã có sẵn (action_misa_invoice_status_report), lọc theo tile được bấm."""
+        action = self.env['ir.actions.actions']._for_xml_id(
+            'misa_invoice_status_report.action_misa_invoice_status_report'
+        )
+        domain = self._misa_invoice_dashboard_base_domain()
+        if state:
+            domain.append(('misa_invoice_state', '=', state))
+        if exception:
+            domain.append(('misa_invoice_exception', '=', True))
+        else:
+            domain.append(('misa_invoice_exception', '=', False))
+        action['domain'] = domain
+        return action
+
+    @api.model
+    def action_misa_invoice_dashboard_scan_now(self):
+        """Bấm nút 'Kiểm tra MISA ngay' trên dashboard: chạy đúng batch của cron rồi trả số liệu mới."""
+        self._cron_scan_misa_invoice_status()
+        return self.get_misa_invoice_dashboard_data()

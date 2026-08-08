@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="misa_invoice_status_report.Dashboard">
+        <div class="miv-dashboard">
+            <div class="miv-header">
+                <div class="miv-header-left">
+                    <h1 class="miv-title"><i class="fa fa-file-text-o me-2"/>Đối soát xuất hóa đơn MISA</h1>
+                    <div class="miv-subtitle">
+                        <t t-if="state.isLoading">Đang tải dữ liệu...</t>
+                        <t t-else="">
+                            Dữ liệu tính đến: <b><t t-esc="formatDateTime(state.data and state.data.last_scan_at)"/></b>
+                            <span class="miv-subtitle-muted">(tự động quét mỗi 30 phút)</span>
+                        </t>
+                    </div>
+                </div>
+                <button class="btn btn-primary miv-scan-btn" t-on-click="scanNow" t-att-disabled="state.isScanning">
+                    <i class="fa fa-refresh" t-att-class="{'fa-spin': state.isScanning}"/>
+                    Kiểm tra MISA ngay
+                </button>
+            </div>
+
+            <div class="miv-loading" t-if="state.isLoading">
+                <i class="fa fa-spinner fa-spin"/> Đang tải dữ liệu...
+            </div>
+
+            <t t-if="!state.isLoading and state.data">
+                <div class="miv-tiles">
+                    <div class="miv-tile miv-tile-danger" t-on-click="() => this.openTile('missing')">
+                        <div class="miv-tile-icon"><i class="fa fa-exclamation-triangle"/></div>
+                        <div class="miv-tile-value"><t t-esc="state.data.counts.missing"/></div>
+                        <div class="miv-tile-label">Chưa có đề nghị xuất HĐ</div>
+                    </div>
+                    <div class="miv-tile miv-tile-warning" t-on-click="() => this.openTile('requested')">
+                        <div class="miv-tile-icon"><i class="fa fa-clock-o"/></div>
+                        <div class="miv-tile-value"><t t-esc="state.data.counts.requested"/></div>
+                        <div class="miv-tile-label">Đã đề nghị, chờ hóa đơn</div>
+                    </div>
+                    <div class="miv-tile miv-tile-success" t-on-click="() => this.openTile('invoiced')">
+                        <div class="miv-tile-icon"><i class="fa fa-check-circle"/></div>
+                        <div class="miv-tile-value"><t t-esc="state.data.counts.invoiced"/></div>
+                        <div class="miv-tile-label">Đã xuất hóa đơn</div>
+                        <div class="miv-tile-sub"><t t-esc="formatCurrency(state.data.invoiced_amount)"/></div>
+                    </div>
+                    <div class="miv-tile miv-tile-muted" t-on-click="() => this.openTile('not_checked')">
+                        <div class="miv-tile-icon"><i class="fa fa-question-circle"/></div>
+                        <div class="miv-tile-value"><t t-esc="state.data.counts.not_checked"/></div>
+                        <div class="miv-tile-label">Chưa kiểm tra</div>
+                    </div>
+                    <div class="miv-tile miv-tile-neutral" t-on-click="openExceptionTile">
+                        <div class="miv-tile-icon"><i class="fa fa-ban"/></div>
+                        <div class="miv-tile-value"><t t-esc="state.data.exception_count"/></div>
+                        <div class="miv-tile-label">Đã đánh dấu ngoại lệ</div>
+                    </div>
+                </div>
+
+                <div class="miv-section">
+                    <div class="miv-section-header">
+                        <h3>Phiếu cần hối gấp nhất</h3>
+                        <a href="#" class="miv-link" t-on-click.prevent="openFullList">Xem tất cả →</a>
+                    </div>
+                    <table class="miv-table" t-if="state.urgent.length">
+                        <thead>
+                            <tr>
+                                <th>Phiếu</th>
+                                <th>Khách hàng</th>
+                                <th>Đơn bán</th>
+                                <th>Ngày xuất kho</th>
+                                <th>Số ngày chờ</th>
+                                <th>Trạng thái</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr t-foreach="state.urgent" t-as="row" t-key="row.id" t-on-click="() => this.openPicking(row.id)">
+                                <td><b><t t-esc="row.name"/></b></td>
+                                <td><t t-esc="row.partner_name"/></td>
+                                <td><t t-esc="row.sale_order_name"/></td>
+                                <td><t t-esc="row.date_done"/></td>
+                                <td>
+                                    <span t-attf-class="miv-badge {{ row.days_pending >= 7 ? 'miv-badge-danger' : 'miv-badge-warning' }}">
+                                        <t t-esc="row.days_pending"/> ngày
+                                    </span>
+                                </td>
+                                <td>
+                                    <span t-attf-class="miv-badge miv-badge-{{ row.state }}">
+                                        <t t-esc="row.state_label"/>
+                                    </span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="miv-empty" t-else="">Không có phiếu nào cần hối 🎉</div>
+                </div>
+
+                <div class="miv-section">
+                    <h3>Theo kho</h3>
+                    <table class="miv-table" t-if="state.data.by_warehouse.length">
+                        <thead>
+                            <tr>
+                                <th>Kho</th>
+                                <th>Chưa đề nghị</th>
+                                <th>Chờ HĐ</th>
+                                <th>Đã xuất HĐ</th>
+                                <th>Ngoại lệ</th>
+                                <th>Tổng</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr t-foreach="state.data.by_warehouse" t-as="wh" t-key="wh.warehouse_id">
+                                <td><b><t t-esc="wh.warehouse_name"/></b></td>
+                                <td class="miv-cell-danger"><t t-esc="wh.missing"/></td>
+                                <td class="miv-cell-warning"><t t-esc="wh.requested"/></td>
+                                <td class="miv-cell-success"><t t-esc="wh.invoiced"/></td>
+                                <td><t t-esc="wh.exception"/></td>
+                                <td><b><t t-esc="wh.total"/></b></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="miv-empty" t-else="">Chưa có dữ liệu.</div>
+                </div>
+            </t>
+        </div>
+    </t>
+</templates>

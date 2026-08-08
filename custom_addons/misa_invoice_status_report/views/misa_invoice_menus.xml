@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- App độc lập: root không có parent -->
+    <menuitem id="menu_misa_invoice_root"
+              name="Đối soát XHD MISA"
+              sequence="70"/>
+
+    <menuitem id="menu_misa_invoice_dashboard"
+              name="Tổng quan"
+              parent="menu_misa_invoice_root"
+              action="action_misa_invoice_dashboard"
+              sequence="10"/>
+
+    <menuitem id="menu_misa_invoice_status_report"
+              name="Danh sách phiếu"
+              parent="menu_misa_invoice_root"
+              action="action_misa_invoice_status_report"
+              sequence="20"/>
+</odoo>
