@@ -76,8 +76,15 @@
         }
     }
 
-    // ===== Cutoff config bar =====
-    .miv-cutoff-bar {
+    // ===== Toolbar: cutoff config + month filter =====
+    .miv-toolbar {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 24px;
+    }
+
+    .miv-cutoff-bar, .miv-month-bar {
         display: flex;
         align-items: center;
         gap: 8px;
@@ -88,9 +95,8 @@
         padding: 9px 14px;
         font-size: 12.5px;
         color: var(--miv-ink-2);
-        margin-bottom: 24px;
 
-        > i.fa-filter { color: var(--miv-ink-muted); margin-right: 2px; }
+        > i { color: var(--miv-ink-muted); margin-right: 2px; }
 
         .miv-cutoff-input {
             border: 1px solid var(--miv-baseline);
