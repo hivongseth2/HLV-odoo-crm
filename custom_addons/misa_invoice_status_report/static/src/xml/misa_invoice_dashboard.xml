@@ -187,25 +187,39 @@
                         </thead>
                         <tbody>
                             <tr>
-                                <td class="miv-cell-good"><b>Đã xuất - Đã gửi</b></td>
-                                <td class="miv-col-num"><t t-esc="state.statusSummary.invoiced_sent.count"/></td>
-                                <td class="miv-col-num"><t t-esc="formatCurrency(state.statusSummary.invoiced_sent.actual_amount)"/></td>
-                                <td class="miv-col-num"><t t-esc="formatCurrency(state.statusSummary.invoiced_sent.invoice_amount)"/></td>
-                                <td class="miv-col-num"><t t-esc="state.statusSummary.invoiced_sent.percentage"/>%</td>
+                                <td class="miv-cell-muted"><b>Chưa kiểm tra</b></td>
+                                <td class="miv-col-num"><t t-esc="state.statusSummary.not_checked.count"/></td>
+                                <td class="miv-col-num"><t t-esc="formatCurrency(state.statusSummary.not_checked.actual_amount)"/></td>
+                                <td class="miv-col-num"><t t-esc="formatCurrency(state.statusSummary.not_checked.invoice_amount)"/></td>
+                                <td class="miv-col-num"><t t-esc="state.statusSummary.not_checked.percentage"/>%</td>
                             </tr>
                             <tr>
-                                <td class="miv-cell-warning"><b>Đã xuất - Chưa gửi</b></td>
-                                <td class="miv-col-num"><t t-esc="state.statusSummary.invoiced_not_sent.count"/></td>
-                                <td class="miv-col-num"><t t-esc="formatCurrency(state.statusSummary.invoiced_not_sent.actual_amount)"/></td>
-                                <td class="miv-col-num"><t t-esc="formatCurrency(state.statusSummary.invoiced_not_sent.invoice_amount)"/></td>
-                                <td class="miv-col-num"><t t-esc="state.statusSummary.invoiced_not_sent.percentage"/>%</td>
+                                <td class="miv-cell-critical"><b>Chưa có đề nghị</b></td>
+                                <td class="miv-col-num"><t t-esc="state.statusSummary.missing.count"/></td>
+                                <td class="miv-col-num"><t t-esc="formatCurrency(state.statusSummary.missing.actual_amount)"/></td>
+                                <td class="miv-col-num"><t t-esc="formatCurrency(state.statusSummary.missing.invoice_amount)"/></td>
+                                <td class="miv-col-num"><t t-esc="state.statusSummary.missing.percentage"/>%</td>
                             </tr>
                             <tr>
-                                <td class="miv-cell-critical"><b>Chưa xuất</b></td>
-                                <td class="miv-col-num"><t t-esc="state.statusSummary.not_invoiced.count"/></td>
-                                <td class="miv-col-num"><t t-esc="formatCurrency(state.statusSummary.not_invoiced.actual_amount)"/></td>
-                                <td class="miv-col-num"><t t-esc="formatCurrency(state.statusSummary.not_invoiced.invoice_amount)"/></td>
-                                <td class="miv-col-num"><t t-esc="state.statusSummary.not_invoiced.percentage"/>%</td>
+                                <td class="miv-cell-warning"><b>Đã đề nghị, chờ HĐ</b></td>
+                                <td class="miv-col-num"><t t-esc="state.statusSummary.requested.count"/></td>
+                                <td class="miv-col-num"><t t-esc="formatCurrency(state.statusSummary.requested.actual_amount)"/></td>
+                                <td class="miv-col-num"><t t-esc="formatCurrency(state.statusSummary.requested.invoice_amount)"/></td>
+                                <td class="miv-col-num"><t t-esc="state.statusSummary.requested.percentage"/>%</td>
+                            </tr>
+                            <tr>
+                                <td class="miv-cell-good"><b>Đã xuất HĐ</b></td>
+                                <td class="miv-col-num"><t t-esc="state.statusSummary.invoiced.count"/></td>
+                                <td class="miv-col-num"><t t-esc="formatCurrency(state.statusSummary.invoiced.actual_amount)"/></td>
+                                <td class="miv-col-num"><t t-esc="formatCurrency(state.statusSummary.invoiced.invoice_amount)"/></td>
+                                <td class="miv-col-num"><t t-esc="state.statusSummary.invoiced.percentage"/>%</td>
+                            </tr>
+                            <tr>
+                                <td><b>Ngoại lệ</b></td>
+                                <td class="miv-col-num"><t t-esc="state.statusSummary.exception.count"/></td>
+                                <td class="miv-col-num"><t t-esc="formatCurrency(state.statusSummary.exception.actual_amount)"/></td>
+                                <td class="miv-col-num"><t t-esc="formatCurrency(state.statusSummary.exception.invoice_amount)"/></td>
+                                <td class="miv-col-num"><t t-esc="state.statusSummary.exception.percentage"/>%</td>
                             </tr>
                             <tr class="miv-total-row">
                                 <td><b>TỔNG CỘNG</b></td>
@@ -216,9 +230,6 @@
                             </tr>
                         </tbody>
                     </table>
-                    <div class="miv-hint">
-                        <i class="fa fa-info-circle"/> "Đã gửi" được suy ra từ trạng thái gửi email của MISA — nếu số liệu chưa khớp thực tế, cho biết để điều chỉnh ngưỡng.
-                    </div>
                 </div>
 
                 <!-- ===== Chi tiết: tabs liên kết Cần hối / Theo kho / Theo sale ===== -->
@@ -413,7 +424,7 @@
                     <div t-if="state.activeTab === 'daily'" class="miv-tab-panel">
                         <div class="miv-daily-filters">
                             <label class="miv-daily-week-toggle">
-                                <input type="checkbox" t-att-checked="state.dailyTab.weekly" t-on-change="onDailyWeeklyToggle"/>
+                                <input type="checkbox" class="miv-cutoff-input" t-att-checked="state.dailyTab.weekly" t-on-change="onDailyWeeklyToggle"/>
                                 Tính theo tuần
                             </label>
                             <select class="miv-cutoff-input" t-on-change="onDailySalerChange">
@@ -426,27 +437,65 @@
                         <div class="miv-loading" t-if="state.dailyTab.loading">
                             <i class="fa fa-spinner fa-spin"/> Đang tải...
                         </div>
-                        <table class="miv-table" t-elif="state.dailyTab.rows.length">
-                            <thead>
-                                <tr>
-                                    <th><t t-esc="state.dailyTab.weekly ? 'Tuần' : 'Ngày'"/></th>
-                                    <th class="miv-col-num">Tổng tiền xuất kho</th>
-                                    <th class="miv-col-num">Tổng tiền xuất hóa đơn</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr t-foreach="state.dailyTab.rows" t-as="row" t-key="row.label">
-                                    <td><b><t t-esc="row.label"/></b></td>
-                                    <td class="miv-col-num"><t t-esc="formatCurrency(row.actual_amount)"/></td>
-                                    <td class="miv-col-num miv-cell-good"><t t-esc="formatCurrency(row.invoice_amount)"/></td>
-                                </tr>
-                            </tbody>
-                        </table>
-                        <div class="miv-empty" t-else="">Chưa có dữ liệu.</div>
+                        <t t-else="">
+                            <div class="miv-chart-wrap" t-if="dailyChart">
+                                <svg t-attf-viewBox="0 0 {{dailyChart.width}} {{dailyChart.height}}" class="miv-chart" preserveAspectRatio="none">
+                                    <t t-foreach="dailyChart.gridLines" t-as="gl" t-key="gl.key">
+                                        <line class="miv-chart-grid" t-att-x1="dailyChart.padding.left" t-att-x2="dailyChart.width - dailyChart.padding.right" t-att-y1="gl.y" t-att-y2="gl.y"/>
+                                        <text class="miv-chart-axis-label" t-att-x="dailyChart.padding.left - 8" t-att-y="gl.y + 3" text-anchor="end"><t t-esc="gl.label"/></text>
+                                    </t>
+                                    <t t-foreach="dailyChart.bars" t-as="bar" t-key="bar.key">
+                                        <rect class="miv-chart-bar" t-att-x="bar.x" t-att-y="bar.y" t-att-width="bar.width" t-att-height="bar.height" rx="3">
+                                            <title><t t-esc="bar.label"/>: <t t-esc="formatCurrency(bar.value)"/></title>
+                                        </rect>
+                                    </t>
+                                    <path class="miv-chart-line" t-att-d="dailyChart.linePath"/>
+                                    <t t-foreach="dailyChart.points" t-as="pt" t-key="pt.key">
+                                        <circle class="miv-chart-dot" t-att-cx="pt.x" t-att-cy="pt.y" r="4">
+                                            <title><t t-esc="pt.label"/>: <t t-esc="formatCurrency(pt.value)"/></title>
+                                        </circle>
+                                    </t>
+                                    <t t-foreach="dailyChart.xLabels" t-as="xl" t-key="xl.key">
+                                        <text class="miv-chart-axis-label" t-att-x="xl.x" t-att-y="dailyChart.height - 8" text-anchor="middle"><t t-esc="xl.label"/></text>
+                                    </t>
+                                </svg>
+                                <div class="miv-chart-legend">
+                                    <span class="miv-chart-legend-item"><i class="miv-chart-legend-dot miv-chart-legend-bar"/> Tổng tiền xuất kho</span>
+                                    <span class="miv-chart-legend-item"><i class="miv-chart-legend-dot miv-chart-legend-line"/> Tổng tiền xuất hóa đơn</span>
+                                </div>
+                            </div>
+                            <table class="miv-table" t-if="state.dailyTab.rows.length">
+                                <thead>
+                                    <tr>
+                                        <th><t t-esc="state.dailyTab.weekly ? 'Tuần' : 'Ngày'"/></th>
+                                        <th class="miv-col-num">Tổng tiền xuất kho</th>
+                                        <th class="miv-col-num">Tổng tiền xuất hóa đơn</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr t-foreach="state.dailyTab.rows" t-as="row" t-key="row.label">
+                                        <td><b><t t-esc="row.label"/></b></td>
+                                        <td class="miv-col-num"><t t-esc="formatCurrency(row.actual_amount)"/></td>
+                                        <td class="miv-col-num miv-cell-good"><t t-esc="formatCurrency(row.invoice_amount)"/></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <div class="miv-empty" t-else="">Chưa có dữ liệu.</div>
+                        </t>
                     </div>
 
                     <!-- === Tab: Phiếu xuất kho (phẳng, key = stock.picking, không group) === -->
                     <div t-if="state.activeTab === 'pickings'" class="miv-tab-panel">
+                        <div class="miv-orders-search">
+                            <i class="fa fa-search"/>
+                            <input type="text" placeholder="Tìm theo mã phiếu (VD: KBC/OUT/...) hoặc khách hàng"
+                                   t-att-value="state.pickingsTab.searchDraft"
+                                   t-on-input="onPickingsSearchInput" t-on-keydown="onPickingsSearchKeydown"/>
+                            <button class="btn btn-sm miv-cutoff-save" t-on-click="submitPickingsSearch">Tìm</button>
+                            <button class="btn btn-sm miv-cutoff-save" t-if="state.pickingsTab.search" t-on-click="clearPickingsSearch">
+                                <i class="fa fa-times"/> Bỏ tìm
+                            </button>
+                        </div>
                         <div class="miv-loading" t-if="state.pickingsTab.loading">
                             <i class="fa fa-spinner fa-spin"/> Đang tải...
                         </div>
