@@ -23,7 +23,6 @@ def _empty_invoice_status():
         'invoice_no': None,
         'invoice_date': None,
         'invoice_amount': None,
-        'send_email_status': None,
     }
 
 
@@ -58,7 +57,6 @@ class MisaApiUtilsInvoiceStatus(models.AbstractModel):
         result['request_refid'] = target_req_id
         result['account_object_name'] = target_customer
         result['state'] = 'requested'
-        result['send_email_status'] = req_info.get('send_email_status')
 
         if not target_req_id or not target_customer:
             return result
@@ -86,8 +84,6 @@ class MisaApiUtilsInvoiceStatus(models.AbstractModel):
         result['invoice_no'] = matched.get('inv_no')
         result['invoice_date'] = matched.get('inv_date')
         result['invoice_amount'] = matched.get('total_amount')
-        if matched.get('send_email_status') is not None:
-            result['send_email_status'] = matched.get('send_email_status')
         return result
 
     def get_invoice_status_for_refno(self, refno):

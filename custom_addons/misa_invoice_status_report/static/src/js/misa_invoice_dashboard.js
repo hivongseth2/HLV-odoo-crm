@@ -62,7 +62,7 @@ export class MisaInvoiceDashboard extends Component {
             // Tab "Theo ngày": có thể lọc theo 1 nhân viên sale + gộp theo tuần.
             dailyTab: { rows: [], loading: false, weekly: false, salerCode: "" },
             // Tab "Phiếu xuất kho": phẳng, key là stock.picking (KBC/OUT/...).
-            pickingsTab: { rows: [], total: 0, page: 1, pageSize: 20, loading: false },
+            pickingsTab: { rows: [], total: 0, page: 1, pageSize: 20, loading: false, search: "", searchDraft: "" },
             // Tab "Đơn hàng": phẳng, key là sale.order (DH...) — 1 đơn có thể gộp nhiều phiếu.
             ordersTab: { rows: [], total: 0, page: 1, pageSize: 20, loading: false, search: "", searchDraft: "" },
             showScanPanel: false,
@@ -475,6 +475,7 @@ export class MisaInvoiceDashboard extends Component {
                 {
                     limit: this.state.pickingsTab.pageSize,
                     offset: (page - 1) * this.state.pickingsTab.pageSize,
+                    search: this.state.pickingsTab.search || false,
                     ...this.filterParams,
                 }
             );
@@ -501,6 +502,27 @@ export class MisaInvoiceDashboard extends Component {
         if (this.state.pickingsTab.page < this.pickingsTabTotalPages) {
             this.loadPickingsTab(this.state.pickingsTab.page + 1);
         }
+    }
+
+    onPickingsSearchInput(ev) {
+        this.state.pickingsTab.searchDraft = ev.target.value;
+    }
+
+    onPickingsSearchKeydown(ev) {
+        if (ev.key === "Enter") {
+            this.submitPickingsSearch();
+        }
+    }
+
+    submitPickingsSearch() {
+        this.state.pickingsTab.search = this.state.pickingsTab.searchDraft.trim();
+        this.loadPickingsTab(1);
+    }
+
+    clearPickingsSearch() {
+        this.state.pickingsTab.search = "";
+        this.state.pickingsTab.searchDraft = "";
+        this.loadPickingsTab(1);
     }
 
     // ===== Tab "Đơn hàng" (phẳng, key = sale.order DH..., phân trang server-side, có search) =====
@@ -702,6 +724,101 @@ export class MisaInvoiceDashboard extends Component {
             return "0 ₫";
         }
         return Number(num).toLocaleString("vi-VN", { maximumFractionDigits: 0 }) + " ₫";
+    }
+
+    formatCurrencyShort(num) {
+        if (!num) {
+            return "0";
+        }
+        const abs = Math.abs(num);
+        if (abs >= 1e9) {
+            return (num / 1e9).toLocaleString("vi-VN", { maximumFractionDigits: 1 }) + " tỷ";
+        }
+        if (abs >= 1e6) {
+            return (num / 1e6).toLocaleString("vi-VN", { maximumFractionDigits: 1 }) + " tr";
+        }
+        if (abs >= 1e3) {
+            return (num / 1e3).toLocaleString("vi-VN", { maximumFractionDigits: 0 }) + " k";
+        }
+        return Number(num).toLocaleString("vi-VN", { maximumFractionDigits: 0 });
+    }
+
+    // "Nice" trần trục Y (làm tròn lên 1/2/5x10^n) để lưới trục không lẻ số.
+    _niceChartMax(raw) {
+        if (raw <= 0) {
+            return 1;
+        }
+        const exp = Math.floor(Math.log10(raw));
+        const base = Math.pow(10, exp);
+        const fraction = raw / base;
+        let niceFraction = 10;
+        if (fraction <= 1) {
+            niceFraction = 1;
+        } else if (fraction <= 2) {
+            niceFraction = 2;
+        } else if (fraction <= 5) {
+            niceFraction = 5;
+        }
+        return niceFraction * base;
+    }
+
+    // Biểu đồ cột (tổng tiền xuất kho) + đường (tổng tiền đã xuất HĐ) cho tab "Theo ngày" —
+    // dựng tay bằng SVG (cùng 1 trục giá trị, không dual-axis) theo bộ palette đã validate.
+    get dailyChart() {
+        const rows = this.state.dailyTab.rows || [];
+        if (!rows.length) {
+            return null;
+        }
+        const width = 760;
+        const height = 260;
+        const padding = { top: 16, right: 16, bottom: 30, left: 60 };
+        const plotW = width - padding.left - padding.right;
+        const plotH = height - padding.top - padding.bottom;
+        const baselineY = padding.top + plotH;
+
+        const maxRaw = Math.max(1, ...rows.map((r) => Math.max(r.actual_amount || 0, r.invoice_amount || 0)));
+        const niceMax = this._niceChartMax(maxRaw);
+
+        const n = rows.length;
+        const slotW = plotW / n;
+        const barWidth = Math.max(4, Math.min(24, slotW * 0.5));
+        const xCenter = (i) => padding.left + slotW * i + slotW / 2;
+        const yFor = (v) => baselineY - (Math.min(v, niceMax) / niceMax) * plotH;
+
+        const bars = rows.map((row, i) => {
+            const y = yFor(row.actual_amount || 0);
+            return {
+                key: `bar-${i}`,
+                x: xCenter(i) - barWidth / 2,
+                y,
+                width: barWidth,
+                height: Math.max(0, baselineY - y),
+                label: row.label,
+                value: row.actual_amount || 0,
+            };
+        });
+
+        const points = rows.map((row, i) => ({
+            key: `pt-${i}`,
+            x: xCenter(i),
+            y: yFor(row.invoice_amount || 0),
+            label: row.label,
+            value: row.invoice_amount || 0,
+        }));
+        const linePath = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
+
+        const gridLines = [0, 0.25, 0.5, 0.75, 1].map((frac) => ({
+            key: `grid-${frac}`,
+            y: baselineY - frac * plotH,
+            label: this.formatCurrencyShort(niceMax * frac),
+        }));
+
+        const labelEvery = Math.max(1, Math.ceil(n / 10));
+        const xLabels = rows
+            .map((row, i) => ({ key: `xl-${i}`, x: xCenter(i), label: row.label, show: i % labelEvery === 0 || i === n - 1 }))
+            .filter((xl) => xl.show);
+
+        return { width, height, padding, baselineY, bars, points, linePath, gridLines, xLabels };
     }
 
     formatDateTime(str) {
