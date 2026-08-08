@@ -50,10 +50,12 @@
                     <div class="miv-month-bar">
                         <i class="fa fa-calendar"/>
                         <span>Xem theo tháng</span>
-                        <input type="month" class="miv-cutoff-input" t-att-value="state.monthFilter" t-on-change="onMonthChange"/>
-                        <button class="btn btn-sm miv-cutoff-save" t-if="state.monthFilter" t-on-click="clearMonthFilter">
-                            <i class="fa fa-times"/> Bỏ lọc
-                        </button>
+                        <select class="miv-cutoff-input" t-on-change="onMonthChange">
+                            <option value="" t-att-selected="!state.monthFilter">Tất cả</option>
+                            <t t-foreach="monthOptions" t-as="opt" t-key="opt.value">
+                                <option t-att-value="opt.value" t-att-selected="opt.value === state.monthFilter" t-esc="opt.label"/>
+                            </t>
+                        </select>
                     </div>
                 </div>
 
@@ -140,31 +142,64 @@
                     <table class="miv-table" t-if="state.urgent.length">
                         <thead>
                             <tr>
+                                <th class="miv-expand-col"/>
                                 <th>Phiếu</th>
                                 <th>Khách hàng</th>
                                 <th>Đơn bán</th>
                                 <th>Ngày xuất kho</th>
+                                <th class="miv-col-num">Tiền thực xuất</th>
+                                <th class="miv-col-num">Tiền đã xuất HĐ</th>
                                 <th class="miv-col-num">Số ngày chờ</th>
                                 <th>Trạng thái</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr t-foreach="state.urgent" t-as="row" t-key="row.id" t-on-click="() => this.openPicking(row.id)">
-                                <td><b><t t-esc="row.name"/></b></td>
-                                <td><t t-esc="row.partner_name"/></td>
-                                <td><t t-esc="row.sale_order_name"/></td>
-                                <td class="miv-col-num"><t t-esc="row.date_done"/></td>
-                                <td class="miv-col-num">
-                                    <span t-attf-class="miv-badge {{ row.days_pending >= 7 ? 'miv-badge-critical' : 'miv-badge-warning' }}">
-                                        <t t-esc="row.days_pending"/> ngày
-                                    </span>
-                                </td>
-                                <td>
-                                    <span t-attf-class="miv-badge miv-badge-state-{{ row.state }}">
-                                        <t t-esc="row.state_label"/>
-                                    </span>
-                                </td>
-                            </tr>
+                            <t t-foreach="state.urgent" t-as="row" t-key="row.id">
+                                <tr t-on-click="() => this.openPicking(row.id)">
+                                    <td class="miv-expand-col">
+                                        <i t-attf-class="fa {{ state.expandedPickingId === row.id ? 'fa-caret-down' : 'fa-caret-right' }}"
+                                           t-on-click="(ev) => this.toggleExpand(row.id, ev)"/>
+                                    </td>
+                                    <td><b><t t-esc="row.name"/></b></td>
+                                    <td><t t-esc="row.partner_name"/></td>
+                                    <td><t t-esc="row.sale_order_name"/></td>
+                                    <td class="miv-col-num"><t t-esc="row.date_done"/></td>
+                                    <td class="miv-col-num"><t t-esc="formatCurrency(row.actual_amount)"/></td>
+                                    <td class="miv-col-num"><t t-esc="formatCurrency(row.invoice_amount)"/></td>
+                                    <td class="miv-col-num">
+                                        <span t-attf-class="miv-badge {{ row.days_pending >= 7 ? 'miv-badge-critical' : 'miv-badge-warning' }}">
+                                            <t t-esc="row.days_pending"/> ngày
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span t-attf-class="miv-badge miv-badge-state-{{ row.state }}">
+                                            <t t-esc="row.state_label"/>
+                                        </span>
+                                    </td>
+                                </tr>
+                                <tr class="miv-expand-row" t-if="state.expandedPickingId === row.id">
+                                    <td colspan="9">
+                                        <div class="miv-expand-loading" t-if="state.expandedLoading">
+                                            <i class="fa fa-spinner fa-spin"/> Đang tải...
+                                        </div>
+                                        <table class="miv-subtable" t-else="">
+                                            <thead>
+                                                <tr><th>Sản phẩm</th><th class="miv-col-num">Số lượng</th><th>ĐVT</th></tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr t-foreach="state.expandedLines" t-as="line" t-key="line_index">
+                                                    <td><t t-esc="line.product_name"/></td>
+                                                    <td class="miv-col-num"><t t-esc="line.qty"/></td>
+                                                    <td><t t-esc="line.uom_name"/></td>
+                                                </tr>
+                                                <tr t-if="!state.expandedLines.length">
+                                                    <td colspan="3" class="miv-empty">Không có dòng sản phẩm nào</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </t>
                         </tbody>
                     </table>
                     <div class="miv-empty" t-else="">
@@ -207,25 +242,34 @@
                         <thead>
                             <tr>
                                 <th>Nhân viên sale</th>
-                                <th class="miv-col-num">Chưa đề nghị</th>
-                                <th class="miv-col-num">Chờ HĐ</th>
+                                <th class="miv-col-num">Tổng phiếu xuất kho</th>
+                                <th class="miv-col-num">Chưa xuất HĐ</th>
                                 <th class="miv-col-num">Đã xuất HĐ</th>
-                                <th class="miv-col-num">Ngoại lệ</th>
-                                <th class="miv-col-num">Tổng</th>
+                                <th class="miv-col-num">Tiền thực xuất</th>
+                                <th class="miv-col-num">Tiền đã xuất HĐ</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr t-foreach="state.data.by_saler" t-as="saler" t-key="saler.saler_code"
+                            <tr t-foreach="pagedSalers" t-as="saler" t-key="saler.saler_code"
                                 t-on-click="() => this.openSalerRow(saler.saler_code)">
                                 <td><b><t t-esc="saler.saler_code"/></b></td>
-                                <td class="miv-col-num miv-cell-critical"><t t-esc="saler.missing"/></td>
-                                <td class="miv-col-num miv-cell-warning"><t t-esc="saler.requested"/></td>
+                                <td class="miv-col-num"><t t-esc="saler.total"/></td>
+                                <td class="miv-col-num miv-cell-critical"><t t-esc="saler.pending"/></td>
                                 <td class="miv-col-num miv-cell-good"><t t-esc="saler.invoiced"/></td>
-                                <td class="miv-col-num"><t t-esc="saler.exception"/></td>
-                                <td class="miv-col-num"><b><t t-esc="saler.total"/></b></td>
+                                <td class="miv-col-num"><t t-esc="formatCurrency(saler.actual_amount_total)"/></td>
+                                <td class="miv-col-num"><t t-esc="formatCurrency(saler.invoice_amount_total)"/></td>
                             </tr>
                         </tbody>
                     </table>
+                    <div class="miv-pagination" t-if="state.data.by_saler.length > 10">
+                        <button class="btn btn-sm miv-page-btn" t-on-click="salerPrevPage" t-att-disabled="state.salerPage &lt;= 1">
+                            <i class="fa fa-chevron-left"/>
+                        </button>
+                        <span class="miv-page-label">Trang <t t-esc="state.salerPage"/> / <t t-esc="salerTotalPages"/></span>
+                        <button class="btn btn-sm miv-page-btn" t-on-click="salerNextPage" t-att-disabled="state.salerPage &gt;= salerTotalPages">
+                            <i class="fa fa-chevron-right"/>
+                        </button>
+                    </div>
                     <div class="miv-empty" t-else="">Chưa có dữ liệu.</div>
                 </div>
             </t>

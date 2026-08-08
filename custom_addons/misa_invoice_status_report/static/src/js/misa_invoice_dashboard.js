@@ -15,6 +15,7 @@ const DONUT_COLORS = {
 };
 const DONUT_RADIUS = 54;
 const DONUT_CIRCUMFERENCE = 2 * Math.PI * DONUT_RADIUS;
+const SALER_PAGE_SIZE = 10;
 
 export class MisaInvoiceDashboard extends Component {
     static template = "misa_invoice_status_report.Dashboard";
@@ -32,11 +33,37 @@ export class MisaInvoiceDashboard extends Component {
             urgent: [],
             cutoffDraft: "",
             monthFilter: "", // "" = tất cả (kể từ mốc đối soát); "YYYY-MM" = lọc theo tháng
+            expandedPickingId: null,
+            expandedLines: [],
+            expandedLoading: false,
+            salerPage: 1,
         });
 
         onWillStart(async () => {
             await this.loadAll();
         });
+    }
+
+    /** Danh sách tháng có thể chọn: từ mốc đối soát tới tháng hiện tại, nhãn tiếng Việt dạng số. */
+    get monthOptions() {
+        const cutoff = this.state.data && this.state.data.cutoff_date;
+        if (!cutoff) {
+            return [];
+        }
+        const [cutoffYear, cutoffMonth] = cutoff.split("-").map(Number);
+        const now = new Date();
+        let year = now.getFullYear();
+        let month = now.getMonth() + 1;
+        const options = [];
+        while (year > cutoffYear || (year === cutoffYear && month >= cutoffMonth)) {
+            options.push({ value: `${year}-${String(month).padStart(2, "0")}`, label: `Tháng ${month}/${year}` });
+            month -= 1;
+            if (month === 0) {
+                month = 12;
+                year -= 1;
+            }
+        }
+        return options;
     }
 
     /** Chuyển "YYYY-MM" thành {date_from, date_to} (đầu/cuối tháng). "" => không lọc. */
@@ -76,6 +103,9 @@ export class MisaInvoiceDashboard extends Component {
     _applyData(data) {
         this.state.data = data;
         this.state.cutoffDraft = data.cutoff_date || "";
+        this.state.salerPage = 1;
+        this.state.expandedPickingId = null;
+        this.state.expandedLines = [];
     }
 
     async onMonthChange(ev) {
@@ -85,20 +115,6 @@ export class MisaInvoiceDashboard extends Component {
             await this._reload();
         } catch (e) {
             this.notification.add("Lỗi lọc theo tháng: " + (e.message || e), { type: "danger" });
-        }
-        this.state.isLoading = false;
-    }
-
-    async clearMonthFilter() {
-        if (!this.state.monthFilter) {
-            return;
-        }
-        this.state.monthFilter = "";
-        this.state.isLoading = true;
-        try {
-            await this._reload();
-        } catch (e) {
-            this.notification.add("Lỗi tải dữ liệu: " + (e.message || e), { type: "danger" });
         }
         this.state.isLoading = false;
     }
@@ -184,6 +200,53 @@ export class MisaInvoiceDashboard extends Component {
             views: [[false, "form"]],
             target: "current",
         });
+    }
+
+    /** Mở/đóng dòng chi tiết sản phẩm ngay trong bảng "Phiếu cần hối gấp nhất". */
+    async toggleExpand(pickingId, ev) {
+        ev.stopPropagation();
+        if (this.state.expandedPickingId === pickingId) {
+            this.state.expandedPickingId = null;
+            this.state.expandedLines = [];
+            return;
+        }
+        this.state.expandedPickingId = pickingId;
+        this.state.expandedLines = [];
+        this.state.expandedLoading = true;
+        try {
+            this.state.expandedLines = await this.orm.call(
+                "stock.picking", "get_misa_invoice_picking_lines", [pickingId], {}
+            );
+        } catch (e) {
+            this.notification.add("Lỗi tải chi tiết phiếu: " + (e.message || e), { type: "danger" });
+        }
+        this.state.expandedLoading = false;
+    }
+
+    // ===== Phân trang bảng "Theo nhân viên sale" (client-side, dữ liệu đã tải sẵn) =====
+    get salerTotalPages() {
+        const total = (this.state.data && this.state.data.by_saler.length) || 0;
+        return Math.max(1, Math.ceil(total / SALER_PAGE_SIZE));
+    }
+
+    get pagedSalers() {
+        if (!this.state.data) {
+            return [];
+        }
+        const start = (this.state.salerPage - 1) * SALER_PAGE_SIZE;
+        return this.state.data.by_saler.slice(start, start + SALER_PAGE_SIZE);
+    }
+
+    salerPrevPage() {
+        if (this.state.salerPage > 1) {
+            this.state.salerPage -= 1;
+        }
+    }
+
+    salerNextPage() {
+        if (this.state.salerPage < this.salerTotalPages) {
+            this.state.salerPage += 1;
+        }
     }
 
     get donutSegments() {
