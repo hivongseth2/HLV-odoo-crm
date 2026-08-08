@@ -1179,12 +1179,10 @@ button.sr-rq-cancel-btn .ms { display:none; }
     .sr-rq-lbl { min-width:90px; }
 }
 
-/* ── Mã QR tài khoản (hero profile — desktop) ── */
-.sr-qr-mini { display:flex; flex-direction:column; align-items:center; gap:6px;
-              background:#fff; border-radius:14px; padding:10px 12px; flex-shrink:0;
-              box-shadow:0 8px 24px rgba(0,0,0,.18); }
-.sr-qr-mini img { width:88px; height:88px; border-radius:4px; background:#fff; display:block; }
-.sr-qr-mini-code { font-size:.66rem; font-weight:700; color:var(--c-ink-v); letter-spacing:.5px; }
+/* ── Mã QR tài khoản (hero profile — desktop, thay cho hiển thị điểm) ── */
+.sr-qr-hero { display:flex; flex-direction:column; align-items:center; gap:8px; flex-shrink:0; }
+.sr-qr-hero img { width:140px; height:140px; border-radius:8px; display:block; }
+.sr-qr-hero-code { font-size:.75rem; font-weight:700; color:rgba(255,255,255,.85); letter-spacing:.5px; }
 
 /* ── Mobile member card (kiểu thẻ VIP) ── */
 .sr-mcard-wrap { display:none; }
@@ -1224,8 +1222,6 @@ button.sr-rq-cancel-btn .ms { display:none; }
 .sr-bottom-nav-spacer { display:none; }
 .sr-bottom-nav { display:none; }
 @media (max-width:768px) {
-    .sr-qr-mini-code { display:none; }
-    .sr-qr-mini img { width:60px; height:60px; }
     .sr-result-hero { display:none; }
     .sr-main-row { display:none; }
     #loyalty-vouchers, #loyalty-history { display:none; }

@@ -113,38 +113,12 @@
                                 </t>
                             </div>
                         </div>
-                        <!-- QR định danh tài khoản -->
-                        <div class="sr-qr-mini" title="Mã QR tài khoản">
-                            <img t-att-src="'/report/barcode/QR/%s?width=100&amp;height=100' % account.username"
-                                 t-att-alt="account.username"/>
-                            <span class="sr-qr-mini-code"><t t-out="account.username"/></span>
-                        </div>
                     </div>
-                    <!-- Balance pill -->
-                    <div class="sr-bal-pill">
-                        <div class="sr-bal-avatar">
-                            <t t-if="partner.loyalty_tier_id and partner.loyalty_tier_id.image_url">
-                                <img class="sr-bal-avatar-img" t-att-src="partner.loyalty_tier_id.image_url" t-att-alt="partner.loyalty_tier_id.name or 'Tier image'"/>
-                            </t>
-                            <t t-else="">
-                                <span class="ms ms-fill ms-lg">workspace_premium</span>
-                            </t>
-                            <t t-if="partner.loyalty_tier_id">
-                                <span class="sr-bal-tier-tag"><t t-out="(partner.loyalty_tier_id.name or '').upper()"/></span>
-                            </t>
-                        </div>
-                        <div>
-                            <div class="sr-bal-lbl">Điểm khả dụng</div>
-                            <div>
-                                <span class="sr-bal-num"><t t-out="'{:,}'.format(exchange_available_points)"/></span>
-                                <span class="sr-bal-unit"> điểm đổi thưởng</span>
-                            </div>
-                            <t t-if="reward_pending_points &gt; 0">
-                                <div style="margin-top:6px;font-size:.82rem;opacity:.85" class="badge-pt-exchange sr-badge">
-                                    <span style="opacity:.85">Đang treo <t t-out="'{:,}'.format(reward_pending_points)"/> điểm ở yêu cầu chờ xử lý</span>
-                                </div>
-                            </t>
-                        </div>
+                    <!-- QR định danh tài khoản (thay cho hiển thị điểm ngay trang chủ) -->
+                    <div class="sr-qr-hero" title="Mã QR tài khoản">
+                        <img t-att-src="'/report/barcode/QR/%s?width=160&amp;height=160' % account.username"
+                             t-att-alt="account.username"/>
+                        <span class="sr-qr-hero-code"><t t-out="account.username"/></span>
                     </div>
                 </div>
                 <!-- Profile action buttons – inside hero -->
@@ -223,9 +197,9 @@
                 </div>
             </div>
 
-            <!-- Shared sections (ẩn trên mobile qua CSS) -->
+            <!-- Voucher (ẩn trên mobile qua CSS) — lịch sử tích lũy gần đây đã bỏ
+                 khỏi trang chủ, xem đầy đủ tại /loyalty/history -->
             <t t-call="hlv_loyalty.loyalty_portal_vouchers_section"/>
-            <t t-call="hlv_loyalty.loyalty_portal_history_section"/>
         </div>
 
         <!-- Shared tier section + modals -->
