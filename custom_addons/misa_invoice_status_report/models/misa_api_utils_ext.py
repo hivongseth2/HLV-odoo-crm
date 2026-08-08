@@ -1,5 +1,6 @@
 import logging
 import time
+from datetime import datetime
 
 from odoo import models
 
@@ -7,6 +8,23 @@ _logger = logging.getLogger(__name__)
 
 MISA_ACT_TOKEN_PARAM = 'misa.act.cached_token'
 MISA_ACT_TOKEN_EXP_PARAM = 'misa.act.cached_token_exp'
+
+# Trần số trang tải khi quét hàng loạt sa_invoice_request theo khoảng ngày (an toàn, tránh
+# vòng lặp vô hạn nếu MISA trả dữ liệu bất thường).
+MISA_INVOICE_REQUEST_MAP_MAX_PAGES = 30
+MISA_INVOICE_REQUEST_MAP_PAGE_SIZE = 100
+
+
+def _empty_invoice_status():
+    return {
+        'state': 'missing',
+        'request_refid': None,
+        'account_object_name': None,
+        'invoice_no': None,
+        'invoice_date': None,
+        'invoice_amount': None,
+        'send_email_status': None,
+    }
 
 
 class MisaApiUtilsInvoiceStatus(models.AbstractModel):
@@ -31,50 +49,22 @@ class MisaApiUtilsInvoiceStatus(models.AbstractModel):
         ICP.set_param(MISA_ACT_TOKEN_EXP_PARAM, str(exp))
         return token
 
-    def get_invoice_status_for_refno(self, refno):
-        """Tra tình trạng xuất hóa đơn của 1 phiếu xuất kho (refno = stock.picking.name)
-        trên MISA. Tái dùng đúng luồng 3 bước của search_invoice_api() (sa_invoice_request
-        -> sa_invoice_get theo khách hàng -> lọc theo sa_invoice_request_refid), nhưng tách
-        rõ 3 trạng thái mà search_invoice_api() không phân biệt được (cả hai đều trả về
-        PageData rỗng):
-        - missing: chưa có "Đề nghị xuất hóa đơn" nào khớp refno.
-        - requested: đã có đề nghị nhưng chưa có hóa đơn nào phát sinh từ đề nghị đó.
-        - invoiced: đã có hóa đơn phát sinh từ đề nghị.
-        """
-        token = self._get_misa_token_cached()
-        headers = self.env['misa.config'].get_default_headers(token)
-
-        result = {
-            'state': 'missing',
-            'request_refid': None,
-            'account_object_name': None,
-            'invoice_no': None,
-            'invoice_date': None,
-            'invoice_amount': None,
-        }
-
-        url_req = "https://actapp.misa.vn/g2/api/sa/v1/sa_invoice_request/paging_filter_v2"
-        payload_req = self.env['misa.config'].get_invoice_request_payload(refno)
-        resp_req = self._fetch_with_retry(url_req, headers, payload_req)
-        if resp_req.status_code != 200:
-            raise Exception(
-                "MISA sa_invoice_request API error %s: %s" % (resp_req.status_code, resp_req.text)
-            )
-
-        page_data_req = resp_req.json().get("Data", {}).get("PageData", []) or []
-        if not page_data_req:
-            return result
-
-        req_info = page_data_req[0]
+    def _misa_invoice_result_from_request(self, req_info):
+        """Bước 2+3 của luồng tra cứu: từ 1 "Đề nghị xuất hóa đơn" (req_info), tìm xem đã
+        có hóa đơn thật phát sinh từ đó chưa (sa_invoice_get, lọc theo sa_invoice_request_refid)."""
+        result = _empty_invoice_status()
         target_req_id = req_info.get("refid")
         target_customer = req_info.get("account_object_name")
         result['request_refid'] = target_req_id
         result['account_object_name'] = target_customer
         result['state'] = 'requested'
+        result['send_email_status'] = req_info.get('send_email_status')
 
         if not target_req_id or not target_customer:
             return result
 
+        token = self._get_misa_token_cached()
+        headers = self.env['misa.config'].get_default_headers(token)
         url_inv = "https://actapp.misa.vn/g2/api/sa/v1/sa_invoice_get/paging_filter_v2"
         payload_inv = self.env['misa.config'].get_invoice_full_search_payload(target_customer)
         resp_inv = self._fetch_with_retry(url_inv, headers, payload_inv)
@@ -96,4 +86,88 @@ class MisaApiUtilsInvoiceStatus(models.AbstractModel):
         result['invoice_no'] = matched.get('inv_no')
         result['invoice_date'] = matched.get('inv_date')
         result['invoice_amount'] = matched.get('total_amount')
+        if matched.get('send_email_status') is not None:
+            result['send_email_status'] = matched.get('send_email_status')
         return result
+
+    def get_invoice_status_for_refno(self, refno):
+        """Tra tình trạng xuất hóa đơn của 1 phiếu xuất kho (refno = stock.picking.name)
+        trên MISA — dùng cho kiểm tra đơn lẻ (nút trên form / gọi ngoài batch), gọi thẳng
+        1 API tìm đúng refno này, không tải hàng loạt."""
+        token = self._get_misa_token_cached()
+        headers = self.env['misa.config'].get_default_headers(token)
+
+        url_req = "https://actapp.misa.vn/g2/api/sa/v1/sa_invoice_request/paging_filter_v2"
+        payload_req = self.env['misa.config'].get_invoice_request_payload(refno)
+        resp_req = self._fetch_with_retry(url_req, headers, payload_req)
+        if resp_req.status_code != 200:
+            raise Exception(
+                "MISA sa_invoice_request API error %s: %s" % (resp_req.status_code, resp_req.text)
+            )
+
+        page_data_req = resp_req.json().get("Data", {}).get("PageData", []) or []
+        if not page_data_req:
+            return _empty_invoice_status()
+        return self._misa_invoice_result_from_request(page_data_req[0])
+
+    def get_invoice_request_map(self, date_from_iso=False, date_to_iso=False):
+        """Tải hàng loạt "Đề nghị xuất hóa đơn" (sa_invoice_request) trong 1 khoảng ngày,
+        dùng để kiểm tra nhiều phiếu cùng lúc chỉ với vài lệnh gọi thay vì 1 lệnh/phiếu.
+
+        MISA cho phép 1 đề nghị đại diện cho NHIỀU phiếu xuất kho gộp chung (VD refno chính
+        là "KBC/OUT/10935" nhưng journal_memo liệt kê thêm "KBC/OUT/10901" và "KBC/OUT/10938" —
+        các phiếu này KHÔNG tự tìm ra được nếu chỉ tra theo đúng refno của chính nó). Vì vậy
+        map trả về được đánh chỉ mục theo CẢ refno lẫn từng dòng trong journal_memo, để phiếu
+        "ăn theo" vẫn tra đúng ra tình trạng của đề nghị đại diện."""
+        token = self._get_misa_token_cached()
+        headers = self.env['misa.config'].get_default_headers(token)
+        url = "https://actapp.misa.vn/g2/api/sa/v1/sa_invoice_request/paging_filter_v2"
+
+        if not date_from_iso:
+            date_from_iso = "2025-12-31T17:00:00.00Z"
+        if not date_to_iso:
+            date_to_iso = datetime.utcnow().isoformat() + "Z"
+
+        by_refno = {}
+        memo_extra = {}
+        page = 1
+        while page <= MISA_INVOICE_REQUEST_MAP_MAX_PAGES:
+            payload = self.env['misa.config'].get_invoice_request_bulk_payload(
+                date_from_iso, date_to_iso, page_index=page, page_size=MISA_INVOICE_REQUEST_MAP_PAGE_SIZE,
+            )
+            resp = self._fetch_with_retry(url, headers, payload)
+            if resp.status_code != 200:
+                _logger.warning(
+                    "❌ [MISA INVOICE MAP] Lỗi tải trang %s: %s %s", page, resp.status_code, resp.text[:300]
+                )
+                break
+
+            page_data = resp.json().get("Data", {}).get("PageData", []) or []
+            if not page_data:
+                break
+
+            for item in page_data:
+                refno = (item.get("refno") or "").strip()
+                if refno:
+                    by_refno[refno] = item
+                memo = item.get("journal_memo") or ""
+                for line in memo.splitlines():
+                    code = line.strip()
+                    if code and code not in memo_extra:
+                        memo_extra[code] = item
+
+            if len(page_data) < MISA_INVOICE_REQUEST_MAP_PAGE_SIZE:
+                break
+            page += 1
+
+        for code, item in memo_extra.items():
+            by_refno.setdefault(code, item)
+        return by_refno
+
+    def get_invoice_status_from_map(self, refno, request_map):
+        """Như get_invoice_status_for_refno() nhưng tra trong map đã tải sẵn (không gọi
+        API tìm đề nghị nữa) — dùng khi kiểm tra theo lô (xem get_invoice_request_map)."""
+        req_info = (request_map or {}).get(refno)
+        if not req_info:
+            return _empty_invoice_status()
+        return self._misa_invoice_result_from_request(req_info)
