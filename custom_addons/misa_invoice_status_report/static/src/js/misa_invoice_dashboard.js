@@ -15,7 +15,20 @@ const DONUT_COLORS = {
 };
 const DONUT_RADIUS = 54;
 const DONUT_CIRCUMFERENCE = 2 * Math.PI * DONUT_RADIUS;
-const SALER_PAGE_SIZE = 10;
+const GROUP_PAGE_SIZE = 10;
+const SCAN_BATCH_SIZE = 50;
+
+function pad2(n) {
+    return String(n).padStart(2, "0");
+}
+
+function monthBounds(year, month) {
+    const lastDay = new Date(year, month, 0).getDate();
+    return {
+        from: `${year}-${pad2(month)}-01`,
+        to: `${year}-${pad2(month)}-${pad2(lastDay)}`,
+    };
+}
 
 export class MisaInvoiceDashboard extends Component {
     static template = "misa_invoice_status_report.Dashboard";
@@ -25,16 +38,27 @@ export class MisaInvoiceDashboard extends Component {
         this.action = useService("action");
         this.notification = useService("notification");
 
+        const now = new Date();
+        const currentMonth = monthBounds(now.getFullYear(), now.getMonth() + 1);
+
         this.state = useState({
             isLoading: true,
             isScanning: false,
             isSavingCutoff: false,
             data: null,
             urgent: [],
+            // Ngày xuất kho: mặc định tháng hiện tại (quick-pick dropdown ghi vào 2 field này,
+            // nhưng người dùng có thể tự sửa tay để lọc 1 ngày cụ thể hoặc 1 khoảng bất kỳ).
+            shipFrom: currentMonth.from,
+            shipTo: currentMonth.to,
+            // Ngày xuất hóa đơn: để trống = không lọc.
+            invFrom: "",
+            invTo: "",
             cutoffDraft: "",
-            monthFilter: "", // "" = tất cả (kể từ mốc đối soát); "YYYY-MM" = lọc theo tháng
-            activeTab: "urgent", // "urgent" | "warehouse" | "saler"
+            activeTab: "urgent", // urgent | warehouse | saler | customer | orders
             salerPage: 1,
+            customerPage: 1,
+            orders: { rows: [], total: 0, page: 1, pageSize: 20, loading: false },
             showScanPanel: false,
             scanProgress: { done: 0, total: 0 },
             scanLog: [],
@@ -45,7 +69,7 @@ export class MisaInvoiceDashboard extends Component {
         });
 
         onWillStart(async () => {
-            await this.loadAll();
+            await this._reloadWithLoading();
         });
     }
 
@@ -61,7 +85,7 @@ export class MisaInvoiceDashboard extends Component {
         let month = now.getMonth() + 1;
         const options = [];
         while (year > cutoffYear || (year === cutoffYear && month >= cutoffMonth)) {
-            options.push({ value: `${year}-${String(month).padStart(2, "0")}`, label: `Tháng ${month}/${year}` });
+            options.push({ value: `${year}-${pad2(month)}`, label: `Tháng ${month}/${year}` });
             month -= 1;
             if (month === 0) {
                 month = 12;
@@ -71,25 +95,35 @@ export class MisaInvoiceDashboard extends Component {
         return options;
     }
 
-    /** Chuyển "YYYY-MM" thành {date_from, date_to} (đầu/cuối tháng). "" => không lọc. */
-    get monthRange() {
-        if (!this.state.monthFilter) {
-            return { date_from: false, date_to: false };
+    /** Dropdown tháng chỉ "khớp" khi shipFrom/shipTo đúng bằng trọn 1 tháng; ngược lại coi như "Tất cả". */
+    get monthDropdownValue() {
+        for (const opt of this.monthOptions) {
+            const [year, month] = opt.value.split("-").map(Number);
+            const bounds = monthBounds(year, month);
+            if (this.state.shipFrom === bounds.from && this.state.shipTo === bounds.to) {
+                return opt.value;
+            }
         }
-        const [year, month] = this.state.monthFilter.split("-").map(Number);
-        const lastDay = new Date(year, month, 0).getDate();
-        const pad = (n) => String(n).padStart(2, "0");
+        return "";
+    }
+
+    get filterParams() {
         return {
-            date_from: `${year}-${pad(month)}-01`,
-            date_to: `${year}-${pad(month)}-${pad(lastDay)}`,
+            date_from: this.state.shipFrom || false,
+            date_to: this.state.shipTo || false,
+            invoice_date_from: this.state.invFrom || false,
+            invoice_date_to: this.state.invTo || false,
         };
     }
 
     switchTab(tab) {
         this.state.activeTab = tab;
+        if (tab === "orders") {
+            this.loadOrders(this.state.orders.page || 1);
+        }
     }
 
-    async loadAll() {
+    async _reloadWithLoading() {
         this.state.isLoading = true;
         try {
             await this._reload();
@@ -100,10 +134,11 @@ export class MisaInvoiceDashboard extends Component {
     }
 
     async _reload() {
-        const range = this.monthRange;
+        const params = this.filterParams;
         const [data, urgent] = await Promise.all([
-            this.orm.call("stock.picking", "get_misa_invoice_dashboard_data", [], { ...range }),
-            this.orm.call("stock.picking", "get_misa_invoice_urgent_list", [], { limit: 10, ...range }),
+            this.orm.call("stock.picking", "get_misa_invoice_dashboard_data", [], { ...params }),
+            this.orm.call("stock.picking", "get_misa_invoice_urgent_list", [], { limit: 10, ...params }),
+            this.loadOrders(1),
         ]);
         this._applyData(data);
         this.state.urgent = urgent;
@@ -113,20 +148,74 @@ export class MisaInvoiceDashboard extends Component {
         this.state.data = data;
         this.state.cutoffDraft = data.cutoff_date || "";
         this.state.salerPage = 1;
+        this.state.customerPage = 1;
     }
 
-    async onMonthChange(ev) {
-        this.state.monthFilter = ev.target.value || "";
-        this.state.isLoading = true;
-        try {
-            await this._reload();
-        } catch (e) {
-            this.notification.add("Lỗi lọc theo tháng: " + (e.message || e), { type: "danger" });
+    // ===== Bộ lọc ngày xuất kho / ngày xuất hóa đơn =====
+    onMonthPick(ev) {
+        const value = ev.target.value;
+        if (!value) {
+            this.state.shipFrom = "";
+            this.state.shipTo = "";
+        } else {
+            const [year, month] = value.split("-").map(Number);
+            const bounds = monthBounds(year, month);
+            this.state.shipFrom = bounds.from;
+            this.state.shipTo = bounds.to;
         }
-        this.state.isLoading = false;
+        this._reloadWithLoading();
     }
 
-    /** Quét từng phiếu một (thay vì 1 lệnh lớn chạy âm thầm) để thấy tiến trình thật. */
+    onShipFromChange(ev) {
+        this.state.shipFrom = ev.target.value || "";
+        this._reloadWithLoading();
+    }
+
+    onShipToChange(ev) {
+        this.state.shipTo = ev.target.value || "";
+        this._reloadWithLoading();
+    }
+
+    onInvFromChange(ev) {
+        this.state.invFrom = ev.target.value || "";
+        this._reloadWithLoading();
+    }
+
+    onInvToChange(ev) {
+        this.state.invTo = ev.target.value || "";
+        this._reloadWithLoading();
+    }
+
+    // ===== Kiểm tra MISA (có tiến trình thấy được) =====
+    /** Xử lý tuần tự 1 batch, cập nhật log + progress theo từng phiếu. */
+    async _processCandidates(candidates) {
+        for (const candidate of candidates) {
+            const entry = { name: candidate.name, statusLabel: "Đang kiểm tra...", loading: true, error: false };
+            this.state.scanLog.unshift(entry);
+            try {
+                const results = await this.orm.call(
+                    "stock.picking", "action_check_misa_invoice_status", [[candidate.id]], {}
+                );
+                const result = results && results[0];
+                if (result && result.error) {
+                    entry.statusLabel = "Lỗi: " + result.error;
+                    entry.error = true;
+                } else if (result) {
+                    entry.statusLabel = result.state_label;
+                } else {
+                    entry.statusLabel = "Bỏ qua";
+                }
+            } catch (e) {
+                entry.statusLabel = "Lỗi: " + (e.message || e);
+                entry.error = true;
+            }
+            entry.loading = false;
+            this.state.scanProgress.done += 1;
+        }
+    }
+
+    /** Không chọn ngày xuất kho nào (Tất cả) => quét 1 batch như trước (an toàn, không quét cả hệ thống).
+     * Có chọn khoảng ngày xuất kho => quét hết TOÀN BỘ khoảng đó, vẫn chia nhỏ từng batch 50. */
     async scanNow() {
         if (this.state.isScanning) {
             return;
@@ -136,36 +225,39 @@ export class MisaInvoiceDashboard extends Component {
         this.state.scanLog = [];
         this.state.scanProgress = { done: 0, total: 0 };
         try {
-            const candidates = await this.orm.call(
-                "stock.picking", "get_misa_invoice_scan_candidates", [], { limit: 50 }
-            );
-            this.state.scanProgress.total = candidates.length;
-            for (const candidate of candidates) {
-                const entry = { name: candidate.name, statusLabel: "Đang kiểm tra...", loading: true, error: false };
-                this.state.scanLog.unshift(entry);
-                try {
-                    const results = await this.orm.call(
-                        "stock.picking", "action_check_misa_invoice_status", [[candidate.id]], {}
+            const range = { date_from: this.state.shipFrom || false, date_to: this.state.shipTo || false };
+            const hasRange = !!(range.date_from || range.date_to);
+
+            if (!hasRange) {
+                const resp = await this.orm.call(
+                    "stock.picking", "get_misa_invoice_scan_candidates", [], { limit: SCAN_BATCH_SIZE }
+                );
+                this.state.scanProgress.total = resp.candidates.length;
+                await this._processCandidates(resp.candidates);
+            } else {
+                let total = null;
+                // eslint-disable-next-line no-constant-condition
+                while (true) {
+                    const resp = await this.orm.call(
+                        "stock.picking", "get_misa_invoice_scan_candidates", [],
+                        { limit: SCAN_BATCH_SIZE, ...range }
                     );
-                    const result = results && results[0];
-                    if (result && result.error) {
-                        entry.statusLabel = "Lỗi: " + result.error;
-                        entry.error = true;
-                    } else if (result) {
-                        entry.statusLabel = result.state_label;
-                    } else {
-                        entry.statusLabel = "Bỏ qua";
+                    if (total === null) {
+                        total = resp.total;
+                        this.state.scanProgress.total = total;
                     }
-                } catch (e) {
-                    entry.statusLabel = "Lỗi: " + (e.message || e);
-                    entry.error = true;
+                    if (!resp.candidates.length) {
+                        break;
+                    }
+                    await this._processCandidates(resp.candidates);
+                    if (this.state.scanProgress.done >= total) {
+                        break;
+                    }
                 }
-                entry.loading = false;
-                this.state.scanProgress.done += 1;
             }
             await this._reload();
-            if (candidates.length) {
-                this.notification.add(`Đã kiểm tra xong ${candidates.length} phiếu.`, { type: "success" });
+            if (this.state.scanProgress.done) {
+                this.notification.add(`Đã kiểm tra xong ${this.state.scanProgress.done} phiếu.`, { type: "success" });
             } else {
                 this.notification.add("Không có phiếu nào cần kiểm tra.", { type: "info" });
             }
@@ -206,7 +298,7 @@ export class MisaInvoiceDashboard extends Component {
     async openTile(invoiceState) {
         const action = await this.orm.call(
             "stock.picking", "get_misa_invoice_report_action", [],
-            { state: invoiceState || false, ...this.monthRange }
+            { state: invoiceState || false, ...this.filterParams }
         );
         this.action.doAction(action);
     }
@@ -214,7 +306,7 @@ export class MisaInvoiceDashboard extends Component {
     async openExceptionTile() {
         const action = await this.orm.call(
             "stock.picking", "get_misa_invoice_report_action", [],
-            { state: false, exception: true, ...this.monthRange }
+            { state: false, exception: true, ...this.filterParams }
         );
         this.action.doAction(action);
     }
@@ -222,7 +314,7 @@ export class MisaInvoiceDashboard extends Component {
     async openMismatchTile() {
         const action = await this.orm.call(
             "stock.picking", "get_misa_invoice_report_action", [],
-            { state: false, mismatch: true, ...this.monthRange }
+            { state: false, mismatch: true, ...this.filterParams }
         );
         this.action.doAction(action);
     }
@@ -230,7 +322,15 @@ export class MisaInvoiceDashboard extends Component {
     async openSalerRow(salerCode) {
         const action = await this.orm.call(
             "stock.picking", "get_misa_invoice_report_action", [],
-            { state: false, saler_code: salerCode, ...this.monthRange }
+            { state: false, saler_code: salerCode, ...this.filterParams }
+        );
+        this.action.doAction(action);
+    }
+
+    async openCustomerRow(partnerId) {
+        const action = await this.orm.call(
+            "stock.picking", "get_misa_invoice_report_action", [],
+            { state: false, partner_id: partnerId, ...this.filterParams }
         );
         this.action.doAction(action);
     }
@@ -282,18 +382,55 @@ export class MisaInvoiceDashboard extends Component {
         return this.state.drawerLines.reduce((sum, line) => sum + (line.value || 0), 0);
     }
 
-    // ===== Phân trang bảng "Theo nhân viên sale" (client-side, dữ liệu đã tải sẵn) =====
+    // ===== Tab "Đơn hàng" (phẳng, phân trang server-side) =====
+    async loadOrders(page) {
+        this.state.orders.loading = true;
+        try {
+            const resp = await this.orm.call(
+                "stock.picking", "get_misa_invoice_picking_list", [],
+                {
+                    limit: this.state.orders.pageSize,
+                    offset: (page - 1) * this.state.orders.pageSize,
+                    ...this.filterParams,
+                }
+            );
+            this.state.orders.rows = resp.rows;
+            this.state.orders.total = resp.total;
+            this.state.orders.page = page;
+        } catch (e) {
+            this.notification.add("Lỗi tải danh sách đơn hàng: " + (e.message || e), { type: "danger" });
+        }
+        this.state.orders.loading = false;
+    }
+
+    get ordersTotalPages() {
+        return Math.max(1, Math.ceil(this.state.orders.total / this.state.orders.pageSize));
+    }
+
+    ordersPrevPage() {
+        if (this.state.orders.page > 1) {
+            this.loadOrders(this.state.orders.page - 1);
+        }
+    }
+
+    ordersNextPage() {
+        if (this.state.orders.page < this.ordersTotalPages) {
+            this.loadOrders(this.state.orders.page + 1);
+        }
+    }
+
+    // ===== Phân trang "Theo nhân viên sale" / "Theo khách hàng" (client-side) =====
     get salerTotalPages() {
         const total = (this.state.data && this.state.data.by_saler.length) || 0;
-        return Math.max(1, Math.ceil(total / SALER_PAGE_SIZE));
+        return Math.max(1, Math.ceil(total / GROUP_PAGE_SIZE));
     }
 
     get pagedSalers() {
         if (!this.state.data) {
             return [];
         }
-        const start = (this.state.salerPage - 1) * SALER_PAGE_SIZE;
-        return this.state.data.by_saler.slice(start, start + SALER_PAGE_SIZE);
+        const start = (this.state.salerPage - 1) * GROUP_PAGE_SIZE;
+        return this.state.data.by_saler.slice(start, start + GROUP_PAGE_SIZE);
     }
 
     salerPrevPage() {
@@ -305,6 +442,31 @@ export class MisaInvoiceDashboard extends Component {
     salerNextPage() {
         if (this.state.salerPage < this.salerTotalPages) {
             this.state.salerPage += 1;
+        }
+    }
+
+    get customerTotalPages() {
+        const total = (this.state.data && this.state.data.by_customer.length) || 0;
+        return Math.max(1, Math.ceil(total / GROUP_PAGE_SIZE));
+    }
+
+    get pagedCustomers() {
+        if (!this.state.data) {
+            return [];
+        }
+        const start = (this.state.customerPage - 1) * GROUP_PAGE_SIZE;
+        return this.state.data.by_customer.slice(start, start + GROUP_PAGE_SIZE);
+    }
+
+    customerPrevPage() {
+        if (this.state.customerPage > 1) {
+            this.state.customerPage -= 1;
+        }
+    }
+
+    customerNextPage() {
+        if (this.state.customerPage < this.customerTotalPages) {
+            this.state.customerPage += 1;
         }
     }
 
