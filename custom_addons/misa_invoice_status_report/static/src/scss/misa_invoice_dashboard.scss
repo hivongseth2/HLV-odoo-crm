@@ -1,3 +1,9 @@
+// Odoo's .o_action_manager mặc định overflow:hidden khiến trang client action dài
+// không cuộn được — phải override riêng cho action chứa dashboard này.
+.o_action_manager:has(.miv-dashboard) {
+    overflow: auto !important;
+}
+
 // Tokens theo bộ palette đã validate (dataviz skill): text ink, chrome, status colors.
 .miv-dashboard {
     --miv-surface: #fcfcfb;
@@ -20,9 +26,10 @@
     max-width: 1320px;
     margin: 0 auto;
     background: var(--miv-plane);
-    min-height: 100%;
     color: var(--miv-ink);
     font-variant-numeric: proportional-nums;
+    min-height: 100%;
+    overflow-y: auto;
 
     .miv-loading {
         padding: 80px 0;
@@ -347,6 +354,91 @@
         .miv-cell-critical { color: var(--miv-critical-text); font-weight: 700; }
         .miv-cell-warning { color: var(--miv-warning-text); font-weight: 700; }
         .miv-cell-good { color: var(--miv-good-text); font-weight: 700; }
+
+        .miv-expand-col {
+            width: 28px;
+            padding: 10px 0 10px 10px;
+
+            i {
+                cursor: pointer;
+                color: var(--miv-ink-muted);
+                width: 16px;
+                display: inline-block;
+                text-align: center;
+
+                &:hover { color: var(--miv-ink); }
+            }
+        }
+    }
+
+    .miv-expand-row {
+        cursor: default !important;
+        background: var(--miv-plane);
+
+        &:hover { background: var(--miv-plane) !important; }
+
+        > td { padding: 10px 10px 14px 38px; }
+    }
+
+    .miv-expand-loading {
+        padding: 10px 0;
+        color: var(--miv-ink-muted);
+        font-size: 12.5px;
+    }
+
+    .miv-subtable {
+        width: 100%;
+        max-width: 560px;
+        border-collapse: collapse;
+        font-size: 12.5px;
+        background: var(--miv-surface);
+        border: 1px solid var(--miv-grid);
+        border-radius: 8px;
+        overflow: hidden;
+
+        th {
+            text-align: left;
+            padding: 6px 10px;
+            color: var(--miv-ink-muted);
+            font-weight: 600;
+            font-size: 11px;
+            background: var(--miv-plane);
+        }
+
+        td {
+            padding: 6px 10px;
+            border-top: 1px solid var(--miv-grid);
+        }
+
+        .miv-col-num { text-align: right; font-variant-numeric: tabular-nums; }
+    }
+
+    .miv-pagination {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        padding-top: 14px;
+
+        .miv-page-btn {
+            border: 1px solid var(--miv-baseline);
+            border-radius: 6px;
+            background: var(--miv-surface);
+            width: 28px;
+            height: 28px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+
+            &:disabled { opacity: 0.4; cursor: default; }
+            &:not(:disabled):hover { background: var(--miv-plane); }
+        }
+
+        .miv-page-label {
+            font-size: 12.5px;
+            color: var(--miv-ink-2);
+            font-variant-numeric: tabular-nums;
+        }
     }
 
     .miv-empty {
