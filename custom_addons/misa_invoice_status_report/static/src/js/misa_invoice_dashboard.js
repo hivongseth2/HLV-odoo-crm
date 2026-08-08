@@ -55,10 +55,16 @@ export class MisaInvoiceDashboard extends Component {
             invFrom: "",
             invTo: "",
             cutoffDraft: "",
-            activeTab: "urgent", // urgent | warehouse | saler | customer | orders
+            activeTab: "urgent", // urgent | warehouse | saler | customer | daily | pickings | orders
             salerPage: 1,
             customerPage: 1,
-            orders: { rows: [], total: 0, page: 1, pageSize: 20, loading: false },
+            statusSummary: null,
+            // Tab "Theo ngày": có thể lọc theo 1 nhân viên sale + gộp theo tuần.
+            dailyTab: { rows: [], loading: false, weekly: false, salerCode: "" },
+            // Tab "Phiếu xuất kho": phẳng, key là stock.picking (KBC/OUT/...).
+            pickingsTab: { rows: [], total: 0, page: 1, pageSize: 20, loading: false },
+            // Tab "Đơn hàng": phẳng, key là sale.order (DH...) — 1 đơn có thể gộp nhiều phiếu.
+            ordersTab: { rows: [], total: 0, page: 1, pageSize: 20, loading: false, search: "", searchDraft: "" },
             showScanPanel: false,
             scanProgress: { done: 0, total: 0 },
             scanLog: [],
@@ -66,6 +72,11 @@ export class MisaInvoiceDashboard extends Component {
             drawerPicking: null,
             drawerLines: [],
             drawerLoading: false,
+            groupDrawerOpen: false,
+            groupDrawerType: null, // "saler" | "customer"
+            groupDrawerRow: null,
+            orderDrawerOpen: false,
+            orderDrawerRow: null,
         });
 
         onWillStart(async () => {
@@ -118,8 +129,12 @@ export class MisaInvoiceDashboard extends Component {
 
     switchTab(tab) {
         this.state.activeTab = tab;
-        if (tab === "orders") {
-            this.loadOrders(this.state.orders.page || 1);
+        if (tab === "pickings") {
+            this.loadPickingsTab(this.state.pickingsTab.page || 1);
+        } else if (tab === "orders") {
+            this.loadOrdersTab(this.state.ordersTab.page || 1);
+        } else if (tab === "daily") {
+            this.loadDailyTab();
         }
     }
 
@@ -135,13 +150,17 @@ export class MisaInvoiceDashboard extends Component {
 
     async _reload() {
         const params = this.filterParams;
-        const [data, urgent] = await Promise.all([
+        const [data, urgent, statusSummary] = await Promise.all([
             this.orm.call("stock.picking", "get_misa_invoice_dashboard_data", [], { ...params }),
             this.orm.call("stock.picking", "get_misa_invoice_urgent_list", [], { limit: 10, ...params }),
-            this.loadOrders(1),
+            this.orm.call("stock.picking", "get_misa_invoice_status_summary", [], { ...params }),
+            this.loadPickingsTab(1),
+            this.loadOrdersTab(1),
+            this.loadDailyTab(),
         ]);
         this._applyData(data);
         this.state.urgent = urgent;
+        this.state.statusSummary = statusSummary;
     }
 
     _applyData(data) {
@@ -187,30 +206,38 @@ export class MisaInvoiceDashboard extends Component {
     }
 
     // ===== Kiểm tra MISA (có tiến trình thấy được) =====
-    /** Xử lý tuần tự 1 batch, cập nhật log + progress theo từng phiếu. */
+    /** Kiểm tra 1 batch bằng 1 lệnh gọi duy nhất (map đề nghị xuất HĐ dùng chung, xử lý đúng
+     * trường hợp 1 đề nghị đại diện cho nhiều phiếu) — sau đó "rải" log ra cho người dùng
+     * thấy tiến trình chạy dần (độ trễ nhỏ ở đây chỉ để hiển thị, không phải do gọi API). */
     async _processCandidates(candidates) {
-        for (const candidate of candidates) {
-            const entry = { name: candidate.name, statusLabel: "Đang kiểm tra...", loading: true, error: false };
-            this.state.scanLog.unshift(entry);
-            try {
-                const results = await this.orm.call(
-                    "stock.picking", "action_check_misa_invoice_status", [[candidate.id]], {}
-                );
-                const result = results && results[0];
-                if (result && result.error) {
-                    entry.statusLabel = "Lỗi: " + result.error;
-                    entry.error = true;
-                } else if (result) {
-                    entry.statusLabel = result.state_label;
-                } else {
-                    entry.statusLabel = "Bỏ qua";
-                }
-            } catch (e) {
-                entry.statusLabel = "Lỗi: " + (e.message || e);
-                entry.error = true;
+        let results = [];
+        try {
+            results = await this.orm.call(
+                "stock.picking", "action_check_misa_invoice_status_batch", [candidates.map((c) => c.id)], {}
+            );
+        } catch (e) {
+            for (const candidate of candidates) {
+                this.state.scanLog.unshift({
+                    name: candidate.name, statusLabel: "Lỗi: " + (e.message || e), loading: false, error: true,
+                });
+                this.state.scanProgress.done += 1;
             }
-            entry.loading = false;
+            return;
+        }
+        const byId = new Map(results.map((r) => [r.id, r]));
+        for (const candidate of candidates) {
+            const result = byId.get(candidate.id);
+            const entry = { name: candidate.name, loading: false, error: false, statusLabel: "Bỏ qua" };
+            if (result && result.error) {
+                entry.statusLabel = "Lỗi: " + result.error;
+                entry.error = true;
+            } else if (result) {
+                entry.statusLabel = result.state_label;
+            }
+            this.state.scanLog.unshift(entry);
             this.state.scanProgress.done += 1;
+            // eslint-disable-next-line no-await-in-loop
+            await new Promise((resolve) => setTimeout(resolve, 60));
         }
     }
 
@@ -335,6 +362,35 @@ export class MisaInvoiceDashboard extends Component {
         this.action.doAction(action);
     }
 
+    /** Bấm vào dòng nhân viên sale/khách hàng: mở drawer tổng quan trước (dữ liệu đã có
+     * sẵn trong `row`, không cần gọi thêm) — nút "Xem danh sách phiếu" trong drawer mới
+     * điều hướng sang danh sách lọc như hành vi cũ. */
+    openGroupDrawer(type, row) {
+        this.state.groupDrawerType = type;
+        this.state.groupDrawerRow = row;
+        this.state.groupDrawerOpen = true;
+    }
+
+    closeGroupDrawer() {
+        this.state.groupDrawerOpen = false;
+        this.state.groupDrawerType = null;
+        this.state.groupDrawerRow = null;
+    }
+
+    onGroupDrawerOverlayClick(ev) {
+        if (ev.target === ev.currentTarget) {
+            this.closeGroupDrawer();
+        }
+    }
+
+    viewGroupDrawerList() {
+        const row = this.state.groupDrawerRow;
+        if (this.state.groupDrawerType === "saler") {
+            return this.openSalerRow(row.saler_code);
+        }
+        return this.openCustomerRow(row.partner_id);
+    }
+
     openFullList() {
         return this.openTile(false);
     }
@@ -382,41 +438,174 @@ export class MisaInvoiceDashboard extends Component {
         return this.state.drawerLines.reduce((sum, line) => sum + (line.value || 0), 0);
     }
 
-    // ===== Tab "Đơn hàng" (phẳng, phân trang server-side) =====
-    async loadOrders(page) {
-        this.state.orders.loading = true;
+    // ===== Tab "Theo ngày" (tổng tiền xuất kho vs đã xuất HĐ theo ngày/tuần) =====
+    async loadDailyTab() {
+        this.state.dailyTab.loading = true;
+        try {
+            this.state.dailyTab.rows = await this.orm.call(
+                "stock.picking", "get_misa_invoice_daily_stats", [],
+                {
+                    ...this.filterParams,
+                    saler_code: this.state.dailyTab.salerCode || false,
+                    weekly: this.state.dailyTab.weekly,
+                }
+            );
+        } catch (e) {
+            this.notification.add("Lỗi tải thống kê theo ngày: " + (e.message || e), { type: "danger" });
+        }
+        this.state.dailyTab.loading = false;
+    }
+
+    onDailyWeeklyToggle(ev) {
+        this.state.dailyTab.weekly = ev.target.checked;
+        this.loadDailyTab();
+    }
+
+    onDailySalerChange(ev) {
+        this.state.dailyTab.salerCode = ev.target.value || "";
+        this.loadDailyTab();
+    }
+
+    // ===== Tab "Phiếu xuất kho" (phẳng, key = stock.picking, phân trang server-side) =====
+    async loadPickingsTab(page) {
+        this.state.pickingsTab.loading = true;
         try {
             const resp = await this.orm.call(
                 "stock.picking", "get_misa_invoice_picking_list", [],
                 {
-                    limit: this.state.orders.pageSize,
-                    offset: (page - 1) * this.state.orders.pageSize,
+                    limit: this.state.pickingsTab.pageSize,
+                    offset: (page - 1) * this.state.pickingsTab.pageSize,
                     ...this.filterParams,
                 }
             );
-            this.state.orders.rows = resp.rows;
-            this.state.orders.total = resp.total;
-            this.state.orders.page = page;
+            this.state.pickingsTab.rows = resp.rows;
+            this.state.pickingsTab.total = resp.total;
+            this.state.pickingsTab.page = page;
+        } catch (e) {
+            this.notification.add("Lỗi tải danh sách phiếu xuất kho: " + (e.message || e), { type: "danger" });
+        }
+        this.state.pickingsTab.loading = false;
+    }
+
+    get pickingsTabTotalPages() {
+        return Math.max(1, Math.ceil(this.state.pickingsTab.total / this.state.pickingsTab.pageSize));
+    }
+
+    pickingsTabPrevPage() {
+        if (this.state.pickingsTab.page > 1) {
+            this.loadPickingsTab(this.state.pickingsTab.page - 1);
+        }
+    }
+
+    pickingsTabNextPage() {
+        if (this.state.pickingsTab.page < this.pickingsTabTotalPages) {
+            this.loadPickingsTab(this.state.pickingsTab.page + 1);
+        }
+    }
+
+    // ===== Tab "Đơn hàng" (phẳng, key = sale.order DH..., phân trang server-side, có search) =====
+    async loadOrdersTab(page) {
+        this.state.ordersTab.loading = true;
+        try {
+            const resp = await this.orm.call(
+                "stock.picking", "get_misa_invoice_order_list", [],
+                {
+                    limit: this.state.ordersTab.pageSize,
+                    offset: (page - 1) * this.state.ordersTab.pageSize,
+                    search: this.state.ordersTab.search || false,
+                    ...this.filterParams,
+                }
+            );
+            this.state.ordersTab.rows = resp.rows;
+            this.state.ordersTab.total = resp.total;
+            this.state.ordersTab.page = page;
         } catch (e) {
             this.notification.add("Lỗi tải danh sách đơn hàng: " + (e.message || e), { type: "danger" });
         }
-        this.state.orders.loading = false;
+        this.state.ordersTab.loading = false;
     }
 
-    get ordersTotalPages() {
-        return Math.max(1, Math.ceil(this.state.orders.total / this.state.orders.pageSize));
+    get ordersTabTotalPages() {
+        return Math.max(1, Math.ceil(this.state.ordersTab.total / this.state.ordersTab.pageSize));
     }
 
-    ordersPrevPage() {
-        if (this.state.orders.page > 1) {
-            this.loadOrders(this.state.orders.page - 1);
+    ordersTabPrevPage() {
+        if (this.state.ordersTab.page > 1) {
+            this.loadOrdersTab(this.state.ordersTab.page - 1);
         }
     }
 
-    ordersNextPage() {
-        if (this.state.orders.page < this.ordersTotalPages) {
-            this.loadOrders(this.state.orders.page + 1);
+    ordersTabNextPage() {
+        if (this.state.ordersTab.page < this.ordersTabTotalPages) {
+            this.loadOrdersTab(this.state.ordersTab.page + 1);
         }
+    }
+
+    onOrdersSearchInput(ev) {
+        this.state.ordersTab.searchDraft = ev.target.value;
+    }
+
+    onOrdersSearchKeydown(ev) {
+        if (ev.key === "Enter") {
+            this.submitOrdersSearch();
+        }
+    }
+
+    submitOrdersSearch() {
+        this.state.ordersTab.search = this.state.ordersTab.searchDraft.trim();
+        this.loadOrdersTab(1);
+    }
+
+    clearOrdersSearch() {
+        this.state.ordersTab.search = "";
+        this.state.ordersTab.searchDraft = "";
+        this.loadOrdersTab(1);
+    }
+
+    /** Bấm vào dòng đơn hàng: mở drawer chi tiết (dữ liệu đã có sẵn `pickings` con từ
+     * backend) — nút trong drawer mở thẳng form đơn bán trên Odoo. */
+    openOrderDrawer(row) {
+        this.state.orderDrawerRow = row;
+        this.state.orderDrawerOpen = true;
+    }
+
+    closeOrderDrawer() {
+        this.state.orderDrawerOpen = false;
+        this.state.orderDrawerRow = null;
+    }
+
+    onOrderDrawerOverlayClick(ev) {
+        if (ev.target === ev.currentTarget) {
+            this.closeOrderDrawer();
+        }
+    }
+
+    openOrderForm() {
+        const row = this.state.orderDrawerRow;
+        if (!row) {
+            return;
+        }
+        this.action.doAction({
+            type: "ir.actions.act_window",
+            res_model: "sale.order",
+            res_id: row.id,
+            views: [[false, "form"]],
+            target: "current",
+        });
+    }
+
+    medalIcon(rank) {
+        return { 1: "🥇", 2: "🥈", 3: "🥉" }[rank] || "";
+    }
+
+    completionClass(pct) {
+        if (pct >= 90) {
+            return "miv-cell-good";
+        }
+        if (pct >= 70) {
+            return "miv-cell-warning";
+        }
+        return "miv-cell-critical";
     }
 
     // ===== Phân trang "Theo nhân viên sale" / "Theo khách hàng" (client-side) =====
