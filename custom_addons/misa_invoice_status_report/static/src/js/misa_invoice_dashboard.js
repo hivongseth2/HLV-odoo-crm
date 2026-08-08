@@ -4,6 +4,18 @@ import { registry } from "@web/core/registry";
 import { Component, useState, onWillStart } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
 
+// Cùng bộ status palette đã validate (xem dataviz skill): good/warning/serious/critical
+// + màu trung tính cho "chưa kiểm tra" và "ngoại lệ".
+const DONUT_COLORS = {
+    invoiced: "#0ca30c",
+    requested: "#fab219",
+    missing: "#d03b3b",
+    exception: "#4a3aa7",
+    not_checked: "#c3c2b7",
+};
+const DONUT_RADIUS = 54;
+const DONUT_CIRCUMFERENCE = 2 * Math.PI * DONUT_RADIUS;
+
 export class MisaInvoiceDashboard extends Component {
     static template = "misa_invoice_status_report.Dashboard";
 
@@ -15,8 +27,10 @@ export class MisaInvoiceDashboard extends Component {
         this.state = useState({
             isLoading: true,
             isScanning: false,
+            isSavingCutoff: false,
             data: null,
             urgent: [],
+            cutoffDraft: "",
         });
 
         onWillStart(async () => {
@@ -31,12 +45,17 @@ export class MisaInvoiceDashboard extends Component {
                 this.orm.call("stock.picking", "get_misa_invoice_dashboard_data", [], {}),
                 this.orm.call("stock.picking", "get_misa_invoice_urgent_list", [], { limit: 10 }),
             ]);
-            this.state.data = data;
+            this._applyData(data);
             this.state.urgent = urgent;
         } catch (e) {
             this.notification.add("Lỗi tải dữ liệu: " + (e.message || e), { type: "danger" });
         }
         this.state.isLoading = false;
+    }
+
+    _applyData(data) {
+        this.state.data = data;
+        this.state.cutoffDraft = data.cutoff_date || "";
     }
 
     async scanNow() {
@@ -45,9 +64,8 @@ export class MisaInvoiceDashboard extends Component {
         }
         this.state.isScanning = true;
         try {
-            this.state.data = await this.orm.call(
-                "stock.picking", "action_misa_invoice_dashboard_scan_now", [], {}
-            );
+            const data = await this.orm.call("stock.picking", "action_misa_invoice_dashboard_scan_now", [], {});
+            this._applyData(data);
             this.state.urgent = await this.orm.call(
                 "stock.picking", "get_misa_invoice_urgent_list", [], { limit: 10 }
             );
@@ -58,9 +76,34 @@ export class MisaInvoiceDashboard extends Component {
         this.state.isScanning = false;
     }
 
+    onCutoffChange(ev) {
+        this.state.cutoffDraft = ev.target.value;
+    }
+
+    async saveCutoff() {
+        if (!this.state.cutoffDraft || this.state.isSavingCutoff) {
+            return;
+        }
+        this.state.isSavingCutoff = true;
+        try {
+            const data = await this.orm.call(
+                "stock.picking", "set_misa_invoice_cutoff_date", [], { date_str: this.state.cutoffDraft }
+            );
+            this._applyData(data);
+            this.state.urgent = await this.orm.call(
+                "stock.picking", "get_misa_invoice_urgent_list", [], { limit: 10 }
+            );
+            this.notification.add("Đã cập nhật mốc đối soát.", { type: "success" });
+        } catch (e) {
+            this.notification.add("Lỗi lưu cấu hình: " + (e.message || e), { type: "danger" });
+        }
+        this.state.isSavingCutoff = false;
+    }
+
+    /** invoiceState falsy (false/undefined) => không lọc trạng thái, dùng cho "Xem tất cả". */
     async openTile(invoiceState) {
         const action = await this.orm.call(
-            "stock.picking", "get_misa_invoice_report_action", [], { state: invoiceState || false, exception: false }
+            "stock.picking", "get_misa_invoice_report_action", [], { state: invoiceState || false }
         );
         this.action.doAction(action);
     }
@@ -70,6 +113,10 @@ export class MisaInvoiceDashboard extends Component {
             "stock.picking", "get_misa_invoice_report_action", [], { state: false, exception: true }
         );
         this.action.doAction(action);
+    }
+
+    openFullList() {
+        return this.openTile(false);
     }
 
     openPicking(pickingId) {
@@ -82,8 +129,42 @@ export class MisaInvoiceDashboard extends Component {
         });
     }
 
-    openFullList() {
-        this.action.doAction("misa_invoice_status_report.action_misa_invoice_status_report");
+    get donutSegments() {
+        const data = this.state.data;
+        if (!data || !data.total) {
+            return [];
+        }
+        const parts = [
+            { key: "invoiced", value: data.counts.invoiced },
+            { key: "requested", value: data.counts.requested },
+            { key: "missing", value: data.counts.missing },
+            { key: "exception", value: data.exception_count },
+            { key: "not_checked", value: data.counts.not_checked },
+        ];
+        let cumulative = 0;
+        const segments = [];
+        for (const part of parts) {
+            if (!part.value) {
+                continue;
+            }
+            const length = (part.value / data.total) * DONUT_CIRCUMFERENCE;
+            segments.push({
+                key: part.key,
+                color: DONUT_COLORS[part.key],
+                dasharray: `${length} ${DONUT_CIRCUMFERENCE - length}`,
+                dashoffset: -cumulative,
+            });
+            cumulative += length;
+        }
+        return segments;
+    }
+
+    get invoicedPercent() {
+        const data = this.state.data;
+        if (!data || !data.total) {
+            return 0;
+        }
+        return Math.round((data.counts.invoiced / data.total) * 100);
     }
 
     formatCurrency(num) {

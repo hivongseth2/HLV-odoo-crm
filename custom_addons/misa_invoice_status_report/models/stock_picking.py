@@ -1,8 +1,10 @@
 import logging
+from datetime import datetime, time as dt_time
 
 from markupsafe import Markup
 
-from odoo import api, fields, models
+from odoo import api, fields, models, _
+from odoo.exceptions import AccessError, UserError
 
 _logger = logging.getLogger(__name__)
 
@@ -15,6 +17,11 @@ MISA_INVOICE_STATE_LABELS = {
 
 # Giới hạn số phiếu xử lý mỗi lần chạy cron, tránh gọi MISA API quá nhiều cùng lúc.
 MISA_INVOICE_SCAN_BATCH_SIZE = 50
+
+# Mốc ngày mặc định bắt đầu đối soát nếu chưa cấu hình (có thể đổi trên dashboard).
+MISA_INVOICE_CUTOFF_PARAM = 'misa_invoice_status_report.cutoff_date'
+MISA_INVOICE_CUTOFF_DEFAULT = '2026-01-01'
+MISA_INVOICE_RECONCILE_GROUP = 'misa_invoice_status_report.group_misa_invoice_reconciliation'
 
 
 class StockPickingMisaInvoiceStatus(models.Model):
@@ -120,12 +127,14 @@ class StockPickingMisaInvoiceStatus(models.Model):
         return True
 
     def _cron_scan_misa_invoice_status(self):
-        pickings = self.search([
-            ('picking_type_id.code', '=', 'outgoing'),
-            ('state', '=', 'done'),
-            ('misa_invoice_state', '!=', 'invoiced'),
-            ('misa_invoice_exception', '=', False),
-        ], order='misa_invoice_last_checked asc nulls first', limit=MISA_INVOICE_SCAN_BATCH_SIZE)
+        pickings = self.search(
+            self._misa_invoice_dashboard_base_domain() + [
+                ('misa_invoice_state', '!=', 'invoiced'),
+                ('misa_invoice_exception', '=', False),
+            ],
+            order='misa_invoice_last_checked asc nulls first',
+            limit=MISA_INVOICE_SCAN_BATCH_SIZE,
+        )
 
         for picking in pickings:
             try:
@@ -135,10 +144,44 @@ class StockPickingMisaInvoiceStatus(models.Model):
                     "❌ [MISA INVOICE STATUS CRON] Lỗi xử lý phiếu %s", picking.name
                 )
 
+    # ==================== Mốc ngày đối soát (cấu hình được) ====================
+
+    def _get_misa_invoice_cutoff_date(self):
+        raw = (self.env['ir.config_parameter'].sudo().get_param(MISA_INVOICE_CUTOFF_PARAM) or '').strip()
+        for value in (raw, MISA_INVOICE_CUTOFF_DEFAULT):
+            if not value:
+                continue
+            try:
+                return fields.Date.from_string(value)
+            except Exception:
+                continue
+        return fields.Date.from_string(MISA_INVOICE_CUTOFF_DEFAULT)
+
+    @api.model
+    def set_misa_invoice_cutoff_date(self, date_str):
+        if not self.env.user.has_group(MISA_INVOICE_RECONCILE_GROUP):
+            raise AccessError(_("Bạn không có quyền thay đổi mốc đối soát MISA."))
+        try:
+            parsed = fields.Date.from_string(date_str)
+        except Exception:
+            parsed = False
+        if not parsed:
+            raise UserError(_("Ngày không hợp lệ: %s") % date_str)
+        self.env['ir.config_parameter'].sudo().set_param(
+            MISA_INVOICE_CUTOFF_PARAM, fields.Date.to_string(parsed)
+        )
+        return self.get_misa_invoice_dashboard_data()
+
     # ==================== Dữ liệu cho Dashboard OWL ====================
 
     def _misa_invoice_dashboard_base_domain(self):
-        return [('picking_type_id.code', '=', 'outgoing'), ('state', '=', 'done')]
+        cutoff = self._get_misa_invoice_cutoff_date()
+        cutoff_dt = fields.Datetime.to_string(datetime.combine(cutoff, dt_time.min))
+        return [
+            ('picking_type_id.code', '=', 'outgoing'),
+            ('state', '=', 'done'),
+            ('date_done', '>=', cutoff_dt),
+        ]
 
     @api.model
     def get_misa_invoice_dashboard_data(self):
@@ -147,7 +190,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
         base_domain = self._misa_invoice_dashboard_base_domain()
 
         counts = {}
-        for state, _label in MISA_INVOICE_STATE_LABELS.items():
+        for state in MISA_INVOICE_STATE_LABELS:
             counts[state] = Picking.search_count(
                 base_domain + [('misa_invoice_state', '=', state), ('misa_invoice_exception', '=', False)]
             )
@@ -191,6 +234,8 @@ class StockPickingMisaInvoiceStatus(models.Model):
             'invoiced_amount': invoiced_amount,
             'by_warehouse': by_warehouse,
             'last_scan_at': last_scan_at,
+            'cutoff_date': fields.Date.to_string(self._get_misa_invoice_cutoff_date()),
+            'can_configure': self.env.user.has_group(MISA_INVOICE_RECONCILE_GROUP),
         }
 
     @api.model
@@ -218,18 +263,20 @@ class StockPickingMisaInvoiceStatus(models.Model):
         return rows
 
     @api.model
-    def get_misa_invoice_report_action(self, state=False, exception=False):
-        """Trả action list đã có sẵn (action_misa_invoice_status_report), lọc theo tile được bấm."""
+    def get_misa_invoice_report_action(self, state=False, exception=None):
+        """Trả action list đã có sẵn (action_misa_invoice_status_report), lọc theo tile được bấm.
+        exception=None: không ép domain, để search view tự quyết định (dùng cho "Xem tất cả").
+        exception=True/False: ép domain đúng theo tile."""
         action = self.env['ir.actions.actions']._for_xml_id(
             'misa_invoice_status_report.action_misa_invoice_status_report'
         )
         domain = self._misa_invoice_dashboard_base_domain()
         if state:
             domain.append(('misa_invoice_state', '=', state))
-        if exception:
-            domain.append(('misa_invoice_exception', '=', True))
-        else:
-            domain.append(('misa_invoice_exception', '=', False))
+            if exception is None:
+                exception = False
+        if exception is not None:
+            domain.append(('misa_invoice_exception', '=', bool(exception)))
         action['domain'] = domain
         return action
 
