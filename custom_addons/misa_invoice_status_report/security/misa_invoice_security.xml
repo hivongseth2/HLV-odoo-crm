@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="module_category_misa_invoice_reconciliation" model="ir.module.category">
+        <field name="name">Đối soát XHD MISA</field>
+        <field name="sequence">55</field>
+    </record>
+
+    <record id="group_misa_invoice_reconciliation" model="res.groups">
+        <field name="name">Đối soát XHD</field>
+        <field name="category_id" ref="module_category_misa_invoice_reconciliation"/>
+        <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+        <field name="comment">Được phép đánh dấu phiếu xuất kho là ngoại lệ (chấp nhận chờ xuất hóa đơn MISA).</field>
+    </record>
+</odoo>

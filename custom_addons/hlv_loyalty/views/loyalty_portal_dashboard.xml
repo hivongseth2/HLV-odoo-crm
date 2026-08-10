@@ -12,18 +12,13 @@
 
         <!-- Top bar -->
         <div style="background:#fff;border-bottom:1px solid #e7e8e9;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px">
-            <a href="/loyalty" style="font-weight:700;font-size:1.1rem;color:var(--c-pri);font-family:'Manrope',sans-serif;text-decoration:none">
-                🏆 Members Portal
+            <span style="font-size:.88rem;color:#666">
+                Xin chào, <strong><t t-out="partner.name"/></strong>
+            </span>
+            <a href="/loyalty/logout"
+               style="padding:7px 16px;background:#f3f4f5;border-radius:20px;font-size:.82rem;font-weight:600;color:#454652;text-decoration:none">
+                Đăng xuất
             </a>
-            <div style="display:flex;align-items:center;gap:12px">
-                <span style="font-size:.88rem;color:#666">
-                    Xin chào, <strong><t t-out="partner.name"/></strong>
-                </span>
-                <a href="/loyalty/logout"
-                   style="padding:7px 16px;background:#f3f4f5;border-radius:20px;font-size:.82rem;font-weight:600;color:#454652;text-decoration:none">
-                    Đăng xuất
-                </a>
-            </div>
         </div>
 
         <!-- Success / error flash -->
@@ -37,7 +32,58 @@
             </div>
         </t>
 
-        <!-- Profile hero -->
+        <!-- Mobile member card (kiểu thẻ VIP) — chỉ hiện trên màn hình hẹp,
+             thay thế toàn bộ hero + các block bên dưới bằng 1 thẻ tối giản -->
+        <div class="sr-mcard-wrap">
+            <div class="sr-mcard">
+                <div class="sr-mcard-top">
+                    <div class="sr-mcard-avatar">
+                        <t t-if="partner.image_1920">
+                            <img t-att-src="'/web/image/res.partner/' + str(partner.id) + '/image_1920'"
+                                 t-att-alt="partner.name or ''"/>
+                        </t>
+                        <t t-else="">
+                            <span class="ms ms-fill">account_circle</span>
+                        </t>
+                    </div>
+                    <div class="sr-mcard-id">
+                        <div class="sr-mcard-name"><t t-out="partner.name"/></div>
+                        <t t-if="partner.loyalty_tier_id">
+                            <span class="sr-mcard-tier"><t t-out="partner.loyalty_tier_id.name"/></span>
+                        </t>
+                    </div>
+                    <div class="sr-mcard-icon-actions">
+                        <button onclick="document.getElementById('modal-phone').style.display='flex'"
+                                class="sr-mcard-icon-btn" aria-label="Đổi số điện thoại">
+                            <span class="ms">edit</span>
+                        </button>
+                        <button onclick="document.getElementById('modal-pw').style.display='flex'"
+                                class="sr-mcard-icon-btn" aria-label="Đổi mật khẩu">
+                            <span class="ms">lock_reset</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="sr-mcard-qr">
+                    <img t-att-src="'/report/barcode/QR/%s?width=280&amp;height=280' % account.username"
+                         t-att-alt="account.username"/>
+                    <div class="sr-mcard-qr-code"><t t-out="account.username"/></div>
+                </div>
+                <div class="sr-mcard-stats">
+                    <a href="/loyalty/history" class="sr-mcard-stat-row">
+                        <span class="sr-mcard-stat-plain">Điểm của bạn</span>
+                        <span class="sr-mcard-stat-link">Xem lịch sử <span class="ms">chevron_right</span></span>
+                    </a>
+                    <a href="/loyalty/vouchers" class="sr-mcard-stat-row">
+                        <div class="sr-mcard-stat-num">
+                            <t t-out="active_vouchers_count or 0"/> <span>quà tặng</span>
+                        </div>
+                        <span class="sr-mcard-stat-link">Xem quà <span class="ms">chevron_right</span></span>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Profile hero (desktop) -->
         <section class="sr-result-hero">
             <div class="sr-rc">
                 <div class="sr-result-top">
@@ -67,38 +113,12 @@
                                 </t>
                             </div>
                         </div>
-                        <!-- QR định danh tài khoản -->
-                        <div class="sr-qr-mini" title="Mã QR tài khoản">
-                            <img t-att-src="'/report/barcode/QR/%s?width=100&amp;height=100' % account.username"
-                                 t-att-alt="account.username"/>
-                            <span class="sr-qr-mini-code"><t t-out="account.username"/></span>
-                        </div>
                     </div>
-                    <!-- Balance pill -->
-                    <div class="sr-bal-pill">
-                        <div class="sr-bal-avatar">
-                            <t t-if="partner.loyalty_tier_id and partner.loyalty_tier_id.image_url">
-                                <img class="sr-bal-avatar-img" t-att-src="partner.loyalty_tier_id.image_url" t-att-alt="partner.loyalty_tier_id.name or 'Tier image'"/>
-                            </t>
-                            <t t-else="">
-                                <span class="ms ms-fill ms-lg">workspace_premium</span>
-                            </t>
-                            <t t-if="partner.loyalty_tier_id">
-                                <span class="sr-bal-tier-tag"><t t-out="(partner.loyalty_tier_id.name or '').upper()"/></span>
-                            </t>
-                        </div>
-                        <div>
-                            <div class="sr-bal-lbl">Điểm khả dụng</div>
-                            <div>
-                                <span class="sr-bal-num"><t t-out="'{:,}'.format(exchange_available_points)"/></span>
-                                <span class="sr-bal-unit"> điểm đổi thưởng</span>
-                            </div>
-                            <t t-if="reward_pending_points &gt; 0">
-                                <div style="margin-top:6px;font-size:.82rem;opacity:.85" class="badge-pt-exchange sr-badge">
-                                    <span style="opacity:.85">Đang treo <t t-out="'{:,}'.format(reward_pending_points)"/> điểm ở yêu cầu chờ xử lý</span>
-                                </div>
-                            </t>
-                        </div>
+                    <!-- QR định danh tài khoản (thay cho hiển thị điểm ngay trang chủ) -->
+                    <div class="sr-qr-hero" title="Mã QR tài khoản">
+                        <img t-att-src="'/report/barcode/QR/%s?width=160&amp;height=160' % account.username"
+                             t-att-alt="account.username"/>
+                        <span class="sr-qr-hero-code"><t t-out="account.username"/></span>
                     </div>
                 </div>
                 <!-- Profile action buttons – inside hero -->
@@ -117,7 +137,7 @@
         </section>
 
         <!-- Body -->
-        <div class="sr-body">
+        <div class="sr-body sr-body-hero">
 
             <!-- Progress + actions row -->
             <div class="sr-main-row">
@@ -177,30 +197,9 @@
                 </div>
             </div>
 
-            <!-- Mobile: lưới thao tác tối giản (thay thế "Thao tác nhanh" + voucher/lịch sử
-                 hiện sẵn trên màn hình rộng) — chỉ hiện icon, khách bấm vào mới xem chi tiết -->
-            <div class="sr-mobile-util-grid">
-                <a href="/loyalty/redeem" class="sr-mobile-util-tile">
-                    <span class="ms ms-fill">redeem</span><span>Đổi thưởng</span>
-                </a>
-                <a href="/loyalty/history" class="sr-mobile-util-tile">
-                    <span class="ms">history</span><span>Xem lịch sử</span>
-                </a>
-                <a href="/loyalty/vouchers" class="sr-mobile-util-tile">
-                    <span class="ms">confirmation_number</span>
-                    <t t-if="active_vouchers_count"><span><t t-out="active_vouchers_count"/> Voucher</span></t>
-                    <t t-else=""><span>Voucher</span></t>
-                </a>
-                <a href="#loyalty-tiers" class="sr-mobile-util-tile">
-                    <span class="ms ms-fill">workspace_premium</span>
-                    <t t-if="partner.loyalty_tier_id"><span><t t-out="partner.loyalty_tier_id.name"/></span></t>
-                    <t t-else=""><span>Ưu đãi hạng</span></t>
-                </a>
-            </div>
-
-            <!-- Shared sections (ẩn trên mobile qua CSS) -->
+            <!-- Voucher (ẩn trên mobile qua CSS) — lịch sử tích lũy gần đây đã bỏ
+                 khỏi trang chủ, xem đầy đủ tại /loyalty/history -->
             <t t-call="hlv_loyalty.loyalty_portal_vouchers_section"/>
-            <t t-call="hlv_loyalty.loyalty_portal_history_section"/>
         </div>
 
         <!-- Shared tier section + modals -->

@@ -87,9 +87,11 @@ def _load_account_data(account):
     """
     root = account.partner_id._get_loyalty_root()
     scope_domain = _account_or_legacy_domain(account, root)
-    # Lịch sử hiện cho khách chỉ gồm giao dịch TÍCH điểm (earn) — tức phần
-    # tích lũy chưa đổi; các dòng đổi/hoàn/chuyển điểm không hiện ở đây.
-    history_domain = scope_domain + [('transaction_type', '=', 'earn')]
+    # Lịch sử hiện cho khách chỉ gồm các dòng CỘNG điểm (point_amount dương)
+    # — tức phần tích lũy chưa đổi (bao gồm cả tích điểm mua hàng, cộng tay,
+    # nhận chuyển điểm...); các dòng trừ điểm (đổi thưởng, hoàn hàng, chuyển
+    # đi, trừ tay) không hiện ở đây.
+    history_domain = scope_domain + [('point_amount', '>', 0)]
     tiers = request.env['hlv.loyalty.tier'].sudo().search(
         [('active', '=', True)], order='min_points asc'
     )
@@ -284,9 +286,10 @@ class LoyaltyPublicPortal(http.Controller):
         if active_st not in ('all', 'pending', 'confirmed', 'cancelled'):
             active_st = 'all'
 
-        # Chỉ hiện lịch sử TÍCH điểm (earn) — phần tích lũy chưa đổi; các
-        # dòng đổi/hoàn/chuyển điểm không hiện cho khách ở trang này.
-        domain = _account_or_legacy_domain(account, root) + [('transaction_type', '=', 'earn')]
+        # Chỉ hiện các dòng CỘNG điểm (point_amount dương) — phần tích lũy
+        # chưa đổi; các dòng trừ điểm (đổi thưởng/hoàn hàng/chuyển đi/trừ tay)
+        # không hiện cho khách ở trang này.
+        domain = _account_or_legacy_domain(account, root) + [('point_amount', '>', 0)]
         if active_pt != 'all':
             domain.append(('point_type', '=', active_pt))
         if active_st != 'all':

@@ -445,21 +445,89 @@ class SaleOrder(models.Model):
 
         # ===== Build combo_codes_with_bom để skip children =====
         # Nếu combo parent có BoM Kit, Odoo sẽ tự explode ra picking
-        # → không cần thêm children vào SO, tránh trùng lặp
+        # → không cần thêm children vào SO, tránh trùng lặp.
+        # Nếu combo parent CHƯA có Kit BOM → tự tạo Kit BOM từ các children
+        # trong chính đơn MISA này, rồi mới skip children như trên.
         combo_codes_with_bom = set()
+        combo_groups = {}  # parent_code -> {'line': ln, 'children': [ln, ...]}
+        _current_combo_parent = None
         for ln in source_lines:
             if ln.get("IsSetProduct"):
-                combo_code = (ln.get("ProductIDText") or "").strip()
-                if combo_code:
-                    prod = env['product.product'].search([('default_code', '=', combo_code)], limit=1)
-                    if prod and env['mrp.bom'].search_count([
-                        ('product_tmpl_id', '=', prod.product_tmpl_id.id),
-                        ('type', '=', 'phantom'),
-                        ('active', '=', True)
-                    ]) > 0:
-                        combo_codes_with_bom.add(combo_code)
-                        _logger.info("📦 Combo '%s' có BoM Kit → sẽ skip children từ MISA", combo_code)
-        
+                _current_combo_parent = (ln.get("ProductIDText") or "").strip()
+                if _current_combo_parent:
+                    combo_groups[_current_combo_parent] = {'line': ln, 'children': []}
+            elif ln.get("IsChildProduct") and _current_combo_parent:
+                combo_groups[_current_combo_parent]['children'].append(ln)
+
+        for combo_code, group in combo_groups.items():
+            prod = env['product.product'].search([('default_code', '=', combo_code)], limit=1)
+            if prod and env['mrp.bom'].search_count([
+                ('product_tmpl_id', '=', prod.product_tmpl_id.id),
+                ('type', '=', 'phantom'),
+                ('active', '=', True)
+            ]) > 0:
+                combo_codes_with_bom.add(combo_code)
+                _logger.info("📦 Combo '%s' đã có Kit BOM → sẽ skip children từ MISA", combo_code)
+                continue
+
+            if not group['children']:
+                continue
+
+            parent_qty = _flt(group['line'].get("Amount"), 0.0)
+            if parent_qty <= 0:
+                _logger.warning("⚠️ Combo '%s' có Amount=0, không thể tự tạo Kit BOM", combo_code)
+                continue
+
+            parent_product = odoo_utils._get_or_create_product(
+                code=combo_code,
+                name=group['line'].get("Description") or combo_code,
+                unit_name=(group['line'].get("UnitIDText") or "Cái").strip(),
+                product_type="consu",
+                purchase_ok=True,
+                sale_ok=True,
+            )
+
+            bom_line_vals = []
+            for child_ln in group['children']:
+                child_code = (child_ln.get("ProductIDText") or "").strip()
+                child_qty_total = _flt(child_ln.get("Amount"), 0.0)
+                if not child_code or child_qty_total <= 0:
+                    continue
+                child_product = odoo_utils._get_or_create_product(
+                    code=child_code,
+                    name=child_ln.get("Description") or child_code,
+                    unit_name=(child_ln.get("UnitIDText") or "Cái").strip(),
+                    product_type="consu",
+                    purchase_ok=True,
+                    sale_ok=True,
+                )
+                bom_line_vals.append((child_product, child_qty_total / parent_qty))
+
+            if not bom_line_vals:
+                _logger.warning("⚠️ Combo '%s' không có thành phần hợp lệ, không tạo Kit BOM", combo_code)
+                continue
+
+            new_bom = env['mrp.bom'].create({
+                'product_tmpl_id': parent_product.product_tmpl_id.id,
+                'product_id': parent_product.id,
+                'type': 'phantom',
+                'product_qty': 1.0,
+                'code': _('Kit tự động từ MISA: %s') % combo_code,
+            })
+            for child_product, qty_per_unit in bom_line_vals:
+                env['mrp.bom.line'].create({
+                    'bom_id': new_bom.id,
+                    'product_id': child_product.id,
+                    'product_qty': qty_per_unit,
+                    'product_uom_id': child_product.uom_id.id,
+                })
+
+            combo_codes_with_bom.add(combo_code)
+            _logger.info(
+                "🆕 Đã tự tạo Kit BOM cho combo '%s' với %d thành phần → sẽ skip children từ MISA",
+                combo_code, len(bom_line_vals)
+            )
+
         # Tạo danh sách các SOL từ MISA (chưa tạo vào DB)
         # Sử dụng tracking theo SortOrder để xác định parent của children
         # (MISA không gửi ParentProductIDText - children xuất hiện ngay sau parent)
