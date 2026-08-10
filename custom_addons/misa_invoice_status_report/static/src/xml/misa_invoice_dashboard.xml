@@ -21,10 +21,16 @@
                             <span class="miv-meta-item">Tự động quét mỗi 30 phút</span>
                         </div>
                     </div>
-                    <button class="btn btn-primary miv-scan-btn" t-on-click="scanNow" t-att-disabled="state.isScanning">
-                        <i class="fa fa-refresh" t-att-class="{'fa-spin': state.isScanning}"/>
-                        Kiểm tra MISA ngay
-                    </button>
+                    <div class="miv-scan-actions">
+                        <label class="miv-daily-week-toggle" t-if="state.data.can_configure" title="Quét lại cả phiếu đã 'Đã xuất HĐ' — chỉ dùng để backfill 1 lần, không dùng hàng ngày">
+                            <input type="checkbox" class="miv-cutoff-input" t-att-checked="state.includeInvoiced" t-on-change="onIncludeInvoicedToggle"/>
+                            Bao gồm phiếu đã xuất HĐ (backfill)
+                        </label>
+                        <button class="btn btn-primary miv-scan-btn" t-on-click="scanNow" t-att-disabled="state.isScanning">
+                            <i class="fa fa-refresh" t-att-class="{'fa-spin': state.isScanning}"/>
+                            Kiểm tra MISA ngay
+                        </button>
+                    </div>
                 </div>
 
                 <!-- ===== Cutoff config + month filter ===== -->
@@ -172,6 +178,37 @@
                     </div>
                 </div>
 
+                <!-- ===== Theo kho: tổng số phiếu vs đã xuất HĐ (cột+đường, bổ sung cho donut) ===== -->
+                <div class="miv-section" t-if="warehouseChart">
+                    <h3>Theo kho: tổng số phiếu vs đã xuất hóa đơn</h3>
+                    <div class="miv-chart-wrap">
+                        <svg t-attf-viewBox="0 0 {{warehouseChart.width}} {{warehouseChart.height}}" class="miv-chart" preserveAspectRatio="none">
+                            <t t-foreach="warehouseChart.gridLines" t-as="gl" t-key="gl.key">
+                                <line class="miv-chart-grid" t-att-x1="warehouseChart.padding.left" t-att-x2="warehouseChart.width - warehouseChart.padding.right" t-att-y1="gl.y" t-att-y2="gl.y"/>
+                                <text class="miv-chart-axis-label" t-att-x="warehouseChart.padding.left - 8" t-att-y="gl.y + 3" text-anchor="end"><t t-esc="gl.label"/></text>
+                            </t>
+                            <t t-foreach="warehouseChart.bars" t-as="bar" t-key="bar.key">
+                                <rect class="miv-chart-bar" t-att-x="bar.x" t-att-y="bar.y" t-att-width="bar.width" t-att-height="bar.height" rx="3">
+                                    <title><t t-esc="bar.label"/>: <t t-esc="bar.value"/> phiếu</title>
+                                </rect>
+                            </t>
+                            <path class="miv-chart-line" t-att-d="warehouseChart.linePath"/>
+                            <t t-foreach="warehouseChart.points" t-as="pt" t-key="pt.key">
+                                <circle class="miv-chart-dot" t-att-cx="pt.x" t-att-cy="pt.y" r="4">
+                                    <title><t t-esc="pt.label"/>: <t t-esc="pt.value"/> phiếu đã xuất HĐ</title>
+                                </circle>
+                            </t>
+                            <t t-foreach="warehouseChart.xLabels" t-as="xl" t-key="xl.key">
+                                <text class="miv-chart-axis-label" t-att-x="xl.x" t-att-y="warehouseChart.height - 8" text-anchor="middle"><t t-esc="xl.label"/></text>
+                            </t>
+                        </svg>
+                        <div class="miv-chart-legend">
+                            <span class="miv-chart-legend-item"><i class="miv-chart-legend-dot miv-chart-legend-bar"/> Tổng số phiếu</span>
+                            <span class="miv-chart-legend-item"><i class="miv-chart-legend-dot miv-chart-legend-line"/> Số phiếu đã xuất HĐ</span>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- ===== Tình trạng xuất hóa đơn ===== -->
                 <div class="miv-section" t-if="state.statusSummary">
                     <h3>Tình trạng xuất hóa đơn</h3>
@@ -285,7 +322,10 @@
                             </thead>
                             <tbody>
                                 <tr t-foreach="state.urgent" t-as="row" t-key="row.id" t-on-click="() => this.openDrawer(row)">
-                                    <td><b><t t-esc="row.name"/></b></td>
+                                    <td>
+                                        <b><t t-esc="row.name"/></b>
+                                        <i class="fa fa-link miv-link-icon" t-if="row.master_picking_id or (row.covered_pickings and row.covered_pickings.length)" title="Gộp chung đề nghị xuất HĐ với phiếu khác"/>
+                                    </td>
                                     <td><t t-esc="row.partner_name"/></td>
                                     <td><t t-esc="row.sale_order_name"/></td>
                                     <td class="miv-col-num"><t t-esc="row.date_done"/></td>
@@ -515,7 +555,10 @@
                                 </thead>
                                 <tbody>
                                     <tr t-foreach="state.pickingsTab.rows" t-as="row" t-key="row.id" t-on-click="() => this.openDrawer(row)">
-                                        <td><b><t t-esc="row.name"/></b></td>
+                                        <td>
+                                            <b><t t-esc="row.name"/></b>
+                                            <i class="fa fa-link miv-link-icon" t-if="row.master_picking_id or (row.covered_pickings and row.covered_pickings.length)" title="Gộp chung đề nghị xuất HĐ với phiếu khác"/>
+                                        </td>
                                         <td><t t-esc="row.partner_name"/></td>
                                         <td><t t-esc="row.sale_order_name"/></td>
                                         <td class="miv-col-num"><t t-esc="row.date_done"/></td>
@@ -642,6 +685,21 @@
                                         <t t-esc="formatCurrency(state.drawerPicking.invoice_amount)"/>
                                     </span>
                                 </div>
+                            </div>
+
+                            <div class="miv-drawer-linking" t-if="state.drawerPicking.master_picking_id">
+                                <i class="fa fa-link"/>
+                                Hóa đơn của phiếu này nằm chung đề nghị với phiếu gốc
+                                <a href="#" t-on-click.prevent="() => this.openPicking(state.drawerPicking.master_picking_id)">
+                                    <t t-esc="state.drawerPicking.master_picking_name"/>
+                                </a>
+                            </div>
+                            <div class="miv-drawer-linking" t-if="state.drawerPicking.covered_pickings and state.drawerPicking.covered_pickings.length">
+                                <i class="fa fa-link"/>
+                                Đề nghị xuất HĐ của phiếu này gộp chung cho:
+                                <t t-foreach="state.drawerPicking.covered_pickings" t-as="cov" t-key="cov.id">
+                                    <a href="#" t-on-click.prevent="() => this.openPicking(cov.id)"><t t-esc="cov.name"/></a><t t-if="!cov_last">, </t>
+                                </t>
                             </div>
 
                             <h4 class="miv-drawer-section-title">Sản phẩm đã xuất</h4>
