@@ -749,6 +749,76 @@
                                     </tr>
                                 </tfoot>
                             </table>
+
+                            <button class="btn btn-secondary btn-sm miv-reconcile-btn"
+                                    t-if="state.drawerPicking.state === 'requested' or state.drawerPicking.state === 'invoiced'"
+                                    t-on-click="loadReconciliation">
+                                <i class="fa fa-balance-scale"/>
+                                <t t-esc="state.reconciliationOpen ? 'Ẩn đối chiếu với MISA' : 'Đối chiếu từng dòng với MISA'"/>
+                            </button>
+
+                            <t t-if="state.reconciliationOpen">
+                                <div class="miv-drawer-loading" t-if="state.reconciliationLoading">
+                                    <i class="fa fa-spinner fa-spin"/> Đang tải đối chiếu từ MISA...
+                                </div>
+                                <t t-elif="state.reconciliation">
+                                    <h4 class="miv-drawer-section-title">Đối chiếu với MISA</h4>
+                                    <div class="miv-drawer-linking" t-if="state.reconciliation.group_picking_names.length > 1">
+                                        <i class="fa fa-link"/>
+                                        Gộp chung đề nghị xuất HĐ của: <t t-esc="state.reconciliation.group_picking_names.join(', ')"/>
+                                    </div>
+
+                                    <div class="miv-drawer-meta miv-reconcile-total">
+                                        <div>
+                                            <span class="miv-drawer-meta-label">Tổng tiền xuất kho (có VAT, cả nhóm)</span>
+                                            <span><b><t t-esc="formatCurrency(state.reconciliation.order_level.actual_amount)"/></b></span>
+                                        </div>
+                                        <div>
+                                            <span class="miv-drawer-meta-label">Tổng tiền hóa đơn MISA (có VAT)</span>
+                                            <span><b><t t-esc="formatCurrency(state.reconciliation.order_level.invoice_amount)"/></b></span>
+                                        </div>
+                                        <div>
+                                            <span class="miv-drawer-meta-label">Chênh lệch</span>
+                                            <span t-attf-class="{{ state.reconciliation.order_level.mismatch ? 'miv-cell-critical' : 'miv-cell-good' }}">
+                                                <b><t t-esc="formatCurrency(state.reconciliation.order_level.diff)"/></b>
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <table class="miv-subtable miv-drawer-table" t-if="state.reconciliation.rows.length">
+                                        <thead>
+                                            <tr>
+                                                <th>Mã hàng / Tên hàng</th>
+                                                <th class="miv-col-num">SL Odoo</th>
+                                                <th class="miv-col-num">SL MISA</th>
+                                                <th class="miv-col-num">Tiền Odoo (chưa VAT)</th>
+                                                <th class="miv-col-num">Tiền MISA (chưa VAT)</th>
+                                                <th>Kết quả</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr t-foreach="state.reconciliation.rows" t-as="row" t-key="row.code"
+                                                t-attf-class="{{ row.mismatch ? 'miv-mismatch-row' : '' }}">
+                                                <td>
+                                                    <b><t t-esc="row.product_name"/></b>
+                                                    <div class="miv-subtable-hint"><t t-esc="row.code"/></div>
+                                                </td>
+                                                <td class="miv-col-num"><t t-esc="row.odoo_qty"/></td>
+                                                <td class="miv-col-num"><t t-esc="row.misa_qty"/></td>
+                                                <td class="miv-col-num"><t t-esc="formatCurrency(row.odoo_value)"/></td>
+                                                <td class="miv-col-num"><t t-esc="formatCurrency(row.misa_value)"/></td>
+                                                <td>
+                                                    <span t-if="row.in_odoo_only" class="miv-badge miv-badge-critical">Thiếu trên MISA</span>
+                                                    <span t-elif="row.in_misa_only" class="miv-badge miv-badge-critical">Thiếu trên Odoo</span>
+                                                    <span t-elif="row.mismatch" class="miv-badge miv-badge-critical">Lệch</span>
+                                                    <span t-else="" class="miv-badge miv-badge-state-invoiced">Khớp</span>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                    <div class="miv-empty" t-else="">Không có dòng hàng nào để đối chiếu.</div>
+                                </t>
+                            </t>
                         </div>
                         <div class="miv-drawer-footer">
                             <button class="btn btn-primary btn-sm" t-on-click="() => this.openPicking(state.drawerPicking.id)">

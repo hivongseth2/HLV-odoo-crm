@@ -82,6 +82,11 @@ export class MisaInvoiceDashboard extends Component {
             drawerPicking: null,
             drawerLines: [],
             drawerLoading: false,
+            // Đối chiếu từng dòng hàng với MISA — tải riêng theo yêu cầu (bấm nút), không tự
+            // động gọi khi mở drawer vì tốn thêm 1 lệnh gọi MISA mỗi lần.
+            reconciliation: null,
+            reconciliationLoading: false,
+            reconciliationOpen: false,
             groupDrawerOpen: false,
             groupDrawerType: null, // "saler" | "customer"
             groupDrawerRow: null,
@@ -456,6 +461,8 @@ export class MisaInvoiceDashboard extends Component {
         this.state.drawerPicking = row;
         this.state.drawerLines = [];
         this.state.drawerLoading = true;
+        this.state.reconciliation = null;
+        this.state.reconciliationOpen = false;
         try {
             this.state.drawerLines = await this.orm.call(
                 "stock.picking", "get_misa_invoice_picking_lines", [row.id], {}
@@ -464,6 +471,40 @@ export class MisaInvoiceDashboard extends Component {
             this.notification.add("Lỗi tải chi tiết phiếu: " + (e.message || e), { type: "danger" });
         }
         this.state.drawerLoading = false;
+    }
+
+    /** Bấm nút "Đối chiếu từng dòng với MISA" — tải riêng (không tự động khi mở drawer) vì
+     * tốn thêm 1 lệnh gọi MISA; tự gộp cả nhóm phiếu nếu phiếu này nằm trong 1 đề nghị gộp
+     * chung nhiều phiếu (xử lý ở backend). */
+    async loadReconciliation() {
+        if (this.state.reconciliationOpen) {
+            this.state.reconciliationOpen = false;
+            return;
+        }
+        this.state.reconciliationOpen = true;
+        if (this.state.reconciliation) {
+            return;
+        }
+        const pickingId = this.state.drawerPicking && this.state.drawerPicking.id;
+        if (!pickingId) {
+            return;
+        }
+        this.state.reconciliationLoading = true;
+        try {
+            const result = await this.orm.call(
+                "stock.picking", "get_misa_invoice_line_reconciliation", [pickingId], {}
+            );
+            if (result && result.error) {
+                this.notification.add("Lỗi đối chiếu với MISA: " + result.error, { type: "danger" });
+                this.state.reconciliationOpen = false;
+            } else {
+                this.state.reconciliation = result;
+            }
+        } catch (e) {
+            this.notification.add("Lỗi đối chiếu với MISA: " + (e.message || e), { type: "danger" });
+            this.state.reconciliationOpen = false;
+        }
+        this.state.reconciliationLoading = false;
     }
 
     /** Bấm vào link 1 phiếu khác từ bên trong 1 drawer (VD "phiếu gốc"/"phiếu đi kèm") —
@@ -483,6 +524,8 @@ export class MisaInvoiceDashboard extends Component {
         this.state.drawerOpen = false;
         this.state.drawerPicking = null;
         this.state.drawerLines = [];
+        this.state.reconciliation = null;
+        this.state.reconciliationOpen = false;
     }
 
     /** Chỉ đóng drawer khi bấm đúng vùng nền mờ (overlay), không đóng khi bấm bên trong drawer. */

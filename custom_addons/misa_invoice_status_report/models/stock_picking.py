@@ -877,9 +877,10 @@ class StockPickingMisaInvoiceStatus(models.Model):
         today = fields.Date.context_today(self)
         return self._misa_invoice_picking_to_row(picking, today)
 
-    @api.model
-    def get_misa_invoice_picking_lines(self, picking_id):
-        """Chi tiết sản phẩm/số lượng/giá trị xuất kho của 1 phiếu, dùng cho drawer chi tiết.
+    def _misa_invoice_picking_line_items(self, picking):
+        """Chi tiết sản phẩm/mã hàng/số lượng/giá trị xuất kho của 1 phiếu — dùng chung cho
+        drawer hiển thị (get_misa_invoice_picking_lines) VÀ đối chiếu từng dòng với MISA
+        (get_misa_invoice_line_reconciliation, so theo default_code).
 
         Giá trị xuất kho = qty * đơn giá trên dòng đơn bán tương ứng (prorate theo
         qty đã giao trên dòng đó). Riêng combo/kit (BOM phantom): các dòng move con do
@@ -887,10 +888,6 @@ class StockPickingMisaInvoiceStatus(models.Model):
         và giá chỉ nằm ở đó (giá sản phẩm con = 0) — nên gán toàn bộ price_subtotal của
         dòng combo cho 1 dòng đại diện, còn các sản phẩm con hiển thị giá trị = 0.
         """
-        picking = self.sudo().browse(picking_id)
-        if not picking.exists():
-            return []
-
         moves = picking.move_ids_without_package.filtered(lambda m: m.quantity > 0)
         groups = {}
         order = []
@@ -915,6 +912,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
             if sale_line and is_kit:
                 lines.append({
                     'product_name': sale_line.product_id.display_name,
+                    'default_code': sale_line.product_id.default_code or False,
                     'qty': sale_line.product_uom_qty,
                     'uom_name': sale_line.product_uom.name,
                     'value': sale_line.price_subtotal,
@@ -923,6 +921,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 for move in group_moves:
                     lines.append({
                         'product_name': move.product_id.display_name,
+                        'default_code': move.product_id.default_code or False,
                         'qty': move.quantity,
                         'uom_name': move.product_uom.name,
                         'value': 0.0,
@@ -936,11 +935,113 @@ class StockPickingMisaInvoiceStatus(models.Model):
                     value = move.quantity * (sale_line.price_subtotal / sale_line.product_uom_qty)
                 lines.append({
                     'product_name': move.product_id.display_name,
+                    'default_code': move.product_id.default_code or False,
                     'qty': move.quantity,
                     'uom_name': move.product_uom.name,
                     'value': value,
                 })
         return lines
+
+    @api.model
+    def get_misa_invoice_picking_lines(self, picking_id):
+        """Chi tiết sản phẩm/số lượng/giá trị xuất kho của 1 phiếu, dùng cho drawer chi tiết."""
+        picking = self.sudo().browse(picking_id)
+        if not picking.exists():
+            return []
+        return self._misa_invoice_picking_line_items(picking)
+
+    def _misa_invoice_group_odoo_lines(self, pickings):
+        """Gộp dòng hàng Odoo của TOÀN BỘ phiếu trong 1 nhóm gộp chung đề nghị xuất HĐ, theo
+        mã hàng (default_code) — MISA cũng gộp chung các phiếu này vào 1 đề nghị/hóa đơn nên
+        phải so theo tổng cả nhóm, không so lẻ từng phiếu. Bỏ qua dòng sản phẩm con của
+        combo/kit (is_component) vì MISA chỉ có 1 dòng cho sản phẩm combo đại diện."""
+        totals = {}
+        for picking in pickings:
+            for line in self._misa_invoice_picking_line_items(picking):
+                if line.get('is_component'):
+                    continue
+                code = line['default_code'] or line['product_name']
+                bucket = totals.setdefault(code, {'product_name': line['product_name'], 'qty': 0.0, 'value': 0.0})
+                bucket['qty'] += line['qty']
+                bucket['value'] += line['value']
+        return totals
+
+    def _misa_invoice_request_lines_by_code(self, misa_lines):
+        """Gộp dòng hàng MISA (đã lấy qua get_invoice_request_lines) theo mã hàng
+        (inventory_item_code) — 1 mã hàng có thể xuất hiện nhiều lần nếu đề nghị gộp
+        nhiều đơn bán khác nhau cùng mua chung 1 sản phẩm."""
+        totals = {}
+        for line in misa_lines:
+            code = line.get('inventory_item_code') or line.get('description') or '?'
+            bucket = totals.setdefault(code, {'product_name': line.get('description'), 'qty': 0.0, 'value': 0.0})
+            bucket['qty'] += line.get('quantity') or 0.0
+            bucket['value'] += line.get('amount_oc') or 0.0
+        return totals
+
+    @api.model
+    def get_misa_invoice_line_reconciliation(self, picking_id):
+        """Đối chiếu TỪNG DÒNG HÀNG (mã hàng, số lượng, tiền hàng chưa VAT) giữa Odoo và MISA
+        cho 1 phiếu — tự động gộp cả nhóm khi phiếu này nằm trong 1 đề nghị xuất HĐ gộp chung
+        nhiều phiếu (không so lẻ từng phiếu, vì MISA cũng gộp chung dòng hàng của tất cả các
+        đơn bán liên quan vào 1 đề nghị duy nhất).
+
+        Phần "tổng đơn" (tiền có VAT) dùng lại đúng misa_invoice_amount_diff/mismatch đã tính
+        sẵn trên phiếu đại diện (đã xử lý đúng case gộp chung) — không tính lại ở đây để
+        tránh 2 nơi tính ra 2 kết quả lệch nhau."""
+        picking = self.sudo().browse(picking_id)
+        if not picking.exists():
+            return False
+
+        representative = picking.misa_invoice_master_picking_id or picking
+        if not representative.misa_invoice_request_refid:
+            return False
+
+        group_pickings = representative | representative.misa_invoice_covered_picking_ids
+
+        misa_utils = self.env['misa.api.utils']
+        try:
+            misa_lines = misa_utils.get_invoice_request_lines(representative.misa_invoice_request_refid)
+        except Exception as e:
+            return {'error': str(e)}
+
+        odoo_totals = self._misa_invoice_group_odoo_lines(group_pickings)
+        misa_totals = self._misa_invoice_request_lines_by_code(misa_lines)
+
+        rows = []
+        for code in set(odoo_totals) | set(misa_totals):
+            odoo = odoo_totals.get(code)
+            misa = misa_totals.get(code)
+            odoo_qty = odoo['qty'] if odoo else 0.0
+            odoo_value = odoo['value'] if odoo else 0.0
+            misa_qty = misa['qty'] if misa else 0.0
+            misa_value = misa['value'] if misa else 0.0
+            amount_diff = odoo_value - misa_value
+            qty_diff = odoo_qty - misa_qty
+            rows.append({
+                'code': code,
+                'product_name': (odoo and odoo['product_name']) or (misa and misa['product_name']) or code,
+                'odoo_qty': odoo_qty,
+                'odoo_value': odoo_value,
+                'misa_qty': misa_qty,
+                'misa_value': misa_value,
+                'qty_diff': qty_diff,
+                'amount_diff': amount_diff,
+                'mismatch': abs(amount_diff) > MISA_INVOICE_AMOUNT_TOLERANCE or abs(qty_diff) > 0.001,
+                'in_odoo_only': odoo is not None and misa is None,
+                'in_misa_only': misa is not None and odoo is None,
+            })
+        rows.sort(key=lambda r: (not r['mismatch'], r['product_name'] or ''))
+
+        return {
+            'rows': rows,
+            'group_picking_names': group_pickings.mapped('name'),
+            'order_level': {
+                'actual_amount': sum(group_pickings.mapped('x_studio_tng_tin_sau_thu')),
+                'invoice_amount': representative.misa_invoice_amount or 0.0,
+                'diff': representative.misa_invoice_amount_diff,
+                'mismatch': representative.misa_invoice_amount_mismatch,
+            },
+        }
 
     @api.model
     def get_misa_invoice_report_action(
