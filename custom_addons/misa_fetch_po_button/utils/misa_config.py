@@ -1,6 +1,6 @@
 from odoo import models
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 class MisaConfig(models.AbstractModel):
     _name = 'misa.config'
@@ -8,31 +8,43 @@ class MisaConfig(models.AbstractModel):
 
     def get_misa_context(self):
         """Trả về context cấu hình cho MISA API."""
-        return  {"TenantId":"47ab503b-99d5-4eb8-aa11-24927abb3585","TenantCode":"3R2PY2F4","DatabaseId":"f4b18d63-6c99-4a53-b974-f6208e84fced","BranchId":"53a073a0-5381-4493-820f-51ea32ebe990","WorkingBook":0,"Language":"vi","IncludeDependentBranch":"False","SessionId":"ss1547cc69a995421e91347736dabe6cb9.693017cdc24074e96e4756afbf2b6ab6.f4b18d636c994a53b974f6208e84fced.638877626393411146","DBType":1,"AuthType":0,"AmisSessionId":"NAA3AGEAYgA1ADAAMwBiADkAOQBkADUANABlAGIAOABhAGEAMQAxADIANAA5ADIANwBhAGIAYgAzADUAOAA1ADkAMgBiADgANABhADYAZgBiADYAZQBiADQANwBhADgAYQA0AGUAMgBhAGUAYgAzAGEAZQA2ADMAYgA0ADYAYwA=","HasAgent":False,"UserType":1,"art":1,"UserId":"1547cc69-a995-421e-9134-7736dabe6cb9","isc":False}
-    
+        return  {"TenantId":"47ab503b-99d5-4eb8-aa11-24927abb3585","TenantCode":"3R2PY2F4","DatabaseId":"f4b18d63-6c99-4a53-b974-f6208e84fced","BranchId":"53a073a0-5381-4493-820f-51ea32ebe990","WorkingBook":0,"Language":"vi","IncludeDependentBranch":"false","SessionId":"ssdf0cb33bb13949f5ac24f9f860b4e987.d1bdb6083c5bc1139163ad5af5eb7463.f4b18d636c994a53b974f6208e84fced.639219459957987744","DBType":1,"AuthType":0,"AmisSessionId":"NAA3AGEAYgA1ADAAMwBiADkAOQBkADUANABlAGIAOABhAGEAMQAxADIANAA5ADIANwBhAGIAYgAzADUAOAA1ADAAZQA1ADgAMQA0AGQAMgAyADkAOQBiADQAMAAwADgAYgAyADgANwBiAGUAZAAzAGUAMgBmADMANQAwAGIAZQA=","HasAgent":False,"UserType":1,"art":0,"UserId":"df0cb33b-b139-49f5-ac24-f9f860b4e987","isc":False,"IsCorpV2":False}
+
     def get_default_headers(self, access_token):
         """Trả về headers mặc định cho MISA API với ĐẦY ĐỦ context và cookies.
-        
+
         ⚠️ QUAN TRỌNG: API detail_full CẦN đủ headers này mới không timeout:
         - Authorization: Bearer token
         - X-MISA-Context: Context đầy đủ (TenantId, BranchId, DatabaseId, SessionId, UserId...)
         - X-Device: Device ID
         - Cookie: Session cookies (tid, x-sessionid, dbid, env, cf_clearance)
         - Referer/Origin: Để backend biết request từ UI chính thức
+
+        ⚠️ cf_clearance/x-sessionid/SessionId/UserId ở đây là "chụp" từ 1 phiên đăng nhập
+        thật trên browser — Cloudflare cf_clearance hết hạn sau 1 thời gian, khi đó API sẽ
+        âm thầm trả về rỗng/lỗi (không phải lúc nào cũng 401) dẫn tới việc quét MISA tưởng
+        "chưa có đề nghị xuất HĐ" cho TẤT CẢ phiếu dù thực tế đã có. Khi gặp lại tình trạng
+        này: mở DevTools trên actapp.misa.vn, copy lại đúng bộ cookie + x-misa-context +
+        x-device từ 1 request thật rồi thay vào đây.
         """
         context = self.get_misa_context()
-        
+
         # Build cookie string từ session hiện tại
         # Note: Các giá trị này cần lấy từ browser hoặc login flow thực tế
+        # (cập nhật lần cuối 2026-08-10 từ 1 phiên đăng nhập thật của thanhluan.hlv@gmail.com)
+        vn_now = datetime.utcnow() + timedelta(hours=7)
         cookie_parts = [
-            "cf_clearance=NnbIOcmJJX9cPSPMbP5wqaJ0d5N.6A_3p5pZRovrMFQ-1759224861-1.2.1.1-mkusGtWxAuLs4JRlxmV2YH1vRhP0HQWs5tESq958fx0lsCN3eF8sXpcmOedgMjsVyQCLvAm9T7jrH48r_FJw1aMpcjT0hLrln5xWqvcXBqTWh3N3QqIfNIX2LBTZp3T114YoGskvEAnWbJwHSvQErcIYAHvE7Hci8c9taXdPraO3bo2raQfMRp.pcIorYWIBM76nsEKGypx.9SuqRvQO8BevnN.gfSXOiM54MS5RhY8",
+            "cf_clearance=hS38JvZDEpOCSkqQeISup0gRsU7vmCaePF40HuCGTf8-1786325168-1.2.1.1-JJaneX4lnujLhsjYaZ68QddTOwssFRrChpEgztSxqIYzYr1yBkqWWjfcqAgKe4RlVEBooG35PyGm5BGhH9uRtZAdPIOxnenDxWP_E9_vw81XfnbJJm.QwJYYnBOsYzwXn6eNILzoM4mTNQarOBxFhySwYmZUB_vL0ZZ1r0uU0h_VYWb9uVqYjEuA94xVKsda6RZdanRlRcC29YUb81yGx8caQLlPFGNc4XgBurxsa5vNc3P60JkO_GFeuU7CoNaWyjy5f_dyc7vyJD1CiVc4NFzbxMvUjbpzeyh4aiJxhBnRrUwwReoBxrRhnM.S.Sb9p7iRbhi9zVsl1ZArVY7MM7R0k2Jbj21cjVZD0NEqS7I",
             "tid=47ab503b-99d5-4eb8-aa11-24927abb3585",
-            "x-sessionid=47ab503b99d54eb8aa1124927abb358545649b79e2874e33b2d395ddb553ccfc",
+            "x-sessionid=47ab503b99d54eb8aa1124927abb35850e5814d2299b4008b287bed3e2f350be",
             "dbid=f4b18d63-6c99-4a53-b974-f6208e84fced",
+            "dbid-47ab503b-99d5-4eb8-aa11-24927abb3585=f4b18d63-6c99-4a53-b974-f6208e84fced",
             "env=g2",
-            f"env_f4b18d63_6c99_4a53_b974_f6208e84fced_10_30_2025=g2",
+            # Cookie "env_<dbid>_<thang>_<ngay>_<nam>" đổi theo NGÀY hiện tại — build động thay
+            # vì hardcode 1 ngày cố định (lý do chính khiến bộ cookie cũ hết hạn ngầm).
+            f"env_f4b18d63_6c99_4a53_b974_f6208e84fced_{vn_now.month}_{vn_now.day}_{vn_now.year}=g2",
         ]
-        
+
         return {
             "Authorization": f"Bearer {access_token}",
             "Content-Type": "application/json",
@@ -43,7 +55,7 @@ class MisaConfig(models.AbstractModel):
             "X-MISA-BranchID": context['BranchId'],
             "X-MISA-Language": "vi",
             "X-MISA-WorkingBook": "0",
-            "X-Device": "f32be43d99071befa62cab0562947494",  # Device ID từ browser
+            "X-Device": "d1bdb6083c5bc1139163ad5af5eb7463",  # Device ID từ browser
             "Cookie": "; ".join(cookie_parts),  # ← QUAN TRỌNG: Cookies session
             "Referer": "https://actapp.misa.vn/app/SA/Return",
             "Origin": "https://actapp.misa.vn",

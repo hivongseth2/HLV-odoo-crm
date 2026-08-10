@@ -178,28 +178,31 @@
                     </div>
                 </div>
 
-                <!-- ===== Theo kho: tổng số phiếu vs đã xuất HĐ (cột+đường, bổ sung cho donut) ===== -->
-                <div class="miv-section" t-if="warehouseChart">
-                    <h3>Theo kho: tổng số phiếu vs đã xuất hóa đơn</h3>
+                <!-- ===== Theo nhân viên sale: tổng số phiếu vs đã xuất HĐ (cột+đường, bổ sung cho donut) ===== -->
+                <div class="miv-section" t-if="salerChart">
+                    <h3>
+                        Theo nhân viên sale: tổng số phiếu vs đã xuất hóa đơn
+                        <span class="miv-section-hint" t-if="salerChartTruncated">(top 15 theo số lượng phiếu)</span>
+                    </h3>
                     <div class="miv-chart-wrap">
-                        <svg t-attf-viewBox="0 0 {{warehouseChart.width}} {{warehouseChart.height}}" class="miv-chart" preserveAspectRatio="none">
-                            <t t-foreach="warehouseChart.gridLines" t-as="gl" t-key="gl.key">
-                                <line class="miv-chart-grid" t-att-x1="warehouseChart.padding.left" t-att-x2="warehouseChart.width - warehouseChart.padding.right" t-att-y1="gl.y" t-att-y2="gl.y"/>
-                                <text class="miv-chart-axis-label" t-att-x="warehouseChart.padding.left - 8" t-att-y="gl.y + 3" text-anchor="end"><t t-esc="gl.label"/></text>
+                        <svg t-attf-viewBox="0 0 {{salerChart.width}} {{salerChart.height}}" class="miv-chart" preserveAspectRatio="none">
+                            <t t-foreach="salerChart.gridLines" t-as="gl" t-key="gl.key">
+                                <line class="miv-chart-grid" t-att-x1="salerChart.padding.left" t-att-x2="salerChart.width - salerChart.padding.right" t-att-y1="gl.y" t-att-y2="gl.y"/>
+                                <text class="miv-chart-axis-label" t-att-x="salerChart.padding.left - 8" t-att-y="gl.y + 3" text-anchor="end"><t t-esc="gl.label"/></text>
                             </t>
-                            <t t-foreach="warehouseChart.bars" t-as="bar" t-key="bar.key">
+                            <t t-foreach="salerChart.bars" t-as="bar" t-key="bar.key">
                                 <rect class="miv-chart-bar" t-att-x="bar.x" t-att-y="bar.y" t-att-width="bar.width" t-att-height="bar.height" rx="3">
                                     <title><t t-esc="bar.label"/>: <t t-esc="bar.value"/> phiếu</title>
                                 </rect>
                             </t>
-                            <path class="miv-chart-line" t-att-d="warehouseChart.linePath"/>
-                            <t t-foreach="warehouseChart.points" t-as="pt" t-key="pt.key">
+                            <path class="miv-chart-line" t-att-d="salerChart.linePath"/>
+                            <t t-foreach="salerChart.points" t-as="pt" t-key="pt.key">
                                 <circle class="miv-chart-dot" t-att-cx="pt.x" t-att-cy="pt.y" r="4">
                                     <title><t t-esc="pt.label"/>: <t t-esc="pt.value"/> phiếu đã xuất HĐ</title>
                                 </circle>
                             </t>
-                            <t t-foreach="warehouseChart.xLabels" t-as="xl" t-key="xl.key">
-                                <text class="miv-chart-axis-label" t-att-x="xl.x" t-att-y="warehouseChart.height - 8" text-anchor="middle"><t t-esc="xl.label"/></text>
+                            <t t-foreach="salerChart.xLabels" t-as="xl" t-key="xl.key">
+                                <text class="miv-chart-axis-label" t-att-x="xl.x" t-att-y="salerChart.height - 8" text-anchor="middle"><t t-esc="xl.label"/></text>
                             </t>
                         </svg>
                         <div class="miv-chart-legend">
