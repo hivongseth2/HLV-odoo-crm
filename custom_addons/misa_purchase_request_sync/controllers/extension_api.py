@@ -442,6 +442,7 @@ class MisaExtensionController(http.Controller):
                         "qty": line.product_uom_qty,
                         "price": line.price_unit,
                         "discount": line.discount,
+                        "loyalty_discount_pct": line.loyalty_discount_pct if hasattr(line, 'loyalty_discount_pct') else 0.0,
                         "tax_percentages": sorted(line.tax_id.mapped('amount')),
                         "uom": line.product_uom.name or "",
                         "qty_delivered": line.qty_delivered if hasattr(line, 'qty_delivered') else 0.0,
@@ -475,6 +476,7 @@ class MisaExtensionController(http.Controller):
                         "qty": float(item.get("crm_qty", item.get("qty")) or 0.0),
                         "price": float(item.get("crm_price", item.get("price")) or 0.0),
                         "discount": float(item.get("crm_discount", item.get("discount")) or 0.0),
+                        "loyalty_discount_pct": float(item.get("loyalty_discount_pct") or 0.0),
                         "tax_percentages": sorted(
                             env['account.tax'].sudo().browse(item.get("tax_ids") or []).exists().mapped('amount')
                         ),
@@ -514,6 +516,11 @@ class MisaExtensionController(http.Controller):
                         sync_baseline_lines.append(baseline_line)
                     sync_baseline_source = "sale_order"
 
+                loyalty_lines = getattr(so, 'loyalty_account_line_ids', False)
+                loyalty_earning_pct = loyalty_lines[0].earning_pct if loyalty_lines else False
+                loyalty_account_id = loyalty_lines[0].account_id.id if loyalty_lines else False
+                loyalty_account_name = loyalty_lines[0].account_id.display_name if loyalty_lines else False
+
                 payload = {
                     "ok": True,
                     "exists": True,
@@ -529,6 +536,9 @@ class MisaExtensionController(http.Controller):
                     "misa_sale_edit_locked_at": (
                         fields.Datetime.to_string(edit_locked_at) if edit_locked_at else False
                     ),
+                    "loyalty_earning_pct": loyalty_earning_pct,
+                    "loyalty_account_id": loyalty_account_id,
+                    "loyalty_account_name": loyalty_account_name,
                     "warehouse": warehouse_payload,
                     "warehouse_id": warehouse_payload["id"],
                     "warehouse_name": warehouse_payload["name"],
@@ -920,6 +930,114 @@ class MisaExtensionController(http.Controller):
 
         return request.make_response(
             json.dumps({"ok": True, "data": {"suppliers": suppliers, "stock": stock_info}}),
+            headers=[("Content-Type", "application/json")]
+        )
+
+    # ============================================================
+    # POST /api/extension/customer_loyalty_accounts
+    # ============================================================
+    @http.route(
+        "/api/extension/customer_loyalty_accounts",
+        type="http",
+        auth="none",
+        methods=["GET", "POST", "OPTIONS"],
+        csrf=False,
+        cors="*",
+    )
+    def api_extension_customer_loyalty_accounts(self, **kwargs):
+        """
+        Lấy danh sách các tài khoản Loyalty Portal của khách hàng kèm mức % chiết khấu mặc định.
+        """
+        if request.httprequest.method == "OPTIONS":
+            return request.make_response("", headers=[("Access-Control-Allow-Origin", "*"), ("Access-Control-Allow-Headers", "*"), ("Access-Control-Allow-Methods", "GET, POST, OPTIONS")])
+
+        payload = self._parse_json_body(kwargs)
+        token = self._extract_token(payload)
+        ok, err = self._authenticate(token)
+        if not ok:
+            return request.make_response(
+                json.dumps(err), headers=[("Content-Type", "application/json")]
+            )
+
+        admin_user = request.env.ref("base.user_admin", raise_if_not_found=False)
+        env = request.env(user=admin_user) if admin_user else request.env
+
+        account_name = (payload.get('account_name') or kwargs.get('account_name') or '').strip()
+        account_id = payload.get('account_id') or kwargs.get('account_id')
+        partner_id = payload.get('partner_id') or kwargs.get('partner_id')
+
+        partner = False
+        if partner_id:
+            partner = env['res.partner'].sudo().browse(int(partner_id)).exists()
+
+        if not partner and account_name:
+            partner = env['res.partner'].sudo().search([
+                ('active', '=', True),
+                '|', '|',
+                ('name', '=', account_name),
+                ('ref', '=', account_name),
+                ('vat', '=', account_name),
+            ], limit=1)
+            if not partner:
+                partner = env['res.partner'].sudo().search([
+                    ('active', '=', True),
+                    ('name', 'ilike', account_name),
+                ], limit=1)
+
+        if not partner and account_id:
+            try:
+                headers, _crm_token = env['sale.order']._misa_headers() if hasattr(env['sale.order'], '_misa_headers') else ({}, False)
+                partner = env['misa.api.utils']._sync_customer_from_misa_account_api(account_id, headers)
+            except Exception:
+                pass
+
+        if not partner:
+            return request.make_response(
+                json.dumps({"ok": True, "data": {"accounts": [], "default_pct": 0.0, "default_account_id": False}}),
+                headers=[("Content-Type", "application/json")]
+            )
+
+        partner = partner.commercial_partner_id or partner
+        root = partner._get_loyalty_root() if hasattr(partner, '_get_loyalty_root') else partner
+
+        loyalty_accounts = env['hlv.loyalty.portal.account'].sudo().search([
+            ('partner_id', '=', root.id),
+            ('active', '=', True),
+        ])
+
+        accounts_data = []
+        default_pct = 0.0
+        default_account_id = False
+
+        for acc in loyalty_accounts:
+            pct = float(acc.default_earning_pct or 0.0)
+            if acc.is_default:
+                default_pct = pct
+                default_account_id = acc.id
+            accounts_data.append({
+                "id": acc.id,
+                "buyer_name": acc.buyer_name or "",
+                "username": acc.username or "",
+                "display_name": acc.display_name or acc.buyer_name or acc.username or "Default Account",
+                "default_earning_pct": pct,
+                "is_default": bool(acc.is_default),
+            })
+
+        if not default_account_id and accounts_data:
+            default_pct = accounts_data[0]["default_earning_pct"]
+            default_account_id = accounts_data[0]["id"]
+
+        return request.make_response(
+            json.dumps({
+                "ok": True,
+                "data": {
+                    "partner_id": root.id,
+                    "partner_name": root.name,
+                    "default_account_id": default_account_id,
+                    "default_pct": default_pct,
+                    "accounts": accounts_data,
+                }
+            }),
             headers=[("Content-Type", "application/json")]
         )
 

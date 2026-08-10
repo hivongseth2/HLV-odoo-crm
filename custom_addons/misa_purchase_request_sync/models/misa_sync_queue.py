@@ -237,6 +237,7 @@ class MisaSyncQueue(models.Model):
             misa_order_id=misa_order_id,
             warehouse_id=warehouse_id,
             create_when_missing=create_when_missing,
+            payload=payload,
         )
 
     def _process_po(self, queue_record, payload):

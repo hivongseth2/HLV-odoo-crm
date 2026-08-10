@@ -1521,6 +1521,7 @@ class SaleOrder(models.Model):
                 )
 
         self._sync_misa_header_in_place(data, headers)
+        self._sync_misa_loyalty_account_line(payload=self.env.context.get('misa_sync_payload'))
         if self.env.context.get('misa_assign_warehouse_from_lines'):
             # Header sync can recompute warehouse_id from the current user's
             # default warehouse. Re-assert the warehouse resolved from MISA
@@ -1706,9 +1707,70 @@ class SaleOrder(models.Model):
             'res_id': order.id,
             'target': 'current',
         }
+
+    def _sync_misa_loyalty_account_line(self, payload=None):
+        """Đồng bộ tài khoản cộng điểm Loyalty (%ck thu mua) từ MISA CRM Extension."""
+        self.ensure_one()
+        payload = payload or self.env.context.get('misa_sync_payload')
+        if not payload or not isinstance(payload, dict):
+            return
+
+        earning_pct = payload.get('loyalty_earning_pct')
+        account_id = payload.get('loyalty_account_id')
+
+        if earning_pct is None and not account_id:
+            return
+
+        try:
+            pct_val = float(earning_pct) if earning_pct is not None else None
+        except (ValueError, TypeError):
+            pct_val = None
+
+        if pct_val is None and not account_id:
+            return
+
+        root_partner = self.partner_id._get_loyalty_root() if (self.partner_id and hasattr(self.partner_id, '_get_loyalty_root')) else self.partner_id
+        if not root_partner:
+            return
+
+        account = False
+        if account_id:
+            account = self.env['hlv.loyalty.portal.account'].sudo().browse(int(account_id)).exists()
+
+        if not account:
+            account = self.env['hlv.loyalty.portal.account'].sudo().search([
+                ('partner_id', '=', root_partner.id),
+                ('active', '=', True),
+                ('is_default', '=', True)
+            ], limit=1)
+
+        if not account:
+            account = self.env['hlv.loyalty.portal.account'].sudo().search([
+                ('partner_id', '=', root_partner.id),
+                ('active', '=', True)
+            ], limit=1)
+
+        if not account:
+            _logger.info("MISA SO Loyalty: Không tìm thấy hlv.loyalty.portal.account cho partner %s", root_partner.name)
+            return
+
+        final_pct = pct_val if pct_val is not None else float(account.default_earning_pct or 0.0)
+
+        existing_line = self.loyalty_account_line_ids.filtered(lambda l: l.account_id == account)[:1]
+        if existing_line:
+            existing_line.sudo().write({'earning_pct': final_pct})
+            _logger.info("MISA SO Loyalty: Đã cập nhật %%ck thu mua SO %s: account=%s, pct=%s", self.name, account.display_name, final_pct)
+        else:
+            self.env['hlv.loyalty.sale.order.account.line'].sudo().create({
+                'order_id': self.id,
+                'account_id': account.id,
+                'earning_pct': final_pct,
+            })
+            _logger.info("MISA SO Loyalty: Đã tạo mới dòng %%ck thu mua SO %s: account=%s, pct=%s", self.name, account.display_name, final_pct)
+
 # =====================API
     @api.model
-    def api_resync_by_misa(self, misa_order_id, warehouse_id=None, create_when_missing=True):
+    def api_resync_by_misa(self, misa_order_id, warehouse_id=None, create_when_missing=True, payload=None):
         """
         Public API (RPC/JSON-RPC) để resync đơn bán theo MISA Order ID.
         - Nếu tìm thấy SO có misa_id => cập nhật tại chỗ theo CRM line ID.
@@ -1740,6 +1802,7 @@ class SaleOrder(models.Model):
             so.sudo().with_context(
                 misa_assign_warehouse_from_lines=True,
                 misa_resolved_warehouse_id=misa_warehouse.id or False,
+                misa_sync_payload=payload,
             ).action_resync_from_misa(
                 prefetched_lines=prefetched_lines,
                 misa_headers=misa_headers,
@@ -1797,6 +1860,7 @@ class SaleOrder(models.Model):
         so_boot.sudo().with_context(
             misa_assign_warehouse_from_lines=not bool(warehouse_id),
             misa_resolved_warehouse_id=misa_warehouse.id or False,
+            misa_sync_payload=payload,
         ).action_resync_from_misa(
             prefetched_lines=prefetched_lines,
             misa_headers=misa_headers,
