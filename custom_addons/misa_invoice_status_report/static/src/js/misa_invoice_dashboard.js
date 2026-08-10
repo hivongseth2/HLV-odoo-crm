@@ -475,22 +475,27 @@ export class MisaInvoiceDashboard extends Component {
      * XUẤT KHO làm key (stock.picking) như trước giờ. */
     openFullList() {
         if (this.state.activeTab === "orders") {
-            return this.openOrdersFullList();
+            return this.showAllOrders();
         }
         return this.openTile(false);
     }
 
-    async openOrdersFullList() {
-        const action = await this.orm.call(
-            "stock.picking", "get_misa_invoice_order_report_action", [],
-            {
-                search: this.state.ordersTab.search || false,
-                state: this.state.ordersTab.stateFilter || false,
-                saler_code: this.state.ordersTab.salerFilter || false,
-                ...this.filterParams,
-            }
-        );
-        this.action.doAction(action);
+    /** "Xem tất cả đơn hàng" — tab "Đơn hàng" đã có đủ search/filter/phân trang/drawer thể
+     * hiện quan hệ đơn-phiếu ngay tại chỗ, nên "xem tất cả" chỉ cần gỡ hết filter đang lọc
+     * hẹp (ngày xuất kho/ngày HĐ/tìm kiếm/trạng thái/sale) rồi tải lại đúng tab này — không
+     * cần mở thêm 1 view Odoo riêng (list Odoo mặc định không thể hiện được quan hệ phiếu
+     * gộp chung/nav drawer như ở đây). */
+    async showAllOrders() {
+        this.state.shipFrom = "";
+        this.state.shipTo = "";
+        this.state.invFrom = "";
+        this.state.invTo = "";
+        this.state.ordersTab.search = "";
+        this.state.ordersTab.searchDraft = "";
+        this.state.ordersTab.stateFilter = "";
+        this.state.ordersTab.salerFilter = "";
+        this.state.activeTab = "orders";
+        await this._reloadWithLoading();
     }
 
     openPicking(pickingId) {
