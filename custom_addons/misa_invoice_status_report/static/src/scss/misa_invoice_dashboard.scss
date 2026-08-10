@@ -861,6 +861,12 @@
         a { color: var(--miv-neutral-text); font-weight: 600; text-decoration: underline; }
     }
 
+    .miv-drawer-actions {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 14px;
+    }
+
     .miv-reconcile-btn {
         display: inline-flex;
         align-items: center;
@@ -901,8 +907,10 @@
     }
 
     .miv-drawer-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
         padding: 14px 20px;
         border-top: 1px solid var(--miv-grid);
-        text-align: right;
     }
 }

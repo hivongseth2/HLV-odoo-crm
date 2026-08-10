@@ -13,8 +13,22 @@
                         <div class="miv-eyebrow">Đối soát &amp; kiểm soát công nợ</div>
                         <h1 class="miv-title">Danh sách đơn hàng</h1>
                         <div class="miv-meta">
-                            <span class="miv-meta-item">Toàn bộ phạm vi đối soát MISA, không giới hạn theo ngày</span>
+                            <span class="miv-meta-item">Mặc định xem toàn bộ phạm vi đối soát MISA — có thể lọc thêm theo ngày xuất kho bên dưới</span>
                         </div>
+                    </div>
+                </div>
+
+                <!-- ===== Lọc theo khoảng ngày xuất kho (để trống = không giới hạn) ===== -->
+                <div class="miv-toolbar">
+                    <div class="miv-month-bar">
+                        <i class="fa fa-calendar"/>
+                        <span>Ngày xuất kho</span>
+                        <input type="date" class="miv-cutoff-input" t-att-value="state.shipFrom" t-on-change="onShipFromChange" title="Từ ngày"/>
+                        <span>→</span>
+                        <input type="date" class="miv-cutoff-input" t-att-value="state.shipTo" t-on-change="onShipToChange" title="Đến ngày"/>
+                        <button class="btn btn-sm miv-cutoff-save" t-if="state.shipFrom or state.shipTo" t-on-click="clearShipDateFilter">
+                            <i class="fa fa-times"/> Bỏ lọc ngày
+                        </button>
                     </div>
                 </div>
 
@@ -164,6 +178,9 @@
                             <div class="miv-empty" t-else="">Không có phiếu xuất kho nào trong phạm vi đang lọc.</div>
                         </div>
                         <div class="miv-drawer-footer">
+                            <button class="btn btn-secondary btn-sm" t-on-click="checkOrderNow" t-att-disabled="state.orderCheckLoading">
+                                <i class="fa fa-refresh" t-att-class="{'fa-spin': state.orderCheckLoading}"/> Kiểm tra MISA ngay
+                            </button>
                             <button class="btn btn-primary btn-sm" t-on-click="openOrderForm">
                                 Mở đơn hàng <i class="fa fa-arrow-right"/>
                             </button>

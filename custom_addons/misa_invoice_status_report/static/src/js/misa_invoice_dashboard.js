@@ -106,6 +106,7 @@ export class MisaInvoiceDashboard extends Component {
             groupDrawerRow: null,
             orderDrawerOpen: false,
             orderDrawerRow: null,
+            orderCheckLoading: false,
         });
 
         onWillStart(async () => {
@@ -563,6 +564,37 @@ export class MisaInvoiceDashboard extends Component {
         this.state.reconciliationOpen = false;
     }
 
+    /** Mở wizard nhập lý do (dialog) — nạp lại drawer + số liệu tổng quan sau khi đóng
+     * wizard (dù xác nhận hay hủy, vì không biết chắc kết quả — nạp lại luôn cho chắc). */
+    async markException(pickingId) {
+        try {
+            const action = await this.orm.call("stock.picking", "action_mark_misa_invoice_exception", [[pickingId]], {});
+            this.action.doAction(action, { onClose: () => this._refreshAfterException(pickingId) });
+        } catch (e) {
+            this.notification.add("Lỗi mở hộp thoại ngoại lệ: " + (e.message || e), { type: "danger" });
+        }
+    }
+
+    async unmarkException(pickingId) {
+        try {
+            await this.orm.call("stock.picking", "action_unmark_misa_invoice_exception", [[pickingId]], {});
+            this.notification.add("Đã bỏ đánh dấu ngoại lệ.", { type: "success" });
+            await this._refreshAfterException(pickingId);
+        } catch (e) {
+            this.notification.add("Lỗi bỏ ngoại lệ: " + (e.message || e), { type: "danger" });
+        }
+    }
+
+    async _refreshAfterException(pickingId) {
+        if (this.state.drawerOpen && this.state.drawerPicking && this.state.drawerPicking.id === pickingId) {
+            const row = await this.orm.call("stock.picking", "get_misa_invoice_picking_row", [pickingId], {});
+            if (row) {
+                this.state.drawerPicking = row;
+            }
+        }
+        await this._reload();
+    }
+
     /** Chỉ đóng drawer khi bấm đúng vùng nền mờ (overlay), không đóng khi bấm bên trong drawer. */
     onDrawerOverlayClick(ev) {
         if (ev.target === ev.currentTarget) {
@@ -808,6 +840,32 @@ export class MisaInvoiceDashboard extends Component {
             views: [[false, "form"]],
             target: "current",
         });
+    }
+
+    /** Bấm "Kiểm tra MISA ngay" trong drawer đơn hàng — lấy TẤT CẢ phiếu xuất kho (đã done)
+     * của đúng đơn hàng đang xem rồi kiểm tra luôn, không cần tìm/chọn từng phiếu riêng lẻ. */
+    async checkOrderNow() {
+        const row = this.state.orderDrawerRow;
+        if (!row || this.state.orderCheckLoading) {
+            return;
+        }
+        this.state.orderCheckLoading = true;
+        try {
+            const resp = await this.orm.call("stock.picking", "action_check_misa_invoice_order", [row.id], {});
+            if (!resp.count) {
+                this.notification.add("Đơn hàng này không có phiếu xuất kho nào đã hoàn tất để kiểm tra.", { type: "warning" });
+            } else {
+                this.notification.add(`Đã kiểm tra xong ${resp.count} phiếu xuất kho của đơn hàng.`, { type: "success" });
+            }
+            await this._reload();
+            const updated = this.state.ordersTab.rows.find((r) => r.id === row.id);
+            if (updated) {
+                this.state.orderDrawerRow = updated;
+            }
+        } catch (e) {
+            this.notification.add("Lỗi kiểm tra MISA: " + (e.message || e), { type: "danger" });
+        }
+        this.state.orderCheckLoading = false;
     }
 
     medalIcon(rank) {

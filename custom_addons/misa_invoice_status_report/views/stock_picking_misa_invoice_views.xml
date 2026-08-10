@@ -164,4 +164,25 @@
         <field name="state">code</field>
         <field name="code">records.action_check_misa_invoice_status()</field>
     </record>
+
+    <!-- ============ Đánh dấu/bỏ ngoại lệ hàng loạt từ menu ⚙ Hành động (chỉ nhóm Đối soát XHD) ============ -->
+    <record id="action_server_misa_invoice_mark_exception" model="ir.actions.server">
+        <field name="name">Đánh dấu ngoại lệ</field>
+        <field name="model_id" ref="stock.model_stock_picking"/>
+        <field name="binding_model_id" ref="stock.model_stock_picking"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="code">action = records.action_mark_misa_invoice_exception()</field>
+        <field name="groups_id" eval="[(4, ref('misa_invoice_status_report.group_misa_invoice_reconciliation'))]"/>
+    </record>
+
+    <record id="action_server_misa_invoice_unmark_exception" model="ir.actions.server">
+        <field name="name">Bỏ ngoại lệ</field>
+        <field name="model_id" ref="stock.model_stock_picking"/>
+        <field name="binding_model_id" ref="stock.model_stock_picking"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="code">records.action_unmark_misa_invoice_exception()</field>
+        <field name="groups_id" eval="[(4, ref('misa_invoice_status_report.group_misa_invoice_reconciliation'))]"/>
+    </record>
 </odoo>

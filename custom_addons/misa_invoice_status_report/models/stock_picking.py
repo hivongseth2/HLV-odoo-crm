@@ -289,13 +289,14 @@ class StockPickingMisaInvoiceStatus(models.Model):
         return results
 
     def action_mark_misa_invoice_exception(self):
-        self.ensure_one()
+        """Mở wizard nhập lý do — dùng chung cho nút trên form (1 phiếu), bulk action trên
+        list (nhiều phiếu), và nút trên drawer dashboard (1 phiếu, gọi qua doAction)."""
         return {
             'type': 'ir.actions.act_window',
             'res_model': 'misa.invoice.exception.wizard',
             'view_mode': 'form',
             'target': 'new',
-            'context': {'default_picking_id': self.id},
+            'context': {'default_picking_ids': self.ids},
         }
 
     def action_unmark_misa_invoice_exception(self):
@@ -347,6 +348,20 @@ class StockPickingMisaInvoiceStatus(models.Model):
         khi quét theo lô, thay vì 1 lệnh RPC/phiếu."""
         pickings = self.sudo().browse(picking_ids).exists()
         return self._misa_invoice_check_batch(pickings)
+
+    @api.model
+    def action_check_misa_invoice_order(self, order_id):
+        """Kiểm tra MISA cho TẤT CẢ phiếu xuất kho (đã done) của 1 đơn bán — dùng khi người
+        dùng chọn thẳng 1 đơn hàng cần đối chiếu ngay từ drawer, thay vì phải tìm/chọn từng
+        phiếu xuất kho riêng lẻ."""
+        order = self.env['sale.order'].sudo().browse(order_id)
+        if not order.exists():
+            return {'results': [], 'count': 0}
+        pickings = order.misa_invoice_picking_ids.filtered(lambda p: p.state == 'done')
+        if not pickings:
+            return {'results': [], 'count': 0}
+        results = self._misa_invoice_check_batch(pickings)
+        return {'results': results, 'count': len(pickings)}
 
     def _cron_scan_misa_invoice_status(self):
         pickings = self.search(
@@ -757,6 +772,8 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 {'id': covered.id, 'name': covered.name}
                 for covered in picking.misa_invoice_covered_picking_ids
             ],
+            'exception': picking.misa_invoice_exception,
+            'exception_reason': picking.misa_invoice_exception_reason or '',
         }
 
     @api.model
@@ -1301,6 +1318,13 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 exception = False
         if exception is not None:
             domain.append(('misa_invoice_exception', '=', bool(exception)))
+            # Action gốc có context mặc định tự áp filter "Chưa đánh dấu ngoại lệ"
+            # (search_default_filter_no_exception) trên search view — nếu domain ở đây đã
+            # tự quyết định rõ ràng theo ngoại lệ (VD tile "Đã đánh dấu ngoại lệ" ép
+            # exception=True) mà vẫn giữ nguyên default đó, search view sẽ tự thêm domain
+            # đối lập (exception=False) đè lên, ra kết quả rỗng/sai. Xóa default để domain
+            # mình set là quyết định duy nhất.
+            action['context'] = {}
         if saler_code:
             value = False if saler_code == MISA_INVOICE_UNASSIGNED_SALER else saler_code
             domain.append(('misa_invoice_saler_code', '=', value))
