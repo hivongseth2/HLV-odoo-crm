@@ -520,6 +520,14 @@ class MisaExtensionController(http.Controller):
                 loyalty_earning_pct = loyalty_lines[0].earning_pct if loyalty_lines else False
                 loyalty_account_id = loyalty_lines[0].account_id.id if loyalty_lines else False
                 loyalty_account_name = loyalty_lines[0].account_id.display_name if loyalty_lines else False
+                loyalty_account_lines_data = []
+                if loyalty_lines:
+                    for line in loyalty_lines:
+                        loyalty_account_lines_data.append({
+                            "account_id": line.account_id.id,
+                            "account_name": line.account_id.display_name,
+                            "earning_pct": line.earning_pct,
+                        })
 
                 payload = {
                     "ok": True,
@@ -539,6 +547,7 @@ class MisaExtensionController(http.Controller):
                     "loyalty_earning_pct": loyalty_earning_pct,
                     "loyalty_account_id": loyalty_account_id,
                     "loyalty_account_name": loyalty_account_name,
+                    "loyalty_account_lines": loyalty_account_lines_data,
                     "warehouse": warehouse_payload,
                     "warehouse_id": warehouse_payload["id"],
                     "warehouse_name": warehouse_payload["name"],
