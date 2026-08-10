@@ -1716,7 +1716,8 @@ class SaleOrder(models.Model):
             return
 
         lines_data = payload.get('loyalty_account_lines')
-        if lines_data and isinstance(lines_data, list):
+        if lines_data is not None and isinstance(lines_data, list):
+            synced_account_ids = []
             for item in lines_data:
                 if not isinstance(item, dict):
                     continue
@@ -1732,6 +1733,7 @@ class SaleOrder(models.Model):
                 except (ValueError, TypeError):
                     pct_val = float(account.default_earning_pct or 0.0)
 
+                synced_account_ids.append(account.id)
                 existing_line = self.loyalty_account_line_ids.filtered(lambda l: l.account_id == account)[:1]
                 if existing_line:
                     existing_line.sudo().write({'earning_pct': pct_val})
@@ -1743,6 +1745,11 @@ class SaleOrder(models.Model):
                         'earning_pct': pct_val,
                     })
                     _logger.info("MISA SO Loyalty: Đã tạo mới dòng %%ck thu mua SO %s: account=%s, pct=%s", self.name, account.display_name, pct_val)
+
+            removed_lines = self.loyalty_account_line_ids.filtered(lambda l: l.account_id.id not in synced_account_ids)
+            if removed_lines:
+                removed_lines.sudo().unlink()
+                _logger.info("MISA SO Loyalty: Đã xóa %s dòng tài khoản Loyalty không còn trong payload của SO %s", len(removed_lines), self.name)
             return
 
         earning_pct = payload.get('loyalty_earning_pct')
