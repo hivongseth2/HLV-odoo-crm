@@ -442,6 +442,7 @@ class MisaExtensionController(http.Controller):
                         "qty": line.product_uom_qty,
                         "price": line.price_unit,
                         "discount": line.discount,
+                        "loyalty_discount_pct": line.loyalty_discount_pct if hasattr(line, 'loyalty_discount_pct') else 0.0,
                         "tax_percentages": sorted(line.tax_id.mapped('amount')),
                         "uom": line.product_uom.name or "",
                         "qty_delivered": line.qty_delivered if hasattr(line, 'qty_delivered') else 0.0,
@@ -475,6 +476,7 @@ class MisaExtensionController(http.Controller):
                         "qty": float(item.get("crm_qty", item.get("qty")) or 0.0),
                         "price": float(item.get("crm_price", item.get("price")) or 0.0),
                         "discount": float(item.get("crm_discount", item.get("discount")) or 0.0),
+                        "loyalty_discount_pct": float(item.get("loyalty_discount_pct") or 0.0),
                         "tax_percentages": sorted(
                             env['account.tax'].sudo().browse(item.get("tax_ids") or []).exists().mapped('amount')
                         ),
