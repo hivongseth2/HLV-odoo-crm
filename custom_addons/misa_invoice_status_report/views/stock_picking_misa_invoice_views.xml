@@ -90,6 +90,7 @@
                 <field name="x_studio_tng_tin_sau_thu" string="Tiền Odoo xuất kho" optional="show" sum="Tổng tiền Odoo"/>
                 <field name="misa_invoice_amount" optional="show" sum="Tổng tiền HĐ"/>
                 <field name="misa_invoice_amount_mismatch" widget="boolean_toggle" readonly="1" optional="show"/>
+                <field name="misa_invoice_multi_order_group" widget="boolean_toggle" readonly="1" optional="hide"/>
                 <field name="misa_invoice_last_checked"/>
                 <field name="misa_invoice_exception" widget="boolean_toggle" readonly="1"/>
                 <button name="action_check_misa_invoice_status" type="object"
@@ -123,6 +124,8 @@
                         domain="[('misa_invoice_exception', '=', True)]"/>
                 <filter string="Chưa đánh dấu ngoại lệ" name="filter_no_exception"
                         domain="[('misa_invoice_exception', '=', False)]"/>
+                <filter string="Gộp chung nhiều đơn bán" name="filter_multi_order_group"
+                        domain="[('misa_invoice_multi_order_group', '=', True)]"/>
                 <separator/>
                 <filter string="Ngày xuất kho" name="filter_date_done" date="date_done"/>
                 <separator/>

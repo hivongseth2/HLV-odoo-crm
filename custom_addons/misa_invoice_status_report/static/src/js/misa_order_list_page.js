@@ -34,7 +34,7 @@ export class MisaOrderListPage extends Component {
             shipTo: "",
             ordersTab: {
                 rows: [], total: 0, page: 1, pageSize: 50, loading: false,
-                search: "", searchDraft: "", stateFilter: "", salerFilter: "",
+                search: "", searchDraft: "", stateFilter: "", salerFilter: "", multiRequestOnly: false,
             },
             orderDrawerOpen: false,
             orderDrawerRow: null,
@@ -70,6 +70,7 @@ export class MisaOrderListPage extends Component {
                     search: this.state.ordersTab.search || false,
                     state: this.state.ordersTab.stateFilter || false,
                     saler_code: this.state.ordersTab.salerFilter || false,
+                    multi_request: this.state.ordersTab.multiRequestOnly,
                     date_from: this.state.shipFrom || false,
                     date_to: this.state.shipTo || false,
                 }
@@ -130,6 +131,11 @@ export class MisaOrderListPage extends Component {
         this.loadOrdersTab(1);
     }
 
+    onOrdersMultiRequestToggle(ev) {
+        this.state.ordersTab.multiRequestOnly = ev.target.checked;
+        this.loadOrdersTab(1);
+    }
+
     onShipFromChange(ev) {
         this.state.shipFrom = ev.target.value || "";
         this.loadOrdersTab(1);
@@ -154,6 +160,7 @@ export class MisaOrderListPage extends Component {
                     search: this.state.ordersTab.search || false,
                     state: this.state.ordersTab.stateFilter || false,
                     saler_code: this.state.ordersTab.salerFilter || false,
+                    multi_request: this.state.ordersTab.multiRequestOnly,
                     date_from: this.state.shipFrom || false,
                     date_to: this.state.shipTo || false,
                 }

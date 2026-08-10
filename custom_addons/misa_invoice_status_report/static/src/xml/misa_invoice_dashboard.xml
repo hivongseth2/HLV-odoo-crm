@@ -22,10 +22,9 @@
                         </div>
                     </div>
                     <div class="miv-scan-actions">
-                        <label class="miv-daily-week-toggle" t-if="state.data.can_configure" title="Quét lại cả phiếu đã 'Đã xuất HĐ' — chỉ dùng để backfill 1 lần, không dùng hàng ngày">
-                            <input type="checkbox" class="miv-cutoff-input" t-att-checked="state.includeInvoiced" t-on-change="onIncludeInvoicedToggle"/>
-                            Bao gồm phiếu đã xuất HĐ (backfill)
-                        </label>
+                        <!-- Checkbox "Bao gồm phiếu đã xuất HĐ (backfill)" đã ẩn khỏi giao diện production
+                             (chỉ cần khi vá lỗi dữ liệu cũ lúc mới triển khai) — state.includeInvoiced vẫn
+                             còn trong code, cần dùng lại thì bỏ comment này. -->
                         <button class="btn btn-primary miv-scan-btn" t-on-click="scanNow" t-att-disabled="state.isScanning">
                             <i class="fa fa-refresh" t-att-class="{'fa-spin': state.isScanning}"/>
                             Kiểm tra MISA ngay
@@ -334,6 +333,7 @@
                                     <td>
                                         <b><t t-esc="row.name"/></b>
                                         <i class="fa fa-link miv-link-icon" t-if="row.master_picking_id or (row.covered_pickings and row.covered_pickings.length)" title="Gộp chung đề nghị xuất HĐ với phiếu khác"/>
+                                        <i class="fa fa-sitemap miv-link-icon" t-if="row.multi_order_group" title="Đề nghị xuất HĐ của nhóm này gộp chung nhiều đơn bán"/>
                                     </td>
                                     <td><t t-esc="row.partner_name"/></td>
                                     <td><t t-esc="row.sale_order_name"/></td>
@@ -586,6 +586,7 @@
                                         <td>
                                             <b><t t-esc="row.name"/></b>
                                             <i class="fa fa-link miv-link-icon" t-if="row.master_picking_id or (row.covered_pickings and row.covered_pickings.length)" title="Gộp chung đề nghị xuất HĐ với phiếu khác"/>
+                                            <i class="fa fa-sitemap miv-link-icon" t-if="row.multi_order_group" title="Đề nghị xuất HĐ của nhóm này gộp chung nhiều đơn bán"/>
                                         </td>
                                         <td><t t-esc="row.partner_name"/></td>
                                         <td><t t-esc="row.sale_order_name"/></td>
@@ -640,6 +641,10 @@
                                     <option t-att-value="saler.saler_code" t-att-selected="state.ordersTab.salerFilter === saler.saler_code" t-esc="saler.saler_code"/>
                                 </t>
                             </select>
+                            <label class="miv-daily-week-toggle" title="Đơn đã xuất hóa đơn qua từ 2 đề nghị/đợt khác nhau trở lên">
+                                <input type="checkbox" class="miv-cutoff-input" t-att-checked="state.ordersTab.multiRequestOnly" t-on-change="onOrdersMultiRequestToggle"/>
+                                Chỉ đơn xuất HĐ nhiều đợt
+                            </label>
                             <button class="btn btn-sm miv-cutoff-save miv-export-btn" t-on-click="exportOrdersExcel">
                                 <i class="fa fa-file-excel-o"/> Xuất Excel
                             </button>
@@ -662,7 +667,10 @@
                                 </thead>
                                 <tbody>
                                     <tr t-foreach="state.ordersTab.rows" t-as="row" t-key="row.id" t-on-click="() => this.openOrderDrawer(row)">
-                                        <td><b><t t-esc="row.name"/></b></td>
+                                        <td>
+                                            <b><t t-esc="row.name"/></b>
+                                            <i class="fa fa-refresh miv-link-icon" t-if="row.multi_request" title="Đã xuất hóa đơn qua nhiều đợt/đề nghị khác nhau"/>
+                                        </td>
                                         <td><t t-esc="row.partner_name"/></td>
                                         <td><t t-esc="row.picking_names or '—'"/></td>
                                         <td class="miv-col-num"><t t-esc="formatCurrency(row.amount_total)"/></td>

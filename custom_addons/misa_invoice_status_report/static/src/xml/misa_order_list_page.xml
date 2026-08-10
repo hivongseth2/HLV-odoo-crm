@@ -54,6 +54,10 @@
                             <option t-att-value="saler.code" t-att-selected="state.ordersTab.salerFilter === saler.code" t-esc="saler.code"/>
                         </t>
                     </select>
+                    <label class="miv-daily-week-toggle" title="Đơn đã xuất hóa đơn qua từ 2 đề nghị/đợt khác nhau trở lên">
+                        <input type="checkbox" class="miv-cutoff-input" t-att-checked="state.ordersTab.multiRequestOnly" t-on-change="onOrdersMultiRequestToggle"/>
+                        Chỉ đơn xuất HĐ nhiều đợt
+                    </label>
                     <button class="btn btn-sm miv-cutoff-save miv-export-btn" t-on-click="exportOrdersExcel">
                         <i class="fa fa-file-excel-o"/> Xuất Excel
                     </button>
@@ -77,7 +81,10 @@
                         </thead>
                         <tbody>
                             <tr t-foreach="state.ordersTab.rows" t-as="row" t-key="row.id" t-on-click="() => this.openOrderDrawer(row)">
-                                <td><b><t t-esc="row.name"/></b></td>
+                                <td>
+                                    <b><t t-esc="row.name"/></b>
+                                    <i class="fa fa-refresh miv-link-icon" t-if="row.multi_request" title="Đã xuất hóa đơn qua nhiều đợt/đề nghị khác nhau"/>
+                                </td>
                                 <td><t t-esc="row.partner_name"/></td>
                                 <td><t t-esc="row.picking_names or '—'"/></td>
                                 <td class="miv-col-num"><t t-esc="formatCurrency(row.amount_total)"/></td>
