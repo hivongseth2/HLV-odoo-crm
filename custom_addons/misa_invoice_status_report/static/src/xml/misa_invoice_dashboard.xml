@@ -546,6 +546,21 @@
                             <button class="btn btn-sm miv-cutoff-save" t-if="state.pickingsTab.search" t-on-click="clearPickingsSearch">
                                 <i class="fa fa-times"/> Bỏ tìm
                             </button>
+                            <select class="miv-cutoff-input" t-on-change="onPickingsStateFilterChange">
+                                <option value="">Tất cả trạng thái</option>
+                                <t t-foreach="pickingStateFilterOptions" t-as="opt" t-key="opt.value">
+                                    <option t-att-value="opt.value" t-att-selected="state.pickingsTab.stateFilter === opt.value" t-esc="opt.label"/>
+                                </t>
+                            </select>
+                            <select class="miv-cutoff-input" t-on-change="onPickingsSalerFilterChange">
+                                <option value="">Tất cả nhân viên sale</option>
+                                <t t-foreach="state.data.by_saler" t-as="saler" t-key="saler.saler_code">
+                                    <option t-att-value="saler.saler_code" t-att-selected="state.pickingsTab.salerFilter === saler.saler_code" t-esc="saler.saler_code"/>
+                                </t>
+                            </select>
+                            <button class="btn btn-sm miv-cutoff-save miv-export-btn" t-on-click="exportPickingsExcel">
+                                <i class="fa fa-file-excel-o"/> Xuất Excel
+                            </button>
                         </div>
                         <div class="miv-loading" t-if="state.pickingsTab.loading">
                             <i class="fa fa-spinner fa-spin"/> Đang tải...
@@ -610,6 +625,21 @@
                             <button class="btn btn-sm miv-cutoff-save" t-on-click="submitOrdersSearch">Tìm</button>
                             <button class="btn btn-sm miv-cutoff-save" t-if="state.ordersTab.search" t-on-click="clearOrdersSearch">
                                 <i class="fa fa-times"/> Bỏ tìm
+                            </button>
+                            <select class="miv-cutoff-input" t-on-change="onOrdersStateFilterChange">
+                                <option value="">Tất cả trạng thái</option>
+                                <t t-foreach="pickingStateFilterOptions" t-as="opt" t-key="opt.value">
+                                    <option t-att-value="opt.value" t-att-selected="state.ordersTab.stateFilter === opt.value" t-esc="opt.label"/>
+                                </t>
+                            </select>
+                            <select class="miv-cutoff-input" t-on-change="onOrdersSalerFilterChange">
+                                <option value="">Tất cả nhân viên sale</option>
+                                <t t-foreach="state.data.by_saler" t-as="saler" t-key="saler.saler_code">
+                                    <option t-att-value="saler.saler_code" t-att-selected="state.ordersTab.salerFilter === saler.saler_code" t-esc="saler.saler_code"/>
+                                </t>
+                            </select>
+                            <button class="btn btn-sm miv-cutoff-save miv-export-btn" t-on-click="exportOrdersExcel">
+                                <i class="fa fa-file-excel-o"/> Xuất Excel
                             </button>
                         </div>
                         <div class="miv-loading" t-if="state.ordersTab.loading">
@@ -803,7 +833,12 @@
                                                     <b><t t-esc="row.product_name"/></b>
                                                     <div class="miv-subtable-hint"><t t-esc="row.code"/></div>
                                                 </td>
-                                                <td class="miv-col-num"><t t-esc="row.odoo_qty"/></td>
+                                                <td class="miv-col-num">
+                                                    <t t-esc="row.odoo_qty"/>
+                                                    <div class="miv-subtable-hint" t-if="row.unit_convert_note">
+                                                        <i class="fa fa-exchange"/> <t t-esc="row.unit_convert_note"/>
+                                                    </div>
+                                                </td>
                                                 <td class="miv-col-num"><t t-esc="row.misa_qty"/></td>
                                                 <td class="miv-col-num"><t t-esc="formatCurrency(row.odoo_value)"/></td>
                                                 <td class="miv-col-num"><t t-esc="formatCurrency(row.misa_value)"/></td>
@@ -811,6 +846,7 @@
                                                     <span t-if="row.in_odoo_only" class="miv-badge miv-badge-critical">Thiếu trên MISA</span>
                                                     <span t-elif="row.in_misa_only" class="miv-badge miv-badge-critical">Thiếu trên Odoo</span>
                                                     <span t-elif="row.mismatch" class="miv-badge miv-badge-critical">Lệch</span>
+                                                    <span t-elif="row.unit_convert_note" class="miv-badge miv-badge-state-invoiced">Khớp (quy đổi ĐVT)</span>
                                                     <span t-else="" class="miv-badge miv-badge-state-invoiced">Khớp</span>
                                                 </td>
                                             </tr>

@@ -20,6 +20,14 @@ const STATE_LABELS = {
     invoiced: "Đã xuất hóa đơn",
     exception: "Ngoại lệ",
 };
+// Dùng cho dropdown lọc trạng thái ở tab "Phiếu xuất kho"/"Đơn hàng" — không có "exception"
+// vì đó là 1 cờ boolean riêng (misa_invoice_exception), không phải giá trị misa_invoice_state.
+const PICKING_STATE_FILTER_OPTIONS = [
+    { value: "not_checked", label: "Chưa kiểm tra" },
+    { value: "missing", label: "Chưa có đề nghị xuất HĐ" },
+    { value: "requested", label: "Đã đề nghị, chờ HĐ" },
+    { value: "invoiced", label: "Đã xuất hóa đơn" },
+];
 const DONUT_RADIUS = 54;
 const DONUT_CIRCUMFERENCE = 2 * Math.PI * DONUT_RADIUS;
 const GROUP_PAGE_SIZE = 10;
@@ -69,9 +77,15 @@ export class MisaInvoiceDashboard extends Component {
             // Tab "Theo ngày": có thể lọc theo 1 nhân viên sale + gộp theo tuần.
             dailyTab: { rows: [], loading: false, weekly: false, salerCode: "" },
             // Tab "Phiếu xuất kho": phẳng, key là stock.picking (KBC/OUT/...).
-            pickingsTab: { rows: [], total: 0, page: 1, pageSize: 20, loading: false, search: "", searchDraft: "" },
+            pickingsTab: {
+                rows: [], total: 0, page: 1, pageSize: 20, loading: false, search: "", searchDraft: "",
+                stateFilter: "", salerFilter: "",
+            },
             // Tab "Đơn hàng": phẳng, key là sale.order (DH...) — 1 đơn có thể gộp nhiều phiếu.
-            ordersTab: { rows: [], total: 0, page: 1, pageSize: 20, loading: false, search: "", searchDraft: "" },
+            ordersTab: {
+                rows: [], total: 0, page: 1, pageSize: 20, loading: false, search: "", searchDraft: "",
+                stateFilter: "", salerFilter: "",
+            },
             showScanPanel: false,
             scanProgress: { done: 0, total: 0 },
             scanLog: [],
@@ -97,6 +111,10 @@ export class MisaInvoiceDashboard extends Component {
         onWillStart(async () => {
             await this._reloadWithLoading();
         });
+    }
+
+    get pickingStateFilterOptions() {
+        return PICKING_STATE_FILTER_OPTIONS;
     }
 
     /** Danh sách tháng có thể chọn: từ mốc đối soát tới tháng hiện tại, nhãn tiếng Việt dạng số. */
@@ -577,6 +595,8 @@ export class MisaInvoiceDashboard extends Component {
                     limit: this.state.pickingsTab.pageSize,
                     offset: (page - 1) * this.state.pickingsTab.pageSize,
                     search: this.state.pickingsTab.search || false,
+                    state: this.state.pickingsTab.stateFilter || false,
+                    saler_code: this.state.pickingsTab.salerFilter || false,
                     ...this.filterParams,
                 }
             );
@@ -626,6 +646,33 @@ export class MisaInvoiceDashboard extends Component {
         this.loadPickingsTab(1);
     }
 
+    onPickingsStateFilterChange(ev) {
+        this.state.pickingsTab.stateFilter = ev.target.value || "";
+        this.loadPickingsTab(1);
+    }
+
+    onPickingsSalerFilterChange(ev) {
+        this.state.pickingsTab.salerFilter = ev.target.value || "";
+        this.loadPickingsTab(1);
+    }
+
+    async exportPickingsExcel() {
+        try {
+            const attachmentId = await this.orm.call(
+                "stock.picking", "export_misa_invoice_picking_list_excel", [],
+                {
+                    search: this.state.pickingsTab.search || false,
+                    state: this.state.pickingsTab.stateFilter || false,
+                    saler_code: this.state.pickingsTab.salerFilter || false,
+                    ...this.filterParams,
+                }
+            );
+            window.location.href = "/web/content/" + attachmentId + "?download=true";
+        } catch (e) {
+            this.notification.add("Lỗi xuất Excel: " + (e.message || e), { type: "danger" });
+        }
+    }
+
     // ===== Tab "Đơn hàng" (phẳng, key = sale.order DH..., phân trang server-side, có search) =====
     async loadOrdersTab(page) {
         this.state.ordersTab.loading = true;
@@ -636,6 +683,8 @@ export class MisaInvoiceDashboard extends Component {
                     limit: this.state.ordersTab.pageSize,
                     offset: (page - 1) * this.state.ordersTab.pageSize,
                     search: this.state.ordersTab.search || false,
+                    state: this.state.ordersTab.stateFilter || false,
+                    saler_code: this.state.ordersTab.salerFilter || false,
                     ...this.filterParams,
                 }
             );
@@ -683,6 +732,33 @@ export class MisaInvoiceDashboard extends Component {
         this.state.ordersTab.search = "";
         this.state.ordersTab.searchDraft = "";
         this.loadOrdersTab(1);
+    }
+
+    onOrdersStateFilterChange(ev) {
+        this.state.ordersTab.stateFilter = ev.target.value || "";
+        this.loadOrdersTab(1);
+    }
+
+    onOrdersSalerFilterChange(ev) {
+        this.state.ordersTab.salerFilter = ev.target.value || "";
+        this.loadOrdersTab(1);
+    }
+
+    async exportOrdersExcel() {
+        try {
+            const attachmentId = await this.orm.call(
+                "stock.picking", "export_misa_invoice_order_list_excel", [],
+                {
+                    search: this.state.ordersTab.search || false,
+                    state: this.state.ordersTab.stateFilter || false,
+                    saler_code: this.state.ordersTab.salerFilter || false,
+                    ...this.filterParams,
+                }
+            );
+            window.location.href = "/web/content/" + attachmentId + "?download=true";
+        } catch (e) {
+            this.notification.add("Lỗi xuất Excel: " + (e.message || e), { type: "danger" });
+        }
     }
 
     /** Bấm vào dòng đơn hàng: mở drawer chi tiết (dữ liệu đã có sẵn `pickings` con từ
