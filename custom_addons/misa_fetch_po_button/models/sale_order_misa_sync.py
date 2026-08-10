@@ -1715,6 +1715,36 @@ class SaleOrder(models.Model):
         if not payload or not isinstance(payload, dict):
             return
 
+        lines_data = payload.get('loyalty_account_lines')
+        if lines_data and isinstance(lines_data, list):
+            for item in lines_data:
+                if not isinstance(item, dict):
+                    continue
+                acc_id = item.get('account_id')
+                pct = item.get('earning_pct')
+                if not acc_id:
+                    continue
+                account = self.env['hlv.loyalty.portal.account'].sudo().browse(int(acc_id)).exists()
+                if not account:
+                    continue
+                try:
+                    pct_val = float(pct) if pct is not None else float(account.default_earning_pct or 0.0)
+                except (ValueError, TypeError):
+                    pct_val = float(account.default_earning_pct or 0.0)
+
+                existing_line = self.loyalty_account_line_ids.filtered(lambda l: l.account_id == account)[:1]
+                if existing_line:
+                    existing_line.sudo().write({'earning_pct': pct_val})
+                    _logger.info("MISA SO Loyalty: Đã cập nhật %%ck thu mua SO %s: account=%s, pct=%s", self.name, account.display_name, pct_val)
+                else:
+                    self.env['hlv.loyalty.sale.order.account.line'].sudo().create({
+                        'order_id': self.id,
+                        'account_id': account.id,
+                        'earning_pct': pct_val,
+                    })
+                    _logger.info("MISA SO Loyalty: Đã tạo mới dòng %%ck thu mua SO %s: account=%s, pct=%s", self.name, account.display_name, pct_val)
+            return
+
         earning_pct = payload.get('loyalty_earning_pct')
         account_id = payload.get('loyalty_account_id')
 
