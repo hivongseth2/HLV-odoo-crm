@@ -875,6 +875,43 @@ export class MisaInvoiceDashboard extends Component {
         this.state.orderCheckLoading = false;
     }
 
+    /** Đánh dấu ngoại lệ cho TẤT CẢ phiếu (đã done, chưa ngoại lệ) của đơn hàng đang xem —
+     * cùng pattern với markException/unmarkException ở drawer phiếu. */
+    async markOrderException() {
+        const row = this.state.orderDrawerRow;
+        if (!row) {
+            return;
+        }
+        try {
+            const action = await this.orm.call("stock.picking", "action_mark_misa_invoice_exception_for_order", [row.id], {});
+            this.action.doAction(action, { onClose: () => this._refreshAfterOrderException(row.id) });
+        } catch (e) {
+            this.notification.add("Lỗi mở hộp thoại ngoại lệ: " + (e.message || e), { type: "danger" });
+        }
+    }
+
+    async unmarkOrderException() {
+        const row = this.state.orderDrawerRow;
+        if (!row) {
+            return;
+        }
+        try {
+            await this.orm.call("stock.picking", "action_unmark_misa_invoice_exception_for_order", [row.id], {});
+            this.notification.add("Đã bỏ đánh dấu ngoại lệ.", { type: "success" });
+            await this._refreshAfterOrderException(row.id);
+        } catch (e) {
+            this.notification.add("Lỗi bỏ ngoại lệ: " + (e.message || e), { type: "danger" });
+        }
+    }
+
+    async _refreshAfterOrderException(orderId) {
+        await this._reload();
+        const updated = this.state.ordersTab.rows.find((r) => r.id === orderId);
+        if (updated && this.state.orderDrawerOpen) {
+            this.state.orderDrawerRow = updated;
+        }
+    }
+
     medalIcon(rank) {
         return { 1: "🥇", 2: "🥈", 3: "🥉" }[rank] || "";
     }

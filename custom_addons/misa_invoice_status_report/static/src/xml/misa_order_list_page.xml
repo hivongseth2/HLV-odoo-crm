@@ -194,6 +194,14 @@
                             </table>
                             <div class="miv-empty" t-else="">Không có phiếu xuất kho nào trong phạm vi đang lọc.</div>
                         </div>
+                        <div class="miv-drawer-actions" t-if="state.canConfigure">
+                            <button class="btn btn-outline-danger btn-sm" t-if="!state.orderDrawerRow.has_exception" t-on-click="markOrderException">
+                                <i class="fa fa-flag"/> Đánh dấu ngoại lệ cả đơn
+                            </button>
+                            <button class="btn btn-outline-secondary btn-sm" t-if="state.orderDrawerRow.has_exception" t-on-click="unmarkOrderException">
+                                <i class="fa fa-flag-o"/> Bỏ ngoại lệ cả đơn
+                            </button>
+                        </div>
                         <div class="miv-drawer-footer">
                             <button class="btn btn-secondary btn-sm" t-on-click="checkOrderNow" t-att-disabled="state.orderCheckLoading">
                                 <i class="fa fa-refresh" t-att-class="{'fa-spin': state.orderCheckLoading}"/> Kiểm tra MISA ngay
