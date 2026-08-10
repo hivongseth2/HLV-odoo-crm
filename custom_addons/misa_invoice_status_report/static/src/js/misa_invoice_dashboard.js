@@ -68,6 +68,9 @@ export class MisaInvoiceDashboard extends Component {
             showScanPanel: false,
             scanProgress: { done: 0, total: 0 },
             scanLog: [],
+            // Chỉ dùng để backfill 1 lần (VD sau khi sửa logic ghép nhiều phiếu/1 đề nghị) —
+            // quét lại CẢ phiếu đã "Đã xuất HĐ", vốn bị loại khỏi vòng quét thường ngày.
+            includeInvoiced: false,
             drawerOpen: false,
             drawerPicking: null,
             drawerLines: [],
@@ -254,10 +257,12 @@ export class MisaInvoiceDashboard extends Component {
         try {
             const range = { date_from: this.state.shipFrom || false, date_to: this.state.shipTo || false };
             const hasRange = !!(range.date_from || range.date_to);
+            const includeInvoiced = this.state.includeInvoiced;
 
             if (!hasRange) {
                 const resp = await this.orm.call(
-                    "stock.picking", "get_misa_invoice_scan_candidates", [], { limit: SCAN_BATCH_SIZE }
+                    "stock.picking", "get_misa_invoice_scan_candidates", [],
+                    { limit: SCAN_BATCH_SIZE, include_invoiced: includeInvoiced }
                 );
                 this.state.scanProgress.total = resp.candidates.length;
                 await this._processCandidates(resp.candidates);
@@ -267,7 +272,7 @@ export class MisaInvoiceDashboard extends Component {
                 while (true) {
                     const resp = await this.orm.call(
                         "stock.picking", "get_misa_invoice_scan_candidates", [],
-                        { limit: SCAN_BATCH_SIZE, ...range }
+                        { limit: SCAN_BATCH_SIZE, include_invoiced: includeInvoiced, ...range }
                     );
                     if (total === null) {
                         total = resp.total;
@@ -298,6 +303,10 @@ export class MisaInvoiceDashboard extends Component {
         if (!this.state.isScanning) {
             this.state.showScanPanel = false;
         }
+    }
+
+    onIncludeInvoicedToggle(ev) {
+        this.state.includeInvoiced = ev.target.checked;
     }
 
     onCutoffChange(ev) {
@@ -762,11 +771,10 @@ export class MisaInvoiceDashboard extends Component {
         return niceFraction * base;
     }
 
-    // Biểu đồ cột (tổng tiền xuất kho) + đường (tổng tiền đã xuất HĐ) cho tab "Theo ngày" —
-    // dựng tay bằng SVG (cùng 1 trục giá trị, không dual-axis) theo bộ palette đã validate.
-    get dailyChart() {
-        const rows = this.state.dailyTab.rows || [];
-        if (!rows.length) {
+    // Dựng hình học SVG dùng chung cho mọi biểu đồ cột+đường của dashboard (cùng 1 trục giá
+    // trị, không dual-axis) — tham số hoá field lấy giá trị cột/đường/nhãn + hàm format trục.
+    _buildComboChart(rows, { barField, lineField, labelField, formatAxis }) {
+        if (!rows || !rows.length) {
             return null;
         }
         const width = 760;
@@ -776,7 +784,7 @@ export class MisaInvoiceDashboard extends Component {
         const plotH = height - padding.top - padding.bottom;
         const baselineY = padding.top + plotH;
 
-        const maxRaw = Math.max(1, ...rows.map((r) => Math.max(r.actual_amount || 0, r.invoice_amount || 0)));
+        const maxRaw = Math.max(1, ...rows.map((r) => Math.max(r[barField] || 0, r[lineField] || 0)));
         const niceMax = this._niceChartMax(maxRaw);
 
         const n = rows.length;
@@ -786,39 +794,62 @@ export class MisaInvoiceDashboard extends Component {
         const yFor = (v) => baselineY - (Math.min(v, niceMax) / niceMax) * plotH;
 
         const bars = rows.map((row, i) => {
-            const y = yFor(row.actual_amount || 0);
+            const y = yFor(row[barField] || 0);
             return {
                 key: `bar-${i}`,
                 x: xCenter(i) - barWidth / 2,
                 y,
                 width: barWidth,
                 height: Math.max(0, baselineY - y),
-                label: row.label,
-                value: row.actual_amount || 0,
+                label: row[labelField],
+                value: row[barField] || 0,
             };
         });
 
         const points = rows.map((row, i) => ({
             key: `pt-${i}`,
             x: xCenter(i),
-            y: yFor(row.invoice_amount || 0),
-            label: row.label,
-            value: row.invoice_amount || 0,
+            y: yFor(row[lineField] || 0),
+            label: row[labelField],
+            value: row[lineField] || 0,
         }));
         const linePath = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
 
         const gridLines = [0, 0.25, 0.5, 0.75, 1].map((frac) => ({
             key: `grid-${frac}`,
             y: baselineY - frac * plotH,
-            label: this.formatCurrencyShort(niceMax * frac),
+            label: formatAxis(niceMax * frac),
         }));
 
         const labelEvery = Math.max(1, Math.ceil(n / 10));
         const xLabels = rows
-            .map((row, i) => ({ key: `xl-${i}`, x: xCenter(i), label: row.label, show: i % labelEvery === 0 || i === n - 1 }))
+            .map((row, i) => ({ key: `xl-${i}`, x: xCenter(i), label: row[labelField], show: i % labelEvery === 0 || i === n - 1 }))
             .filter((xl) => xl.show);
 
         return { width, height, padding, baselineY, bars, points, linePath, gridLines, xLabels };
+    }
+
+    // Tab "Theo ngày": cột = tổng tiền xuất kho, đường = tổng tiền đã xuất HĐ.
+    get dailyChart() {
+        return this._buildComboChart(this.state.dailyTab.rows, {
+            barField: "actual_amount",
+            lineField: "invoice_amount",
+            labelField: "label",
+            formatAxis: (v) => this.formatCurrencyShort(v),
+        });
+    }
+
+    // Khu vực tổng quan: cột = tổng số phiếu theo kho, đường = số phiếu đã xuất HĐ theo kho
+    // (cùng đơn vị "số phiếu" nên chung 1 trục được, bổ sung cho donut vốn chỉ thấy tỷ lệ
+    // tổng thể chứ không thấy kho nào đang tồn đọng nhiều).
+    get warehouseChart() {
+        const rows = (this.state.data && this.state.data.by_warehouse) || [];
+        return this._buildComboChart(rows, {
+            barField: "total",
+            lineField: "invoiced",
+            labelField: "warehouse_name",
+            formatAxis: (v) => Math.round(v).toLocaleString("vi-VN"),
+        });
     }
 
     formatDateTime(str) {

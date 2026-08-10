@@ -1,4 +1,5 @@
 import logging
+from collections import defaultdict
 from datetime import datetime, time as dt_time, timedelta
 
 from markupsafe import Markup
@@ -61,6 +62,19 @@ class StockPickingMisaInvoiceStatus(models.Model):
     misa_invoice_no = fields.Char(string='Số hóa đơn MISA', copy=False)
     misa_invoice_date = fields.Date(string='Ngày hóa đơn MISA', copy=False)
     misa_invoice_amount = fields.Float(string='Tiền hóa đơn MISA', copy=False)
+
+    # MISA cho phép 1 "đề nghị xuất HĐ" (dùng refno của 1 phiếu làm đại diện) gộp chung cho
+    # nhiều phiếu xuất kho khác, liệt kê trong journal_memo — các phiếu "ăn theo" đó KHÔNG tự
+    # có đề nghị riêng. misa_invoice_master_picking_id trỏ NGƯỢC về phiếu đại diện (chỉ set ở
+    # phiếu ăn theo); misa_invoice_covered_picking_ids là chiều ngược lại, tự có trên phiếu
+    # đại diện nhờ Odoo suy ra từ field Many2one trên — không cần lưu thêm gì khác.
+    misa_invoice_master_picking_id = fields.Many2one(
+        'stock.picking', string='Phiếu xuất kho gốc (gộp chung đề nghị HĐ)', copy=False, index=True,
+    )
+    misa_invoice_covered_picking_ids = fields.One2many(
+        'stock.picking', 'misa_invoice_master_picking_id',
+        string='Các phiếu xuất kho đi kèm (gộp chung HĐ)',
+    )
 
     # 1 phiếu xuất kho có thể gộp nhiều đơn bán (MISA trả "order_code": "DH1, DH2"
     # cho cùng 1 refno), và 1 đơn bán có thể được xuất bởi nhiều phiếu (giao nhiều đợt)
@@ -138,12 +152,26 @@ class StockPickingMisaInvoiceStatus(models.Model):
             source_partner = order.partner_id if order else picking.partner_id
             picking.misa_invoice_root_partner_id = source_partner.commercial_partner_id
 
-    @api.depends('misa_invoice_state', 'misa_invoice_amount', 'x_studio_tng_tin_sau_thu')
+    @api.depends(
+        'misa_invoice_state', 'misa_invoice_amount', 'x_studio_tng_tin_sau_thu',
+        'misa_invoice_master_picking_id', 'misa_invoice_covered_picking_ids.x_studio_tng_tin_sau_thu',
+    )
     def _compute_misa_invoice_amount_mismatch(self):
         for picking in self:
             actual_amount = getattr(picking, 'x_studio_tng_tin_sau_thu', False) or 0.0
-            if picking.misa_invoice_state == 'invoiced' and actual_amount:
-                diff = actual_amount - (picking.misa_invoice_amount or 0.0)
+            if picking.misa_invoice_master_picking_id:
+                # Phiếu "ăn theo" 1 đề nghị gộp chung — không tự so tiền ở đây (tiền hóa đơn
+                # đầy đủ được lưu ở phiếu gốc), xem đối chiếu tại misa_invoice_master_picking_id.
+                picking.misa_invoice_amount_diff = 0.0
+                picking.misa_invoice_amount_mismatch = False
+            elif picking.misa_invoice_state == 'invoiced' and (actual_amount or picking.misa_invoice_covered_picking_ids):
+                # Nếu có phiếu đi kèm gộp chung đề nghị, so theo TỔNG tiền thực xuất của cả
+                # nhóm với tiền hóa đơn (đã lưu đầy đủ ở phiếu gốc) — so từng phiếu riêng lẻ
+                # với tổng tiền hóa đơn gộp sẽ luôn báo lệch sai.
+                group_actual = actual_amount + sum(
+                    picking.misa_invoice_covered_picking_ids.mapped('x_studio_tng_tin_sau_thu')
+                )
+                diff = group_actual - (picking.misa_invoice_amount or 0.0)
                 picking.misa_invoice_amount_diff = diff
                 picking.misa_invoice_amount_mismatch = abs(diff) > MISA_INVOICE_AMOUNT_TOLERANCE
             else:
@@ -180,12 +208,22 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 results.append({'id': picking.id, 'name': picking.name, 'error': str(e)})
                 continue
 
+            # MISA cho phép 1 đề nghị (refno của phiếu ĐẠI DIỆN) gộp chung nhiều phiếu khác
+            # (liệt kê trong journal_memo) — nếu refno thật của đề nghị khác tên phiếu đang
+            # kiểm tra, đây là phiếu "ăn theo": trỏ về phiếu gốc và KHÔNG lưu tiền hóa đơn ở
+            # đây nữa (đã lưu đầy đủ ở phiếu gốc) để tránh cộng dồn trùng tiền trong dashboard.
+            master_refno = status.get('master_refno')
+            master_picking = self.browse()
+            if master_refno and master_refno != picking.name:
+                master_picking = self.sudo().search([('name', '=', master_refno)], limit=1)
+
             vals = {
                 'misa_invoice_state': status['state'],
                 'misa_invoice_last_checked': fields.Datetime.now(),
                 'misa_invoice_request_refid': status.get('request_refid') or False,
                 'misa_invoice_no': status.get('invoice_no') or False,
-                'misa_invoice_amount': status.get('invoice_amount') or 0.0,
+                'misa_invoice_amount': 0.0 if master_picking else (status.get('invoice_amount') or 0.0),
+                'misa_invoice_master_picking_id': master_picking.id if master_picking else False,
             }
             invoice_date = status.get('invoice_date')
             if invoice_date:
@@ -195,6 +233,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
                     _logger.warning("Không parse được ngày hóa đơn MISA: %s", invoice_date)
 
             old_state = picking.misa_invoice_state
+            old_master_id = picking.misa_invoice_master_picking_id.id
             picking.write(vals)
 
             if old_state != status['state']:
@@ -203,6 +242,24 @@ class StockPickingMisaInvoiceStatus(models.Model):
                         MISA_INVOICE_STATE_LABELS.get(old_state, old_state),
                         MISA_INVOICE_STATE_LABELS.get(status['state'], status['state']),
                     )
+                )
+            if master_picking and old_master_id != master_picking.id:
+                master_link = Markup('<a href="#" data-oe-model="stock.picking" data-oe-id="%d">%s</a>') % (
+                    master_picking.id, master_picking.name
+                )
+                picking_link = Markup('<a href="#" data-oe-model="stock.picking" data-oe-id="%d">%s</a>') % (
+                    picking.id, picking.name
+                )
+                picking.message_post(
+                    body=Markup(
+                        "<b>🔗 Xuất hóa đơn gộp chung:</b> đề nghị xuất HĐ của phiếu này nằm trong "
+                        "phiếu gốc %s (xem chi tiết hóa đơn tại đó)."
+                    ) % master_link
+                )
+                master_picking.message_post(
+                    body=Markup(
+                        "<b>🔗 Xuất hóa đơn gộp chung:</b> đề nghị xuất HĐ này gộp chung cho phiếu %s."
+                    ) % picking_link
                 )
             if picking.misa_invoice_amount_mismatch:
                 picking.message_post(
@@ -240,11 +297,16 @@ class StockPickingMisaInvoiceStatus(models.Model):
         self.message_post(body=Markup("Đã bỏ đánh dấu ngoại lệ xuất hóa đơn MISA."))
         return True
 
-    def _misa_invoice_scan_domain(self, date_from=False, date_to=False):
-        return self._misa_invoice_dashboard_base_domain(date_from, date_to) + [
-            ('misa_invoice_state', '!=', 'invoiced'),
+    def _misa_invoice_scan_domain(self, date_from=False, date_to=False, include_invoiced=False):
+        domain = self._misa_invoice_dashboard_base_domain(date_from, date_to) + [
             ('misa_invoice_exception', '=', False),
         ]
+        if not include_invoiced:
+            # Cron mặc định loại phiếu đã "Đã xuất HĐ" ra khỏi vòng quét định kỳ để giảm tần
+            # suất gọi MISA — include_invoiced=True chỉ dùng cho nút quét thủ công khi cần
+            # backfill lại (VD sau khi sửa logic ghép nhiều phiếu/1 đề nghị xuất hóa đơn).
+            domain.append(('misa_invoice_state', '!=', 'invoiced'))
+        return domain
 
     def _misa_invoice_check_batch(self, pickings):
         """Kiểm tra 1 lô phiếu bằng 1 map đề nghị xuất HĐ dùng chung (thay vì gọi API tìm
@@ -287,15 +349,23 @@ class StockPickingMisaInvoiceStatus(models.Model):
             _logger.exception("❌ [MISA INVOICE STATUS CRON] Lỗi xử lý theo lô")
 
     @api.model
-    def get_misa_invoice_scan_candidates(self, limit=MISA_INVOICE_SCAN_BATCH_SIZE, date_from=False, date_to=False):
+    def get_misa_invoice_scan_candidates(
+        self, limit=MISA_INVOICE_SCAN_BATCH_SIZE, date_from=False, date_to=False, include_invoiced=False,
+    ):
         """Danh sách phiếu SẼ được quét (chưa gọi MISA) — dùng để dashboard chạy
         từng phiếu một và hiện tiến trình thực (thay vì 1 lệnh lớn chạy âm thầm).
 
         Khi có date_from/date_to (đang xem theo 1 khoảng ngày xuất kho cụ thể), JS sẽ
         lặp gọi hàm này nhiều lần (mỗi lần 1 batch) cho tới khi quét hết `total` — nhờ
         vậy vẫn chia nhỏ từng lệnh gọi MISA nhưng làm trọn được cả khoảng đang cần gấp,
-        thay vì luôn chỉ dừng ở 1 batch như khi không chọn khoảng ngày nào."""
-        domain = self._misa_invoice_scan_domain(date_from, date_to)
+        thay vì luôn chỉ dừng ở 1 batch như khi không chọn khoảng ngày nào.
+
+        include_invoiced=True: quét lại CẢ phiếu đã "Đã xuất HĐ" — chỉ để chủ động backfill
+        1 lần (VD sau khi sửa logic ghép nhiều phiếu/1 đề nghị), không dùng cho quét thường
+        ngày vì sẽ gọi MISA lại cho những phiếu vốn đã xong."""
+        if include_invoiced and not self.env.user.has_group(MISA_INVOICE_RECONCILE_GROUP):
+            raise AccessError(_("Bạn không có quyền quét lại phiếu đã xuất hóa đơn."))
+        domain = self._misa_invoice_scan_domain(date_from, date_to, include_invoiced=include_invoiced)
         Picking = self.sudo()
         pickings = Picking.search(domain, order='misa_invoice_last_checked asc nulls first', limit=limit)
         return {
@@ -395,6 +465,54 @@ class StockPickingMisaInvoiceStatus(models.Model):
             'outstanding_amount_total': sum(not_invoiced.mapped('x_studio_tng_tin_sau_thu')),
         }
 
+    def _misa_invoice_grouped_breakdown(self, domain, groupby_field):
+        """Như _misa_invoice_amount_sums() + _misa_invoice_state_breakdown() nhưng cho TẤT
+        CẢ các nhóm của 1 field (VD từng nhân viên sale, từng khách hàng) cùng lúc, bằng ĐÚNG
+        1 lệnh read_group (SQL GROUP BY) — thay vì lặp N truy vấn (search + 4 search_count +
+        vài mapped) cho từng nhóm. Bắt buộc phải làm vậy vì số nhóm (đặc biệt là khách hàng)
+        có thể lên tới hàng trăm/nghìn khi phạm vi lọc có hàng nghìn phiếu, N+1 query ở đây
+        mới chính là nguyên nhân dashboard lag chứ không phải do thiếu phân trang.
+
+        Trả về dict {group_key: {total, missing, requested, invoiced, exception,
+        actual_amount_total, invoice_amount_total, outstanding_amount_total}} — group_key là
+        id (Many2one), giá trị field (Char), hoặc False cho nhóm rỗng."""
+        Picking = self.sudo()
+        groups = defaultdict(lambda: {
+            'total': 0, 'missing': 0, 'requested': 0, 'invoiced': 0, 'exception': 0,
+            'actual_amount_total': 0.0, 'invoice_amount_total': 0.0, 'outstanding_amount_total': 0.0,
+        })
+        rows = Picking.read_group(
+            domain,
+            ['x_studio_tng_tin_sau_thu:sum', 'misa_invoice_amount:sum'],
+            [groupby_field, 'misa_invoice_state', 'misa_invoice_exception'],
+            lazy=False,
+        )
+        for row in rows:
+            key = row[groupby_field]
+            key = key[0] if isinstance(key, tuple) else key
+            count = row['__count']
+            state = row['misa_invoice_state']
+            exception = row['misa_invoice_exception']
+            actual_sum = row['x_studio_tng_tin_sau_thu'] or 0.0
+            invoice_sum = row['misa_invoice_amount'] or 0.0
+
+            bucket = groups[key]
+            bucket['total'] += count
+            bucket['actual_amount_total'] += actual_sum
+            if state == 'invoiced':
+                bucket['invoiced'] += count
+                bucket['invoice_amount_total'] += invoice_sum
+            else:
+                bucket['outstanding_amount_total'] += actual_sum
+                if not exception:
+                    if state == 'missing':
+                        bucket['missing'] += count
+                    elif state == 'requested':
+                        bucket['requested'] += count
+            if exception:
+                bucket['exception'] += count
+        return groups
+
     @api.model
     def get_misa_invoice_dashboard_data(
         self, date_from=False, date_to=False, invoice_date_from=False, invoice_date_to=False,
@@ -414,8 +532,10 @@ class StockPickingMisaInvoiceStatus(models.Model):
         mismatch_count = Picking.search_count(base_domain + [('misa_invoice_amount_mismatch', '=', True)])
         total = sum(counts.values()) + exception_count
 
-        invoiced_pickings = Picking.search(base_domain + [('misa_invoice_state', '=', 'invoiced')])
-        invoiced_amount = sum(invoiced_pickings.mapped('misa_invoice_amount'))
+        invoiced_sum = Picking.read_group(
+            base_domain + [('misa_invoice_state', '=', 'invoiced')], ['misa_invoice_amount:sum'], [],
+        )
+        invoiced_amount = (invoiced_sum[0]['misa_invoice_amount'] or 0.0) if invoiced_sum else 0.0
 
         by_warehouse = []
         warehouses = self.env['stock.warehouse'].sudo().search([])
@@ -431,16 +551,21 @@ class StockPickingMisaInvoiceStatus(models.Model):
 
         by_saler = []
         saler_groups = Picking.read_group(base_domain, ['id'], ['misa_invoice_saler_code'])
+        saler_stats = self._misa_invoice_grouped_breakdown(base_domain, 'misa_invoice_saler_code')
         for grp in saler_groups:
-            saler_domain = base_domain + [('misa_invoice_saler_code', '=', grp['misa_invoice_saler_code'])]
-            saler_pickings = Picking.search(saler_domain)
-            row = self._misa_invoice_state_breakdown(saler_domain)
-            row.update({
+            stats = saler_stats[grp['misa_invoice_saler_code']]
+            row = {
+                'missing': stats['missing'],
+                'requested': stats['requested'],
+                'invoiced': stats['invoiced'],
+                'exception': stats['exception'],
                 'saler_code': grp['misa_invoice_saler_code'] or MISA_INVOICE_UNASSIGNED_SALER,
                 'total': grp['misa_invoice_saler_code_count'],
-                'pending': row['missing'] + row['requested'],
-            })
-            row.update(self._misa_invoice_amount_sums(saler_pickings))
+                'pending': stats['missing'] + stats['requested'],
+                'actual_amount_total': stats['actual_amount_total'],
+                'invoice_amount_total': stats['invoice_amount_total'],
+                'outstanding_amount_total': stats['outstanding_amount_total'],
+            }
             # % hoàn thành = SỐ LƯỢNG phiếu đã xuất HĐ / tổng số phiếu (không so theo tiền —
             # 2 số tiền đến từ 2 hệ thống khác nhau, tổng có thể lệch nên tỷ lệ theo tiền
             # từng cho ra > 100%, không phản ánh đúng "hoàn thành bao nhiêu %").
@@ -454,20 +579,24 @@ class StockPickingMisaInvoiceStatus(models.Model):
         # nhánh cụ thể trên từng phiếu — tránh 1 khách hàng bị tách thành nhiều dòng.
         by_customer = []
         customer_groups = Picking.read_group(base_domain, ['id'], ['misa_invoice_root_partner_id'])
+        customer_stats = self._misa_invoice_grouped_breakdown(base_domain, 'misa_invoice_root_partner_id')
         for grp in customer_groups:
             partner = grp['misa_invoice_root_partner_id']  # False, hoặc (id, display_name)
             partner_id = partner[0] if partner else False
-            customer_domain = base_domain + [('misa_invoice_root_partner_id', '=', partner_id)]
-            customer_pickings = Picking.search(customer_domain)
-            row = self._misa_invoice_state_breakdown(customer_domain)
-            row.update({
+            stats = customer_stats[partner_id]
+            by_customer.append({
+                'missing': stats['missing'],
+                'requested': stats['requested'],
+                'invoiced': stats['invoiced'],
+                'exception': stats['exception'],
                 'partner_id': partner_id,
                 'partner_name': partner[1] if partner else 'Chưa có khách hàng',
                 'total': grp['misa_invoice_root_partner_id_count'],
-                'pending': row['missing'] + row['requested'],
+                'pending': stats['missing'] + stats['requested'],
+                'actual_amount_total': stats['actual_amount_total'],
+                'invoice_amount_total': stats['invoice_amount_total'],
+                'outstanding_amount_total': stats['outstanding_amount_total'],
             })
-            row.update(self._misa_invoice_amount_sums(customer_pickings))
-            by_customer.append(row)
         by_customer.sort(key=lambda row: row['pending'], reverse=True)
 
         cron = self.env.ref('misa_invoice_status_report.ir_cron_misa_invoice_status_scan', raise_if_not_found=False)
@@ -496,27 +625,44 @@ class StockPickingMisaInvoiceStatus(models.Model):
         """Bảng 'Tình trạng xuất hóa đơn': đúng 4 trạng thái đối soát đã dùng xuyên suốt
         dashboard (Chưa kiểm tra / Chưa có đề nghị / Đã đề nghị chờ HĐ / Đã xuất HĐ) + Ngoại lệ,
         kèm số phiếu / tổng tiền XK / tổng tiền đã xuất HĐ / tỷ lệ phiếu."""
+        # Gộp bằng 1 lệnh read_group (SQL GROUP BY) thay vì search() cả nghìn phiếu rồi
+        # filtered()/mapped() nhiều lần trong Python — tránh tải cả recordset lớn vào bộ nhớ.
         Picking = self.sudo()
         domain = self._misa_invoice_dashboard_base_domain(
             date_from, date_to, invoice_date_from, invoice_date_to
         )
-        pickings = Picking.search(domain)
-        exception_pickings = pickings.filtered(lambda p: p.misa_invoice_exception)
-        scoped = pickings - exception_pickings
+        rows = {state: {'count': 0, 'actual_amount': 0.0, 'invoice_amount': 0.0} for state in MISA_INVOICE_STATE_LABELS}
+        rows['exception'] = {'count': 0, 'actual_amount': 0.0, 'invoice_amount': 0.0}
+        rows['total'] = {'count': 0, 'actual_amount': 0.0, 'invoice_amount': 0.0}
 
-        def _row(recs):
-            invoiced = recs.filtered(lambda p: p.misa_invoice_state == 'invoiced')
-            return {
-                'count': len(recs),
-                'actual_amount': sum(recs.mapped('x_studio_tng_tin_sau_thu')),
-                'invoice_amount': sum(invoiced.mapped('misa_invoice_amount')),
-            }
+        grouped = Picking.read_group(
+            domain,
+            ['x_studio_tng_tin_sau_thu:sum', 'misa_invoice_amount:sum'],
+            ['misa_invoice_state', 'misa_invoice_exception'],
+            lazy=False,
+        )
+        for grp in grouped:
+            count = grp['__count']
+            state = grp['misa_invoice_state']
+            exception = grp['misa_invoice_exception']
+            actual_sum = grp['x_studio_tng_tin_sau_thu'] or 0.0
+            invoice_sum = grp['misa_invoice_amount'] or 0.0
 
-        rows = {}
-        for state in MISA_INVOICE_STATE_LABELS:
-            rows[state] = _row(scoped.filtered(lambda p, s=state: p.misa_invoice_state == s))
-        rows['exception'] = _row(exception_pickings)
-        rows['total'] = _row(pickings)
+            rows['total']['count'] += count
+            rows['total']['actual_amount'] += actual_sum
+            if state == 'invoiced':
+                rows['total']['invoice_amount'] += invoice_sum
+
+            if exception:
+                rows['exception']['count'] += count
+                rows['exception']['actual_amount'] += actual_sum
+                if state == 'invoiced':
+                    rows['exception']['invoice_amount'] += invoice_sum
+            elif state in rows:
+                rows[state]['count'] += count
+                rows[state]['actual_amount'] += actual_sum
+                if state == 'invoiced':
+                    rows[state]['invoice_amount'] += invoice_sum
 
         total_count = rows['total']['count'] or 1
         for row in rows.values():
@@ -562,6 +708,11 @@ class StockPickingMisaInvoiceStatus(models.Model):
 
     def _misa_invoice_picking_to_row(self, picking, today):
         done_date = picking.date_done.date() if picking.date_done else False
+        master = picking.misa_invoice_master_picking_id
+        # Phiếu "ăn theo" 1 đề nghị gộp chung tự lưu misa_invoice_amount = 0 (tránh cộng dồn
+        # trùng ở các tổng khác) — hiển thị ở đây thì lấy tiền hóa đơn ĐẦY ĐỦ từ phiếu gốc để
+        # người dùng không hiểu lầm "đã xuất HĐ" nhưng tiền lại bằng 0.
+        invoice_amount = (master.misa_invoice_amount or 0.0) if master else (picking.misa_invoice_amount or 0.0)
         return {
             'id': picking.id,
             'name': picking.name,
@@ -573,10 +724,16 @@ class StockPickingMisaInvoiceStatus(models.Model):
             'state': picking.misa_invoice_state,
             'state_label': MISA_INVOICE_STATE_LABELS.get(picking.misa_invoice_state, picking.misa_invoice_state),
             'actual_amount': picking.x_studio_tng_tin_sau_thu or 0.0,
-            'invoice_amount': picking.misa_invoice_amount or 0.0,
+            'invoice_amount': invoice_amount,
             'outstanding_amount': 0.0 if picking.misa_invoice_state == 'invoiced' else (
                 picking.x_studio_tng_tin_sau_thu or 0.0
             ),
+            'master_picking_id': master.id if master else False,
+            'master_picking_name': master.name if master else False,
+            'covered_pickings': [
+                {'id': covered.id, 'name': covered.name}
+                for covered in picking.misa_invoice_covered_picking_ids
+            ],
         }
 
     @api.model

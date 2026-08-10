@@ -45,6 +45,14 @@
                                        decoration-danger="misa_invoice_amount_mismatch"/>
                             </group>
                         </group>
+                        <group string="Xuất hóa đơn gộp chung" invisible="not misa_invoice_master_picking_id and not misa_invoice_covered_picking_ids">
+                            <field name="misa_invoice_master_picking_id" readonly="1"
+                                   invisible="not misa_invoice_master_picking_id"
+                                   string="Phiếu gốc (đề nghị HĐ nằm ở phiếu này)"/>
+                            <field name="misa_invoice_covered_picking_ids" readonly="1" widget="many2many_tags"
+                                   invisible="not misa_invoice_covered_picking_ids"
+                                   string="Đề nghị HĐ này gộp chung cho các phiếu"/>
+                        </group>
                         <group string="Ngoại lệ" invisible="not misa_invoice_exception">
                             <field name="misa_invoice_exception_reason" readonly="1" nolabel="1"/>
                             <field name="misa_invoice_exception_by_id" readonly="1"/>

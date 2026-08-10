@@ -23,6 +23,7 @@ def _empty_invoice_status():
         'invoice_no': None,
         'invoice_date': None,
         'invoice_amount': None,
+        'master_refno': None,
     }
 
 
@@ -56,6 +57,7 @@ class MisaApiUtilsInvoiceStatus(models.AbstractModel):
         target_customer = req_info.get("account_object_name")
         result['request_refid'] = target_req_id
         result['account_object_name'] = target_customer
+        result['master_refno'] = (req_info.get("refno") or "").strip() or None
         result['state'] = 'requested'
 
         if not target_req_id or not target_customer:
