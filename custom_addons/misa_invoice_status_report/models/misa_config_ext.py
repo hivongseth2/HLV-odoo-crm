@@ -7,7 +7,12 @@ class MisaConfigInvoiceStatus(models.AbstractModel):
     def get_invoice_request_bulk_payload(self, date_from_iso, date_to_iso, page_index=1, page_size=100):
         """Như get_invoice_request_payload() nhưng KHÔNG customFilter theo 1 refno cụ thể —
         tải hàng loạt "Đề nghị xuất hóa đơn" trong khoảng ngày để dựng map tra cứu 1 lần
-        cho nhiều phiếu (xem misa.api.utils.get_invoice_request_map)."""
+        cho nhiều phiếu (xem misa.api.utils.get_invoice_request_map).
+
+        ⚠️ Payload thật của MISA khi liệt kê KHÔNG lọc gì (chụp từ trang InvoiceRequest lúc
+        không gõ tìm kiếm) hoàn toàn KHÔNG có key "customFilter" — gửi key này dù để mảng
+        rỗng ([]) cũng khiến MISA trả lỗi server chung chung (Code 99). Vì vậy tuyệt đối
+        không thêm lại "customFilter" ở đây, kể cả rỗng."""
         return {
             "sort": "[{\"property\":3972,\"desc\":true,\"data_type\":3,\"operand\":1},"
                     "{\"property\":4008,\"desc\":true,\"data_type\":1,\"operand\":1}]",
@@ -15,7 +20,6 @@ class MisaConfigInvoiceStatus(models.AbstractModel):
                 {"property": 3972, "value": date_from_iso, "operator": 10, "operand": 1, "data_type": 3},
                 {"property": 3972, "value": date_to_iso, "operator": 12, "operand": 1, "data_type": 3},
             ],
-            "customFilter": [],
             "pageIndex": page_index,
             "pageSize": page_size,
             "useSp": False,

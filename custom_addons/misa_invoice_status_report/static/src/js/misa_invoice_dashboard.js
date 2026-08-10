@@ -13,6 +13,13 @@ const DONUT_COLORS = {
     exception: "#4a3aa7",
     not_checked: "#c3c2b7",
 };
+const STATE_LABELS = {
+    not_checked: "Chưa kiểm tra",
+    missing: "Chưa có đề nghị xuất HĐ",
+    requested: "Đã đề nghị, chờ HĐ",
+    invoiced: "Đã xuất hóa đơn",
+    exception: "Ngoại lệ",
+};
 const DONUT_RADIUS = 54;
 const DONUT_CIRCUMFERENCE = 2 * Math.PI * DONUT_RADIUS;
 const GROUP_PAGE_SIZE = 10;
@@ -394,10 +401,39 @@ export class MisaInvoiceDashboard extends Component {
 
     viewGroupDrawerList() {
         const row = this.state.groupDrawerRow;
-        if (this.state.groupDrawerType === "saler") {
+        const type = this.state.groupDrawerType;
+        if (type === "saler") {
             return this.openSalerRow(row.saler_code);
         }
-        return this.openCustomerRow(row.partner_id);
+        if (type === "customer") {
+            return this.openCustomerRow(row.partner_id);
+        }
+        if (type === "state") {
+            this.closeGroupDrawer();
+            if (row.key === "exception") {
+                return this.openExceptionTile();
+            }
+            return this.openTile(row.key);
+        }
+        if (type === "day") {
+            // Chuyển sang tab "Phiếu xuất kho", lọc đúng ngày/tuần đang xem trong drawer.
+            this.closeGroupDrawer();
+            this.state.shipFrom = row.date_from;
+            this.state.shipTo = row.date_to;
+            this.state.activeTab = "pickings";
+            return this._reloadWithLoading();
+        }
+        return undefined;
+    }
+
+    /** Bấm vào donut/legend/tile trạng thái: mở drawer thống kê nhanh cho đúng trạng thái đó
+     * (dữ liệu đã có sẵn trong state.statusSummary, không cần gọi thêm). */
+    openStateDrawer(stateKey) {
+        const summary = this.state.statusSummary && this.state.statusSummary[stateKey];
+        if (!summary) {
+            return;
+        }
+        this.openGroupDrawer("state", { key: stateKey, label: STATE_LABELS[stateKey] || stateKey, ...summary });
     }
 
     openFullList() {
@@ -428,6 +464,19 @@ export class MisaInvoiceDashboard extends Component {
             this.notification.add("Lỗi tải chi tiết phiếu: " + (e.message || e), { type: "danger" });
         }
         this.state.drawerLoading = false;
+    }
+
+    /** Bấm vào link 1 phiếu khác từ bên trong 1 drawer (VD "phiếu gốc"/"phiếu đi kèm") —
+     * mở drawer của phiếu đó luôn thay vì rời trang sang form Odoo. */
+    async openPickingDrawer(pickingId) {
+        try {
+            const row = await this.orm.call("stock.picking", "get_misa_invoice_picking_row", [pickingId], {});
+            if (row) {
+                await this.openDrawer(row);
+            }
+        } catch (e) {
+            this.notification.add("Lỗi mở phiếu: " + (e.message || e), { type: "danger" });
+        }
     }
 
     closeDrawer() {
@@ -803,6 +852,7 @@ export class MisaInvoiceDashboard extends Component {
                 height: Math.max(0, baselineY - y),
                 label: row[labelField],
                 value: row[barField] || 0,
+                row,
             };
         });
 
@@ -812,6 +862,7 @@ export class MisaInvoiceDashboard extends Component {
             y: yFor(row[lineField] || 0),
             label: row[labelField],
             value: row[lineField] || 0,
+            row,
         }));
         const linePath = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
 

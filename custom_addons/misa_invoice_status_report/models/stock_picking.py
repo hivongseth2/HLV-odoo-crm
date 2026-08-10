@@ -1,6 +1,6 @@
 import logging
 from collections import defaultdict
-from datetime import datetime, time as dt_time, timedelta
+from datetime import date, datetime, time as dt_time, timedelta
 
 from markupsafe import Markup
 
@@ -696,10 +696,17 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 iso_year, iso_week, _iso_weekday = day.isocalendar()
                 key = (iso_year, iso_week)
                 label = "Tuần %s/%s" % (iso_week, iso_year)
+                week_start = date.fromisocalendar(iso_year, iso_week, 1)
+                bucket_date_from = fields.Date.to_string(week_start)
+                bucket_date_to = fields.Date.to_string(week_start + timedelta(days=6))
             else:
                 key = day
                 label = fields.Date.to_string(day)
-            bucket = buckets.setdefault(key, {'label': label, 'actual_amount': 0.0, 'invoice_amount': 0.0})
+                bucket_date_from = bucket_date_to = label
+            bucket = buckets.setdefault(key, {
+                'label': label, 'actual_amount': 0.0, 'invoice_amount': 0.0,
+                'date_from': bucket_date_from, 'date_to': bucket_date_to,
+            })
             bucket['actual_amount'] += picking.x_studio_tng_tin_sau_thu or 0.0
             if picking.misa_invoice_state == 'invoiced':
                 bucket['invoice_amount'] += picking.misa_invoice_amount or 0.0
@@ -725,6 +732,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
             'state_label': MISA_INVOICE_STATE_LABELS.get(picking.misa_invoice_state, picking.misa_invoice_state),
             'actual_amount': picking.x_studio_tng_tin_sau_thu or 0.0,
             'invoice_amount': invoice_amount,
+            'invoice_no': picking.misa_invoice_no or False,
             'outstanding_amount': 0.0 if picking.misa_invoice_state == 'invoiced' else (
                 picking.x_studio_tng_tin_sau_thu or 0.0
             ),
@@ -818,9 +826,16 @@ class StockPickingMisaInvoiceStatus(models.Model):
             order_pickings = order.misa_invoice_picking_ids.filtered(lambda p: p.id in picking_id_set)
             states = order_pickings.mapped('misa_invoice_state')
             overall_state = self._misa_invoice_order_state(states)
-            invoiced_amount = sum(
-                order_pickings.filtered(lambda p: p.misa_invoice_state == 'invoiced').mapped('misa_invoice_amount')
-            )
+            # Phiếu "ăn theo" 1 đề nghị gộp chung lưu misa_invoice_amount = 0 (tránh cộng
+            # trùng) — muốn ra đúng tổng tiền HĐ của đơn phải quy về phiếu ĐẠI DIỆN của từng
+            # đề nghị rồi khử trùng theo id đại diện đó (2 phiếu ăn theo cùng 1 đề nghị chỉ
+            # tính 1 lần; 2 đề nghị khác nhau vẫn cộng đủ cả 2).
+            invoiced_pickings = order_pickings.filtered(lambda p: p.misa_invoice_state == 'invoiced')
+            representatives = {
+                (p.misa_invoice_master_picking_id or p).id: (p.misa_invoice_master_picking_id or p)
+                for p in invoiced_pickings
+            }
+            invoiced_amount = sum(rep.misa_invoice_amount or 0.0 for rep in representatives.values())
             rows.append({
                 'id': order.id,
                 'name': order.name,
@@ -838,12 +853,29 @@ class StockPickingMisaInvoiceStatus(models.Model):
                         'state': p.misa_invoice_state,
                         'state_label': MISA_INVOICE_STATE_LABELS.get(p.misa_invoice_state, p.misa_invoice_state),
                         'actual_amount': p.x_studio_tng_tin_sau_thu or 0.0,
-                        'invoice_amount': p.misa_invoice_amount or 0.0,
+                        'invoice_amount': (
+                            p.misa_invoice_master_picking_id.misa_invoice_amount
+                            if p.misa_invoice_master_picking_id else p.misa_invoice_amount
+                        ) or 0.0,
+                        'invoice_no': p.misa_invoice_no or False,
+                        'master_picking_id': p.misa_invoice_master_picking_id.id or False,
+                        'master_picking_name': p.misa_invoice_master_picking_id.name or False,
                     }
                     for p in order_pickings
                 ],
             })
         return {'rows': rows, 'total': total}
+
+    @api.model
+    def get_misa_invoice_picking_row(self, picking_id):
+        """Lấy dữ liệu 1 phiếu theo đúng format `_misa_invoice_picking_to_row` — dùng để mở
+        drawer chi tiết từ 1 id (VD bấm vào link phiếu gốc/phiếu đi kèm trong drawer khác),
+        thay vì phải điều hướng sang form Odoo."""
+        picking = self.sudo().browse(picking_id)
+        if not picking.exists():
+            return False
+        today = fields.Date.context_today(self)
+        return self._misa_invoice_picking_to_row(picking, today)
 
     @api.model
     def get_misa_invoice_picking_lines(self, picking_id):

@@ -197,6 +197,12 @@
         }
 
         circle { transition: stroke-dasharray 0.3s ease; }
+
+        .miv-donut-segment {
+            cursor: pointer;
+
+            &:hover { opacity: 0.82; }
+        }
     }
 
     .miv-donut-center {
@@ -231,8 +237,13 @@
             display: flex;
             align-items: center;
             gap: 8px;
-            padding: 4px 0;
+            padding: 4px 6px;
+            margin: 0 -6px;
+            border-radius: 6px;
             color: var(--miv-ink-2);
+            cursor: pointer;
+
+            &:hover { background: var(--miv-plane); }
 
             b {
                 margin-left: auto;
@@ -422,6 +433,15 @@
         }
 
         .miv-col-num { text-align: right; font-variant-numeric: tabular-nums; }
+
+        .miv-subtable-hint {
+            font-size: 10.5px;
+            color: var(--miv-ink-muted);
+            margin-top: 2px;
+
+            i { margin-right: 3px; }
+            a { color: var(--miv-neutral-text); font-weight: 600; }
+        }
     }
 
     .miv-pagination {
@@ -522,6 +542,7 @@
 
     .miv-chart-bar {
         fill: var(--miv-series-1);
+        cursor: pointer;
         transition: opacity 0.12s ease;
 
         &:hover { opacity: 0.8; }
@@ -540,6 +561,10 @@
         fill: var(--miv-good);
         stroke: var(--miv-surface);
         stroke-width: 2;
+        cursor: pointer;
+        transition: opacity 0.12s ease;
+
+        &:hover { opacity: 0.75; }
     }
 
     .miv-chart-legend {

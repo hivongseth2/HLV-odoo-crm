@@ -112,9 +112,13 @@
                                 <circle cx="60" cy="60" r="54" class="miv-donut-track"/>
                                 <t t-foreach="donutSegments" t-as="seg" t-key="seg.key">
                                     <circle cx="60" cy="60" r="54" fill="none" stroke-width="12" stroke-linecap="butt"
+                                            class="miv-donut-segment"
                                             t-att-stroke="seg.color"
                                             t-att-stroke-dasharray="seg.dasharray"
-                                            t-att-stroke-dashoffset="seg.dashoffset"/>
+                                            t-att-stroke-dashoffset="seg.dashoffset"
+                                            t-on-click="() => this.openStateDrawer(seg.key)">
+                                        <title>Xem thống kê</title>
+                                    </circle>
                                 </t>
                             </svg>
                             <div class="miv-donut-center">
@@ -123,11 +127,11 @@
                             </div>
                         </div>
                         <ul class="miv-legend">
-                            <li><span class="miv-dot" style="background:#0ca30c"/>Đã xuất HĐ <b><t t-esc="state.data.counts.invoiced"/></b></li>
-                            <li><span class="miv-dot" style="background:#fab219"/>Chờ hóa đơn <b><t t-esc="state.data.counts.requested"/></b></li>
-                            <li><span class="miv-dot" style="background:#d03b3b"/>Chưa đề nghị <b><t t-esc="state.data.counts.missing"/></b></li>
-                            <li><span class="miv-dot" style="background:#c3c2b7"/>Chưa kiểm tra <b><t t-esc="state.data.counts.not_checked"/></b></li>
-                            <li><span class="miv-dot" style="background:#4a3aa7"/>Ngoại lệ <b><t t-esc="state.data.exception_count"/></b></li>
+                            <li t-on-click="() => this.openStateDrawer('invoiced')"><span class="miv-dot" style="background:#0ca30c"/>Đã xuất HĐ <b><t t-esc="state.data.counts.invoiced"/></b></li>
+                            <li t-on-click="() => this.openStateDrawer('requested')"><span class="miv-dot" style="background:#fab219"/>Chờ hóa đơn <b><t t-esc="state.data.counts.requested"/></b></li>
+                            <li t-on-click="() => this.openStateDrawer('missing')"><span class="miv-dot" style="background:#d03b3b"/>Chưa đề nghị <b><t t-esc="state.data.counts.missing"/></b></li>
+                            <li t-on-click="() => this.openStateDrawer('not_checked')"><span class="miv-dot" style="background:#c3c2b7"/>Chưa kiểm tra <b><t t-esc="state.data.counts.not_checked"/></b></li>
+                            <li t-on-click="() => this.openStateDrawer('exception')"><span class="miv-dot" style="background:#4a3aa7"/>Ngoại lệ <b><t t-esc="state.data.exception_count"/></b></li>
                         </ul>
                     </div>
 
@@ -191,14 +195,16 @@
                                 <text class="miv-chart-axis-label" t-att-x="salerChart.padding.left - 8" t-att-y="gl.y + 3" text-anchor="end"><t t-esc="gl.label"/></text>
                             </t>
                             <t t-foreach="salerChart.bars" t-as="bar" t-key="bar.key">
-                                <rect class="miv-chart-bar" t-att-x="bar.x" t-att-y="bar.y" t-att-width="bar.width" t-att-height="bar.height" rx="3">
-                                    <title><t t-esc="bar.label"/>: <t t-esc="bar.value"/> phiếu</title>
+                                <rect class="miv-chart-bar" t-att-x="bar.x" t-att-y="bar.y" t-att-width="bar.width" t-att-height="bar.height" rx="3"
+                                      t-on-click="() => this.openGroupDrawer('saler', bar.row)">
+                                    <title><t t-esc="bar.label"/>: <t t-esc="bar.value"/> phiếu (bấm để xem thống kê)</title>
                                 </rect>
                             </t>
                             <path class="miv-chart-line" t-att-d="salerChart.linePath"/>
                             <t t-foreach="salerChart.points" t-as="pt" t-key="pt.key">
-                                <circle class="miv-chart-dot" t-att-cx="pt.x" t-att-cy="pt.y" r="4">
-                                    <title><t t-esc="pt.label"/>: <t t-esc="pt.value"/> phiếu đã xuất HĐ</title>
+                                <circle class="miv-chart-dot" t-att-cx="pt.x" t-att-cy="pt.y" r="4"
+                                        t-on-click="() => this.openGroupDrawer('saler', pt.row)">
+                                    <title><t t-esc="pt.label"/>: <t t-esc="pt.value"/> phiếu đã xuất HĐ (bấm để xem thống kê)</title>
                                 </circle>
                             </t>
                             <t t-foreach="salerChart.xLabels" t-as="xl" t-key="xl.key">
@@ -488,14 +494,16 @@
                                         <text class="miv-chart-axis-label" t-att-x="dailyChart.padding.left - 8" t-att-y="gl.y + 3" text-anchor="end"><t t-esc="gl.label"/></text>
                                     </t>
                                     <t t-foreach="dailyChart.bars" t-as="bar" t-key="bar.key">
-                                        <rect class="miv-chart-bar" t-att-x="bar.x" t-att-y="bar.y" t-att-width="bar.width" t-att-height="bar.height" rx="3">
-                                            <title><t t-esc="bar.label"/>: <t t-esc="formatCurrency(bar.value)"/></title>
+                                        <rect class="miv-chart-bar" t-att-x="bar.x" t-att-y="bar.y" t-att-width="bar.width" t-att-height="bar.height" rx="3"
+                                              t-on-click="() => this.openGroupDrawer('day', bar.row)">
+                                            <title><t t-esc="bar.label"/>: <t t-esc="formatCurrency(bar.value)"/> (bấm để xem thống kê)</title>
                                         </rect>
                                     </t>
                                     <path class="miv-chart-line" t-att-d="dailyChart.linePath"/>
                                     <t t-foreach="dailyChart.points" t-as="pt" t-key="pt.key">
-                                        <circle class="miv-chart-dot" t-att-cx="pt.x" t-att-cy="pt.y" r="4">
-                                            <title><t t-esc="pt.label"/>: <t t-esc="formatCurrency(pt.value)"/></title>
+                                        <circle class="miv-chart-dot" t-att-cx="pt.x" t-att-cy="pt.y" r="4"
+                                                t-on-click="() => this.openGroupDrawer('day', pt.row)">
+                                            <title><t t-esc="pt.label"/>: <t t-esc="formatCurrency(pt.value)"/> (bấm để xem thống kê)</title>
                                         </circle>
                                     </t>
                                     <t t-foreach="dailyChart.xLabels" t-as="xl" t-key="xl.key">
@@ -688,12 +696,16 @@
                                         <t t-esc="formatCurrency(state.drawerPicking.invoice_amount)"/>
                                     </span>
                                 </div>
+                                <div t-if="state.drawerPicking.invoice_no">
+                                    <span class="miv-drawer-meta-label">Số hóa đơn MISA</span>
+                                    <span><b><t t-esc="state.drawerPicking.invoice_no"/></b></span>
+                                </div>
                             </div>
 
                             <div class="miv-drawer-linking" t-if="state.drawerPicking.master_picking_id">
                                 <i class="fa fa-link"/>
                                 Hóa đơn của phiếu này nằm chung đề nghị với phiếu gốc
-                                <a href="#" t-on-click.prevent="() => this.openPicking(state.drawerPicking.master_picking_id)">
+                                <a href="#" t-on-click.prevent="() => this.openPickingDrawer(state.drawerPicking.master_picking_id)">
                                     <t t-esc="state.drawerPicking.master_picking_name"/>
                                 </a>
                             </div>
@@ -701,7 +713,7 @@
                                 <i class="fa fa-link"/>
                                 Đề nghị xuất HĐ của phiếu này gộp chung cho:
                                 <t t-foreach="state.drawerPicking.covered_pickings" t-as="cov" t-key="cov.id">
-                                    <a href="#" t-on-click.prevent="() => this.openPicking(cov.id)"><t t-esc="cov.name"/></a><t t-if="!cov_last">, </t>
+                                    <a href="#" t-on-click.prevent="() => this.openPickingDrawer(cov.id)"><t t-esc="cov.name"/></a><t t-if="!cov_last">, </t>
                                 </t>
                             </div>
 
@@ -747,23 +759,30 @@
                 </div>
             </div>
 
-            <!-- ===== Drawer tổng quan nhân viên sale / khách hàng (trượt từ phải) ===== -->
+            <!-- ===== Drawer tổng quan nhân viên sale / khách hàng / trạng thái / ngày (trượt từ phải) ===== -->
             <div class="miv-drawer-overlay" t-if="state.groupDrawerOpen" t-on-click="onGroupDrawerOverlayClick">
                 <div class="miv-drawer">
                     <t t-if="state.groupDrawerRow">
                         <div class="miv-drawer-header">
                             <div>
                                 <div class="miv-drawer-eyebrow">
-                                    <t t-esc="state.groupDrawerType === 'saler' ? 'Nhân viên sale' : 'Khách hàng'"/>
+                                    <t t-if="state.groupDrawerType === 'saler'">Nhân viên sale</t>
+                                    <t t-elif="state.groupDrawerType === 'customer'">Khách hàng</t>
+                                    <t t-elif="state.groupDrawerType === 'state'">Trạng thái xuất hóa đơn</t>
+                                    <t t-elif="state.groupDrawerType === 'day'">
+                                        <t t-esc="state.dailyTab.weekly ? 'Tuần' : 'Ngày'"/>
+                                    </t>
                                 </div>
                                 <div class="miv-drawer-title">
-                                    <t t-esc="state.groupDrawerType === 'saler' ? state.groupDrawerRow.saler_code : state.groupDrawerRow.partner_name"/>
+                                    <t t-if="state.groupDrawerType === 'saler'"><t t-esc="state.groupDrawerRow.saler_code"/></t>
+                                    <t t-elif="state.groupDrawerType === 'customer'"><t t-esc="state.groupDrawerRow.partner_name"/></t>
+                                    <t t-else=""><t t-esc="state.groupDrawerRow.label"/></t>
                                 </div>
                             </div>
                             <i class="fa fa-times miv-drawer-close" t-on-click="closeGroupDrawer"/>
                         </div>
                         <div class="miv-drawer-body">
-                            <div class="miv-drawer-meta">
+                            <div class="miv-drawer-meta" t-if="state.groupDrawerType === 'saler' or state.groupDrawerType === 'customer'">
                                 <div>
                                     <span class="miv-drawer-meta-label">Tổng phiếu xuất kho</span>
                                     <span><b><t t-esc="state.groupDrawerRow.total"/></b></span>
@@ -791,6 +810,34 @@
                                 <div>
                                     <span class="miv-drawer-meta-label">Tiền chưa xuất HĐ</span>
                                     <span class="miv-cell-critical"><b><t t-esc="formatCurrency(state.groupDrawerRow.outstanding_amount_total)"/></b></span>
+                                </div>
+                            </div>
+                            <div class="miv-drawer-meta" t-if="state.groupDrawerType === 'state'">
+                                <div>
+                                    <span class="miv-drawer-meta-label">Số phiếu</span>
+                                    <span><b><t t-esc="state.groupDrawerRow.count"/></b></span>
+                                </div>
+                                <div>
+                                    <span class="miv-drawer-meta-label">Tỷ lệ trên tổng</span>
+                                    <span><b><t t-esc="state.groupDrawerRow.percentage"/>%</b></span>
+                                </div>
+                                <div>
+                                    <span class="miv-drawer-meta-label">Tổng tiền xuất kho</span>
+                                    <span><b><t t-esc="formatCurrency(state.groupDrawerRow.actual_amount)"/></b></span>
+                                </div>
+                                <div>
+                                    <span class="miv-drawer-meta-label">Tổng tiền đã xuất HĐ</span>
+                                    <span><b><t t-esc="formatCurrency(state.groupDrawerRow.invoice_amount)"/></b></span>
+                                </div>
+                            </div>
+                            <div class="miv-drawer-meta" t-if="state.groupDrawerType === 'day'">
+                                <div>
+                                    <span class="miv-drawer-meta-label">Tổng tiền xuất kho</span>
+                                    <span><b><t t-esc="formatCurrency(state.groupDrawerRow.actual_amount)"/></b></span>
+                                </div>
+                                <div>
+                                    <span class="miv-drawer-meta-label">Tổng tiền đã xuất HĐ</span>
+                                    <span><b><t t-esc="formatCurrency(state.groupDrawerRow.invoice_amount)"/></b></span>
                                 </div>
                             </div>
                         </div>
@@ -844,15 +891,25 @@
                                         <th>Phiếu</th>
                                         <th class="miv-col-num">Tiền thực xuất</th>
                                         <th class="miv-col-num">Tiền đã xuất HĐ</th>
+                                        <th>Số HĐ</th>
                                         <th>Trạng thái</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <tr t-foreach="state.orderDrawerRow.pickings" t-as="p" t-key="p.id"
-                                        t-on-click="() => this.openPicking(p.id)">
-                                        <td><b><t t-esc="p.name"/></b></td>
+                                        t-on-click="() => this.openPickingDrawer(p.id)">
+                                        <td>
+                                            <b><t t-esc="p.name"/></b>
+                                            <div class="miv-subtable-hint" t-if="p.master_picking_id">
+                                                <i class="fa fa-link"/> gộp chung với
+                                                <a href="#" t-on-click.prevent.stop="() => this.openPickingDrawer(p.master_picking_id)">
+                                                    <t t-esc="p.master_picking_name"/>
+                                                </a>
+                                            </div>
+                                        </td>
                                         <td class="miv-col-num"><t t-esc="formatCurrency(p.actual_amount)"/></td>
                                         <td class="miv-col-num"><t t-esc="formatCurrency(p.invoice_amount)"/></td>
+                                        <td><t t-esc="p.invoice_no or '—'"/></td>
                                         <td>
                                             <span t-attf-class="miv-badge miv-badge-state-{{ p.state }}">
                                                 <t t-esc="p.state_label"/>
