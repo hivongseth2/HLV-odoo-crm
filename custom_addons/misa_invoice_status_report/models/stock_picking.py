@@ -117,10 +117,17 @@ class StockPickingMisaInvoiceStatus(models.Model):
         compute='_compute_misa_invoice_root_partner_id', store=True,
     )
 
-    @api.depends('move_ids_without_package.sale_line_id.order_id', 'origin')
+    @api.depends('move_ids_without_package.sale_line_id.order_id', 'origin', 'picking_type_id.code')
     def _compute_misa_invoice_sale_order_ids(self):
         SaleOrder = self.env['sale.order']
         for picking in self:
+            # Chỉ gắn quan hệ với đơn bán ở PHIẾU XUẤT KHO CUỐI (outgoing) — kho dùng giao
+            # hàng nhiều bước (pick/pack/out) thì các bước trung gian (pick, pack) cũng có
+            # move trỏ về cùng sale_line_id, nếu không loại ra sẽ bị lẫn vào "phiếu liên
+            # quan" của đơn bán dù chúng không phải phiếu xuất kho thật sự cần đối soát HĐ.
+            if picking.picking_type_code != 'outgoing':
+                picking.misa_invoice_sale_order_ids = False
+                continue
             orders = picking.move_ids_without_package.mapped('sale_line_id.order_id')
             if not orders and picking.origin:
                 names = [name.strip() for name in picking.origin.split(',') if name.strip()]
@@ -1287,36 +1294,5 @@ class StockPickingMisaInvoiceStatus(models.Model):
             domain.append(('picking_type_id.warehouse_id', '=', warehouse_id))
         if mismatch:
             domain.append(('misa_invoice_amount_mismatch', '=', True))
-        action['domain'] = domain
-        return action
-
-    @api.model
-    def get_misa_invoice_order_report_action(
-        self, search=False, state=False, saler_code=False,
-        date_from=False, date_to=False, invoice_date_from=False, invoice_date_to=False,
-    ):
-        """Mở danh sách ĐƠN BÁN (action_misa_invoice_order_report, view riêng có cột trạng
-        thái/tiền HĐ MISA) — dùng cho nút "Xem tất cả" khi đang ở tab 'Đơn hàng' trên
-        dashboard, lấy ĐƠN HÀNG làm key (khác với get_misa_invoice_report_action ở trên lấy
-        stock.picking làm key, dùng cho các tab còn lại). Lấy action đã lưu qua _for_xml_id
-        (không dựng dict tay) để ORM tự điền đủ "views" — dựng tay dễ thiếu field JS cần."""
-        Picking = self.sudo()
-        if state or saler_code:
-            picking_domain = self._misa_invoice_picking_list_domain(
-                False, state, saler_code, date_from, date_to, invoice_date_from, invoice_date_to
-            )
-        else:
-            picking_domain = self._misa_invoice_dashboard_base_domain(
-                date_from, date_to, invoice_date_from, invoice_date_to
-            )
-        picking_ids = Picking.search(picking_domain).ids
-
-        domain = [('misa_invoice_picking_ids', 'in', picking_ids)] if picking_ids else [('id', '=', 0)]
-        if search:
-            domain.append(('name', 'ilike', search))
-
-        action = self.env['ir.actions.actions']._for_xml_id(
-            'misa_invoice_status_report.action_misa_invoice_order_report'
-        )
         action['domain'] = domain
         return action
