@@ -77,6 +77,7 @@
                                 <th class="miv-col-num">Tiền đã xuất HĐ</th>
                                 <th class="miv-col-num">Tiền chưa xuất HĐ</th>
                                 <th>Trạng thái</th>
+                                <th>Ngoại lệ</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -94,6 +95,10 @@
                                     <span t-attf-class="miv-badge miv-badge-state-{{ row.state }}">
                                         <t t-esc="row.state_label"/>
                                     </span>
+                                </td>
+                                <td>
+                                    <span class="miv-badge miv-badge-critical" t-if="row.has_exception">Có</span>
+                                    <span t-else="">—</span>
                                 </td>
                             </tr>
                         </tbody>
@@ -157,6 +162,7 @@
                                         <th class="miv-col-num">Tiền đã xuất HĐ</th>
                                         <th>Số HĐ</th>
                                         <th>Trạng thái</th>
+                                        <th>Ngoại lệ</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -178,6 +184,10 @@
                                             <span t-attf-class="miv-badge miv-badge-state-{{ p.state }}">
                                                 <t t-esc="p.state_label"/>
                                             </span>
+                                        </td>
+                                        <td>
+                                            <span class="miv-badge miv-badge-critical" t-if="p.exception">Có</span>
+                                            <span t-else="">—</span>
                                         </td>
                                     </tr>
                                 </tbody>

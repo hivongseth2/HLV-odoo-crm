@@ -333,7 +333,7 @@
                                     <td>
                                         <b><t t-esc="row.name"/></b>
                                         <i class="fa fa-link miv-link-icon" t-if="row.master_picking_id or (row.covered_pickings and row.covered_pickings.length)" title="Gộp chung đề nghị xuất HĐ với phiếu khác"/>
-                                        <i class="fa fa-sitemap miv-link-icon" t-if="row.multi_order_group" title="Đề nghị xuất HĐ của nhóm này gộp chung nhiều đơn bán"/>
+                                        <i class="fa fa-sitemap miv-link-icon" t-if="row.multi_order_group" t-attf-title="Đề nghị xuất HĐ của nhóm này gộp chung: {{row.group_order_names}}"/>
                                     </td>
                                     <td><t t-esc="row.partner_name"/></td>
                                     <td><t t-esc="row.sale_order_name"/></td>
@@ -579,6 +579,7 @@
                                         <th class="miv-col-num">Tiền đã xuất HĐ</th>
                                         <th class="miv-col-num">Tiền chưa xuất HĐ</th>
                                         <th>Trạng thái</th>
+                                        <th>Ngoại lệ</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -586,7 +587,7 @@
                                         <td>
                                             <b><t t-esc="row.name"/></b>
                                             <i class="fa fa-link miv-link-icon" t-if="row.master_picking_id or (row.covered_pickings and row.covered_pickings.length)" title="Gộp chung đề nghị xuất HĐ với phiếu khác"/>
-                                            <i class="fa fa-sitemap miv-link-icon" t-if="row.multi_order_group" title="Đề nghị xuất HĐ của nhóm này gộp chung nhiều đơn bán"/>
+                                            <i class="fa fa-sitemap miv-link-icon" t-if="row.multi_order_group" t-attf-title="Đề nghị xuất HĐ của nhóm này gộp chung: {{row.group_order_names}}"/>
                                         </td>
                                         <td><t t-esc="row.partner_name"/></td>
                                         <td><t t-esc="row.sale_order_name"/></td>
@@ -598,6 +599,10 @@
                                             <span t-attf-class="miv-badge miv-badge-state-{{ row.state }}">
                                                 <t t-esc="row.state_label"/>
                                             </span>
+                                        </td>
+                                        <td>
+                                            <span class="miv-badge miv-badge-critical" t-if="row.exception">Có</span>
+                                            <span t-else="">—</span>
                                         </td>
                                     </tr>
                                 </tbody>
@@ -663,6 +668,7 @@
                                         <th class="miv-col-num">Tiền đã xuất HĐ</th>
                                         <th class="miv-col-num">Tiền chưa xuất HĐ</th>
                                         <th>Trạng thái</th>
+                                        <th>Ngoại lệ</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -680,6 +686,10 @@
                                             <span t-attf-class="miv-badge miv-badge-state-{{ row.state }}">
                                                 <t t-esc="row.state_label"/>
                                             </span>
+                                        </td>
+                                        <td>
+                                            <span class="miv-badge miv-badge-critical" t-if="row.has_exception">Có</span>
+                                            <span t-else="">—</span>
                                         </td>
                                     </tr>
                                 </tbody>
@@ -1031,6 +1041,7 @@
                                         <th class="miv-col-num">Tiền đã xuất HĐ</th>
                                         <th>Số HĐ</th>
                                         <th>Trạng thái</th>
+                                        <th>Ngoại lệ</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -1052,6 +1063,10 @@
                                             <span t-attf-class="miv-badge miv-badge-state-{{ p.state }}">
                                                 <t t-esc="p.state_label"/>
                                             </span>
+                                        </td>
+                                        <td>
+                                            <span class="miv-badge miv-badge-critical" t-if="p.exception">Có</span>
+                                            <span t-else="">—</span>
                                         </td>
                                     </tr>
                                 </tbody>

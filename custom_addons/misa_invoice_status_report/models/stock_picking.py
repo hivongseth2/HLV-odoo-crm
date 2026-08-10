@@ -86,6 +86,12 @@ class StockPickingMisaInvoiceStatus(models.Model):
     misa_invoice_multi_order_group = fields.Boolean(
         string='Gộp chung nhiều đơn bán', compute='_compute_misa_invoice_multi_order_group', store=True,
     )
+    # Tên TẤT CẢ đơn bán trong cả nhóm (gốc + các phiếu ăn theo) — không lưu (store=False) vì
+    # chỉ để đọc hiển thị cho biết cụ thể gộp với đơn nào, không cần search/group theo field
+    # này (đã có domain riêng qua misa_invoice_multi_order_group).
+    misa_invoice_group_order_names = fields.Char(
+        string='Đơn bán trong nhóm gộp', compute='_compute_misa_invoice_multi_order_group',
+    )
 
     # 1 phiếu xuất kho có thể gộp nhiều đơn bán (MISA trả "order_code": "DH1, DH2"
     # cho cùng 1 refno), và 1 đơn bán có thể được xuất bởi nhiều phiếu (giao nhiều đợt)
@@ -181,6 +187,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
             group_pickings = group | group.misa_invoice_covered_picking_ids
             orders = group_pickings.mapped('misa_invoice_sale_order_ids')
             picking.misa_invoice_multi_order_group = len(orders) > 1
+            picking.misa_invoice_group_order_names = ', '.join(orders.mapped('name'))
 
     @api.depends(
         'misa_invoice_state', 'misa_invoice_amount', 'x_studio_tng_tin_sau_thu',
@@ -807,6 +814,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
             'exception': picking.misa_invoice_exception,
             'exception_reason': picking.misa_invoice_exception_reason or '',
             'multi_order_group': picking.misa_invoice_multi_order_group,
+            'group_order_names': picking.misa_invoice_group_order_names,
         }
 
     @api.model
@@ -993,6 +1001,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
             # misa_invoice_multi_order_group trên picking, vốn là chiều ngược lại: 1 đề nghị
             # gộp NHIỀU đơn).
             'multi_request': len(representatives) > 1,
+            'has_exception': any(order_pickings.mapped('misa_invoice_exception')),
             'pickings': [
                 {
                     'id': p.id,
@@ -1007,6 +1016,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
                     'invoice_no': p.misa_invoice_no or False,
                     'master_picking_id': p.misa_invoice_master_picking_id.id or False,
                     'master_picking_name': p.misa_invoice_master_picking_id.name or False,
+                    'exception': p.misa_invoice_exception,
                 }
                 for p in order_pickings
             ],

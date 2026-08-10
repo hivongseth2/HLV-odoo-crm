@@ -91,6 +91,9 @@
                 <field name="misa_invoice_amount" optional="show" sum="Tổng tiền HĐ"/>
                 <field name="misa_invoice_amount_mismatch" widget="boolean_toggle" readonly="1" optional="show"/>
                 <field name="misa_invoice_multi_order_group" widget="boolean_toggle" readonly="1" optional="hide"/>
+                <field name="misa_invoice_group_order_names" string="Đơn bán trong nhóm gộp" optional="show"/>
+                <field name="misa_invoice_master_picking_id" string="Phiếu gốc" optional="hide"/>
+                <field name="misa_invoice_covered_picking_ids" widget="many2many_tags" string="Phiếu đi kèm" optional="hide"/>
                 <field name="misa_invoice_last_checked"/>
                 <field name="misa_invoice_exception" widget="boolean_toggle" readonly="1"/>
                 <button name="action_check_misa_invoice_status" type="object"
