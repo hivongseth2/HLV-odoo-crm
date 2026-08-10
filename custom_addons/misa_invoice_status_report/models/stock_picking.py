@@ -545,11 +545,15 @@ class StockPickingMisaInvoiceStatus(models.Model):
         warehouses = self.env['stock.warehouse'].sudo().search([])
         for wh in warehouses:
             wh_domain = base_domain + [('picking_type_id.warehouse_id', '=', wh.id)]
-            wh_total = Picking.search_count(wh_domain)
-            if not wh_total:
+            wh_pickings = Picking.search(wh_domain)
+            if not wh_pickings:
                 continue
             row = self._misa_invoice_state_breakdown(wh_domain)
-            row.update({'warehouse_id': wh.id, 'warehouse_name': wh.name, 'total': wh_total})
+            row.update({
+                'warehouse_id': wh.id, 'warehouse_name': wh.name, 'total': len(wh_pickings),
+                'pending': row['missing'] + row['requested'],
+            })
+            row.update(self._misa_invoice_amount_sums(wh_pickings))
             by_warehouse.append(row)
         by_warehouse.sort(key=lambda row: row['missing'], reverse=True)
 
@@ -1257,7 +1261,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
     @api.model
     def get_misa_invoice_report_action(
         self, state=False, exception=None, saler_code=False, mismatch=False, partner_id=False,
-        date_from=False, date_to=False, invoice_date_from=False, invoice_date_to=False,
+        warehouse_id=False, date_from=False, date_to=False, invoice_date_from=False, invoice_date_to=False,
     ):
         """Trả action list đã có sẵn (action_misa_invoice_status_report), lọc theo tile/dòng được bấm.
         exception=None: không ép domain, để search view tự quyết định (dùng cho "Xem tất cả").
@@ -1279,7 +1283,41 @@ class StockPickingMisaInvoiceStatus(models.Model):
             domain.append(('misa_invoice_saler_code', '=', value))
         if partner_id:
             domain.append(('misa_invoice_root_partner_id', '=', partner_id))
+        if warehouse_id:
+            domain.append(('picking_type_id.warehouse_id', '=', warehouse_id))
         if mismatch:
             domain.append(('misa_invoice_amount_mismatch', '=', True))
         action['domain'] = domain
         return action
+
+    @api.model
+    def get_misa_invoice_order_report_action(
+        self, search=False, state=False, saler_code=False,
+        date_from=False, date_to=False, invoice_date_from=False, invoice_date_to=False,
+    ):
+        """Mở danh sách ĐƠN BÁN (sale.order, list view mặc định của Odoo) — dùng cho nút
+        "Xem tất cả" khi đang ở tab 'Đơn hàng' trên dashboard, lấy ĐƠN HÀNG làm key (khác với
+        get_misa_invoice_report_action ở trên lấy stock.picking làm key, dùng cho các tab
+        còn lại)."""
+        Picking = self.sudo()
+        if state or saler_code:
+            picking_domain = self._misa_invoice_picking_list_domain(
+                False, state, saler_code, date_from, date_to, invoice_date_from, invoice_date_to
+            )
+        else:
+            picking_domain = self._misa_invoice_dashboard_base_domain(
+                date_from, date_to, invoice_date_from, invoice_date_to
+            )
+        picking_ids = Picking.search(picking_domain).ids
+
+        domain = [('misa_invoice_picking_ids', 'in', picking_ids)] if picking_ids else [('id', '=', 0)]
+        if search:
+            domain.append(('name', 'ilike', search))
+
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Đơn hàng liên quan đối soát MISA',
+            'res_model': 'sale.order',
+            'view_mode': 'list,form',
+            'domain': domain,
+        }

@@ -401,6 +401,14 @@ export class MisaInvoiceDashboard extends Component {
         this.action.doAction(action);
     }
 
+    async openWarehouseRow(warehouseId) {
+        const action = await this.orm.call(
+            "stock.picking", "get_misa_invoice_report_action", [],
+            { state: false, warehouse_id: warehouseId, ...this.filterParams }
+        );
+        this.action.doAction(action);
+    }
+
     /** Bấm vào dòng nhân viên sale/khách hàng: mở drawer tổng quan trước (dữ liệu đã có
      * sẵn trong `row`, không cần gọi thêm) — nút "Xem danh sách phiếu" trong drawer mới
      * điều hướng sang danh sách lọc như hành vi cũ. */
@@ -431,6 +439,9 @@ export class MisaInvoiceDashboard extends Component {
         if (type === "customer") {
             return this.openCustomerRow(row.partner_id);
         }
+        if (type === "warehouse") {
+            return this.openWarehouseRow(row.warehouse_id);
+        }
         if (type === "state") {
             this.closeGroupDrawer();
             if (row.key === "exception") {
@@ -459,8 +470,27 @@ export class MisaInvoiceDashboard extends Component {
         this.openGroupDrawer("state", { key: stateKey, label: STATE_LABELS[stateKey] || stateKey, ...summary });
     }
 
+    /** "Xem tất cả" — tab-aware: đang ở tab "Đơn hàng" thì mở danh sách lấy ĐƠN HÀNG làm
+     * key (sale.order), các tab còn lại (kể cả "Phiếu xuất kho") mở danh sách lấy PHIẾU
+     * XUẤT KHO làm key (stock.picking) như trước giờ. */
     openFullList() {
+        if (this.state.activeTab === "orders") {
+            return this.openOrdersFullList();
+        }
         return this.openTile(false);
+    }
+
+    async openOrdersFullList() {
+        const action = await this.orm.call(
+            "stock.picking", "get_misa_invoice_order_report_action", [],
+            {
+                search: this.state.ordersTab.search || false,
+                state: this.state.ordersTab.stateFilter || false,
+                saler_code: this.state.ordersTab.salerFilter || false,
+                ...this.filterParams,
+            }
+        );
+        this.action.doAction(action);
     }
 
     openPicking(pickingId) {
