@@ -563,6 +563,37 @@ export class MisaInvoiceDashboard extends Component {
         this.state.reconciliationOpen = false;
     }
 
+    /** Mở wizard nhập lý do (dialog) — nạp lại drawer + số liệu tổng quan sau khi đóng
+     * wizard (dù xác nhận hay hủy, vì không biết chắc kết quả — nạp lại luôn cho chắc). */
+    async markException(pickingId) {
+        try {
+            const action = await this.orm.call("stock.picking", "action_mark_misa_invoice_exception", [[pickingId]], {});
+            this.action.doAction(action, { onClose: () => this._refreshAfterException(pickingId) });
+        } catch (e) {
+            this.notification.add("Lỗi mở hộp thoại ngoại lệ: " + (e.message || e), { type: "danger" });
+        }
+    }
+
+    async unmarkException(pickingId) {
+        try {
+            await this.orm.call("stock.picking", "action_unmark_misa_invoice_exception", [[pickingId]], {});
+            this.notification.add("Đã bỏ đánh dấu ngoại lệ.", { type: "success" });
+            await this._refreshAfterException(pickingId);
+        } catch (e) {
+            this.notification.add("Lỗi bỏ ngoại lệ: " + (e.message || e), { type: "danger" });
+        }
+    }
+
+    async _refreshAfterException(pickingId) {
+        if (this.state.drawerOpen && this.state.drawerPicking && this.state.drawerPicking.id === pickingId) {
+            const row = await this.orm.call("stock.picking", "get_misa_invoice_picking_row", [pickingId], {});
+            if (row) {
+                this.state.drawerPicking = row;
+            }
+        }
+        await this._reload();
+    }
+
     /** Chỉ đóng drawer khi bấm đúng vùng nền mờ (overlay), không đóng khi bấm bên trong drawer. */
     onDrawerOverlayClick(ev) {
         if (ev.target === ev.currentTarget) {
