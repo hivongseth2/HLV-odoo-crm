@@ -329,11 +329,19 @@ class StockPickingMisaInvoiceStatus(models.Model):
 
     def action_mark_misa_invoice_exception(self):
         """Mở wizard nhập lý do — dùng chung cho nút trên form (1 phiếu), bulk action trên
-        list (nhiều phiếu), và nút trên drawer dashboard (1 phiếu, gọi qua doAction)."""
+        list (nhiều phiếu), và nút trên drawer dashboard (1 phiếu, gọi qua doAction).
+
+        ⚠️ Action dict dựng tay: khi gọi qua nút form (type="object") hoặc ir.actions.server,
+        Odoo tự nới đủ field còn thiếu trước khi đưa cho JS. Nhưng khi JS gọi thẳng qua
+        orm.call() rồi đưa kết quả cho action.doAction(), KHÔNG có bước nới đó — thiếu
+        "views" sẽ làm _preprocessAction() lỗi ngay (đã gặp y hệt ở
+        get_misa_invoice_order_report_action). Nên trả đủ "views" ở đây luôn để an toàn cho
+        mọi đường gọi."""
         return {
             'type': 'ir.actions.act_window',
             'res_model': 'misa.invoice.exception.wizard',
             'view_mode': 'form',
+            'views': [(False, 'form')],
             'target': 'new',
             'context': {'default_picking_ids': self.ids},
         }
@@ -347,6 +355,38 @@ class StockPickingMisaInvoiceStatus(models.Model):
         })
         self.message_post(body=Markup("Đã bỏ đánh dấu ngoại lệ xuất hóa đơn MISA."))
         return True
+
+    @api.model
+    def action_mark_misa_invoice_exception_for_order(self, order_id):
+        """Đánh dấu ngoại lệ cho TẤT CẢ phiếu xuất kho (đã done, chưa ngoại lệ) của 1 đơn
+        bán — dùng từ drawer đơn hàng, gộp chung 1 lý do cho cả nhóm thay vì phải mở từng
+        phiếu riêng lẻ."""
+        order = self.env['sale.order'].sudo().browse(order_id)
+        if not order.exists():
+            return {'type': 'ir.actions.act_window_close'}
+        pickings = order.misa_invoice_picking_ids.filtered(
+            lambda p: p.state == 'done' and not p.misa_invoice_exception
+        )
+        if not pickings:
+            return {'type': 'ir.actions.act_window_close'}
+        return pickings.action_mark_misa_invoice_exception()
+
+    @api.model
+    def action_unmark_misa_invoice_exception_for_order(self, order_id):
+        order = self.env['sale.order'].sudo().browse(order_id)
+        if not order.exists():
+            return 0
+        pickings = order.misa_invoice_picking_ids.filtered(lambda p: p.misa_invoice_exception)
+        if pickings:
+            pickings.action_unmark_misa_invoice_exception()
+        return len(pickings)
+
+    @api.model
+    def get_misa_invoice_can_configure(self):
+        """Cờ quyền cho trang danh sách đơn hàng độc lập (misa_order_list_page.js) — dashboard
+        chính đã có sẵn field này trong get_misa_invoice_dashboard_data, nhưng trang riêng
+        không tải dữ liệu dashboard nên cần 1 endpoint nhẹ riêng."""
+        return self.env.user.has_group(MISA_INVOICE_RECONCILE_GROUP)
 
     def _misa_invoice_scan_domain(self, date_from=False, date_to=False, include_invoiced=False):
         domain = self._misa_invoice_dashboard_base_domain(date_from, date_to) + [
