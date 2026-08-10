@@ -1319,5 +1319,10 @@ class StockPickingMisaInvoiceStatus(models.Model):
             'name': 'Đơn hàng liên quan đối soát MISA',
             'res_model': 'sale.order',
             'view_mode': 'list,form',
+            # Action dict dựng tay (không qua _for_xml_id) nên KHÔNG được ORM tự nới
+            # view_mode thành views — thiếu key này khiến JS action service lỗi ngay khi
+            # doAction() (_preprocessAction đọc action.views.map(...) trên undefined).
+            'views': [(False, 'list'), (False, 'form')],
             'domain': domain,
+            'target': 'current',
         }
