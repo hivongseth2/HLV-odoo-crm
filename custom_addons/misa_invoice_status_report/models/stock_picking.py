@@ -1295,10 +1295,11 @@ class StockPickingMisaInvoiceStatus(models.Model):
         self, search=False, state=False, saler_code=False,
         date_from=False, date_to=False, invoice_date_from=False, invoice_date_to=False,
     ):
-        """Mở danh sách ĐƠN BÁN (sale.order, list view mặc định của Odoo) — dùng cho nút
-        "Xem tất cả" khi đang ở tab 'Đơn hàng' trên dashboard, lấy ĐƠN HÀNG làm key (khác với
-        get_misa_invoice_report_action ở trên lấy stock.picking làm key, dùng cho các tab
-        còn lại)."""
+        """Mở danh sách ĐƠN BÁN (action_misa_invoice_order_report, view riêng có cột trạng
+        thái/tiền HĐ MISA) — dùng cho nút "Xem tất cả" khi đang ở tab 'Đơn hàng' trên
+        dashboard, lấy ĐƠN HÀNG làm key (khác với get_misa_invoice_report_action ở trên lấy
+        stock.picking làm key, dùng cho các tab còn lại). Lấy action đã lưu qua _for_xml_id
+        (không dựng dict tay) để ORM tự điền đủ "views" — dựng tay dễ thiếu field JS cần."""
         Picking = self.sudo()
         if state or saler_code:
             picking_domain = self._misa_invoice_picking_list_domain(
@@ -1314,15 +1315,8 @@ class StockPickingMisaInvoiceStatus(models.Model):
         if search:
             domain.append(('name', 'ilike', search))
 
-        return {
-            'type': 'ir.actions.act_window',
-            'name': 'Đơn hàng liên quan đối soát MISA',
-            'res_model': 'sale.order',
-            'view_mode': 'list,form',
-            # Action dict dựng tay (không qua _for_xml_id) nên KHÔNG được ORM tự nới
-            # view_mode thành views — thiếu key này khiến JS action service lỗi ngay khi
-            # doAction() (_preprocessAction đọc action.views.map(...) trên undefined).
-            'views': [(False, 'list'), (False, 'form')],
-            'domain': domain,
-            'target': 'current',
-        }
+        action = self.env['ir.actions.actions']._for_xml_id(
+            'misa_invoice_status_report.action_misa_invoice_order_report'
+        )
+        action['domain'] = domain
+        return action
