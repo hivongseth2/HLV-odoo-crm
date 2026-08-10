@@ -27,6 +27,23 @@ def _empty_invoice_status():
     }
 
 
+def _misa_json_or_raise(resp, context):
+    """MISA có thể trả HTTP 200 kèm {"Success": false, ...} khi phiên/cookie hết hạn (không
+    chỉ 401) — nếu chỉ kiểm tra status_code thì các API bên dưới sẽ ÂM THẦM đọc ra PageData
+    rỗng và hiểu nhầm thành "chưa có đề nghị xuất HĐ" cho toàn bộ phiếu đang kiểm tra, dù
+    thực tế đề nghị vẫn tồn tại trên MISA. Raise rõ ràng ở đây để lỗi phiên không bị hiểu
+    nhầm thành dữ liệu hợp lệ."""
+    try:
+        data = resp.json()
+    except ValueError:
+        data = None
+    if resp.status_code != 200 or not data or not data.get("Success"):
+        raise Exception(
+            "MISA %s lỗi (status=%s): %s" % (context, resp.status_code, (resp.text or "")[:500])
+        )
+    return data
+
+
 class MisaApiUtilsInvoiceStatus(models.AbstractModel):
     _inherit = 'misa.api.utils'
 
@@ -68,12 +85,9 @@ class MisaApiUtilsInvoiceStatus(models.AbstractModel):
         url_inv = "https://actapp.misa.vn/g2/api/sa/v1/sa_invoice_get/paging_filter_v2"
         payload_inv = self.env['misa.config'].get_invoice_full_search_payload(target_customer)
         resp_inv = self._fetch_with_retry(url_inv, headers, payload_inv)
-        if resp_inv.status_code != 200:
-            raise Exception(
-                "MISA sa_invoice_get API error %s: %s" % (resp_inv.status_code, resp_inv.text)
-            )
+        data_inv = _misa_json_or_raise(resp_inv, "sa_invoice_get")
 
-        page_data_inv = resp_inv.json().get("Data", {}).get("PageData", []) or []
+        page_data_inv = data_inv.get("Data", {}).get("PageData", []) or []
         matched_invs = [
             inv for inv in page_data_inv
             if inv.get("sa_invoice_request_refid") == target_req_id
@@ -98,12 +112,9 @@ class MisaApiUtilsInvoiceStatus(models.AbstractModel):
         url_req = "https://actapp.misa.vn/g2/api/sa/v1/sa_invoice_request/paging_filter_v2"
         payload_req = self.env['misa.config'].get_invoice_request_payload(refno)
         resp_req = self._fetch_with_retry(url_req, headers, payload_req)
-        if resp_req.status_code != 200:
-            raise Exception(
-                "MISA sa_invoice_request API error %s: %s" % (resp_req.status_code, resp_req.text)
-            )
+        data_req = _misa_json_or_raise(resp_req, "sa_invoice_request")
 
-        page_data_req = resp_req.json().get("Data", {}).get("PageData", []) or []
+        page_data_req = data_req.get("Data", {}).get("PageData", []) or []
         if not page_data_req:
             return _empty_invoice_status()
         return self._misa_invoice_result_from_request(page_data_req[0])
@@ -134,13 +145,13 @@ class MisaApiUtilsInvoiceStatus(models.AbstractModel):
                 date_from_iso, date_to_iso, page_index=page, page_size=MISA_INVOICE_REQUEST_MAP_PAGE_SIZE,
             )
             resp = self._fetch_with_retry(url, headers, payload)
-            if resp.status_code != 200:
-                _logger.warning(
-                    "❌ [MISA INVOICE MAP] Lỗi tải trang %s: %s %s", page, resp.status_code, resp.text[:300]
-                )
-                break
+            # Raise thay vì log+break: nếu trang 1 lỗi mà cứ coi map rỗng là "đã tải xong",
+            # toàn bộ phiếu đang kiểm tra theo lô sẽ bị hiểu nhầm thành "chưa có đề nghị" và
+            # GHI ĐÈ lên trạng thái đúng đã có trước đó — thà cả lô lỗi rõ ràng (được
+            # _misa_invoice_check_batch bắt lại và bỏ qua) còn hơn âm thầm sai dữ liệu.
+            data = _misa_json_or_raise(resp, "sa_invoice_request (map trang %s)" % page)
 
-            page_data = resp.json().get("Data", {}).get("PageData", []) or []
+            page_data = data.get("Data", {}).get("PageData", []) or []
             if not page_data:
                 break
 

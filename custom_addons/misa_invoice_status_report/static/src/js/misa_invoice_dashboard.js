@@ -839,17 +839,23 @@ export class MisaInvoiceDashboard extends Component {
         });
     }
 
-    // Khu vực tổng quan: cột = tổng số phiếu theo kho, đường = số phiếu đã xuất HĐ theo kho
-    // (cùng đơn vị "số phiếu" nên chung 1 trục được, bổ sung cho donut vốn chỉ thấy tỷ lệ
-    // tổng thể chứ không thấy kho nào đang tồn đọng nhiều).
-    get warehouseChart() {
-        const rows = (this.state.data && this.state.data.by_warehouse) || [];
+    // Khu vực tổng quan: cột = tổng số phiếu theo nhân viên sale, đường = số phiếu đã xuất HĐ
+    // theo nhân viên sale (cùng đơn vị "số phiếu" nên chung 1 trục được, bổ sung cho donut
+    // vốn chỉ thấy tỷ lệ tổng thể chứ không thấy sale nào đang tồn đọng nhiều). Giới hạn
+    // top 15 theo số lượng phiếu để cột không bị dày đặc khi có nhiều nhân viên sale.
+    get salerChart() {
+        const allRows = (this.state.data && this.state.data.by_saler) || [];
+        const rows = [...allRows].sort((a, b) => b.total - a.total).slice(0, 15);
         return this._buildComboChart(rows, {
             barField: "total",
             lineField: "invoiced",
-            labelField: "warehouse_name",
+            labelField: "saler_code",
             formatAxis: (v) => Math.round(v).toLocaleString("vi-VN"),
         });
+    }
+
+    get salerChartTruncated() {
+        return ((this.state.data && this.state.data.by_saler) || []).length > 15;
     }
 
     formatDateTime(str) {
