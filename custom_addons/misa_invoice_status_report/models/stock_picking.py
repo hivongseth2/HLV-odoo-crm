@@ -881,6 +881,22 @@ class StockPickingMisaInvoiceStatus(models.Model):
             'phieu_xuat_kho_%s.xlsx' % fields.Date.to_string(today), content
         )
 
+    @api.model
+    def get_misa_invoice_saler_options(self):
+        """Danh sách mã sale (toàn bộ phạm vi đối soát, không giới hạn ngày) để đổ vào dropdown
+        lọc — dùng cho trang "Danh sách đơn hàng" độc lập, nơi không có sẵn state.data.by_saler
+        như dashboard Tổng quan."""
+        Picking = self.sudo()
+        domain = self._misa_invoice_dashboard_base_domain()
+        groups = Picking.read_group(domain, ['id'], ['misa_invoice_saler_code'])
+        return [
+            {
+                'code': grp['misa_invoice_saler_code'] or MISA_INVOICE_UNASSIGNED_SALER,
+                'count': grp['misa_invoice_saler_code_count'],
+            }
+            for grp in groups
+        ]
+
     def _misa_invoice_order_state(self, states):
         """Trạng thái tổng hợp của 1 đơn bán từ tập trạng thái các phiếu xuất kho liên quan
         (trong phạm vi đang lọc) — 1 đơn có thể có nhiều phiếu/nhiều đề nghị xuất HĐ."""

@@ -29,6 +29,8 @@
             'misa_invoice_status_report/static/src/scss/misa_invoice_dashboard.scss',
             'misa_invoice_status_report/static/src/xml/misa_invoice_dashboard.xml',
             'misa_invoice_status_report/static/src/js/misa_invoice_dashboard.js',
+            'misa_invoice_status_report/static/src/xml/misa_order_list_page.xml',
+            'misa_invoice_status_report/static/src/js/misa_order_list_page.js',
         ],
     },
     'installable': True,
