@@ -848,6 +848,21 @@
         a { color: var(--miv-neutral-text); font-weight: 600; text-decoration: underline; }
     }
 
+    .miv-reconcile-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin: 12px 0;
+    }
+
+    .miv-reconcile-total {
+        margin-bottom: 14px;
+    }
+
+    .miv-mismatch-row {
+        background: rgba(208, 59, 59, 0.06);
+    }
+
     .miv-link-icon {
         color: var(--miv-neutral-text);
         font-size: 11px;
