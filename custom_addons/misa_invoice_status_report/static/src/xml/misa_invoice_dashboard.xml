@@ -310,7 +310,7 @@
                             Đơn hàng <span class="miv-tab-count"><t t-esc="state.ordersTab.total"/></span>
                         </button>
                         <a href="#" class="miv-link miv-tab-viewall" t-on-click.prevent="openFullList">
-                            Xem tất cả <i class="fa fa-arrow-right"/>
+                            <t t-esc="state.activeTab === 'orders' ? 'Xem tất cả đơn hàng' : 'Xem tất cả phiếu'"/> <i class="fa fa-arrow-right"/>
                         </a>
                     </div>
 
@@ -360,7 +360,7 @@
 
                     <!-- === Tab: Theo kho === -->
                     <div t-if="state.activeTab === 'warehouse'" class="miv-tab-panel">
-                        <table class="miv-table miv-table-compact" t-if="state.data.by_warehouse.length">
+                        <table class="miv-table" t-if="state.data.by_warehouse.length">
                             <thead>
                                 <tr>
                                     <th>Kho</th>
@@ -372,7 +372,8 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr t-foreach="state.data.by_warehouse" t-as="wh" t-key="wh.warehouse_id">
+                                <tr t-foreach="state.data.by_warehouse" t-as="wh" t-key="wh.warehouse_id"
+                                    t-on-click="() => this.openGroupDrawer('warehouse', wh)">
                                     <td><b><t t-esc="wh.warehouse_name"/></b></td>
                                     <td class="miv-col-num miv-cell-critical"><t t-esc="wh.missing"/></td>
                                     <td class="miv-col-num miv-cell-warning"><t t-esc="wh.requested"/></td>
@@ -524,7 +525,8 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr t-foreach="state.dailyTab.rows" t-as="row" t-key="row.label">
+                                    <tr t-foreach="state.dailyTab.rows" t-as="row" t-key="row.label"
+                                        t-on-click="() => this.openGroupDrawer('day', row)">
                                         <td><b><t t-esc="row.label"/></b></td>
                                         <td class="miv-col-num"><t t-esc="formatCurrency(row.actual_amount)"/></td>
                                         <td class="miv-col-num miv-cell-good"><t t-esc="formatCurrency(row.invoice_amount)"/></td>
@@ -874,6 +876,7 @@
                                 <div class="miv-drawer-eyebrow">
                                     <t t-if="state.groupDrawerType === 'saler'">Nhân viên sale</t>
                                     <t t-elif="state.groupDrawerType === 'customer'">Khách hàng</t>
+                                    <t t-elif="state.groupDrawerType === 'warehouse'">Kho</t>
                                     <t t-elif="state.groupDrawerType === 'state'">Trạng thái xuất hóa đơn</t>
                                     <t t-elif="state.groupDrawerType === 'day'">
                                         <t t-esc="state.dailyTab.weekly ? 'Tuần' : 'Ngày'"/>
@@ -882,13 +885,14 @@
                                 <div class="miv-drawer-title">
                                     <t t-if="state.groupDrawerType === 'saler'"><t t-esc="state.groupDrawerRow.saler_code"/></t>
                                     <t t-elif="state.groupDrawerType === 'customer'"><t t-esc="state.groupDrawerRow.partner_name"/></t>
+                                    <t t-elif="state.groupDrawerType === 'warehouse'"><t t-esc="state.groupDrawerRow.warehouse_name"/></t>
                                     <t t-else=""><t t-esc="state.groupDrawerRow.label"/></t>
                                 </div>
                             </div>
                             <i class="fa fa-times miv-drawer-close" t-on-click="closeGroupDrawer"/>
                         </div>
                         <div class="miv-drawer-body">
-                            <div class="miv-drawer-meta" t-if="state.groupDrawerType === 'saler' or state.groupDrawerType === 'customer'">
+                            <div class="miv-drawer-meta" t-if="state.groupDrawerType === 'saler' or state.groupDrawerType === 'customer' or state.groupDrawerType === 'warehouse'">
                                 <div>
                                     <span class="miv-drawer-meta-label">Tổng phiếu xuất kho</span>
                                     <span><b><t t-esc="state.groupDrawerRow.total"/></b></span>
