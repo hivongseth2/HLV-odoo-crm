@@ -13,6 +13,21 @@ const DONUT_COLORS = {
     exception: "#4a3aa7",
     not_checked: "#c3c2b7",
 };
+const STATE_LABELS = {
+    not_checked: "Chưa kiểm tra",
+    missing: "Chưa có đề nghị xuất HĐ",
+    requested: "Đã đề nghị, chờ HĐ",
+    invoiced: "Đã xuất hóa đơn",
+    exception: "Ngoại lệ",
+};
+// Dùng cho dropdown lọc trạng thái ở tab "Phiếu xuất kho"/"Đơn hàng" — không có "exception"
+// vì đó là 1 cờ boolean riêng (misa_invoice_exception), không phải giá trị misa_invoice_state.
+const PICKING_STATE_FILTER_OPTIONS = [
+    { value: "not_checked", label: "Chưa kiểm tra" },
+    { value: "missing", label: "Chưa có đề nghị xuất HĐ" },
+    { value: "requested", label: "Đã đề nghị, chờ HĐ" },
+    { value: "invoiced", label: "Đã xuất hóa đơn" },
+];
 const DONUT_RADIUS = 54;
 const DONUT_CIRCUMFERENCE = 2 * Math.PI * DONUT_RADIUS;
 const GROUP_PAGE_SIZE = 10;
@@ -62,9 +77,15 @@ export class MisaInvoiceDashboard extends Component {
             // Tab "Theo ngày": có thể lọc theo 1 nhân viên sale + gộp theo tuần.
             dailyTab: { rows: [], loading: false, weekly: false, salerCode: "" },
             // Tab "Phiếu xuất kho": phẳng, key là stock.picking (KBC/OUT/...).
-            pickingsTab: { rows: [], total: 0, page: 1, pageSize: 20, loading: false, search: "", searchDraft: "" },
+            pickingsTab: {
+                rows: [], total: 0, page: 1, pageSize: 20, loading: false, search: "", searchDraft: "",
+                stateFilter: "", salerFilter: "",
+            },
             // Tab "Đơn hàng": phẳng, key là sale.order (DH...) — 1 đơn có thể gộp nhiều phiếu.
-            ordersTab: { rows: [], total: 0, page: 1, pageSize: 20, loading: false, search: "", searchDraft: "" },
+            ordersTab: {
+                rows: [], total: 0, page: 1, pageSize: 20, loading: false, search: "", searchDraft: "",
+                stateFilter: "", salerFilter: "",
+            },
             showScanPanel: false,
             scanProgress: { done: 0, total: 0 },
             scanLog: [],
@@ -75,6 +96,11 @@ export class MisaInvoiceDashboard extends Component {
             drawerPicking: null,
             drawerLines: [],
             drawerLoading: false,
+            // Đối chiếu từng dòng hàng với MISA — tải riêng theo yêu cầu (bấm nút), không tự
+            // động gọi khi mở drawer vì tốn thêm 1 lệnh gọi MISA mỗi lần.
+            reconciliation: null,
+            reconciliationLoading: false,
+            reconciliationOpen: false,
             groupDrawerOpen: false,
             groupDrawerType: null, // "saler" | "customer"
             groupDrawerRow: null,
@@ -85,6 +111,10 @@ export class MisaInvoiceDashboard extends Component {
         onWillStart(async () => {
             await this._reloadWithLoading();
         });
+    }
+
+    get pickingStateFilterOptions() {
+        return PICKING_STATE_FILTER_OPTIONS;
     }
 
     /** Danh sách tháng có thể chọn: từ mốc đối soát tới tháng hiện tại, nhãn tiếng Việt dạng số. */
@@ -371,6 +401,14 @@ export class MisaInvoiceDashboard extends Component {
         this.action.doAction(action);
     }
 
+    async openWarehouseRow(warehouseId) {
+        const action = await this.orm.call(
+            "stock.picking", "get_misa_invoice_report_action", [],
+            { state: false, warehouse_id: warehouseId, ...this.filterParams }
+        );
+        this.action.doAction(action);
+    }
+
     /** Bấm vào dòng nhân viên sale/khách hàng: mở drawer tổng quan trước (dữ liệu đã có
      * sẵn trong `row`, không cần gọi thêm) — nút "Xem danh sách phiếu" trong drawer mới
      * điều hướng sang danh sách lọc như hành vi cũ. */
@@ -394,13 +432,51 @@ export class MisaInvoiceDashboard extends Component {
 
     viewGroupDrawerList() {
         const row = this.state.groupDrawerRow;
-        if (this.state.groupDrawerType === "saler") {
+        const type = this.state.groupDrawerType;
+        if (type === "saler") {
             return this.openSalerRow(row.saler_code);
         }
-        return this.openCustomerRow(row.partner_id);
+        if (type === "customer") {
+            return this.openCustomerRow(row.partner_id);
+        }
+        if (type === "warehouse") {
+            return this.openWarehouseRow(row.warehouse_id);
+        }
+        if (type === "state") {
+            this.closeGroupDrawer();
+            if (row.key === "exception") {
+                return this.openExceptionTile();
+            }
+            return this.openTile(row.key);
+        }
+        if (type === "day") {
+            // Chuyển sang tab "Phiếu xuất kho", lọc đúng ngày/tuần đang xem trong drawer.
+            this.closeGroupDrawer();
+            this.state.shipFrom = row.date_from;
+            this.state.shipTo = row.date_to;
+            this.state.activeTab = "pickings";
+            return this._reloadWithLoading();
+        }
+        return undefined;
     }
 
+    /** Bấm vào donut/legend/tile trạng thái: mở drawer thống kê nhanh cho đúng trạng thái đó
+     * (dữ liệu đã có sẵn trong state.statusSummary, không cần gọi thêm). */
+    openStateDrawer(stateKey) {
+        const summary = this.state.statusSummary && this.state.statusSummary[stateKey];
+        if (!summary) {
+            return;
+        }
+        this.openGroupDrawer("state", { key: stateKey, label: STATE_LABELS[stateKey] || stateKey, ...summary });
+    }
+
+    /** "Xem tất cả" — tab-aware: đang ở tab "Đơn hàng" thì mở danh sách lấy ĐƠN HÀNG làm
+     * key (sale.order), các tab còn lại (kể cả "Phiếu xuất kho") mở danh sách lấy PHIẾU
+     * XUẤT KHO làm key (stock.picking) như trước giờ. */
     openFullList() {
+        if (this.state.activeTab === "orders") {
+            return this.action.doAction("misa_invoice_status_report.action_misa_invoice_order_list_page");
+        }
         return this.openTile(false);
     }
 
@@ -420,6 +496,8 @@ export class MisaInvoiceDashboard extends Component {
         this.state.drawerPicking = row;
         this.state.drawerLines = [];
         this.state.drawerLoading = true;
+        this.state.reconciliation = null;
+        this.state.reconciliationOpen = false;
         try {
             this.state.drawerLines = await this.orm.call(
                 "stock.picking", "get_misa_invoice_picking_lines", [row.id], {}
@@ -430,10 +508,59 @@ export class MisaInvoiceDashboard extends Component {
         this.state.drawerLoading = false;
     }
 
+    /** Bấm nút "Đối chiếu từng dòng với MISA" — tải riêng (không tự động khi mở drawer) vì
+     * tốn thêm 1 lệnh gọi MISA; tự gộp cả nhóm phiếu nếu phiếu này nằm trong 1 đề nghị gộp
+     * chung nhiều phiếu (xử lý ở backend). */
+    async loadReconciliation() {
+        if (this.state.reconciliationOpen) {
+            this.state.reconciliationOpen = false;
+            return;
+        }
+        this.state.reconciliationOpen = true;
+        if (this.state.reconciliation) {
+            return;
+        }
+        const pickingId = this.state.drawerPicking && this.state.drawerPicking.id;
+        if (!pickingId) {
+            return;
+        }
+        this.state.reconciliationLoading = true;
+        try {
+            const result = await this.orm.call(
+                "stock.picking", "get_misa_invoice_line_reconciliation", [pickingId], {}
+            );
+            if (result && result.error) {
+                this.notification.add("Lỗi đối chiếu với MISA: " + result.error, { type: "danger" });
+                this.state.reconciliationOpen = false;
+            } else {
+                this.state.reconciliation = result;
+            }
+        } catch (e) {
+            this.notification.add("Lỗi đối chiếu với MISA: " + (e.message || e), { type: "danger" });
+            this.state.reconciliationOpen = false;
+        }
+        this.state.reconciliationLoading = false;
+    }
+
+    /** Bấm vào link 1 phiếu khác từ bên trong 1 drawer (VD "phiếu gốc"/"phiếu đi kèm") —
+     * mở drawer của phiếu đó luôn thay vì rời trang sang form Odoo. */
+    async openPickingDrawer(pickingId) {
+        try {
+            const row = await this.orm.call("stock.picking", "get_misa_invoice_picking_row", [pickingId], {});
+            if (row) {
+                await this.openDrawer(row);
+            }
+        } catch (e) {
+            this.notification.add("Lỗi mở phiếu: " + (e.message || e), { type: "danger" });
+        }
+    }
+
     closeDrawer() {
         this.state.drawerOpen = false;
         this.state.drawerPicking = null;
         this.state.drawerLines = [];
+        this.state.reconciliation = null;
+        this.state.reconciliationOpen = false;
     }
 
     /** Chỉ đóng drawer khi bấm đúng vùng nền mờ (overlay), không đóng khi bấm bên trong drawer. */
@@ -485,6 +612,8 @@ export class MisaInvoiceDashboard extends Component {
                     limit: this.state.pickingsTab.pageSize,
                     offset: (page - 1) * this.state.pickingsTab.pageSize,
                     search: this.state.pickingsTab.search || false,
+                    state: this.state.pickingsTab.stateFilter || false,
+                    saler_code: this.state.pickingsTab.salerFilter || false,
                     ...this.filterParams,
                 }
             );
@@ -534,6 +663,33 @@ export class MisaInvoiceDashboard extends Component {
         this.loadPickingsTab(1);
     }
 
+    onPickingsStateFilterChange(ev) {
+        this.state.pickingsTab.stateFilter = ev.target.value || "";
+        this.loadPickingsTab(1);
+    }
+
+    onPickingsSalerFilterChange(ev) {
+        this.state.pickingsTab.salerFilter = ev.target.value || "";
+        this.loadPickingsTab(1);
+    }
+
+    async exportPickingsExcel() {
+        try {
+            const attachmentId = await this.orm.call(
+                "stock.picking", "export_misa_invoice_picking_list_excel", [],
+                {
+                    search: this.state.pickingsTab.search || false,
+                    state: this.state.pickingsTab.stateFilter || false,
+                    saler_code: this.state.pickingsTab.salerFilter || false,
+                    ...this.filterParams,
+                }
+            );
+            window.location.href = "/web/content/" + attachmentId + "?download=true";
+        } catch (e) {
+            this.notification.add("Lỗi xuất Excel: " + (e.message || e), { type: "danger" });
+        }
+    }
+
     // ===== Tab "Đơn hàng" (phẳng, key = sale.order DH..., phân trang server-side, có search) =====
     async loadOrdersTab(page) {
         this.state.ordersTab.loading = true;
@@ -544,6 +700,8 @@ export class MisaInvoiceDashboard extends Component {
                     limit: this.state.ordersTab.pageSize,
                     offset: (page - 1) * this.state.ordersTab.pageSize,
                     search: this.state.ordersTab.search || false,
+                    state: this.state.ordersTab.stateFilter || false,
+                    saler_code: this.state.ordersTab.salerFilter || false,
                     ...this.filterParams,
                 }
             );
@@ -591,6 +749,33 @@ export class MisaInvoiceDashboard extends Component {
         this.state.ordersTab.search = "";
         this.state.ordersTab.searchDraft = "";
         this.loadOrdersTab(1);
+    }
+
+    onOrdersStateFilterChange(ev) {
+        this.state.ordersTab.stateFilter = ev.target.value || "";
+        this.loadOrdersTab(1);
+    }
+
+    onOrdersSalerFilterChange(ev) {
+        this.state.ordersTab.salerFilter = ev.target.value || "";
+        this.loadOrdersTab(1);
+    }
+
+    async exportOrdersExcel() {
+        try {
+            const attachmentId = await this.orm.call(
+                "stock.picking", "export_misa_invoice_order_list_excel", [],
+                {
+                    search: this.state.ordersTab.search || false,
+                    state: this.state.ordersTab.stateFilter || false,
+                    saler_code: this.state.ordersTab.salerFilter || false,
+                    ...this.filterParams,
+                }
+            );
+            window.location.href = "/web/content/" + attachmentId + "?download=true";
+        } catch (e) {
+            this.notification.add("Lỗi xuất Excel: " + (e.message || e), { type: "danger" });
+        }
     }
 
     /** Bấm vào dòng đơn hàng: mở drawer chi tiết (dữ liệu đã có sẵn `pickings` con từ
@@ -803,6 +988,7 @@ export class MisaInvoiceDashboard extends Component {
                 height: Math.max(0, baselineY - y),
                 label: row[labelField],
                 value: row[barField] || 0,
+                row,
             };
         });
 
@@ -812,6 +998,7 @@ export class MisaInvoiceDashboard extends Component {
             y: yFor(row[lineField] || 0),
             label: row[labelField],
             value: row[lineField] || 0,
+            row,
         }));
         const linePath = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
 

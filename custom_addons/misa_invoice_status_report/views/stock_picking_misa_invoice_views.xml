@@ -87,6 +87,7 @@
                        decoration-muted="misa_invoice_state == 'not_checked'"/>
                 <field name="misa_invoice_no" optional="show"/>
                 <field name="misa_invoice_date" optional="show"/>
+                <field name="x_studio_tng_tin_sau_thu" string="Tiền Odoo xuất kho" optional="show" sum="Tổng tiền Odoo"/>
                 <field name="misa_invoice_amount" optional="show" sum="Tổng tiền HĐ"/>
                 <field name="misa_invoice_amount_mismatch" widget="boolean_toggle" readonly="1" optional="show"/>
                 <field name="misa_invoice_last_checked"/>

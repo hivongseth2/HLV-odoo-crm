@@ -180,3 +180,28 @@ class MisaApiUtilsInvoiceStatus(models.AbstractModel):
         if not req_info:
             return _empty_invoice_status()
         return self._misa_invoice_result_from_request(req_info)
+
+    def get_invoice_request_lines(self, request_refid):
+        """Chi tiết TỪNG DÒNG HÀNG (mã hàng, số lượng, đơn giá, thành tiền chưa VAT, mã đơn
+        bán gốc) của 1 "Đề nghị xuất hóa đơn" theo refid — dùng để đối chiếu từng dòng sản
+        phẩm giữa Odoo và MISA (xem stock_picking.get_misa_invoice_line_reconciliation).
+        Phân trang y hệt get_invoice_request_map() phòng khi 1 đề nghị có rất nhiều dòng."""
+        token = self._get_misa_token_cached()
+        headers = self.env['misa.config'].get_default_headers(token)
+        url = "https://actapp.misa.vn/g2/api/sa/v1/sa_invoice_request/get_paging_detail"
+
+        lines = []
+        page = 1
+        while page <= MISA_INVOICE_REQUEST_MAP_MAX_PAGES:
+            payload = self.env['misa.config'].get_invoice_request_detail_payload(
+                request_refid, page_index=page, page_size=MISA_INVOICE_REQUEST_MAP_PAGE_SIZE,
+            )
+            resp = self._fetch_with_retry(url, headers, payload)
+            data = _misa_json_or_raise(resp, "sa_invoice_request/get_paging_detail (trang %s)" % page)
+
+            page_data = data.get("Data", {}).get("PageData", []) or []
+            lines.extend(page_data)
+            if len(page_data) < MISA_INVOICE_REQUEST_MAP_PAGE_SIZE:
+                break
+            page += 1
+        return lines
