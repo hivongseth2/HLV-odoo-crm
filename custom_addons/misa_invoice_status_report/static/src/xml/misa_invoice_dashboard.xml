@@ -1051,6 +1051,9 @@
                             <div class="miv-empty" t-else="">Không có phiếu xuất kho nào trong phạm vi đang lọc.</div>
                         </div>
                         <div class="miv-drawer-footer">
+                            <button class="btn btn-secondary btn-sm" t-on-click="checkOrderNow" t-att-disabled="state.orderCheckLoading">
+                                <i class="fa fa-refresh" t-att-class="{'fa-spin': state.orderCheckLoading}"/> Kiểm tra MISA ngay
+                            </button>
                             <button class="btn btn-primary btn-sm" t-on-click="openOrderForm">
                                 Mở đơn hàng <i class="fa fa-arrow-right"/>
                             </button>
