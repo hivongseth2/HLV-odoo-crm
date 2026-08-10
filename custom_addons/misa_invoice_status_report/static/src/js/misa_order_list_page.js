@@ -28,6 +28,10 @@ export class MisaOrderListPage extends Component {
         this.state = useState({
             isLoading: true,
             salerOptions: [],
+            // Để trống = không giới hạn theo ngày (đúng nghĩa "xem tất cả" mặc định) — có thể
+            // tự nhập để thu hẹp lại khi cần.
+            shipFrom: "",
+            shipTo: "",
             ordersTab: {
                 rows: [], total: 0, page: 1, pageSize: 50, loading: false,
                 search: "", searchDraft: "", stateFilter: "", salerFilter: "",
@@ -65,6 +69,8 @@ export class MisaOrderListPage extends Component {
                     search: this.state.ordersTab.search || false,
                     state: this.state.ordersTab.stateFilter || false,
                     saler_code: this.state.ordersTab.salerFilter || false,
+                    date_from: this.state.shipFrom || false,
+                    date_to: this.state.shipTo || false,
                 }
             );
             this.state.ordersTab.rows = resp.rows;
@@ -123,6 +129,22 @@ export class MisaOrderListPage extends Component {
         this.loadOrdersTab(1);
     }
 
+    onShipFromChange(ev) {
+        this.state.shipFrom = ev.target.value || "";
+        this.loadOrdersTab(1);
+    }
+
+    onShipToChange(ev) {
+        this.state.shipTo = ev.target.value || "";
+        this.loadOrdersTab(1);
+    }
+
+    clearShipDateFilter() {
+        this.state.shipFrom = "";
+        this.state.shipTo = "";
+        this.loadOrdersTab(1);
+    }
+
     async exportOrdersExcel() {
         try {
             const attachmentId = await this.orm.call(
@@ -131,6 +153,8 @@ export class MisaOrderListPage extends Component {
                     search: this.state.ordersTab.search || false,
                     state: this.state.ordersTab.stateFilter || false,
                     saler_code: this.state.ordersTab.salerFilter || false,
+                    date_from: this.state.shipFrom || false,
+                    date_to: this.state.shipTo || false,
                 }
             );
             window.location.href = "/web/content/" + attachmentId + "?download=true";

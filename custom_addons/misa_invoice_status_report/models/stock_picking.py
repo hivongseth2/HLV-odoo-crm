@@ -289,13 +289,14 @@ class StockPickingMisaInvoiceStatus(models.Model):
         return results
 
     def action_mark_misa_invoice_exception(self):
-        self.ensure_one()
+        """Mở wizard nhập lý do — dùng chung cho nút trên form (1 phiếu), bulk action trên
+        list (nhiều phiếu), và nút trên drawer dashboard (1 phiếu, gọi qua doAction)."""
         return {
             'type': 'ir.actions.act_window',
             'res_model': 'misa.invoice.exception.wizard',
             'view_mode': 'form',
             'target': 'new',
-            'context': {'default_picking_id': self.id},
+            'context': {'default_picking_ids': self.ids},
         }
 
     def action_unmark_misa_invoice_exception(self):
@@ -757,6 +758,8 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 {'id': covered.id, 'name': covered.name}
                 for covered in picking.misa_invoice_covered_picking_ids
             ],
+            'exception': picking.misa_invoice_exception,
+            'exception_reason': picking.misa_invoice_exception_reason or '',
         }
 
     @api.model

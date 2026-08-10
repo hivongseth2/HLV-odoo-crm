@@ -31,7 +31,7 @@ class AmisCallbackConfig(models.Model):
         string='Mã ứng dụng (App ID)',
         help='MISA app_id dùng làm key để xác thực signature HMAC SHA256.',
         required=True,
-        default='cfd435c9-b5c9-484f-b86d-ddbba36dc0f4',
+        default='',
     )
     callback_route = fields.Char(
         string='Đường dẫn callback',

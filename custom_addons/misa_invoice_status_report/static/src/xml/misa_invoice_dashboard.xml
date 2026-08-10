@@ -732,6 +732,26 @@
                                     <span class="miv-drawer-meta-label">Số hóa đơn MISA</span>
                                     <span><b><t t-esc="state.drawerPicking.invoice_no"/></b></span>
                                 </div>
+                                <div t-if="state.drawerPicking.exception">
+                                    <span class="miv-drawer-meta-label">Ngoại lệ</span>
+                                    <span class="miv-badge miv-badge-critical">Đã đánh dấu</span>
+                                </div>
+                            </div>
+
+                            <div class="miv-drawer-linking" t-if="state.drawerPicking.exception">
+                                <i class="fa fa-ban"/>
+                                Lý do ngoại lệ: <t t-esc="state.drawerPicking.exception_reason or '—'"/>
+                            </div>
+
+                            <div class="miv-drawer-actions" t-if="state.data.can_configure and state.drawerPicking.state != 'invoiced'">
+                                <button class="btn btn-sm btn-secondary" t-if="!state.drawerPicking.exception"
+                                        t-on-click="() => this.markException(state.drawerPicking.id)">
+                                    <i class="fa fa-ban"/> Đánh dấu ngoại lệ
+                                </button>
+                                <button class="btn btn-sm btn-secondary" t-if="state.drawerPicking.exception"
+                                        t-on-click="() => this.unmarkException(state.drawerPicking.id)">
+                                    <i class="fa fa-undo"/> Bỏ ngoại lệ
+                                </button>
                             </div>
 
                             <div class="miv-drawer-linking" t-if="state.drawerPicking.master_picking_id">
