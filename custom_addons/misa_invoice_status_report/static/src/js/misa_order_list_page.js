@@ -38,6 +38,7 @@ export class MisaOrderListPage extends Component {
             },
             orderDrawerOpen: false,
             orderDrawerRow: null,
+            orderCheckLoading: false,
         });
 
         onWillStart(async () => {
@@ -194,6 +195,32 @@ export class MisaOrderListPage extends Component {
             views: [[false, "form"]],
             target: "current",
         });
+    }
+
+    /** Bấm "Kiểm tra MISA ngay" trong drawer đơn hàng — lấy TẤT CẢ phiếu xuất kho (đã done)
+     * của đúng đơn hàng đang xem rồi kiểm tra luôn, không cần tìm/chọn từng phiếu riêng lẻ. */
+    async checkOrderNow() {
+        const row = this.state.orderDrawerRow;
+        if (!row || this.state.orderCheckLoading) {
+            return;
+        }
+        this.state.orderCheckLoading = true;
+        try {
+            const resp = await this.orm.call("stock.picking", "action_check_misa_invoice_order", [row.id], {});
+            if (!resp.count) {
+                this.notification.add("Đơn hàng này không có phiếu xuất kho nào đã hoàn tất để kiểm tra.", { type: "warning" });
+            } else {
+                this.notification.add(`Đã kiểm tra xong ${resp.count} phiếu xuất kho của đơn hàng.`, { type: "success" });
+            }
+            await this.loadOrdersTab(this.state.ordersTab.page);
+            const updated = this.state.ordersTab.rows.find((r) => r.id === row.id);
+            if (updated) {
+                this.state.orderDrawerRow = updated;
+            }
+        } catch (e) {
+            this.notification.add("Lỗi kiểm tra MISA: " + (e.message || e), { type: "danger" });
+        }
+        this.state.orderCheckLoading = false;
     }
 
     /** Bấm vào link phiếu gốc/phiếu đi kèm bên trong drawer đơn hàng — mở form phiếu đó
