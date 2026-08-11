@@ -854,6 +854,10 @@
                                     <span><b><t t-esc="state.customsTab.preview.invoice_no"/></b></span>
                                 </div>
                                 <div>
+                                    <span class="miv-drawer-meta-label">Số chứng từ</span>
+                                    <span><t t-esc="state.customsTab.preview.refno_finance or '—'"/></span>
+                                </div>
+                                <div>
                                     <span class="miv-drawer-meta-label">Ngày hóa đơn</span>
                                     <span><t t-esc="state.customsTab.preview.invoice_date and state.customsTab.preview.invoice_date.slice(0, 10)"/></span>
                                 </div>
@@ -912,6 +916,10 @@
                             <button class="btn btn-sm miv-cutoff-save" t-if="state.customsTab.search" t-on-click="clearCustomsSearch">
                                 <i class="fa fa-times"/> Bỏ tìm
                             </button>
+                            <label class="miv-daily-week-toggle" title="Dòng chưa tìm được phiếu xuất kho khớp (đơn hàng + mã hàng + số lượng)">
+                                <input type="checkbox" class="miv-cutoff-input" t-att-checked="state.customsTab.pendingOnly" t-on-change="onCustomsPendingOnlyToggle"/>
+                                Chỉ hiện đang chờ xuất kho (<t t-esc="state.customsTab.pendingCount"/>)
+                            </label>
                         </div>
                         <div class="miv-loading" t-if="state.customsTab.loading">
                             <i class="fa fa-spinner fa-spin"/> Đang tải...
@@ -928,6 +936,8 @@
                                         <th>Tên hàng</th>
                                         <th class="miv-col-num">Số lượng</th>
                                         <th class="miv-col-num">Thành tiền</th>
+                                        <th>Trạng thái</th>
+                                        <th>Phiếu xuất kho</th>
                                         <th>Ghi nhận bởi</th>
                                         <th/>
                                     </tr>
@@ -945,6 +955,12 @@
                                         <td><t t-esc="row.description"/></td>
                                         <td class="miv-col-num"><t t-esc="row.quantity"/></td>
                                         <td class="miv-col-num"><t t-esc="formatCurrency(row.amount)"/></td>
+                                        <td>
+                                            <span t-attf-class="miv-badge {{ row.match_state === 'matched' ? 'miv-badge-state-invoiced' : 'miv-badge-state-requested' }}">
+                                                <t t-esc="row.match_state_label"/>
+                                            </span>
+                                        </td>
+                                        <td><t t-esc="row.picking_name or '—'"/></td>
                                         <td><t t-esc="row.fetched_by"/></td>
                                         <td>
                                             <button class="btn btn-link miv-link" t-on-click="() => this.deleteCustomsInvoice(row.invoice_no)" title="Xóa cả hóa đơn này">

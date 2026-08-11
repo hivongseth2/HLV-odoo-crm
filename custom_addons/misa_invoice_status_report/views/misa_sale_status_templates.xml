@@ -440,6 +440,7 @@
                             <div id="msu-customs-preview" style="display:none;margin-top:14px">
                                 <div class="msu-drawer-meta" style="margin-bottom:14px">
                                     <div class="msu-drawer-meta-item"><span class="msu-meta-label">Số hóa đơn</span><span class="msu-meta-value" id="msu-customs-preview-no"/></div>
+                                    <div class="msu-drawer-meta-item"><span class="msu-meta-label">Số chứng từ</span><span class="msu-meta-value" id="msu-customs-preview-refno"/></div>
                                     <div class="msu-drawer-meta-item"><span class="msu-meta-label">Ngày hóa đơn</span><span class="msu-meta-value" id="msu-customs-preview-date"/></div>
                                     <div class="msu-drawer-meta-item"><span class="msu-meta-label">Khách hàng</span><span class="msu-meta-value" id="msu-customs-preview-partner"/></div>
                                     <div class="msu-drawer-meta-item"><span class="msu-meta-label">Tổng tiền hóa đơn</span><span class="msu-meta-value" id="msu-customs-preview-total"/></div>
@@ -470,6 +471,9 @@
                         <div class="msu-filters">
                             <input type="text" id="msu-customs-search" class="msu-input msu-search-input" placeholder="Tìm theo số hóa đơn, mã đơn hàng hoặc mã hàng..."/>
                             <button id="msu-customs-search-btn" class="msu-btn msu-btn-primary msu-btn-sm">Tìm</button>
+                            <label class="msu-check-label">
+                                <input type="checkbox" id="msu-customs-pending-only"/> Chỉ hiện đang chờ xuất kho (<span id="msu-customs-pending-count">0</span>)
+                            </label>
                             <button id="msu-customs-refresh-btn" class="msu-btn msu-btn-outline-muted msu-btn-sm"><i class="fa fa-refresh"/> Làm mới</button>
                         </div>
                         <div class="msu-table-card">
@@ -485,6 +489,8 @@
                                             <th>Tên hàng</th>
                                             <th class="msu-col-num">Số lượng</th>
                                             <th class="msu-col-num">Thành tiền</th>
+                                            <th>Trạng thái</th>
+                                            <th>Phiếu xuất kho</th>
                                             <th>Ghi nhận bởi</th>
                                             <th/>
                                         </tr>
@@ -557,7 +563,7 @@
                         page: 1, total: 0, rows: [], selected: {},
                         activeTab: 'pickings',
                         shopee: {search: '', stateFilter: '', page: 1, total: 0, rows: [], loaded: false},
-                        customs: {search: '', page: 1, total: 0, rows: [], loaded: false, preview: null},
+                        customs: {search: '', page: 1, total: 0, rows: [], loaded: false, preview: null, pendingOnly: false, pendingCount: 0},
                     };
 
                     function esc(s) {
@@ -751,6 +757,7 @@
                         if (!preview) { section.style.display = 'none'; return; }
                         section.style.display = '';
                         document.getElementById('msu-customs-preview-no').textContent = preview.invoice_no || '—';
+                        document.getElementById('msu-customs-preview-refno').textContent = preview.refno_finance || '—';
                         document.getElementById('msu-customs-preview-date').textContent = preview.invoice_date ? preview.invoice_date.slice(0, 10) : '—';
                         document.getElementById('msu-customs-preview-partner').textContent = preview.partner_name || '—';
                         document.getElementById('msu-customs-preview-total').textContent = fmtMoney(preview.total_amount);
@@ -805,7 +812,8 @@
                         var btn = this;
                         setBtnLoading(btn, true);
                         rpc('/misa_sale_status/api/customs/save', { inv_no: invNo }).then(function(res) {
-                            toast('Đã ghi nhận ' + res.count + ' dòng cho hóa đơn ' + res.invoice_no + '.', 'success');
+                            var matchNote = res.matched_count ? (' (' + res.matched_count + ' dòng đã khớp phiếu xuất kho ngay)') : ' (chưa có phiếu xuất kho nào khớp, sẽ tự thử lại sau)';
+                            toast('Đã ghi nhận ' + res.count + ' dòng cho hóa đơn ' + res.invoice_no + '.' + matchNote, 'success');
                             state.customs.preview = null;
                             document.getElementById('msu-customs-inv-input').value = '';
                             renderCustomsPreview();
@@ -833,6 +841,8 @@
                                 '<td>' + esc(row.description) + '</td>' +
                                 '<td class="msu-col-num">' + row.quantity + '</td>' +
                                 '<td class="msu-col-num">' + fmtMoney(row.amount) + '</td>' +
+                                '<td><span class="msu-badge-state ' + (row.match_state === 'matched' ? 'msu-badge-state-invoiced' : 'msu-badge-state-requested') + '">' + esc(row.match_state_label) + '</span></td>' +
+                                '<td>' + (row.picking_name ? esc(row.picking_name) : '<span class="msu-muted">—</span>') + '</td>' +
                                 '<td>' + esc(row.fetched_by) + '</td>' +
                                 '<td><button class="msu-btn msu-btn-outline-danger msu-btn-xs msu-customs-delete" data-inv="' + esc(row.invoice_no) + '" title="Xóa cả hóa đơn này"><i class="fa fa-trash"></i></button></td>';
                             tbody.appendChild(tr);
@@ -861,12 +871,15 @@
                     function loadCustomsList(page) {
                         state.customs.page = page;
                         return rpc('/misa_sale_status/api/customs/list', {
-                            search: state.customs.search, limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE,
+                            search: state.customs.search, pending_only: state.customs.pendingOnly,
+                            limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE,
                         }).then(function(res) {
                             var data = res.data || {};
                             state.customs.rows = data.rows || [];
                             state.customs.total = data.total || 0;
+                            state.customs.pendingCount = data.pending_count || 0;
                             state.customs.loaded = true;
+                            document.getElementById('msu-customs-pending-count').textContent = state.customs.pendingCount;
                             renderCustomsRows();
                             updateCustomsPagination();
                         }).catch(function(e) { toast('Lỗi tải danh sách đơn hải quan: ' + e.message, 'error'); });
@@ -878,6 +891,10 @@
                     });
                     document.getElementById('msu-customs-search').addEventListener('keydown', function(ev) {
                         if (ev.key === 'Enter') { document.getElementById('msu-customs-search-btn').click(); }
+                    });
+                    document.getElementById('msu-customs-pending-only').addEventListener('change', function() {
+                        state.customs.pendingOnly = this.checked;
+                        loadCustomsList(1);
                     });
                     document.getElementById('msu-customs-refresh-btn').addEventListener('click', function() { loadCustomsList(state.customs.page); });
                     document.getElementById('msu-customs-prev').addEventListener('click', function() { if (state.customs.page > 1) { loadCustomsList(state.customs.page - 1); } });

@@ -860,6 +860,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
         return {
             'invoice_no': voucher.get('inv_no') or inv_no,
             'invoice_refid': refid,
+            'refno_finance': voucher.get('refno_finance') or '',
             'invoice_date': voucher.get('inv_date'),
             'partner_name': voucher.get('account_object_name') or '',
             'total_amount': voucher.get('total_amount') or 0.0,
@@ -871,7 +872,12 @@ class StockPickingMisaInvoiceStatus(models.Model):
         """Ghi nhận (lưu) 1 hóa đơn hải quan — tự fetch lại MISA lần nữa (không tin dữ liệu
         preview gửi ngược từ client) để đảm bảo dữ liệu lưu luôn khớp với MISA ngay tại thời
         điểm lưu. Fetch lại cùng 1 số hóa đơn nhiều lần sẽ THAY THẾ hoàn toàn các dòng cũ
-        (xóa rồi tạo lại) — coi như "đồng bộ lại", không cộng dồn trùng."""
+        (xóa rồi tạo lại) — coi như "đồng bộ lại", không cộng dồn trùng.
+
+        Mỗi dòng vừa tạo được thử KHỚP NGAY với 1 phiếu xuất kho (nếu đã tồn tại và đã done)
+        — nếu chưa có phiếu (hàng chưa xuất kho) hoặc phiếu chưa hoàn tất, dòng ở lại
+        'pending' và cron định kỳ (_cron_scan_misa_customs_pending) sẽ tự thử lại sau,
+        không cần thao tác gì thêm."""
         preview = self.fetch_misa_customs_invoice(inv_no)
         CustomsLine = self.env['misa.invoice.customs.line'].sudo()
         CustomsLine.search([('invoice_no', '=', preview['invoice_no'])]).unlink()
@@ -888,6 +894,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
             created |= CustomsLine.create({
                 'invoice_no': preview['invoice_no'],
                 'invoice_refid': preview['invoice_refid'],
+                'refno_finance': preview.get('refno_finance') or '',
                 'invoice_date': invoice_date,
                 'partner_name': preview['partner_name'],
                 'sale_order_id': line['sale_order_id'] or False,
@@ -900,23 +907,117 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 'fetched_by_id': self.env.user.id,
                 'fetched_at': fields.Datetime.now(),
             })
-        return {'count': len(created), 'invoice_no': preview['invoice_no']}
+        matched_count = 0
+        for line in created:
+            if self._misa_invoice_customs_try_match(line):
+                matched_count += 1
+        return {'count': len(created), 'matched_count': matched_count, 'invoice_no': preview['invoice_no']}
+
+    def _misa_invoice_customs_try_match(self, line):
+        """Thử tìm 1 phiếu xuất kho (đã done) khớp ĐÚNG đơn bán + mã hàng + số lượng của dòng
+        hải quan này — nếu tìm được, gán luôn và ghi nhận phiếu đó "đã xuất hóa đơn" (đúng
+        tinh thần: hóa đơn có trước, xuất kho Odoo xác nhận sau). Số lượng phải khớp gần đúng
+        (sai số 0.01) vì có thể xuất kho nhiều đợt cho cùng đơn/mã hàng — chỉ nhận phiếu mà
+        tổng SL xuất của đúng mã hàng đó khớp với SL trên hóa đơn, tránh gán nhầm phiếu khác
+        đợt của cùng đơn."""
+        line.ensure_one()
+        if line.match_state == 'matched':
+            return True
+        if not line.sale_order_id or not line.inventory_item_code:
+            return False
+        product = self.env['product.product'].sudo().search(
+            [('default_code', '=', line.inventory_item_code)], limit=1,
+        )
+        if not product:
+            return False
+        moves = self.env['stock.move'].sudo().search([
+            ('sale_line_id.order_id', '=', line.sale_order_id.id),
+            ('product_id', '=', product.id),
+            ('picking_id.picking_type_id.code', '=', 'outgoing'),
+            ('picking_id.state', '=', 'done'),
+        ])
+        if not moves:
+            return False
+        qty_by_picking = {}
+        for move in moves:
+            qty_by_picking[move.picking_id] = qty_by_picking.get(move.picking_id, 0.0) + move.quantity
+        best_picking, best_diff = None, None
+        for picking, qty in qty_by_picking.items():
+            diff = abs(qty - line.quantity)
+            if best_diff is None or diff < best_diff:
+                best_diff, best_picking = diff, picking
+        if not best_picking or best_diff > 0.01:
+            return False
+        line.write({
+            'picking_id': best_picking.id,
+            'match_state': 'matched',
+            'matched_at': fields.Datetime.now(),
+        })
+        self._misa_invoice_customs_apply_to_picking(best_picking)
+        return True
+
+    def _misa_invoice_customs_apply_to_picking(self, picking):
+        """Khi 1 phiếu xuất kho có >=1 dòng hải quan đã khớp — ghi nhận phiếu đó 'đã xuất HĐ'
+        (nếu chưa từng ghi nhận qua luồng nào khác), lấy số HĐ/ngày HĐ từ dòng hải quan, tiền
+        = tổng các dòng hải quan khớp với phiếu này (không phải tổng cả hóa đơn, vì 1 hóa đơn
+        có thể gộp nhiều đơn/nhiều phiếu khác nhau)."""
+        if picking.misa_invoice_state == 'invoiced':
+            return
+        lines = self.env['misa.invoice.customs.line'].sudo().search([('picking_id', '=', picking.id)])
+        if not lines:
+            return
+        old_state = picking.misa_invoice_state
+        picking.write({
+            'misa_invoice_state': 'invoiced',
+            'misa_invoice_no': lines[0].invoice_no,
+            'misa_invoice_date': lines[0].invoice_date,
+            'misa_invoice_amount': sum(lines.mapped('amount')),
+            'misa_invoice_last_checked': fields.Datetime.now(),
+        })
+        picking.message_post(
+            body=Markup(
+                "<b>Đã ghi nhận xuất hóa đơn (hải quan — hóa đơn xuất trước xuất kho):</b> "
+                "%s → %s, số hóa đơn %s."
+            ) % (
+                MISA_INVOICE_STATE_LABELS.get(old_state, old_state),
+                MISA_INVOICE_STATE_LABELS.get('invoiced', 'invoiced'),
+                lines[0].invoice_no,
+            )
+        )
+
+    def _cron_scan_misa_customs_pending(self):
+        """Quét định kỳ các dòng hải quan còn 'pending' (chưa có phiếu xuất kho tương ứng
+        hoặc phiếu chưa hoàn tất lúc ghi nhận) — tự thử khớp lại, không cần thao tác thủ công
+        khi phiếu xuất kho được tạo/hoàn tất sau đó."""
+        pending = self.env['misa.invoice.customs.line'].sudo().search(
+            [('match_state', '=', 'pending')], limit=200,
+        )
+        for line in pending:
+            try:
+                self._misa_invoice_customs_try_match(line)
+            except Exception:
+                _logger.exception(
+                    "❌ [MISA CUSTOMS SCAN] Lỗi thử khớp dòng hải quan #%s (HĐ %s)", line.id, line.invoice_no,
+                )
 
     @api.model
-    def get_misa_customs_lines(self, search=False, limit=50, offset=0):
+    def get_misa_customs_lines(self, search=False, pending_only=False, limit=50, offset=0):
         Lines = self.env['misa.invoice.customs.line'].sudo()
         domain = []
         if search:
-            domain = [
+            domain += [
                 '|', '|', ('invoice_no', 'ilike', search),
                 ('order_code', 'ilike', search), ('inventory_item_code', 'ilike', search),
             ]
+        if pending_only:
+            domain.append(('match_state', '=', 'pending'))
         lines = Lines.search(domain, limit=limit, offset=offset)
         return {
             'rows': [
                 {
                     'id': line.id,
                     'invoice_no': line.invoice_no,
+                    'refno_finance': line.refno_finance or '',
                     'invoice_date': fields.Date.to_string(line.invoice_date) if line.invoice_date else '',
                     'partner_name': line.partner_name or '',
                     'order_code': line.order_code,
@@ -928,12 +1029,17 @@ class StockPickingMisaInvoiceStatus(models.Model):
                     'quantity': line.quantity,
                     'unit_price': line.unit_price,
                     'amount': line.amount,
+                    'match_state': line.match_state,
+                    'match_state_label': 'Đã khớp phiếu xuất kho' if line.match_state == 'matched' else 'Chờ xuất kho',
+                    'picking_id': line.picking_id.id if line.picking_id else False,
+                    'picking_name': line.picking_id.name if line.picking_id else False,
                     'fetched_by': line.fetched_by_id.name or '',
                     'fetched_at': fields.Datetime.to_string(line.fetched_at) if line.fetched_at else '',
                 }
                 for line in lines
             ],
             'total': Lines.search_count(domain),
+            'pending_count': Lines.search_count([('match_state', '=', 'pending')]),
         }
 
     @api.model
