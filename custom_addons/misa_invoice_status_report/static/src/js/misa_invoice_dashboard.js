@@ -131,6 +131,8 @@ export class MisaInvoiceDashboard extends Component {
             orderDrawerOpen: false,
             orderDrawerRow: null,
             orderCheckLoading: false,
+            customsDrawerOpen: false,
+            customsDrawerRow: null,
         });
 
         onWillStart(async () => {
@@ -898,6 +900,56 @@ export class MisaInvoiceDashboard extends Component {
         return preview.lines.filter((line) => !line.sale_order_found).length;
     }
 
+    /** 3 trạng thái hiển thị cho 1 dòng hải quan: matched (xanh) / nomatch (vàng, có đơn
+     * hàng nhưng chưa khớp phiếu xuất kho) / noorder (đỏ, không tìm thấy đơn hàng trong Odoo). */
+    customsRowStatus(row) {
+        if (row.match_state === "matched") {
+            return "matched";
+        }
+        if (!row.sale_order_found) {
+            return "noorder";
+        }
+        return "nomatch";
+    }
+
+    customsRowStatusLabel(row) {
+        const status = this.customsRowStatus(row);
+        if (status === "matched") {
+            return "Đã khớp phiếu xuất kho";
+        }
+        if (status === "noorder") {
+            return "Không tìm thấy đơn hàng";
+        }
+        return "Chờ xuất kho";
+    }
+
+    customsRowBadgeState(row) {
+        const status = this.customsRowStatus(row);
+        if (status === "matched") {
+            return "invoiced";
+        }
+        if (status === "noorder") {
+            return "missing";
+        }
+        return "requested";
+    }
+
+    openCustomsDrawer(row) {
+        this.state.customsDrawerRow = row;
+        this.state.customsDrawerOpen = true;
+    }
+
+    closeCustomsDrawer() {
+        this.state.customsDrawerOpen = false;
+        this.state.customsDrawerRow = null;
+    }
+
+    onCustomsDrawerOverlayClick(ev) {
+        if (ev.target === ev.currentTarget) {
+            this.closeCustomsDrawer();
+        }
+    }
+
     onCustomsInvInput(ev) {
         this.state.customsTab.invInput = ev.target.value;
     }
@@ -1019,6 +1071,9 @@ export class MisaInvoiceDashboard extends Component {
         try {
             await this.orm.call("stock.picking", "delete_misa_customs_invoice", [invNo], {});
             this.notification.add("Đã xóa hóa đơn " + invNo + ".", { type: "success" });
+            if (this.state.customsDrawerOpen && this.state.customsDrawerRow && this.state.customsDrawerRow.invoice_no === invNo) {
+                this.closeCustomsDrawer();
+            }
             await this.loadCustomsTab(this.state.customsTab.page);
         } catch (e) {
             this.notification.add("Lỗi xóa: " + (e.message || e), { type: "danger" });
@@ -1036,6 +1091,19 @@ export class MisaInvoiceDashboard extends Component {
                 this.notification.add(result.match_note || "Vẫn chưa khớp được.", { type: "warning" });
             }
             await this.loadCustomsTab(this.state.customsTab.page);
+            if (this.state.customsDrawerOpen && this.state.customsDrawerRow && this.state.customsDrawerRow.id === lineId) {
+                const updated = this.state.customsTab.rows.find((r) => r.id === lineId);
+                if (updated) {
+                    this.state.customsDrawerRow = updated;
+                } else if (result.matched) {
+                    this.state.customsDrawerRow = {
+                        ...this.state.customsDrawerRow,
+                        match_state: "matched",
+                        match_note: result.match_note,
+                        picking_name: result.picking_name,
+                    };
+                }
+            }
         } catch (e) {
             this.notification.add("Lỗi thử khớp lại: " + (e.message || e), { type: "danger" });
         }

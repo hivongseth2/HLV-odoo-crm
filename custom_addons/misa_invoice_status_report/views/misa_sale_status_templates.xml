@@ -165,6 +165,12 @@
                 .msu-table tbody tr:nth-child(even){background:#fbfbfa}
                 .msu-table tbody tr:hover{background:#f3f6fb}
                 .msu-row-clickable{cursor:pointer}
+                .msu-row-status-matched{background:rgba(12,163,12,.06)}
+                .msu-row-status-nomatch{background:rgba(250,178,25,.10)}
+                .msu-row-status-noorder{background:rgba(208,59,59,.08)}
+                .msu-row-status-matched:hover{background:rgba(12,163,12,.13)}
+                .msu-row-status-nomatch:hover{background:rgba(250,178,25,.20)}
+                .msu-row-status-noorder:hover{background:rgba(208,59,59,.15)}
                 .msu-col-diff-bad{color:#d03b3b;font-weight:800}
                 .msu-col-num{text-align:right;font-variant-numeric:tabular-nums}
                 .msu-picking-name{font-weight:700;color:#111827}
@@ -482,17 +488,10 @@
                                     <thead>
                                         <tr>
                                             <th>Số hóa đơn</th>
-                                            <th>Ngày HĐ</th>
-                                            <th>Khách hàng</th>
                                             <th>Đơn hàng</th>
-                                            <th>Mã hàng</th>
-                                            <th>Tên hàng</th>
+                                            <th>Mã hàng / Tên hàng</th>
                                             <th class="msu-col-num">Số lượng</th>
-                                            <th class="msu-col-num">Thành tiền</th>
                                             <th>Trạng thái</th>
-                                            <th>Phiếu xuất kho</th>
-                                            <th>Ghi nhận bởi</th>
-                                            <th/>
                                         </tr>
                                     </thead>
                                     <tbody id="msu-customs-tbody"/>
@@ -823,66 +822,79 @@
                         }).finally(function() { setBtnLoading(btn, false); });
                     });
 
+                    // 3 trạng thái hiển thị cho 1 dòng hải quan: matched (xanh) / nomatch (vàng, có
+                    // đơn hàng nhưng chưa khớp phiếu xuất kho) / noorder (đỏ, không tìm thấy đơn
+                    // hàng trong Odoo) — dùng chung để tô cả dòng lẫn badge trạng thái.
+                    function customsRowStatus(row) {
+                        if (row.match_state === 'matched') { return 'matched'; }
+                        if (!row.sale_order_found) { return 'noorder'; }
+                        return 'nomatch';
+                    }
+                    function customsRowStatusLabel(row) {
+                        var s = customsRowStatus(row);
+                        if (s === 'matched') { return 'Đã khớp phiếu xuất kho'; }
+                        if (s === 'noorder') { return 'Không tìm thấy đơn hàng'; }
+                        return 'Chờ xuất kho';
+                    }
+                    function customsRowBadgeState(row) {
+                        var s = customsRowStatus(row);
+                        if (s === 'matched') { return 'invoiced'; }
+                        if (s === 'noorder') { return 'missing'; }
+                        return 'requested';
+                    }
+
                     function renderCustomsRows() {
                         var tbody = document.getElementById('msu-customs-tbody');
                         tbody.innerHTML = '';
                         document.getElementById('msu-customs-empty').style.display = state.customs.rows.length ? 'none' : '';
                         state.customs.rows.forEach(function(row) {
                             var tr = document.createElement('tr');
-                            var orderCell = row.sale_order_found
-                                ? esc(row.sale_order_name)
-                                : '<span class="msu-col-diff-bad" title="Không tìm thấy đơn hàng này trong Odoo"><i class="fa fa-warning"></i> ' + esc(row.order_code || '(trống)') + '</span>';
+                            tr.className = 'msu-row-clickable msu-row-status-' + customsRowStatus(row);
+                            tr.dataset.id = row.id;
                             tr.innerHTML =
                                 '<td><b>' + esc(row.invoice_no) + '</b></td>' +
-                                '<td>' + esc(row.invoice_date) + '</td>' +
-                                '<td>' + esc(row.partner_name) + '</td>' +
-                                '<td>' + orderCell + '</td>' +
-                                '<td>' + esc(row.inventory_item_code) + '</td>' +
-                                '<td>' + esc(row.description) + '</td>' +
+                                '<td>' + (row.sale_order_found ? esc(row.sale_order_name) : '<i class="fa fa-warning"></i> ' + esc(row.sale_order_name || row.order_code || '(trống)')) + '</td>' +
+                                '<td><div>' + esc(row.inventory_item_code) + '</div><div class="msu-muted" style="font-size:.78rem">' + esc(row.description) + '</div></td>' +
                                 '<td class="msu-col-num">' + row.quantity + '</td>' +
-                                '<td class="msu-col-num">' + fmtMoney(row.amount) + '</td>' +
-                                '<td><span class="msu-badge-state ' + (row.match_state === 'matched' ? 'msu-badge-state-invoiced' : 'msu-badge-state-requested') + '" title="' + esc(row.match_note || '') + '">' + esc(row.match_state_label) + '</span></td>' +
-                                '<td>' + (row.picking_name ? esc(row.picking_name) : '<span class="msu-muted">—</span>') + '</td>' +
-                                '<td>' + esc(row.fetched_by) + '</td>' +
-                                '<td><div class="msu-btn-group">' +
-                                    (row.match_state === 'pending' ? '<button class="msu-btn msu-btn-outline-primary msu-btn-xs msu-customs-retry" data-id="' + row.id + '" title="Thử khớp lại ngay"><i class="fa fa-refresh"></i></button>' : '') +
-                                    '<button class="msu-btn msu-btn-outline-danger msu-btn-xs msu-customs-delete" data-inv="' + esc(row.invoice_no) + '" title="Xóa cả hóa đơn này"><i class="fa fa-trash"></i></button>' +
-                                '</div></td>';
+                                '<td><span class="msu-badge-state msu-badge-state-' + customsRowBadgeState(row) + '" title="' + esc(row.match_note || '') + '">' + esc(customsRowStatusLabel(row)) + '</span></td>';
                             tbody.appendChild(tr);
-                            if (row.match_state === 'pending' && row.match_note) {
-                                var noteRow = document.createElement('tr');
-                                noteRow.innerHTML = '<td></td><td colspan="11" class="msu-muted" style="font-size:.78rem;padding-top:0"><i class="fa fa-info-circle"></i> ' + esc(row.match_note) + '</td>';
-                                tbody.appendChild(noteRow);
+                        });
+                        tbody.querySelectorAll('.msu-row-clickable').forEach(function(tr) {
+                            tr.addEventListener('click', function() {
+                                var id = parseInt(this.dataset.id, 10);
+                                var row = state.customs.rows.find(function(r) { return r.id === id; });
+                                if (row) { openCustomsDrawer(row); }
+                            });
+                        });
+                    }
+
+                    function customsDeleteInvoice(invNo) {
+                        if (!window.confirm('Xóa toàn bộ dữ liệu đã ghi nhận cho hóa đơn "' + invNo + '"?')) { return; }
+                        rpc('/misa_sale_status/api/customs/delete', { inv_no: invNo }).then(function() {
+                            toast('Đã xóa hóa đơn ' + invNo + '.', 'success');
+                            if (customsDrawerRowId != null) { closeDrawer(); }
+                            loadCustomsList(state.customs.page);
+                        }).catch(function(e) { toast('Lỗi xóa: ' + e.message, 'error'); });
+                    }
+
+                    function customsRetryMatch(lineId, btn) {
+                        setBtnLoading(btn, true);
+                        rpc('/misa_sale_status/api/customs/retry', { line_id: lineId }).then(function(res) {
+                            var result = res.result || {};
+                            if (result.matched) {
+                                toast('Đã khớp với phiếu ' + result.picking_name + '.', 'success');
+                            } else {
+                                toast(result.match_note || 'Vẫn chưa khớp được.', 'warning');
                             }
-                        });
-                        tbody.querySelectorAll('.msu-customs-delete').forEach(function(btn) {
-                            btn.addEventListener('click', function() {
-                                var invNo = this.dataset.inv;
-                                if (!window.confirm('Xóa toàn bộ dữ liệu đã ghi nhận cho hóa đơn "' + invNo + '"?')) { return; }
-                                rpc('/misa_sale_status/api/customs/delete', { inv_no: invNo }).then(function() {
-                                    toast('Đã xóa hóa đơn ' + invNo + '.', 'success');
-                                    loadCustomsList(state.customs.page);
-                                }).catch(function(e) { toast('Lỗi xóa: ' + e.message, 'error'); });
+                            loadCustomsList(state.customs.page).then(function() {
+                                if (customsDrawerRowId === lineId) {
+                                    var updated = state.customs.rows.find(function(r) { return r.id === lineId; });
+                                    if (updated) { openCustomsDrawer(updated); }
+                                }
                             });
-                        });
-                        tbody.querySelectorAll('.msu-customs-retry').forEach(function(btn) {
-                            btn.addEventListener('click', function() {
-                                var lineId = parseInt(this.dataset.id, 10);
-                                setBtnLoading(this, true);
-                                var self = this;
-                                rpc('/misa_sale_status/api/customs/retry', { line_id: lineId }).then(function(res) {
-                                    var result = res.result || {};
-                                    if (result.matched) {
-                                        toast('Đã khớp với phiếu ' + result.picking_name + '.', 'success');
-                                    } else {
-                                        toast(result.match_note || 'Vẫn chưa khớp được.', 'warning');
-                                    }
-                                    loadCustomsList(state.customs.page);
-                                }).catch(function(e) {
-                                    toast('Lỗi thử khớp lại: ' + e.message, 'error');
-                                    setBtnLoading(self, false);
-                                });
-                            });
+                        }).catch(function(e) {
+                            toast('Lỗi thử khớp lại: ' + e.message, 'error');
+                            setBtnLoading(btn, false);
                         });
                     }
 
@@ -1299,29 +1311,82 @@
                         bindActionButtons(tbody);
                     }
 
-                    // ===== Drawer chi tiết 1 phiếu =====
+                    // ===== Drawer chi tiết (dùng chung 1 khung cho cả "phiếu xuất kho" và
+                    // "dòng đơn hải quan" — chỉ 1 drawer mở tại 1 thời điểm nên tái dùng DOM,
+                    // đổi nội dung theo drawerKind) =====
                     var drawerOverlay = document.getElementById('msu-drawer-overlay');
                     var drawerEl = document.getElementById('msu-drawer');
                     var drawerOpenId = null;
+                    var drawerKind = null; // 'picking' | 'customs'
+                    var customsDrawerRowId = null;
 
                     function closeDrawer() {
                         drawerOverlay.style.display = 'none';
                         drawerOpenId = null;
+                        customsDrawerRowId = null;
+                        drawerKind = null;
                     }
                     drawerOverlay.addEventListener('click', function(ev) {
                         if (ev.target === drawerOverlay) { closeDrawer(); }
                     });
 
                     function openDrawer(row) {
+                        drawerKind = 'picking';
                         drawerOpenId = row.id;
                         renderDrawerContent(row);
                         drawerOverlay.style.display = 'flex';
                     }
 
                     function refreshDrawerIfOpen() {
-                        if (drawerOpenId == null) { return; }
+                        if (drawerKind !== 'picking' || drawerOpenId == null) { return; }
                         var row = state.rows.find(function(r) { return r.id === drawerOpenId; });
                         if (row) { renderDrawerContent(row); } else { closeDrawer(); }
+                    }
+
+                    function openCustomsDrawer(row) {
+                        drawerKind = 'customs';
+                        customsDrawerRowId = row.id;
+                        renderCustomsDrawerContent(row);
+                        drawerOverlay.style.display = 'flex';
+                    }
+
+                    function renderCustomsDrawerContent(row) {
+                        drawerEl.innerHTML =
+                            '<div class="msu-drawer-header">' +
+                                '<div><h4 class="msu-drawer-title">' + esc(row.invoice_no) + '</h4><div class="msu-drawer-subtitle">' + esc(row.partner_name) + '</div></div>' +
+                                '<button class="msu-drawer-close" id="msu-drawer-close-btn"><i class="fa fa-times"></i></button>' +
+                            '</div>' +
+                            '<div class="msu-drawer-body">' +
+                                '<div class="msu-drawer-section">' +
+                                    '<div class="msu-drawer-meta">' +
+                                        '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Trạng thái</span><span class="msu-badge-state msu-badge-state-' + customsRowBadgeState(row) + '">' + esc(customsRowStatusLabel(row)) + '</span></div>' +
+                                        (row.match_note ? '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Ghi chú khớp</span><span class="msu-meta-value">' + esc(row.match_note) + '</span></div>' : '') +
+                                        '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Số chứng từ</span><span class="msu-meta-value">' + (row.refno_finance ? esc(row.refno_finance) : '—') + '</span></div>' +
+                                        '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Ngày hóa đơn</span><span class="msu-meta-value">' + esc(row.invoice_date) + '</span></div>' +
+                                        '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Đơn hàng</span><span class="msu-meta-value' + (row.sale_order_found ? '' : ' msu-col-diff-bad') + '">' + esc(row.sale_order_name || row.order_code || '—') + '</span></div>' +
+                                        '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Mã hàng</span><span class="msu-meta-value">' + esc(row.inventory_item_code) + '</span></div>' +
+                                        '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Tên hàng</span><span class="msu-meta-value">' + esc(row.description) + '</span></div>' +
+                                        '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Số lượng</span><span class="msu-meta-value">' + row.quantity + '</span></div>' +
+                                        '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Đơn giá</span><span class="msu-meta-value">' + fmtMoney(row.unit_price) + '</span></div>' +
+                                        '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Thành tiền</span><span class="msu-meta-value">' + fmtMoney(row.amount) + '</span></div>' +
+                                        '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Phiếu xuất kho</span><span class="msu-meta-value">' + (row.picking_name ? esc(row.picking_name) : '—') + '</span></div>' +
+                                        '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Ghi nhận bởi</span><span class="msu-meta-value">' + esc(row.fetched_by) + '</span></div>' +
+                                    '</div>' +
+                                '</div>' +
+                            '</div>' +
+                            '<div class="msu-drawer-actions">' +
+                                (row.match_state === 'pending' ? '<button class="msu-btn msu-btn-outline-primary msu-btn-sm" id="msu-customs-drawer-retry"><i class="fa fa-refresh"></i> Thử khớp lại</button>' : '') +
+                                '<button class="msu-btn msu-btn-outline-danger msu-btn-sm" id="msu-customs-drawer-delete"><i class="fa fa-trash"></i> Xóa cả hóa đơn này</button>' +
+                            '</div>';
+
+                        document.getElementById('msu-drawer-close-btn').addEventListener('click', closeDrawer);
+                        var retryBtn = document.getElementById('msu-customs-drawer-retry');
+                        if (retryBtn) {
+                            retryBtn.addEventListener('click', function() { customsRetryMatch(row.id, retryBtn); });
+                        }
+                        document.getElementById('msu-customs-drawer-delete').addEventListener('click', function() {
+                            customsDeleteInvoice(row.invoice_no);
+                        });
                     }
 
                     function renderDrawerContent(row) {

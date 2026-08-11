@@ -929,58 +929,33 @@
                                 <thead>
                                     <tr>
                                         <th>Số hóa đơn</th>
-                                        <th>Ngày HĐ</th>
-                                        <th>Khách hàng</th>
-                                        <th>Mã sale</th>
                                         <th>Đơn hàng</th>
-                                        <th>Mã hàng</th>
-                                        <th>Tên hàng</th>
+                                        <th>Mã hàng / Tên hàng</th>
                                         <th class="miv-col-num">Số lượng</th>
-                                        <th class="miv-col-num">Thành tiền</th>
                                         <th>Trạng thái</th>
-                                        <th>Phiếu xuất kho</th>
-                                        <th>Ghi nhận bởi</th>
-                                        <th/>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <t t-foreach="state.customsTab.rows" t-as="row" t-key="row.id">
-                                        <tr>
-                                            <td><b><t t-esc="row.invoice_no"/></b></td>
-                                            <td><t t-esc="row.invoice_date"/></td>
-                                            <td><t t-esc="row.partner_name"/></td>
-                                            <td><t t-esc="row.employee_code or '—'"/></td>
-                                            <td t-attf-class="{{ !row.sale_order_found ? 'miv-cell-critical' : '' }}">
-                                                <i class="fa fa-warning" t-if="!row.sale_order_found" title="Không tìm thấy đơn hàng này trong Odoo"/>
-                                                <t t-esc="row.sale_order_name"/>
-                                            </td>
-                                            <td><t t-esc="row.inventory_item_code"/></td>
-                                            <td><t t-esc="row.description"/></td>
-                                            <td class="miv-col-num"><t t-esc="row.quantity"/></td>
-                                            <td class="miv-col-num"><t t-esc="formatCurrency(row.amount)"/></td>
-                                            <td>
-                                                <span t-attf-class="miv-badge {{ row.match_state === 'matched' ? 'miv-badge-state-invoiced' : 'miv-badge-state-requested' }}"
-                                                      t-att-title="row.match_note">
-                                                    <t t-esc="row.match_state_label"/>
-                                                </span>
-                                            </td>
-                                            <td><t t-esc="row.picking_name or '—'"/></td>
-                                            <td><t t-esc="row.fetched_by"/></td>
-                                            <td>
-                                                <button class="btn btn-link miv-link" t-if="row.match_state == 'pending'"
-                                                        t-on-click="() => this.retryCustomsMatch(row.id)" title="Thử khớp lại ngay">
-                                                    <i class="fa fa-refresh"/>
-                                                </button>
-                                                <button class="btn btn-link miv-link" t-on-click="() => this.deleteCustomsInvoice(row.invoice_no)" title="Xóa cả hóa đơn này">
-                                                    <i class="fa fa-trash"/>
-                                                </button>
-                                            </td>
-                                        </tr>
-                                        <tr t-if="row.match_state == 'pending' and row.match_note">
-                                            <td/>
-                                            <td colspan="11" class="miv-section-hint"><i class="fa fa-info-circle"/> <t t-esc="row.match_note"/></td>
-                                        </tr>
-                                    </t>
+                                    <tr t-foreach="state.customsTab.rows" t-as="row" t-key="row.id"
+                                        t-attf-class="miv-row-status-{{ customsRowStatus(row) }}"
+                                        t-on-click="() => this.openCustomsDrawer(row)">
+                                        <td><b><t t-esc="row.invoice_no"/></b></td>
+                                        <td>
+                                            <i class="fa fa-warning" t-if="!row.sale_order_found" title="Không tìm thấy đơn hàng này trong Odoo"/>
+                                            <t t-esc="row.sale_order_name"/>
+                                        </td>
+                                        <td>
+                                            <div><t t-esc="row.inventory_item_code"/></div>
+                                            <div class="miv-subtable-hint"><t t-esc="row.description"/></div>
+                                        </td>
+                                        <td class="miv-col-num"><t t-esc="row.quantity"/></td>
+                                        <td>
+                                            <span t-attf-class="miv-badge miv-badge-state-{{ customsRowBadgeState(row) }}"
+                                                  t-att-title="row.match_note">
+                                                <t t-esc="customsRowStatusLabel(row)"/>
+                                            </span>
+                                        </td>
+                                    </tr>
                                 </tbody>
                             </table>
                             <div class="miv-pagination" t-if="state.customsTab.total > state.customsTab.pageSize">
@@ -1406,6 +1381,90 @@
                             </button>
                             <button class="btn btn-primary btn-sm" t-on-click="openOrderForm">
                                 Mở đơn hàng <i class="fa fa-arrow-right"/>
+                            </button>
+                        </div>
+                    </t>
+                </div>
+            </div>
+
+            <div class="miv-drawer-overlay" t-if="state.customsDrawerOpen" t-on-click="onCustomsDrawerOverlayClick">
+                <div class="miv-drawer">
+                    <t t-if="state.customsDrawerRow">
+                        <div class="miv-drawer-header">
+                            <div>
+                                <div class="miv-drawer-eyebrow">Đơn hải quan</div>
+                                <div class="miv-drawer-title"><t t-esc="state.customsDrawerRow.invoice_no"/></div>
+                                <div class="miv-drawer-subtitle"><t t-esc="state.customsDrawerRow.partner_name"/></div>
+                            </div>
+                            <i class="fa fa-times miv-drawer-close" t-on-click="closeCustomsDrawer"/>
+                        </div>
+                        <div class="miv-drawer-body">
+                            <div class="miv-drawer-meta">
+                                <div>
+                                    <span class="miv-drawer-meta-label">Trạng thái</span>
+                                    <span t-attf-class="miv-badge miv-badge-state-{{ customsRowBadgeState(state.customsDrawerRow) }}">
+                                        <t t-esc="customsRowStatusLabel(state.customsDrawerRow)"/>
+                                    </span>
+                                </div>
+                                <div t-if="state.customsDrawerRow.match_note">
+                                    <span class="miv-drawer-meta-label">Ghi chú khớp</span>
+                                    <span><t t-esc="state.customsDrawerRow.match_note"/></span>
+                                </div>
+                                <div>
+                                    <span class="miv-drawer-meta-label">Số chứng từ</span>
+                                    <span><t t-esc="state.customsDrawerRow.refno_finance or '—'"/></span>
+                                </div>
+                                <div>
+                                    <span class="miv-drawer-meta-label">Ngày hóa đơn</span>
+                                    <span><t t-esc="state.customsDrawerRow.invoice_date"/></span>
+                                </div>
+                                <div>
+                                    <span class="miv-drawer-meta-label">Mã sale</span>
+                                    <span><t t-esc="state.customsDrawerRow.employee_code or '—'"/></span>
+                                </div>
+                                <div>
+                                    <span class="miv-drawer-meta-label">Đơn hàng</span>
+                                    <span t-attf-class="{{ !state.customsDrawerRow.sale_order_found ? 'miv-cell-critical' : '' }}">
+                                        <t t-esc="state.customsDrawerRow.sale_order_name"/>
+                                    </span>
+                                </div>
+                                <div>
+                                    <span class="miv-drawer-meta-label">Mã hàng</span>
+                                    <span><t t-esc="state.customsDrawerRow.inventory_item_code"/></span>
+                                </div>
+                                <div>
+                                    <span class="miv-drawer-meta-label">Tên hàng</span>
+                                    <span><t t-esc="state.customsDrawerRow.description"/></span>
+                                </div>
+                                <div>
+                                    <span class="miv-drawer-meta-label">Số lượng</span>
+                                    <span><t t-esc="state.customsDrawerRow.quantity"/></span>
+                                </div>
+                                <div>
+                                    <span class="miv-drawer-meta-label">Đơn giá</span>
+                                    <span><t t-esc="formatCurrency(state.customsDrawerRow.unit_price)"/></span>
+                                </div>
+                                <div>
+                                    <span class="miv-drawer-meta-label">Thành tiền</span>
+                                    <span><b><t t-esc="formatCurrency(state.customsDrawerRow.amount)"/></b></span>
+                                </div>
+                                <div>
+                                    <span class="miv-drawer-meta-label">Phiếu xuất kho</span>
+                                    <span><t t-esc="state.customsDrawerRow.picking_name or '—'"/></span>
+                                </div>
+                                <div>
+                                    <span class="miv-drawer-meta-label">Ghi nhận bởi</span>
+                                    <span><t t-esc="state.customsDrawerRow.fetched_by"/></span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="miv-drawer-actions">
+                            <button class="btn btn-sm btn-secondary" t-if="state.customsDrawerRow.match_state == 'pending'"
+                                    t-on-click="() => this.retryCustomsMatch(state.customsDrawerRow.id)">
+                                <i class="fa fa-refresh"/> Thử khớp lại
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" t-on-click="() => this.deleteCustomsInvoice(state.customsDrawerRow.invoice_no)">
+                                <i class="fa fa-trash"/> Xóa cả hóa đơn này
                             </button>
                         </div>
                     </t>
