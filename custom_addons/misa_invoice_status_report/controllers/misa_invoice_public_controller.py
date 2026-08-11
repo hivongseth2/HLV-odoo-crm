@@ -207,17 +207,6 @@ class MisaInvoicePublicController(http.Controller):
             _logger.exception('misa_sale_status api_customs_retry error')
             return _json_error(str(e))
 
-    @http.route('/misa_sale_status/api/customs/delete', type='json', auth='public', methods=['POST'])
-    def api_customs_delete(self, inv_no='', **kwargs):
-        if not _pw_allowed():
-            return _json_error('unauthorized')
-        try:
-            count = request.env['stock.picking'].sudo().delete_misa_customs_invoice(inv_no)
-            return {'status': 'success', 'count': count}
-        except Exception as e:
-            _logger.exception('misa_sale_status api_customs_delete error')
-            return _json_error(str(e))
-
     @http.route('/misa_sale_status/api/customs/search_pickings', type='json', auth='public', methods=['POST'])
     def api_customs_search_pickings(self, line_id=None, search='', **kwargs):
         if not _pw_allowed():

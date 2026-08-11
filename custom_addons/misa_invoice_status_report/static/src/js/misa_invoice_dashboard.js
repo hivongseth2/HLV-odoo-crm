@@ -185,11 +185,16 @@ export class MisaInvoiceDashboard extends Component {
         const totalActual = summary.total.actual_amount;
         const misaInvoiced = summary.invoiced.invoice_amount;
         const shopeeInvoiced = summary.shopee ? summary.shopee.invoice_amount : 0;
+        // Chỉ phần CHƯA khớp phiếu xuất kho (invoice_amount ở đây = customs_summary.pending_amount,
+        // xem get_misa_invoice_status_summary) — phần đã khớp thì tiền đã nằm sẵn trong
+        // misaInvoiced rồi (qua picking.misa_invoice_amount), cộng thêm sẽ đếm trùng 2 lần.
+        const customsInvoiced = summary.customs ? summary.customs.invoice_amount : 0;
         return {
             total_actual_amount: totalActual,
             misa_invoiced_amount: misaInvoiced,
             shopee_invoiced_amount: shopeeInvoiced,
-            outstanding_amount: totalActual - misaInvoiced - shopeeInvoiced,
+            customs_invoiced_amount: customsInvoiced,
+            outstanding_amount: totalActual - misaInvoiced - shopeeInvoiced - customsInvoiced,
         };
     }
 
@@ -201,6 +206,9 @@ export class MisaInvoiceDashboard extends Component {
         } else if (kind === "shopee") {
             this.state.shopeeTab.stateFilter = "accepted";
             this.switchTab("shopee");
+        } else if (kind === "customs") {
+            this.state.customsTab.pendingOnly = true;
+            this.switchTab("customs");
         } else {
             // 'total' và 'outstanding' không map được về đúng 1 giá trị filter duy nhất
             // (còn lại = gồm nhiều trạng thái) — bỏ filter, để xem hết rồi tự đọc theo cột.

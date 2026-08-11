@@ -92,11 +92,12 @@
 
                 /* ---- Đối chiếu tổng ---- */
                 .msu-recon-card{margin-bottom:18px}
-                .msu-recon-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+                .msu-recon-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px}
                 .msu-recon-item{display:flex;flex-direction:column;gap:4px}
                 .msu-recon-value{font-size:1.3rem;font-weight:800;color:#111827;font-variant-numeric:tabular-nums}
                 .msu-recon-good{color:#0ca30c}
                 .msu-recon-shopee{color:#c9247a}
+                .msu-recon-customs{color:#2a6f97}
                 .msu-recon-outstanding{color:#d03b3b}
                 @media(max-width:768px){.msu-recon-grid{grid-template-columns:repeat(2,1fr)}}
 
@@ -276,6 +277,10 @@
                             <div class="msu-recon-item">
                                 <span class="msu-meta-label">Đã xuất HĐ (Shopee)</span>
                                 <span class="msu-recon-value msu-recon-shopee" id="msu-recon-shopee">0 đ</span>
+                            </div>
+                            <div class="msu-recon-item" title="Chỉ tính phần hóa đơn hải quan CHƯA khớp phiếu xuất kho nào — phần đã khớp đã tính vào ô 'Đã xuất HĐ (MISA)' rồi.">
+                                <span class="msu-meta-label">Đã xuất HĐ (Hải quan, chưa khớp PXK)</span>
+                                <span class="msu-recon-value msu-recon-customs" id="msu-recon-customs">0 đ</span>
                             </div>
                             <div class="msu-recon-item">
                                 <span class="msu-meta-label">Còn lại chưa xuất HĐ</span>
@@ -669,6 +674,7 @@
                             document.getElementById('msu-recon-total').textContent = fmtMoney(d.total_actual_amount);
                             document.getElementById('msu-recon-misa').textContent = fmtMoney(d.misa_invoiced_amount);
                             document.getElementById('msu-recon-shopee').textContent = fmtMoney(d.shopee_invoiced_amount);
+                            document.getElementById('msu-recon-customs').textContent = fmtMoney(d.customs_pending_amount);
                             document.getElementById('msu-recon-outstanding').textContent = fmtMoney(d.outstanding_amount);
                         }).catch(function(e) { toast('Lỗi tải số liệu đối chiếu: ' + e.message, 'error'); });
                     }
@@ -778,11 +784,19 @@
 
                         var unmatched = (preview.lines || []).filter(function(l) { return !l.sale_order_found; });
                         var warningEl = document.getElementById('msu-customs-preview-warning');
-                        if (unmatched.length) {
+                        var saveBtn = document.getElementById('msu-customs-save-btn');
+                        if (preview.conflict_picking_name) {
+                            warningEl.style.display = '';
+                            warningEl.textContent = 'Hóa đơn này đã được gắn với phiếu xuất kho ' + preview.conflict_picking_name +
+                                ' qua luồng khác (không phải hải quan) — không thể ghi nhận, sẽ bị tính trùng 2 lần.';
+                            saveBtn.disabled = true;
+                        } else if (unmatched.length) {
                             warningEl.style.display = '';
                             warningEl.textContent = 'Có ' + unmatched.length + ' dòng không tìm thấy đơn hàng tương ứng trong Odoo (vẫn ghi nhận được, nhưng cần kiểm tra lại mã đơn).';
+                            saveBtn.disabled = false;
                         } else {
                             warningEl.style.display = 'none';
+                            saveBtn.disabled = false;
                         }
                     }
 
@@ -867,15 +881,6 @@
                                 if (row) { openCustomsDrawer(row); }
                             });
                         });
-                    }
-
-                    function customsDeleteInvoice(invNo) {
-                        if (!window.confirm('Xóa toàn bộ dữ liệu đã ghi nhận cho hóa đơn "' + invNo + '"?')) { return; }
-                        rpc('/misa_sale_status/api/customs/delete', { inv_no: invNo }).then(function() {
-                            toast('Đã xóa hóa đơn ' + invNo + '.', 'success');
-                            if (customsDrawerRowId != null) { closeDrawer(); }
-                            loadCustomsList(state.customs.page);
-                        }).catch(function(e) { toast('Lỗi xóa: ' + e.message, 'error'); });
                     }
 
                     function customsRetryMatch(lineId, btn) {
@@ -1418,10 +1423,12 @@
                         var actionsEl = document.getElementById('msu-customs-drawer-actions');
                         if (!actionsEl) { return; }
                         if (customsManualState.open) { actionsEl.innerHTML = ''; return; }
+                        // Không có nút xóa hóa đơn ở đây — chỉ admin (dashboard nội bộ) mới được
+                        // xóa hóa đơn hải quan, sale (trang public này) chỉ được thử khớp lại
+                        // hoặc khớp thủ công để tự sửa khi hệ thống khớp sai/thiếu.
                         actionsEl.innerHTML =
                             (row.match_state !== 'matched' ? '<button class="msu-btn msu-btn-outline-primary msu-btn-sm" id="msu-customs-drawer-retry"><i class="fa fa-refresh"></i> Thử khớp lại</button>' : '') +
-                            (row.match_state !== 'matched' ? '<button class="msu-btn msu-btn-outline-muted msu-btn-sm" id="msu-customs-drawer-manual"><i class="fa fa-hand-pointer-o"></i> Khớp thủ công</button>' : '') +
-                            '<button class="msu-btn msu-btn-outline-danger msu-btn-sm" id="msu-customs-drawer-delete"><i class="fa fa-trash"></i> Xóa cả hóa đơn này</button>';
+                            (row.match_state !== 'matched' ? '<button class="msu-btn msu-btn-outline-muted msu-btn-sm" id="msu-customs-drawer-manual"><i class="fa fa-hand-pointer-o"></i> Khớp thủ công</button>' : '');
                         var retryBtn = document.getElementById('msu-customs-drawer-retry');
                         if (retryBtn) {
                             retryBtn.addEventListener('click', function() { customsRetryMatch(row.id, retryBtn); });
@@ -1430,9 +1437,6 @@
                         if (manualBtn) {
                             manualBtn.addEventListener('click', function() { openCustomsManualPanel(row); });
                         }
-                        document.getElementById('msu-customs-drawer-delete').addEventListener('click', function() {
-                            customsDeleteInvoice(row.invoice_no);
-                        });
                     }
 
                     function openCustomsManualPanel(row) {
