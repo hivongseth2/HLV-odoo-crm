@@ -241,6 +241,11 @@ class StockPickingMisaInvoiceStatus(models.Model):
         # nó lọt vào 1 lượt quét khác, gây ra nghịch lý "phiếu ăn theo đã xuất HĐ nhưng phiếu
         # gốc lại chưa" dù cùng 1 đề nghị.
         extra_masters_to_check = self.browse()
+        # Tra theo mã đơn hàng chỉ là NGƯỜI DÙNG SUY LUẬN (order code không phải khóa join
+        # đáng tin cậy như refno=tên phiếu) — nếu 1 đơn có NHIỀU phiếu xuất kho cùng "missing"
+        # trong đợt kiểm tra này, chỉ cho phiếu ĐẦU TIÊN nhận đề nghị tìm được qua mã đơn đó,
+        # tránh mỗi phiếu tưởng nhầm mình đã xuất HĐ full tiền của cùng 1 đề nghị (double-count).
+        claimed_order_refnos = {}
         for picking in self:
             if picking.picking_type_code != 'outgoing':
                 continue
@@ -260,6 +265,31 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 )
                 results.append({'id': picking.id, 'name': picking.name, 'error': str(e)})
                 continue
+
+            # Tra theo tên phiếu không ra đề nghị nào — trước khi kết luận "chưa có đề nghị",
+            # thử lại bằng mã ĐƠN HÀNG (DH...) liên quan: sale nhiều khi tạo đề nghị xuất HĐ
+            # trên MISA bằng mã đơn thay vì mã phiếu xuất kho nội bộ. Bỏ qua bước này nếu đã
+            # gắn mã đề nghị thủ công (người dùng đã xác định chính xác refno cần dùng).
+            if status['state'] == 'missing' and not picking.misa_invoice_manual_refno:
+                for order_name in picking.misa_invoice_sale_order_ids.mapped('name'):
+                    if not order_name or order_name == refno or order_name in claimed_order_refnos:
+                        continue
+                    try:
+                        if request_map is not None:
+                            order_status = misa_utils.get_invoice_status_from_map(order_name, request_map)
+                        else:
+                            order_status = misa_utils.get_invoice_status_for_refno(order_name)
+                    except Exception:
+                        _logger.exception(
+                            "❌ [MISA INVOICE STATUS] Lỗi thử lại theo mã đơn %s cho phiếu %s",
+                            order_name, picking.name,
+                        )
+                        continue
+                    if order_status['state'] != 'missing':
+                        status = order_status
+                        refno = order_name
+                        claimed_order_refnos[order_name] = picking
+                        break
 
             # MISA cho phép 1 đề nghị (refno của phiếu ĐẠI DIỆN) gộp chung nhiều phiếu khác
             # (liệt kê trong journal_memo) — nếu refno thật của đề nghị khác tên phiếu đang
@@ -1441,17 +1471,25 @@ class StockPickingMisaInvoiceStatus(models.Model):
             return []
         return self._misa_invoice_picking_line_items(picking)
 
-    def _misa_invoice_group_odoo_lines(self, pickings):
+    def _misa_invoice_group_odoo_lines(self, pickings, misa_codes=None):
         """Gộp dòng hàng Odoo của TOÀN BỘ phiếu trong 1 nhóm gộp chung đề nghị xuất HĐ, theo
         mã hàng (default_code) — MISA cũng gộp chung các phiếu này vào 1 đề nghị/hóa đơn nên
-        phải so theo tổng cả nhóm, không so lẻ từng phiếu. Bỏ qua dòng sản phẩm con của
-        combo/kit (is_component) vì MISA chỉ có 1 dòng cho sản phẩm combo đại diện."""
+        phải so theo tổng cả nhóm, không so lẻ từng phiếu.
+
+        Dòng sản phẩm con của combo/kit (is_component) mặc định bị bỏ qua (giá trị của cả
+        combo đã tính đủ ở dòng đại diện) — TRỪ KHI misa_codes cho biết MISA cũng có dòng
+        riêng cho đúng mã con đó. Thực tế quan sát được: MISA rã hẳn combo ra từng sản phẩm
+        con khi tạo đề nghị xuất HĐ (không giữ 1 dòng combo gộp), nên nếu cứ bỏ qua sẽ báo
+        nhầm "thiếu trên Odoo" cho các mã con dù giá trị/số lượng đã được gộp đủ ở dòng combo
+        — bật lại dòng con (qty thật, value=0 vì tiền đã nằm ở dòng combo) khi MISA có báo
+        đúng mã đó để 2 bên so khớp nhau, còn KHÔNG có ở MISA thì vẫn bỏ qua như cũ."""
+        misa_codes = misa_codes or set()
         totals = {}
         for picking in pickings:
             for line in self._misa_invoice_picking_line_items(picking):
-                if line.get('is_component'):
-                    continue
                 code = line['default_code'] or line['product_name']
+                if line.get('is_component') and code not in misa_codes:
+                    continue
                 bucket = totals.setdefault(
                     code, {'product_name': line['product_name'], 'uom_name': line['uom_name'], 'qty': 0.0, 'value': 0.0}
                 )
@@ -1551,8 +1589,8 @@ class StockPickingMisaInvoiceStatus(models.Model):
         except Exception as e:
             return {'error': str(e)}
 
-        odoo_totals = self._misa_invoice_group_odoo_lines(group_pickings)
         misa_totals = self._misa_invoice_request_lines_by_code(misa_lines)
+        odoo_totals = self._misa_invoice_group_odoo_lines(group_pickings, misa_codes=set(misa_totals.keys()))
 
         rows = []
         for code in set(odoo_totals) | set(misa_totals):
