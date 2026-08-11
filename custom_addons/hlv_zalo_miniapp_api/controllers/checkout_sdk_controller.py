@@ -6,12 +6,14 @@ import logging
 import time
 
 from odoo import http, fields, _
-from odoo.http import request
+from odoo.http import request, Response
+
+from .base_api import ZaloBaseAPI
 
 _logger = logging.getLogger(__name__)
 
 
-class ZaloCheckoutSDKController(http.Controller):
+class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
 
     def _get_private_key(self):
         """Lấy Private Key từ hệ thống cấu hình ir.config_parameter."""
@@ -75,7 +77,7 @@ class ZaloCheckoutSDKController(http.Controller):
         }
         """
         try:
-            body = request.jsonrequest or {}
+            body = self._request_json()
             contact_id = body.get('contact_id')
             items = body.get('items', [])
             address_id = body.get('address_id')
@@ -215,7 +217,7 @@ class ZaloCheckoutSDKController(http.Controller):
         }
         """
         try:
-            body = request.jsonrequest or {}
+            body = self._request_json()
             data = body.get('data', {})
             req_mac = body.get('mac', '')
             req_overall_mac = body.get('overallMac', '')
@@ -305,7 +307,7 @@ class ZaloCheckoutSDKController(http.Controller):
         }
         """
         try:
-            body = request.jsonrequest or {}
+            body = self._request_json()
             data = body.get('data', {})
             req_mac = body.get('mac', '')
 
