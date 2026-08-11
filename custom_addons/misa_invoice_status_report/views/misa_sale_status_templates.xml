@@ -841,11 +841,19 @@
                                 '<td>' + esc(row.description) + '</td>' +
                                 '<td class="msu-col-num">' + row.quantity + '</td>' +
                                 '<td class="msu-col-num">' + fmtMoney(row.amount) + '</td>' +
-                                '<td><span class="msu-badge-state ' + (row.match_state === 'matched' ? 'msu-badge-state-invoiced' : 'msu-badge-state-requested') + '">' + esc(row.match_state_label) + '</span></td>' +
+                                '<td><span class="msu-badge-state ' + (row.match_state === 'matched' ? 'msu-badge-state-invoiced' : 'msu-badge-state-requested') + '" title="' + esc(row.match_note || '') + '">' + esc(row.match_state_label) + '</span></td>' +
                                 '<td>' + (row.picking_name ? esc(row.picking_name) : '<span class="msu-muted">—</span>') + '</td>' +
                                 '<td>' + esc(row.fetched_by) + '</td>' +
-                                '<td><button class="msu-btn msu-btn-outline-danger msu-btn-xs msu-customs-delete" data-inv="' + esc(row.invoice_no) + '" title="Xóa cả hóa đơn này"><i class="fa fa-trash"></i></button></td>';
+                                '<td><div class="msu-btn-group">' +
+                                    (row.match_state === 'pending' ? '<button class="msu-btn msu-btn-outline-primary msu-btn-xs msu-customs-retry" data-id="' + row.id + '" title="Thử khớp lại ngay"><i class="fa fa-refresh"></i></button>' : '') +
+                                    '<button class="msu-btn msu-btn-outline-danger msu-btn-xs msu-customs-delete" data-inv="' + esc(row.invoice_no) + '" title="Xóa cả hóa đơn này"><i class="fa fa-trash"></i></button>' +
+                                '</div></td>';
                             tbody.appendChild(tr);
+                            if (row.match_state === 'pending' && row.match_note) {
+                                var noteRow = document.createElement('tr');
+                                noteRow.innerHTML = '<td></td><td colspan="11" class="msu-muted" style="font-size:.78rem;padding-top:0"><i class="fa fa-info-circle"></i> ' + esc(row.match_note) + '</td>';
+                                tbody.appendChild(noteRow);
+                            }
                         });
                         tbody.querySelectorAll('.msu-customs-delete').forEach(function(btn) {
                             btn.addEventListener('click', function() {
@@ -855,6 +863,25 @@
                                     toast('Đã xóa hóa đơn ' + invNo + '.', 'success');
                                     loadCustomsList(state.customs.page);
                                 }).catch(function(e) { toast('Lỗi xóa: ' + e.message, 'error'); });
+                            });
+                        });
+                        tbody.querySelectorAll('.msu-customs-retry').forEach(function(btn) {
+                            btn.addEventListener('click', function() {
+                                var lineId = parseInt(this.dataset.id, 10);
+                                setBtnLoading(this, true);
+                                var self = this;
+                                rpc('/misa_sale_status/api/customs/retry', { line_id: lineId }).then(function(res) {
+                                    var result = res.result || {};
+                                    if (result.matched) {
+                                        toast('Đã khớp với phiếu ' + result.picking_name + '.', 'success');
+                                    } else {
+                                        toast(result.match_note || 'Vẫn chưa khớp được.', 'warning');
+                                    }
+                                    loadCustomsList(state.customs.page);
+                                }).catch(function(e) {
+                                    toast('Lỗi thử khớp lại: ' + e.message, 'error');
+                                    setBtnLoading(self, false);
+                                });
                             });
                         });
                     }
@@ -869,9 +896,10 @@
                     }
 
                     function loadCustomsList(page) {
+                        if (!state.salerCode) { return Promise.resolve(); }
                         state.customs.page = page;
                         return rpc('/misa_sale_status/api/customs/list', {
-                            search: state.customs.search, pending_only: state.customs.pendingOnly,
+                            saler_code: state.salerCode, search: state.customs.search, pending_only: state.customs.pendingOnly,
                             limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE,
                         }).then(function(res) {
                             var data = res.data || {};

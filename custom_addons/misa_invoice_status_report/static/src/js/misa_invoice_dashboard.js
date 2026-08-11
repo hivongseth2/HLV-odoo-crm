@@ -1025,6 +1025,22 @@ export class MisaInvoiceDashboard extends Component {
         }
     }
 
+    /** Thử khớp lại NGAY 1 dòng hải quan (không cần chờ cron 30 phút) — dùng khi vừa tạo/hoàn
+     * tất phiếu xuất kho hoặc vừa sửa mã hàng (default_code) trên Odoo. */
+    async retryCustomsMatch(lineId) {
+        try {
+            const result = await this.orm.call("stock.picking", "retry_misa_customs_match", [lineId], {});
+            if (result.matched) {
+                this.notification.add("Đã khớp với phiếu " + result.picking_name + ".", { type: "success" });
+            } else {
+                this.notification.add(result.match_note || "Vẫn chưa khớp được.", { type: "warning" });
+            }
+            await this.loadCustomsTab(this.state.customsTab.page);
+        } catch (e) {
+            this.notification.add("Lỗi thử khớp lại: " + (e.message || e), { type: "danger" });
+        }
+    }
+
     // ===== Tab "Đơn hàng" (phẳng, key = sale.order DH..., phân trang server-side, có search) =====
     async loadOrdersTab(page) {
         this.state.ordersTab.loading = true;

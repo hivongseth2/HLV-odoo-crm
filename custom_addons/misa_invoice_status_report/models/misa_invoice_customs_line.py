@@ -17,6 +17,10 @@ class MisaInvoiceCustomsLine(models.Model):
     refno_finance = fields.Char(string='Số chứng từ (refno_finance)')
     invoice_date = fields.Date(string='Ngày hóa đơn')
     partner_name = fields.Char(string='Khách hàng')
+    # Mã nhân viên sale trên chứng từ MISA (employee_code) — dùng để trang public
+    # /misa_sale_status chỉ hiện đúng hóa đơn của sale đang xem (so với mã đã chọn, khớp
+    # đúng cách misa_invoice_saler_code lọc dữ liệu ở phần còn lại của trang).
+    employee_code = fields.Char(string='Mã nhân viên sale (MISA)', index=True)
 
     sale_order_id = fields.Many2one('sale.order', string='Đơn bán', ondelete='set null', index=True)
     # Giữ lại mã gốc từ MISA dù có khớp được sale.order hay không — để biết ngay khi khớp
@@ -38,6 +42,10 @@ class MisaInvoiceCustomsLine(models.Model):
         ('matched', 'Đã khớp phiếu xuất kho'),
     ], string='Trạng thái khớp', default='pending', index=True, required=True)
     matched_at = fields.Datetime(string='Thời điểm khớp')
+    # Lý do CỤ THỂ đang ở trạng thái pending (không tìm thấy sản phẩm / chưa có phiếu / có
+    # phiếu nhưng lệch số lượng...) — để người dùng tự biết cần sửa gì mà không phải đoán mù
+    # hay chờ tới lượt cron sau mới biết.
+    match_note = fields.Char(string='Ghi chú khớp')
 
     fetched_by_id = fields.Many2one('res.users', string='Người ghi nhận')
     fetched_at = fields.Datetime(string='Thời điểm ghi nhận')
