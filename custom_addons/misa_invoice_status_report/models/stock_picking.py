@@ -906,6 +906,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 'amount': line.get('amount_oc') or 0.0,
             })
 
+        conflict = self._misa_invoice_customs_conflicting_picking(voucher.get('inv_no') or inv_no)
         return {
             'invoice_no': voucher.get('inv_no') or inv_no,
             'invoice_refid': refid,
@@ -915,7 +916,25 @@ class StockPickingMisaInvoiceStatus(models.Model):
             'employee_code': voucher.get('employee_code') or '',
             'total_amount': voucher.get('total_amount') or 0.0,
             'lines': preview_lines,
+            'conflict_picking_name': conflict.name if conflict else False,
         }
+
+    def _misa_invoice_customs_conflicting_picking(self, inv_no):
+        """Tìm phiếu xuất kho ĐÃ được gắn số hóa đơn này qua LUỒNG KHÁC (không phải chính lượt
+        khớp hải quan của hóa đơn này) — dùng để chặn ghi nhận trùng: nếu 1 phiếu xuất kho đã
+        có hóa đơn này rồi (thường là qua luồng thông thường theo refno=tên phiếu), ghi nhận
+        thêm lần nữa qua hải quan sẽ khiến tiền hóa đơn đó bị tính/hiện 2 lần. Loại trừ các
+        phiếu đã khớp qua CHÍNH tính năng hải quan này (từ 1 lượt lưu trước của hóa đơn này) vì
+        đó là re-sync bình thường, không phải trùng lặp."""
+        inv_no = (inv_no or '').strip()
+        if not inv_no:
+            return self.browse()
+        existing_lines = self.env['misa.invoice.customs.line'].sudo().search([('invoice_no', '=', inv_no)])
+        already_matched_picking_ids = existing_lines.mapped('match_ids.picking_id').ids
+        domain = [('misa_invoice_no', '=', inv_no)]
+        if already_matched_picking_ids:
+            domain.append(('id', 'not in', already_matched_picking_ids))
+        return self.sudo().search(domain, limit=1)
 
     @api.model
     def save_misa_customs_invoice(self, inv_no):
@@ -927,8 +946,17 @@ class StockPickingMisaInvoiceStatus(models.Model):
         Mỗi dòng vừa tạo được thử KHỚP NGAY với 1 phiếu xuất kho (nếu đã tồn tại và đã done)
         — nếu chưa có phiếu (hàng chưa xuất kho) hoặc phiếu chưa hoàn tất, dòng ở lại
         'pending' và cron định kỳ (_cron_scan_misa_customs_pending) sẽ tự thử lại sau,
-        không cần thao tác gì thêm."""
+        không cần thao tác gì thêm.
+
+        CHẶN nếu phiếu xuất kho nào đó đã được gắn hóa đơn này qua luồng khác rồi — tránh trùng
+        hóa đơn giữa phiếu xuất kho (luồng thông thường) và hải quan (bị tính tiền 2 lần)."""
         preview = self.fetch_misa_customs_invoice(inv_no)
+        conflict = self._misa_invoice_customs_conflicting_picking(preview['invoice_no'])
+        if conflict:
+            raise UserError(
+                "Hóa đơn \"%s\" đã được gắn với phiếu xuất kho %s qua luồng khác (không phải hải quan) — "
+                "không thể ghi nhận trùng, sẽ bị tính hóa đơn này 2 lần." % (preview['invoice_no'], conflict.name)
+            )
         CustomsLine = self.env['misa.invoice.customs.line'].sudo()
         CustomsLine.search([('invoice_no', '=', preview['invoice_no'])]).unlink()
 
@@ -1311,6 +1339,11 @@ class StockPickingMisaInvoiceStatus(models.Model):
 
     @api.model
     def delete_misa_customs_invoice(self, inv_no):
+        """Chỉ nhóm 'Đối soát XHD' (admin) mới được xóa — trang public /misa_sale_status chạy
+        bằng user public/portal nên KHÔNG bao giờ thuộc nhóm này, tự động chặn sale xóa dù có
+        gọi thẳng API cũng không qua được (không chỉ ẩn nút trên UI)."""
+        if not self.env.user.has_group(MISA_INVOICE_RECONCILE_GROUP):
+            raise AccessError(_("Chỉ quản trị viên (nhóm Đối soát XHD) mới được xóa hóa đơn hải quan."))
         inv_no = (inv_no or '').strip()
         if not inv_no:
             return 0
@@ -1573,6 +1606,19 @@ class StockPickingMisaInvoiceStatus(models.Model):
         rows['total']['count'] += rows['shopee']['count']
         rows['total']['actual_amount'] += rows['shopee']['actual_amount']
         rows['total']['invoice_amount'] += rows['shopee']['invoice_amount']
+
+        # Hải quan: đơn vị tính là DÒNG HÓA ĐƠN (misa.invoice.customs.line), không phải PHIẾU
+        # XUẤT KHO như các dòng khác — không cộng count vào total (khác đơn vị, sẽ làm sai tỷ
+        # lệ phiếu) và không có actual_amount riêng (hàng có thể chưa hề xuất kho ở Odoo). Chỉ
+        # cộng invoice_amount (= phần CHƯA khớp phiếu nào, xem _misa_invoice_customs_summary)
+        # vào tổng đã xuất HĐ — phần đã khớp thì tiền đã tính vào dòng 'invoiced' ở trên rồi.
+        customs_summary = Picking._misa_invoice_customs_summary(date_from, date_to)
+        rows['customs'] = {
+            'count': customs_summary['total_count'],
+            'actual_amount': 0.0,
+            'invoice_amount': customs_summary['pending_amount'],
+        }
+        rows['total']['invoice_amount'] += rows['customs']['invoice_amount']
 
         total_count = rows['total']['count'] or 1
         for row in rows.values():

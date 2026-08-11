@@ -242,6 +242,14 @@
                                 <div class="miv-tile-label">Đã xuất HĐ (Shopee)</div>
                             </div>
                         </div>
+                        <div class="miv-tile miv-tile-customs" t-on-click="() => this.openReconciliationGroup('customs')"
+                             title="Chỉ tính phần hóa đơn hải quan CHƯA khớp phiếu xuất kho nào — phần đã khớp đã tính vào ô 'Đã xuất HĐ (MISA)' rồi.">
+                            <div class="miv-tile-icon"><i class="fa fa-ship"/></div>
+                            <div class="miv-tile-body">
+                                <div class="miv-tile-value"><t t-esc="formatCurrency(reconciliationTotals.customs_invoiced_amount)"/></div>
+                                <div class="miv-tile-label">Đã xuất HĐ (Hải quan, chưa khớp PXK)</div>
+                            </div>
+                        </div>
                         <div class="miv-tile miv-tile-critical" t-on-click="() => this.openReconciliationGroup('outstanding')">
                             <div class="miv-tile-icon"><i class="fa fa-hourglass-half"/></div>
                             <div class="miv-tile-body">
@@ -899,9 +907,15 @@
                                 Có <t t-esc="customsUnmatchedCount"/> dòng không tìm thấy đơn hàng tương ứng trong Odoo
                                 (vẫn ghi nhận được, nhưng cần kiểm tra lại mã đơn).
                             </div>
+                            <div class="miv-empty miv-cell-critical" t-if="state.customsTab.preview.conflict_picking_name">
+                                <i class="fa fa-warning"/> Hóa đơn này đã được gắn với phiếu xuất kho
+                                <b><t t-esc="state.customsTab.preview.conflict_picking_name"/></b> qua luồng khác (không phải hải quan) —
+                                không thể ghi nhận, sẽ bị tính trùng 2 lần.
+                            </div>
                             <div class="miv-drawer-actions">
                                 <button class="btn btn-sm btn-secondary" t-on-click="cancelCustomsPreview">Hủy</button>
-                                <button class="btn btn-sm btn-primary" t-on-click="saveCustomsInvoice" t-att-disabled="state.customsTab.saving">
+                                <button class="btn btn-sm btn-primary" t-on-click="saveCustomsInvoice"
+                                        t-att-disabled="state.customsTab.saving or state.customsTab.preview.conflict_picking_name">
                                     <i class="fa fa-spinner fa-spin" t-if="state.customsTab.saving"/> Ghi nhận
                                 </button>
                             </div>
@@ -1543,7 +1557,8 @@
                                     t-on-click="openCustomsManualMatch">
                                 <i class="fa fa-hand-pointer-o"/> Khớp thủ công
                             </button>
-                            <button class="btn btn-sm btn-outline-danger" t-on-click="() => this.deleteCustomsInvoice(state.customsDrawerRow.invoice_no)">
+                            <button class="btn btn-sm btn-outline-danger" t-if="state.data.can_configure"
+                                    t-on-click="() => this.deleteCustomsInvoice(state.customsDrawerRow.invoice_no)">
                                 <i class="fa fa-trash"/> Xóa cả hóa đơn này
                             </button>
                         </div>
