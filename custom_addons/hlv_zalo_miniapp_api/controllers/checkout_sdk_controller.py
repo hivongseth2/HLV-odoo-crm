@@ -169,8 +169,31 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
 
             desc_text = f"Thanh toan don hang {sale_order.name}"
 
+            # 5. Đảm bảo quy tắc Zalo Checkout SDK: sum(item[i].amount) phải BẰNG ĐÚNG với amount tổng
+            final_order_amount = int(round(sale_order.amount_total)) if sale_order.amount_total else int(total_amount)
+            sdk_items = []
+            for line in sale_order.order_line:
+                if line.product_id:
+                    # price_total chứa tổng giá trị sau thuế của line
+                    line_amt = int(round(line.price_total)) if line.price_total else int(round(line.price_subtotal or (line.price_unit * line.product_uom_qty)))
+                    sdk_items.append({
+                        'id': str(line.product_id.id),
+                        'amount': line_amt,
+                    })
+
+            if not sdk_items:
+                sdk_items = [{
+                    'id': str(items[0].get('product_id')) if items else '1',
+                    'amount': final_order_amount,
+                }]
+
+            sum_sdk_items = sum(it['amount'] for it in sdk_items)
+            if sdk_items and sum_sdk_items != final_order_amount:
+                diff = final_order_amount - sum_sdk_items
+                sdk_items[-1]['amount'] += diff
+
             params_for_mac = {
-                'amount': int(sale_order.amount_total or total_amount),
+                'amount': final_order_amount,
                 'desc': desc_text,
                 'item': sdk_items,
                 'extradata': extradata_obj,
