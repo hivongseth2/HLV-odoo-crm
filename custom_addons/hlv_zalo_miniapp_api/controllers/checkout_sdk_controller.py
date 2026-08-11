@@ -192,12 +192,17 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
                 diff = final_order_amount - sum_sdk_items
                 sdk_items[-1]['amount'] += diff
 
+            # Pre-stringify extradata và method để đảm bảo MAC consistency
+            # giữa Backend (Python json.dumps) và Frontend (gửi thẳng string cho SDK)
+            extradata_str = json.dumps(extradata_obj, separators=(',', ':'))
+            method_str = json.dumps(method_obj, separators=(',', ':'))
+
             params_for_mac = {
                 'amount': final_order_amount,
                 'desc': desc_text,
                 'item': sdk_items,
-                'extradata': extradata_obj,
-                'method': method_obj
+                'extradata': extradata_str,
+                'method': method_str
             }
 
             private_key = self._get_private_key()
@@ -209,17 +214,18 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
                 }
 
             mac_str = self._generate_create_order_mac(params_for_mac, private_key)
+            _logger.info("Zalo Checkout MAC computed: %s (amount=%s)", mac_str, final_order_amount)
 
             return {
                 'status': 'success',
                 'data': {
                     'orderId': sale_order.name,
                     'odoo_id': sale_order.id,
-                    'amount': int(sale_order.amount_total or total_amount),
+                    'amount': final_order_amount,
                     'desc': desc_text,
                     'item': sdk_items,
-                    'extradata': extradata_obj,
-                    'method': method_obj,
+                    'extradata': extradata_str,
+                    'method': method_str,
                     'mac': mac_str,
                 }
             }
