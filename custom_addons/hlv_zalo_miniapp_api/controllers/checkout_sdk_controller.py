@@ -34,7 +34,7 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
         1. Gom các keys: amount, desc, extradata, item (và method nếu có)
         2. Format extradata và method về JSON String
         3. Format item về String (JSON stringified list)
-        4. Sắp xếp các key theo thứ tự từ điển A-Z
+        4. Sắp xếp các key ở cấp cao nhất (top-level) theo thứ tự từ điển A-Z
         5. Nối chuỗi dạng key=value phân cách bằng &
         6. Tạo mã HMAC-SHA256 với private_key
         """
@@ -44,15 +44,17 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
         formatted_map = {
             'amount': str(params['amount']),
             'desc': str(params['desc']),
-            'extradata': json.dumps(params['extradata'], sort_keys=True, separators=(',', ':')) if isinstance(params['extradata'], (dict, list)) else str(params['extradata']),
+            'extradata': json.dumps(params['extradata'], separators=(',', ':')) if isinstance(params['extradata'], (dict, list)) else str(params['extradata']),
             'item': json.dumps(params['item'], separators=(',', ':')) if isinstance(params['item'], (dict, list)) else str(params['item']),
         }
 
         if 'method' in params and params['method']:
-            formatted_map['method'] = json.dumps(params['method'], sort_keys=True, separators=(',', ':')) if isinstance(params['method'], (dict, list)) else str(params['method'])
+            formatted_map['method'] = json.dumps(params['method'], separators=(',', ':')) if isinstance(params['method'], (dict, list)) else str(params['method'])
 
         sorted_keys = sorted(formatted_map.keys())
         raw_data = "&".join([f"{k}={formatted_map[k]}" for k in sorted_keys])
+
+        _logger.info("Zalo Checkout MAC raw_data: %s", raw_data)
 
         mac = hmac.new(
             private_key.encode('utf-8'),
