@@ -28,6 +28,15 @@ const PICKING_STATE_FILTER_OPTIONS = [
     { value: "requested", label: "Đã đề nghị, chờ HĐ" },
     { value: "invoiced", label: "Đã xuất hóa đơn" },
 ];
+// Trạng thái riêng của hóa đơn điện tử Shopee (meInvoice) — khác hẳn tập trạng thái MISA ở
+// trên vì đây là model meinvoice.invoice.state, không phải misa_invoice_state.
+const SHOPEE_STATE_FILTER_OPTIONS = [
+    { value: "missing", label: "Chưa có HĐĐT" },
+    { value: "draft", label: "Nháp, chưa phát hành" },
+    { value: "submitted", label: "Đã gửi, chờ CQT duyệt" },
+    { value: "rejected", label: "Bị từ chối" },
+    { value: "accepted", label: "Đã phát hành" },
+];
 const DONUT_RADIUS = 54;
 const DONUT_CIRCUMFERENCE = 2 * Math.PI * DONUT_RADIUS;
 const GROUP_PAGE_SIZE = 10;
@@ -86,6 +95,13 @@ export class MisaInvoiceDashboard extends Component {
                 rows: [], total: 0, page: 1, pageSize: 20, loading: false, search: "", searchDraft: "",
                 stateFilter: "", salerFilter: "", multiRequestOnly: false,
             },
+            // Tab "Đơn Shopee": hóa đơn điện tử meInvoice riêng (amis_callback), chỉ xem —
+            // phân trang/lọc phía server nhưng trạng thái tính từ model khác nên load nguyên
+            // trang rồi cắt theo offset/limit ở backend (xem get_misa_invoice_shopee_list).
+            shopeeTab: {
+                rows: [], total: 0, page: 1, pageSize: 20, loading: false, search: "", searchDraft: "",
+                stateFilter: "",
+            },
             showScanPanel: false,
             scanProgress: { done: 0, total: 0 },
             scanLog: [],
@@ -116,6 +132,10 @@ export class MisaInvoiceDashboard extends Component {
 
     get pickingStateFilterOptions() {
         return PICKING_STATE_FILTER_OPTIONS;
+    }
+
+    get shopeeStateFilterOptions() {
+        return SHOPEE_STATE_FILTER_OPTIONS;
     }
 
     /** Danh sách tháng có thể chọn: từ mốc đối soát tới tháng hiện tại, nhãn tiếng Việt dạng số. */
@@ -169,6 +189,8 @@ export class MisaInvoiceDashboard extends Component {
             this.loadOrdersTab(this.state.ordersTab.page || 1);
         } else if (tab === "daily") {
             this.loadDailyTab();
+        } else if (tab === "shopee") {
+            this.loadShopeeTab(this.state.shopeeTab.page || 1);
         }
     }
 
@@ -191,6 +213,7 @@ export class MisaInvoiceDashboard extends Component {
             this.loadPickingsTab(1),
             this.loadOrdersTab(1),
             this.loadDailyTab(),
+            this.loadShopeeTab(1),
         ]);
         this._applyData(data);
         this.state.urgent = urgent;
@@ -747,6 +770,72 @@ export class MisaInvoiceDashboard extends Component {
         } catch (e) {
             this.notification.add("Lỗi xuất Excel: " + (e.message || e), { type: "danger" });
         }
+    }
+
+    // ===== Tab "Đơn Shopee" (hóa đơn điện tử meInvoice riêng, amis_callback, chỉ xem) =====
+    async loadShopeeTab(page) {
+        this.state.shopeeTab.loading = true;
+        try {
+            const resp = await this.orm.call(
+                "stock.picking", "get_misa_invoice_shopee_list", [],
+                {
+                    limit: this.state.shopeeTab.pageSize,
+                    offset: (page - 1) * this.state.shopeeTab.pageSize,
+                    search: this.state.shopeeTab.search || false,
+                    state: this.state.shopeeTab.stateFilter || false,
+                    date_from: this.state.shipFrom || false,
+                    date_to: this.state.shipTo || false,
+                }
+            );
+            this.state.shopeeTab.rows = resp.rows;
+            this.state.shopeeTab.total = resp.total;
+            this.state.shopeeTab.page = page;
+        } catch (e) {
+            this.notification.add("Lỗi tải danh sách đơn Shopee: " + (e.message || e), { type: "danger" });
+        }
+        this.state.shopeeTab.loading = false;
+    }
+
+    get shopeeTabTotalPages() {
+        return Math.max(1, Math.ceil(this.state.shopeeTab.total / this.state.shopeeTab.pageSize));
+    }
+
+    shopeeTabPrevPage() {
+        if (this.state.shopeeTab.page > 1) {
+            this.loadShopeeTab(this.state.shopeeTab.page - 1);
+        }
+    }
+
+    shopeeTabNextPage() {
+        if (this.state.shopeeTab.page < this.shopeeTabTotalPages) {
+            this.loadShopeeTab(this.state.shopeeTab.page + 1);
+        }
+    }
+
+    onShopeeSearchInput(ev) {
+        this.state.shopeeTab.searchDraft = ev.target.value;
+    }
+
+    onShopeeSearchKeydown(ev) {
+        if (ev.key === "Enter") {
+            this.submitShopeeSearch();
+        }
+    }
+
+    submitShopeeSearch() {
+        this.state.shopeeTab.search = this.state.shopeeTab.searchDraft.trim();
+        this.loadShopeeTab(1);
+    }
+
+    clearShopeeSearch() {
+        this.state.shopeeTab.search = "";
+        this.state.shopeeTab.searchDraft = "";
+        this.loadShopeeTab(1);
+    }
+
+    onShopeeStateFilterChange(ev) {
+        this.state.shopeeTab.stateFilter = ev.target.value || "";
+        this.loadShopeeTab(1);
     }
 
     // ===== Tab "Đơn hàng" (phẳng, key = sale.order DH..., phân trang server-side, có search) =====

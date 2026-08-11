@@ -45,6 +45,18 @@ MISA_ORDER_STATE_LABELS = {
     'invoiced': 'Đã xuất hóa đơn',
 }
 
+# Đơn Shopee dùng luồng hóa đơn điện tử "meInvoice" riêng của amis_callback (model
+# meinvoice.invoice), không đi qua sa_invoice_request như MISA — trạng thái lấy thẳng từ
+# field `state` của meinvoice.invoice (draft/submitted/rejected/accepted), + 'missing' tự
+# thêm khi đơn Shopee chưa có bản ghi hóa đơn nào (hoặc tất cả đã bị hủy).
+MISA_SHOPEE_INVOICE_STATE_LABELS = {
+    'missing': 'Chưa có HĐĐT',
+    'draft': 'Nháp, chưa phát hành',
+    'submitted': 'Đã gửi, chờ CQT duyệt',
+    'rejected': 'Bị từ chối',
+    'accepted': 'Đã phát hành',
+}
+
 
 class StockPickingMisaInvoiceStatus(models.Model):
     _inherit = 'stock.picking'
@@ -627,13 +639,19 @@ class StockPickingMisaInvoiceStatus(models.Model):
     # ==================== Dữ liệu cho Dashboard OWL ====================
 
     def _misa_invoice_dashboard_base_domain(
-        self, date_from=False, date_to=False, invoice_date_from=False, invoice_date_to=False,
+        self, date_from=False, date_to=False, invoice_date_from=False, invoice_date_to=False, shopee=False,
     ):
         """Domain nền cho mọi truy vấn đối soát: phiếu xuất kho đã done, từ mốc
         đối soát trở đi. date_from/date_to lọc theo NGÀY XUẤT KHO (date_done, có thể
         là 1 ngày cụ thể nếu from=to, hoặc 1 khoảng) — chỉ dùng để THU HẸP thêm, không
         bao giờ vượt ra ngoài mốc đối soát. invoice_date_from/to lọc theo NGÀY XUẤT
-        HÓA ĐƠN (misa_invoice_date) — độc lập với ngày xuất kho."""
+        HÓA ĐƠN (misa_invoice_date) — độc lập với ngày xuất kho.
+
+        shopee=False (mặc định): phạm vi đối soát MISA (sa_invoice_request) như trước giờ —
+        loại phiếu Shopee ra vì chúng dùng luồng hóa đơn điện tử meInvoice riêng, không đi qua
+        MISA. shopee=True: đảo ngược lại — CHỈ lấy phiếu Shopee, dùng cho tab/đối soát riêng
+        (xem _misa_invoice_shopee_domain) để tổng tiền xuất kho toàn hệ thống có thể cộng đủ
+        cả 2 luồng lại (MISA + Shopee) mà không đếm trùng hay bỏ sót phiếu nào."""
         lower = self._get_misa_invoice_cutoff_date()
         if date_from:
             try:
@@ -647,8 +665,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
             ('picking_type_id.code', '=', 'outgoing'),
             ('state', '=', 'done'),
             ('date_done', '>=', fields.Datetime.to_string(datetime.combine(lower, dt_time.min))),
-            # Đơn Shopee dùng luồng meInvoice riêng; phiếu trả hàng không cần xuất HĐ mới.
-            ('misa_invoice_is_shopee', '=', False),
+            ('misa_invoice_is_shopee', '=', bool(shopee)),
             ('origin', 'not ilike', 'trả hàng'),
         ]
         if date_to:
@@ -665,6 +682,139 @@ class StockPickingMisaInvoiceStatus(models.Model):
         if invoice_date_to:
             domain.append(('misa_invoice_date', '<=', invoice_date_to))
         return domain
+
+    # ==================== Đơn Shopee (hóa đơn điện tử meInvoice riêng, amis_callback) ====================
+
+    def _misa_invoice_shopee_domain(self, date_from=False, date_to=False):
+        return self._misa_invoice_dashboard_base_domain(date_from, date_to, shopee=True)
+
+    def _misa_invoice_shopee_representative_invoice(self, order):
+        """1 đơn Shopee có thể có nhiều bản ghi meinvoice.invoice theo thời gian (nháp, hủy rồi
+        tạo lại...) — lấy bản ĐÃ PHÁT HÀNH (accepted) mới nhất nếu có (đúng nghĩa hóa đơn hợp
+        lệ cuối cùng đại diện cho đơn), không thì lấy bản chưa hủy mới nhất để biết đang ở
+        bước nào. Bỏ qua hẳn các bản đã hủy (cancelled) — không phản ánh thực trạng hiện tại."""
+        invoices = order.amis_draft_invoice_ids.filtered(lambda inv: inv.state != 'cancelled')
+        if not invoices:
+            return self.env['meinvoice.invoice'].browse()
+        accepted = invoices.filtered(lambda inv: inv.state == 'accepted')
+        if accepted:
+            return accepted.sorted('write_date', reverse=True)[0]
+        return invoices.sorted('write_date', reverse=True)[0]
+
+    def _misa_invoice_shopee_picking_to_row(self, picking, today):
+        orders = picking.misa_invoice_sale_order_ids
+        invoice = self.env['meinvoice.invoice'].browse()
+        for order in orders:
+            candidate = self._misa_invoice_shopee_representative_invoice(order)
+            if not candidate:
+                continue
+            if not invoice or candidate.state == 'accepted':
+                invoice = candidate
+            if invoice.state == 'accepted':
+                break
+        state = invoice.state if invoice else 'missing'
+        done_date = picking.date_done.date() if picking.date_done else False
+        return {
+            'id': picking.id,
+            'name': picking.name,
+            'partner_name': picking.misa_invoice_root_partner_id.display_name or picking.partner_id.display_name or '',
+            'sale_order_name': ', '.join(orders.mapped('name')),
+            'saler_code': picking.misa_invoice_saler_code or '',
+            'date_done': fields.Date.to_string(done_date) if done_date else '',
+            'days_pending': (today - done_date).days if done_date else 0,
+            'actual_amount': picking.x_studio_tng_tin_sau_thu or 0.0,
+            'state': state,
+            'state_label': MISA_SHOPEE_INVOICE_STATE_LABELS.get(state, state),
+            'invoice_no': invoice.inv_no or False,
+            'invoice_date': fields.Date.to_string(invoice.inv_date_result) if invoice and invoice.inv_date_result else False,
+            'invoice_amount': (invoice.total_amount_oc or 0.0) if state == 'accepted' else 0.0,
+        }
+
+    def _misa_invoice_shopee_summary(self, domain):
+        """Tổng hợp toàn bộ phiếu Shopee khớp domain — dùng cho cả tile tổng quan lẫn số liệu
+        nền cho tab Đơn Shopee. Phải build từng dòng bằng Python (không read_group được) vì
+        trạng thái/tiền HĐĐT nằm ở model meinvoice.invoice, không phải field trực tiếp trên
+        stock.picking — chấp nhận được vì tập Shopee luôn là 1 phần nhỏ của tổng phiếu."""
+        Picking = self.sudo()
+        pickings = Picking.search(domain)
+        today = fields.Date.context_today(self)
+        rows = [Picking._misa_invoice_shopee_picking_to_row(p, today) for p in pickings]
+        by_state = {key: {'count': 0, 'actual_amount': 0.0, 'invoice_amount': 0.0} for key in MISA_SHOPEE_INVOICE_STATE_LABELS}
+        for row in rows:
+            bucket = by_state[row['state']]
+            bucket['count'] += 1
+            bucket['actual_amount'] += row['actual_amount']
+            bucket['invoice_amount'] += row['invoice_amount']
+        return {
+            'rows': rows,
+            'by_state': by_state,
+            'total_count': len(rows),
+            'total_actual_amount': sum(r['actual_amount'] for r in rows),
+            'total_invoice_amount': sum(r['invoice_amount'] for r in rows),
+        }
+
+    @api.model
+    def get_misa_invoice_shopee_list(
+        self, limit=20, offset=0, search=False, state=False, saler_code=False,
+        date_from=False, date_to=False,
+    ):
+        """Tab 'Đơn Shopee' trên dashboard nội bộ — danh sách phiếu Shopee + tình trạng hóa
+        đơn điện tử (meInvoice), lọc/phân trang bằng Python vì trạng thái tính từ model khác
+        (xem _misa_invoice_shopee_summary)."""
+        Picking = self.sudo()
+        domain = Picking._misa_invoice_shopee_domain(date_from, date_to)
+        if saler_code:
+            value = False if saler_code == MISA_INVOICE_UNASSIGNED_SALER else saler_code
+            domain.append(('misa_invoice_saler_code', '=', value))
+        if search:
+            domain += ['|', ('name', 'ilike', search), ('misa_invoice_sale_order_ids.name', 'ilike', search)]
+
+        summary = Picking._misa_invoice_shopee_summary(domain)
+        rows = summary['rows']
+        if state:
+            rows = [row for row in rows if row['state'] == state]
+        rows.sort(key=lambda row: row['date_done'], reverse=True)
+        total = len(rows)
+        return {
+            'rows': rows[offset:offset + limit],
+            'total': total,
+            'counts': {key: bucket['count'] for key, bucket in summary['by_state'].items()},
+        }
+
+    @api.model
+    def get_misa_invoice_reconciliation_totals(self, date_from=False, date_to=False, saler_code=False):
+        """Số liệu đối chiếu tổng: Tổng tiền xuất kho (MISA + Shopee gộp lại) = tiền đã xuất
+        HĐ MISA + tiền đã xuất HĐ Shopee + tiền còn lại chưa xuất HĐ (ở luồng nào cũng tính) —
+        dùng chung cho dashboard nội bộ VÀ trang public /misa_sale_status, để con số tổng luôn
+        khớp giữa các mảnh thay vì mỗi nơi tính rời rạc ra kết quả lệch nhau."""
+        Picking = self.sudo()
+        misa_domain = Picking._misa_invoice_dashboard_base_domain(date_from, date_to)
+        shopee_domain = Picking._misa_invoice_shopee_domain(date_from, date_to)
+        if saler_code:
+            value = False if saler_code == MISA_INVOICE_UNASSIGNED_SALER else saler_code
+            misa_domain = misa_domain + [('misa_invoice_saler_code', '=', value)]
+            shopee_domain = shopee_domain + [('misa_invoice_saler_code', '=', value)]
+
+        misa_actual_group = Picking.read_group(misa_domain, ['x_studio_tng_tin_sau_thu:sum'], [])
+        misa_actual_total = (misa_actual_group[0]['x_studio_tng_tin_sau_thu'] or 0.0) if misa_actual_group else 0.0
+        misa_invoiced_group = Picking.read_group(
+            misa_domain + [('misa_invoice_state', '=', 'invoiced')], ['misa_invoice_amount:sum'], [],
+        )
+        misa_invoiced_total = (misa_invoiced_group[0]['misa_invoice_amount'] or 0.0) if misa_invoiced_group else 0.0
+
+        shopee_summary = Picking._misa_invoice_shopee_summary(shopee_domain)
+
+        total_actual_amount = misa_actual_total + shopee_summary['total_actual_amount']
+        total_invoiced_amount = misa_invoiced_total + shopee_summary['total_invoice_amount']
+
+        return {
+            'total_actual_amount': total_actual_amount,
+            'misa_actual_amount': misa_actual_total,
+            'misa_invoiced_amount': misa_invoiced_total,
+            'shopee_actual_amount': shopee_summary['total_actual_amount'],
+            'shopee_invoiced_amount': shopee_summary['total_invoice_amount'],
+            'outstanding_amount': total_actual_amount - total_invoiced_amount,
+        }
 
     def _misa_invoice_state_breakdown(self, domain):
         Picking = self.sudo()
@@ -850,8 +1000,11 @@ class StockPickingMisaInvoiceStatus(models.Model):
         self, date_from=False, date_to=False, invoice_date_from=False, invoice_date_to=False,
     ):
         """Bảng 'Tình trạng xuất hóa đơn': đúng 4 trạng thái đối soát đã dùng xuyên suốt
-        dashboard (Chưa kiểm tra / Chưa có đề nghị / Đã đề nghị chờ HĐ / Đã xuất HĐ) + Ngoại lệ,
-        kèm số phiếu / tổng tiền XK / tổng tiền đã xuất HĐ / tỷ lệ phiếu."""
+        dashboard (Chưa kiểm tra / Chưa có đề nghị / Đã đề nghị chờ HĐ / Đã xuất HĐ) + Ngoại lệ
+        + Đơn Shopee (luồng hóa đơn điện tử meInvoice riêng), kèm số phiếu / tổng tiền XK /
+        tổng tiền đã xuất HĐ / tỷ lệ phiếu. Dòng Shopee được CỘNG VÀO dòng TỔNG CỘNG để tổng
+        tiền xuất kho/đã xuất HĐ phản ánh đúng TOÀN BỘ hệ thống (MISA + Shopee), không chỉ
+        riêng phần MISA — đây là điểm mấu chốt để 2 số cộng lại luôn khớp với tổng."""
         # Gộp bằng 1 lệnh read_group (SQL GROUP BY) thay vì search() cả nghìn phiếu rồi
         # filtered()/mapped() nhiều lần trong Python — tránh tải cả recordset lớn vào bộ nhớ.
         Picking = self.sudo()
@@ -890,6 +1043,17 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 rows[state]['actual_amount'] += actual_sum
                 if state == 'invoiced':
                     rows[state]['invoice_amount'] += invoice_sum
+
+        shopee_domain = Picking._misa_invoice_shopee_domain(date_from, date_to)
+        shopee_summary = Picking._misa_invoice_shopee_summary(shopee_domain)
+        rows['shopee'] = {
+            'count': shopee_summary['total_count'],
+            'actual_amount': shopee_summary['total_actual_amount'],
+            'invoice_amount': shopee_summary['total_invoice_amount'],
+        }
+        rows['total']['count'] += rows['shopee']['count']
+        rows['total']['actual_amount'] += rows['shopee']['actual_amount']
+        rows['total']['invoice_amount'] += rows['shopee']['invoice_amount']
 
         total_count = rows['total']['count'] or 1
         for row in rows.values():
@@ -1237,6 +1401,28 @@ class StockPickingMisaInvoiceStatus(models.Model):
         code = self._misa_invoice_validate_public_saler_code(saler_code)
         return self.sudo().get_misa_invoice_daily_stats(
             date_from=date_from, date_to=date_to, saler_code=code, weekly=weekly,
+        )
+
+    @api.model
+    def get_misa_invoice_public_shopee_list(
+        self, saler_code, search=False, state=False, date_from=False, date_to=False,
+        limit=50, offset=0,
+    ):
+        """Tab 'Đơn Shopee' trên trang public, scope theo đúng 1 mã sale — tái dùng
+        get_misa_invoice_shopee_list (nội bộ) sau khi xác thực mã sale."""
+        code = self._misa_invoice_validate_public_saler_code(saler_code)
+        return self.sudo().get_misa_invoice_shopee_list(
+            limit=limit, offset=offset, search=search, state=state, saler_code=code,
+            date_from=date_from, date_to=date_to,
+        )
+
+    @api.model
+    def get_misa_invoice_public_reconciliation_totals(self, saler_code, date_from=False, date_to=False):
+        """Số liệu đối chiếu tổng (xem get_misa_invoice_reconciliation_totals) scope theo
+        đúng 1 mã sale cho trang public."""
+        code = self._misa_invoice_validate_public_saler_code(saler_code)
+        return self.sudo().get_misa_invoice_reconciliation_totals(
+            date_from=date_from, date_to=date_to, saler_code=code,
         )
 
     @api.model

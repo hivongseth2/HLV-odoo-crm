@@ -266,6 +266,13 @@
                                 <td class="miv-col-num"><t t-esc="formatCurrency(state.statusSummary.exception.invoice_amount)"/></td>
                                 <td class="miv-col-num"><t t-esc="state.statusSummary.exception.percentage"/>%</td>
                             </tr>
+                            <tr t-if="state.statusSummary.shopee" t-on-click="() => this.switchTab('shopee')" class="miv-row-clickable">
+                                <td class="miv-cell-shopee"><b>Đơn Shopee (HĐĐT riêng)</b></td>
+                                <td class="miv-col-num"><t t-esc="state.statusSummary.shopee.count"/></td>
+                                <td class="miv-col-num"><t t-esc="formatCurrency(state.statusSummary.shopee.actual_amount)"/></td>
+                                <td class="miv-col-num"><t t-esc="formatCurrency(state.statusSummary.shopee.invoice_amount)"/></td>
+                                <td class="miv-col-num"><t t-esc="state.statusSummary.shopee.percentage"/>%</td>
+                            </tr>
                             <tr class="miv-total-row">
                                 <td><b>TỔNG CỘNG</b></td>
                                 <td class="miv-col-num"><b><t t-esc="state.statusSummary.total.count"/></b></td>
@@ -307,6 +314,10 @@
                         <button t-attf-class="miv-tab {{ state.activeTab === 'orders' ? 'active' : '' }}"
                                 t-on-click="() => this.switchTab('orders')">
                             Đơn hàng <span class="miv-tab-count"><t t-esc="state.ordersTab.total"/></span>
+                        </button>
+                        <button t-attf-class="miv-tab {{ state.activeTab === 'shopee' ? 'active' : '' }}"
+                                t-on-click="() => this.switchTab('shopee')">
+                            Đơn Shopee <span class="miv-tab-count"><t t-esc="state.shopeeTab.total"/></span>
                         </button>
                         <a href="#" class="miv-link miv-tab-viewall" t-on-click.prevent="openFullList">
                             <t t-esc="state.activeTab === 'orders' ? 'Xem tất cả đơn hàng' : 'Xem tất cả phiếu'"/> <i class="fa fa-arrow-right"/>
@@ -709,6 +720,76 @@
                                 </button>
                             </div>
                             <div class="miv-empty" t-if="!state.ordersTab.rows.length">Không tìm thấy đơn hàng nào.</div>
+                        </t>
+                    </div>
+
+                    <!-- === Tab: Đơn Shopee (hóa đơn điện tử meInvoice riêng, chỉ xem, amis_callback) === -->
+                    <div t-if="state.activeTab === 'shopee'" class="miv-tab-panel">
+                        <div class="miv-orders-search">
+                            <i class="fa fa-search"/>
+                            <input type="text" placeholder="Tìm theo mã phiếu hoặc mã đơn hàng Shopee"
+                                   t-att-value="state.shopeeTab.searchDraft"
+                                   t-on-input="onShopeeSearchInput" t-on-keydown="onShopeeSearchKeydown"/>
+                            <button class="btn btn-sm miv-cutoff-save" t-on-click="submitShopeeSearch">Tìm</button>
+                            <button class="btn btn-sm miv-cutoff-save" t-if="state.shopeeTab.search" t-on-click="clearShopeeSearch">
+                                <i class="fa fa-times"/> Bỏ tìm
+                            </button>
+                            <select class="miv-cutoff-input" t-on-change="onShopeeStateFilterChange">
+                                <option value="">Tất cả trạng thái</option>
+                                <t t-foreach="shopeeStateFilterOptions" t-as="opt" t-key="opt.value">
+                                    <option t-att-value="opt.value" t-att-selected="state.shopeeTab.stateFilter === opt.value" t-esc="opt.label"/>
+                                </t>
+                            </select>
+                        </div>
+                        <div class="miv-loading" t-if="state.shopeeTab.loading">
+                            <i class="fa fa-spinner fa-spin"/> Đang tải...
+                        </div>
+                        <t t-else="">
+                            <table class="miv-table miv-table-compact" t-if="state.shopeeTab.rows.length">
+                                <thead>
+                                    <tr>
+                                        <th>Phiếu</th>
+                                        <th>Đơn bán</th>
+                                        <th>Khách hàng</th>
+                                        <th>Ngày xuất kho</th>
+                                        <th class="miv-col-num">Tiền thực xuất</th>
+                                        <th>Trạng thái HĐĐT</th>
+                                        <th>Số hóa đơn</th>
+                                        <th>Ngày hóa đơn</th>
+                                        <th class="miv-col-num">Tiền hóa đơn</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr t-foreach="state.shopeeTab.rows" t-as="row" t-key="row.id">
+                                        <td><b><t t-esc="row.name"/></b></td>
+                                        <td><t t-esc="row.sale_order_name"/></td>
+                                        <td><t t-esc="row.partner_name"/></td>
+                                        <td class="miv-col-num"><t t-esc="row.date_done"/></td>
+                                        <td class="miv-col-num"><t t-esc="formatCurrency(row.actual_amount)"/></td>
+                                        <td>
+                                            <span t-attf-class="miv-badge miv-badge-state-{{ row.state }}">
+                                                <t t-esc="row.state_label"/>
+                                            </span>
+                                        </td>
+                                        <td><t t-esc="row.invoice_no or '—'"/></td>
+                                        <td><t t-esc="row.invoice_date or '—'"/></td>
+                                        <td class="miv-col-num"><t t-esc="row.state === 'accepted' ? formatCurrency(row.invoice_amount) : '—'"/></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <div class="miv-pagination" t-if="state.shopeeTab.total > state.shopeeTab.pageSize">
+                                <button class="btn btn-sm miv-page-btn" t-on-click="shopeeTabPrevPage" t-att-disabled="state.shopeeTab.page &lt;= 1">
+                                    <i class="fa fa-chevron-left"/>
+                                </button>
+                                <span class="miv-page-label">
+                                    Trang <t t-esc="state.shopeeTab.page"/> / <t t-esc="shopeeTabTotalPages"/>
+                                    (<t t-esc="state.shopeeTab.total"/> phiếu)
+                                </span>
+                                <button class="btn btn-sm miv-page-btn" t-on-click="shopeeTabNextPage" t-att-disabled="state.shopeeTab.page &gt;= shopeeTabTotalPages">
+                                    <i class="fa fa-chevron-right"/>
+                                </button>
+                            </div>
+                            <div class="miv-empty" t-if="!state.shopeeTab.rows.length">Không có đơn Shopee nào trong phạm vi đang lọc.</div>
                         </t>
                     </div>
                 </div>
