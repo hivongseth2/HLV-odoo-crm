@@ -1,5 +1,3 @@
-from markupsafe import Markup
-
 from odoo import fields, models
 
 
@@ -14,14 +12,5 @@ class MisaInvoiceExceptionWizard(models.TransientModel):
 
     def action_confirm(self):
         self.ensure_one()
-        self.picking_ids.write({
-            'misa_invoice_exception': True,
-            'misa_invoice_exception_reason': self.reason,
-            'misa_invoice_exception_by_id': self.env.user.id,
-            'misa_invoice_exception_date': fields.Datetime.now(),
-        })
-        for picking in self.picking_ids:
-            picking.message_post(
-                body=Markup("<b>Đã đánh dấu ngoại lệ xuất hóa đơn MISA.</b><br/>Lý do: %s") % self.reason
-            )
+        self.picking_ids._misa_invoice_apply_exception(self.reason)
         return {'type': 'ir.actions.act_window_close'}
