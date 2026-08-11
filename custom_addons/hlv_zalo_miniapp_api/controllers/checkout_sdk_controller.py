@@ -44,12 +44,12 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
         formatted_map = {
             'amount': str(params['amount']),
             'desc': str(params['desc']),
-            'extradata': json.dumps(params['extradata'], separators=(',', ':')) if isinstance(params['extradata'], (dict, list)) else str(params['extradata']),
+            'extradata': json.dumps(params['extradata'], sort_keys=True, separators=(',', ':')) if isinstance(params['extradata'], (dict, list)) else str(params['extradata']),
             'item': json.dumps(params['item'], separators=(',', ':')) if isinstance(params['item'], (dict, list)) else str(params['item']),
         }
 
         if 'method' in params and params['method']:
-            formatted_map['method'] = json.dumps(params['method'], separators=(',', ':')) if isinstance(params['method'], (dict, list)) else str(params['method'])
+            formatted_map['method'] = json.dumps(params['method'], sort_keys=True, separators=(',', ':')) if isinstance(params['method'], (dict, list)) else str(params['method'])
 
         sorted_keys = sorted(formatted_map.keys())
         raw_data = "&".join([f"{k}={formatted_map[k]}" for k in sorted_keys])
@@ -176,6 +176,13 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
             }
 
             private_key = self._get_private_key()
+            if not private_key:
+                _logger.error("CHƯA CẤU HÌNH Private Key cho Zalo Checkout SDK! Vui lòng cài đặt System Parameter 'hlv_zalo_miniapp.checkout_private_key'.")
+                return {
+                    'status': 'error',
+                    'message': 'Odoo Server chưa được cấu hình Private Key cho Zalo Checkout SDK. Vui lòng vào Odoo Settings > System Parameters thêm hlv_zalo_miniapp.checkout_private_key'
+                }
+
             mac_str = self._generate_create_order_mac(params_for_mac, private_key)
 
             return {
