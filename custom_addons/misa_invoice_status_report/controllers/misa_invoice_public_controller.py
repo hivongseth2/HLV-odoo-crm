@@ -218,6 +218,45 @@ class MisaInvoicePublicController(http.Controller):
             _logger.exception('misa_sale_status api_customs_delete error')
             return _json_error(str(e))
 
+    @http.route('/misa_sale_status/api/customs/search_pickings', type='json', auth='public', methods=['POST'])
+    def api_customs_search_pickings(self, line_id=None, search='', **kwargs):
+        if not _pw_allowed():
+            return _json_error('unauthorized')
+        try:
+            rows = request.env['stock.picking'].sudo().search_pickings_for_customs_manual_match(
+                int(line_id), search=search or False,
+            )
+            return {'status': 'success', 'rows': rows}
+        except Exception as e:
+            _logger.exception('misa_sale_status api_customs_search_pickings error')
+            return _json_error(str(e))
+
+    @http.route('/misa_sale_status/api/customs/manual_match', type='json', auth='public', methods=['POST'])
+    def api_customs_manual_match(self, line_id=None, picking_id=None, quantity=False, **kwargs):
+        if not _pw_allowed():
+            return _json_error('unauthorized')
+        try:
+            result = request.env['stock.picking'].sudo().set_manual_customs_match(
+                int(line_id), int(picking_id), quantity=quantity or False,
+            )
+            return {'status': 'success', 'result': result}
+        except UserError as e:
+            return _json_error(str(e))
+        except Exception as e:
+            _logger.exception('misa_sale_status api_customs_manual_match error')
+            return _json_error(str(e))
+
+    @http.route('/misa_sale_status/api/customs/remove_match', type='json', auth='public', methods=['POST'])
+    def api_customs_remove_match(self, match_id=None, **kwargs):
+        if not _pw_allowed():
+            return _json_error('unauthorized')
+        try:
+            result = request.env['stock.picking'].sudo().remove_customs_match(int(match_id))
+            return {'status': 'success', 'result': result}
+        except Exception as e:
+            _logger.exception('misa_sale_status api_customs_remove_match error')
+            return _json_error(str(e))
+
     @http.route('/misa_sale_status/api/check', type='json', auth='public', methods=['POST'])
     def api_check(self, picking_ids=None, saler_code='', **kwargs):
         if not _pw_allowed():

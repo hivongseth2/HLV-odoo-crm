@@ -1,4 +1,4 @@
-from odoo import fields, models
+from odoo import api, fields, models
 
 
 class MisaInvoiceCustomsLine(models.Model):
@@ -33,19 +33,38 @@ class MisaInvoiceCustomsLine(models.Model):
     unit_price = fields.Float(string='Đơn giá')
     amount = fields.Float(string='Thành tiền (chưa VAT)')
 
-    # Khi lưu, hệ thống thử tìm NGAY 1 phiếu xuất kho (đã done) khớp đơn bán + mã hàng + số
-    # lượng — nếu phiếu chưa tồn tại hoặc chưa hoàn tất, dòng này ở lại 'pending' và cron định
-    # kỳ (_cron_scan_misa_customs_pending) sẽ tự thử lại, không cần thao tác gì thêm.
-    picking_id = fields.Many2one('stock.picking', string='Phiếu xuất kho khớp', ondelete='set null', index=True)
+    # Khi lưu, hệ thống thử tìm NGAY phiếu xuất kho (đã done) khớp đơn bán + mã hàng — nếu
+    # phiếu chưa tồn tại hoặc chưa hoàn tất, dòng này ở lại 'pending' và cron định kỳ
+    # (_cron_scan_misa_customs_pending) sẽ tự thử lại, không cần thao tác gì thêm. 1 dòng có
+    # thể được xuất kho THÀNH NHIỀU ĐỢT (hóa đơn ghi 2 nhưng phiếu đầu chỉ xuất 1) nên quan hệ
+    # với phiếu xuất kho tách ra bảng match_ids riêng thay vì 1 Many2one duy nhất.
+    match_ids = fields.One2many('misa.invoice.customs.match', 'line_id', string='Các lượt khớp phiếu xuất kho')
+    # picking_id giữ lại = phiếu của lượt khớp GẦN NHẤT — chỉ để hiển thị nhanh (list, badge...)
+    # mà không phải join qua match_ids; nguồn sự thật thực sự là match_ids.
+    picking_id = fields.Many2one(
+        'stock.picking', string='Phiếu xuất kho (gần nhất)', compute='_compute_matched_qty', store=True,
+    )
+    matched_qty = fields.Float(string='Số lượng đã khớp', compute='_compute_matched_qty', store=True)
     match_state = fields.Selection([
         ('pending', 'Chờ xuất kho'),
+        ('partial', 'Khớp một phần'),
         ('matched', 'Đã khớp phiếu xuất kho'),
     ], string='Trạng thái khớp', default='pending', index=True, required=True)
     matched_at = fields.Datetime(string='Thời điểm khớp')
-    # Lý do CỤ THỂ đang ở trạng thái pending (không tìm thấy sản phẩm / chưa có phiếu / có
-    # phiếu nhưng lệch số lượng...) — để người dùng tự biết cần sửa gì mà không phải đoán mù
-    # hay chờ tới lượt cron sau mới biết.
+    # Lý do CỤ THỂ đang ở trạng thái pending/partial (không tìm thấy sản phẩm / chưa có phiếu /
+    # còn thiếu số lượng...) — để người dùng tự biết cần sửa gì mà không phải đoán mù hay chờ
+    # tới lượt cron sau mới biết.
     match_note = fields.Char(string='Ghi chú khớp')
 
     fetched_by_id = fields.Many2one('res.users', string='Người ghi nhận')
     fetched_at = fields.Datetime(string='Thời điểm ghi nhận')
+
+    @api.depends('match_ids.quantity', 'match_ids.picking_id', 'match_ids.matched_at')
+    def _compute_matched_qty(self):
+        for line in self:
+            line.matched_qty = sum(line.match_ids.mapped('quantity'))
+            line.picking_id = line.match_ids[-1].picking_id if line.match_ids else False
+
+    def remaining_qty(self):
+        self.ensure_one()
+        return max(self.quantity - self.matched_qty, 0.0)
