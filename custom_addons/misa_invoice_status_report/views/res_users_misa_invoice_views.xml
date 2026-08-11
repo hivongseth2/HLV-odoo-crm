@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_users_form_misa_invoice_saler_codes" model="ir.ui.view">
+        <field name="name">res.users.form.misa.invoice.saler.codes</field>
+        <field name="model">res.users</field>
+        <field name="inherit_id" ref="base.view_users_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='name']" position="after">
+                <field name="x_misa_saler_codes" placeholder="NV001, NV002"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

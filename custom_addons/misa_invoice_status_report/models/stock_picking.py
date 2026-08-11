@@ -241,6 +241,11 @@ class StockPickingMisaInvoiceStatus(models.Model):
         # nó lọt vào 1 lượt quét khác, gây ra nghịch lý "phiếu ăn theo đã xuất HĐ nhưng phiếu
         # gốc lại chưa" dù cùng 1 đề nghị.
         extra_masters_to_check = self.browse()
+        # Tra theo mã đơn hàng chỉ là NGƯỜI DÙNG SUY LUẬN (order code không phải khóa join
+        # đáng tin cậy như refno=tên phiếu) — nếu 1 đơn có NHIỀU phiếu xuất kho cùng "missing"
+        # trong đợt kiểm tra này, chỉ cho phiếu ĐẦU TIÊN nhận đề nghị tìm được qua mã đơn đó,
+        # tránh mỗi phiếu tưởng nhầm mình đã xuất HĐ full tiền của cùng 1 đề nghị (double-count).
+        claimed_order_refnos = {}
         for picking in self:
             if picking.picking_type_code != 'outgoing':
                 continue
@@ -260,6 +265,31 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 )
                 results.append({'id': picking.id, 'name': picking.name, 'error': str(e)})
                 continue
+
+            # Tra theo tên phiếu không ra đề nghị nào — trước khi kết luận "chưa có đề nghị",
+            # thử lại bằng mã ĐƠN HÀNG (DH...) liên quan: sale nhiều khi tạo đề nghị xuất HĐ
+            # trên MISA bằng mã đơn thay vì mã phiếu xuất kho nội bộ. Bỏ qua bước này nếu đã
+            # gắn mã đề nghị thủ công (người dùng đã xác định chính xác refno cần dùng).
+            if status['state'] == 'missing' and not picking.misa_invoice_manual_refno:
+                for order_name in picking.misa_invoice_sale_order_ids.mapped('name'):
+                    if not order_name or order_name == refno or order_name in claimed_order_refnos:
+                        continue
+                    try:
+                        if request_map is not None:
+                            order_status = misa_utils.get_invoice_status_from_map(order_name, request_map)
+                        else:
+                            order_status = misa_utils.get_invoice_status_for_refno(order_name)
+                    except Exception:
+                        _logger.exception(
+                            "❌ [MISA INVOICE STATUS] Lỗi thử lại theo mã đơn %s cho phiếu %s",
+                            order_name, picking.name,
+                        )
+                        continue
+                    if order_status['state'] != 'missing':
+                        status = order_status
+                        refno = order_name
+                        claimed_order_refnos[order_name] = picking
+                        break
 
             # MISA cho phép 1 đề nghị (refno của phiếu ĐẠI DIỆN) gộp chung nhiều phiếu khác
             # (liệt kê trong journal_memo) — nếu refno thật của đề nghị khác tên phiếu đang
@@ -359,6 +389,24 @@ class StockPickingMisaInvoiceStatus(models.Model):
             'context': {'default_picking_ids': self.ids},
         }
 
+    def _misa_invoice_apply_exception(self, reason, source_note=''):
+        """Ghi nhận đánh dấu ngoại lệ — dùng chung cho wizard nội bộ
+        (misa.invoice.exception.wizard) và hành động từ trang public /misa_sale_status.
+        source_note: ghi chú thêm vào chatter (VD "trang public — mã sale NV001") để biết
+        nguồn gốc thao tác khi không có res.users cụ thể để trỏ vào (public/anonymous)."""
+        self.write({
+            'misa_invoice_exception': True,
+            'misa_invoice_exception_reason': reason,
+            'misa_invoice_exception_by_id': self.env.user.id,
+            'misa_invoice_exception_date': fields.Datetime.now(),
+        })
+        note_html = (Markup(" (%s)") % source_note) if source_note else ""
+        for picking in self:
+            picking.message_post(
+                body=Markup("<b>Đã đánh dấu ngoại lệ xuất hóa đơn MISA%s.</b><br/>Lý do: %s")
+                % (note_html, reason)
+            )
+
     def action_unmark_misa_invoice_exception(self):
         self.write({
             'misa_invoice_exception': False,
@@ -368,6 +416,27 @@ class StockPickingMisaInvoiceStatus(models.Model):
         })
         self.message_post(body=Markup("Đã bỏ đánh dấu ngoại lệ xuất hóa đơn MISA."))
         return True
+
+    def action_apply_manual_invoice_link(self, refno, source_note=''):
+        """Gắn mã đề nghị MISA thủ công + kiểm tra lại theo mã đó ngay — dùng chung cho wizard
+        nội bộ (misa.invoice.manual.link.wizard) và hành động từ trang public
+        /misa_sale_status. Trả về dict kết quả kiểm tra (xem action_check_misa_invoice_status)
+        thay vì raise khi MISA chưa xác nhận đã xuất HĐ — mã vẫn được lưu lại để lần kiểm tra
+        sau (kể cả cron) tự dùng, caller tự quyết định có cảnh báo người dùng hay không."""
+        self.ensure_one()
+        refno = (refno or '').strip()
+        if not refno:
+            raise UserError("Vui lòng nhập mã đề nghị MISA.")
+        self.misa_invoice_manual_refno = refno
+        note_html = (Markup(" (%s)") % source_note) if source_note else ""
+        self.message_post(
+            body=Markup(
+                "Đã gắn mã đề nghị MISA thủ công%s: <b>%s</b> (dùng khi refno tự sinh trên "
+                "MISA không khớp tên phiếu)."
+            ) % (note_html, refno)
+        )
+        results = self.action_check_misa_invoice_status()
+        return results[0] if results else {}
 
     def action_open_misa_invoice_manual_link_wizard(self):
         """Mở wizard gắn mã đề nghị MISA thủ công cho 1 phiếu (nút form/list, hoặc gọi qua
@@ -1045,6 +1114,124 @@ class StockPickingMisaInvoiceStatus(models.Model):
             for grp in groups
         ]
 
+    # ==================== Trang public /misa_sale_status (misa_invoice_public_controller) ====================
+    # Mỗi sale theo dõi + tự thao tác (gắn mã đề nghị thủ công, đánh dấu ngoại lệ) trên các
+    # phiếu của MÌNH mà không cần vào backend Odoo. Vì nhiều sale dùng chung 1 mật khẩu trang
+    # public (giống /sale_plan, /search_invoice), danh tính "tôi là sale nào" xác định bằng
+    # cách TỰ CHỌN đúng mã sale MISA của mình trong danh sách hợp lệ (đăng ký sẵn qua
+    # res.users.x_misa_saler_codes, xem get_misa_invoice_saler_code_registry) — không cần
+    # đăng nhập Odoo thật, cùng mức tin cậy với hlv_order_cancel_request (đã áp dụng y hệt
+    # kiểu xác thực "tự khai mã sale" này cho 1 trang public khác trong cùng hệ thống).
+
+    @api.model
+    def get_misa_invoice_saler_code_registry(self):
+        """Gộp TẤT CẢ mã sale MISA đã đăng ký qua res.users.x_misa_saler_codes (của mọi user,
+        không chỉ user đang gọi) thành 1 danh sách phẳng, không trùng — nguồn cho ô chọn mã
+        sale trên trang public. Cùng cách hlv_sale_delivery_planning gộp
+        x_sale_plan_mention_names cho trang /sale_plan."""
+        users = self.env['res.users'].sudo().search([('x_misa_saler_codes', '!=', False)])
+        codes = []
+        seen = set()
+        for user in users:
+            for part in (user.x_misa_saler_codes or '').split(','):
+                code = part.strip()
+                if code and code.upper() not in seen:
+                    seen.add(code.upper())
+                    codes.append(code)
+        return sorted(codes)
+
+    def _misa_invoice_validate_public_saler_code(self, saler_code):
+        code = (saler_code or '').strip()
+        if not code:
+            raise UserError("Vui lòng chọn mã sale của bạn.")
+        registry = {c.upper() for c in self.get_misa_invoice_saler_code_registry()}
+        if code.upper() not in registry:
+            raise UserError("Mã sale không hợp lệ, vui lòng chọn lại.")
+        return code
+
+    @api.model
+    def get_misa_invoice_public_list(
+        self, saler_code, search=False, only_pending=True, limit=50, offset=0,
+    ):
+        """Danh sách phiếu xuất kho của ĐÚNG 1 mã sale cho trang public — mặc định chỉ hiện
+        phiếu chưa xuất HĐ và chưa đánh dấu ngoại lệ (đúng mục đích "theo dõi đơn chưa XHD"),
+        search theo cả tên phiếu LẪN tên đơn bán liên quan (only_pending=False để tra cứu tự
+        do, không giới hạn trạng thái)."""
+        Picking = self.sudo()
+        code = self._misa_invoice_validate_public_saler_code(saler_code)
+        base_domain = Picking._misa_invoice_dashboard_base_domain() + [
+            ('misa_invoice_saler_code', '=', code),
+        ]
+        domain = list(base_domain)
+        if only_pending:
+            domain += [
+                ('misa_invoice_state', '!=', 'invoiced'),
+                ('misa_invoice_exception', '=', False),
+            ]
+        if search:
+            domain += ['|', ('name', 'ilike', search), ('misa_invoice_sale_order_ids.name', 'ilike', search)]
+
+        total = Picking.search_count(domain)
+        pickings = Picking.search(domain, order='date_done desc', limit=limit, offset=offset)
+        today = fields.Date.context_today(self)
+
+        state_groups = Picking.read_group(base_domain, ['id'], ['misa_invoice_state'])
+        state_counts = {row['misa_invoice_state']: row['misa_invoice_state_count'] for row in state_groups}
+        exception_count = Picking.search_count(base_domain + [('misa_invoice_exception', '=', True)])
+
+        return {
+            'rows': [Picking._misa_invoice_picking_to_row(p, today) for p in pickings],
+            'total': total,
+            'counts': {
+                'missing': state_counts.get('missing', 0),
+                'requested': state_counts.get('requested', 0),
+                'invoiced': state_counts.get('invoiced', 0),
+                'exception': exception_count,
+            },
+        }
+
+    @api.model
+    def action_public_check(self, picking_ids, saler_code):
+        code = self._misa_invoice_validate_public_saler_code(saler_code)
+        pickings = self.sudo().browse(picking_ids or []).exists().filtered(
+            lambda p: p.misa_invoice_saler_code == code
+        )
+        if not pickings:
+            return []
+        return self._misa_invoice_check_batch(pickings)
+
+    @api.model
+    def action_public_mark_exception(self, picking_ids, saler_code, reason):
+        code = self._misa_invoice_validate_public_saler_code(saler_code)
+        reason = (reason or '').strip()
+        if not reason:
+            raise UserError("Vui lòng nhập lý do.")
+        pickings = self.sudo().browse(picking_ids or []).exists().filtered(
+            lambda p: p.misa_invoice_saler_code == code
+        )
+        if not pickings:
+            raise UserError("Không tìm thấy phiếu phù hợp với mã sale của bạn.")
+        pickings._misa_invoice_apply_exception(reason, source_note='trang public — mã sale %s' % code)
+        return {'count': len(pickings)}
+
+    @api.model
+    def action_public_unmark_exception(self, picking_ids, saler_code):
+        code = self._misa_invoice_validate_public_saler_code(saler_code)
+        pickings = self.sudo().browse(picking_ids or []).exists().filtered(
+            lambda p: p.misa_invoice_saler_code == code
+        )
+        if pickings:
+            pickings.action_unmark_misa_invoice_exception()
+        return {'count': len(pickings)}
+
+    @api.model
+    def action_public_manual_link(self, picking_id, saler_code, refno):
+        code = self._misa_invoice_validate_public_saler_code(saler_code)
+        picking = self.sudo().browse(picking_id).exists()
+        if not picking or picking.misa_invoice_saler_code != code:
+            raise UserError("Không tìm thấy phiếu phù hợp với mã sale của bạn.")
+        return picking.action_apply_manual_invoice_link(refno, source_note='trang public — mã sale %s' % code)
+
     def _misa_invoice_order_state(self, states):
         """Trạng thái tổng hợp của 1 đơn bán từ tập trạng thái các phiếu xuất kho liên quan
         (trong phạm vi đang lọc) — 1 đơn có thể có nhiều phiếu/nhiều đề nghị xuất HĐ."""
@@ -1284,17 +1471,25 @@ class StockPickingMisaInvoiceStatus(models.Model):
             return []
         return self._misa_invoice_picking_line_items(picking)
 
-    def _misa_invoice_group_odoo_lines(self, pickings):
+    def _misa_invoice_group_odoo_lines(self, pickings, misa_codes=None):
         """Gộp dòng hàng Odoo của TOÀN BỘ phiếu trong 1 nhóm gộp chung đề nghị xuất HĐ, theo
         mã hàng (default_code) — MISA cũng gộp chung các phiếu này vào 1 đề nghị/hóa đơn nên
-        phải so theo tổng cả nhóm, không so lẻ từng phiếu. Bỏ qua dòng sản phẩm con của
-        combo/kit (is_component) vì MISA chỉ có 1 dòng cho sản phẩm combo đại diện."""
+        phải so theo tổng cả nhóm, không so lẻ từng phiếu.
+
+        Dòng sản phẩm con của combo/kit (is_component) mặc định bị bỏ qua (giá trị của cả
+        combo đã tính đủ ở dòng đại diện) — TRỪ KHI misa_codes cho biết MISA cũng có dòng
+        riêng cho đúng mã con đó. Thực tế quan sát được: MISA rã hẳn combo ra từng sản phẩm
+        con khi tạo đề nghị xuất HĐ (không giữ 1 dòng combo gộp), nên nếu cứ bỏ qua sẽ báo
+        nhầm "thiếu trên Odoo" cho các mã con dù giá trị/số lượng đã được gộp đủ ở dòng combo
+        — bật lại dòng con (qty thật, value=0 vì tiền đã nằm ở dòng combo) khi MISA có báo
+        đúng mã đó để 2 bên so khớp nhau, còn KHÔNG có ở MISA thì vẫn bỏ qua như cũ."""
+        misa_codes = misa_codes or set()
         totals = {}
         for picking in pickings:
             for line in self._misa_invoice_picking_line_items(picking):
-                if line.get('is_component'):
-                    continue
                 code = line['default_code'] or line['product_name']
+                if line.get('is_component') and code not in misa_codes:
+                    continue
                 bucket = totals.setdefault(
                     code, {'product_name': line['product_name'], 'uom_name': line['uom_name'], 'qty': 0.0, 'value': 0.0}
                 )
@@ -1394,8 +1589,8 @@ class StockPickingMisaInvoiceStatus(models.Model):
         except Exception as e:
             return {'error': str(e)}
 
-        odoo_totals = self._misa_invoice_group_odoo_lines(group_pickings)
         misa_totals = self._misa_invoice_request_lines_by_code(misa_lines)
+        odoo_totals = self._misa_invoice_group_odoo_lines(group_pickings, misa_codes=set(misa_totals.keys()))
 
         rows = []
         for code in set(odoo_totals) | set(misa_totals):
