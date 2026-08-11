@@ -947,6 +947,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
         # trùng ở các tổng khác) — hiển thị ở đây thì lấy tiền hóa đơn ĐẦY ĐỦ từ phiếu gốc để
         # người dùng không hiểu lầm "đã xuất HĐ" nhưng tiền lại bằng 0.
         invoice_amount = (master.misa_invoice_amount or 0.0) if master else (picking.misa_invoice_amount or 0.0)
+        diff_source = master if master else picking
         return {
             'id': picking.id,
             'name': picking.name,
@@ -974,6 +975,8 @@ class StockPickingMisaInvoiceStatus(models.Model):
             'multi_order_group': picking.misa_invoice_multi_order_group,
             'group_order_names': picking.misa_invoice_group_order_names,
             'manual_refno': picking.misa_invoice_manual_refno or False,
+            'amount_diff': diff_source.misa_invoice_amount_diff or 0.0,
+            'amount_mismatch': diff_source.misa_invoice_amount_mismatch,
         }
 
     @api.model
@@ -1149,10 +1152,30 @@ class StockPickingMisaInvoiceStatus(models.Model):
             raise UserError("Mã sale không hợp lệ, vui lòng chọn lại.")
         return code
 
+    def _misa_invoice_public_multi_request_order_ids(self, base_domain):
+        """Tìm các đơn bán 'xuất HĐ nhiều đợt' (>= 2 đề nghị/phiếu đại diện KHÁC NHAU cùng
+        xuất HĐ cho 1 đơn) trong phạm vi base_domain — cùng logic multi_request của
+        _misa_invoice_order_row (dashboard nội bộ), nhưng tính trên toàn bộ phiếu khớp
+        base_domain thay vì theo trang đang xem, để lọc picking-level cho đúng."""
+        Picking = self.sudo()
+        pickings = Picking.search(base_domain)
+        by_order = {}
+        for picking in pickings:
+            for order in picking.misa_invoice_sale_order_ids:
+                by_order.setdefault(order.id, self.browse())
+                by_order[order.id] |= picking
+        multi_ids = []
+        for order_id, order_pickings in by_order.items():
+            invoiced = order_pickings.filtered(lambda p: p.misa_invoice_state == 'invoiced')
+            representatives = {(p.misa_invoice_master_picking_id or p).id for p in invoiced}
+            if len(representatives) > 1:
+                multi_ids.append(order_id)
+        return multi_ids
+
     @api.model
     def get_misa_invoice_public_list(
         self, saler_code, search=False, state=False, date_from=False, date_to=False,
-        limit=50, offset=0,
+        multi_order_group=False, multi_request=False, limit=50, offset=0,
     ):
         """Danh sách phiếu xuất kho của ĐÚNG 1 mã sale cho trang public, lọc thêm được theo
         khoảng NGÀY XUẤT KHO (date_from/date_to) và theo trạng thái cụ thể:
@@ -1161,6 +1184,9 @@ class StockPickingMisaInvoiceStatus(models.Model):
         - 'missing' / 'requested' / 'invoiced': đúng trạng thái đó, chưa ngoại lệ.
         - 'exception': đã đánh dấu ngoại lệ (không phân biệt trạng thái xuất HĐ).
         - 'all': không lọc trạng thái/ngoại lệ, chỉ còn scope theo mã sale + ngày.
+        multi_order_group=True: chỉ phiếu thuộc nhóm gộp chung nhiều đơn bán (1 đề nghị HĐ
+        cho >=2 đơn). multi_request=True: chỉ phiếu của đơn bán đã xuất HĐ qua >=2 đề nghị
+        khác nhau (giao/xuất nhiều đợt) — 2 case khác nhau, xem field misa_invoice_multi_order_group.
         search theo cả tên phiếu LẪN tên đơn bán liên quan. counts (cho donut/badge) luôn tính
         trên TOÀN BỘ phạm vi ngày đang lọc, không bị ảnh hưởng bởi state/search hiện tại — để
         số liệu tổng quan luôn nhất quán dù đang xem tab nào."""
@@ -1178,6 +1204,11 @@ class StockPickingMisaInvoiceStatus(models.Model):
             domain += [('misa_invoice_state', '!=', 'invoiced'), ('misa_invoice_exception', '=', False)]
         if search:
             domain += ['|', ('name', 'ilike', search), ('misa_invoice_sale_order_ids.name', 'ilike', search)]
+        if multi_order_group:
+            domain.append(('misa_invoice_multi_order_group', '=', True))
+        if multi_request:
+            multi_request_order_ids = Picking._misa_invoice_public_multi_request_order_ids(base_domain)
+            domain.append(('misa_invoice_sale_order_ids', 'in', multi_request_order_ids))
 
         total = Picking.search_count(domain)
         pickings = Picking.search(domain, order='date_done desc', limit=limit, offset=offset)

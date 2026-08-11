@@ -53,13 +53,17 @@ class MisaInvoicePublicController(http.Controller):
         return {'status': 'success', 'codes': codes}
 
     @http.route('/misa_sale_status/api/list', type='json', auth='public', methods=['POST'])
-    def api_list(self, saler_code='', search='', state='', date_from='', date_to='', limit=50, offset=0, **kwargs):
+    def api_list(
+        self, saler_code='', search='', state='', date_from='', date_to='',
+        multi_order_group=False, multi_request=False, limit=50, offset=0, **kwargs
+    ):
         if not _pw_allowed():
             return _json_error('unauthorized')
         try:
             data = request.env['stock.picking'].sudo().get_misa_invoice_public_list(
                 saler_code=saler_code, search=search, state=state or False,
                 date_from=date_from or False, date_to=date_to or False,
+                multi_order_group=bool(multi_order_group), multi_request=bool(multi_request),
                 limit=int(limit), offset=int(offset),
             )
             return {'status': 'success', 'data': data}
