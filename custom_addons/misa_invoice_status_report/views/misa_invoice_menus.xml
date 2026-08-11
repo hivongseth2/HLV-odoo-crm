@@ -11,6 +11,7 @@
     <!-- App độc lập: root không có parent -->
     <menuitem id="menu_misa_invoice_root"
               name="Đối soát XHD MISA"
+              web_icon="misa_invoice_status_report,static/description/icon.png"
               sequence="70"/>
 
     <menuitem id="menu_misa_invoice_dashboard"
