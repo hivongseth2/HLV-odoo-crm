@@ -595,6 +595,33 @@ export class MisaInvoiceDashboard extends Component {
         await this._reload();
     }
 
+    /** Mở wizard gắn mã đề nghị MISA thủ công cho 1 phiếu (trường hợp sale quên ghi đúng số
+     * phiếu xuất kho lúc tạo đề nghị trên MISA) — cùng pattern doAction+onClose refresh với
+     * markException. */
+    async openManualLinkWizard(pickingId) {
+        try {
+            const action = await this.orm.call("stock.picking", "action_open_misa_invoice_manual_link_wizard", [[pickingId]], {});
+            this.action.doAction(action, { onClose: () => this._refreshAfterException(pickingId) });
+        } catch (e) {
+            this.notification.add("Lỗi mở hộp thoại gắn mã đề nghị: " + (e.message || e), { type: "danger" });
+        }
+    }
+
+    /** Như openManualLinkWizard nhưng gọi từ drawer đơn hàng — chưa biết trước phiếu nào,
+     * wizard tự giới hạn lựa chọn trong các phiếu của đúng đơn hàng đang xem. */
+    async openManualLinkWizardForOrder() {
+        const row = this.state.orderDrawerRow;
+        if (!row) {
+            return;
+        }
+        try {
+            const action = await this.orm.call("stock.picking", "action_open_misa_invoice_manual_link_wizard_for_order", [row.id], {});
+            this.action.doAction(action, { onClose: () => this._refreshAfterOrderException(row.id) });
+        } catch (e) {
+            this.notification.add("Lỗi mở hộp thoại gắn mã đề nghị: " + (e.message || e), { type: "danger" });
+        }
+    }
+
     /** Chỉ đóng drawer khi bấm đúng vùng nền mờ (overlay), không đóng khi bấm bên trong drawer. */
     onDrawerOverlayClick(ev) {
         if (ev.target === ev.currentTarget) {

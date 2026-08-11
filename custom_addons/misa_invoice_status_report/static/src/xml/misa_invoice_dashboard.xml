@@ -334,6 +334,7 @@
                                         <b><t t-esc="row.name"/></b>
                                         <i class="fa fa-link miv-link-icon" t-if="row.master_picking_id or (row.covered_pickings and row.covered_pickings.length)" title="Gộp chung đề nghị xuất HĐ với phiếu khác"/>
                                         <i class="fa fa-sitemap miv-link-icon" t-if="row.multi_order_group" t-attf-title="Đề nghị xuất HĐ của nhóm này gộp chung: {{row.group_order_names}}"/>
+                                        <i class="fa fa-pencil miv-link-icon" t-if="row.manual_refno" t-attf-title="Đã gắn mã đề nghị thủ công: {{row.manual_refno}}"/>
                                     </td>
                                     <td><t t-esc="row.partner_name"/></td>
                                     <td><t t-esc="row.sale_order_name"/></td>
@@ -588,6 +589,7 @@
                                             <b><t t-esc="row.name"/></b>
                                             <i class="fa fa-link miv-link-icon" t-if="row.master_picking_id or (row.covered_pickings and row.covered_pickings.length)" title="Gộp chung đề nghị xuất HĐ với phiếu khác"/>
                                             <i class="fa fa-sitemap miv-link-icon" t-if="row.multi_order_group" t-attf-title="Đề nghị xuất HĐ của nhóm này gộp chung: {{row.group_order_names}}"/>
+                                            <i class="fa fa-pencil miv-link-icon" t-if="row.manual_refno" t-attf-title="Đã gắn mã đề nghị thủ công: {{row.manual_refno}}"/>
                                         </td>
                                         <td><t t-esc="row.partner_name"/></td>
                                         <td><t t-esc="row.sale_order_name"/></td>
@@ -761,6 +763,11 @@
                                 Lý do ngoại lệ: <t t-esc="state.drawerPicking.exception_reason or '—'"/>
                             </div>
 
+                            <div class="miv-drawer-linking" t-if="state.drawerPicking.manual_refno">
+                                <i class="fa fa-pencil"/>
+                                Đã gắn mã đề nghị MISA thủ công: <b><t t-esc="state.drawerPicking.manual_refno"/></b>
+                            </div>
+
                             <div class="miv-drawer-actions" t-if="state.data.can_configure and state.drawerPicking.state != 'invoiced'">
                                 <button class="btn btn-sm btn-secondary" t-if="!state.drawerPicking.exception"
                                         t-on-click="() => this.markException(state.drawerPicking.id)">
@@ -769,6 +776,9 @@
                                 <button class="btn btn-sm btn-secondary" t-if="state.drawerPicking.exception"
                                         t-on-click="() => this.unmarkException(state.drawerPicking.id)">
                                     <i class="fa fa-undo"/> Bỏ ngoại lệ
+                                </button>
+                                <button class="btn btn-sm btn-secondary" t-on-click="() => this.openManualLinkWizard(state.drawerPicking.id)">
+                                    <i class="fa fa-pencil"/> Gắn mã đề nghị (đã xuất HĐ thủ công)
                                 </button>
                             </div>
 
@@ -1067,6 +1077,7 @@
                                         <td>
                                             <span class="miv-badge miv-badge-critical" t-if="p.exception">Có</span>
                                             <span t-else="">—</span>
+                                            <i class="fa fa-pencil miv-link-icon" t-if="p.manual_refno" t-attf-title="Đã gắn mã đề nghị thủ công: {{p.manual_refno}}"/>
                                         </td>
                                     </tr>
                                 </tbody>
@@ -1079,6 +1090,9 @@
                             </button>
                             <button class="btn btn-outline-secondary btn-sm" t-if="state.orderDrawerRow.has_exception" t-on-click="unmarkOrderException">
                                 <i class="fa fa-flag-o"/> Bỏ ngoại lệ cả đơn
+                            </button>
+                            <button class="btn btn-outline-secondary btn-sm" t-if="state.orderDrawerRow.state != 'invoiced'" t-on-click="openManualLinkWizardForOrder">
+                                <i class="fa fa-pencil"/> Gắn mã đề nghị (đã xuất HĐ thủ công)
                             </button>
                         </div>
                         <div class="miv-drawer-footer">
