@@ -271,9 +271,9 @@
 
                     <div class="msu-bulk-bar" id="msu-bulk-bar" style="display:none">
                         <span id="msu-bulk-count"/>
-                        <button id="msu-bulk-check" class="msu-btn msu-btn-outline-primary msu-btn-sm">Kiểm tra MISA ngay</button>
+                        <button id="msu-bulk-check" class="msu-btn msu-btn-outline-primary msu-btn-sm" data-loading-text="Đang kiểm tra...">Kiểm tra MISA ngay</button>
                         <button id="msu-bulk-exception" class="msu-btn msu-btn-outline-danger msu-btn-sm">Đánh dấu ngoại lệ</button>
-                        <button id="msu-bulk-unexception" class="msu-btn msu-btn-outline-muted msu-btn-sm">Bỏ ngoại lệ</button>
+                        <button id="msu-bulk-unexception" class="msu-btn msu-btn-outline-muted msu-btn-sm" data-loading-text="Đang xử lý...">Bỏ ngoại lệ</button>
                     </div>
 
                     <div class="msu-table-card">
@@ -322,7 +322,7 @@
                     <div id="msu-link-error" class="msu-modal-error"/>
                     <div class="msu-modal-actions">
                         <button class="msu-btn msu-btn-outline-muted msu-btn-sm" id="msu-link-cancel">Hủy</button>
-                        <button class="msu-btn msu-btn-primary msu-btn-sm" id="msu-link-confirm">Xác nhận</button>
+                        <button class="msu-btn msu-btn-primary msu-btn-sm" id="msu-link-confirm" data-loading-text="Đang kiểm tra...">Xác nhận</button>
                     </div>
                 </div>
             </div>
@@ -335,7 +335,7 @@
                     <div id="msu-exception-error" class="msu-modal-error"/>
                     <div class="msu-modal-actions">
                         <button class="msu-btn msu-btn-outline-muted msu-btn-sm" id="msu-exception-cancel">Hủy</button>
-                        <button class="msu-btn msu-btn-primary msu-btn-sm" id="msu-exception-confirm">Xác nhận</button>
+                        <button class="msu-btn msu-btn-primary msu-btn-sm" id="msu-exception-confirm" data-loading-text="Đang lưu...">Xác nhận</button>
                     </div>
                 </div>
             </div>
@@ -397,6 +397,26 @@
                         el.textContent = message;
                         stack.appendChild(el);
                         setTimeout(function() { el.remove(); }, 5000);
+                    }
+
+                    // Vô hiệu hóa + đổi sang icon xoay trong lúc chờ RPC (gọi MISA có thể mất
+                    // vài giây) — để người dùng biết đang xử lý, tránh bấm lặp lại nhiều lần.
+                    // data-loading-text (nếu có trên nút) sẽ hiện kèm chữ, không có thì chỉ hiện icon.
+                    function setBtnLoading(btn, loading) {
+                        if (!btn) { return; }
+                        if (loading) {
+                            if (btn.dataset.loading === '1') { return; }
+                            btn.dataset.loading = '1';
+                            btn.dataset.originalHtml = btn.innerHTML;
+                            var loadingText = btn.dataset.loadingText;
+                            btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i>' + (loadingText ? ' ' + esc(loadingText) : '');
+                            btn.disabled = true;
+                        } else {
+                            if (btn.dataset.loading !== '1') { return; }
+                            btn.innerHTML = btn.dataset.originalHtml;
+                            btn.disabled = false;
+                            delete btn.dataset.loading;
+                        }
                     }
 
                     var selectEl = document.getElementById('msu-saler-select');
@@ -764,7 +784,7 @@
                             });
                         });
                         document.querySelectorAll('.msu-act-check').forEach(function(btn) {
-                            btn.addEventListener('click', function() { runCheck([parseInt(this.dataset.id, 10)]); });
+                            btn.addEventListener('click', function() { runCheck([parseInt(this.dataset.id, 10)], this); });
                         });
                         document.querySelectorAll('.msu-act-link').forEach(function(btn) {
                             btn.addEventListener('click', function() { openLinkModal(parseInt(this.dataset.id, 10), this.dataset.name); });
@@ -773,7 +793,7 @@
                             btn.addEventListener('click', function() { openExceptionModal([parseInt(this.dataset.id, 10)], this.dataset.name); });
                         });
                         document.querySelectorAll('.msu-act-unexception').forEach(function(btn) {
-                            btn.addEventListener('click', function() { runUnexception([parseInt(this.dataset.id, 10)]); });
+                            btn.addEventListener('click', function() { runUnexception([parseInt(this.dataset.id, 10)], this); });
                         });
                     }
 
@@ -784,22 +804,29 @@
                         document.getElementById('msu-bulk-count').textContent = 'Đã chọn ' + ids.length + ' phiếu';
                     }
 
-                    function runCheck(ids) {
-                        rpc('/misa_sale_status/api/check', {picking_ids: ids, saler_code: state.salerCode}).then(function() {
+                    function runCheck(ids, btn) {
+                        setBtnLoading(btn, true);
+                        return rpc('/misa_sale_status/api/check', {picking_ids: ids, saler_code: state.salerCode}).then(function() {
                             toast('Đã kiểm tra xong ' + ids.length + ' phiếu.', 'success');
-                            loadList(state.page);
+                            return loadList(state.page);
+                        }).then(function() {
                             loadDailyChart();
-                        }).catch(function(e) { toast('Lỗi kiểm tra MISA: ' + e.message, 'error'); });
+                        }).catch(function(e) {
+                            toast('Lỗi kiểm tra MISA: ' + e.message, 'error');
+                        }).finally(function() { setBtnLoading(btn, false); });
                     }
-                    function runUnexception(ids) {
-                        rpc('/misa_sale_status/api/unmark_exception', {picking_ids: ids, saler_code: state.salerCode}).then(function() {
+                    function runUnexception(ids, btn) {
+                        setBtnLoading(btn, true);
+                        return rpc('/misa_sale_status/api/unmark_exception', {picking_ids: ids, saler_code: state.salerCode}).then(function() {
                             toast('Đã bỏ đánh dấu ngoại lệ.', 'success');
-                            loadList(state.page);
-                        }).catch(function(e) { toast('Lỗi: ' + e.message, 'error'); });
+                            return loadList(state.page);
+                        }).catch(function(e) {
+                            toast('Lỗi: ' + e.message, 'error');
+                        }).finally(function() { setBtnLoading(btn, false); });
                     }
 
-                    document.getElementById('msu-bulk-check').addEventListener('click', function() { runCheck(Object.keys(state.selected).map(Number)); });
-                    document.getElementById('msu-bulk-unexception').addEventListener('click', function() { runUnexception(Object.keys(state.selected).map(Number)); });
+                    document.getElementById('msu-bulk-check').addEventListener('click', function() { runCheck(Object.keys(state.selected).map(Number), this); });
+                    document.getElementById('msu-bulk-unexception').addEventListener('click', function() { runUnexception(Object.keys(state.selected).map(Number), this); });
                     document.getElementById('msu-bulk-exception').addEventListener('click', function() {
                         openExceptionModal(Object.keys(state.selected).map(Number), Object.keys(state.selected).length + ' phiếu đã chọn');
                     });
@@ -819,12 +846,14 @@
                         var refno = document.getElementById('msu-link-refno').value.trim();
                         var errEl = document.getElementById('msu-link-error');
                         if (!refno) { errEl.textContent = 'Vui lòng nhập mã đề nghị.'; return; }
+                        var btn = this;
+                        setBtnLoading(btn, true);
                         rpc('/misa_sale_status/api/manual_link', {picking_id: linkPickingId, saler_code: state.salerCode, refno: refno}).then(function(res) {
                             linkModal.style.display = 'none';
                             if (res.warning) { toast(res.warning, 'warning'); } else { toast('Đã gắn mã đề nghị và xác nhận đã xuất hóa đơn.', 'success'); }
                             loadList(state.page);
                             loadDailyChart();
-                        }).catch(function(e) { errEl.textContent = e.message; });
+                        }).catch(function(e) { errEl.textContent = e.message; }).finally(function() { setBtnLoading(btn, false); });
                     });
 
                     // ===== Modal: đánh dấu ngoại lệ =====
@@ -842,11 +871,13 @@
                         var reason = document.getElementById('msu-exception-reason').value.trim();
                         var errEl = document.getElementById('msu-exception-error');
                         if (!reason) { errEl.textContent = 'Vui lòng nhập lý do.'; return; }
+                        var btn = this;
+                        setBtnLoading(btn, true);
                         rpc('/misa_sale_status/api/mark_exception', {picking_ids: exceptionIds, saler_code: state.salerCode, reason: reason}).then(function() {
                             exceptionModal.style.display = 'none';
                             toast('Đã đánh dấu ngoại lệ.', 'success');
                             loadList(state.page);
-                        }).catch(function(e) { errEl.textContent = e.message; });
+                        }).catch(function(e) { errEl.textContent = e.message; }).finally(function() { setBtnLoading(btn, false); });
                     });
 
                     window.addEventListener('resize', function() {
