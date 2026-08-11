@@ -89,6 +89,38 @@ class MisaInvoicePublicController(http.Controller):
             _logger.exception('misa_sale_status api_daily_stats error')
             return _json_error(str(e))
 
+    @http.route('/misa_sale_status/api/shopee_list', type='json', auth='public', methods=['POST'])
+    def api_shopee_list(self, saler_code='', search='', state='', date_from='', date_to='', limit=50, offset=0, **kwargs):
+        if not _pw_allowed():
+            return _json_error('unauthorized')
+        try:
+            data = request.env['stock.picking'].sudo().get_misa_invoice_public_shopee_list(
+                saler_code=saler_code, search=search, state=state or False,
+                date_from=date_from or False, date_to=date_to or False,
+                limit=int(limit), offset=int(offset),
+            )
+            return {'status': 'success', 'data': data}
+        except UserError as e:
+            return _json_error(str(e))
+        except Exception as e:
+            _logger.exception('misa_sale_status api_shopee_list error')
+            return _json_error(str(e))
+
+    @http.route('/misa_sale_status/api/reconciliation_totals', type='json', auth='public', methods=['POST'])
+    def api_reconciliation_totals(self, saler_code='', date_from='', date_to='', **kwargs):
+        if not _pw_allowed():
+            return _json_error('unauthorized')
+        try:
+            data = request.env['stock.picking'].sudo().get_misa_invoice_public_reconciliation_totals(
+                saler_code=saler_code, date_from=date_from or False, date_to=date_to or False,
+            )
+            return {'status': 'success', 'data': data}
+        except UserError as e:
+            return _json_error(str(e))
+        except Exception as e:
+            _logger.exception('misa_sale_status api_reconciliation_totals error')
+            return _json_error(str(e))
+
     @http.route('/misa_sale_status/api/check', type='json', auth='public', methods=['POST'])
     def api_check(self, picking_ids=None, saler_code='', **kwargs):
         if not _pw_allowed():
