@@ -29,6 +29,24 @@ class ResConfigSettings(models.TransientModel):
         help='Mô tả ngắn hiển thị trên thẻ kết nối OA',
     )
 
+    # ===== Cấu hình Zalo Checkout SDK =====
+    x_zalo_checkout_sandbox_mode = fields.Boolean(
+        string='Chế độ Checkout SDK Sandbox',
+        config_parameter='hlv_zalo_miniapp.checkout_sandbox_mode',
+        default=True,
+        help='Bật chế độ thử nghiệm Sandbox cho Zalo Checkout SDK (Sử dụng các phương thức Sandbox)',
+    )
+    x_zalo_checkout_app_id = fields.Char(
+        string='Zalo Mini App ID',
+        config_parameter='hlv_zalo_miniapp.checkout_app_id',
+        help='ID định danh của Mini App trên Zalo Developer Portal',
+    )
+    x_zalo_checkout_private_key = fields.Char(
+        string='Checkout Private Key',
+        config_parameter='hlv_zalo_miniapp.checkout_private_key',
+        help='Private Key do Zalo cung cấp dùng để ký MAC và xác thực Webhook Callback',
+    )
+
     # ===== Cấu hình Thông báo Yêu cầu Đổi/Trả Zalo =====
     x_zalo_return_notify_user_ids = fields.Many2many(
         "res.users",
