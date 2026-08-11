@@ -816,6 +816,136 @@ class StockPickingMisaInvoiceStatus(models.Model):
             'outstanding_amount': total_actual_amount - total_invoiced_amount,
         }
 
+    # ==================== Đơn hải quan (hóa đơn xuất TRƯỚC khi xuất kho Odoo) ====================
+    # Case đặc biệt: hàng hải quan phải xuất hóa đơn MISA TRƯỚC khi tạo/xác nhận phiếu xuất
+    # kho Odoo — lúc đó chưa hề có refno picking nào để đối soát theo luồng thông thường
+    # (sa_invoice_request). Giải pháp: cho nhập thẳng SỐ HÓA ĐƠN, tra theo chứng từ bán hàng
+    # thật (sa_voucher_get) 1 lần để lấy toàn bộ dòng hàng (đơn hàng + mã hàng), rồi ghi nhận
+    # lại — ở mức ĐƠN HÀNG + MÃ HÀNG (không phải cả đơn) vì 1 hóa đơn có thể chỉ phủ 1 PHẦN
+    # đơn hàng (xuất kho từng phần).
+
+    @api.model
+    def fetch_misa_customs_invoice(self, inv_no):
+        """Tra 1 hóa đơn MISA theo SỐ HÓA ĐƠN — trả về PREVIEW (chưa lưu) để người dùng xem
+        lại (đơn hàng nào khớp được trong Odoo, đơn nào không) trước khi ghi nhận."""
+        inv_no = (inv_no or '').strip()
+        if not inv_no:
+            raise UserError("Vui lòng nhập số hóa đơn.")
+        misa_utils = self.env['misa.api.utils']
+        voucher = misa_utils.get_voucher_by_inv_no(inv_no)
+        if not voucher:
+            raise UserError("Không tìm thấy hóa đơn số \"%s\" trên MISA." % inv_no)
+        refid = voucher.get('refid')
+        lines = misa_utils.get_voucher_lines(refid) if refid else []
+
+        order_codes = sorted({(line.get('order_code') or '').strip() for line in lines if line.get('order_code')})
+        orders = self.env['sale.order'].sudo().search([('name', 'in', order_codes)]) if order_codes else self.env['sale.order']
+        orders_by_name = {order.name: order for order in orders}
+
+        preview_lines = []
+        for line in lines:
+            order_code = (line.get('order_code') or '').strip()
+            order = orders_by_name.get(order_code)
+            preview_lines.append({
+                'order_code': order_code,
+                'sale_order_id': order.id if order else False,
+                'sale_order_found': bool(order),
+                'inventory_item_code': line.get('inventory_item_code') or '',
+                'description': line.get('description') or '',
+                'quantity': line.get('quantity') or 0.0,
+                'unit_price': line.get('unit_price') or 0.0,
+                'amount': line.get('amount_oc') or 0.0,
+            })
+
+        return {
+            'invoice_no': voucher.get('inv_no') or inv_no,
+            'invoice_refid': refid,
+            'invoice_date': voucher.get('inv_date'),
+            'partner_name': voucher.get('account_object_name') or '',
+            'total_amount': voucher.get('total_amount') or 0.0,
+            'lines': preview_lines,
+        }
+
+    @api.model
+    def save_misa_customs_invoice(self, inv_no):
+        """Ghi nhận (lưu) 1 hóa đơn hải quan — tự fetch lại MISA lần nữa (không tin dữ liệu
+        preview gửi ngược từ client) để đảm bảo dữ liệu lưu luôn khớp với MISA ngay tại thời
+        điểm lưu. Fetch lại cùng 1 số hóa đơn nhiều lần sẽ THAY THẾ hoàn toàn các dòng cũ
+        (xóa rồi tạo lại) — coi như "đồng bộ lại", không cộng dồn trùng."""
+        preview = self.fetch_misa_customs_invoice(inv_no)
+        CustomsLine = self.env['misa.invoice.customs.line'].sudo()
+        CustomsLine.search([('invoice_no', '=', preview['invoice_no'])]).unlink()
+
+        invoice_date = False
+        if preview['invoice_date']:
+            try:
+                invoice_date = fields.Date.to_date(preview['invoice_date'])
+            except Exception:
+                invoice_date = False
+
+        created = CustomsLine.browse()
+        for line in preview['lines']:
+            created |= CustomsLine.create({
+                'invoice_no': preview['invoice_no'],
+                'invoice_refid': preview['invoice_refid'],
+                'invoice_date': invoice_date,
+                'partner_name': preview['partner_name'],
+                'sale_order_id': line['sale_order_id'] or False,
+                'order_code': line['order_code'],
+                'inventory_item_code': line['inventory_item_code'],
+                'description': line['description'],
+                'quantity': line['quantity'],
+                'unit_price': line['unit_price'],
+                'amount': line['amount'],
+                'fetched_by_id': self.env.user.id,
+                'fetched_at': fields.Datetime.now(),
+            })
+        return {'count': len(created), 'invoice_no': preview['invoice_no']}
+
+    @api.model
+    def get_misa_customs_lines(self, search=False, limit=50, offset=0):
+        Lines = self.env['misa.invoice.customs.line'].sudo()
+        domain = []
+        if search:
+            domain = [
+                '|', '|', ('invoice_no', 'ilike', search),
+                ('order_code', 'ilike', search), ('inventory_item_code', 'ilike', search),
+            ]
+        lines = Lines.search(domain, limit=limit, offset=offset)
+        return {
+            'rows': [
+                {
+                    'id': line.id,
+                    'invoice_no': line.invoice_no,
+                    'invoice_date': fields.Date.to_string(line.invoice_date) if line.invoice_date else '',
+                    'partner_name': line.partner_name or '',
+                    'order_code': line.order_code,
+                    'sale_order_id': line.sale_order_id.id if line.sale_order_id else False,
+                    'sale_order_name': line.sale_order_id.name if line.sale_order_id else line.order_code,
+                    'sale_order_found': bool(line.sale_order_id),
+                    'inventory_item_code': line.inventory_item_code,
+                    'description': line.description or '',
+                    'quantity': line.quantity,
+                    'unit_price': line.unit_price,
+                    'amount': line.amount,
+                    'fetched_by': line.fetched_by_id.name or '',
+                    'fetched_at': fields.Datetime.to_string(line.fetched_at) if line.fetched_at else '',
+                }
+                for line in lines
+            ],
+            'total': Lines.search_count(domain),
+        }
+
+    @api.model
+    def delete_misa_customs_invoice(self, inv_no):
+        inv_no = (inv_no or '').strip()
+        if not inv_no:
+            return 0
+        lines = self.env['misa.invoice.customs.line'].sudo().search([('invoice_no', '=', inv_no)])
+        count = len(lines)
+        lines.unlink()
+        return count
+
     def _misa_invoice_state_breakdown(self, domain):
         Picking = self.sudo()
         return {
@@ -1632,6 +1762,53 @@ class StockPickingMisaInvoiceStatus(models.Model):
             return False
         today = fields.Date.context_today(self)
         return self._misa_invoice_picking_to_row(picking, today)
+
+    def _misa_invoice_picking_siblings(self, picking):
+        """Các phiếu xuất kho KHÁC cùng (các) đơn bán liên quan tới phiếu này — dùng khi 1 đơn
+        được giao/xuất kho NHIỀU ĐỢT (nhiều phiếu riêng biệt). Khác với
+        misa_invoice_master_picking_id/covered (gộp theo 1 ĐỀ NGHỊ xuất HĐ trên MISA) — đây
+        là gộp theo ĐƠN BÁN, để người xem thấy hết các đợt xuất khác của cùng đơn dù chúng
+        không chung đề nghị xuất HĐ nào cả."""
+        if not picking.misa_invoice_sale_order_ids:
+            return []
+        siblings = self.sudo().search([
+            ('misa_invoice_sale_order_ids', 'in', picking.misa_invoice_sale_order_ids.ids),
+            ('id', '!=', picking.id),
+            ('picking_type_id.code', '=', 'outgoing'),
+        ], order='date_done desc')
+        return [
+            {
+                'id': s.id, 'name': s.name,
+                'state': s.misa_invoice_state,
+                'state_label': MISA_INVOICE_STATE_LABELS.get(s.misa_invoice_state, s.misa_invoice_state),
+                'date_done': fields.Date.to_string(s.date_done.date()) if s.date_done else '',
+            }
+            for s in siblings
+        ]
+
+    @api.model
+    def get_misa_invoice_picking_siblings(self, picking_id):
+        picking = self.sudo().browse(picking_id)
+        if not picking.exists():
+            return []
+        return self._misa_invoice_picking_siblings(picking)
+
+    @api.model
+    def get_misa_invoice_public_picking_row(self, picking_id, saler_code):
+        code = self._misa_invoice_validate_public_saler_code(saler_code)
+        picking = self.sudo().browse(picking_id).exists()
+        if not picking or picking.misa_invoice_saler_code != code:
+            return False
+        today = fields.Date.context_today(self)
+        return self._misa_invoice_picking_to_row(picking, today)
+
+    @api.model
+    def get_misa_invoice_public_picking_siblings(self, picking_id, saler_code):
+        code = self._misa_invoice_validate_public_saler_code(saler_code)
+        picking = self.sudo().browse(picking_id).exists()
+        if not picking or picking.misa_invoice_saler_code != code:
+            return []
+        return self._misa_invoice_picking_siblings(picking)
 
     def _misa_invoice_picking_line_items(self, picking):
         """Chi tiết sản phẩm/mã hàng/số lượng/giá trị xuất kho của 1 phiếu — dùng chung cho

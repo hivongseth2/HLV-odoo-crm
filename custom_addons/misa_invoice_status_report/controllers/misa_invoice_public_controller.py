@@ -121,6 +121,86 @@ class MisaInvoicePublicController(http.Controller):
             _logger.exception('misa_sale_status api_reconciliation_totals error')
             return _json_error(str(e))
 
+    @http.route('/misa_sale_status/api/picking_row', type='json', auth='public', methods=['POST'])
+    def api_picking_row(self, picking_id=None, saler_code='', **kwargs):
+        if not _pw_allowed():
+            return _json_error('unauthorized')
+        try:
+            row = request.env['stock.picking'].sudo().get_misa_invoice_public_picking_row(
+                int(picking_id), saler_code
+            )
+            return {'status': 'success', 'row': row}
+        except UserError as e:
+            return _json_error(str(e))
+        except Exception as e:
+            _logger.exception('misa_sale_status api_picking_row error')
+            return _json_error(str(e))
+
+    @http.route('/misa_sale_status/api/picking_siblings', type='json', auth='public', methods=['POST'])
+    def api_picking_siblings(self, picking_id=None, saler_code='', **kwargs):
+        if not _pw_allowed():
+            return _json_error('unauthorized')
+        try:
+            siblings = request.env['stock.picking'].sudo().get_misa_invoice_public_picking_siblings(
+                int(picking_id), saler_code
+            )
+            return {'status': 'success', 'siblings': siblings}
+        except UserError as e:
+            return _json_error(str(e))
+        except Exception as e:
+            _logger.exception('misa_sale_status api_picking_siblings error')
+            return _json_error(str(e))
+
+    @http.route('/misa_sale_status/api/customs/fetch', type='json', auth='public', methods=['POST'])
+    def api_customs_fetch(self, inv_no='', **kwargs):
+        if not _pw_allowed():
+            return _json_error('unauthorized')
+        try:
+            preview = request.env['stock.picking'].sudo().fetch_misa_customs_invoice(inv_no)
+            return {'status': 'success', 'preview': preview}
+        except UserError as e:
+            return _json_error(str(e))
+        except Exception as e:
+            _logger.exception('misa_sale_status api_customs_fetch error')
+            return _json_error(str(e))
+
+    @http.route('/misa_sale_status/api/customs/save', type='json', auth='public', methods=['POST'])
+    def api_customs_save(self, inv_no='', **kwargs):
+        if not _pw_allowed():
+            return _json_error('unauthorized')
+        try:
+            result = request.env['stock.picking'].sudo().save_misa_customs_invoice(inv_no)
+            return {'status': 'success', 'count': result.get('count', 0), 'invoice_no': result.get('invoice_no')}
+        except UserError as e:
+            return _json_error(str(e))
+        except Exception as e:
+            _logger.exception('misa_sale_status api_customs_save error')
+            return _json_error(str(e))
+
+    @http.route('/misa_sale_status/api/customs/list', type='json', auth='public', methods=['POST'])
+    def api_customs_list(self, search='', limit=50, offset=0, **kwargs):
+        if not _pw_allowed():
+            return _json_error('unauthorized')
+        try:
+            data = request.env['stock.picking'].sudo().get_misa_customs_lines(
+                search=search or False, limit=int(limit), offset=int(offset),
+            )
+            return {'status': 'success', 'data': data}
+        except Exception as e:
+            _logger.exception('misa_sale_status api_customs_list error')
+            return _json_error(str(e))
+
+    @http.route('/misa_sale_status/api/customs/delete', type='json', auth='public', methods=['POST'])
+    def api_customs_delete(self, inv_no='', **kwargs):
+        if not _pw_allowed():
+            return _json_error('unauthorized')
+        try:
+            count = request.env['stock.picking'].sudo().delete_misa_customs_invoice(inv_no)
+            return {'status': 'success', 'count': count}
+        except Exception as e:
+            _logger.exception('misa_sale_status api_customs_delete error')
+            return _json_error(str(e))
+
     @http.route('/misa_sale_status/api/check', type='json', auth='public', methods=['POST'])
     def api_check(self, picking_ids=None, saler_code='', **kwargs):
         if not _pw_allowed():
