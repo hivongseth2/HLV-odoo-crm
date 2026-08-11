@@ -188,6 +188,7 @@
                                         <td>
                                             <span class="miv-badge miv-badge-critical" t-if="p.exception">Có</span>
                                             <span t-else="">—</span>
+                                            <i class="fa fa-pencil miv-link-icon" t-if="p.manual_refno" t-attf-title="Đã gắn mã đề nghị thủ công: {{p.manual_refno}}"/>
                                         </td>
                                     </tr>
                                 </tbody>
@@ -200,6 +201,9 @@
                             </button>
                             <button class="btn btn-outline-secondary btn-sm" t-if="state.orderDrawerRow.has_exception" t-on-click="unmarkOrderException">
                                 <i class="fa fa-flag-o"/> Bỏ ngoại lệ cả đơn
+                            </button>
+                            <button class="btn btn-outline-secondary btn-sm" t-if="state.orderDrawerRow.state != 'invoiced'" t-on-click="openManualLinkWizardForOrder">
+                                <i class="fa fa-pencil"/> Gắn mã đề nghị (đã xuất HĐ thủ công)
                             </button>
                         </div>
                         <div class="miv-drawer-footer">

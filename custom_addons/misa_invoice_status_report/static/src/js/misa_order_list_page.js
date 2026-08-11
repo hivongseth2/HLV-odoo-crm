@@ -277,6 +277,22 @@ export class MisaOrderListPage extends Component {
         }
     }
 
+    /** Mở wizard gắn mã đề nghị MISA thủ công cho đơn hàng đang xem (trường hợp sale quên
+     * ghi đúng số phiếu xuất kho lúc tạo đề nghị trên MISA) — chưa biết trước phiếu nào,
+     * wizard tự giới hạn lựa chọn trong các phiếu của đúng đơn hàng này. */
+    async openManualLinkWizardForOrder() {
+        const row = this.state.orderDrawerRow;
+        if (!row) {
+            return;
+        }
+        try {
+            const action = await this.orm.call("stock.picking", "action_open_misa_invoice_manual_link_wizard_for_order", [row.id], {});
+            this.action.doAction(action, { onClose: () => this._refreshAfterOrderException(row.id) });
+        } catch (e) {
+            this.notification.add("Lỗi mở hộp thoại gắn mã đề nghị: " + (e.message || e), { type: "danger" });
+        }
+    }
+
     /** Bấm vào link phiếu gốc/phiếu đi kèm bên trong drawer đơn hàng — mở form phiếu đó
      * (trang này không có drawer chi tiết phiếu riêng như dashboard Tổng quan, nên mở form
      * Odoo thẳng luôn, đơn giản hơn cho 1 trang chỉ tập trung vào ĐƠN HÀNG). */

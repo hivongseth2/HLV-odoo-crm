@@ -19,6 +19,7 @@
         'security/misa_invoice_security.xml',
         'security/ir.model.access.csv',
         'wizard/misa_invoice_exception_wizard_views.xml',
+        'wizard/misa_invoice_manual_link_wizard_views.xml',
         'views/stock_picking_misa_invoice_views.xml',
         'views/misa_invoice_dashboard_views.xml',
         'views/misa_invoice_menus.xml',

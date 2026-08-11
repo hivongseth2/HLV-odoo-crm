@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_misa_invoice_manual_link_wizard_form" model="ir.ui.view">
+        <field name="name">misa.invoice.manual.link.wizard.form</field>
+        <field name="model">misa.invoice.manual.link.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Gắn mã đề nghị MISA thủ công">
+                <p class="text-muted">
+                    Dùng khi sale quên ghi đúng số phiếu xuất kho lúc tạo đề nghị xuất hóa đơn
+                    trên MISA, khiến MISA tự sinh mã đề nghị khác (VD "DN00123") không khớp tên
+                    phiếu — hệ thống sẽ gọi lại MISA để xác nhận đúng mã trước khi cập nhật.
+                </p>
+                <group>
+                    <field name="picking_id"/>
+                    <field name="manual_refno" placeholder="VD: DN00123"/>
+                </group>
+                <footer>
+                    <button name="action_confirm" string="Xác nhận" type="object" class="btn-primary"/>
+                    <button string="Hủy" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

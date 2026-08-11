@@ -67,6 +67,14 @@ class StockPickingMisaInvoiceStatus(models.Model):
     misa_invoice_date = fields.Date(string='Ngày hóa đơn MISA', copy=False)
     misa_invoice_amount = fields.Float(string='Tiền hóa đơn MISA', copy=False)
 
+    # Đối soát tự động tra MISA bằng refno = TÊN PHIẾU. Nếu sale quên ghi đúng số phiếu xuất
+    # kho lúc tạo đề nghị xuất HĐ trên MISA, MISA tự sinh 1 mã đề nghị khác (VD "DN00123")
+    # không khớp tên phiếu — tự động sẽ không bao giờ tìm ra. Field này cho gắn tay đúng mã
+    # đề nghị đó (qua wizard misa.invoice.manual.link.wizard), sau đó MỌI lần kiểm tra (thủ
+    # công lẫn cron) sẽ ưu tiên tra theo mã này thay vì theo tên phiếu — xem
+    # action_check_misa_invoice_status.
+    misa_invoice_manual_refno = fields.Char(string='Mã đề nghị MISA (gắn tay)', copy=False)
+
     # MISA cho phép 1 "đề nghị xuất HĐ" (dùng refno của 1 phiếu làm đại diện) gộp chung cho
     # nhiều phiếu xuất kho khác, liệt kê trong journal_memo — các phiếu "ăn theo" đó KHÔNG tự
     # có đề nghị riêng. misa_invoice_master_picking_id trỏ NGƯỢC về phiếu đại diện (chỉ set ở
@@ -236,14 +244,16 @@ class StockPickingMisaInvoiceStatus(models.Model):
         for picking in self:
             if picking.picking_type_code != 'outgoing':
                 continue
+            # Ưu tiên mã đề nghị gắn tay (nếu có) — xem misa_invoice_manual_refno.
+            refno = picking.misa_invoice_manual_refno or picking.name
             try:
                 if request_map is not None:
-                    status = misa_utils.get_invoice_status_from_map(picking.name, request_map)
+                    status = misa_utils.get_invoice_status_from_map(refno, request_map)
                 else:
-                    status = misa_utils.get_invoice_status_for_refno(picking.name)
+                    status = misa_utils.get_invoice_status_for_refno(refno)
             except Exception as e:
                 _logger.exception(
-                    "❌ [MISA INVOICE STATUS] Lỗi kiểm tra phiếu %s: %s", picking.name, e
+                    "❌ [MISA INVOICE STATUS] Lỗi kiểm tra phiếu %s (refno=%s): %s", picking.name, refno, e
                 )
                 picking.message_post(
                     body=Markup("<b>Kiểm tra hóa đơn MISA thất bại:</b><br/>%s") % str(e)
@@ -257,7 +267,10 @@ class StockPickingMisaInvoiceStatus(models.Model):
             # đây nữa (đã lưu đầy đủ ở phiếu gốc) để tránh cộng dồn trùng tiền trong dashboard.
             master_refno = status.get('master_refno')
             master_picking = self.browse()
-            if master_refno and master_refno != picking.name:
+            # So với refno vừa dùng để tra (không phải luôn là tên phiếu — có thể là mã đề
+            # nghị gắn tay) — nếu trùng nghĩa là đề nghị này chính là của phiếu đang xét,
+            # không cần tìm phiếu gốc nào khác.
+            if master_refno and master_refno != refno:
                 master_picking = self.sudo().search([('name', '=', master_refno)], limit=1)
                 if (
                     master_picking and master_picking.id not in self._ids
@@ -356,6 +369,23 @@ class StockPickingMisaInvoiceStatus(models.Model):
         self.message_post(body=Markup("Đã bỏ đánh dấu ngoại lệ xuất hóa đơn MISA."))
         return True
 
+    def action_open_misa_invoice_manual_link_wizard(self):
+        """Mở wizard gắn mã đề nghị MISA thủ công cho 1 phiếu (nút form/list, hoặc gọi qua
+        doAction từ drawer phiếu trên dashboard) — dùng khi sale quên ghi đúng số phiếu xuất
+        kho lúc tạo đề nghị xuất HĐ trên MISA."""
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': 'misa.invoice.manual.link.wizard',
+            'view_mode': 'form',
+            'views': [(False, 'form')],
+            'target': 'new',
+            'context': {
+                'default_picking_id': self.id,
+                'allowed_picking_ids': self.ids,
+            },
+        }
+
     @api.model
     def action_mark_misa_invoice_exception_for_order(self, order_id):
         """Đánh dấu ngoại lệ cho TẤT CẢ phiếu xuất kho (đã done, chưa ngoại lệ) của 1 đơn
@@ -380,6 +410,25 @@ class StockPickingMisaInvoiceStatus(models.Model):
         if pickings:
             pickings.action_unmark_misa_invoice_exception()
         return len(pickings)
+
+    @api.model
+    def action_open_misa_invoice_manual_link_wizard_for_order(self, order_id):
+        """Như action_open_misa_invoice_manual_link_wizard nhưng gọi từ drawer đơn hàng —
+        chưa biết trước phiếu nào nên để trống picking_id, chỉ giới hạn lựa chọn trong các
+        phiếu (đã done, chưa xuất HĐ) của đúng đơn hàng đang xem."""
+        order = self.env['sale.order'].sudo().browse(order_id)
+        picking_ids = order.misa_invoice_picking_ids.filtered(
+            lambda p: p.picking_type_code == 'outgoing' and p.state == 'done'
+            and p.misa_invoice_state != 'invoiced'
+        ).ids
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': 'misa.invoice.manual.link.wizard',
+            'view_mode': 'form',
+            'views': [(False, 'form')],
+            'target': 'new',
+            'context': {'allowed_picking_ids': picking_ids},
+        }
 
     @api.model
     def get_misa_invoice_can_configure(self):
@@ -855,6 +904,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
             'exception_reason': picking.misa_invoice_exception_reason or '',
             'multi_order_group': picking.misa_invoice_multi_order_group,
             'group_order_names': picking.misa_invoice_group_order_names,
+            'manual_refno': picking.misa_invoice_manual_refno or False,
         }
 
     @api.model
@@ -1057,6 +1107,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
                     'master_picking_id': p.misa_invoice_master_picking_id.id or False,
                     'master_picking_name': p.misa_invoice_master_picking_id.name or False,
                     'exception': p.misa_invoice_exception,
+                    'manual_refno': p.misa_invoice_manual_refno or False,
                 }
                 for p in order_pickings
             ],
