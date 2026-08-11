@@ -403,6 +403,15 @@
 
         &.miv-table-compact tbody tr { cursor: default; }
 
+        // Đơn hải quan: khớp phiếu xuất kho (xanh) / có đơn nhưng chưa khớp (vàng) / không
+        // tìm thấy đơn hàng trong Odoo (đỏ) — tô nhẹ cả dòng để nhận ra ngay không cần đọc badge.
+        tbody tr.miv-row-status-matched { background: rgba(12, 163, 12, 0.06); }
+        tbody tr.miv-row-status-nomatch { background: rgba(250, 178, 25, 0.10); }
+        tbody tr.miv-row-status-noorder { background: rgba(208, 59, 59, 0.08); }
+        tbody tr.miv-row-status-matched:hover { background: rgba(12, 163, 12, 0.13); }
+        tbody tr.miv-row-status-nomatch:hover { background: rgba(250, 178, 25, 0.20); }
+        tbody tr.miv-row-status-noorder:hover { background: rgba(208, 59, 59, 0.15); }
+
         .miv-cell-critical { color: var(--miv-critical-text); font-weight: 700; }
         .miv-cell-warning { color: var(--miv-warning-text); font-weight: 700; }
         .miv-cell-good { color: var(--miv-good-text); font-weight: 700; }
