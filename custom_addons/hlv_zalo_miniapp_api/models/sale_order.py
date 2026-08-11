@@ -15,6 +15,31 @@ class SaleOrder(models.Model):
         store=True,
     )
 
+    # ===== Zalo Checkout SDK Transaction Fields =====
+    x_zalo_trans_id = fields.Char(
+        string="Mã giao dịch Zalo SDK",
+        help="Mã định danh giao dịch trả về từ Zalo Checkout SDK hoặc Cổng thanh toán",
+        index=True,
+    )
+    x_zalo_payment_method = fields.Char(
+        string="Phương thức thanh toán Zalo",
+        help="Phương thức thanh toán do Checkout SDK ghi nhận (VD: ZALOPAY_SANDBOX, VNPAY_SANDBOX, COD)",
+    )
+    x_zalo_payment_status = fields.Selection(
+        [
+            ("pending", "Chờ thanh toán"),
+            ("paid", "Đã thanh toán"),
+            ("failed", "Thanh toán thất bại"),
+        ],
+        string="Trạng thái thanh toán Zalo",
+        default="pending",
+        index=True,
+    )
+    x_zalo_trans_time = fields.Datetime(
+        string="Thời điểm giao dịch Zalo",
+        help="Thời gian hoàn tất giao dịch thanh toán phía Zalo SDK",
+    )
+
     # Computed fields tổng hợp từ picking_ids để đảm bảo 100% tương thích REST API cũ
     x_return_requested = fields.Boolean(
         string="Khách đề nghị đổi/trả",
