@@ -181,16 +181,30 @@ class MisaInvoicePublicController(http.Controller):
             return _json_error(str(e))
 
     @http.route('/misa_sale_status/api/customs/list', type='json', auth='public', methods=['POST'])
-    def api_customs_list(self, search='', pending_only=False, limit=50, offset=0, **kwargs):
+    def api_customs_list(self, saler_code='', search='', pending_only=False, limit=50, offset=0, **kwargs):
         if not _pw_allowed():
             return _json_error('unauthorized')
         try:
-            data = request.env['stock.picking'].sudo().get_misa_customs_lines(
-                search=search or False, pending_only=bool(pending_only), limit=int(limit), offset=int(offset),
+            data = request.env['stock.picking'].sudo().get_misa_invoice_public_customs_lines(
+                saler_code=saler_code, search=search or False, pending_only=bool(pending_only),
+                limit=int(limit), offset=int(offset),
             )
             return {'status': 'success', 'data': data}
+        except UserError as e:
+            return _json_error(str(e))
         except Exception as e:
             _logger.exception('misa_sale_status api_customs_list error')
+            return _json_error(str(e))
+
+    @http.route('/misa_sale_status/api/customs/retry', type='json', auth='public', methods=['POST'])
+    def api_customs_retry(self, line_id=None, **kwargs):
+        if not _pw_allowed():
+            return _json_error('unauthorized')
+        try:
+            result = request.env['stock.picking'].sudo().retry_misa_customs_match(int(line_id))
+            return {'status': 'success', 'result': result}
+        except Exception as e:
+            _logger.exception('misa_sale_status api_customs_retry error')
             return _json_error(str(e))
 
     @http.route('/misa_sale_status/api/customs/delete', type='json', auth='public', methods=['POST'])

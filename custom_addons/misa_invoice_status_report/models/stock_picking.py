@@ -863,6 +863,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
             'refno_finance': voucher.get('refno_finance') or '',
             'invoice_date': voucher.get('inv_date'),
             'partner_name': voucher.get('account_object_name') or '',
+            'employee_code': voucher.get('employee_code') or '',
             'total_amount': voucher.get('total_amount') or 0.0,
             'lines': preview_lines,
         }
@@ -897,6 +898,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 'refno_finance': preview.get('refno_finance') or '',
                 'invoice_date': invoice_date,
                 'partner_name': preview['partner_name'],
+                'employee_code': preview.get('employee_code') or '',
                 'sale_order_id': line['sale_order_id'] or False,
                 'order_code': line['order_code'],
                 'inventory_item_code': line['inventory_item_code'],
@@ -923,12 +925,20 @@ class StockPickingMisaInvoiceStatus(models.Model):
         line.ensure_one()
         if line.match_state == 'matched':
             return True
-        if not line.sale_order_id or not line.inventory_item_code:
+        if not line.sale_order_id:
+            line.match_note = "Không tìm thấy đơn bán \"%s\" trong Odoo." % (line.order_code or '')
             return False
+        item_code = (line.inventory_item_code or '').strip()
+        if not item_code:
+            line.match_note = "Dòng này không có mã hàng."
+            return False
+        # '=ilike' so khớp CHÍNH XÁC nhưng không phân biệt hoa/thường — mã hàng giữa MISA và
+        # Odoo đôi khi lệch cách viết hoa dù cùng 1 sản phẩm, strip() để bỏ khoảng trắng thừa.
         product = self.env['product.product'].sudo().search(
-            [('default_code', '=', line.inventory_item_code)], limit=1,
+            [('default_code', '=ilike', item_code)], limit=1,
         )
         if not product:
+            line.match_note = "Không tìm thấy sản phẩm Odoo có mã hàng (default_code) = \"%s\"." % item_code
             return False
         moves = self.env['stock.move'].sudo().search([
             ('sale_line_id.order_id', '=', line.sale_order_id.id),
@@ -937,6 +947,10 @@ class StockPickingMisaInvoiceStatus(models.Model):
             ('picking_id.state', '=', 'done'),
         ])
         if not moves:
+            line.match_note = (
+                "Tìm thấy sản phẩm \"%s\" nhưng chưa có phiếu xuất kho nào (đã hoàn tất) "
+                "cho đúng đơn bán %s."
+            ) % (item_code, line.sale_order_id.name)
             return False
         qty_by_picking = {}
         for move in moves:
@@ -947,11 +961,16 @@ class StockPickingMisaInvoiceStatus(models.Model):
             if best_diff is None or diff < best_diff:
                 best_diff, best_picking = diff, picking
         if not best_picking or best_diff > 0.01:
+            line.match_note = (
+                "Có phiếu xuất kho (%s) cho mã hàng này nhưng SỐ LƯỢNG chưa khớp: "
+                "hóa đơn ghi %s, phiếu xuất %s — cần kiểm tra lại thủ công."
+            ) % (best_picking.name if best_picking else '?', line.quantity, qty_by_picking.get(best_picking, 0.0))
             return False
         line.write({
             'picking_id': best_picking.id,
             'match_state': 'matched',
             'matched_at': fields.Datetime.now(),
+            'match_note': False,
         })
         self._misa_invoice_customs_apply_to_picking(best_picking)
         return True
@@ -1001,9 +1020,15 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 )
 
     @api.model
-    def get_misa_customs_lines(self, search=False, pending_only=False, limit=50, offset=0):
+    def get_misa_customs_lines(self, search=False, pending_only=False, saler_code=False, limit=50, offset=0):
+        """saler_code (tùy chọn): lọc theo đúng employee_code trên hóa đơn — dùng bởi trang
+        public /misa_sale_status (mỗi sale chỉ thấy hóa đơn của mình), KHÔNG dùng ở dashboard
+        nội bộ (admin xem hết, không truyền tham số này)."""
         Lines = self.env['misa.invoice.customs.line'].sudo()
-        domain = []
+        base_domain = []
+        if saler_code:
+            base_domain.append(('employee_code', '=', saler_code))
+        domain = list(base_domain)
         if search:
             domain += [
                 '|', '|', ('invoice_no', 'ilike', search),
@@ -1020,6 +1045,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
                     'refno_finance': line.refno_finance or '',
                     'invoice_date': fields.Date.to_string(line.invoice_date) if line.invoice_date else '',
                     'partner_name': line.partner_name or '',
+                    'employee_code': line.employee_code or '',
                     'order_code': line.order_code,
                     'sale_order_id': line.sale_order_id.id if line.sale_order_id else False,
                     'sale_order_name': line.sale_order_id.name if line.sale_order_id else line.order_code,
@@ -1031,6 +1057,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
                     'amount': line.amount,
                     'match_state': line.match_state,
                     'match_state_label': 'Đã khớp phiếu xuất kho' if line.match_state == 'matched' else 'Chờ xuất kho',
+                    'match_note': line.match_note or '',
                     'picking_id': line.picking_id.id if line.picking_id else False,
                     'picking_name': line.picking_id.name if line.picking_id else False,
                     'fetched_by': line.fetched_by_id.name or '',
@@ -1039,8 +1066,15 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 for line in lines
             ],
             'total': Lines.search_count(domain),
-            'pending_count': Lines.search_count([('match_state', '=', 'pending')]),
+            'pending_count': Lines.search_count(base_domain + [('match_state', '=', 'pending')]),
         }
+
+    @api.model
+    def get_misa_invoice_public_customs_lines(self, saler_code, search=False, pending_only=False, limit=50, offset=0):
+        code = self._misa_invoice_validate_public_saler_code(saler_code)
+        return self.sudo().get_misa_customs_lines(
+            search=search, pending_only=pending_only, saler_code=code, limit=limit, offset=offset,
+        )
 
     @api.model
     def delete_misa_customs_invoice(self, inv_no):
@@ -1051,6 +1085,21 @@ class StockPickingMisaInvoiceStatus(models.Model):
         count = len(lines)
         lines.unlink()
         return count
+
+    @api.model
+    def retry_misa_customs_match(self, line_id):
+        """Thử khớp lại NGAY 1 dòng hải quan cụ thể (bấm tay) — không cần chờ tới lượt cron
+        định kỳ, để người dùng thấy ngay kết quả/lý do sau khi vừa tạo/hoàn tất phiếu xuất
+        kho hoặc sửa mã hàng trên Odoo."""
+        line = self.env['misa.invoice.customs.line'].sudo().browse(line_id)
+        if not line.exists():
+            return {'matched': False, 'match_note': 'Dòng này không còn tồn tại.'}
+        matched = self._misa_invoice_customs_try_match(line)
+        return {
+            'matched': matched,
+            'match_note': line.match_note or '',
+            'picking_name': line.picking_id.name if line.picking_id else False,
+        }
 
     def _misa_invoice_state_breakdown(self, domain):
         Picking = self.sudo()

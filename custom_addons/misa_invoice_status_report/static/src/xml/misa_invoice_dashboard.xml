@@ -931,6 +931,7 @@
                                         <th>Số hóa đơn</th>
                                         <th>Ngày HĐ</th>
                                         <th>Khách hàng</th>
+                                        <th>Mã sale</th>
                                         <th>Đơn hàng</th>
                                         <th>Mã hàng</th>
                                         <th>Tên hàng</th>
@@ -943,31 +944,43 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr t-foreach="state.customsTab.rows" t-as="row" t-key="row.id">
-                                        <td><b><t t-esc="row.invoice_no"/></b></td>
-                                        <td><t t-esc="row.invoice_date"/></td>
-                                        <td><t t-esc="row.partner_name"/></td>
-                                        <td t-attf-class="{{ !row.sale_order_found ? 'miv-cell-critical' : '' }}">
-                                            <i class="fa fa-warning" t-if="!row.sale_order_found" title="Không tìm thấy đơn hàng này trong Odoo"/>
-                                            <t t-esc="row.sale_order_name"/>
-                                        </td>
-                                        <td><t t-esc="row.inventory_item_code"/></td>
-                                        <td><t t-esc="row.description"/></td>
-                                        <td class="miv-col-num"><t t-esc="row.quantity"/></td>
-                                        <td class="miv-col-num"><t t-esc="formatCurrency(row.amount)"/></td>
-                                        <td>
-                                            <span t-attf-class="miv-badge {{ row.match_state === 'matched' ? 'miv-badge-state-invoiced' : 'miv-badge-state-requested' }}">
-                                                <t t-esc="row.match_state_label"/>
-                                            </span>
-                                        </td>
-                                        <td><t t-esc="row.picking_name or '—'"/></td>
-                                        <td><t t-esc="row.fetched_by"/></td>
-                                        <td>
-                                            <button class="btn btn-link miv-link" t-on-click="() => this.deleteCustomsInvoice(row.invoice_no)" title="Xóa cả hóa đơn này">
-                                                <i class="fa fa-trash"/>
-                                            </button>
-                                        </td>
-                                    </tr>
+                                    <t t-foreach="state.customsTab.rows" t-as="row" t-key="row.id">
+                                        <tr>
+                                            <td><b><t t-esc="row.invoice_no"/></b></td>
+                                            <td><t t-esc="row.invoice_date"/></td>
+                                            <td><t t-esc="row.partner_name"/></td>
+                                            <td><t t-esc="row.employee_code or '—'"/></td>
+                                            <td t-attf-class="{{ !row.sale_order_found ? 'miv-cell-critical' : '' }}">
+                                                <i class="fa fa-warning" t-if="!row.sale_order_found" title="Không tìm thấy đơn hàng này trong Odoo"/>
+                                                <t t-esc="row.sale_order_name"/>
+                                            </td>
+                                            <td><t t-esc="row.inventory_item_code"/></td>
+                                            <td><t t-esc="row.description"/></td>
+                                            <td class="miv-col-num"><t t-esc="row.quantity"/></td>
+                                            <td class="miv-col-num"><t t-esc="formatCurrency(row.amount)"/></td>
+                                            <td>
+                                                <span t-attf-class="miv-badge {{ row.match_state === 'matched' ? 'miv-badge-state-invoiced' : 'miv-badge-state-requested' }}"
+                                                      t-att-title="row.match_note">
+                                                    <t t-esc="row.match_state_label"/>
+                                                </span>
+                                            </td>
+                                            <td><t t-esc="row.picking_name or '—'"/></td>
+                                            <td><t t-esc="row.fetched_by"/></td>
+                                            <td>
+                                                <button class="btn btn-link miv-link" t-if="row.match_state == 'pending'"
+                                                        t-on-click="() => this.retryCustomsMatch(row.id)" title="Thử khớp lại ngay">
+                                                    <i class="fa fa-refresh"/>
+                                                </button>
+                                                <button class="btn btn-link miv-link" t-on-click="() => this.deleteCustomsInvoice(row.invoice_no)" title="Xóa cả hóa đơn này">
+                                                    <i class="fa fa-trash"/>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        <tr t-if="row.match_state == 'pending' and row.match_note">
+                                            <td/>
+                                            <td colspan="11" class="miv-section-hint"><i class="fa fa-info-circle"/> <t t-esc="row.match_note"/></td>
+                                        </tr>
+                                    </t>
                                 </tbody>
                             </table>
                             <div class="miv-pagination" t-if="state.customsTab.total > state.customsTab.pageSize">
