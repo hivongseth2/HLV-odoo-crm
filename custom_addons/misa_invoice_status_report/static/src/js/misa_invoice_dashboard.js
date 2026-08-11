@@ -133,6 +133,9 @@ export class MisaInvoiceDashboard extends Component {
             orderCheckLoading: false,
             customsDrawerOpen: false,
             customsDrawerRow: null,
+            // Panel "Khớp thủ công" bên trong drawer hải quan — dùng khi hệ thống tự động
+            // khớp SAI (chọn nhầm phiếu) hoặc khớp THIẾU (không tìm ra phiếu phù hợp).
+            customsManual: { open: false, search: "", loading: false, results: [], qty: "" },
         });
 
         onWillStart(async () => {
@@ -920,6 +923,9 @@ export class MisaInvoiceDashboard extends Component {
         if (status === "noorder") {
             return "Không tìm thấy đơn hàng";
         }
+        if (row.match_state === "partial") {
+            return "Khớp " + row.matched_qty + "/" + row.quantity;
+        }
         return "Chờ xuất kho";
     }
 
@@ -937,16 +943,106 @@ export class MisaInvoiceDashboard extends Component {
     openCustomsDrawer(row) {
         this.state.customsDrawerRow = row;
         this.state.customsDrawerOpen = true;
+        this.state.customsManual = { open: false, search: "", loading: false, results: [], qty: "" };
     }
 
     closeCustomsDrawer() {
         this.state.customsDrawerOpen = false;
         this.state.customsDrawerRow = null;
+        this.state.customsManual = { open: false, search: "", loading: false, results: [], qty: "" };
     }
 
     onCustomsDrawerOverlayClick(ev) {
         if (ev.target === ev.currentTarget) {
             this.closeCustomsDrawer();
+        }
+    }
+
+    /** Sau khi khớp/xóa lượt khớp thay đổi 1 dòng — nạp lại danh sách rồi cập nhật đúng
+     * bản ghi đang mở trong drawer (nếu còn tồn tại) để người dùng thấy ngay kết quả. */
+    async _refreshCustomsAfterChange(lineId) {
+        await this.loadCustomsTab(this.state.customsTab.page);
+        if (this.state.customsDrawerOpen && this.state.customsDrawerRow && this.state.customsDrawerRow.id === lineId) {
+            const updated = this.state.customsTab.rows.find((r) => r.id === lineId);
+            if (updated) {
+                this.state.customsDrawerRow = updated;
+            }
+        }
+    }
+
+    async openCustomsManualMatch() {
+        this.state.customsManual = {
+            open: true, search: "", loading: false, results: [],
+            qty: this.state.customsDrawerRow ? String(this.state.customsDrawerRow.remaining_qty) : "",
+        };
+        await this.searchCustomsManualCandidates();
+    }
+
+    closeCustomsManualMatch() {
+        this.state.customsManual = { open: false, search: "", loading: false, results: [], qty: "" };
+    }
+
+    onCustomsManualSearchInput(ev) {
+        this.state.customsManual.search = ev.target.value;
+    }
+
+    onCustomsManualSearchKeydown(ev) {
+        if (ev.key === "Enter") {
+            this.searchCustomsManualCandidates();
+        }
+    }
+
+    onCustomsManualQtyInput(ev) {
+        this.state.customsManual.qty = ev.target.value;
+    }
+
+    async searchCustomsManualCandidates() {
+        if (!this.state.customsDrawerRow) {
+            return;
+        }
+        this.state.customsManual.loading = true;
+        try {
+            this.state.customsManual.results = await this.orm.call(
+                "stock.picking", "search_pickings_for_customs_manual_match",
+                [this.state.customsDrawerRow.id], { search: this.state.customsManual.search || false },
+            );
+        } catch (e) {
+            this.notification.add("Lỗi tìm phiếu: " + (e.message || e), { type: "danger" });
+        }
+        this.state.customsManual.loading = false;
+    }
+
+    async pickCustomsManualPicking(pickingId) {
+        const line = this.state.customsDrawerRow;
+        if (!line) {
+            return;
+        }
+        try {
+            const result = await this.orm.call(
+                "stock.picking", "set_manual_customs_match",
+                [line.id, pickingId], { quantity: this.state.customsManual.qty || false },
+            );
+            this.notification.add("Đã gán phiếu " + result.picking_name + " (thủ công).", { type: "success" });
+            this.closeCustomsManualMatch();
+            await this._refreshCustomsAfterChange(line.id);
+        } catch (e) {
+            this.notification.add("Lỗi gán thủ công: " + (e.message || e), { type: "danger" });
+        }
+    }
+
+    async removeCustomsMatch(matchId) {
+        const line = this.state.customsDrawerRow;
+        if (!window.confirm("Xóa lượt khớp này? Phiếu xuất kho liên quan có thể quay lại trạng thái chưa xuất hóa đơn.")) {
+            return;
+        }
+        try {
+            await this.orm.call("stock.picking", "remove_customs_match", [matchId], {});
+            this.notification.add("Đã xóa lượt khớp.", { type: "success" });
+            if (line) {
+                await this._refreshCustomsAfterChange(line.id);
+            }
+        } catch (e) {
+            this.notification.add("Lỗi xóa lượt khớp: " + (e.message || e), { type: "danger" });
         }
     }
 
@@ -1090,20 +1186,7 @@ export class MisaInvoiceDashboard extends Component {
             } else {
                 this.notification.add(result.match_note || "Vẫn chưa khớp được.", { type: "warning" });
             }
-            await this.loadCustomsTab(this.state.customsTab.page);
-            if (this.state.customsDrawerOpen && this.state.customsDrawerRow && this.state.customsDrawerRow.id === lineId) {
-                const updated = this.state.customsTab.rows.find((r) => r.id === lineId);
-                if (updated) {
-                    this.state.customsDrawerRow = updated;
-                } else if (result.matched) {
-                    this.state.customsDrawerRow = {
-                        ...this.state.customsDrawerRow,
-                        match_state: "matched",
-                        match_note: result.match_note,
-                        picking_name: result.picking_name,
-                    };
-                }
-            }
+            await this._refreshCustomsAfterChange(lineId);
         } catch (e) {
             this.notification.add("Lỗi thử khớp lại: " + (e.message || e), { type: "danger" });
         }

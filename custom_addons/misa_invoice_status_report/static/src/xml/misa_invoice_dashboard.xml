@@ -1437,8 +1437,12 @@
                                     <span><t t-esc="state.customsDrawerRow.description"/></span>
                                 </div>
                                 <div>
-                                    <span class="miv-drawer-meta-label">Số lượng</span>
+                                    <span class="miv-drawer-meta-label">Số lượng hóa đơn</span>
                                     <span><t t-esc="state.customsDrawerRow.quantity"/></span>
+                                </div>
+                                <div t-if="state.customsDrawerRow.match_state != 'matched'">
+                                    <span class="miv-drawer-meta-label">Còn thiếu</span>
+                                    <span class="miv-cell-warning"><b><t t-esc="state.customsDrawerRow.remaining_qty"/></b></span>
                                 </div>
                                 <div>
                                     <span class="miv-drawer-meta-label">Đơn giá</span>
@@ -1449,19 +1453,95 @@
                                     <span><b><t t-esc="formatCurrency(state.customsDrawerRow.amount)"/></b></span>
                                 </div>
                                 <div>
-                                    <span class="miv-drawer-meta-label">Phiếu xuất kho</span>
-                                    <span><t t-esc="state.customsDrawerRow.picking_name or '—'"/></span>
-                                </div>
-                                <div>
                                     <span class="miv-drawer-meta-label">Ghi nhận bởi</span>
                                     <span><t t-esc="state.customsDrawerRow.fetched_by"/></span>
                                 </div>
                             </div>
+
+                            <h4 class="miv-drawer-section-title">Phiếu xuất kho đã khớp</h4>
+                            <table class="miv-subtable miv-drawer-table" t-if="state.customsDrawerRow.matches and state.customsDrawerRow.matches.length">
+                                <thead>
+                                    <tr>
+                                        <th>Phiếu</th>
+                                        <th class="miv-col-num">Số lượng</th>
+                                        <th>Cách khớp</th>
+                                        <th/>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr t-foreach="state.customsDrawerRow.matches" t-as="m" t-key="m.id">
+                                        <td><b><t t-esc="m.picking_name"/></b></td>
+                                        <td class="miv-col-num"><t t-esc="m.quantity"/></td>
+                                        <td>
+                                            <span t-if="m.is_manual" class="miv-badge miv-badge-warning" t-attf-title="Người gán: {{m.matched_by}}">Thủ công</span>
+                                            <span t-else="" class="miv-badge miv-badge-state-not_checked">Tự động</span>
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-link miv-link" t-on-click="() => this.removeCustomsMatch(m.id)" title="Xóa lượt khớp này">
+                                                <i class="fa fa-trash"/>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <div class="miv-empty" t-else="">Chưa khớp phiếu xuất kho nào.</div>
+
+                            <div t-if="state.customsManual.open" class="miv-section">
+                                <h4 class="miv-drawer-section-title">Chọn phiếu khớp thủ công</h4>
+                                <div class="miv-orders-search">
+                                    <i class="fa fa-search"/>
+                                    <input type="text" placeholder="Tìm theo tên phiếu (bỏ trống = phiếu của đúng đơn hàng)"
+                                           t-att-value="state.customsManual.search"
+                                           t-on-input="onCustomsManualSearchInput" t-on-keydown="onCustomsManualSearchKeydown"/>
+                                    <button class="btn btn-sm miv-cutoff-save" t-on-click="searchCustomsManualCandidates">Tìm</button>
+                                </div>
+                                <div class="miv-drawer-meta-item" style="margin: 8px 0">
+                                    <span class="miv-drawer-meta-label">Số lượng gán</span>
+                                    <input type="number" step="any" class="miv-cutoff-input" style="max-width: 120px"
+                                           t-att-value="state.customsManual.qty" t-on-input="onCustomsManualQtyInput"/>
+                                </div>
+                                <div class="miv-loading" t-if="state.customsManual.loading">
+                                    <i class="fa fa-spinner fa-spin"/> Đang tìm...
+                                </div>
+                                <table class="miv-subtable miv-drawer-table" t-if="!state.customsManual.loading and state.customsManual.results.length">
+                                    <thead>
+                                        <tr>
+                                            <th>Phiếu</th>
+                                            <th>Trạng thái</th>
+                                            <th class="miv-col-num">Đã xuất (mã hàng này)</th>
+                                            <th/>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr t-foreach="state.customsManual.results" t-as="p" t-key="p.id">
+                                            <td><b><t t-esc="p.name"/></b></td>
+                                            <td><t t-esc="p.state_label"/></td>
+                                            <td class="miv-col-num">
+                                                <t t-esc="p.shipped_qty"/>
+                                                <span t-if="p.already_matched_qty" class="miv-cell-muted"> (đã dùng <t t-esc="p.already_matched_qty"/>)</span>
+                                            </td>
+                                            <td>
+                                                <button class="btn btn-sm btn-primary" t-on-click="() => this.pickCustomsManualPicking(p.id)">Gán</button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                <div class="miv-empty" t-if="!state.customsManual.loading and !state.customsManual.results.length">
+                                    Không tìm thấy phiếu nào phù hợp.
+                                </div>
+                                <div class="miv-drawer-actions">
+                                    <button class="btn btn-sm btn-secondary" t-on-click="closeCustomsManualMatch">Đóng</button>
+                                </div>
+                            </div>
                         </div>
-                        <div class="miv-drawer-actions">
-                            <button class="btn btn-sm btn-secondary" t-if="state.customsDrawerRow.match_state == 'pending'"
+                        <div class="miv-drawer-actions" t-if="!state.customsManual.open">
+                            <button class="btn btn-sm btn-secondary" t-if="state.customsDrawerRow.match_state != 'matched'"
                                     t-on-click="() => this.retryCustomsMatch(state.customsDrawerRow.id)">
                                 <i class="fa fa-refresh"/> Thử khớp lại
+                            </button>
+                            <button class="btn btn-sm btn-secondary" t-if="state.customsDrawerRow.match_state != 'matched'"
+                                    t-on-click="openCustomsManualMatch">
+                                <i class="fa fa-hand-pointer-o"/> Khớp thủ công
                             </button>
                             <button class="btn btn-sm btn-outline-danger" t-on-click="() => this.deleteCustomsInvoice(state.customsDrawerRow.invoice_no)">
                                 <i class="fa fa-trash"/> Xóa cả hóa đơn này

@@ -33,6 +33,13 @@ MISA_INVOICE_AMOUNT_TOLERANCE = 1.0
 
 MISA_INVOICE_UNASSIGNED_SALER = 'Chưa gán mã sale'
 
+# Nhãn trạng thái stock.picking (KHÁC với MISA_INVOICE_STATE_LABELS ở trên, vốn là trạng thái
+# xuất hóa đơn) — dùng khi liệt kê phiếu gợi ý cho tính năng "khớp thủ công" đơn hải quan.
+STOCK_PICKING_STATE_LABELS = {
+    'draft': 'Nháp', 'waiting': 'Chờ hàng', 'confirmed': 'Chờ hàng',
+    'assigned': 'Sẵn sàng', 'done': 'Hoàn tất', 'cancel': 'Đã hủy',
+}
+
 # Số ngày nới rộng biên trước ngày xuất kho sớm nhất trong lô khi tải map đề nghị xuất HĐ —
 # vì đề nghị/hóa đơn thường được lập TRỄ hơn ngày xuất kho (đúng lý do có báo cáo này).
 MISA_INVOICE_MAP_LOOKBACK_DAYS = 60
@@ -781,12 +788,45 @@ class StockPickingMisaInvoiceStatus(models.Model):
             'counts': {key: bucket['count'] for key, bucket in summary['by_state'].items()},
         }
 
+    def _misa_invoice_customs_summary(self, date_from=False, date_to=False, saler_code=False):
+        """Tổng hợp toàn bộ dòng hải quan khớp bộ lọc (theo NGÀY HÓA ĐƠN, vì dòng pending chưa
+        chắc đã có phiếu xuất kho/date_done nào) — dùng cho tile 'Đơn hải quan' trong thống kê
+        đối soát. matched_amount = phần tiền ĐÃ được cộng vào misa_invoiced_amount thông qua
+        match_ids (picking.misa_invoice_amount) — chỉ cộng pending_amount (phần CHƯA phản ánh
+        qua picking nào) vào tổng chung, tránh đếm trùng 2 lần cho phần đã khớp."""
+        Lines = self.env['misa.invoice.customs.line'].sudo()
+        domain = []
+        if date_from:
+            domain.append(('invoice_date', '>=', date_from))
+        if date_to:
+            domain.append(('invoice_date', '<=', date_to))
+        if saler_code:
+            value = False if saler_code == MISA_INVOICE_UNASSIGNED_SALER else saler_code
+            domain.append(('employee_code', '=', value))
+        lines = Lines.search(domain)
+        matched_amount = sum(lines.mapped('match_ids.amount'))
+        total_amount = sum(lines.mapped('amount'))
+        matched_lines = lines.filtered(lambda l: l.match_state == 'matched')
+        return {
+            'total_count': len(lines),
+            'matched_count': len(matched_lines),
+            'pending_count': len(lines) - len(matched_lines),
+            'total_amount': total_amount,
+            'matched_amount': matched_amount,
+            'pending_amount': total_amount - matched_amount,
+        }
+
     @api.model
     def get_misa_invoice_reconciliation_totals(self, date_from=False, date_to=False, saler_code=False):
-        """Số liệu đối chiếu tổng: Tổng tiền xuất kho (MISA + Shopee gộp lại) = tiền đã xuất
-        HĐ MISA + tiền đã xuất HĐ Shopee + tiền còn lại chưa xuất HĐ (ở luồng nào cũng tính) —
-        dùng chung cho dashboard nội bộ VÀ trang public /misa_sale_status, để con số tổng luôn
-        khớp giữa các mảnh thay vì mỗi nơi tính rời rạc ra kết quả lệch nhau."""
+        """Số liệu đối chiếu tổng: Tổng tiền xuất kho (MISA + Shopee + Hải quan gộp lại) =
+        tiền đã xuất HĐ MISA + tiền đã xuất HĐ Shopee + tiền đã xuất HĐ hải quan CHƯA phản ánh
+        qua phiếu xuất kho nào + tiền còn lại chưa xuất HĐ (ở luồng nào cũng tính) — dùng chung
+        cho dashboard nội bộ VÀ trang public /misa_sale_status, để con số tổng luôn khớp giữa
+        các mảnh thay vì mỗi nơi tính rời rạc ra kết quả lệch nhau.
+
+        Hải quan chỉ cộng PHẦN CHƯA KHỚP (customs_summary['pending_amount']) vào tổng — phần
+        đã khớp phiếu xuất kho thì tiền đó đã nằm sẵn trong misa_invoiced_amount rồi (qua
+        picking.misa_invoice_amount), cộng thêm sẽ bị đếm trùng 2 lần."""
         Picking = self.sudo()
         misa_domain = Picking._misa_invoice_dashboard_base_domain(date_from, date_to)
         shopee_domain = Picking._misa_invoice_shopee_domain(date_from, date_to)
@@ -803,9 +843,12 @@ class StockPickingMisaInvoiceStatus(models.Model):
         misa_invoiced_total = (misa_invoiced_group[0]['misa_invoice_amount'] or 0.0) if misa_invoiced_group else 0.0
 
         shopee_summary = Picking._misa_invoice_shopee_summary(shopee_domain)
+        customs_summary = Picking._misa_invoice_customs_summary(date_from, date_to, saler_code)
 
         total_actual_amount = misa_actual_total + shopee_summary['total_actual_amount']
-        total_invoiced_amount = misa_invoiced_total + shopee_summary['total_invoice_amount']
+        total_invoiced_amount = (
+            misa_invoiced_total + shopee_summary['total_invoice_amount'] + customs_summary['pending_amount']
+        )
 
         return {
             'total_actual_amount': total_actual_amount,
@@ -813,6 +856,12 @@ class StockPickingMisaInvoiceStatus(models.Model):
             'misa_invoiced_amount': misa_invoiced_total,
             'shopee_actual_amount': shopee_summary['total_actual_amount'],
             'shopee_invoiced_amount': shopee_summary['total_invoice_amount'],
+            'customs_total_amount': customs_summary['total_amount'],
+            'customs_matched_amount': customs_summary['matched_amount'],
+            'customs_pending_amount': customs_summary['pending_amount'],
+            'customs_total_count': customs_summary['total_count'],
+            'customs_matched_count': customs_summary['matched_count'],
+            'customs_pending_count': customs_summary['pending_count'],
             'outstanding_amount': total_actual_amount - total_invoiced_amount,
         }
 
@@ -916,12 +965,14 @@ class StockPickingMisaInvoiceStatus(models.Model):
         return {'count': len(created), 'matched_count': matched_count, 'invoice_no': preview['invoice_no']}
 
     def _misa_invoice_customs_try_match(self, line):
-        """Thử tìm 1 phiếu xuất kho (đã done) khớp ĐÚNG đơn bán + mã hàng + số lượng của dòng
-        hải quan này — nếu tìm được, gán luôn và ghi nhận phiếu đó "đã xuất hóa đơn" (đúng
-        tinh thần: hóa đơn có trước, xuất kho Odoo xác nhận sau). Số lượng phải khớp gần đúng
-        (sai số 0.01) vì có thể xuất kho nhiều đợt cho cùng đơn/mã hàng — chỉ nhận phiếu mà
-        tổng SL xuất của đúng mã hàng đó khớp với SL trên hóa đơn, tránh gán nhầm phiếu khác
-        đợt của cùng đơn."""
+        """Thử tìm phiếu xuất kho (đã done) khớp đơn bán + mã hàng của dòng hải quan này — CHO
+        PHÉP khớp TỪNG PHẦN vì hàng có thể xuất kho nhiều đợt (hóa đơn ghi số lượng 2 nhưng đợt
+        xuất đầu chỉ có 1): dòng ở trạng thái 'partial' và vẫn tiếp tục được cron thử lại cho
+        tới khi tổng số lượng khớp (matched_qty, cộng dồn qua match_ids) đủ so với hóa đơn.
+        Mỗi phiếu chỉ tính 1 lần cho dòng này, và số lượng đã bị dòng hải quan KHÁC (cùng đơn +
+        cùng mã hàng) lấy trước sẽ được trừ ra — tránh 2 dòng cùng cộng dồn 1 lượng hàng xuất
+        kho. Vì nới lỏng điều kiện (không còn đòi khớp CHÍNH XÁC tuyệt đối), thuật toán có thể
+        chọn nhầm phiếu ở vài ca hiếm — dùng "Khớp thủ công" / "Xóa lượt khớp" trên UI để sửa."""
         line.ensure_one()
         if line.match_state == 'matched':
             return True
@@ -940,57 +991,103 @@ class StockPickingMisaInvoiceStatus(models.Model):
         if not product:
             line.match_note = "Không tìm thấy sản phẩm Odoo có mã hàng (default_code) = \"%s\"." % item_code
             return False
-        moves = self.env['stock.move'].sudo().search([
+        remaining = line.remaining_qty()
+        already_picking_ids = line.match_ids.mapped('picking_id').ids
+        domain = [
             ('sale_line_id.order_id', '=', line.sale_order_id.id),
             ('product_id', '=', product.id),
             ('picking_id.picking_type_id.code', '=', 'outgoing'),
             ('picking_id.state', '=', 'done'),
-        ])
+        ]
+        if already_picking_ids:
+            domain.append(('picking_id', 'not in', already_picking_ids))
+        moves = self.env['stock.move'].sudo().search(domain)
         if not moves:
-            line.match_note = (
-                "Tìm thấy sản phẩm \"%s\" nhưng chưa có phiếu xuất kho nào (đã hoàn tất) "
-                "cho đúng đơn bán %s."
-            ) % (item_code, line.sale_order_id.name)
+            if line.matched_qty > 0.01:
+                line.match_note = "Đã khớp %s/%s — còn thiếu %s, đang chờ xuất kho đợt tiếp theo." % (
+                    line.matched_qty, line.quantity, remaining,
+                )
+            else:
+                line.match_note = (
+                    "Tìm thấy sản phẩm \"%s\" nhưng chưa có phiếu xuất kho nào (đã hoàn tất) "
+                    "cho đúng đơn bán %s."
+                ) % (item_code, line.sale_order_id.name)
             return False
         qty_by_picking = {}
         for move in moves:
             qty_by_picking[move.picking_id] = qty_by_picking.get(move.picking_id, 0.0) + move.quantity
-        best_picking, best_diff = None, None
-        for picking, qty in qty_by_picking.items():
-            diff = abs(qty - line.quantity)
-            if best_diff is None or diff < best_diff:
-                best_diff, best_picking = diff, picking
-        if not best_picking or best_diff > 0.01:
+        picking_ids = [p.id for p in qty_by_picking]
+        other_matches = self.env['misa.invoice.customs.match'].sudo().search([
+            ('picking_id', 'in', picking_ids),
+            ('line_id.sale_order_id', '=', line.sale_order_id.id),
+            ('line_id.inventory_item_code', '=ilike', item_code),
+            ('line_id', '!=', line.id),
+        ])
+        allocated_elsewhere = {}
+        for m in other_matches:
+            allocated_elsewhere[m.picking_id.id] = allocated_elsewhere.get(m.picking_id.id, 0.0) + m.quantity
+        available_by_picking = {
+            picking: qty - allocated_elsewhere.get(picking.id, 0.0)
+            for picking, qty in qty_by_picking.items()
+        }
+        available_by_picking = {p: q for p, q in available_by_picking.items() if q > 0.01}
+        if not available_by_picking:
             line.match_note = (
-                "Có phiếu xuất kho (%s) cho mã hàng này nhưng SỐ LƯỢNG chưa khớp: "
-                "hóa đơn ghi %s, phiếu xuất %s — cần kiểm tra lại thủ công."
-            ) % (best_picking.name if best_picking else '?', line.quantity, qty_by_picking.get(best_picking, 0.0))
+                "Có phiếu xuất kho cho mã hàng này nhưng toàn bộ số lượng đã được dòng hải quan "
+                "khác (cùng đơn, cùng mã hàng) sử dụng — cần kiểm tra lại thủ công."
+            )
             return False
+        # Xuất kho đợt nào trước thì tính vào hóa đơn trước (FIFO theo ngày hoàn tất phiếu).
+        ordered_pickings = sorted(
+            available_by_picking.items(),
+            key=lambda kv: kv[0].date_done or kv[0].create_date or fields.Datetime.now(),
+        )
+        unit_amount = (line.amount / line.quantity) if line.quantity else 0.0
+        for picking, free_qty in ordered_pickings:
+            if remaining <= 0.01:
+                break
+            take_qty = min(free_qty, remaining)
+            self.env['misa.invoice.customs.match'].sudo().create({
+                'line_id': line.id,
+                'picking_id': picking.id,
+                'quantity': take_qty,
+                'amount': unit_amount * take_qty,
+                'is_manual': False,
+                'matched_at': fields.Datetime.now(),
+            })
+            self._misa_invoice_customs_apply_to_picking(picking)
+            remaining -= take_qty
+        new_remaining = line.remaining_qty()
+        if new_remaining <= 0.01:
+            line.write({'match_state': 'matched', 'matched_at': fields.Datetime.now(), 'match_note': False})
+            return True
         line.write({
-            'picking_id': best_picking.id,
-            'match_state': 'matched',
-            'matched_at': fields.Datetime.now(),
-            'match_note': False,
+            'match_state': 'partial' if line.matched_qty > 0.01 else 'pending',
+            'match_note': "Đã khớp %s/%s — còn thiếu %s, đang chờ xuất kho đợt tiếp theo." % (
+                line.matched_qty, line.quantity, new_remaining,
+            ),
         })
-        self._misa_invoice_customs_apply_to_picking(best_picking)
-        return True
+        return False
 
     def _misa_invoice_customs_apply_to_picking(self, picking):
-        """Khi 1 phiếu xuất kho có >=1 dòng hải quan đã khớp — ghi nhận phiếu đó 'đã xuất HĐ'
-        (nếu chưa từng ghi nhận qua luồng nào khác), lấy số HĐ/ngày HĐ từ dòng hải quan, tiền
-        = tổng các dòng hải quan khớp với phiếu này (không phải tổng cả hóa đơn, vì 1 hóa đơn
-        có thể gộp nhiều đơn/nhiều phiếu khác nhau)."""
+        """Khi 1 phiếu xuất kho có >=1 lượt khớp hải quan (match_ids) — ghi nhận phiếu đó 'đã
+        xuất HĐ' (nếu chưa từng ghi nhận qua luồng nào khác), lấy số HĐ/ngày HĐ từ lượt khớp
+        ĐẦU TIÊN, tiền = tổng amount đã quy cho phiếu này qua các lượt khớp (không phải tổng cả
+        hóa đơn hay tổng cả dòng hải quan, vì 1 dòng có thể bị chia xuất kho nhiều đợt/phiếu)."""
         if picking.misa_invoice_state == 'invoiced':
             return
-        lines = self.env['misa.invoice.customs.line'].sudo().search([('picking_id', '=', picking.id)])
-        if not lines:
+        matches = self.env['misa.invoice.customs.match'].sudo().search(
+            [('picking_id', '=', picking.id)], order='matched_at',
+        )
+        if not matches:
             return
+        first_line = matches[0].line_id
         old_state = picking.misa_invoice_state
         picking.write({
             'misa_invoice_state': 'invoiced',
-            'misa_invoice_no': lines[0].invoice_no,
-            'misa_invoice_date': lines[0].invoice_date,
-            'misa_invoice_amount': sum(lines.mapped('amount')),
+            'misa_invoice_no': first_line.invoice_no,
+            'misa_invoice_date': first_line.invoice_date,
+            'misa_invoice_amount': sum(matches.mapped('amount')),
             'misa_invoice_last_checked': fields.Datetime.now(),
         })
         picking.message_post(
@@ -1000,9 +1097,127 @@ class StockPickingMisaInvoiceStatus(models.Model):
             ) % (
                 MISA_INVOICE_STATE_LABELS.get(old_state, old_state),
                 MISA_INVOICE_STATE_LABELS.get('invoiced', 'invoiced'),
-                lines[0].invoice_no,
+                first_line.invoice_no,
             )
         )
+
+    @api.model
+    def search_pickings_for_customs_manual_match(self, line_id, search=False, limit=20):
+        """Danh sách phiếu xuất kho gợi ý để người dùng CHỌN THỦ CÔNG khi tự động khớp sai/thiếu
+        — mặc định chỉ hiện phiếu outgoing của ĐÚNG đơn bán trên dòng hải quan; cho tìm thêm
+        theo tên phiếu (search) phòng trường hợp sale ghi nhầm mã đơn hàng trên MISA. Kèm số
+        lượng đã xuất của đúng mã hàng (nếu xác định được sản phẩm) để người dùng đối chiếu."""
+        line = self.env['misa.invoice.customs.line'].sudo().browse(line_id)
+        if not line.exists():
+            return []
+        domain = [('picking_type_id.code', '=', 'outgoing'), ('state', '!=', 'cancel')]
+        if search:
+            domain.append(('name', 'ilike', search))
+        elif line.sale_order_id:
+            domain.append(('misa_invoice_sale_order_ids', '=', line.sale_order_id.id))
+        else:
+            return []
+        pickings = self.sudo().search(domain, limit=limit, order='date_done desc, id desc')
+        item_code = (line.inventory_item_code or '').strip()
+        product = (
+            self.env['product.product'].sudo().search([('default_code', '=ilike', item_code)], limit=1)
+            if item_code else self.env['product.product']
+        )
+        Match = self.env['misa.invoice.customs.match'].sudo()
+        result = []
+        for picking in pickings:
+            shipped_qty = 0.0
+            if product:
+                moves = picking.move_ids_without_package.filtered(lambda m: m.product_id == product)
+                shipped_qty = sum(moves.mapped('quantity'))
+            existing = Match.search([('picking_id', '=', picking.id), ('line_id', '=', line.id)], limit=1)
+            result.append({
+                'id': picking.id,
+                'name': picking.name,
+                'state': picking.state,
+                'state_label': STOCK_PICKING_STATE_LABELS.get(picking.state, picking.state),
+                'date_done': fields.Datetime.to_string(picking.date_done) if picking.date_done else '',
+                'shipped_qty': shipped_qty,
+                'already_matched_qty': existing.quantity if existing else 0.0,
+            })
+        return result
+
+    @api.model
+    def set_manual_customs_match(self, line_id, picking_id, quantity=False):
+        """Cho người dùng CHỌN THỦ CÔNG 1 phiếu xuất kho để khớp với dòng hải quan này — dùng
+        khi hệ thống tự động khớp SAI (chọn nhầm phiếu) hoặc khớp THIẾU (không tìm ra phiếu phù
+        hợp). Không kiểm tra lại số lượng như khớp tự động — tin lựa chọn thủ công của người
+        dùng, chỉ giới hạn không vượt quá số lượng còn thiếu của dòng."""
+        line = self.env['misa.invoice.customs.line'].sudo().browse(line_id)
+        if not line.exists():
+            raise UserError("Dòng hải quan này không còn tồn tại.")
+        picking = self.sudo().browse(picking_id)
+        if not picking.exists():
+            raise UserError("Phiếu xuất kho này không còn tồn tại.")
+        remaining = line.remaining_qty()
+        if remaining <= 0.01:
+            raise UserError("Dòng hải quan này đã khớp đủ số lượng, không cần gán thêm.")
+        qty = float(quantity) if quantity else remaining
+        if qty <= 0:
+            raise UserError("Số lượng gán phải lớn hơn 0.")
+        qty = min(qty, remaining)
+        unit_amount = (line.amount / line.quantity) if line.quantity else 0.0
+        self.env['misa.invoice.customs.match'].sudo().create({
+            'line_id': line.id,
+            'picking_id': picking.id,
+            'quantity': qty,
+            'amount': unit_amount * qty,
+            'is_manual': True,
+            'matched_by_id': self.env.user.id,
+            'matched_at': fields.Datetime.now(),
+        })
+        self._misa_invoice_customs_apply_to_picking(picking)
+        new_remaining = line.remaining_qty()
+        if new_remaining <= 0.01:
+            line.write({'match_state': 'matched', 'matched_at': fields.Datetime.now(), 'match_note': False})
+        else:
+            line.write({
+                'match_state': 'partial',
+                'match_note': "Đã khớp %s/%s (gồm gán thủ công) — còn thiếu %s." % (
+                    line.matched_qty, line.quantity, new_remaining,
+                ),
+            })
+        return {'matched': line.match_state == 'matched', 'remaining_qty': new_remaining, 'picking_name': picking.name}
+
+    @api.model
+    def remove_customs_match(self, match_id):
+        """Xóa 1 lượt khớp SAI (thủ công hoặc tự động) — khôi phục lại đúng trạng thái còn
+        thiếu của dòng hải quan. Nếu phiếu xuất kho đó không còn lượt khớp nào khác trỏ tới,
+        trả phiếu về 'chưa kiểm tra' để luồng đối soát HĐ thông thường (theo refno) tự đánh giá
+        lại từ đầu — tránh phiếu bị "kẹt" ở trạng thái đã xuất HĐ chỉ vì 1 lượt khớp sai."""
+        match = self.env['misa.invoice.customs.match'].sudo().browse(match_id)
+        if not match.exists():
+            return {'removed': False}
+        line = match.line_id
+        picking = match.picking_id
+        match.unlink()
+        remaining_matches = self.env['misa.invoice.customs.match'].sudo().search_count(
+            [('picking_id', '=', picking.id)],
+        )
+        if not remaining_matches and picking.misa_invoice_state == 'invoiced':
+            picking.write({
+                'misa_invoice_state': 'not_checked',
+                'misa_invoice_no': False,
+                'misa_invoice_date': False,
+                'misa_invoice_amount': 0.0,
+            })
+            picking.message_post(body="Đã xóa lượt khớp hải quan sai — trả phiếu về 'Chưa kiểm tra' để đối soát lại.")
+        new_remaining = line.remaining_qty()
+        if new_remaining <= 0.01:
+            line.write({'match_state': 'matched', 'match_note': False})
+        elif line.matched_qty > 0.01:
+            line.write({
+                'match_state': 'partial',
+                'match_note': "Đã khớp %s/%s — còn thiếu %s." % (line.matched_qty, line.quantity, new_remaining),
+            })
+        else:
+            line.write({'match_state': 'pending', 'match_note': "Chưa có phiếu xuất kho nào khớp."})
+        return {'removed': True, 'line_id': line.id}
 
     def _cron_scan_misa_customs_pending(self):
         """Quét định kỳ các dòng hải quan còn 'pending' (chưa có phiếu xuất kho tương ứng
@@ -1035,8 +1250,11 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 ('order_code', 'ilike', search), ('inventory_item_code', 'ilike', search),
             ]
         if pending_only:
-            domain.append(('match_state', '=', 'pending'))
+            domain.append(('match_state', 'in', ('pending', 'partial')))
         lines = Lines.search(domain, limit=limit, offset=offset)
+        match_state_labels = {
+            'matched': 'Đã khớp phiếu xuất kho', 'partial': 'Khớp một phần', 'pending': 'Chờ xuất kho',
+        }
         return {
             'rows': [
                 {
@@ -1055,18 +1273,33 @@ class StockPickingMisaInvoiceStatus(models.Model):
                     'quantity': line.quantity,
                     'unit_price': line.unit_price,
                     'amount': line.amount,
+                    'matched_qty': line.matched_qty,
+                    'remaining_qty': line.remaining_qty(),
                     'match_state': line.match_state,
-                    'match_state_label': 'Đã khớp phiếu xuất kho' if line.match_state == 'matched' else 'Chờ xuất kho',
+                    'match_state_label': match_state_labels.get(line.match_state, line.match_state),
                     'match_note': line.match_note or '',
                     'picking_id': line.picking_id.id if line.picking_id else False,
                     'picking_name': line.picking_id.name if line.picking_id else False,
+                    'matches': [
+                        {
+                            'id': m.id,
+                            'picking_id': m.picking_id.id,
+                            'picking_name': m.picking_id.name,
+                            'quantity': m.quantity,
+                            'amount': m.amount,
+                            'is_manual': m.is_manual,
+                            'matched_by': m.matched_by_id.name or '',
+                            'matched_at': fields.Datetime.to_string(m.matched_at) if m.matched_at else '',
+                        }
+                        for m in line.match_ids
+                    ],
                     'fetched_by': line.fetched_by_id.name or '',
                     'fetched_at': fields.Datetime.to_string(line.fetched_at) if line.fetched_at else '',
                 }
                 for line in lines
             ],
             'total': Lines.search_count(domain),
-            'pending_count': Lines.search_count(base_domain + [('match_state', '=', 'pending')]),
+            'pending_count': Lines.search_count(base_domain + [('match_state', 'in', ('pending', 'partial'))]),
         }
 
     @api.model
@@ -1099,6 +1332,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
             'matched': matched,
             'match_note': line.match_note or '',
             'picking_name': line.picking_id.name if line.picking_id else False,
+            'remaining_qty': line.remaining_qty(),
         }
 
     def _misa_invoice_state_breakdown(self, domain):

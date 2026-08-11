@@ -834,6 +834,7 @@
                         var s = customsRowStatus(row);
                         if (s === 'matched') { return 'Đã khớp phiếu xuất kho'; }
                         if (s === 'noorder') { return 'Không tìm thấy đơn hàng'; }
+                        if (row.match_state === 'partial') { return 'Khớp ' + row.matched_qty + '/' + row.quantity; }
                         return 'Chờ xuất kho';
                     }
                     function customsRowBadgeState(row) {
@@ -1325,6 +1326,7 @@
                         drawerOpenId = null;
                         customsDrawerRowId = null;
                         drawerKind = null;
+                        customsManualState = { open: false, search: '', loading: false, results: [], qty: '' };
                     }
                     drawerOverlay.addEventListener('click', function(ev) {
                         if (ev.target === drawerOverlay) { closeDrawer(); }
@@ -1346,11 +1348,32 @@
                     function openCustomsDrawer(row) {
                         drawerKind = 'customs';
                         customsDrawerRowId = row.id;
+                        if (!customsManualState.open) {
+                            customsManualState = { open: false, search: '', loading: false, results: [], qty: '' };
+                        }
                         renderCustomsDrawerContent(row);
                         drawerOverlay.style.display = 'flex';
                     }
 
+                    // Panel "Khớp thủ công" bên trong drawer hải quan — dùng khi hệ thống tự
+                    // động khớp SAI (chọn nhầm phiếu) hoặc khớp THIẾU (không tìm ra phiếu phù
+                    // hợp). State module-scope vì drawer được render lại toàn bộ mỗi lần đổi.
+                    var customsManualState = { open: false, search: '', loading: false, results: [], qty: '' };
+
                     function renderCustomsDrawerContent(row) {
+                        var matchesHtml = (row.matches && row.matches.length)
+                            ? '<table class="msu-table" style="margin-top:8px"><thead><tr><th>Phiếu</th><th class="msu-col-num">Số lượng</th><th>Cách khớp</th><th></th></tr></thead><tbody>' +
+                                row.matches.map(function(m) {
+                                    return '<tr><td><b>' + esc(m.picking_name) + '</b></td>' +
+                                        '<td class="msu-col-num">' + m.quantity + '</td>' +
+                                        '<td>' + (m.is_manual
+                                            ? '<span class="msu-badge-state msu-badge-state-submitted" title="Người gán: ' + esc(m.matched_by) + '">Thủ công</span>'
+                                            : '<span class="msu-badge-state msu-badge-state-not_checked">Tự động</span>') + '</td>' +
+                                        '<td><button class="msu-btn msu-btn-outline-danger msu-btn-xs msu-customs-match-remove" data-match-id="' + m.id + '" title="Xóa lượt khớp này"><i class="fa fa-trash"></i></button></td></tr>';
+                                }).join('') +
+                                '</tbody></table>'
+                            : '<p class="msu-muted" style="font-size:.84rem;margin-top:8px">Chưa khớp phiếu xuất kho nào.</p>';
+
                         drawerEl.innerHTML =
                             '<div class="msu-drawer-header">' +
                                 '<div><h4 class="msu-drawer-title">' + esc(row.invoice_no) + '</h4><div class="msu-drawer-subtitle">' + esc(row.partner_name) + '</div></div>' +
@@ -1366,27 +1389,157 @@
                                         '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Đơn hàng</span><span class="msu-meta-value' + (row.sale_order_found ? '' : ' msu-col-diff-bad') + '">' + esc(row.sale_order_name || row.order_code || '—') + '</span></div>' +
                                         '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Mã hàng</span><span class="msu-meta-value">' + esc(row.inventory_item_code) + '</span></div>' +
                                         '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Tên hàng</span><span class="msu-meta-value">' + esc(row.description) + '</span></div>' +
-                                        '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Số lượng</span><span class="msu-meta-value">' + row.quantity + '</span></div>' +
+                                        '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Số lượng hóa đơn</span><span class="msu-meta-value">' + row.quantity + '</span></div>' +
+                                        (row.match_state !== 'matched' ? '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Còn thiếu</span><span class="msu-meta-value msu-col-diff-bad">' + row.remaining_qty + '</span></div>' : '') +
                                         '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Đơn giá</span><span class="msu-meta-value">' + fmtMoney(row.unit_price) + '</span></div>' +
                                         '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Thành tiền</span><span class="msu-meta-value">' + fmtMoney(row.amount) + '</span></div>' +
-                                        '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Phiếu xuất kho</span><span class="msu-meta-value">' + (row.picking_name ? esc(row.picking_name) : '—') + '</span></div>' +
                                         '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Ghi nhận bởi</span><span class="msu-meta-value">' + esc(row.fetched_by) + '</span></div>' +
                                     '</div>' +
                                 '</div>' +
+                                '<div class="msu-drawer-section">' +
+                                    '<p class="msu-drawer-section-title">Phiếu xuất kho đã khớp</p>' +
+                                    matchesHtml +
+                                '</div>' +
+                                '<div class="msu-drawer-section" id="msu-customs-manual-panel"></div>' +
                             '</div>' +
-                            '<div class="msu-drawer-actions">' +
-                                (row.match_state === 'pending' ? '<button class="msu-btn msu-btn-outline-primary msu-btn-sm" id="msu-customs-drawer-retry"><i class="fa fa-refresh"></i> Thử khớp lại</button>' : '') +
-                                '<button class="msu-btn msu-btn-outline-danger msu-btn-sm" id="msu-customs-drawer-delete"><i class="fa fa-trash"></i> Xóa cả hóa đơn này</button>' +
-                            '</div>';
+                            '<div class="msu-drawer-actions" id="msu-customs-drawer-actions"></div>';
 
                         document.getElementById('msu-drawer-close-btn').addEventListener('click', closeDrawer);
+                        drawerEl.querySelectorAll('.msu-customs-match-remove').forEach(function(btn) {
+                            btn.addEventListener('click', function() {
+                                removeCustomsMatchRow(parseInt(this.dataset.matchId, 10), row);
+                            });
+                        });
+                        renderCustomsDrawerActions(row);
+                        renderCustomsManualPanel(row);
+                    }
+
+                    function renderCustomsDrawerActions(row) {
+                        var actionsEl = document.getElementById('msu-customs-drawer-actions');
+                        if (!actionsEl) { return; }
+                        if (customsManualState.open) { actionsEl.innerHTML = ''; return; }
+                        actionsEl.innerHTML =
+                            (row.match_state !== 'matched' ? '<button class="msu-btn msu-btn-outline-primary msu-btn-sm" id="msu-customs-drawer-retry"><i class="fa fa-refresh"></i> Thử khớp lại</button>' : '') +
+                            (row.match_state !== 'matched' ? '<button class="msu-btn msu-btn-outline-muted msu-btn-sm" id="msu-customs-drawer-manual"><i class="fa fa-hand-pointer-o"></i> Khớp thủ công</button>' : '') +
+                            '<button class="msu-btn msu-btn-outline-danger msu-btn-sm" id="msu-customs-drawer-delete"><i class="fa fa-trash"></i> Xóa cả hóa đơn này</button>';
                         var retryBtn = document.getElementById('msu-customs-drawer-retry');
                         if (retryBtn) {
                             retryBtn.addEventListener('click', function() { customsRetryMatch(row.id, retryBtn); });
                         }
+                        var manualBtn = document.getElementById('msu-customs-drawer-manual');
+                        if (manualBtn) {
+                            manualBtn.addEventListener('click', function() { openCustomsManualPanel(row); });
+                        }
                         document.getElementById('msu-customs-drawer-delete').addEventListener('click', function() {
                             customsDeleteInvoice(row.invoice_no);
                         });
+                    }
+
+                    function openCustomsManualPanel(row) {
+                        customsManualState = { open: true, search: '', loading: false, results: [], qty: String(row.remaining_qty) };
+                        renderCustomsManualPanel(row);
+                        renderCustomsDrawerActions(row);
+                        searchCustomsManualCandidates(row);
+                    }
+
+                    function closeCustomsManualPanel(row) {
+                        customsManualState = { open: false, search: '', loading: false, results: [], qty: '' };
+                        renderCustomsManualPanel(row);
+                        renderCustomsDrawerActions(row);
+                    }
+
+                    function renderCustomsManualPanel(row) {
+                        var panel = document.getElementById('msu-customs-manual-panel');
+                        if (!panel) { return; }
+                        if (!customsManualState.open) { panel.innerHTML = ''; return; }
+                        var resultsHtml;
+                        if (customsManualState.loading) {
+                            resultsHtml = '<p class="msu-muted" style="font-size:.84rem"><i class="fa fa-spinner fa-spin"></i> Đang tìm...</p>';
+                        } else if (customsManualState.results.length) {
+                            resultsHtml = '<table class="msu-table" style="margin-top:8px"><thead><tr><th>Phiếu</th><th>Trạng thái</th><th class="msu-col-num">Đã xuất (mã hàng này)</th><th></th></tr></thead><tbody>' +
+                                customsManualState.results.map(function(p) {
+                                    return '<tr><td><b>' + esc(p.name) + '</b></td>' +
+                                        '<td>' + esc(p.state_label) + '</td>' +
+                                        '<td class="msu-col-num">' + p.shipped_qty + (p.already_matched_qty ? ' <span class="msu-muted">(đã dùng ' + p.already_matched_qty + ')</span>' : '') + '</td>' +
+                                        '<td><button class="msu-btn msu-btn-primary msu-btn-xs msu-customs-manual-pick" data-picking-id="' + p.id + '">Gán</button></td></tr>';
+                                }).join('') +
+                                '</tbody></table>';
+                        } else {
+                            resultsHtml = '<p class="msu-muted" style="font-size:.84rem">Không tìm thấy phiếu nào phù hợp.</p>';
+                        }
+                        panel.innerHTML =
+                            '<p class="msu-drawer-section-title">Chọn phiếu khớp thủ công</p>' +
+                            '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+                                '<input type="text" id="msu-customs-manual-search" class="msu-input" style="flex:1;min-width:160px" placeholder="Tìm theo tên phiếu (bỏ trống = phiếu của đúng đơn hàng)" value="' + esc(customsManualState.search) + '"/>' +
+                                '<button class="msu-btn msu-btn-primary msu-btn-sm" id="msu-customs-manual-search-btn">Tìm</button>' +
+                            '</div>' +
+                            '<div style="margin-top:8px"><label class="msu-meta-label" style="display:block;margin-bottom:3px">Số lượng gán</label>' +
+                                '<input type="number" step="any" id="msu-customs-manual-qty" class="msu-input" style="max-width:120px" value="' + esc(customsManualState.qty) + '"/>' +
+                            '</div>' +
+                            resultsHtml +
+                            '<div style="margin-top:10px"><button class="msu-btn msu-btn-outline-muted msu-btn-sm" id="msu-customs-manual-close">Đóng</button></div>';
+
+                        document.getElementById('msu-customs-manual-search-btn').addEventListener('click', function() {
+                            customsManualState.search = document.getElementById('msu-customs-manual-search').value.trim();
+                            searchCustomsManualCandidates(row);
+                        });
+                        document.getElementById('msu-customs-manual-search').addEventListener('keydown', function(ev) {
+                            if (ev.key === 'Enter') { document.getElementById('msu-customs-manual-search-btn').click(); }
+                        });
+                        document.getElementById('msu-customs-manual-qty').addEventListener('input', function() {
+                            customsManualState.qty = this.value;
+                        });
+                        document.getElementById('msu-customs-manual-close').addEventListener('click', function() {
+                            closeCustomsManualPanel(row);
+                        });
+                        panel.querySelectorAll('.msu-customs-manual-pick').forEach(function(btn) {
+                            btn.addEventListener('click', function() {
+                                pickCustomsManualPicking(row, parseInt(this.dataset.pickingId, 10));
+                            });
+                        });
+                    }
+
+                    function searchCustomsManualCandidates(row) {
+                        customsManualState.loading = true;
+                        renderCustomsManualPanel(row);
+                        rpc('/misa_sale_status/api/customs/search_pickings', { line_id: row.id, search: customsManualState.search || false }).then(function(res) {
+                            customsManualState.loading = false;
+                            customsManualState.results = res.rows || [];
+                            renderCustomsManualPanel(row);
+                        }).catch(function(e) {
+                            customsManualState.loading = false;
+                            renderCustomsManualPanel(row);
+                            toast('Lỗi tìm phiếu: ' + e.message, 'error');
+                        });
+                    }
+
+                    function pickCustomsManualPicking(row, pickingId) {
+                        rpc('/misa_sale_status/api/customs/manual_match', {
+                            line_id: row.id, picking_id: pickingId, quantity: customsManualState.qty || false,
+                        }).then(function(res) {
+                            var result = res.result || {};
+                            toast('Đã gán phiếu ' + result.picking_name + ' (thủ công).', 'success');
+                            closeCustomsManualPanel(row);
+                            loadCustomsList(state.customs.page).then(function() {
+                                if (customsDrawerRowId === row.id) {
+                                    var updated = state.customs.rows.find(function(r) { return r.id === row.id; });
+                                    if (updated) { openCustomsDrawer(updated); }
+                                }
+                            });
+                        }).catch(function(e) { toast('Lỗi gán thủ công: ' + e.message, 'error'); });
+                    }
+
+                    function removeCustomsMatchRow(matchId, row) {
+                        if (!window.confirm('Xóa lượt khớp này? Phiếu xuất kho liên quan có thể quay lại trạng thái chưa xuất hóa đơn.')) { return; }
+                        rpc('/misa_sale_status/api/customs/remove_match', { match_id: matchId }).then(function() {
+                            toast('Đã xóa lượt khớp.', 'success');
+                            loadCustomsList(state.customs.page).then(function() {
+                                if (customsDrawerRowId === row.id) {
+                                    var updated = state.customs.rows.find(function(r) { return r.id === row.id; });
+                                    if (updated) { openCustomsDrawer(updated); }
+                                }
+                            });
+                        }).catch(function(e) { toast('Lỗi xóa lượt khớp: ' + e.message, 'error'); });
                     }
 
                     function renderDrawerContent(row) {
