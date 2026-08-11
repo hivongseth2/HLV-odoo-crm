@@ -23,6 +23,7 @@
         'views/stock_picking_misa_invoice_views.xml',
         'views/misa_invoice_dashboard_views.xml',
         'views/misa_invoice_menus.xml',
+        'views/misa_invoice_customs_line_views.xml',
         'views/res_users_misa_invoice_views.xml',
         'views/misa_sale_status_templates.xml',
         'data/misa_invoice_status_cron.xml',

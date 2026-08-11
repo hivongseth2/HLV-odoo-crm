@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_misa_invoice_customs_line_list" model="ir.ui.view">
+        <field name="name">misa.invoice.customs.line.list</field>
+        <field name="model">misa.invoice.customs.line</field>
+        <field name="arch" type="xml">
+            <list string="Đơn hải quan (hóa đơn xuất trước xuất kho)" create="0">
+                <field name="invoice_no"/>
+                <field name="invoice_date"/>
+                <field name="partner_name"/>
+                <field name="order_code"/>
+                <field name="sale_order_id"/>
+                <field name="inventory_item_code"/>
+                <field name="description" optional="show"/>
+                <field name="quantity" optional="show"/>
+                <field name="unit_price" optional="hide"/>
+                <field name="amount" sum="Tổng tiền"/>
+                <field name="fetched_by_id" optional="hide"/>
+                <field name="fetched_at" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_misa_invoice_customs_line_search" model="ir.ui.view">
+        <field name="name">misa.invoice.customs.line.search</field>
+        <field name="model">misa.invoice.customs.line</field>
+        <field name="arch" type="xml">
+            <search string="Tìm đơn hải quan">
+                <field name="invoice_no"/>
+                <field name="order_code"/>
+                <field name="sale_order_id"/>
+                <field name="inventory_item_code"/>
+                <filter string="Chưa khớp đơn bán" name="filter_unmatched" domain="[('sale_order_id', '=', False)]"/>
+                <group expand="1" string="Nhóm theo">
+                    <filter string="Hóa đơn" name="groupby_invoice" context="{'group_by': 'invoice_no'}"/>
+                    <filter string="Đơn bán" name="groupby_order" context="{'group_by': 'order_code'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_misa_invoice_customs_line" model="ir.actions.act_window">
+        <field name="name">Đơn hải quan</field>
+        <field name="res_model">misa.invoice.customs.line</field>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="view_misa_invoice_customs_line_list"/>
+        <field name="search_view_id" ref="view_misa_invoice_customs_line_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smile">
+                Chưa có dòng nào — dùng tab "Đơn hải quan" trên dashboard Đối soát MISA để
+                nhập số hóa đơn và ghi nhận (trường hợp hóa đơn xuất TRƯỚC khi xuất kho Odoo).
+            </p>
+        </field>
+    </record>
+
+    <menuitem id="menu_misa_invoice_customs_line"
+              name="Đơn hải quan"
+              parent="menu_misa_invoice_root"
+              action="action_misa_invoice_customs_line"
+              sequence="30"/>
+</odoo>

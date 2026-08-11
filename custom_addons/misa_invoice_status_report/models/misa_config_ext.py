@@ -1,3 +1,5 @@
+import datetime
+
 from odoo import models
 
 
@@ -45,4 +47,56 @@ class MisaConfigInvoiceStatus(models.AbstractModel):
             "useSp": False,
             "view": 66,
             "summaryColumns": [3870, 308, 1455, 5350],
+        }
+
+    def get_voucher_search_payload(self, inv_no):
+        """Payload tìm 1 CHỨNG TỪ BÁN HÀNG (sa_voucher_get, hóa đơn thật đã lập) theo SỐ HÓA
+        ĐƠN (inv_no) — dùng cho case "hải quan": hóa đơn xuất TRƯỚC khi có phiếu xuất kho
+        Odoo, nên không thể tra theo refno (chưa có phiếu). Copy nguyên payload thật (chụp từ
+        DevTools khi gõ số hóa đơn tìm trên trang SAVoucher), chỉ thay value của customFilter
+        property 4018 (và các childrens) = inv_no, KHÔNG đổi field nào khác."""
+        now_iso = datetime.datetime.utcnow().isoformat() + "Z"
+        return {
+            "sort": "[{\"property\":3654,\"desc\":true,\"data_type\":3,\"operand\":1},"
+                    "{\"property\":4018,\"desc\":true,\"data_type\":1,\"operand\":1}]",
+            "filter": [
+                {"property": 3654, "value": "2025-12-31T17:00:00.00Z", "operator": 10, "operand": 1, "data_type": 3},
+                {"property": 3654, "value": now_iso, "operator": 12, "operand": 1, "data_type": 3},
+            ],
+            "customFilter": [{
+                "property": 4018, "value": inv_no, "operator": 1, "operand": 1, "childrens": [
+                    {"property": 2189, "value": inv_no, "operator": 1, "operand": 2, "data_type": 1},
+                    {"property": 57, "value": inv_no, "operator": 1, "operand": 2, "data_type": 1},
+                    {"property": 4029, "value": inv_no, "operator": 1, "operand": 2},
+                    {"property": 5709, "value": inv_no, "operator": 1, "operand": 2, "data_type": 1},
+                ],
+                "data_type": 1,
+            }],
+            "pageIndex": 1,
+            "pageSize": 100,
+            "useSp": False,
+            "view": 1,
+            "summaryColumns": [5126, 5068, 5141, 5039, 2198],
+            "loadMode": 2,
+        }
+
+    def get_voucher_detail_payload(self, refid, page_index=1, page_size=100):
+        """Payload lấy CHI TIẾT TỪNG DÒNG HÀNG (mã hàng, đơn hàng gốc, số lượng, tiền) của 1
+        chứng từ bán hàng (sa_voucher_get) theo refid — copy nguyên payload thật, chỉ thay
+        value của filter property 3993 = refid."""
+        return {
+            "columns": [
+                2157, 1355, 4670, 3295, 1122, 2161, 5683, 1029, 4669, 5274, 3870, 1195, 1065,
+                5279, 5281, 308, 34, 5364, 283, 5350, 5347, 3099, 1124, 3404, 5476, 2358,
+            ],
+            "sort": "[{\"property\":4555,\"desc\":false,\"data_type\":4,\"operand\":1}]",
+            "filter": [
+                {"property": 3993, "operator": 7, "operand": 1, "value": refid, "data_type": 10},
+            ],
+            "pageIndex": page_index,
+            "pageSize": page_size,
+            "useSp": False,
+            "view": 96,
+            "summaryColumns": [3870, 3488, 308, 283, 5350],
+            "loadMode": 2,
         }

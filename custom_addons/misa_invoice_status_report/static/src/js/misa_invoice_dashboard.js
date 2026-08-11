@@ -102,6 +102,12 @@ export class MisaInvoiceDashboard extends Component {
                 rows: [], total: 0, page: 1, pageSize: 20, loading: false, search: "", searchDraft: "",
                 stateFilter: "",
             },
+            // Tab "Đơn hải quan": hóa đơn MISA xuất TRƯỚC khi có phiếu xuất kho Odoo — nhập
+            // tay số hóa đơn, xem preview trước khi ghi nhận (fetching/saving riêng biệt).
+            customsTab: {
+                rows: [], total: 0, page: 1, pageSize: 20, loading: false, search: "", searchDraft: "",
+                invInput: "", fetching: false, saving: false, preview: null,
+            },
             showScanPanel: false,
             scanProgress: { done: 0, total: 0 },
             scanLog: [],
@@ -111,6 +117,7 @@ export class MisaInvoiceDashboard extends Component {
             drawerOpen: false,
             drawerPicking: null,
             drawerLines: [],
+            drawerSiblings: [],
             drawerLoading: false,
             // Đối chiếu từng dòng hàng với MISA — tải riêng theo yêu cầu (bấm nút), không tự
             // động gọi khi mở drawer vì tốn thêm 1 lệnh gọi MISA mỗi lần.
@@ -160,6 +167,42 @@ export class MisaInvoiceDashboard extends Component {
         return options;
     }
 
+    /** Đối chiếu tổng tiền xuất kho (MISA + Shopee) — tính thẳng từ state.statusSummary đã
+     * tải sẵn (không gọi thêm API): dòng 'invoiced' chỉ cộng invoice_amount cho đúng
+     * misa_invoice_state == 'invoiced' (xem get_misa_invoice_status_summary), dòng 'shopee'
+     * đã CỘNG SẴN vào 'total' ở backend nên còn lại = total - misa - shopee luôn khớp. */
+    get reconciliationTotals() {
+        const summary = this.state.statusSummary;
+        if (!summary) {
+            return null;
+        }
+        const totalActual = summary.total.actual_amount;
+        const misaInvoiced = summary.invoiced.invoice_amount;
+        const shopeeInvoiced = summary.shopee ? summary.shopee.invoice_amount : 0;
+        return {
+            total_actual_amount: totalActual,
+            misa_invoiced_amount: misaInvoiced,
+            shopee_invoiced_amount: shopeeInvoiced,
+            outstanding_amount: totalActual - misaInvoiced - shopeeInvoiced,
+        };
+    }
+
+    /** Bấm vào 1 ô đối chiếu tổng — nhảy tới đúng tab/filter thể hiện nhóm đó. */
+    openReconciliationGroup(kind) {
+        if (kind === "misa") {
+            this.state.pickingsTab.stateFilter = "invoiced";
+            this.switchTab("pickings");
+        } else if (kind === "shopee") {
+            this.state.shopeeTab.stateFilter = "accepted";
+            this.switchTab("shopee");
+        } else {
+            // 'total' và 'outstanding' không map được về đúng 1 giá trị filter duy nhất
+            // (còn lại = gồm nhiều trạng thái) — bỏ filter, để xem hết rồi tự đọc theo cột.
+            this.state.pickingsTab.stateFilter = "";
+            this.switchTab("pickings");
+        }
+    }
+
     /** Dropdown tháng chỉ "khớp" khi shipFrom/shipTo đúng bằng trọn 1 tháng; ngược lại coi như "Tất cả". */
     get monthDropdownValue() {
         for (const opt of this.monthOptions) {
@@ -191,6 +234,8 @@ export class MisaInvoiceDashboard extends Component {
             this.loadDailyTab();
         } else if (tab === "shopee") {
             this.loadShopeeTab(this.state.shopeeTab.page || 1);
+        } else if (tab === "customs") {
+            this.loadCustomsTab(this.state.customsTab.page || 1);
         }
     }
 
@@ -519,13 +564,17 @@ export class MisaInvoiceDashboard extends Component {
         this.state.drawerOpen = true;
         this.state.drawerPicking = row;
         this.state.drawerLines = [];
+        this.state.drawerSiblings = [];
         this.state.drawerLoading = true;
         this.state.reconciliation = null;
         this.state.reconciliationOpen = false;
         try {
-            this.state.drawerLines = await this.orm.call(
-                "stock.picking", "get_misa_invoice_picking_lines", [row.id], {}
-            );
+            const [lines, siblings] = await Promise.all([
+                this.orm.call("stock.picking", "get_misa_invoice_picking_lines", [row.id], {}),
+                this.orm.call("stock.picking", "get_misa_invoice_picking_siblings", [row.id], {}),
+            ]);
+            this.state.drawerLines = lines;
+            this.state.drawerSiblings = siblings;
         } catch (e) {
             this.notification.add("Lỗi tải chi tiết phiếu: " + (e.message || e), { type: "danger" });
         }
@@ -583,6 +632,7 @@ export class MisaInvoiceDashboard extends Component {
         this.state.drawerOpen = false;
         this.state.drawerPicking = null;
         this.state.drawerLines = [];
+        this.state.drawerSiblings = [];
         this.state.reconciliation = null;
         this.state.reconciliationOpen = false;
     }
@@ -836,6 +886,132 @@ export class MisaInvoiceDashboard extends Component {
     onShopeeStateFilterChange(ev) {
         this.state.shopeeTab.stateFilter = ev.target.value || "";
         this.loadShopeeTab(1);
+    }
+
+    // ===== Tab "Đơn hải quan" (hóa đơn MISA xuất TRƯỚC khi có phiếu xuất kho Odoo) =====
+    get customsUnmatchedCount() {
+        const preview = this.state.customsTab.preview;
+        if (!preview) {
+            return 0;
+        }
+        return preview.lines.filter((line) => !line.sale_order_found).length;
+    }
+
+    onCustomsInvInput(ev) {
+        this.state.customsTab.invInput = ev.target.value;
+    }
+
+    async fetchCustomsInvoice() {
+        const invNo = (this.state.customsTab.invInput || "").trim();
+        if (!invNo) {
+            this.notification.add("Vui lòng nhập số hóa đơn.", { type: "danger" });
+            return;
+        }
+        this.state.customsTab.fetching = true;
+        try {
+            this.state.customsTab.preview = await this.orm.call(
+                "stock.picking", "fetch_misa_customs_invoice", [invNo], {}
+            );
+        } catch (e) {
+            this.notification.add("Lỗi tra cứu hóa đơn: " + (e.message || e), { type: "danger" });
+        }
+        this.state.customsTab.fetching = false;
+    }
+
+    cancelCustomsPreview() {
+        this.state.customsTab.preview = null;
+        this.state.customsTab.invInput = "";
+    }
+
+    async saveCustomsInvoice() {
+        if (!this.state.customsTab.preview) {
+            return;
+        }
+        const invNo = this.state.customsTab.preview.invoice_no;
+        this.state.customsTab.saving = true;
+        try {
+            const result = await this.orm.call("stock.picking", "save_misa_customs_invoice", [invNo], {});
+            this.notification.add(
+                "Đã ghi nhận " + result.count + " dòng cho hóa đơn " + result.invoice_no + ".",
+                { type: "success" }
+            );
+            this.state.customsTab.preview = null;
+            this.state.customsTab.invInput = "";
+            await this.loadCustomsTab(1);
+        } catch (e) {
+            this.notification.add("Lỗi ghi nhận hóa đơn: " + (e.message || e), { type: "danger" });
+        }
+        this.state.customsTab.saving = false;
+    }
+
+    async loadCustomsTab(page) {
+        this.state.customsTab.loading = true;
+        try {
+            const resp = await this.orm.call(
+                "stock.picking", "get_misa_customs_lines", [],
+                {
+                    limit: this.state.customsTab.pageSize,
+                    offset: (page - 1) * this.state.customsTab.pageSize,
+                    search: this.state.customsTab.search || false,
+                }
+            );
+            this.state.customsTab.rows = resp.rows;
+            this.state.customsTab.total = resp.total;
+            this.state.customsTab.page = page;
+        } catch (e) {
+            this.notification.add("Lỗi tải danh sách đơn hải quan: " + (e.message || e), { type: "danger" });
+        }
+        this.state.customsTab.loading = false;
+    }
+
+    get customsTabTotalPages() {
+        return Math.max(1, Math.ceil(this.state.customsTab.total / this.state.customsTab.pageSize));
+    }
+
+    customsTabPrevPage() {
+        if (this.state.customsTab.page > 1) {
+            this.loadCustomsTab(this.state.customsTab.page - 1);
+        }
+    }
+
+    customsTabNextPage() {
+        if (this.state.customsTab.page < this.customsTabTotalPages) {
+            this.loadCustomsTab(this.state.customsTab.page + 1);
+        }
+    }
+
+    onCustomsSearchInput(ev) {
+        this.state.customsTab.searchDraft = ev.target.value;
+    }
+
+    onCustomsSearchKeydown(ev) {
+        if (ev.key === "Enter") {
+            this.submitCustomsSearch();
+        }
+    }
+
+    submitCustomsSearch() {
+        this.state.customsTab.search = this.state.customsTab.searchDraft.trim();
+        this.loadCustomsTab(1);
+    }
+
+    clearCustomsSearch() {
+        this.state.customsTab.search = "";
+        this.state.customsTab.searchDraft = "";
+        this.loadCustomsTab(1);
+    }
+
+    async deleteCustomsInvoice(invNo) {
+        if (!window.confirm('Xóa toàn bộ dữ liệu đã ghi nhận cho hóa đơn "' + invNo + '"?')) {
+            return;
+        }
+        try {
+            await this.orm.call("stock.picking", "delete_misa_customs_invoice", [invNo], {});
+            this.notification.add("Đã xóa hóa đơn " + invNo + ".", { type: "success" });
+            await this.loadCustomsTab(this.state.customsTab.page);
+        } catch (e) {
+            this.notification.add("Lỗi xóa: " + (e.message || e), { type: "danger" });
+        }
     }
 
     // ===== Tab "Đơn hàng" (phẳng, key = sale.order DH..., phân trang server-side, có search) =====

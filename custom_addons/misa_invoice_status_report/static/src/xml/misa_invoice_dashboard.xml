@@ -217,6 +217,41 @@
                     </div>
                 </div>
 
+                <!-- ===== Đối chiếu tổng tiền xuất kho (MISA + Shopee) ===== -->
+                <div class="miv-section" t-if="reconciliationTotals">
+                    <h3>Đối chiếu tổng tiền xuất kho</h3>
+                    <div class="miv-tiles">
+                        <div class="miv-tile miv-tile-neutral" t-on-click="() => this.openReconciliationGroup('total')">
+                            <div class="miv-tile-icon"><i class="fa fa-cubes"/></div>
+                            <div class="miv-tile-body">
+                                <div class="miv-tile-value"><t t-esc="formatCurrency(reconciliationTotals.total_actual_amount)"/></div>
+                                <div class="miv-tile-label">Tổng tiền xuất kho</div>
+                            </div>
+                        </div>
+                        <div class="miv-tile miv-tile-good" t-on-click="() => this.openReconciliationGroup('misa')">
+                            <div class="miv-tile-icon"><i class="fa fa-check-circle"/></div>
+                            <div class="miv-tile-body">
+                                <div class="miv-tile-value"><t t-esc="formatCurrency(reconciliationTotals.misa_invoiced_amount)"/></div>
+                                <div class="miv-tile-label">Đã xuất HĐ (MISA)</div>
+                            </div>
+                        </div>
+                        <div class="miv-tile miv-tile-shopee" t-on-click="() => this.openReconciliationGroup('shopee')">
+                            <div class="miv-tile-icon"><i class="fa fa-shopping-bag"/></div>
+                            <div class="miv-tile-body">
+                                <div class="miv-tile-value"><t t-esc="formatCurrency(reconciliationTotals.shopee_invoiced_amount)"/></div>
+                                <div class="miv-tile-label">Đã xuất HĐ (Shopee)</div>
+                            </div>
+                        </div>
+                        <div class="miv-tile miv-tile-critical" t-on-click="() => this.openReconciliationGroup('outstanding')">
+                            <div class="miv-tile-icon"><i class="fa fa-hourglass-half"/></div>
+                            <div class="miv-tile-body">
+                                <div class="miv-tile-value"><t t-esc="formatCurrency(reconciliationTotals.outstanding_amount)"/></div>
+                                <div class="miv-tile-label">Còn lại chưa xuất HĐ</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- ===== Tình trạng xuất hóa đơn ===== -->
                 <div class="miv-section" t-if="state.statusSummary">
                     <h3>Tình trạng xuất hóa đơn</h3>
@@ -318,6 +353,10 @@
                         <button t-attf-class="miv-tab {{ state.activeTab === 'shopee' ? 'active' : '' }}"
                                 t-on-click="() => this.switchTab('shopee')">
                             Đơn Shopee <span class="miv-tab-count"><t t-esc="state.shopeeTab.total"/></span>
+                        </button>
+                        <button t-attf-class="miv-tab {{ state.activeTab === 'customs' ? 'active' : '' }}"
+                                t-on-click="() => this.switchTab('customs')">
+                            Đơn hải quan <span class="miv-tab-count"><t t-esc="state.customsTab.total"/></span>
                         </button>
                         <a href="#" class="miv-link miv-tab-viewall" t-on-click.prevent="openFullList">
                             <t t-esc="state.activeTab === 'orders' ? 'Xem tất cả đơn hàng' : 'Xem tất cả phiếu'"/> <i class="fa fa-arrow-right"/>
@@ -792,6 +831,144 @@
                             <div class="miv-empty" t-if="!state.shopeeTab.rows.length">Không có đơn Shopee nào trong phạm vi đang lọc.</div>
                         </t>
                     </div>
+
+                    <!-- === Tab: Đơn hải quan (hóa đơn xuất TRƯỚC khi xuất kho Odoo) === -->
+                    <div t-if="state.activeTab === 'customs'" class="miv-tab-panel">
+                        <p class="miv-section-hint">
+                            Dùng khi hóa đơn MISA được xuất TRƯỚC khi xuất kho Odoo (VD hàng hải quan) — nhập số hóa đơn để
+                            tra cứu rồi ghi nhận lại đơn hàng + mã hàng đã được hóa đơn này bao phủ (có thể chỉ phủ 1 phần đơn hàng).
+                        </p>
+                        <div class="miv-orders-search">
+                            <i class="fa fa-search"/>
+                            <input type="text" placeholder="Nhập số hóa đơn, VD: 00004448" id="customsInvInput"
+                                   t-att-value="state.customsTab.invInput" t-on-input="onCustomsInvInput"/>
+                            <button class="btn btn-sm miv-cutoff-save" t-on-click="fetchCustomsInvoice" t-att-disabled="state.customsTab.fetching">
+                                <i class="fa fa-spinner fa-spin" t-if="state.customsTab.fetching"/> Tra cứu
+                            </button>
+                        </div>
+
+                        <div t-if="state.customsTab.preview" class="miv-section">
+                            <div class="miv-drawer-meta">
+                                <div>
+                                    <span class="miv-drawer-meta-label">Số hóa đơn</span>
+                                    <span><b><t t-esc="state.customsTab.preview.invoice_no"/></b></span>
+                                </div>
+                                <div>
+                                    <span class="miv-drawer-meta-label">Ngày hóa đơn</span>
+                                    <span><t t-esc="state.customsTab.preview.invoice_date and state.customsTab.preview.invoice_date.slice(0, 10)"/></span>
+                                </div>
+                                <div>
+                                    <span class="miv-drawer-meta-label">Khách hàng</span>
+                                    <span><t t-esc="state.customsTab.preview.partner_name"/></span>
+                                </div>
+                                <div>
+                                    <span class="miv-drawer-meta-label">Tổng tiền hóa đơn</span>
+                                    <span><b><t t-esc="formatCurrency(state.customsTab.preview.total_amount)"/></b></span>
+                                </div>
+                            </div>
+                            <table class="miv-table miv-table-compact">
+                                <thead>
+                                    <tr>
+                                        <th>Mã đơn hàng</th>
+                                        <th>Mã hàng</th>
+                                        <th>Tên hàng</th>
+                                        <th class="miv-col-num">Số lượng</th>
+                                        <th class="miv-col-num">Đơn giá</th>
+                                        <th class="miv-col-num">Thành tiền</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr t-foreach="state.customsTab.preview.lines" t-as="line" t-key="line_index">
+                                        <td t-attf-class="{{ !line.sale_order_found ? 'miv-cell-critical' : '' }}">
+                                            <i class="fa fa-warning" t-if="!line.sale_order_found" title="Không tìm thấy đơn hàng này trong Odoo"/>
+                                            <t t-esc="line.order_code or '(trống)'"/>
+                                        </td>
+                                        <td><t t-esc="line.inventory_item_code"/></td>
+                                        <td><t t-esc="line.description"/></td>
+                                        <td class="miv-col-num"><t t-esc="line.quantity"/></td>
+                                        <td class="miv-col-num"><t t-esc="formatCurrency(line.unit_price)"/></td>
+                                        <td class="miv-col-num"><t t-esc="formatCurrency(line.amount)"/></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <div class="miv-empty" t-if="customsUnmatchedCount">
+                                Có <t t-esc="customsUnmatchedCount"/> dòng không tìm thấy đơn hàng tương ứng trong Odoo
+                                (vẫn ghi nhận được, nhưng cần kiểm tra lại mã đơn).
+                            </div>
+                            <div class="miv-drawer-actions">
+                                <button class="btn btn-sm btn-secondary" t-on-click="cancelCustomsPreview">Hủy</button>
+                                <button class="btn btn-sm btn-primary" t-on-click="saveCustomsInvoice" t-att-disabled="state.customsTab.saving">
+                                    <i class="fa fa-spinner fa-spin" t-if="state.customsTab.saving"/> Ghi nhận
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="miv-orders-search">
+                            <i class="fa fa-search"/>
+                            <input type="text" placeholder="Tìm theo số hóa đơn, mã đơn hàng hoặc mã hàng..."
+                                   t-att-value="state.customsTab.searchDraft"
+                                   t-on-input="onCustomsSearchInput" t-on-keydown="onCustomsSearchKeydown"/>
+                            <button class="btn btn-sm miv-cutoff-save" t-on-click="submitCustomsSearch">Tìm</button>
+                            <button class="btn btn-sm miv-cutoff-save" t-if="state.customsTab.search" t-on-click="clearCustomsSearch">
+                                <i class="fa fa-times"/> Bỏ tìm
+                            </button>
+                        </div>
+                        <div class="miv-loading" t-if="state.customsTab.loading">
+                            <i class="fa fa-spinner fa-spin"/> Đang tải...
+                        </div>
+                        <t t-else="">
+                            <table class="miv-table" t-if="state.customsTab.rows.length">
+                                <thead>
+                                    <tr>
+                                        <th>Số hóa đơn</th>
+                                        <th>Ngày HĐ</th>
+                                        <th>Khách hàng</th>
+                                        <th>Đơn hàng</th>
+                                        <th>Mã hàng</th>
+                                        <th>Tên hàng</th>
+                                        <th class="miv-col-num">Số lượng</th>
+                                        <th class="miv-col-num">Thành tiền</th>
+                                        <th>Ghi nhận bởi</th>
+                                        <th/>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr t-foreach="state.customsTab.rows" t-as="row" t-key="row.id">
+                                        <td><b><t t-esc="row.invoice_no"/></b></td>
+                                        <td><t t-esc="row.invoice_date"/></td>
+                                        <td><t t-esc="row.partner_name"/></td>
+                                        <td t-attf-class="{{ !row.sale_order_found ? 'miv-cell-critical' : '' }}">
+                                            <i class="fa fa-warning" t-if="!row.sale_order_found" title="Không tìm thấy đơn hàng này trong Odoo"/>
+                                            <t t-esc="row.sale_order_name"/>
+                                        </td>
+                                        <td><t t-esc="row.inventory_item_code"/></td>
+                                        <td><t t-esc="row.description"/></td>
+                                        <td class="miv-col-num"><t t-esc="row.quantity"/></td>
+                                        <td class="miv-col-num"><t t-esc="formatCurrency(row.amount)"/></td>
+                                        <td><t t-esc="row.fetched_by"/></td>
+                                        <td>
+                                            <button class="btn btn-link miv-link" t-on-click="() => this.deleteCustomsInvoice(row.invoice_no)" title="Xóa cả hóa đơn này">
+                                                <i class="fa fa-trash"/>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <div class="miv-pagination" t-if="state.customsTab.total > state.customsTab.pageSize">
+                                <button class="btn btn-sm miv-page-btn" t-on-click="customsTabPrevPage" t-att-disabled="state.customsTab.page &lt;= 1">
+                                    <i class="fa fa-chevron-left"/>
+                                </button>
+                                <span class="miv-page-label">
+                                    Trang <t t-esc="state.customsTab.page"/> / <t t-esc="customsTabTotalPages"/>
+                                    (<t t-esc="state.customsTab.total"/> dòng)
+                                </span>
+                                <button class="btn btn-sm miv-page-btn" t-on-click="customsTabNextPage" t-att-disabled="state.customsTab.page &gt;= customsTabTotalPages">
+                                    <i class="fa fa-chevron-right"/>
+                                </button>
+                            </div>
+                            <div class="miv-empty" t-if="!state.customsTab.rows.length">Chưa có dữ liệu đơn hải quan.</div>
+                        </t>
+                    </div>
                 </div>
             </t>
 
@@ -877,6 +1054,24 @@
                                     <a href="#" t-on-click.prevent="() => this.openPickingDrawer(cov.id)"><t t-esc="cov.name"/></a><t t-if="!cov_last">, </t>
                                 </t>
                             </div>
+
+                            <t t-if="state.drawerSiblings and state.drawerSiblings.length">
+                                <h4 class="miv-drawer-section-title">Phiếu xuất kho khác cùng đơn hàng</h4>
+                                <table class="miv-subtable miv-drawer-table">
+                                    <tbody>
+                                        <tr t-foreach="state.drawerSiblings" t-as="sib" t-key="sib.id"
+                                            class="miv-row-clickable" t-on-click="() => this.openPickingDrawer(sib.id)">
+                                            <td><b><t t-esc="sib.name"/></b></td>
+                                            <td><t t-esc="sib.date_done"/></td>
+                                            <td>
+                                                <span t-attf-class="miv-badge miv-badge-state-{{ sib.state }}">
+                                                    <t t-esc="sib.state_label"/>
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </t>
 
                             <h4 class="miv-drawer-section-title">Sản phẩm đã xuất</h4>
                             <div class="miv-drawer-loading" t-if="state.drawerLoading">

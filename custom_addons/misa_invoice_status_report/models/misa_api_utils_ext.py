@@ -205,3 +205,42 @@ class MisaApiUtilsInvoiceStatus(models.AbstractModel):
                 break
             page += 1
         return lines
+
+    def get_voucher_by_inv_no(self, inv_no):
+        """Tra 1 CHỨNG TỪ BÁN HÀNG (sa_voucher_get — hóa đơn thật đã lập trên MISA) theo SỐ
+        HÓA ĐƠN — dùng cho case "hải quan": hóa đơn được xuất TRƯỚC khi có phiếu xuất kho
+        Odoo, nên không có refno picking nào để tra theo luồng sa_invoice_request thông
+        thường; đây là cách duy nhất tìm ra chứng từ chỉ bằng số hóa đơn."""
+        token = self._get_misa_token_cached()
+        headers = self.env['misa.config'].get_default_headers(token)
+        url = "https://actapp.misa.vn/g2/api/sa/v1/sa_voucher_get/paging_filter_v2"
+        payload = self.env['misa.config'].get_voucher_search_payload(inv_no)
+        resp = self._fetch_with_retry(url, headers, payload)
+        data = _misa_json_or_raise(resp, "sa_voucher_get")
+        page_data = data.get("Data", {}).get("PageData", []) or []
+        return page_data[0] if page_data else None
+
+    def get_voucher_lines(self, refid):
+        """Chi tiết TỪNG DÒNG HÀNG (mã đơn hàng gốc order_code, mã hàng, số lượng, tiền) của
+        1 chứng từ bán hàng theo refid — cho biết CHÍNH XÁC đơn hàng nào + mã hàng nào đã
+        được hóa đơn này bao phủ (1 hóa đơn có thể gộp nhiều đơn, và có thể chỉ phủ MỘT PHẦN
+        1 đơn nếu xuất kho nhiều đợt)."""
+        token = self._get_misa_token_cached()
+        headers = self.env['misa.config'].get_default_headers(token)
+        url = "https://actapp.misa.vn/g2/api/sa/v1/sa_voucher_get/get_paging_detail"
+
+        lines = []
+        page = 1
+        while page <= MISA_INVOICE_REQUEST_MAP_MAX_PAGES:
+            payload = self.env['misa.config'].get_voucher_detail_payload(
+                refid, page_index=page, page_size=MISA_INVOICE_REQUEST_MAP_PAGE_SIZE,
+            )
+            resp = self._fetch_with_retry(url, headers, payload)
+            data = _misa_json_or_raise(resp, "sa_voucher_get/get_paging_detail (trang %s)" % page)
+
+            page_data = data.get("Data", {}).get("PageData", []) or []
+            lines.extend(page_data)
+            if len(page_data) < MISA_INVOICE_REQUEST_MAP_PAGE_SIZE:
+                break
+            page += 1
+        return lines
