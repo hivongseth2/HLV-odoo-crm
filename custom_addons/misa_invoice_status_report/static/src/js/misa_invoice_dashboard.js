@@ -107,6 +107,7 @@ export class MisaInvoiceDashboard extends Component {
             customsTab: {
                 rows: [], total: 0, page: 1, pageSize: 20, loading: false, search: "", searchDraft: "",
                 invInput: "", fetching: false, saving: false, preview: null,
+                pendingOnly: false, pendingCount: 0,
             },
             showScanPanel: false,
             scanProgress: { done: 0, total: 0 },
@@ -931,8 +932,11 @@ export class MisaInvoiceDashboard extends Component {
         this.state.customsTab.saving = true;
         try {
             const result = await this.orm.call("stock.picking", "save_misa_customs_invoice", [invNo], {});
+            const matchNote = result.matched_count
+                ? " (" + result.matched_count + " dòng đã khớp phiếu xuất kho ngay)"
+                : " (chưa có phiếu xuất kho nào khớp, sẽ tự thử lại sau)";
             this.notification.add(
-                "Đã ghi nhận " + result.count + " dòng cho hóa đơn " + result.invoice_no + ".",
+                "Đã ghi nhận " + result.count + " dòng cho hóa đơn " + result.invoice_no + "." + matchNote,
                 { type: "success" }
             );
             this.state.customsTab.preview = null;
@@ -953,10 +957,12 @@ export class MisaInvoiceDashboard extends Component {
                     limit: this.state.customsTab.pageSize,
                     offset: (page - 1) * this.state.customsTab.pageSize,
                     search: this.state.customsTab.search || false,
+                    pending_only: this.state.customsTab.pendingOnly,
                 }
             );
             this.state.customsTab.rows = resp.rows;
             this.state.customsTab.total = resp.total;
+            this.state.customsTab.pendingCount = resp.pending_count || 0;
             this.state.customsTab.page = page;
         } catch (e) {
             this.notification.add("Lỗi tải danh sách đơn hải quan: " + (e.message || e), { type: "danger" });
@@ -998,6 +1004,11 @@ export class MisaInvoiceDashboard extends Component {
     clearCustomsSearch() {
         this.state.customsTab.search = "";
         this.state.customsTab.searchDraft = "";
+        this.loadCustomsTab(1);
+    }
+
+    onCustomsPendingOnlyToggle(ev) {
+        this.state.customsTab.pendingOnly = ev.target.checked;
         this.loadCustomsTab(1);
     }
 
