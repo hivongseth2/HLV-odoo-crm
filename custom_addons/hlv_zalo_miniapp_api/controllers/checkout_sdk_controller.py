@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import crypto if False else None # Standard library uses hmac and hashlib
 import hmac
 import hashlib
 import json
