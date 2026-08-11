@@ -6,37 +6,40 @@
             <t t-set="no_footer" t-value="True"/>
         </xpath>
         <xpath expr="//main" position="replace">
-            <div id="wrap" class="o_portal_wrap">
-                <div class="container-fluid py-4">
-                    <t t-out="0"/>
-                </div>
+            <div id="wrap" class="msu-wrap">
+                <t t-out="0"/>
             </div>
         </xpath>
     </template>
 
     <template id="misa_sale_status_login" name="MISA Sale Status Login">
         <t t-call="misa_invoice_status_report.misa_sale_status_layout">
-            <div class="row justify-content-center">
-                <div class="col-lg-4 col-md-6">
-                    <div class="card shadow-sm">
-                        <div class="card-body p-4">
-                            <h4 class="text-center mb-4">Tình trạng xuất hóa đơn MISA</h4>
-                            <form method="post">
-                                <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
-                                <div class="mb-3">
-                                    <label class="form-label">Mật khẩu truy cập</label>
-                                    <input type="password" class="form-control" name="password" required="required"
-                                           placeholder="Nhập mật khẩu..." autofocus="autofocus"/>
-                                </div>
-                                <t t-if="error">
-                                    <div class="alert alert-danger" role="alert"><t t-esc="error"/></div>
-                                </t>
-                                <div class="d-grid">
-                                    <button type="submit" class="btn btn-primary">Đăng nhập</button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
+            <style>
+                .msu-wrap{background:#f4f5f7;min-height:100vh;font-family:-apple-system,"Segoe UI",Roboto,sans-serif}
+                .msu-login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+                .msu-login-card{background:#fff;border-radius:14px;box-shadow:0 10px 40px rgba(15,23,42,.10);padding:36px 32px;width:min(380px,92vw)}
+                .msu-login-card h4{margin:0 0 22px;font-weight:800;text-align:center;color:#111827;font-size:1.25rem}
+                .msu-field-label{display:block;font-size:.82rem;font-weight:700;color:#374151;margin-bottom:6px}
+                .msu-input{width:100%;box-sizing:border-box;border:1px solid #d8d7d0;border-radius:8px;padding:10px 12px;font-size:.92rem;color:#111827;background:#fff}
+                .msu-input:focus{outline:none;border-color:#2a78d6;box-shadow:0 0 0 3px rgba(42,120,214,.15)}
+                .msu-alert-error{background:#fdf1f1;border:1px solid #f3c9c9;color:#a02323;border-radius:8px;padding:10px 12px;font-size:.85rem;margin-top:14px}
+                .msu-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:8px;border:1px solid transparent;font-weight:700;font-size:.88rem;padding:10px 16px;cursor:pointer;transition:filter .15s,background .15s;line-height:1.2}
+                .msu-btn-primary{background:#2a78d6;border-color:#2a78d6;color:#fff;width:100%;margin-top:18px}
+                .msu-btn-primary:hover{background:#2568bd}
+            </style>
+            <div class="msu-login-wrap">
+                <div class="msu-login-card">
+                    <h4>Tình trạng xuất hóa đơn MISA</h4>
+                    <form method="post">
+                        <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                        <label class="msu-field-label" for="msu-login-password">Mật khẩu truy cập</label>
+                        <input type="password" id="msu-login-password" class="msu-input" name="password" required="required"
+                               placeholder="Nhập mật khẩu..." autofocus="autofocus"/>
+                        <t t-if="error">
+                            <div class="msu-alert-error"><t t-esc="error"/></div>
+                        </t>
+                        <button type="submit" class="msu-btn msu-btn-primary">Đăng nhập</button>
+                    </form>
                 </div>
             </div>
         </t>
@@ -45,127 +48,399 @@
     <template id="misa_sale_status_page" name="MISA Sale Status Page">
         <t t-call="misa_invoice_status_report.misa_sale_status_layout">
             <style>
-                .msu-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
-                .msu-header h3{margin:0;font-weight:700}
-                .msu-identity-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#f8f9fa;border:1px solid #e9ecef;border-radius:8px;padding:12px 16px;margin-bottom:16px}
-                .msu-identity-bar select{min-width:220px}
-                .msu-badges{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
-                .msu-badge{border-radius:8px;padding:14px;text-align:center;border:1px solid #e9ecef}
-                .msu-badge span{display:block;font-size:1.6rem;font-weight:800;line-height:1.1}
-                .msu-badge small{color:#6c757d;font-weight:600}
-                .msu-badge-danger{background:#fef2f2;border-color:#fecaca}.msu-badge-danger span{color:#dc2626}
-                .msu-badge-warning{background:#fffbeb;border-color:#fde68a}.msu-badge-warning span{color:#b45309}
-                .msu-badge-muted{background:#f8fafc;border-color:#e2e8f0}.msu-badge-muted span{color:#475569}
-                .msu-badge-success{background:#f0fdf4;border-color:#bbf7d0}.msu-badge-success span{color:#15803d}
-                .msu-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
-                .msu-toolbar input[type=text]{min-width:260px}
-                .msu-checkbox{display:flex;align-items:center;gap:6px;font-size:.85rem;color:#475569;margin:0}
-                .msu-bulk-bar{display:flex;align-items:center;gap:10px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:8px 14px;margin-bottom:10px}
-                .msu-table{background:#fff}
-                .msu-table th{white-space:nowrap;font-size:.78rem;text-transform:uppercase;color:#64748b}
-                .msu-table td{vertical-align:middle;font-size:.86rem}
-                .msu-link-icon{color:#64748b;margin-left:6px}
-                .msu-badge-state{display:inline-block;padding:3px 9px;border-radius:999px;font-size:.72rem;font-weight:700}
-                .msu-badge-state-missing{background:#fef2f2;color:#dc2626}
-                .msu-badge-state-requested{background:#fffbeb;color:#b45309}
-                .msu-badge-state-invoiced{background:#f0fdf4;color:#15803d}
-                .msu-badge-state-not_checked{background:#f1f5f9;color:#475569}
-                .msu-badge-exception{background:#f1f5f9;color:#475569;padding:3px 9px;border-radius:999px;font-size:.72rem;font-weight:700}
-                .msu-manual-refno{font-size:.78rem;color:#7c3aed;font-weight:600}
-                .msu-row-actions{display:flex;gap:6px;flex-wrap:wrap}
-                .msu-empty{text-align:center;color:#94a3b8;padding:32px 0}
-                .msu-pagination{display:flex;align-items:center;justify-content:center;gap:12px;margin-top:12px}
-                .msu-modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:2000;display:flex;align-items:center;justify-content:center}
-                .msu-modal{background:#fff;border-radius:10px;padding:22px;width:min(440px,92vw);box-shadow:0 20px 50px rgba(15,23,42,.25)}
-                .msu-modal h5{margin-bottom:6px;font-weight:700}
-                .msu-modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
-                .msu-modal-error{color:#dc2626;font-size:.82rem;margin-top:8px;min-height:1em}
+                .msu-wrap{background:#f4f5f7;min-height:100vh;font-family:-apple-system,"Segoe UI",Roboto,sans-serif;color:#1c1c1c;padding-bottom:60px}
+                .misa-sale-status{max-width:1280px;margin:0 auto;padding:28px 20px 0}
+                * { box-sizing:border-box }
+
+                /* ---- Header ---- */
+                .msu-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px}
+                .msu-header h3{margin:0;font-weight:800;font-size:1.4rem;color:#111827}
+                .msu-header .msu-eyebrow{font-size:.74rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#8b8d94;margin-bottom:2px}
+
+                /* ---- Buttons (self-contained, no Bootstrap dependency) ---- */
+                .msu-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:8px;border:1px solid transparent;font-weight:700;font-size:.84rem;padding:8px 14px;cursor:pointer;transition:filter .12s,background .12s,border-color .12s;line-height:1.2;white-space:nowrap;font-family:inherit}
+                .msu-btn:hover{filter:brightness(.97)}
+                .msu-btn:disabled{opacity:.45;cursor:not-allowed;filter:none}
+                .msu-btn-sm{padding:5px 11px;font-size:.76rem;border-radius:6px}
+                .msu-btn-xs{padding:4px 9px;font-size:.72rem;border-radius:6px}
+                .msu-btn-primary{background:#2a78d6;border-color:#2a78d6;color:#fff}
+                .msu-btn-primary:hover{background:#2568bd}
+                .msu-btn-white{background:#fff;border-color:#dcdbd4;color:#3f3e3a}
+                .msu-btn-white:hover{background:#f5f5f3}
+                .msu-btn-outline-primary{background:#fff;border-color:#2a78d6;color:#2a78d6}
+                .msu-btn-outline-primary:hover{background:#eef5fd}
+                .msu-btn-outline-danger{background:#fff;border-color:#d03b3b;color:#d03b3b}
+                .msu-btn-outline-danger:hover{background:#fcefef}
+                .msu-btn-outline-muted{background:#fff;border-color:#d8d7d0;color:#52514e}
+                .msu-btn-outline-muted:hover{background:#f5f5f3}
+
+                /* ---- Card shell ---- */
+                .msu-card{background:#fff;border-radius:12px;border:1px solid #eceae4;box-shadow:0 1px 2px rgba(15,23,42,.03);padding:18px 20px}
+                .msu-card-title{font-weight:800;font-size:.92rem;color:#111827;margin:0 0 4px}
+                .msu-card-subtitle{font-size:.76rem;color:#8b8d94;margin:0 0 14px}
+
+                /* ---- Identity bar ---- */
+                .msu-identity-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+                .msu-identity-bar .msu-card{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:14px 18px;flex:1}
+                .msu-identity-label{font-weight:700;font-size:.85rem;color:#374151;white-space:nowrap}
+                .msu-select-wrap{position:relative;display:inline-flex;align-items:center}
+                .msu-select-wrap .msu-select-caret{position:absolute;right:11px;top:50%;transform:translateY(-50%);font-size:.68rem;color:#8b8d94;pointer-events:none}
+                .msu-select{border:1px solid #d8d7d0;border-radius:8px;padding:8px 28px 8px 12px;font-size:.86rem;color:#111827;background:#fff;appearance:none;-webkit-appearance:none;-moz-appearance:none;min-width:190px;cursor:pointer}
+                .msu-select:focus{outline:none;border-color:#2a78d6}
+                .msu-select::-ms-expand{display:none}
+                .msu-identity-hint{color:#d03b3b;font-size:.78rem}
+
+                /* ---- Đối chiếu tổng ---- */
+                .msu-recon-card{margin-bottom:18px}
+                .msu-recon-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+                .msu-recon-item{display:flex;flex-direction:column;gap:4px}
+                .msu-recon-value{font-size:1.3rem;font-weight:800;color:#111827;font-variant-numeric:tabular-nums}
+                .msu-recon-good{color:#0ca30c}
+                .msu-recon-shopee{color:#c9247a}
+                .msu-recon-outstanding{color:#d03b3b}
+                @media(max-width:768px){.msu-recon-grid{grid-template-columns:repeat(2,1fr)}}
+
+                /* ---- Tabs ---- */
+                .msu-tabs{display:flex;gap:6px;margin-bottom:16px;border-bottom:1px solid #e5e4dd}
+                .msu-tab{background:none;border:none;border-bottom:2px solid transparent;padding:10px 4px;margin-right:18px;font-size:.86rem;font-weight:700;color:#8b8d94;cursor:pointer}
+                .msu-tab:hover{color:#3f3e3a}
+                .msu-tab-active{color:#2a78d6;border-bottom-color:#2a78d6}
+                .msu-badge-state-draft{background:#f1f0eb;color:#52514e}
+                .msu-badge-state-submitted{background:#fef8e9;color:#92600a}
+                .msu-badge-state-rejected{background:#fdf1f1;color:#d03b3b}
+                .msu-badge-state-accepted{background:#eaf8ea;color:#0ca30c}
+
+                /* ---- Stat tiles ---- */
+                .msu-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+                .msu-stat{border-radius:12px;padding:16px 18px;border:1px solid;display:flex;flex-direction:column;gap:2px}
+                .msu-stat .msu-stat-value{font-size:1.7rem;font-weight:800;line-height:1.1}
+                .msu-stat .msu-stat-label{font-size:.78rem;font-weight:700;color:#52514e}
+                .msu-stat-critical{background:#fdf1f1;border-color:#f3caca}.msu-stat-critical .msu-stat-value{color:#d03b3b}
+                .msu-stat-warning{background:#fef8e9;border-color:#f7e2a8}.msu-stat-warning .msu-stat-value{color:#92600a}
+                .msu-stat-muted{background:#f4f4f2;border-color:#e2e1da}.msu-stat-muted .msu-stat-value{color:#52514e}
+                .msu-stat-good{background:#eaf8ea;border-color:#bfe6bf}.msu-stat-good .msu-stat-value{color:#0ca30c}
+
+                /* ---- Charts row ---- */
+                .msu-charts{display:grid;grid-template-columns:minmax(260px,340px) 1fr;gap:14px;margin-bottom:18px;align-items:stretch}
+                @media(max-width:860px){.msu-charts{grid-template-columns:1fr}}
+                .msu-donut-wrap{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+                .msu-donut-svg{flex:0 0 auto}
+                .msu-donut-hole-total{font-size:1.5rem;font-weight:800;fill:#111827}
+                .msu-donut-hole-label{font-size:.5rem;fill:#8b8d94;font-weight:700}
+                .msu-legend{display:flex;flex-direction:column;gap:8px;font-size:.8rem;flex:1;min-width:140px}
+                .msu-legend-row{display:flex;align-items:center;gap:8px}
+                .msu-legend-dot{width:10px;height:10px;border-radius:3px;flex:0 0 auto}
+                .msu-legend-label{color:#3f3e3a;flex:1}
+                .msu-legend-value{font-weight:800;color:#111827;font-variant-numeric:tabular-nums}
+                .msu-empty-chart{color:#8b8d94;font-size:.82rem;padding:20px 0;text-align:center}
+
+                .msu-bar-legend{display:flex;gap:16px;margin-bottom:8px;font-size:.78rem}
+                .msu-bar-legend-item{display:flex;align-items:center;gap:6px;color:#52514e;font-weight:600}
+                .msu-bar-legend-swatch{width:12px;height:8px;border-radius:2px}
+                .msu-bar-legend-line{width:14px;height:2px;border-radius:1px}
+
+                /* ---- Filter bar ---- */
+                .msu-filters{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+                .msu-filters .msu-input, .msu-filters .msu-select{height:36px}
+                .msu-input{border:1px solid #d8d7d0;border-radius:8px;padding:8px 12px;font-size:.85rem;color:#111827;background:#fff;font-family:inherit}
+                .msu-input:focus{outline:none;border-color:#2a78d6}
+                .msu-date-group{display:flex;align-items:center;gap:6px;background:#fff;border:1px solid #e5e4dd;border-radius:8px;padding:5px 10px}
+                .msu-date-group i{color:#8b8d94}
+                .msu-date-group input[type=date]{border:none;font-size:.82rem;color:#111827;background:transparent;padding:2px}
+                .msu-date-group input[type=date]:focus{outline:none}
+                .msu-search-input{min-width:240px;flex:1}
+                .msu-check-label{display:inline-flex;align-items:center;gap:6px;font-size:.82rem;font-weight:600;color:#52514e;cursor:pointer;user-select:none}
+                .msu-check-label input{cursor:pointer}
+
+                /* ---- Bulk bar ---- */
+                .msu-bulk-bar{display:flex;align-items:center;gap:10px;background:#eaf1fc;border:1px solid #c7dcf5;border-radius:10px;padding:10px 16px;margin-bottom:12px;font-size:.84rem;font-weight:700;color:#1c4a80}
+
+                /* ---- Table ---- */
+                .msu-table-card{background:#fff;border-radius:12px;border:1px solid #eceae4;overflow:hidden}
+                .msu-table-scroll{overflow-x:auto}
+                .msu-table{width:100%;border-collapse:collapse;font-size:.84rem}
+                .msu-table thead th{white-space:nowrap;font-size:.7rem;text-transform:uppercase;letter-spacing:.03em;color:#8b8d94;font-weight:800;text-align:left;padding:12px 14px;border-bottom:1px solid #eceae4;background:#fafaf8}
+                .msu-table tbody td{padding:10px 14px;border-bottom:1px solid #f1f0eb;vertical-align:middle}
+                .msu-table tbody tr:last-child td{border-bottom:none}
+                .msu-table tbody tr:nth-child(even){background:#fbfbfa}
+                .msu-table tbody tr:hover{background:#f3f6fb}
+                .msu-row-clickable{cursor:pointer}
+                .msu-col-diff-bad{color:#d03b3b;font-weight:800}
+                .msu-col-num{text-align:right;font-variant-numeric:tabular-nums}
+                .msu-picking-name{font-weight:700;color:#111827}
+                .msu-picking-order{color:#8b8d94;font-size:.78rem;display:block;margin-top:2px}
+                .msu-link-icon{color:#8b8d94;margin-left:6px}
+                .msu-manual-refno{font-size:.78rem;color:#6d3fc9;font-weight:700}
+                .msu-muted{color:#b3b2ab}
+
+                .msu-badge-state{display:inline-block;padding:3px 10px;border-radius:999px;font-size:.72rem;font-weight:800}
+                .msu-badge-state-missing{background:#fdf1f1;color:#d03b3b}
+                .msu-badge-state-requested{background:#fef8e9;color:#92600a}
+                .msu-badge-state-invoiced{background:#eaf8ea;color:#0ca30c}
+                .msu-badge-state-not_checked{background:#f1f0eb;color:#52514e}
+                .msu-badge-exception{background:#f1f0eb;color:#52514e;padding:3px 10px;border-radius:999px;font-size:.72rem;font-weight:800;margin-left:6px}
+
+                .msu-btn-group{display:inline-flex}
+                .msu-btn-group .msu-btn{border-radius:0;margin-left:-1px;position:relative}
+                .msu-btn-group .msu-btn:first-child{border-radius:6px 0 0 6px;margin-left:0}
+                .msu-btn-group .msu-btn:last-child{border-radius:0 6px 6px 0}
+                .msu-btn-group .msu-btn:hover{z-index:1}
+                .msu-empty{text-align:center;color:#8b8d94;padding:40px 0;font-size:.88rem}
+                .msu-pagination{display:flex;align-items:center;justify-content:center;gap:14px;padding:16px 0;font-size:.82rem;color:#52514e}
+
+                /* ---- Drawer (chi tiết 1 phiếu) ---- */
+                .msu-drawer-overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:1900;display:flex;justify-content:flex-end}
+                .msu-drawer{background:#fff;width:min(440px,100vw);height:100%;overflow-y:auto;box-shadow:-10px 0 34px rgba(15,23,42,.18);animation:msuDrawerIn .16s ease-out}
+                @keyframes msuDrawerIn{from{transform:translateX(24px);opacity:.5}to{transform:translateX(0);opacity:1}}
+                .msu-drawer-header{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:20px 20px 16px;border-bottom:1px solid #eceae4}
+                .msu-drawer-title{font-size:1.05rem;font-weight:800;color:#111827;margin:0}
+                .msu-drawer-subtitle{font-size:.8rem;color:#8b8d94;margin-top:3px}
+                .msu-drawer-close{cursor:pointer;color:#8b8d94;font-size:1rem;background:none;border:none;padding:4px;line-height:1}
+                .msu-drawer-close:hover{color:#3f3e3a}
+                .msu-drawer-body{padding:18px 20px 8px}
+                .msu-drawer-section{margin-bottom:20px}
+                .msu-drawer-section-title{font-size:.7rem;text-transform:uppercase;letter-spacing:.03em;color:#8b8d94;font-weight:800;margin:0 0 10px}
+                .msu-drawer-meta{display:grid;grid-template-columns:1fr 1fr;gap:14px 16px}
+                .msu-drawer-meta-item .msu-meta-label{font-size:.74rem;color:#8b8d94;display:block;margin-bottom:3px}
+                .msu-drawer-meta-item .msu-meta-value{font-weight:700;color:#111827;font-size:.9rem}
+                .msu-drawer-list{display:flex;flex-direction:column;gap:8px}
+                .msu-drawer-list-item{display:flex;justify-content:space-between;gap:10px;font-size:.84rem;padding:8px 10px;background:#fafaf8;border-radius:8px}
+                .msu-drawer-reason{background:#fdf1f1;border:1px solid #f3caca;border-radius:8px;padding:10px 12px;font-size:.84rem;color:#7a2020}
+                .msu-drawer-actions{display:flex;gap:8px;padding:16px 20px 20px;border-top:1px solid #eceae4;position:sticky;bottom:0;background:#fff}
+                .msu-drawer-actions .msu-btn-group{flex:1;display:flex}
+                .msu-drawer-actions .msu-btn{flex:1;justify-content:center;gap:6px}
+
+                /* ---- Modal ---- */
+                .msu-modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:2000;display:flex;align-items:center;justify-content:center;padding:16px}
+                .msu-modal{background:#fff;border-radius:12px;padding:24px;width:min(440px,100%);box-shadow:0 24px 60px rgba(15,23,42,.28)}
+                .msu-modal h5{margin:0 0 6px;font-weight:800;font-size:1.02rem;color:#111827}
+                .msu-modal p{margin:0 0 12px}
+                .msu-modal textarea.msu-input{width:100%;resize:vertical;font-family:inherit}
+                .msu-modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
+                .msu-modal-error{color:#d03b3b;font-size:.8rem;margin-top:8px;min-height:1.1em;font-weight:600}
+
+                /* ---- Toast ---- */
                 .msu-toast-stack{position:fixed;right:16px;top:16px;z-index:2100;display:flex;flex-direction:column;gap:8px;width:min(360px,calc(100vw - 32px))}
-                .msu-toast{background:#fff;border-left:4px solid #2a78d6;border-radius:8px;box-shadow:0 14px 36px rgba(15,23,42,.22);padding:10px 14px;font-size:.85rem;color:#0f172a}
-                .msu-toast.error{border-left-color:#dc2626}
-                .msu-toast.warning{border-left-color:#d97706}
-                .msu-toast.success{border-left-color:#16a34a}
-                @media(max-width:768px){.msu-badges{grid-template-columns:repeat(2,1fr)}}
+                .msu-toast{background:#fff;border-left:4px solid #2a78d6;border-radius:8px;box-shadow:0 14px 36px rgba(15,23,42,.22);padding:11px 14px;font-size:.84rem;color:#1c1c1c}
+                .msu-toast.error{border-left-color:#d03b3b}
+                .msu-toast.warning{border-left-color:#c98500}
+                .msu-toast.success{border-left-color:#0ca30c}
+
+                @media(max-width:768px){.msu-stats{grid-template-columns:repeat(2,1fr)}}
             </style>
 
             <div class="misa-sale-status">
                 <div class="msu-header">
-                    <h3>Tình trạng xuất hóa đơn MISA</h3>
-                    <a href="/misa_sale_status/logout" class="btn btn-sm btn-outline-secondary">Đăng xuất</a>
+                    <div>
+                        <div class="msu-eyebrow">Đối soát MISA</div>
+                        <h3>Tình trạng xuất hóa đơn</h3>
+                    </div>
+                    <a href="/misa_sale_status/logout" class="msu-btn msu-btn-white msu-btn-sm">Đăng xuất</a>
                 </div>
 
                 <div class="msu-identity-bar">
-                    <label for="msu-saler-select"><b>Mã sale của bạn:</b></label>
-                    <select id="msu-saler-select" class="form-select form-select-sm">
-                        <option value="">-- Chọn mã sale --</option>
-                    </select>
-                    <span id="msu-identity-hint" class="text-muted small"></span>
+                    <div class="msu-card">
+                        <span class="msu-identity-label">Mã sale của bạn</span>
+                        <span class="msu-select-wrap">
+                            <select id="msu-saler-select" class="msu-select">
+                                <option value="">-- Chọn mã sale --</option>
+                            </select>
+                            <i class="fa fa-chevron-down msu-select-caret"/>
+                        </span>
+                        <span id="msu-identity-hint" class="msu-identity-hint"/>
+                    </div>
                 </div>
 
                 <div id="msu-app" style="display:none">
-                    <div class="msu-badges">
-                        <div class="msu-badge msu-badge-danger"><span id="msu-count-missing">0</span><small>Chưa có đề nghị</small></div>
-                        <div class="msu-badge msu-badge-warning"><span id="msu-count-requested">0</span><small>Đã đề nghị, chờ HĐ</small></div>
-                        <div class="msu-badge msu-badge-muted"><span id="msu-count-exception">0</span><small>Ngoại lệ</small></div>
-                        <div class="msu-badge msu-badge-success"><span id="msu-count-invoiced">0</span><small>Đã xuất HĐ</small></div>
+                    <div class="msu-card msu-recon-card">
+                        <p class="msu-card-title">Đối chiếu tổng tiền xuất kho</p>
+                        <p class="msu-card-subtitle">Tổng tiền xuất kho phải khớp với tổng đã xuất HĐ (MISA + Shopee) + phần còn lại</p>
+                        <div class="msu-recon-grid">
+                            <div class="msu-recon-item">
+                                <span class="msu-meta-label">Tổng tiền xuất kho</span>
+                                <span class="msu-recon-value" id="msu-recon-total">0 đ</span>
+                            </div>
+                            <div class="msu-recon-item">
+                                <span class="msu-meta-label">Đã xuất HĐ (MISA)</span>
+                                <span class="msu-recon-value msu-recon-good" id="msu-recon-misa">0 đ</span>
+                            </div>
+                            <div class="msu-recon-item">
+                                <span class="msu-meta-label">Đã xuất HĐ (Shopee)</span>
+                                <span class="msu-recon-value msu-recon-shopee" id="msu-recon-shopee">0 đ</span>
+                            </div>
+                            <div class="msu-recon-item">
+                                <span class="msu-meta-label">Còn lại chưa xuất HĐ</span>
+                                <span class="msu-recon-value msu-recon-outstanding" id="msu-recon-outstanding">0 đ</span>
+                            </div>
+                        </div>
                     </div>
 
-                    <div class="msu-toolbar">
-                        <input type="text" id="msu-search" class="form-control form-control-sm" placeholder="Tìm theo mã phiếu hoặc mã đơn hàng..."/>
-                        <button id="msu-search-btn" class="btn btn-sm btn-primary">Tìm</button>
-                        <button id="msu-search-clear" class="btn btn-sm btn-outline-secondary" style="display:none">Bỏ tìm</button>
-                        <label class="msu-checkbox">
-                            <input type="checkbox" id="msu-only-pending" checked="checked"/> Chỉ hiện đơn chưa xử lý
+                    <div class="msu-tabs">
+                        <button class="msu-tab msu-tab-active" id="msu-tab-btn-pickings" data-tab="pickings">Phiếu xuất kho (MISA)</button>
+                        <button class="msu-tab" id="msu-tab-btn-shopee" data-tab="shopee">Đơn Shopee</button>
+                    </div>
+
+                    <div id="msu-tab-pickings">
+                    <div class="msu-filters">
+                        <div class="msu-date-group">
+                            <i class="fa fa-calendar"/>
+                            <input type="date" id="msu-date-from" title="Ngày xuất kho từ"/>
+                            <span class="msu-muted">→</span>
+                            <input type="date" id="msu-date-to" title="Ngày xuất kho đến"/>
+                        </div>
+                        <button id="msu-date-clear" class="msu-btn msu-btn-outline-muted msu-btn-sm" style="display:none">
+                            <i class="fa fa-times"/> Bỏ lọc ngày
+                        </button>
+                        <span class="msu-select-wrap">
+                            <select id="msu-state-select" class="msu-select">
+                                <option value="">Chưa xử lý (mặc định)</option>
+                                <option value="missing">Chưa có đề nghị</option>
+                                <option value="requested">Đã đề nghị, chờ HĐ</option>
+                                <option value="exception">Ngoại lệ</option>
+                                <option value="invoiced">Đã xuất HĐ</option>
+                                <option value="all">Tất cả trạng thái</option>
+                            </select>
+                            <i class="fa fa-chevron-down msu-select-caret"/>
+                        </span>
+                        <input type="text" id="msu-search" class="msu-input msu-search-input" placeholder="Tìm theo mã phiếu hoặc mã đơn hàng..."/>
+                        <button id="msu-search-btn" class="msu-btn msu-btn-primary msu-btn-sm">Tìm</button>
+                        <button id="msu-search-clear" class="msu-btn msu-btn-outline-muted msu-btn-sm" style="display:none">Bỏ tìm</button>
+                        <button id="msu-refresh-btn" class="msu-btn msu-btn-outline-muted msu-btn-sm"><i class="fa fa-refresh"/> Làm mới</button>
+                    </div>
+
+                    <div class="msu-filters">
+                        <label class="msu-check-label">
+                            <input type="checkbox" id="msu-multi-order-group"/> Đơn xuất gộp (nhiều đơn bán / 1 đề nghị)
                         </label>
-                        <button id="msu-refresh-btn" class="btn btn-sm btn-outline-secondary"><i class="fa fa-refresh"/> Làm mới</button>
+                        <label class="msu-check-label">
+                            <input type="checkbox" id="msu-multi-request"/> Đơn xuất nhiều lần (nhiều đề nghị / 1 đơn)
+                        </label>
+                    </div>
+
+                    <div class="msu-stats">
+                        <div class="msu-stat msu-stat-critical"><span class="msu-stat-value" id="msu-count-missing">0</span><span class="msu-stat-label">Chưa có đề nghị</span></div>
+                        <div class="msu-stat msu-stat-warning"><span class="msu-stat-value" id="msu-count-requested">0</span><span class="msu-stat-label">Đã đề nghị, chờ HĐ</span></div>
+                        <div class="msu-stat msu-stat-muted"><span class="msu-stat-value" id="msu-count-exception">0</span><span class="msu-stat-label">Ngoại lệ</span></div>
+                        <div class="msu-stat msu-stat-good"><span class="msu-stat-value" id="msu-count-invoiced">0</span><span class="msu-stat-label">Đã xuất HĐ</span></div>
+                    </div>
+
+                    <div class="msu-charts">
+                        <div class="msu-card">
+                            <p class="msu-card-title">Cơ cấu trạng thái</p>
+                            <p class="msu-card-subtitle">Theo số phiếu, trong phạm vi ngày đang lọc</p>
+                            <div id="msu-donut-container"/>
+                        </div>
+                        <div class="msu-card">
+                            <p class="msu-card-title">Tiền xuất kho &amp; tiền đã xuất HĐ theo ngày</p>
+                            <p class="msu-card-subtitle" id="msu-chart-subtitle">30 ngày gần nhất</p>
+                            <div class="msu-bar-legend">
+                                <span class="msu-bar-legend-item"><span class="msu-bar-legend-swatch" style="background:#2a78d6"/> Tiền xuất kho</span>
+                                <span class="msu-bar-legend-item"><span class="msu-bar-legend-line" style="background:#0ca30c"/> Tiền đã xuất HĐ</span>
+                            </div>
+                            <div id="msu-bar-chart-container"/>
+                        </div>
                     </div>
 
                     <div class="msu-bulk-bar" id="msu-bulk-bar" style="display:none">
-                        <span id="msu-bulk-count"></span>
-                        <button id="msu-bulk-check" class="btn btn-sm btn-outline-primary">Kiểm tra MISA ngay</button>
-                        <button id="msu-bulk-exception" class="btn btn-sm btn-outline-danger">Đánh dấu ngoại lệ</button>
-                        <button id="msu-bulk-unexception" class="btn btn-sm btn-outline-secondary">Bỏ ngoại lệ</button>
+                        <span id="msu-bulk-count"/>
+                        <button id="msu-bulk-check" class="msu-btn msu-btn-outline-primary msu-btn-sm" data-loading-text="Đang kiểm tra...">Kiểm tra MISA ngay</button>
+                        <button id="msu-bulk-exception" class="msu-btn msu-btn-outline-danger msu-btn-sm">Đánh dấu ngoại lệ</button>
+                        <button id="msu-bulk-unexception" class="msu-btn msu-btn-outline-muted msu-btn-sm" data-loading-text="Đang xử lý...">Bỏ ngoại lệ</button>
                     </div>
 
-                    <div class="table-responsive">
-                        <table class="table msu-table align-middle">
-                            <thead>
-                                <tr>
-                                    <th><input type="checkbox" id="msu-select-all"/></th>
-                                    <th>Phiếu / Đơn hàng</th>
-                                    <th>Khách hàng</th>
-                                    <th>Ngày xuất kho</th>
-                                    <th class="text-end">Tiền thực xuất</th>
-                                    <th>Trạng thái</th>
-                                    <th>Mã đề nghị</th>
-                                    <th>Thao tác</th>
-                                </tr>
-                            </thead>
-                            <tbody id="msu-tbody"/>
-                        </table>
+                    <div class="msu-table-card">
+                        <div class="msu-table-scroll">
+                            <table class="msu-table">
+                                <thead>
+                                    <tr>
+                                        <th><input type="checkbox" id="msu-select-all"/></th>
+                                        <th>Phiếu / Đơn hàng</th>
+                                        <th>Khách hàng</th>
+                                        <th>Ngày xuất kho</th>
+                                        <th class="msu-col-num">Tiền thực xuất</th>
+                                        <th>Trạng thái</th>
+                                        <th>Mã đề nghị</th>
+                                        <th>Thao tác</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="msu-tbody"/>
+                            </table>
+                        </div>
+                        <div id="msu-empty" class="msu-empty" style="display:none">Không có phiếu nào khớp bộ lọc hiện tại.</div>
+                        <div class="msu-pagination" id="msu-pagination" style="display:none">
+                            <button id="msu-prev" class="msu-btn msu-btn-outline-muted msu-btn-sm">&#8249; Trước</button>
+                            <span id="msu-page-label"/>
+                            <button id="msu-next" class="msu-btn msu-btn-outline-muted msu-btn-sm">Sau &#8250;</button>
+                        </div>
                     </div>
-                    <div id="msu-empty" class="msu-empty" style="display:none">Không có phiếu nào.</div>
-                    <div class="msu-pagination" id="msu-pagination" style="display:none">
-                        <button id="msu-prev" class="btn btn-sm btn-outline-secondary">&#8249; Trước</button>
-                        <span id="msu-page-label"/>
-                        <button id="msu-next" class="btn btn-sm btn-outline-secondary">Sau &#8250;</button>
+                    </div>
+
+                    <div id="msu-tab-shopee" style="display:none">
+                        <p class="msu-card-subtitle">
+                            Đơn Shopee xuất hóa đơn điện tử (meInvoice) riêng, không qua đề nghị MISA — mỗi đơn có 1 hóa đơn điện tử đi kèm.
+                        </p>
+                        <div class="msu-filters">
+                            <span class="msu-select-wrap">
+                                <select id="msu-shopee-state-select" class="msu-select">
+                                    <option value="">Tất cả trạng thái</option>
+                                    <option value="missing">Chưa có HĐĐT</option>
+                                    <option value="draft">Nháp, chưa phát hành</option>
+                                    <option value="submitted">Đã gửi, chờ CQT duyệt</option>
+                                    <option value="rejected">Bị từ chối</option>
+                                    <option value="accepted">Đã phát hành</option>
+                                </select>
+                                <i class="fa fa-chevron-down msu-select-caret"/>
+                            </span>
+                            <input type="text" id="msu-shopee-search" class="msu-input msu-search-input" placeholder="Tìm theo mã phiếu hoặc mã đơn hàng..."/>
+                            <button id="msu-shopee-search-btn" class="msu-btn msu-btn-primary msu-btn-sm">Tìm</button>
+                            <button id="msu-shopee-refresh-btn" class="msu-btn msu-btn-outline-muted msu-btn-sm"><i class="fa fa-refresh"/> Làm mới</button>
+                        </div>
+                        <div class="msu-table-card">
+                            <div class="msu-table-scroll">
+                                <table class="msu-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Phiếu / Đơn hàng</th>
+                                            <th>Khách hàng</th>
+                                            <th>Ngày xuất kho</th>
+                                            <th class="msu-col-num">Tiền thực xuất</th>
+                                            <th>Trạng thái HĐĐT</th>
+                                            <th>Số hóa đơn</th>
+                                            <th>Ngày hóa đơn</th>
+                                            <th class="msu-col-num">Tiền hóa đơn</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="msu-shopee-tbody"/>
+                                </table>
+                            </div>
+                            <div id="msu-shopee-empty" class="msu-empty" style="display:none">Không có đơn Shopee nào khớp bộ lọc hiện tại.</div>
+                            <div class="msu-pagination" id="msu-shopee-pagination" style="display:none">
+                                <button id="msu-shopee-prev" class="msu-btn msu-btn-outline-muted msu-btn-sm">&#8249; Trước</button>
+                                <span id="msu-shopee-page-label"/>
+                                <button id="msu-shopee-next" class="msu-btn msu-btn-outline-muted msu-btn-sm">Sau &#8250;</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
+            </div>
+
+            <div class="msu-drawer-overlay" id="msu-drawer-overlay" style="display:none">
+                <div class="msu-drawer" id="msu-drawer"/>
             </div>
 
             <div class="msu-modal-overlay" id="msu-link-modal" style="display:none">
                 <div class="msu-modal">
                     <h5>Gắn mã đề nghị MISA thủ công</h5>
-                    <p class="text-muted small">
+                    <p class="msu-card-subtitle">
                         Dùng khi tạo đề nghị xuất HĐ trên MISA mà quên ghi đúng số phiếu xuất kho,
                         MISA tự sinh 1 mã đề nghị khác — nhập đúng mã đó vào đây.
                     </p>
-                    <p class="mb-2">Phiếu: <b id="msu-link-picking-name"/></p>
-                    <input type="text" id="msu-link-refno" class="form-control" placeholder="VD: DN00123"/>
+                    <p>Phiếu: <b id="msu-link-picking-name"/></p>
+                    <input type="text" id="msu-link-refno" class="msu-input" style="width:100%" placeholder="VD: DN00123"/>
                     <div id="msu-link-error" class="msu-modal-error"/>
                     <div class="msu-modal-actions">
-                        <button class="btn btn-secondary btn-sm" id="msu-link-cancel">Hủy</button>
-                        <button class="btn btn-primary btn-sm" id="msu-link-confirm">Xác nhận</button>
+                        <button class="msu-btn msu-btn-outline-muted msu-btn-sm" id="msu-link-cancel">Hủy</button>
+                        <button class="msu-btn msu-btn-primary msu-btn-sm" id="msu-link-confirm" data-loading-text="Đang kiểm tra...">Xác nhận</button>
                     </div>
                 </div>
             </div>
@@ -173,12 +448,12 @@
             <div class="msu-modal-overlay" id="msu-exception-modal" style="display:none">
                 <div class="msu-modal">
                     <h5>Đánh dấu ngoại lệ xuất hóa đơn</h5>
-                    <p class="text-muted small" id="msu-exception-target"/>
-                    <textarea id="msu-exception-reason" class="form-control" rows="3" placeholder="Lý do chấp nhận chờ xuất hóa đơn..."/>
+                    <p class="msu-card-subtitle" id="msu-exception-target"/>
+                    <textarea id="msu-exception-reason" class="msu-input" rows="3" placeholder="Lý do chấp nhận chờ xuất hóa đơn..."/>
                     <div id="msu-exception-error" class="msu-modal-error"/>
                     <div class="msu-modal-actions">
-                        <button class="btn btn-secondary btn-sm" id="msu-exception-cancel">Hủy</button>
-                        <button class="btn btn-primary btn-sm" id="msu-exception-confirm">Xác nhận</button>
+                        <button class="msu-btn msu-btn-outline-muted msu-btn-sm" id="msu-exception-cancel">Hủy</button>
+                        <button class="msu-btn msu-btn-primary msu-btn-sm" id="msu-exception-confirm" data-loading-text="Đang lưu...">Xác nhận</button>
                     </div>
                 </div>
             </div>
@@ -189,10 +464,20 @@
                 (function() {
                     var STORAGE_KEY = 'misa_sale_status_code';
                     var PAGE_SIZE = 50;
-                    var STATE_LABELS = {not_checked: 'Chưa kiểm tra', missing: 'Chưa có đề nghị xuất HĐ', requested: 'Đã đề nghị, chờ HĐ', invoiced: 'Đã xuất hóa đơn'};
+                    var COLORS = {missing: '#d03b3b', requested: '#fab219', exception: '#9a9992', invoiced: '#0ca30c'};
+                    var STATE_META = [
+                        {key: 'missing', label: 'Chưa có đề nghị'},
+                        {key: 'requested', label: 'Đã đề nghị, chờ HĐ'},
+                        {key: 'exception', label: 'Ngoại lệ'},
+                        {key: 'invoiced', label: 'Đã xuất HĐ'},
+                    ];
                     var state = {
                         salerCode: localStorage.getItem(STORAGE_KEY) || '',
-                        search: '', onlyPending: true, page: 1, total: 0, rows: [], selected: {},
+                        search: '', stateFilter: '', dateFrom: '', dateTo: '',
+                        multiOrderGroup: false, multiRequest: false,
+                        page: 1, total: 0, rows: [], selected: {},
+                        activeTab: 'pickings',
+                        shopee: {search: '', stateFilter: '', page: 1, total: 0, rows: [], loaded: false},
                     };
 
                     function esc(s) {
@@ -203,6 +488,12 @@
                     function fmtMoney(n) {
                         if (!n) { return '0 đ'; }
                         return Math.round(n).toLocaleString('vi-VN') + ' đ';
+                    }
+                    function fmtCompactMoney(n) {
+                        n = n || 0;
+                        if (Math.abs(n) >= 1000000) { return (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'tr'; }
+                        if (Math.abs(n) >= 1000) { return Math.round(n / 1000) + 'k'; }
+                        return String(Math.round(n));
                     }
                     function rpc(url, params) {
                         return fetch(url, {
@@ -226,6 +517,26 @@
                         el.textContent = message;
                         stack.appendChild(el);
                         setTimeout(function() { el.remove(); }, 5000);
+                    }
+
+                    // Vô hiệu hóa + đổi sang icon xoay trong lúc chờ RPC (gọi MISA có thể mất
+                    // vài giây) — để người dùng biết đang xử lý, tránh bấm lặp lại nhiều lần.
+                    // data-loading-text (nếu có trên nút) sẽ hiện kèm chữ, không có thì chỉ hiện icon.
+                    function setBtnLoading(btn, loading) {
+                        if (!btn) { return; }
+                        if (loading) {
+                            if (btn.dataset.loading === '1') { return; }
+                            btn.dataset.loading = '1';
+                            btn.dataset.originalHtml = btn.innerHTML;
+                            var loadingText = btn.dataset.loadingText;
+                            btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i>' + (loadingText ? ' ' + esc(loadingText) : '');
+                            btn.disabled = true;
+                        } else {
+                            if (btn.dataset.loading !== '1') { return; }
+                            btn.innerHTML = btn.dataset.originalHtml;
+                            btn.disabled = false;
+                            delete btn.dataset.loading;
+                        }
                     }
 
                     var selectEl = document.getElementById('msu-saler-select');
@@ -257,8 +568,99 @@
                         hintEl.textContent = '';
                         if (state.salerCode) {
                             loadList(1);
+                            loadDailyChart();
+                            loadReconciliationTotals();
+                            if (state.activeTab === 'shopee') { loadShopeeList(1); }
                         }
                     }
+
+                    // ===== Đối chiếu tổng tiền xuất kho (MISA + Shopee) =====
+                    function loadReconciliationTotals() {
+                        if (!state.salerCode) { return; }
+                        rpc('/misa_sale_status/api/reconciliation_totals', {
+                            saler_code: state.salerCode, date_from: state.dateFrom, date_to: state.dateTo,
+                        }).then(function(res) {
+                            var d = res.data || {};
+                            document.getElementById('msu-recon-total').textContent = fmtMoney(d.total_actual_amount);
+                            document.getElementById('msu-recon-misa').textContent = fmtMoney(d.misa_invoiced_amount);
+                            document.getElementById('msu-recon-shopee').textContent = fmtMoney(d.shopee_invoiced_amount);
+                            document.getElementById('msu-recon-outstanding').textContent = fmtMoney(d.outstanding_amount);
+                        }).catch(function(e) { toast('Lỗi tải số liệu đối chiếu: ' + e.message, 'error'); });
+                    }
+
+                    // ===== Tab: Phiếu xuất kho (MISA) / Đơn Shopee =====
+                    document.querySelectorAll('.msu-tab').forEach(function(btn) {
+                        btn.addEventListener('click', function() {
+                            state.activeTab = this.dataset.tab;
+                            document.querySelectorAll('.msu-tab').forEach(function(b) { b.classList.remove('msu-tab-active'); });
+                            this.classList.add('msu-tab-active');
+                            document.getElementById('msu-tab-pickings').style.display = state.activeTab === 'pickings' ? '' : 'none';
+                            document.getElementById('msu-tab-shopee').style.display = state.activeTab === 'shopee' ? '' : 'none';
+                            if (state.activeTab === 'shopee' && !state.shopee.loaded) { loadShopeeList(1); }
+                        });
+                    });
+
+                    function renderShopeeRows() {
+                        var tbody = document.getElementById('msu-shopee-tbody');
+                        tbody.innerHTML = '';
+                        document.getElementById('msu-shopee-empty').style.display = state.shopee.rows.length ? 'none' : '';
+                        state.shopee.rows.forEach(function(row) {
+                            var tr = document.createElement('tr');
+                            tr.innerHTML =
+                                '<td><span class="msu-picking-name">' + esc(row.name) + '</span><span class="msu-picking-order">' + esc(row.sale_order_name || '') + '</span></td>' +
+                                '<td>' + esc(row.partner_name) + '</td>' +
+                                '<td>' + esc(row.date_done) + '</td>' +
+                                '<td class="msu-col-num">' + fmtMoney(row.actual_amount) + '</td>' +
+                                '<td><span class="msu-badge-state msu-badge-state-' + row.state + '">' + esc(row.state_label) + '</span></td>' +
+                                '<td>' + (row.invoice_no ? esc(row.invoice_no) : '<span class="msu-muted">—</span>') + '</td>' +
+                                '<td>' + (row.invoice_date ? esc(row.invoice_date) : '<span class="msu-muted">—</span>') + '</td>' +
+                                '<td class="msu-col-num">' + (row.state === 'accepted' ? fmtMoney(row.invoice_amount) : '<span class="msu-muted">—</span>') + '</td>';
+                            tbody.appendChild(tr);
+                        });
+                    }
+
+                    function updateShopeePagination() {
+                        var totalPages = Math.max(1, Math.ceil(state.shopee.total / PAGE_SIZE));
+                        var pag = document.getElementById('msu-shopee-pagination');
+                        pag.style.display = state.shopee.total > PAGE_SIZE ? '' : 'none';
+                        document.getElementById('msu-shopee-page-label').textContent = 'Trang ' + state.shopee.page + ' / ' + totalPages + ' (' + state.shopee.total + ' đơn)';
+                        document.getElementById('msu-shopee-prev').disabled = state.shopee.page <= 1;
+                        document.getElementById('msu-shopee-next').disabled = state.shopee.page >= totalPages;
+                    }
+
+                    function loadShopeeList(page) {
+                        if (!state.salerCode) { return Promise.resolve(); }
+                        state.shopee.page = page;
+                        return rpc('/misa_sale_status/api/shopee_list', {
+                            saler_code: state.salerCode, search: state.shopee.search, state: state.shopee.stateFilter,
+                            date_from: state.dateFrom, date_to: state.dateTo,
+                            limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE,
+                        }).then(function(res) {
+                            var data = res.data || {};
+                            state.shopee.rows = data.rows || [];
+                            state.shopee.total = data.total || 0;
+                            state.shopee.loaded = true;
+                            renderShopeeRows();
+                            updateShopeePagination();
+                        }).catch(function(e) { toast('Lỗi tải danh sách đơn Shopee: ' + e.message, 'error'); });
+                    }
+
+                    document.getElementById('msu-shopee-search-btn').addEventListener('click', function() {
+                        state.shopee.search = document.getElementById('msu-shopee-search').value.trim();
+                        loadShopeeList(1);
+                    });
+                    document.getElementById('msu-shopee-search').addEventListener('keydown', function(ev) {
+                        if (ev.key === 'Enter') { document.getElementById('msu-shopee-search-btn').click(); }
+                    });
+                    document.getElementById('msu-shopee-state-select').addEventListener('change', function() {
+                        state.shopee.stateFilter = this.value;
+                        loadShopeeList(1);
+                    });
+                    document.getElementById('msu-shopee-refresh-btn').addEventListener('click', function() { loadShopeeList(state.shopee.page); });
+                    document.getElementById('msu-shopee-prev').addEventListener('click', function() { if (state.shopee.page > 1) { loadShopeeList(state.shopee.page - 1); } });
+                    document.getElementById('msu-shopee-next').addEventListener('click', function() {
+                        if (state.shopee.page < Math.ceil(state.shopee.total / PAGE_SIZE)) { loadShopeeList(state.shopee.page + 1); }
+                    });
 
                     selectEl.addEventListener('change', function() {
                         state.salerCode = selectEl.value;
@@ -273,9 +675,26 @@
 
                     function rowMeta(row) {
                         var parts = [];
-                        if (row.multi_order_group) { parts.push('<i class="fa fa-sitemap msu-link-icon" title="Gộp chung nhiều đơn bán: ' + esc(row.group_order_names) + '"/>'); }
-                        if (row.master_picking_id || (row.covered_pickings && row.covered_pickings.length)) { parts.push('<i class="fa fa-link msu-link-icon" title="Gộp chung đề nghị xuất HĐ với phiếu khác"/>'); }
+                        if (row.multi_order_group) { parts.push('<i class="fa fa-sitemap msu-link-icon" title="Gộp chung nhiều đơn bán: ' + esc(row.group_order_names) + '"></i>'); }
+                        if (row.master_picking_id || (row.covered_pickings && row.covered_pickings.length)) { parts.push('<i class="fa fa-link msu-link-icon" title="Gộp chung đề nghị xuất HĐ với phiếu khác"></i>'); }
                         return parts.join('');
+                    }
+
+                    // Nhóm nút thao tác dùng chung cho bảng (icon-only, size xs) và drawer
+                    // (có chữ, size sm) — LUÔN hiện đủ 3 nút, disable (không ẩn) nút không áp
+                    // dụng được để nhóm nút không bị "co lại" trông như mất chức năng.
+                    function actionButtonsHtml(row, opts) {
+                        opts = opts || {};
+                        var size = opts.size || 'xs';
+                        var withText = !!opts.withText;
+                        var canModify = row.state !== 'invoiced';
+                        function label(text) { return withText ? ' ' + text : ''; }
+                        var checkBtn = '<button class="msu-btn msu-btn-outline-primary msu-btn-' + size + ' msu-act-check" data-id="' + row.id + '" title="Kiểm tra ngay"><i class="fa fa-refresh"></i>' + label('Kiểm tra ngay') + '</button>';
+                        var linkBtn = '<button class="msu-btn msu-btn-outline-muted msu-btn-' + size + ' msu-act-link" data-id="' + row.id + '" data-name="' + esc(row.name) + '" title="' + (canModify ? 'Gắn mã đề nghị' : 'Đã xuất HĐ, không cần gắn mã đề nghị nữa') + '"' + (canModify ? '' : ' disabled="disabled"') + '><i class="fa fa-pencil"></i>' + label('Gắn mã đề nghị') + '</button>';
+                        var exceptionBtn = row.exception
+                            ? '<button class="msu-btn msu-btn-outline-muted msu-btn-' + size + ' msu-act-unexception" data-id="' + row.id + '" title="Bỏ ngoại lệ"><i class="fa fa-undo"></i>' + label('Bỏ ngoại lệ') + '</button>'
+                            : '<button class="msu-btn msu-btn-outline-danger msu-btn-' + size + ' msu-act-exception" data-id="' + row.id + '" data-name="' + esc(row.name) + '" title="' + (canModify ? 'Đánh dấu ngoại lệ' : 'Đã xuất HĐ, không cần đánh dấu ngoại lệ nữa') + '"' + (canModify ? '' : ' disabled="disabled"') + '><i class="fa fa-ban"></i>' + label('Đánh dấu ngoại lệ') + '</button>';
+                        return '<div class="msu-btn-group">' + checkBtn + linkBtn + exceptionBtn + '</div>';
                     }
 
                     function renderRows() {
@@ -284,38 +703,193 @@
                         document.getElementById('msu-empty').style.display = state.rows.length ? 'none' : '';
                         state.rows.forEach(function(row) {
                             var tr = document.createElement('tr');
+                            tr.dataset.id = row.id;
+                            tr.className = 'msu-row-clickable';
                             var checked = state.selected[row.id] ? 'checked="checked"' : '';
                             var manualHtml = row.manual_refno
                                 ? '<span class="msu-manual-refno" title="Đã gắn mã đề nghị thủ công">' + esc(row.manual_refno) + '</span>'
-                                : '<span class="text-muted">—</span>';
+                                : '<span class="msu-muted">—</span>';
                             var exceptionHtml = row.exception
                                 ? '<span class="msu-badge-exception" title="' + esc(row.exception_reason || '') + '">Ngoại lệ</span>' : '';
                             tr.innerHTML =
                                 '<td><input type="checkbox" class="msu-row-check" data-id="' + row.id + '" ' + checked + '/></td>' +
-                                '<td><b>' + esc(row.name) + '</b>' + rowMeta(row) + '<br/><span class="text-muted small">' + esc(row.sale_order_name || '') + '</span></td>' +
+                                '<td><span class="msu-picking-name">' + esc(row.name) + '</span>' + rowMeta(row) + '<span class="msu-picking-order">' + esc(row.sale_order_name || '') + '</span></td>' +
                                 '<td>' + esc(row.partner_name) + '</td>' +
                                 '<td>' + esc(row.date_done) + '</td>' +
-                                '<td class="text-end">' + fmtMoney(row.actual_amount) + '</td>' +
-                                '<td><span class="msu-badge-state msu-badge-state-' + row.state + '">' + esc(row.state_label) + '</span> ' + exceptionHtml + '</td>' +
+                                '<td class="msu-col-num">' + fmtMoney(row.actual_amount) + '</td>' +
+                                '<td><span class="msu-badge-state msu-badge-state-' + row.state + '">' + esc(row.state_label) + '</span>' + exceptionHtml + '</td>' +
                                 '<td>' + manualHtml + '</td>' +
-                                '<td><div class="msu-row-actions">' +
-                                    '<button class="btn btn-sm btn-outline-primary msu-act-check" data-id="' + row.id + '">Kiểm tra ngay</button>' +
-                                    (row.state !== 'invoiced' ? '<button class="btn btn-sm btn-outline-secondary msu-act-link" data-id="' + row.id + '" data-name="' + esc(row.name) + '">Gắn mã đề nghị</button>' : '') +
-                                    (row.state !== 'invoiced' && !row.exception ? '<button class="btn btn-sm btn-outline-danger msu-act-exception" data-id="' + row.id + '" data-name="' + esc(row.name) + '">Ngoại lệ</button>' : '') +
-                                    (row.exception ? '<button class="btn btn-sm btn-outline-secondary msu-act-unexception" data-id="' + row.id + '">Bỏ ngoại lệ</button>' : '') +
-                                '</div></td>';
+                                '<td>' + actionButtonsHtml(row) + '</td>';
                             tbody.appendChild(tr);
                         });
                         bindRowEvents();
                         updateBulkBar();
                     }
 
-                    function updateBadges(counts) {
+                    var lastCounts = {missing: 0, requested: 0, exception: 0, invoiced: 0};
+
+                    function updateStats(counts) {
                         counts = counts || {};
+                        lastCounts = counts;
                         document.getElementById('msu-count-missing').textContent = counts.missing || 0;
                         document.getElementById('msu-count-requested').textContent = counts.requested || 0;
                         document.getElementById('msu-count-exception').textContent = counts.exception || 0;
                         document.getElementById('msu-count-invoiced').textContent = counts.invoiced || 0;
+                        renderDonut(counts);
+                    }
+
+                    // ===== Donut chart (cơ cấu trạng thái) — SVG vẽ tay, không cần thư viện =====
+                    function renderDonut(counts) {
+                        var container = document.getElementById('msu-donut-container');
+                        var total = STATE_META.reduce(function(sum, m) { return sum + (counts[m.key] || 0); }, 0);
+                        if (!total) {
+                            container.innerHTML = '<div class="msu-empty-chart">Chưa có dữ liệu trong phạm vi đang lọc.</div>';
+                            return;
+                        }
+                        var size = 148, r = 58, cx = size / 2, cy = size / 2, thickness = 20;
+                        var circumference = 2 * Math.PI * r;
+                        var gap = 3; // khoảng hở (đơn vị theo chu vi) giữa 2 lát, mô phỏng surface gap
+                        var offset = 0;
+                        var segments = [];
+                        STATE_META.forEach(function(meta) {
+                            var value = counts[meta.key] || 0;
+                            if (!value) { return; }
+                            var len = (value / total) * circumference;
+                            segments.push({
+                                meta: meta, value: value,
+                                dasharray: Math.max(len - gap, 0) + ' ' + (circumference - Math.max(len - gap, 0)),
+                                dashoffset: -offset,
+                            });
+                            offset += len;
+                        });
+                        var svgParts = ['<svg class="msu-donut-svg" width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '">'];
+                        svgParts.push('<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="#f1f0eb" stroke-width="' + thickness + '"/>');
+                        segments.forEach(function(seg) {
+                            svgParts.push(
+                                '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="' + COLORS[seg.meta.key] + '" ' +
+                                'stroke-width="' + thickness + '" stroke-dasharray="' + seg.dasharray + '" stroke-dashoffset="' + seg.dashoffset + '" ' +
+                                'transform="rotate(-90 ' + cx + ' ' + cy + ')" stroke-linecap="butt">' +
+                                '<title>' + esc(seg.meta.label) + ': ' + seg.value + ' phiếu</title>' +
+                                '</circle>'
+                            );
+                        });
+                        svgParts.push('<text x="' + cx + '" y="' + (cy - 4) + '" text-anchor="middle" class="msu-donut-hole-total">' + total + '</text>');
+                        svgParts.push('<text x="' + cx + '" y="' + (cy + 14) + '" text-anchor="middle" class="msu-donut-hole-label">TỔNG SỐ</text>');
+                        svgParts.push('</svg>');
+
+                        var legendParts = ['<div class="msu-legend">'];
+                        STATE_META.forEach(function(meta) {
+                            var value = counts[meta.key] || 0;
+                            var pct = total ? Math.round((value / total) * 100) : 0;
+                            legendParts.push(
+                                '<div class="msu-legend-row">' +
+                                    '<span class="msu-legend-dot" style="background:' + COLORS[meta.key] + '"></span>' +
+                                    '<span class="msu-legend-label">' + esc(meta.label) + '</span>' +
+                                    '<span class="msu-legend-value">' + value + '</span>' +
+                                    '<span class="msu-muted">(' + pct + '%)</span>' +
+                                '</div>'
+                            );
+                        });
+                        legendParts.push('</div>');
+
+                        container.innerHTML = '<div class="msu-donut-wrap">' + svgParts.join('') + legendParts.join('') + '</div>';
+                    }
+
+                    // ===== Bar + line chart (tiền xuất kho vs tiền đã xuất HĐ theo ngày) =====
+                    function renderBarChart(buckets) {
+                        var container = document.getElementById('msu-bar-chart-container');
+                        if (!buckets || !buckets.length) {
+                            container.innerHTML = '<div class="msu-empty-chart">Chưa có dữ liệu trong phạm vi đang lọc.</div>';
+                            return;
+                        }
+                        var width = Math.max(container.clientWidth || 560, 320);
+                        var height = 220;
+                        var padL = 54, padR = 14, padT = 14, padB = 28;
+                        var plotW = width - padL - padR, plotH = height - padT - padB;
+                        var maxVal = 0;
+                        buckets.forEach(function(b) { maxVal = Math.max(maxVal, b.actual_amount || 0, b.invoice_amount || 0); });
+                        if (!maxVal) { maxVal = 1; }
+                        // Làm tròn trục Y lên mốc đẹp (1/2/5 * 10^n) để nhãn dễ đọc.
+                        var niceMax = (function() {
+                            var exp = Math.floor(Math.log10(maxVal));
+                            var base = Math.pow(10, exp);
+                            var mult = maxVal / base;
+                            var steps = [1, 2, 2.5, 5, 10];
+                            for (var i = 0; i < steps.length; i++) { if (mult <= steps[i]) { return steps[i] * base; } }
+                            return 10 * base;
+                        })();
+                        var n = buckets.length;
+                        var slot = plotW / n;
+                        var barW = Math.min(24, slot * 0.44);
+
+                        function yFor(v) { return padT + plotH - (v / niceMax) * plotH; }
+                        function xCenter(i) { return padL + slot * i + slot / 2; }
+
+                        var ticks = 4;
+                        var gridParts = [];
+                        var yLabelParts = [];
+                        for (var t = 0; t <= ticks; t++) {
+                            var val = (niceMax / ticks) * t;
+                            var y = yFor(val);
+                            gridParts.push('<line x1="' + padL + '" y1="' + y + '" x2="' + (width - padR) + '" y2="' + y + '" stroke="#eceae4" stroke-width="1"/>');
+                            yLabelParts.push('<text x="' + (padL - 8) + '" y="' + (y + 3) + '" text-anchor="end" font-size="10" fill="#8b8d94">' + fmtCompactMoney(val) + '</text>');
+                        }
+
+                        // Nhãn trục X chọn lọc: ước lượng bề rộng cần cho 1 nhãn rồi chỉ hiện
+                        // đủ số nhãn vừa khít, tránh chữ đè lên nhau khi có nhiều cột (nhiều
+                        // tuần/ngày) — luôn hiện nhãn cuối cùng để biết mốc gần nhất.
+                        var minLabelWidth = 64;
+                        var maxLabels = Math.max(1, Math.floor(plotW / minLabelWidth));
+                        var labelStep = Math.max(1, Math.ceil(n / maxLabels));
+
+                        var barParts = [], dotParts = [], labelParts = [];
+                        var linePoints = [];
+                        buckets.forEach(function(b, i) {
+                            var cx = xCenter(i);
+                            var barX = cx - barW / 2;
+                            var barY = yFor(b.actual_amount || 0);
+                            var barH = Math.max(padT + plotH - barY, 0);
+                            if (barH > 0) {
+                                barParts.push(
+                                    '<rect x="' + barX + '" y="' + barY + '" width="' + barW + '" height="' + barH + '" rx="4" ry="4" fill="#2a78d6">' +
+                                    '<title>' + esc(b.label) + ' — Tiền xuất kho: ' + fmtMoney(b.actual_amount) + '</title>' +
+                                    '</rect>'
+                                );
+                            }
+                            var ly = yFor(b.invoice_amount || 0);
+                            linePoints.push(cx + ',' + ly);
+                            dotParts.push(
+                                '<circle cx="' + cx + '" cy="' + ly + '" r="4" fill="#0ca30c" stroke="#fff" stroke-width="2">' +
+                                '<title>' + esc(b.label) + ' — Tiền đã xuất HĐ: ' + fmtMoney(b.invoice_amount) + '</title>' +
+                                '</circle>'
+                            );
+                            if (i % labelStep === 0 || i === n - 1) {
+                                labelParts.push('<text x="' + cx + '" y="' + (height - 8) + '" text-anchor="middle" font-size="9" fill="#8b8d94">' + esc(b.label) + '</text>');
+                            }
+                        });
+
+                        var svg =
+                            '<svg width="100%" height="' + height + '" viewBox="0 0 ' + width + ' ' + height + '" preserveAspectRatio="xMidYMid meet">' +
+                            gridParts.join('') + yLabelParts.join('') +
+                            '<line x1="' + padL + '" y1="' + (padT + plotH) + '" x2="' + (width - padR) + '" y2="' + (padT + plotH) + '" stroke="#c9c8c1" stroke-width="1"/>' +
+                            barParts.join('') +
+                            '<polyline points="' + linePoints.join(' ') + '" fill="none" stroke="#0ca30c" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>' +
+                            dotParts.join('') + labelParts.join('') +
+                            '</svg>';
+                        container.innerHTML = svg;
+                    }
+
+                    function loadDailyChart() {
+                        if (!state.salerCode) { return; }
+                        var weekly = !state.dateFrom && !state.dateTo;
+                        document.getElementById('msu-chart-subtitle').textContent = weekly
+                            ? 'Theo tuần (không giới hạn ngày — chọn khoảng ngày để xem theo ngày)'
+                            : 'Theo ngày, trong khoảng đã chọn';
+                        rpc('/misa_sale_status/api/daily_stats', {
+                            saler_code: state.salerCode, date_from: state.dateFrom, date_to: state.dateTo, weekly: weekly,
+                        }).then(function(res) {
+                            renderBarChart(res.buckets || []);
+                        }).catch(function(e) { toast('Lỗi tải biểu đồ theo ngày: ' + e.message, 'error'); });
                     }
 
                     function updatePagination() {
@@ -332,16 +906,19 @@
                         if (!state.salerCode) { return Promise.resolve(); }
                         state.page = page;
                         return rpc('/misa_sale_status/api/list', {
-                            saler_code: state.salerCode, search: state.search,
-                            only_pending: state.onlyPending, limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE,
+                            saler_code: state.salerCode, search: state.search, state: state.stateFilter,
+                            date_from: state.dateFrom, date_to: state.dateTo,
+                            multi_order_group: state.multiOrderGroup, multi_request: state.multiRequest,
+                            limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE,
                         }).then(function(res) {
                             var data = res.data || {};
                             state.rows = data.rows || [];
                             state.total = data.total || 0;
                             state.selected = {};
-                            updateBadges(data.counts);
+                            updateStats(data.counts);
                             renderRows();
                             updatePagination();
+                            refreshDrawerIfOpen();
                         }).catch(function(e) {
                             if (!opts.silent) { toast('Lỗi tải danh sách: ' + e.message, 'error'); }
                         });
@@ -361,11 +938,48 @@
                         this.style.display = 'none';
                         loadList(1);
                     });
-                    document.getElementById('msu-only-pending').addEventListener('change', function() {
-                        state.onlyPending = this.checked;
+                    document.getElementById('msu-state-select').addEventListener('change', function() {
+                        state.stateFilter = this.value;
                         loadList(1);
                     });
-                    document.getElementById('msu-refresh-btn').addEventListener('click', function() { loadList(state.page); });
+                    document.getElementById('msu-multi-order-group').addEventListener('change', function() {
+                        state.multiOrderGroup = this.checked;
+                        loadList(1);
+                    });
+                    document.getElementById('msu-multi-request').addEventListener('change', function() {
+                        state.multiRequest = this.checked;
+                        loadList(1);
+                    });
+                    // Ngày xuất kho là filter DÙNG CHUNG cho cả 2 tab + đối chiếu tổng — đổi 1
+                    // nơi phải nạp lại cả 3 để số liệu không bị lệch phạm vi với nhau.
+                    function reloadForDateScopeChange() {
+                        loadList(1);
+                        loadDailyChart();
+                        loadReconciliationTotals();
+                        if (state.shopee.loaded) { loadShopeeList(1); }
+                    }
+                    document.getElementById('msu-date-from').addEventListener('change', function() {
+                        state.dateFrom = this.value;
+                        document.getElementById('msu-date-clear').style.display = (state.dateFrom || state.dateTo) ? '' : 'none';
+                        reloadForDateScopeChange();
+                    });
+                    document.getElementById('msu-date-to').addEventListener('change', function() {
+                        state.dateTo = this.value;
+                        document.getElementById('msu-date-clear').style.display = (state.dateFrom || state.dateTo) ? '' : 'none';
+                        reloadForDateScopeChange();
+                    });
+                    document.getElementById('msu-date-clear').addEventListener('click', function() {
+                        state.dateFrom = ''; state.dateTo = '';
+                        document.getElementById('msu-date-from').value = '';
+                        document.getElementById('msu-date-to').value = '';
+                        this.style.display = 'none';
+                        reloadForDateScopeChange();
+                    });
+                    document.getElementById('msu-refresh-btn').addEventListener('click', function() {
+                        loadList(state.page);
+                        loadDailyChart();
+                        loadReconciliationTotals();
+                    });
                     document.getElementById('msu-prev').addEventListener('click', function() { if (state.page > 1) { loadList(state.page - 1); } });
                     document.getElementById('msu-next').addEventListener('click', function() {
                         if (state.page < Math.ceil(state.total / PAGE_SIZE)) { loadList(state.page + 1); }
@@ -379,26 +993,112 @@
                         renderRows();
                     });
 
+                    // Gắn sự kiện cho các nút thao tác trong 1 vùng cụ thể (bảng HOẶC drawer) —
+                    // scope theo root truyền vào để 2 vùng không đè/nhân đôi listener của nhau
+                    // dù dùng chung class (actionButtonsHtml dùng chung cho cả 2 nơi).
+                    function bindActionButtons(root) {
+                        root.querySelectorAll('.msu-act-check').forEach(function(btn) {
+                            btn.addEventListener('click', function() { runCheck([parseInt(this.dataset.id, 10)], this); });
+                        });
+                        root.querySelectorAll('.msu-act-link').forEach(function(btn) {
+                            btn.addEventListener('click', function() { openLinkModal(parseInt(this.dataset.id, 10), this.dataset.name); });
+                        });
+                        root.querySelectorAll('.msu-act-exception').forEach(function(btn) {
+                            btn.addEventListener('click', function() { openExceptionModal([parseInt(this.dataset.id, 10)], this.dataset.name); });
+                        });
+                        root.querySelectorAll('.msu-act-unexception').forEach(function(btn) {
+                            btn.addEventListener('click', function() { runUnexception([parseInt(this.dataset.id, 10)], this); });
+                        });
+                    }
+
                     function bindRowEvents() {
-                        document.querySelectorAll('.msu-row-check').forEach(function(cb) {
+                        var tbody = document.getElementById('msu-tbody');
+                        tbody.querySelectorAll('.msu-row-check').forEach(function(cb) {
                             cb.addEventListener('change', function() {
                                 var id = parseInt(this.dataset.id, 10);
                                 if (this.checked) { state.selected[id] = true; } else { delete state.selected[id]; }
                                 updateBulkBar();
                             });
                         });
-                        document.querySelectorAll('.msu-act-check').forEach(function(btn) {
-                            btn.addEventListener('click', function() { runCheck([parseInt(this.dataset.id, 10)]); });
+                        tbody.querySelectorAll('.msu-row-clickable').forEach(function(tr) {
+                            tr.addEventListener('click', function(ev) {
+                                if (ev.target.closest('input, button, .msu-btn, a')) { return; }
+                                var id = parseInt(this.dataset.id, 10);
+                                var row = state.rows.find(function(r) { return r.id === id; });
+                                if (row) { openDrawer(row); }
+                            });
                         });
-                        document.querySelectorAll('.msu-act-link').forEach(function(btn) {
-                            btn.addEventListener('click', function() { openLinkModal(parseInt(this.dataset.id, 10), this.dataset.name); });
-                        });
-                        document.querySelectorAll('.msu-act-exception').forEach(function(btn) {
-                            btn.addEventListener('click', function() { openExceptionModal([parseInt(this.dataset.id, 10)], this.dataset.name); });
-                        });
-                        document.querySelectorAll('.msu-act-unexception').forEach(function(btn) {
-                            btn.addEventListener('click', function() { runUnexception([parseInt(this.dataset.id, 10)]); });
-                        });
+                        bindActionButtons(tbody);
+                    }
+
+                    // ===== Drawer chi tiết 1 phiếu =====
+                    var drawerOverlay = document.getElementById('msu-drawer-overlay');
+                    var drawerEl = document.getElementById('msu-drawer');
+                    var drawerOpenId = null;
+
+                    function closeDrawer() {
+                        drawerOverlay.style.display = 'none';
+                        drawerOpenId = null;
+                    }
+                    drawerOverlay.addEventListener('click', function(ev) {
+                        if (ev.target === drawerOverlay) { closeDrawer(); }
+                    });
+
+                    function openDrawer(row) {
+                        drawerOpenId = row.id;
+                        renderDrawerContent(row);
+                        drawerOverlay.style.display = 'flex';
+                    }
+
+                    function refreshDrawerIfOpen() {
+                        if (drawerOpenId == null) { return; }
+                        var row = state.rows.find(function(r) { return r.id === drawerOpenId; });
+                        if (row) { renderDrawerContent(row); } else { closeDrawer(); }
+                    }
+
+                    function renderDrawerContent(row) {
+                        var exceptionHtml = row.exception
+                            ? '<div class="msu-drawer-section"><p class="msu-drawer-section-title">Ngoại lệ</p><div class="msu-drawer-reason">' + esc(row.exception_reason || '') + '</div></div>'
+                            : '';
+                        var groupItems = [];
+                        if (row.master_picking_name) {
+                            groupItems.push('<div class="msu-drawer-list-item"><span>Phiếu gốc</span><b>' + esc(row.master_picking_name) + '</b></div>');
+                        }
+                        if (row.covered_pickings && row.covered_pickings.length) {
+                            groupItems.push('<div class="msu-drawer-list-item"><span>Phiếu đi kèm</span><b>' + esc(row.covered_pickings.map(function(c) { return c.name; }).join(', ')) + '</b></div>');
+                        }
+                        if (row.multi_order_group && row.group_order_names) {
+                            groupItems.push('<div class="msu-drawer-list-item"><span>Đơn bán trong nhóm gộp</span><b>' + esc(row.group_order_names) + '</b></div>');
+                        }
+                        var groupHtml = groupItems.length
+                            ? '<div class="msu-drawer-section"><p class="msu-drawer-section-title">Gộp chung đề nghị xuất HĐ</p><div class="msu-drawer-list">' + groupItems.join('') + '</div></div>'
+                            : '';
+                        var diffClass = row.amount_mismatch ? ' msu-col-diff-bad' : '';
+
+                        drawerEl.innerHTML =
+                            '<div class="msu-drawer-header">' +
+                                '<div><h4 class="msu-drawer-title">' + esc(row.name) + '</h4><div class="msu-drawer-subtitle">' + esc(row.partner_name) + '</div></div>' +
+                                '<button class="msu-drawer-close" id="msu-drawer-close-btn"><i class="fa fa-times"></i></button>' +
+                            '</div>' +
+                            '<div class="msu-drawer-body">' +
+                                '<div class="msu-drawer-section">' +
+                                    '<div class="msu-drawer-meta">' +
+                                        '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Đơn hàng</span><span class="msu-meta-value">' + (row.sale_order_name ? esc(row.sale_order_name) : '—') + '</span></div>' +
+                                        '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Ngày xuất kho</span><span class="msu-meta-value">' + esc(row.date_done) + '</span></div>' +
+                                        '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Trạng thái</span><span class="msu-badge-state msu-badge-state-' + row.state + '">' + esc(row.state_label) + '</span></div>' +
+                                        '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Tiền thực xuất</span><span class="msu-meta-value">' + fmtMoney(row.actual_amount) + '</span></div>' +
+                                        '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Số hóa đơn</span><span class="msu-meta-value">' + (row.invoice_no ? esc(row.invoice_no) : '—') + '</span></div>' +
+                                        '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Tiền hóa đơn</span><span class="msu-meta-value">' + (row.state === 'invoiced' ? fmtMoney(row.invoice_amount) : '—') + '</span></div>' +
+                                        '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Chênh lệch tiền</span><span class="msu-meta-value' + diffClass + '">' + (row.state === 'invoiced' ? fmtMoney(row.amount_diff) : '—') + '</span></div>' +
+                                        '<div class="msu-drawer-meta-item"><span class="msu-meta-label">Mã đề nghị (gắn tay)</span><span class="msu-meta-value">' + (row.manual_refno ? esc(row.manual_refno) : '—') + '</span></div>' +
+                                    '</div>' +
+                                '</div>' +
+                                groupHtml + exceptionHtml +
+                            '</div>' +
+                            '<div class="msu-drawer-actions">' + actionButtonsHtml(row, {size: 'sm', withText: true}) + '</div>';
+
+                        document.getElementById('msu-drawer-close-btn').addEventListener('click', closeDrawer);
+                        bindActionButtons(drawerEl);
                     }
 
                     function updateBulkBar() {
@@ -408,21 +1108,30 @@
                         document.getElementById('msu-bulk-count').textContent = 'Đã chọn ' + ids.length + ' phiếu';
                     }
 
-                    function runCheck(ids) {
-                        rpc('/misa_sale_status/api/check', {picking_ids: ids, saler_code: state.salerCode}).then(function() {
+                    function runCheck(ids, btn) {
+                        setBtnLoading(btn, true);
+                        return rpc('/misa_sale_status/api/check', {picking_ids: ids, saler_code: state.salerCode}).then(function() {
                             toast('Đã kiểm tra xong ' + ids.length + ' phiếu.', 'success');
-                            loadList(state.page);
-                        }).catch(function(e) { toast('Lỗi kiểm tra MISA: ' + e.message, 'error'); });
+                            return loadList(state.page);
+                        }).then(function() {
+                            loadDailyChart();
+                            loadReconciliationTotals();
+                        }).catch(function(e) {
+                            toast('Lỗi kiểm tra MISA: ' + e.message, 'error');
+                        }).finally(function() { setBtnLoading(btn, false); });
                     }
-                    function runUnexception(ids) {
-                        rpc('/misa_sale_status/api/unmark_exception', {picking_ids: ids, saler_code: state.salerCode}).then(function() {
+                    function runUnexception(ids, btn) {
+                        setBtnLoading(btn, true);
+                        return rpc('/misa_sale_status/api/unmark_exception', {picking_ids: ids, saler_code: state.salerCode}).then(function() {
                             toast('Đã bỏ đánh dấu ngoại lệ.', 'success');
-                            loadList(state.page);
-                        }).catch(function(e) { toast('Lỗi: ' + e.message, 'error'); });
+                            return loadList(state.page);
+                        }).catch(function(e) {
+                            toast('Lỗi: ' + e.message, 'error');
+                        }).finally(function() { setBtnLoading(btn, false); });
                     }
 
-                    document.getElementById('msu-bulk-check').addEventListener('click', function() { runCheck(Object.keys(state.selected).map(Number)); });
-                    document.getElementById('msu-bulk-unexception').addEventListener('click', function() { runUnexception(Object.keys(state.selected).map(Number)); });
+                    document.getElementById('msu-bulk-check').addEventListener('click', function() { runCheck(Object.keys(state.selected).map(Number), this); });
+                    document.getElementById('msu-bulk-unexception').addEventListener('click', function() { runUnexception(Object.keys(state.selected).map(Number), this); });
                     document.getElementById('msu-bulk-exception').addEventListener('click', function() {
                         openExceptionModal(Object.keys(state.selected).map(Number), Object.keys(state.selected).length + ' phiếu đã chọn');
                     });
@@ -442,11 +1151,15 @@
                         var refno = document.getElementById('msu-link-refno').value.trim();
                         var errEl = document.getElementById('msu-link-error');
                         if (!refno) { errEl.textContent = 'Vui lòng nhập mã đề nghị.'; return; }
+                        var btn = this;
+                        setBtnLoading(btn, true);
                         rpc('/misa_sale_status/api/manual_link', {picking_id: linkPickingId, saler_code: state.salerCode, refno: refno}).then(function(res) {
                             linkModal.style.display = 'none';
                             if (res.warning) { toast(res.warning, 'warning'); } else { toast('Đã gắn mã đề nghị và xác nhận đã xuất hóa đơn.', 'success'); }
                             loadList(state.page);
-                        }).catch(function(e) { errEl.textContent = e.message; });
+                            loadDailyChart();
+                            loadReconciliationTotals();
+                        }).catch(function(e) { errEl.textContent = e.message; }).finally(function() { setBtnLoading(btn, false); });
                     });
 
                     // ===== Modal: đánh dấu ngoại lệ =====
@@ -464,11 +1177,17 @@
                         var reason = document.getElementById('msu-exception-reason').value.trim();
                         var errEl = document.getElementById('msu-exception-error');
                         if (!reason) { errEl.textContent = 'Vui lòng nhập lý do.'; return; }
+                        var btn = this;
+                        setBtnLoading(btn, true);
                         rpc('/misa_sale_status/api/mark_exception', {picking_ids: exceptionIds, saler_code: state.salerCode, reason: reason}).then(function() {
                             exceptionModal.style.display = 'none';
                             toast('Đã đánh dấu ngoại lệ.', 'success');
                             loadList(state.page);
-                        }).catch(function(e) { errEl.textContent = e.message; });
+                        }).catch(function(e) { errEl.textContent = e.message; }).finally(function() { setBtnLoading(btn, false); });
+                    });
+
+                    window.addEventListener('resize', function() {
+                        if (state.salerCode) { loadDailyChart(); }
                     });
 
                     loadSalerCodes();

@@ -406,6 +406,12 @@
         .miv-cell-warning { color: var(--miv-warning-text); font-weight: 700; }
         .miv-cell-good { color: var(--miv-good-text); font-weight: 700; }
         .miv-cell-muted { color: var(--miv-ink-muted); font-weight: 700; }
+        .miv-cell-shopee { color: #c9247a; font-weight: 700; }
+
+        &.miv-table-compact tbody tr.miv-row-clickable {
+            cursor: pointer;
+            &:hover { background: var(--miv-plane); }
+        }
     }
 
     .miv-subtable {
@@ -607,6 +613,12 @@
         &.miv-badge-state-invoiced { background: rgba(12, 163, 12, 0.12); color: var(--miv-good-text); }
         &.miv-badge-state-not_checked { background: rgba(137, 135, 129, 0.14); color: var(--miv-ink-muted); }
         &.miv-badge-state-partial { background: rgba(74, 58, 167, 0.12); color: var(--miv-neutral-text); }
+        // Trạng thái riêng của hóa đơn điện tử Shopee (meInvoice) — 'missing' dùng chung style
+        // đỏ ở trên, còn lại là các bước riêng của luồng phát hành.
+        &.miv-badge-state-draft { background: rgba(137, 135, 129, 0.14); color: var(--miv-ink-muted); }
+        &.miv-badge-state-submitted { background: rgba(250, 178, 25, 0.18); color: var(--miv-warning-text); }
+        &.miv-badge-state-rejected { background: rgba(208, 59, 59, 0.12); color: var(--miv-critical-text); }
+        &.miv-badge-state-accepted { background: rgba(12, 163, 12, 0.12); color: var(--miv-good-text); }
     }
 
     // ===== Scan progress panel =====

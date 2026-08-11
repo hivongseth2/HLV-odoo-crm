@@ -53,12 +53,17 @@ class MisaInvoicePublicController(http.Controller):
         return {'status': 'success', 'codes': codes}
 
     @http.route('/misa_sale_status/api/list', type='json', auth='public', methods=['POST'])
-    def api_list(self, saler_code='', search='', only_pending=True, limit=50, offset=0, **kwargs):
+    def api_list(
+        self, saler_code='', search='', state='', date_from='', date_to='',
+        multi_order_group=False, multi_request=False, limit=50, offset=0, **kwargs
+    ):
         if not _pw_allowed():
             return _json_error('unauthorized')
         try:
             data = request.env['stock.picking'].sudo().get_misa_invoice_public_list(
-                saler_code=saler_code, search=search, only_pending=bool(only_pending),
+                saler_code=saler_code, search=search, state=state or False,
+                date_from=date_from or False, date_to=date_to or False,
+                multi_order_group=bool(multi_order_group), multi_request=bool(multi_request),
                 limit=int(limit), offset=int(offset),
             )
             return {'status': 'success', 'data': data}
@@ -66,6 +71,54 @@ class MisaInvoicePublicController(http.Controller):
             return _json_error(str(e))
         except Exception as e:
             _logger.exception('misa_sale_status api_list error')
+            return _json_error(str(e))
+
+    @http.route('/misa_sale_status/api/daily_stats', type='json', auth='public', methods=['POST'])
+    def api_daily_stats(self, saler_code='', date_from='', date_to='', weekly=False, **kwargs):
+        if not _pw_allowed():
+            return _json_error('unauthorized')
+        try:
+            buckets = request.env['stock.picking'].sudo().get_misa_invoice_public_daily_stats(
+                saler_code=saler_code, date_from=date_from or False, date_to=date_to or False,
+                weekly=bool(weekly),
+            )
+            return {'status': 'success', 'buckets': buckets}
+        except UserError as e:
+            return _json_error(str(e))
+        except Exception as e:
+            _logger.exception('misa_sale_status api_daily_stats error')
+            return _json_error(str(e))
+
+    @http.route('/misa_sale_status/api/shopee_list', type='json', auth='public', methods=['POST'])
+    def api_shopee_list(self, saler_code='', search='', state='', date_from='', date_to='', limit=50, offset=0, **kwargs):
+        if not _pw_allowed():
+            return _json_error('unauthorized')
+        try:
+            data = request.env['stock.picking'].sudo().get_misa_invoice_public_shopee_list(
+                saler_code=saler_code, search=search, state=state or False,
+                date_from=date_from or False, date_to=date_to or False,
+                limit=int(limit), offset=int(offset),
+            )
+            return {'status': 'success', 'data': data}
+        except UserError as e:
+            return _json_error(str(e))
+        except Exception as e:
+            _logger.exception('misa_sale_status api_shopee_list error')
+            return _json_error(str(e))
+
+    @http.route('/misa_sale_status/api/reconciliation_totals', type='json', auth='public', methods=['POST'])
+    def api_reconciliation_totals(self, saler_code='', date_from='', date_to='', **kwargs):
+        if not _pw_allowed():
+            return _json_error('unauthorized')
+        try:
+            data = request.env['stock.picking'].sudo().get_misa_invoice_public_reconciliation_totals(
+                saler_code=saler_code, date_from=date_from or False, date_to=date_to or False,
+            )
+            return {'status': 'success', 'data': data}
+        except UserError as e:
+            return _json_error(str(e))
+        except Exception as e:
+            _logger.exception('misa_sale_status api_reconciliation_totals error')
             return _json_error(str(e))
 
     @http.route('/misa_sale_status/api/check', type='json', auth='public', methods=['POST'])
