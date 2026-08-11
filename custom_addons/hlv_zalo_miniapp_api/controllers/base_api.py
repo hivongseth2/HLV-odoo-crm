@@ -36,7 +36,8 @@ class ZaloBaseAPI:
     def _get_secret_key():
         try:
             Param = request.env["ir.config_parameter"].sudo()
-            key = Param.get_param("zalo_api_secret", "")
+            key = Param.get_param("zalo_api_secret", "") or Param.get_param("hlv_loyalty.zalo_secret_key", "") or Param.get_param("zalo.secret_key", "")
+            key = str(key or "").strip()
             if not key:
                 _logger.warning("zalo_api_secret not configured! Using dev fallback. Set this param in System Parameters for production.")
                 return "hlv_zalo_dev_secret_2026"

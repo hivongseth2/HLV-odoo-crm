@@ -17,11 +17,14 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
 
     def _get_private_key(self):
         """Lấy Private Key từ hệ thống cấu hình ir.config_parameter."""
-        return request.env['ir.config_parameter'].sudo().get_param('hlv_zalo_miniapp.checkout_private_key', '')
+        ICP = request.env['ir.config_parameter'].sudo()
+        val = ICP.get_param('hlv_zalo_miniapp.checkout_private_key', '') or ICP.get_param('checkout_private_key', '') or ICP.get_param('zalo.checkout_private_key', '')
+        return str(val or '').strip()
 
     def _get_app_id(self):
         """Lấy Zalo Mini App ID từ cấu hình."""
-        return request.env['ir.config_parameter'].sudo().get_param('hlv_zalo_miniapp.checkout_app_id', '')
+        val = request.env['ir.config_parameter'].sudo().get_param('hlv_zalo_miniapp.checkout_app_id', '')
+        return str(val or '').strip()
 
     def _is_sandbox(self):
         """Kiểm tra môi trường Checkout SDK có bật Sandbox không."""
@@ -64,7 +67,7 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
 
         return mac
 
-    @http.route('/api/v1/zalo_checkout/init_order', type='json', auth='public', methods=['POST'], csrf=False)
+    @http.route('/api/v1/zalo_checkout/init_order', type='http', auth='public', methods=['POST', 'OPTIONS'], csrf=False)
     def init_checkout_order(self, **post):
         """
         API khởi tạo đơn hàng thanh toán trên Odoo Backend và tạo chữ ký MAC cho Zalo Checkout SDK.
@@ -78,6 +81,8 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
             "payment_method": "zalopay" // "zalopay", "vnpay", hoặc "cod"
         }
         """
+        if request.httprequest.method == 'OPTIONS':
+            return self._response_options()
         try:
             body = self._request_json()
             contact_id = body.get('contact_id')
@@ -85,14 +90,14 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
             address_id = body.get('address_id')
             note = body.get('note', '')
             voucher_code = body.get('voucher_code', '')
-            payment_method_input = body.get('payment_method', 'cod').lower()
+            payment_method_input = str(body.get('payment_method', 'cod')).lower()
 
             if not contact_id or not items:
-                return {'status': 'error', 'message': 'Thiếu thông tin contact_id hoặc sản phẩm đơn hàng'}
+                return self._response_error("INVALID_INPUT", "Thiếu thông tin contact_id hoặc sản phẩm đơn hàng")
 
             partner = request.env['res.partner'].sudo().browse(int(contact_id))
             if not partner.exists():
-                return {'status': 'error', 'message': 'Khách hàng không tồn tại'}
+                return self._response_error("NOT_FOUND", "Khách hàng không tồn tại", 404)
 
             # 1. Map địa chỉ nhận hàng
             addr_domain = [('id', '=', int(address_id))] if address_id else [('id', '=', partner.id)]
@@ -131,7 +136,7 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
                 })
 
             if not order_lines:
-                return {'status': 'error', 'message': 'Không tìm thấy sản phẩm hợp lệ'}
+                return self._response_error("INVALID_INPUT", "Không tìm thấy sản phẩm hợp lệ")
 
             # 3. Tạo Sale Order trong Odoo ở trạng thái draft
             order_vals = {
@@ -174,7 +179,6 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
             sdk_items = []
             for line in sale_order.order_line:
                 if line.product_id:
-                    # price_total chứa tổng giá trị sau thuế của line
                     line_amt = int(round(line.price_total)) if line.price_total else int(round(line.price_subtotal or (line.price_unit * line.product_uom_qty)))
                     sdk_items.append({
                         'id': str(line.product_id.id),
@@ -193,7 +197,6 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
                 sdk_items[-1]['amount'] += diff
 
             # Pre-stringify extradata và method để đảm bảo MAC consistency
-            # giữa Backend (Python json.dumps) và Frontend (gửi thẳng string cho SDK)
             extradata_str = json.dumps(extradata_obj, separators=(',', ':'))
             method_str = json.dumps(method_obj, separators=(',', ':'))
 
@@ -208,15 +211,16 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
             private_key = self._get_private_key()
             if not private_key:
                 _logger.error("CHƯA CẤU HÌNH Private Key cho Zalo Checkout SDK! Vui lòng cài đặt System Parameter 'hlv_zalo_miniapp.checkout_private_key'.")
-                return {
-                    'status': 'error',
-                    'message': 'Odoo Server chưa được cấu hình Private Key cho Zalo Checkout SDK. Vui lòng vào Odoo Settings > System Parameters thêm hlv_zalo_miniapp.checkout_private_key'
-                }
+                return self._response_error(
+                    "CONFIG_ERROR",
+                    "Odoo Server chưa được cấu hình Private Key cho Zalo Checkout SDK. Vui lòng vào Odoo Settings > System Parameters thêm hlv_zalo_miniapp.checkout_private_key",
+                    503
+                )
 
             mac_str = self._generate_create_order_mac(params_for_mac, private_key)
             _logger.info("Zalo Checkout MAC computed: %s (amount=%s)", mac_str, final_order_amount)
 
-            return {
+            return self._response_success({
                 'status': 'success',
                 'data': {
                     'orderId': sale_order.name,
@@ -228,12 +232,12 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
                     'method': method_str,
                     'mac': mac_str,
                 }
-            }
+            })
         except Exception as e:
             _logger.exception("Lỗi khởi tạo đơn hàng Checkout SDK: %s", str(e))
-            return {'status': 'error', 'message': f'Lỗi hệ thống: {str(e)}'}
+            return self._response_error("SERVER_ERROR", f"Lỗi hệ thống: {str(e)}", 500)
 
-    @http.route('/api/zalo/checkout/callback', type='json', auth='public', methods=['POST'], csrf=False)
+    @http.route('/api/zalo/checkout/callback', type='json', auth='public', methods=['POST', 'OPTIONS'], csrf=False)
     def zalo_checkout_callback(self, **post):
         """
         Webhook nhận kết quả thanh toán từ Zalo Checkout SDK Server.
@@ -254,6 +258,8 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
             "overallMac": "..."
         }
         """
+        if request.httprequest.method == 'OPTIONS':
+            return self._response_options()
         try:
             body = self._request_json()
             data = body.get('data', {})
@@ -330,7 +336,7 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
             _logger.exception("Lỗi khi xử lý Callback Zalo Checkout SDK: %s", str(e))
             return {'returnCode': -1, 'returnMessage': f'Internal Server Error: {str(e)}'}
 
-    @http.route('/api/zalo/checkout/notify', type='json', auth='public', methods=['POST'], csrf=False)
+    @http.route('/api/zalo/checkout/notify', type='json', auth='public', methods=['POST', 'OPTIONS'], csrf=False)
     def zalo_checkout_notify(self, **post):
         """
         Webhook nhận thông báo khi người dùng chọn phương thức COD hoặc Bank Transfer.
@@ -344,6 +350,8 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
             "mac": "..."
         }
         """
+        if request.httprequest.method == 'OPTIONS':
+            return self._response_options()
         try:
             body = self._request_json()
             data = body.get('data', {})
