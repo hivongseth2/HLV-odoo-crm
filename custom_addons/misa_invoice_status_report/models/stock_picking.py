@@ -1151,23 +1151,31 @@ class StockPickingMisaInvoiceStatus(models.Model):
 
     @api.model
     def get_misa_invoice_public_list(
-        self, saler_code, search=False, only_pending=True, limit=50, offset=0,
+        self, saler_code, search=False, state=False, date_from=False, date_to=False,
+        limit=50, offset=0,
     ):
-        """Danh sách phiếu xuất kho của ĐÚNG 1 mã sale cho trang public — mặc định chỉ hiện
-        phiếu chưa xuất HĐ và chưa đánh dấu ngoại lệ (đúng mục đích "theo dõi đơn chưa XHD"),
-        search theo cả tên phiếu LẪN tên đơn bán liên quan (only_pending=False để tra cứu tự
-        do, không giới hạn trạng thái)."""
+        """Danh sách phiếu xuất kho của ĐÚNG 1 mã sale cho trang public, lọc thêm được theo
+        khoảng NGÀY XUẤT KHO (date_from/date_to) và theo trạng thái cụ thể:
+        - state rỗng/'pending' (mặc định): chưa xuất HĐ, chưa ngoại lệ — đúng mục đích "theo
+          dõi đơn chưa XHD".
+        - 'missing' / 'requested' / 'invoiced': đúng trạng thái đó, chưa ngoại lệ.
+        - 'exception': đã đánh dấu ngoại lệ (không phân biệt trạng thái xuất HĐ).
+        - 'all': không lọc trạng thái/ngoại lệ, chỉ còn scope theo mã sale + ngày.
+        search theo cả tên phiếu LẪN tên đơn bán liên quan. counts (cho donut/badge) luôn tính
+        trên TOÀN BỘ phạm vi ngày đang lọc, không bị ảnh hưởng bởi state/search hiện tại — để
+        số liệu tổng quan luôn nhất quán dù đang xem tab nào."""
         Picking = self.sudo()
         code = self._misa_invoice_validate_public_saler_code(saler_code)
-        base_domain = Picking._misa_invoice_dashboard_base_domain() + [
+        base_domain = Picking._misa_invoice_dashboard_base_domain(date_from, date_to) + [
             ('misa_invoice_saler_code', '=', code),
         ]
         domain = list(base_domain)
-        if only_pending:
-            domain += [
-                ('misa_invoice_state', '!=', 'invoiced'),
-                ('misa_invoice_exception', '=', False),
-            ]
+        if state == 'exception':
+            domain.append(('misa_invoice_exception', '=', True))
+        elif state in ('missing', 'requested', 'invoiced'):
+            domain += [('misa_invoice_state', '=', state), ('misa_invoice_exception', '=', False)]
+        elif state != 'all':
+            domain += [('misa_invoice_state', '!=', 'invoiced'), ('misa_invoice_exception', '=', False)]
         if search:
             domain += ['|', ('name', 'ilike', search), ('misa_invoice_sale_order_ids.name', 'ilike', search)]
 
@@ -1189,6 +1197,16 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 'exception': exception_count,
             },
         }
+
+    @api.model
+    def get_misa_invoice_public_daily_stats(self, saler_code, date_from=False, date_to=False, weekly=False):
+        """Số liệu 'theo ngày' (tiền xuất kho vs tiền đã xuất HĐ) cho trang public, scope theo
+        đúng 1 mã sale — tái dùng thẳng get_misa_invoice_daily_stats (dashboard nội bộ) sau khi
+        xác thực mã sale, tránh viết lại logic gộp theo ngày/tuần."""
+        code = self._misa_invoice_validate_public_saler_code(saler_code)
+        return self.sudo().get_misa_invoice_daily_stats(
+            date_from=date_from, date_to=date_to, saler_code=code, weekly=weekly,
+        )
 
     @api.model
     def action_public_check(self, picking_ids, saler_code):
