@@ -67,6 +67,14 @@ class StockPickingMisaInvoiceStatus(models.Model):
     misa_invoice_date = fields.Date(string='Ngày hóa đơn MISA', copy=False)
     misa_invoice_amount = fields.Float(string='Tiền hóa đơn MISA', copy=False)
 
+    # Đối soát tự động tra MISA bằng refno = TÊN PHIẾU. Nếu sale quên ghi đúng số phiếu xuất
+    # kho lúc tạo đề nghị xuất HĐ trên MISA, MISA tự sinh 1 mã đề nghị khác (VD "DN00123")
+    # không khớp tên phiếu — tự động sẽ không bao giờ tìm ra. Field này cho gắn tay đúng mã
+    # đề nghị đó (qua wizard misa.invoice.manual.link.wizard), sau đó MỌI lần kiểm tra (thủ
+    # công lẫn cron) sẽ ưu tiên tra theo mã này thay vì theo tên phiếu — xem
+    # action_check_misa_invoice_status.
+    misa_invoice_manual_refno = fields.Char(string='Mã đề nghị MISA (gắn tay)', copy=False)
+
     # MISA cho phép 1 "đề nghị xuất HĐ" (dùng refno của 1 phiếu làm đại diện) gộp chung cho
     # nhiều phiếu xuất kho khác, liệt kê trong journal_memo — các phiếu "ăn theo" đó KHÔNG tự
     # có đề nghị riêng. misa_invoice_master_picking_id trỏ NGƯỢC về phiếu đại diện (chỉ set ở
@@ -78,6 +86,19 @@ class StockPickingMisaInvoiceStatus(models.Model):
     misa_invoice_covered_picking_ids = fields.One2many(
         'stock.picking', 'misa_invoice_master_picking_id',
         string='Các phiếu xuất kho đi kèm (gộp chung HĐ)',
+    )
+    # True nếu đề nghị/hóa đơn của NHÓM này (gốc + các phiếu ăn theo) gộp chung cho từ 2 đơn
+    # bán trở lên — VD 1 đề nghị xuất HĐ gộp giao hàng của DH1 và DH2 làm 1. Dùng để lọc/audit
+    # riêng case này, khác với case "1 đơn bán được xuất hóa đơn qua nhiều đề nghị khác nhau"
+    # (xem get_misa_invoice_order_list's multi_request).
+    misa_invoice_multi_order_group = fields.Boolean(
+        string='Gộp chung nhiều đơn bán', compute='_compute_misa_invoice_multi_order_group', store=True,
+    )
+    # Tên TẤT CẢ đơn bán trong cả nhóm (gốc + các phiếu ăn theo) — không lưu (store=False) vì
+    # chỉ để đọc hiển thị cho biết cụ thể gộp với đơn nào, không cần search/group theo field
+    # này (đã có domain riêng qua misa_invoice_multi_order_group).
+    misa_invoice_group_order_names = fields.Char(
+        string='Đơn bán trong nhóm gộp', compute='_compute_misa_invoice_multi_order_group',
     )
 
     # 1 phiếu xuất kho có thể gộp nhiều đơn bán (MISA trả "order_code": "DH1, DH2"
@@ -164,6 +185,19 @@ class StockPickingMisaInvoiceStatus(models.Model):
             picking.misa_invoice_root_partner_id = source_partner.commercial_partner_id
 
     @api.depends(
+        'misa_invoice_sale_order_ids',
+        'misa_invoice_master_picking_id.misa_invoice_sale_order_ids',
+        'misa_invoice_covered_picking_ids.misa_invoice_sale_order_ids',
+    )
+    def _compute_misa_invoice_multi_order_group(self):
+        for picking in self:
+            group = picking.misa_invoice_master_picking_id or picking
+            group_pickings = group | group.misa_invoice_covered_picking_ids
+            orders = group_pickings.mapped('misa_invoice_sale_order_ids')
+            picking.misa_invoice_multi_order_group = len(orders) > 1
+            picking.misa_invoice_group_order_names = ', '.join(orders.mapped('name'))
+
+    @api.depends(
         'misa_invoice_state', 'misa_invoice_amount', 'x_studio_tng_tin_sau_thu',
         'misa_invoice_master_picking_id', 'misa_invoice_covered_picking_ids.x_studio_tng_tin_sau_thu',
     )
@@ -201,17 +235,25 @@ class StockPickingMisaInvoiceStatus(models.Model):
         hóa đơn đại diện cho nhiều phiếu (xem _misa_invoice_check_batch)."""
         misa_utils = self.env['misa.api.utils']
         results = []
+        # Phiếu gốc của 1 nhóm gộp chung có thể KHÔNG nằm trong lô đang kiểm tra này (VD chỉ
+        # có phiếu "ăn theo" được chọn/lọt vào lô quét) — nếu không chủ động kiểm tra luôn nó
+        # ở đây, phiếu gốc sẽ bị "treo" ở trạng thái cũ (thường là "missing") cho tới khi tự
+        # nó lọt vào 1 lượt quét khác, gây ra nghịch lý "phiếu ăn theo đã xuất HĐ nhưng phiếu
+        # gốc lại chưa" dù cùng 1 đề nghị.
+        extra_masters_to_check = self.browse()
         for picking in self:
             if picking.picking_type_code != 'outgoing':
                 continue
+            # Ưu tiên mã đề nghị gắn tay (nếu có) — xem misa_invoice_manual_refno.
+            refno = picking.misa_invoice_manual_refno or picking.name
             try:
                 if request_map is not None:
-                    status = misa_utils.get_invoice_status_from_map(picking.name, request_map)
+                    status = misa_utils.get_invoice_status_from_map(refno, request_map)
                 else:
-                    status = misa_utils.get_invoice_status_for_refno(picking.name)
+                    status = misa_utils.get_invoice_status_for_refno(refno)
             except Exception as e:
                 _logger.exception(
-                    "❌ [MISA INVOICE STATUS] Lỗi kiểm tra phiếu %s: %s", picking.name, e
+                    "❌ [MISA INVOICE STATUS] Lỗi kiểm tra phiếu %s (refno=%s): %s", picking.name, refno, e
                 )
                 picking.message_post(
                     body=Markup("<b>Kiểm tra hóa đơn MISA thất bại:</b><br/>%s") % str(e)
@@ -225,8 +267,16 @@ class StockPickingMisaInvoiceStatus(models.Model):
             # đây nữa (đã lưu đầy đủ ở phiếu gốc) để tránh cộng dồn trùng tiền trong dashboard.
             master_refno = status.get('master_refno')
             master_picking = self.browse()
-            if master_refno and master_refno != picking.name:
+            # So với refno vừa dùng để tra (không phải luôn là tên phiếu — có thể là mã đề
+            # nghị gắn tay) — nếu trùng nghĩa là đề nghị này chính là của phiếu đang xét,
+            # không cần tìm phiếu gốc nào khác.
+            if master_refno and master_refno != refno:
                 master_picking = self.sudo().search([('name', '=', master_refno)], limit=1)
+                if (
+                    master_picking and master_picking.id not in self._ids
+                    and master_picking.misa_invoice_state != 'invoiced'
+                ):
+                    extra_masters_to_check |= master_picking
 
             vals = {
                 'misa_invoice_state': status['state'],
@@ -286,15 +336,25 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 'state': picking.misa_invoice_state,
                 'state_label': MISA_INVOICE_STATE_LABELS.get(picking.misa_invoice_state, picking.misa_invoice_state),
             })
+        if extra_masters_to_check:
+            results += extra_masters_to_check.action_check_misa_invoice_status(request_map=request_map)
         return results
 
     def action_mark_misa_invoice_exception(self):
         """Mở wizard nhập lý do — dùng chung cho nút trên form (1 phiếu), bulk action trên
-        list (nhiều phiếu), và nút trên drawer dashboard (1 phiếu, gọi qua doAction)."""
+        list (nhiều phiếu), và nút trên drawer dashboard (1 phiếu, gọi qua doAction).
+
+        ⚠️ Action dict dựng tay: khi gọi qua nút form (type="object") hoặc ir.actions.server,
+        Odoo tự nới đủ field còn thiếu trước khi đưa cho JS. Nhưng khi JS gọi thẳng qua
+        orm.call() rồi đưa kết quả cho action.doAction(), KHÔNG có bước nới đó — thiếu
+        "views" sẽ làm _preprocessAction() lỗi ngay (đã gặp y hệt ở
+        get_misa_invoice_order_report_action). Nên trả đủ "views" ở đây luôn để an toàn cho
+        mọi đường gọi."""
         return {
             'type': 'ir.actions.act_window',
             'res_model': 'misa.invoice.exception.wizard',
             'view_mode': 'form',
+            'views': [(False, 'form')],
             'target': 'new',
             'context': {'default_picking_ids': self.ids},
         }
@@ -308,6 +368,74 @@ class StockPickingMisaInvoiceStatus(models.Model):
         })
         self.message_post(body=Markup("Đã bỏ đánh dấu ngoại lệ xuất hóa đơn MISA."))
         return True
+
+    def action_open_misa_invoice_manual_link_wizard(self):
+        """Mở wizard gắn mã đề nghị MISA thủ công cho 1 phiếu (nút form/list, hoặc gọi qua
+        doAction từ drawer phiếu trên dashboard) — dùng khi sale quên ghi đúng số phiếu xuất
+        kho lúc tạo đề nghị xuất HĐ trên MISA."""
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': 'misa.invoice.manual.link.wizard',
+            'view_mode': 'form',
+            'views': [(False, 'form')],
+            'target': 'new',
+            'context': {
+                'default_picking_id': self.id,
+                'allowed_picking_ids': self.ids,
+            },
+        }
+
+    @api.model
+    def action_mark_misa_invoice_exception_for_order(self, order_id):
+        """Đánh dấu ngoại lệ cho TẤT CẢ phiếu xuất kho (đã done, chưa ngoại lệ) của 1 đơn
+        bán — dùng từ drawer đơn hàng, gộp chung 1 lý do cho cả nhóm thay vì phải mở từng
+        phiếu riêng lẻ."""
+        order = self.env['sale.order'].sudo().browse(order_id)
+        if not order.exists():
+            return {'type': 'ir.actions.act_window_close'}
+        pickings = order.misa_invoice_picking_ids.filtered(
+            lambda p: p.state == 'done' and not p.misa_invoice_exception
+        )
+        if not pickings:
+            return {'type': 'ir.actions.act_window_close'}
+        return pickings.action_mark_misa_invoice_exception()
+
+    @api.model
+    def action_unmark_misa_invoice_exception_for_order(self, order_id):
+        order = self.env['sale.order'].sudo().browse(order_id)
+        if not order.exists():
+            return 0
+        pickings = order.misa_invoice_picking_ids.filtered(lambda p: p.misa_invoice_exception)
+        if pickings:
+            pickings.action_unmark_misa_invoice_exception()
+        return len(pickings)
+
+    @api.model
+    def action_open_misa_invoice_manual_link_wizard_for_order(self, order_id):
+        """Như action_open_misa_invoice_manual_link_wizard nhưng gọi từ drawer đơn hàng —
+        chưa biết trước phiếu nào nên để trống picking_id, chỉ giới hạn lựa chọn trong các
+        phiếu (đã done, chưa xuất HĐ) của đúng đơn hàng đang xem."""
+        order = self.env['sale.order'].sudo().browse(order_id)
+        picking_ids = order.misa_invoice_picking_ids.filtered(
+            lambda p: p.picking_type_code == 'outgoing' and p.state == 'done'
+            and p.misa_invoice_state != 'invoiced'
+        ).ids
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': 'misa.invoice.manual.link.wizard',
+            'view_mode': 'form',
+            'views': [(False, 'form')],
+            'target': 'new',
+            'context': {'allowed_picking_ids': picking_ids},
+        }
+
+    @api.model
+    def get_misa_invoice_can_configure(self):
+        """Cờ quyền cho trang danh sách đơn hàng độc lập (misa_order_list_page.js) — dashboard
+        chính đã có sẵn field này trong get_misa_invoice_dashboard_data, nhưng trang riêng
+        không tải dữ liệu dashboard nên cần 1 endpoint nhẹ riêng."""
+        return self.env.user.has_group(MISA_INVOICE_RECONCILE_GROUP)
 
     def _misa_invoice_scan_domain(self, date_from=False, date_to=False, include_invoiced=False):
         domain = self._misa_invoice_dashboard_base_domain(date_from, date_to) + [
@@ -774,6 +902,9 @@ class StockPickingMisaInvoiceStatus(models.Model):
             ],
             'exception': picking.misa_invoice_exception,
             'exception_reason': picking.misa_invoice_exception_reason or '',
+            'multi_order_group': picking.misa_invoice_multi_order_group,
+            'group_order_names': picking.misa_invoice_group_order_names,
+            'manual_refno': picking.misa_invoice_manual_refno or False,
         }
 
     @api.model
@@ -928,9 +1059,63 @@ class StockPickingMisaInvoiceStatus(models.Model):
             return 'missing'
         return 'not_checked'
 
+    def _misa_invoice_order_row(self, order, picking_id_set):
+        """Dựng 1 dòng cho tab 'Đơn hàng' — tách riêng khỏi get_misa_invoice_order_list để
+        dùng chung được cho cả đường phân trang thường VÀ đường lọc multi_request (phải tính
+        cho toàn bộ candidate trước khi phân trang, xem bên dưới)."""
+        order_pickings = order.misa_invoice_picking_ids.filtered(lambda p: p.id in picking_id_set)
+        states = order_pickings.mapped('misa_invoice_state')
+        overall_state = self._misa_invoice_order_state(states)
+        # Phiếu "ăn theo" 1 đề nghị gộp chung lưu misa_invoice_amount = 0 (tránh cộng
+        # trùng) — muốn ra đúng tổng tiền HĐ của đơn phải quy về phiếu ĐẠI DIỆN của từng
+        # đề nghị rồi khử trùng theo id đại diện đó (2 phiếu ăn theo cùng 1 đề nghị chỉ
+        # tính 1 lần; 2 đề nghị khác nhau vẫn cộng đủ cả 2).
+        invoiced_pickings = order_pickings.filtered(lambda p: p.misa_invoice_state == 'invoiced')
+        representatives = {
+            (p.misa_invoice_master_picking_id or p).id: (p.misa_invoice_master_picking_id or p)
+            for p in invoiced_pickings
+        }
+        invoiced_amount = sum(rep.misa_invoice_amount or 0.0 for rep in representatives.values())
+        return {
+            'id': order.id,
+            'name': order.name,
+            'partner_name': order.partner_id.commercial_partner_id.display_name or '',
+            'picking_names': ', '.join(order_pickings.mapped('name')),
+            'amount_total': order.amount_total,
+            'invoice_amount': invoiced_amount,
+            'outstanding_amount': 0.0 if overall_state == 'invoiced' else order.amount_total,
+            'state': overall_state,
+            'state_label': MISA_ORDER_STATE_LABELS.get(overall_state, overall_state),
+            # True nếu đơn này đã được xuất HĐ qua từ 2 đề nghị/phiếu đại diện KHÁC NHAU trở
+            # lên — VD giao/xuất HĐ nhiều đợt cho cùng 1 đơn (khác với
+            # misa_invoice_multi_order_group trên picking, vốn là chiều ngược lại: 1 đề nghị
+            # gộp NHIỀU đơn).
+            'multi_request': len(representatives) > 1,
+            'has_exception': any(order_pickings.mapped('misa_invoice_exception')),
+            'pickings': [
+                {
+                    'id': p.id,
+                    'name': p.name,
+                    'state': p.misa_invoice_state,
+                    'state_label': MISA_INVOICE_STATE_LABELS.get(p.misa_invoice_state, p.misa_invoice_state),
+                    'actual_amount': p.x_studio_tng_tin_sau_thu or 0.0,
+                    'invoice_amount': (
+                        p.misa_invoice_master_picking_id.misa_invoice_amount
+                        if p.misa_invoice_master_picking_id else p.misa_invoice_amount
+                    ) or 0.0,
+                    'invoice_no': p.misa_invoice_no or False,
+                    'master_picking_id': p.misa_invoice_master_picking_id.id or False,
+                    'master_picking_name': p.misa_invoice_master_picking_id.name or False,
+                    'exception': p.misa_invoice_exception,
+                    'manual_refno': p.misa_invoice_manual_refno or False,
+                }
+                for p in order_pickings
+            ],
+        }
+
     @api.model
     def get_misa_invoice_order_list(
-        self, limit=20, offset=0, search=False, state=False, saler_code=False,
+        self, limit=20, offset=0, search=False, state=False, saler_code=False, multi_request=False,
         date_from=False, date_to=False, invoice_date_from=False, invoice_date_to=False,
     ):
         """Danh sách ĐƠN BÁN (key là sale.order DH...) — tab 'Đơn hàng' trên dashboard.
@@ -941,7 +1126,12 @@ class StockPickingMisaInvoiceStatus(models.Model):
         state/saler_code lọc theo PHIẾU (không phải theo trạng thái tổng hợp của đơn) — VD
         lọc "Đã xuất HĐ" sẽ ra các đơn có ít nhất 1 phiếu đã xuất HĐ trong phạm vi đang lọc
         (đơn "Một phần đã xuất HĐ" vẫn xuất hiện), đủ dùng để thu hẹp danh sách mà không cần
-        tính lại state tổng hợp cho toàn bộ đơn trước khi phân trang."""
+        tính lại state tổng hợp cho toàn bộ đơn trước khi phân trang.
+
+        multi_request=True: lọc "đơn đã xuất HĐ qua nhiều đề nghị khác nhau" (VD giao/xuất
+        nhiều đợt) — phải tính cho TẤT CẢ candidate rồi mới phân trang được (không lọc bằng
+        domain SQL thường vì cần so sánh giữa các phiếu của cùng 1 đơn), nên chỉ áp dụng khi
+        thật sự bật filter này (bộ lọc audit, không phải đường tải chính hàng ngày)."""
         Picking = self.sudo()
         SaleOrder = self.env['sale.order'].sudo()
         # 2 domain tách riêng: base_picking_ids quyết định "phiếu nào thuộc phạm vi đang lọc
@@ -967,58 +1157,22 @@ class StockPickingMisaInvoiceStatus(models.Model):
         if search:
             order_domain.append(('name', 'ilike', search))
 
+        if multi_request:
+            all_orders = SaleOrder.search(order_domain, order='date_order desc')
+            all_rows = [self._misa_invoice_order_row(order, base_picking_id_set) for order in all_orders]
+            filtered_rows = [row for row in all_rows if row['multi_request']]
+            total = len(filtered_rows)
+            rows = filtered_rows[offset:offset + limit]
+            return {'rows': rows, 'total': total}
+
         total = SaleOrder.search_count(order_domain)
         orders = SaleOrder.search(order_domain, order='date_order desc', limit=limit, offset=offset)
-
-        picking_id_set = base_picking_id_set
-        rows = []
-        for order in orders:
-            order_pickings = order.misa_invoice_picking_ids.filtered(lambda p: p.id in picking_id_set)
-            states = order_pickings.mapped('misa_invoice_state')
-            overall_state = self._misa_invoice_order_state(states)
-            # Phiếu "ăn theo" 1 đề nghị gộp chung lưu misa_invoice_amount = 0 (tránh cộng
-            # trùng) — muốn ra đúng tổng tiền HĐ của đơn phải quy về phiếu ĐẠI DIỆN của từng
-            # đề nghị rồi khử trùng theo id đại diện đó (2 phiếu ăn theo cùng 1 đề nghị chỉ
-            # tính 1 lần; 2 đề nghị khác nhau vẫn cộng đủ cả 2).
-            invoiced_pickings = order_pickings.filtered(lambda p: p.misa_invoice_state == 'invoiced')
-            representatives = {
-                (p.misa_invoice_master_picking_id or p).id: (p.misa_invoice_master_picking_id or p)
-                for p in invoiced_pickings
-            }
-            invoiced_amount = sum(rep.misa_invoice_amount or 0.0 for rep in representatives.values())
-            rows.append({
-                'id': order.id,
-                'name': order.name,
-                'partner_name': order.partner_id.commercial_partner_id.display_name or '',
-                'picking_names': ', '.join(order_pickings.mapped('name')),
-                'amount_total': order.amount_total,
-                'invoice_amount': invoiced_amount,
-                'outstanding_amount': 0.0 if overall_state == 'invoiced' else order.amount_total,
-                'state': overall_state,
-                'state_label': MISA_ORDER_STATE_LABELS.get(overall_state, overall_state),
-                'pickings': [
-                    {
-                        'id': p.id,
-                        'name': p.name,
-                        'state': p.misa_invoice_state,
-                        'state_label': MISA_INVOICE_STATE_LABELS.get(p.misa_invoice_state, p.misa_invoice_state),
-                        'actual_amount': p.x_studio_tng_tin_sau_thu or 0.0,
-                        'invoice_amount': (
-                            p.misa_invoice_master_picking_id.misa_invoice_amount
-                            if p.misa_invoice_master_picking_id else p.misa_invoice_amount
-                        ) or 0.0,
-                        'invoice_no': p.misa_invoice_no or False,
-                        'master_picking_id': p.misa_invoice_master_picking_id.id or False,
-                        'master_picking_name': p.misa_invoice_master_picking_id.name or False,
-                    }
-                    for p in order_pickings
-                ],
-            })
+        rows = [self._misa_invoice_order_row(order, base_picking_id_set) for order in orders]
         return {'rows': rows, 'total': total}
 
     @api.model
     def export_misa_invoice_order_list_excel(
-        self, search=False, state=False, saler_code=False,
+        self, search=False, state=False, saler_code=False, multi_request=False,
         date_from=False, date_to=False, invoice_date_from=False, invoice_date_to=False,
     ):
         """Xuất Excel TOÀN BỘ đơn hàng khớp filter hiện tại của tab 'Đơn hàng' — trả về id
@@ -1026,7 +1180,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
         Giới hạn 10.000 dòng (đủ dư cho quy mô dữ liệu hiện tại) để tránh xuất vô hạn nếu
         filter quá rộng."""
         result = self.get_misa_invoice_order_list(
-            limit=10000, offset=0, search=search, state=state, saler_code=saler_code,
+            limit=10000, offset=0, search=search, state=state, saler_code=saler_code, multi_request=multi_request,
             date_from=date_from, date_to=date_to,
             invoice_date_from=invoice_date_from, invoice_date_to=invoice_date_to,
         )

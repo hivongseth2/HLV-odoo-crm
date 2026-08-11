@@ -54,6 +54,10 @@
                             <option t-att-value="saler.code" t-att-selected="state.ordersTab.salerFilter === saler.code" t-esc="saler.code"/>
                         </t>
                     </select>
+                    <label class="miv-daily-week-toggle" title="Đơn đã xuất hóa đơn qua từ 2 đề nghị/đợt khác nhau trở lên">
+                        <input type="checkbox" class="miv-cutoff-input" t-att-checked="state.ordersTab.multiRequestOnly" t-on-change="onOrdersMultiRequestToggle"/>
+                        Chỉ đơn xuất HĐ nhiều đợt
+                    </label>
                     <button class="btn btn-sm miv-cutoff-save miv-export-btn" t-on-click="exportOrdersExcel">
                         <i class="fa fa-file-excel-o"/> Xuất Excel
                     </button>
@@ -73,11 +77,15 @@
                                 <th class="miv-col-num">Tiền đã xuất HĐ</th>
                                 <th class="miv-col-num">Tiền chưa xuất HĐ</th>
                                 <th>Trạng thái</th>
+                                <th>Ngoại lệ</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr t-foreach="state.ordersTab.rows" t-as="row" t-key="row.id" t-on-click="() => this.openOrderDrawer(row)">
-                                <td><b><t t-esc="row.name"/></b></td>
+                                <td>
+                                    <b><t t-esc="row.name"/></b>
+                                    <i class="fa fa-refresh miv-link-icon" t-if="row.multi_request" title="Đã xuất hóa đơn qua nhiều đợt/đề nghị khác nhau"/>
+                                </td>
                                 <td><t t-esc="row.partner_name"/></td>
                                 <td><t t-esc="row.picking_names or '—'"/></td>
                                 <td class="miv-col-num"><t t-esc="formatCurrency(row.amount_total)"/></td>
@@ -87,6 +95,10 @@
                                     <span t-attf-class="miv-badge miv-badge-state-{{ row.state }}">
                                         <t t-esc="row.state_label"/>
                                     </span>
+                                </td>
+                                <td>
+                                    <span class="miv-badge miv-badge-critical" t-if="row.has_exception">Có</span>
+                                    <span t-else="">—</span>
                                 </td>
                             </tr>
                         </tbody>
@@ -150,6 +162,7 @@
                                         <th class="miv-col-num">Tiền đã xuất HĐ</th>
                                         <th>Số HĐ</th>
                                         <th>Trạng thái</th>
+                                        <th>Ngoại lệ</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -172,10 +185,26 @@
                                                 <t t-esc="p.state_label"/>
                                             </span>
                                         </td>
+                                        <td>
+                                            <span class="miv-badge miv-badge-critical" t-if="p.exception">Có</span>
+                                            <span t-else="">—</span>
+                                            <i class="fa fa-pencil miv-link-icon" t-if="p.manual_refno" t-attf-title="Đã gắn mã đề nghị thủ công: {{p.manual_refno}}"/>
+                                        </td>
                                     </tr>
                                 </tbody>
                             </table>
                             <div class="miv-empty" t-else="">Không có phiếu xuất kho nào trong phạm vi đang lọc.</div>
+                        </div>
+                        <div class="miv-drawer-actions" t-if="state.canConfigure">
+                            <button class="btn btn-outline-danger btn-sm" t-if="!state.orderDrawerRow.has_exception" t-on-click="markOrderException">
+                                <i class="fa fa-flag"/> Đánh dấu ngoại lệ cả đơn
+                            </button>
+                            <button class="btn btn-outline-secondary btn-sm" t-if="state.orderDrawerRow.has_exception" t-on-click="unmarkOrderException">
+                                <i class="fa fa-flag-o"/> Bỏ ngoại lệ cả đơn
+                            </button>
+                            <button class="btn btn-outline-secondary btn-sm" t-if="state.orderDrawerRow.state != 'invoiced'" t-on-click="openManualLinkWizardForOrder">
+                                <i class="fa fa-pencil"/> Gắn mã đề nghị (đã xuất HĐ thủ công)
+                            </button>
                         </div>
                         <div class="miv-drawer-footer">
                             <button class="btn btn-secondary btn-sm" t-on-click="checkOrderNow" t-att-disabled="state.orderCheckLoading">

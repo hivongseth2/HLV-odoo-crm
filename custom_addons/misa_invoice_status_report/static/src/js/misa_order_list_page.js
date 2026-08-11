@@ -27,6 +27,7 @@ export class MisaOrderListPage extends Component {
 
         this.state = useState({
             isLoading: true,
+            canConfigure: false,
             salerOptions: [],
             // Để trống = không giới hạn theo ngày (đúng nghĩa "xem tất cả" mặc định) — có thể
             // tự nhập để thu hẹp lại khi cần.
@@ -34,7 +35,7 @@ export class MisaOrderListPage extends Component {
             shipTo: "",
             ordersTab: {
                 rows: [], total: 0, page: 1, pageSize: 50, loading: false,
-                search: "", searchDraft: "", stateFilter: "", salerFilter: "",
+                search: "", searchDraft: "", stateFilter: "", salerFilter: "", multiRequestOnly: false,
             },
             orderDrawerOpen: false,
             orderDrawerRow: null,
@@ -42,7 +43,7 @@ export class MisaOrderListPage extends Component {
         });
 
         onWillStart(async () => {
-            await Promise.all([this.loadSalerOptions(), this.loadOrdersTab(1)]);
+            await Promise.all([this.loadSalerOptions(), this.loadOrdersTab(1), this.loadCanConfigure()]);
             this.state.isLoading = false;
         });
     }
@@ -59,6 +60,14 @@ export class MisaOrderListPage extends Component {
         }
     }
 
+    async loadCanConfigure() {
+        try {
+            this.state.canConfigure = await this.orm.call("stock.picking", "get_misa_invoice_can_configure", [], {});
+        } catch (e) {
+            this.state.canConfigure = false;
+        }
+    }
+
     async loadOrdersTab(page) {
         this.state.ordersTab.loading = true;
         try {
@@ -70,6 +79,7 @@ export class MisaOrderListPage extends Component {
                     search: this.state.ordersTab.search || false,
                     state: this.state.ordersTab.stateFilter || false,
                     saler_code: this.state.ordersTab.salerFilter || false,
+                    multi_request: this.state.ordersTab.multiRequestOnly,
                     date_from: this.state.shipFrom || false,
                     date_to: this.state.shipTo || false,
                 }
@@ -130,6 +140,11 @@ export class MisaOrderListPage extends Component {
         this.loadOrdersTab(1);
     }
 
+    onOrdersMultiRequestToggle(ev) {
+        this.state.ordersTab.multiRequestOnly = ev.target.checked;
+        this.loadOrdersTab(1);
+    }
+
     onShipFromChange(ev) {
         this.state.shipFrom = ev.target.value || "";
         this.loadOrdersTab(1);
@@ -154,6 +169,7 @@ export class MisaOrderListPage extends Component {
                     search: this.state.ordersTab.search || false,
                     state: this.state.ordersTab.stateFilter || false,
                     saler_code: this.state.ordersTab.salerFilter || false,
+                    multi_request: this.state.ordersTab.multiRequestOnly,
                     date_from: this.state.shipFrom || false,
                     date_to: this.state.shipTo || false,
                 }
@@ -221,6 +237,60 @@ export class MisaOrderListPage extends Component {
             this.notification.add("Lỗi kiểm tra MISA: " + (e.message || e), { type: "danger" });
         }
         this.state.orderCheckLoading = false;
+    }
+
+    /** Đánh dấu ngoại lệ cho TẤT CẢ phiếu (đã done, chưa ngoại lệ) của đơn hàng đang xem —
+     * cùng pattern với markException trên dashboard chính: server trả action wizard, JS chỉ
+     * việc doAction rồi refresh khi đóng. */
+    async markOrderException() {
+        const row = this.state.orderDrawerRow;
+        if (!row) {
+            return;
+        }
+        try {
+            const action = await this.orm.call("stock.picking", "action_mark_misa_invoice_exception_for_order", [row.id], {});
+            this.action.doAction(action, { onClose: () => this._refreshAfterOrderException(row.id) });
+        } catch (e) {
+            this.notification.add("Lỗi mở hộp thoại ngoại lệ: " + (e.message || e), { type: "danger" });
+        }
+    }
+
+    async unmarkOrderException() {
+        const row = this.state.orderDrawerRow;
+        if (!row) {
+            return;
+        }
+        try {
+            await this.orm.call("stock.picking", "action_unmark_misa_invoice_exception_for_order", [row.id], {});
+            this.notification.add("Đã bỏ đánh dấu ngoại lệ.", { type: "success" });
+            await this._refreshAfterOrderException(row.id);
+        } catch (e) {
+            this.notification.add("Lỗi bỏ ngoại lệ: " + (e.message || e), { type: "danger" });
+        }
+    }
+
+    async _refreshAfterOrderException(orderId) {
+        await this.loadOrdersTab(this.state.ordersTab.page);
+        const updated = this.state.ordersTab.rows.find((r) => r.id === orderId);
+        if (updated && this.state.orderDrawerOpen) {
+            this.state.orderDrawerRow = updated;
+        }
+    }
+
+    /** Mở wizard gắn mã đề nghị MISA thủ công cho đơn hàng đang xem (trường hợp sale quên
+     * ghi đúng số phiếu xuất kho lúc tạo đề nghị trên MISA) — chưa biết trước phiếu nào,
+     * wizard tự giới hạn lựa chọn trong các phiếu của đúng đơn hàng này. */
+    async openManualLinkWizardForOrder() {
+        const row = this.state.orderDrawerRow;
+        if (!row) {
+            return;
+        }
+        try {
+            const action = await this.orm.call("stock.picking", "action_open_misa_invoice_manual_link_wizard_for_order", [row.id], {});
+            this.action.doAction(action, { onClose: () => this._refreshAfterOrderException(row.id) });
+        } catch (e) {
+            this.notification.add("Lỗi mở hộp thoại gắn mã đề nghị: " + (e.message || e), { type: "danger" });
+        }
     }
 
     /** Bấm vào link phiếu gốc/phiếu đi kèm bên trong drawer đơn hàng — mở form phiếu đó

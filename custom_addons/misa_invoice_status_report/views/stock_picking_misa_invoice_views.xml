@@ -19,6 +19,10 @@
                             string="Bỏ ngoại lệ" class="btn-secondary"
                             groups="misa_invoice_status_report.group_misa_invoice_reconciliation"
                             invisible="not misa_invoice_exception"/>
+                    <button name="action_open_misa_invoice_manual_link_wizard" type="object"
+                            string="Gắn mã đề nghị (đã xuất HĐ thủ công)" class="btn-secondary"
+                            groups="misa_invoice_status_report.group_misa_invoice_reconciliation"
+                            invisible="picking_type_code != 'outgoing' or state != 'done' or misa_invoice_state == 'invoiced'"/>
                 </xpath>
                 <xpath expr="//notebook" position="inside">
                     <page string="Hóa đơn MISA" name="misa_invoice_status"
@@ -33,6 +37,8 @@
                                        readonly="1"/>
                                 <field name="misa_invoice_last_checked" readonly="1"/>
                                 <field name="misa_invoice_request_refid" readonly="1"/>
+                                <field name="misa_invoice_manual_refno" readonly="1"
+                                       invisible="not misa_invoice_manual_refno"/>
                                 <field name="misa_invoice_sale_order_ids" widget="many2many_tags" readonly="1"/>
                                 <field name="misa_invoice_saler_code" readonly="1"/>
                             </group>
@@ -90,10 +96,19 @@
                 <field name="x_studio_tng_tin_sau_thu" string="Tiền Odoo xuất kho" optional="show" sum="Tổng tiền Odoo"/>
                 <field name="misa_invoice_amount" optional="show" sum="Tổng tiền HĐ"/>
                 <field name="misa_invoice_amount_mismatch" widget="boolean_toggle" readonly="1" optional="show"/>
+                <field name="misa_invoice_multi_order_group" widget="boolean_toggle" readonly="1" optional="hide"/>
+                <field name="misa_invoice_group_order_names" string="Đơn bán trong nhóm gộp" optional="show"/>
+                <field name="misa_invoice_master_picking_id" string="Phiếu gốc" optional="hide"/>
+                <field name="misa_invoice_covered_picking_ids" widget="many2many_tags" string="Phiếu đi kèm" optional="hide"/>
+                <field name="misa_invoice_manual_refno" string="Mã đề nghị (gắn tay)" optional="hide"/>
                 <field name="misa_invoice_last_checked"/>
                 <field name="misa_invoice_exception" widget="boolean_toggle" readonly="1"/>
                 <button name="action_check_misa_invoice_status" type="object"
                         string="Kiểm tra ngay" class="btn-link"/>
+                <button name="action_open_misa_invoice_manual_link_wizard" type="object"
+                        string="Gắn mã đề nghị" class="btn-link"
+                        groups="misa_invoice_status_report.group_misa_invoice_reconciliation"
+                        invisible="misa_invoice_state == 'invoiced'"/>
             </list>
         </field>
     </record>
@@ -123,6 +138,10 @@
                         domain="[('misa_invoice_exception', '=', True)]"/>
                 <filter string="Chưa đánh dấu ngoại lệ" name="filter_no_exception"
                         domain="[('misa_invoice_exception', '=', False)]"/>
+                <filter string="Gộp chung nhiều đơn bán" name="filter_multi_order_group"
+                        domain="[('misa_invoice_multi_order_group', '=', True)]"/>
+                <filter string="Đã gắn mã đề nghị thủ công" name="filter_manual_refno"
+                        domain="[('misa_invoice_manual_refno', '!=', False)]"/>
                 <separator/>
                 <filter string="Ngày xuất kho" name="filter_date_done" date="date_done"/>
                 <separator/>

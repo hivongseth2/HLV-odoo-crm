@@ -1,2 +1,3 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_misa_invoice_exception_wizard,misa.invoice.exception.wizard,model_misa_invoice_exception_wizard,misa_invoice_status_report.group_misa_invoice_reconciliation,1,1,1,0
+access_misa_invoice_manual_link_wizard,misa.invoice.manual.link.wizard,model_misa_invoice_manual_link_wizard,misa_invoice_status_report.group_misa_invoice_reconciliation,1,1,1,0
