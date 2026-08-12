@@ -107,7 +107,7 @@ export class MisaInvoiceDashboard extends Component {
             customsTab: {
                 rows: [], total: 0, page: 1, pageSize: 20, loading: false, search: "", searchDraft: "",
                 invInput: "", fetching: false, saving: false, preview: null,
-                pendingOnly: false, pendingCount: 0,
+                pendingOnly: false, pendingCount: 0, checkingAll: false,
             },
             showScanPanel: false,
             scanProgress: { done: 0, total: 0 },
@@ -1257,6 +1257,24 @@ export class MisaInvoiceDashboard extends Component {
         } catch (e) {
             this.notification.add("Lỗi thử khớp lại: " + (e.message || e), { type: "danger" });
         }
+    }
+
+    /** Nút "Kiểm tra tất cả đang chờ" — thử khớp lại NGAY toàn bộ dòng pending/partial thay vì
+     * chờ cron (30 phút/lần) hoặc bấm từng dòng — dùng khi nghi ngờ có phiếu đã xuất kho xong
+     * mà vì lý do gì đó chưa được tự động thử khớp. */
+    async retryAllPendingCustomsMatches() {
+        this.state.customsTab.checkingAll = true;
+        try {
+            const result = await this.orm.call("stock.picking", "retry_all_pending_customs_matches", [], {});
+            this.notification.add(
+                "Đã kiểm tra " + result.checked + " dòng, khớp thêm " + result.matched_count + " dòng.",
+                { type: result.matched_count ? "success" : "info" }
+            );
+            await this.loadCustomsTab(this.state.customsTab.page);
+        } catch (e) {
+            this.notification.add("Lỗi kiểm tra hàng loạt: " + (e.message || e), { type: "danger" });
+        }
+        this.state.customsTab.checkingAll = false;
     }
 
     // ===== Tab "Đơn hàng" (phẳng, key = sale.order DH..., phân trang server-side, có search) =====
