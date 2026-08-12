@@ -1,6 +1,6 @@
 {
     'name': 'MISA Invoice Status Report',
-    'version': '1.1',
+    'version': '1.2',
     'category': 'Inventory',
     'summary': 'Đối soát phiếu xuất kho chưa có hóa đơn MISA',
     'description': """
@@ -41,4 +41,8 @@
     'application': True,
     'auto_install': False,
     'license': 'LGPL-3',
+    # Backfill misa_invoice_net_actual_amount cho phiếu cũ khi CÀI MỚI module (trường hợp
+    # nâng cấp module đã cài sẵn thì dùng migrations/1.2/post-migrate.py thay vì hook này, vì
+    # post_init_hook không chạy khi upgrade module đã cài).
+    'post_init_hook': 'post_init_hook',
 }
