@@ -46,10 +46,10 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
         return str(val).lower() in ('true', '1', 'yes')
     def _generate_create_order_mac(self, params, private_key):
         """
-        Tính toán chuỗi MAC bảo mật bằng HMAC-SHA256 theo quy tắc Zalo Checkout SDK:
+        Quy tắc tính MAC cho createOrder / purchase của Zalo Checkout SDK:
         1. Gom các keys: amount, desc, extradata, item (và method nếu có)
-        2. Format extradata và method về JSON String
-        3. Format item về String (JSON stringified list)
+        2. Format extradata và method về JSON String (sắp xếp key từ điển A-Z, separators=(',', ':'))
+        3. Format item về String (JSON stringified list với key từng item từ điển A-Z)
         4. Sắp xếp các key ở cấp cao nhất (top-level) theo thứ tự từ điển A-Z
         5. Nối chuỗi dạng key=value phân cách bằng &
         6. Tạo mã HMAC-SHA256 với private_key
@@ -57,15 +57,20 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
         if not private_key:
             return ""
 
+        def _json_serialize(obj):
+            if isinstance(obj, (dict, list)):
+                return json.dumps(obj, separators=(',', ':'), sort_keys=True, ensure_ascii=False)
+            return str(obj)
+
         formatted_map = {
             'amount': str(params['amount']),
             'desc': str(params['desc']),
-            'extradata': json.dumps(params['extradata'], separators=(',', ':')) if isinstance(params['extradata'], (dict, list)) else str(params['extradata']),
-            'item': json.dumps(params['item'], separators=(',', ':')) if isinstance(params['item'], (dict, list)) else str(params['item']),
+            'extradata': _json_serialize(params['extradata']) if isinstance(params['extradata'], (dict, list)) else str(params['extradata']),
+            'item': _json_serialize(params['item']) if isinstance(params['item'], (dict, list)) else str(params['item']),
         }
 
         if 'method' in params and params['method']:
-            formatted_map['method'] = json.dumps(params['method'], separators=(',', ':')) if isinstance(params['method'], (dict, list)) else str(params['method'])
+            formatted_map['method'] = _json_serialize(params['method']) if isinstance(params['method'], (dict, list)) else str(params['method'])
 
         sorted_keys = sorted(formatted_map.keys())
         raw_data = "&".join([f"{k}={formatted_map[k]}" for k in sorted_keys])
@@ -78,6 +83,7 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
             hashlib.sha256,
         ).hexdigest()
         return mac
+
 
 
     def _build_checkout_payload(self, body, private_key):
@@ -132,8 +138,8 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
                 'name': product.display_name,
             }))
             sdk_items.append({
-                'id': str(product.id),
                 'amount': line_subtotal,
+                'id': str(product.id),
             })
             item_refs.append({
                 'product_id': product.id,
@@ -177,9 +183,9 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
             diff = final_order_amount - sum_sdk_items
             sdk_items[-1]['amount'] += diff
 
-        # 5. Pre-stringify extradata và method để đảm bảo MAC consistency
-        extradata_str = json.dumps(extradata_obj, separators=(',', ':'))
-        method_str = json.dumps(method_obj, separators=(',', ':'))
+        # 5. Pre-stringify extradata và method để đảm bảo MAC consistency chuẩn Zalo SDK (alphabetical sort)
+        extradata_str = json.dumps(extradata_obj, separators=(',', ':'), sort_keys=True, ensure_ascii=False)
+        method_str = json.dumps(method_obj, separators=(',', ':'), sort_keys=True, ensure_ascii=False)
 
         params_for_mac = {
             'amount': final_order_amount,
