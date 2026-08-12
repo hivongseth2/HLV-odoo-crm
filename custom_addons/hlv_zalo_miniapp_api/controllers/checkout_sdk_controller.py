@@ -96,7 +96,8 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
         contact_id = body.get('contact_id')
         items = body.get('items', [])
         address_id = body.get('address_id')
-        payment_method_input = str(body.get('payment_method', 'cod')).lower()
+        payment_method_raw = body.get('payment_method')
+        payment_method_input = str(payment_method_raw).lower() if payment_method_raw else ""
 
         if not contact_id or not items:
             raise _CheckoutError("INVALID_INPUT", "Thiếu thông tin contact_id hoặc sản phẩm đơn hàng")
@@ -150,19 +151,21 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
         if not order_lines:
             raise _CheckoutError("INVALID_INPUT", "Không tìm thấy sản phẩm hợp lệ")
 
-        # 3. Xác định mã phương thức thanh toán dựa theo môi trường Sandbox / Production
-        is_sandbox = self._is_sandbox()
+        # 3. Xác định mã phương thức thanh toán (Nếu người dùng chọn trước PTTT)
+        method_str = None
+        if payment_method_input and payment_method_input not in ('none', 'native', 'false'):
+            is_sandbox = self._is_sandbox()
+            method_input_upper = payment_method_input.upper()
+            if is_sandbox and not method_input_upper.endswith('_SANDBOX'):
+                method_code = f"{method_input_upper}_SANDBOX"
+            else:
+                method_code = method_input_upper
 
-        method_input_upper = payment_method_input.upper()
-        if is_sandbox and not method_input_upper.endswith('_SANDBOX'):
-            method_code = f"{method_input_upper}_SANDBOX"
-        else:
-            method_code = method_input_upper
-
-        method_obj = {
-            'id': method_code,
-            'isCustom': False,
-        }
+            method_obj = {
+                'id': method_code,
+                'isCustom': False,
+            }
+            method_str = json.dumps(method_obj, separators=(',', ':'), sort_keys=True, ensure_ascii=False)
 
         # Cấp phát trước mã đơn bán hàng dự kiến (sale.order sequence) để gắn vào Ghi chú & Extradata Zalo SDK
         order_name = request.env['ir.sequence'].sudo().next_by_code('sale.order') or 'S00000'
@@ -183,25 +186,25 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
 
         # 5. Pre-stringify extradata và method để đảm bảo MAC consistency chuẩn Zalo SDK (alphabetical sort)
         extradata_str = json.dumps(extradata_obj, separators=(',', ':'), sort_keys=True, ensure_ascii=False)
-        method_str = json.dumps(method_obj, separators=(',', ':'), sort_keys=True, ensure_ascii=False)
 
         params_for_mac = {
             'amount': final_order_amount,
             'desc': desc_text,
             'item': sdk_items,
             'extradata': extradata_str,
-            'method': method_str,
         }
+        if method_str:
+            params_for_mac['method'] = method_str
 
         mac_str = self._generate_create_order_mac(params_for_mac, private_key)
-        _logger.info("Zalo Checkout MAC computed: %s (amount=%s, order_name=%s)", mac_str, final_order_amount, order_name)
+        _logger.info("Zalo Checkout MAC computed: %s (amount=%s, order_name=%s, has_method=%s)", mac_str, final_order_amount, order_name, bool(method_str))
 
         return {
             'partner_id': partner.id,
             'delivery_partner_id': delivery_partner.id,
             'address_id': address_id,
             'note': body.get('note', ''),
-            'payment_method': payment_method_input,
+            'payment_method': payment_method_input or 'native',
             'items_json': json.dumps(item_refs),
             'amount': final_order_amount,
             'desc': desc_text,
@@ -278,15 +281,18 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
                 'mac': payload['mac'],
             })
 
-            return self._response_success({
+            res_payload = {
                 'prepareToken': token,
                 'mac': payload['mac'],
                 'amount': payload['amount'],
                 'desc': payload['desc'],
                 'item': payload['sdk_items'],
                 'extradata': payload['extradata_str'],
-                'method': payload['method_str'],
-            })
+            }
+            if payload.get('method_str'):
+                res_payload['method'] = payload['method_str']
+
+            return self._response_success(res_payload)
         except _CheckoutError as e:
             return self._response_error(e.code, e.message, e.status)
         except Exception as e:
