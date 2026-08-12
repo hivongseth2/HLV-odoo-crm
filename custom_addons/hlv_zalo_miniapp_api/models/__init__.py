@@ -11,5 +11,6 @@ from . import snapshot_log
 from . import stock_quant
 from . import sale_order
 from . import stock_picking
+from . import checkout_prepare
 
 
