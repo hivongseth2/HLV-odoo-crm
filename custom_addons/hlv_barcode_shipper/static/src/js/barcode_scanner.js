@@ -559,6 +559,10 @@ class BarcodeShipper {
     // --- API & Logic ---
 
     async scanPickOrder() {
+        // Khóa quét một khoảng ngắn sau mỗi lượt để tránh quét quá nhanh
+        // dẫn đến quét nhầm 2 phiếu liên tiếp (hardware scanner bắn liên tục).
+        if (this._pickScanLocked) return;
+
         const input = document.getElementById('pick-barcode-input');
         const barcode = (input?.value || '').trim();
         if (!barcode) {
@@ -566,6 +570,9 @@ class BarcodeShipper {
             return;
         }
         if (input) input.value = '';
+
+        this._pickScanLocked = true;
+        if (input) input.disabled = true;
 
         this.showMessage('pick-result', 'Đang tìm phiếu giao hàng...', 'warning');
         try {
@@ -596,13 +603,18 @@ class BarcodeShipper {
             } else {
                 this.showMessage('pick-result', res.error || 'Không tìm thấy', 'danger');
                 this.playSound('error');
-                this.focusCurrentInput();
             }
         } catch (e) {
             console.error(e);
             this.showMessage('pick-result', 'Lỗi kết nối, vui lòng thử lại.', 'danger');
             this.playSound('error');
-            this.focusCurrentInput();
+        } finally {
+            // Chờ một chút rồi mới mở khóa để hạn chế quét liên tiếp quá nhanh
+            setTimeout(() => {
+                this._pickScanLocked = false;
+                if (input) input.disabled = false;
+                this.focusCurrentInput();
+            }, 800);
         }
     }
 
@@ -649,7 +661,99 @@ class BarcodeShipper {
                 : `<div class="alert alert-warning" style="margin-top:8px;">Tất cả phiếu đang bỏ qua. Quét thêm hoặc khôi phục.</div>`}
         `;
         container.style.display = 'block';
-        document.getElementById('pick-proceed-btn')?.addEventListener('click', () => this._proceedToItemScan());
+        document.getElementById('pick-proceed-btn')?.addEventListener('click', () => this._confirmProceedToItemScan());
+    }
+
+    // Nếu chỉ có 1 phiếu thì tiến hành ngay, nếu nhiều hơn 1 phiếu thì
+    // yêu cầu xác nhận lại (tránh giao nhầm do quét lộn phiếu).
+    _confirmProceedToItemScan() {
+        const deliverList = this._pickPhotoList.filter(p => !p.skipped);
+        if (deliverList.length === 0) {
+            this.showMessage('pick-result', 'Chưa có phiếu nào để giao.', 'danger');
+            return;
+        }
+        if (deliverList.length === 1) {
+            this._proceedToItemScan();
+            return;
+        }
+        this._showDeliverConfirmModal();
+    }
+
+    _showDeliverConfirmModal() {
+        let modal = document.getElementById('deliver-confirm-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'deliver-confirm-modal';
+            modal.className = 'modal-overlay';
+            modal.innerHTML = `
+                <div class="modal-content" style="max-height: 80vh;">
+                    <div class="modal-header">
+                        <h3 class="modal-title"><i class="fa fa-question-circle"></i> Xác nhận giao hàng</h3>
+                        <button class="modal-close">&times;</button>
+                    </div>
+                    <div id="deliver-confirm-body" class="modal-body" style="background:#f5f6f8;"></div>
+                    <div class="modal-footer" style="padding: 15px; border-top: 1px solid #eee; display:flex; gap:10px; background:#fff;">
+                        <button id="deliver-confirm-cancel-btn" class="btn btn-secondary btn-lg" style="flex:1;">Hủy</button>
+                        <button id="deliver-confirm-ok-btn" class="btn btn-success btn-lg" style="flex:2;"></button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+
+            modal.querySelector('.modal-close').addEventListener('click', () => this.closeModal(modal));
+            modal.querySelector('#deliver-confirm-cancel-btn').addEventListener('click', () => this.closeModal(modal));
+            modal.querySelector('#deliver-confirm-ok-btn').addEventListener('click', () => {
+                this.closeModal(modal);
+                this._proceedToItemScan();
+            });
+        }
+        this._renderDeliverConfirmBody(modal);
+        this.showModal(modal);
+    }
+
+    _renderDeliverConfirmBody(modal) {
+        const body = modal.querySelector('#deliver-confirm-body');
+        const okBtn = modal.querySelector('#deliver-confirm-ok-btn');
+        const deliverList = this._pickPhotoList.filter(p => !p.skipped);
+
+        if (deliverList.length === 0) {
+            body.innerHTML = '<div class="alert alert-warning" style="margin:0;">Tất cả phiếu đã bị bỏ. Vui lòng khôi phục ít nhất 1 phiếu.</div>';
+            if (okBtn) { okBtn.disabled = true; okBtn.innerHTML = '<i class="fa fa-check"></i> Xác nhận giao'; }
+            return;
+        }
+
+        const items = deliverList.map(p => `
+            <div style="display:flex;align-items:center;gap:10px;padding:8px;background:#fff;border-radius:8px;margin-bottom:6px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+                <div style="flex:1;min-width:0;">
+                    <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.pickingName}</div>
+                    ${p.soName && p.soName !== 'Khác' ? `<div style="font-size:11px;color:#888;">${p.soName}</div>` : ''}
+                </div>
+                <i class="fa fa-times-circle" title="Bỏ phiếu này khỏi lượt giao" onclick="window.barcodeShipper._toggleSkipInDeliverConfirm(${p.pickingId})" style="color:#e53935;font-size:20px;flex-shrink:0;cursor:pointer;"></i>
+            </div>
+        `).join('');
+
+        body.innerHTML = `
+            <div style="margin-bottom:10px;font-size:14px;">Bạn có chắc muốn giao <b>${deliverList.length} phiếu</b> sau đây không?</div>
+            ${items}
+        `;
+        if (okBtn) {
+            okBtn.disabled = false;
+            okBtn.innerHTML = `<i class="fa fa-check"></i> Xác nhận giao (${deliverList.length} phiếu)`;
+        }
+    }
+
+    // Bỏ/khôi phục phiếu ngay trong modal xác nhận (đồng bộ với danh sách phía sau)
+    _toggleSkipInDeliverConfirm(pickingId) {
+        this._toggleSkipPick(pickingId);
+        const modal = document.getElementById('deliver-confirm-modal');
+        if (!modal) return;
+        const deliverList = this._pickPhotoList.filter(p => !p.skipped);
+        if (deliverList.length <= 1) {
+            // Không còn đủ phiếu để cần xác nhận nữa -> đóng modal
+            this.closeModal(modal);
+            return;
+        }
+        this._renderDeliverConfirmBody(modal);
     }
 
     async _proceedToItemScan() {
