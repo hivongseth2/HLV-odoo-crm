@@ -4,7 +4,7 @@
 {
     "name": "HLV Barcode Shipper",
     "summary": "Mobile barcode screen for shipper to scan PICK -> OUT",
-    "version": "18.0.3.13.0",
+    "version": "18.0.3.12.0",
     "author": "Hoang Long Vu",
     "website": "https://hoanglongvu.com",
     "category": "Inventory/Barcode",
@@ -14,38 +14,17 @@
     "data": [
         "security/hlv_barcode_shipper_security.xml",
         "security/ir.model.access.csv",
-        "wizard/geocode_picker_wizard_views.xml",
         "views/barcode_scan_log_views.xml",
         "views/stock_picking_views.xml",
         "views/barcode_shipper_views.xml",
-        # "views/barcode_shipper_v2_views.xml",  # Tạm ngưng V2
-        "views/delivery_route_views.xml",
         "views/res_config_settings_views.xml",
         "views/shipper_management_views.xml",
         "views/res_users_views.xml",
-        "views/res_partner_views.xml",
     ],
     "assets": {
-        "web.assets_common": [
-            "hlv_barcode_shipper/static/src/css/hlv_global_colors.css",
-        ],
         "web.assets_frontend": [
             "hlv_barcode_shipper/static/src/css/barcode_shipper.css",
             "hlv_barcode_shipper/static/src/js/barcode_scanner.js",
-        ],
-        "web.assets_backend": [
-            "hlv_barcode_shipper/static/src/components/google_map_picker/**/*",
-            "hlv_barcode_shipper/static/src/services/**/*",
-            "hlv_barcode_shipper/static/src/components/**/*",
-        ],
-        # "hlv_barcode_shipper.assets_shipper_v2": [
-        #     "hlv_barcode_shipper/static/src/main_v2.js",
-        # ],
-        "hlv_barcode_shipper.assets_delivery_route": [
-            "hlv_barcode_shipper/static/src/components/delivery_route/route_stop_list.js",
-            "hlv_barcode_shipper/static/src/components/delivery_route/delivery_route_app.js",
-            "hlv_barcode_shipper/static/src/components/delivery_route/delivery_route.css",
-            "hlv_barcode_shipper/static/src/main_delivery_route.js",
         ],
     },
     "installable": True,

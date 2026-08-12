@@ -69,7 +69,6 @@
                     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
                     <script src="https://fastly.jsdelivr.net/npm/barcode-detector@3/dist/iife/polyfill.min.js"></script>
                     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css"/>
-                    <link rel="stylesheet" href="/hlv_barcode_shipper/static/src/css/hlv_global_colors.css"/>
                     <link rel="stylesheet" href="/hlv_barcode_shipper/static/src/css/barcode_shipper.css"/>
                 </t>
 
@@ -77,45 +76,29 @@
                     <div class="shipper-container">
 
                         <!-- Header -->
-                        <div class="shipper-header" style="padding: 15px 20px;">
-                            <div class="header-title" id="btn-open-sidebar" style="cursor: pointer;">
+                        <div class="shipper-header">
+                            <div class="header-title">
                                 <i class="fa fa-shipping-fast"></i> Shipper
                             </div>
-                            <div id="header-current-tab-name" class="current-tab-badge">Nhận hàng</div>
+                            <div class="user-info">
+                                <i class="fa fa-user-circle"></i> <t t-esc="user.shipper_name or user.name"/>
+                            </div>
                         </div>
 
-                        <!-- Sidebar Overlay -->
-                        <div id="sidebar-overlay" class="sidebar-overlay"></div>
-
-                        <!-- Sidebar Navigation -->
-                        <div id="shipper-sidebar" class="sidebar-nav">
-                            <div class="sidebar-header">
-                                <div class="header-title">
-                                    <i class="fa fa-shipping-fast"></i> Menu
-                                </div>
-                                <button id="btn-close-sidebar" class="btn btn-text" style="color: #6c757d; font-size: 1.2rem; padding: 0;"><i class="fa fa-times"></i></button>
-                            </div>
-                            <div class="sidebar-body">
-                                <div class="tab-nav sidebar-tabs">
-                                    <button class="tab-btn active" data-tab="receive">
-                                        <i class="fa fa-inbox"></i> Nhận hàng
-                                    </button>
-                                    <button class="tab-btn" data-tab="deliver">
-                                        <i class="fa fa-truck"></i> Giao hàng
-                                    </button>
-                                    <button class="tab-btn" data-tab="return">
-                                        <i class="fa fa-undo-alt"></i> Trả hàng
-                                    </button>
-                                    <button class="tab-btn" data-tab="delivered">
-                                        <i class="fa fa-clipboard-check"></i> Đã giao
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="sidebar-footer" style="margin-top: auto; padding: 15px; border-top: 1px solid #f0f0f0;">
-                                <button class="btn btn-text" style="width: 100%; text-align: left; padding: 10px 5px; color: #6c757d; font-weight: 600; font-size: 0.95rem; justify-content: flex-start; gap: 8px;">
-                                    <i class="fa fa-user-circle"></i> Tài xế khác
-                                </button>
-                            </div>
+                        <!-- Tab Navigation -->
+                        <div class="tab-nav">
+                            <button class="tab-btn active" data-tab="receive">
+                                <i class="fa fa-inbox"></i> Nhận hàng
+                            </button>
+                            <button class="tab-btn" data-tab="deliver">
+                                <i class="fa fa-truck"></i> Giao hàng
+                            </button>
+                            <button class="tab-btn" data-tab="return">
+                                <i class="fa fa-undo-alt"></i> Trả hàng
+                            </button>
+                            <button class="tab-btn" data-tab="delivered">
+                                <i class="fa fa-clipboard-check"></i> Đã giao
+                            </button>
                         </div>
 
                         <!-- ==================== TAB: NHẬN HÀNG ==================== -->
@@ -226,13 +209,6 @@
 
                         <!-- ==================== TAB: GIAO HÀNG ==================== -->
                         <div id="tab-deliver" class="tab-content">
-                            
-                            <!-- Nút quay lại tuyến vận chuyển -->
-                            <div style="margin-bottom: 15px;">
-                                <a href="/barcode/shipper_route" class="btn btn-outline" style="box-sizing: border-box; width: 100%; font-weight: 600; border: 1px solid #1591DC; color: #1591DC; background: #fff; padding: 10px; border-radius: 8px; text-align: center; display: block; text-decoration: none;">
-                                    <i class="fa fa-map-marked-alt me-2"></i> Quay lại Lộ Trình Giao Hàng
-                                </a>
-                            </div>
 
                             <!-- Deliver Step 1: Scan PICK -->
                             <div id="step-scan-pick" class="scan-step active">

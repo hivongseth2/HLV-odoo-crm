@@ -14,12 +14,6 @@
             <field name="url">/barcode/shipper</field>
             <field name="target">self</field>
         </record>
-
-        <record id="action_delivery_route_url" model="ir.actions.act_url">
-            <field name="name">Tuyến giao hàng</field>
-            <field name="url">/barcode/shipper_route</field>
-            <field name="target">self</field>
-        </record>
         
         <!-- Barcode Scanner Menu -->
         <menuitem id="menu_barcode_scanner"
@@ -29,13 +23,6 @@
                   sequence="10"
                   groups="hlv_barcode_shipper.group_shipper"/>
         
-        <menuitem id="menu_delivery_route"
-                  name="Tuyến giao hàng"
-                  parent="menu_barcode_shipper_root"
-                  action="action_delivery_route_url"
-                  sequence="15"
-                  groups="hlv_barcode_shipper.group_shipper"/>
-
         <!-- Delivery Orders Menu -->
         <menuitem id="menu_delivery_orders"
                   name="📦 Delivery Orders"

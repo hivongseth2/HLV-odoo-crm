@@ -13,16 +13,6 @@
                 <h3 class="mt16">Giao hàng</h3>
                 <div class="row mt16 o_settings_container">
                     <div class="col-12 col-lg-6 o_setting_box">
-                        <div class="o_setting_left_pane"/>
-                        <div class="o_setting_right_pane">
-                            <label for="hlv_barcode_google_maps_api_key"/>
-                            <field name="hlv_barcode_google_maps_api_key" password="True"/>
-                            <div class="text-muted">
-                                Google Maps API key cho màn hình lập tuyến giao hàng.
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-12 col-lg-6 o_setting_box">
                         <div class="o_setting_left_pane">
                             <field name="hlv_barcode_skip_package_scan"/>
                         </div>

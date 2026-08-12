@@ -81,8 +81,7 @@ class BarcodeShipper {
         await this.loadSettings();
         this.bindEvents();
         this.setupBarcodeInputs();
-        const initialTab = (window.location.hash || '').replace('#', '');
-        this.switchTab(['receive', 'deliver', 'return', 'delivered'].includes(initialTab) ? initialTab : 'receive');
+        this.switchTab('receive');
         this.loadReturnList();
 
         window.addEventListener('beforeunload', (e) => {
@@ -138,18 +137,6 @@ class BarcodeShipper {
         document.querySelectorAll('.tab-content').forEach(tc => {
             tc.classList.toggle('active', tc.id === `tab-${tabName}`);
         });
-
-        const tabNames = {
-            'receive': 'Nhận hàng',
-            'deliver': 'Giao hàng',
-            'return': 'Trả hàng',
-            'delivered': 'Đã giao'
-        };
-        const headerTabName = document.getElementById('header-current-tab-name');
-        if (headerTabName) {
-            headerTabName.textContent = tabNames[tabName] || '';
-        }
-
         if (tabName === 'receive') {
             this.showReceiveStep('receive-step-scan');
             this._showReceivePrompt();
@@ -186,31 +173,9 @@ class BarcodeShipper {
     showStep(id) { this.showDeliverStep(id); }
 
     bindEvents() {
-        // Sidebar and Tab switching logic
-        const btnOpenSidebar = document.getElementById('btn-open-sidebar');
-        const btnCloseSidebar = document.getElementById('btn-close-sidebar');
-        const sidebarOverlay = document.getElementById('sidebar-overlay');
-        const sidebarNav = document.getElementById('shipper-sidebar');
-        const closeSidebarFn = () => {
-            if (sidebarNav) sidebarNav.classList.remove('open');
-            if (sidebarOverlay) sidebarOverlay.classList.remove('show');
-        };
-        if (btnOpenSidebar) btnOpenSidebar.addEventListener('click', () => {
-            sidebarNav.classList.add('open');
-            sidebarOverlay.classList.add('show');
-        });
-        if (btnCloseSidebar) btnCloseSidebar.addEventListener('click', closeSidebarFn);
-        if (sidebarOverlay) sidebarOverlay.addEventListener('click', closeSidebarFn);
-
+        // Tab switching
         document.querySelectorAll('.tab-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                if (btn.dataset.tab === 'deliver' && window.location.hash !== '#deliver') {
-                    window.location.href = '/barcode/shipper_route';
-                    return;
-                }
-                this.switchTab(btn.dataset.tab);
-                closeSidebarFn();
-            });
+            btn.addEventListener('click', () => this.switchTab(btn.dataset.tab));
         });
 
         // === DELIVER TAB ===
