@@ -107,7 +107,7 @@ export class MisaInvoiceDashboard extends Component {
             customsTab: {
                 rows: [], total: 0, page: 1, pageSize: 20, loading: false, search: "", searchDraft: "",
                 invInput: "", fetching: false, saving: false, preview: null,
-                pendingOnly: false, pendingCount: 0,
+                pendingOnly: false, pendingCount: 0, checkingAll: false,
             },
             showScanPanel: false,
             scanProgress: { done: 0, total: 0 },
@@ -136,6 +136,14 @@ export class MisaInvoiceDashboard extends Component {
             // Panel "Khớp thủ công" bên trong drawer hải quan — dùng khi hệ thống tự động
             // khớp SAI (chọn nhầm phiếu) hoặc khớp THIẾU (không tìm ra phiếu phù hợp).
             customsManual: { open: false, search: "", loading: false, results: [], qty: "" },
+            // Drawer "Chênh lệch" (tile Chênh lệch trong Đối chiếu tổng) — liệt kê ĐÚNG các
+            // phiếu đang góp phần vào số chênh lệch, sort theo mức lệch giảm dần.
+            discrepancyOpen: false,
+            discrepancyLoading: false,
+            discrepancy: null,
+            // Các section lớn ở trang tổng quan (trên tab nav) có thể thu gọn cho đỡ dài trang —
+            // mặc định mở hết, key nào có mặt trong đây với giá trị true là đang bị thu gọn.
+            collapsedSections: {},
         });
 
         onWillStart(async () => {
@@ -189,12 +197,14 @@ export class MisaInvoiceDashboard extends Component {
         // xem get_misa_invoice_status_summary) — phần đã khớp thì tiền đã nằm sẵn trong
         // misaInvoiced rồi (qua picking.misa_invoice_amount), cộng thêm sẽ đếm trùng 2 lần.
         const customsInvoiced = summary.customs ? summary.customs.invoice_amount : 0;
+        const totalInvoiced = misaInvoiced + shopeeInvoiced + customsInvoiced;
         return {
             total_actual_amount: totalActual,
             misa_invoiced_amount: misaInvoiced,
             shopee_invoiced_amount: shopeeInvoiced,
             customs_invoiced_amount: customsInvoiced,
-            outstanding_amount: totalActual - misaInvoiced - shopeeInvoiced - customsInvoiced,
+            total_invoiced_amount: totalInvoiced,
+            outstanding_amount: totalActual - totalInvoiced,
         };
     }
 
@@ -215,6 +225,55 @@ export class MisaInvoiceDashboard extends Component {
             this.state.pickingsTab.stateFilter = "";
             this.switchTab("pickings");
         }
+    }
+
+    /** Thu gọn/mở lại 1 section lớn ở trang tổng quan (đối chiếu tổng, tình trạng XHD, biểu đồ
+     * theo sale...) — key tùy đặt tên ở template, không cần khai báo trước trong state. */
+    toggleSection(key) {
+        this.state.collapsedSections[key] = !this.state.collapsedSections[key];
+    }
+
+    /** Tile "Chênh lệch" trong Đối chiếu tổng — mở drawer liệt kê ĐÚNG các phiếu đang góp phần
+     * vào số chênh lệch (chưa xuất HĐ, hoặc đã xuất HĐ nhưng lệch tiền), sort theo |lệch| giảm
+     * dần, thay vì chỉ nhảy qua tab phiếu không lọc gì như trước. */
+    async openDiscrepancyDrawer() {
+        this.state.discrepancyOpen = true;
+        this.state.discrepancyLoading = true;
+        try {
+            this.state.discrepancy = await this.orm.call(
+                "stock.picking", "get_misa_invoice_discrepancy", [],
+                { ...this.filterParams, limit: 200 }
+            );
+        } catch (e) {
+            this.notification.add("Lỗi tải danh sách chênh lệch: " + (e.message || e), { type: "danger" });
+            this.state.discrepancyOpen = false;
+        }
+        this.state.discrepancyLoading = false;
+    }
+
+    closeDiscrepancyDrawer() {
+        this.state.discrepancyOpen = false;
+        this.state.discrepancy = null;
+    }
+
+    onDiscrepancyOverlayClick(ev) {
+        if (ev.target === ev.currentTarget) {
+            this.closeDiscrepancyDrawer();
+        }
+    }
+
+    /** Bấm 1 dòng trong drawer chênh lệch — phiếu MISA thường thì mở drawer chi tiết đầy đủ
+     * (đã có sẵn); phiếu Shopee thì tab riêng CHƯA có drawer nào, nên nhảy qua tab đó lọc theo
+     * đúng tên phiếu thay vì cố mở nhầm drawer MISA với dữ liệu không khớp. */
+    openDiscrepancyRow(row) {
+        this.closeDiscrepancyDrawer();
+        if (row.source === "shopee") {
+            this.state.shopeeTab.searchDraft = row.name;
+            this.state.shopeeTab.search = row.name;
+            this.switchTab("shopee");
+            return;
+        }
+        this.openDrawer(row);
     }
 
     /** Dropdown tháng chỉ "khớp" khi shipFrom/shipTo đúng bằng trọn 1 tháng; ngược lại coi như "Tất cả". */
@@ -1198,6 +1257,24 @@ export class MisaInvoiceDashboard extends Component {
         } catch (e) {
             this.notification.add("Lỗi thử khớp lại: " + (e.message || e), { type: "danger" });
         }
+    }
+
+    /** Nút "Kiểm tra tất cả đang chờ" — thử khớp lại NGAY toàn bộ dòng pending/partial thay vì
+     * chờ cron (30 phút/lần) hoặc bấm từng dòng — dùng khi nghi ngờ có phiếu đã xuất kho xong
+     * mà vì lý do gì đó chưa được tự động thử khớp. */
+    async retryAllPendingCustomsMatches() {
+        this.state.customsTab.checkingAll = true;
+        try {
+            const result = await this.orm.call("stock.picking", "retry_all_pending_customs_matches", [], {});
+            this.notification.add(
+                "Đã kiểm tra " + result.checked + " dòng, khớp thêm " + result.matched_count + " dòng.",
+                { type: result.matched_count ? "success" : "info" }
+            );
+            await this.loadCustomsTab(this.state.customsTab.page);
+        } catch (e) {
+            this.notification.add("Lỗi kiểm tra hàng loạt: " + (e.message || e), { type: "danger" });
+        }
+        this.state.customsTab.checkingAll = false;
     }
 
     // ===== Tab "Đơn hàng" (phẳng, key = sale.order DH..., phân trang server-side, có search) =====

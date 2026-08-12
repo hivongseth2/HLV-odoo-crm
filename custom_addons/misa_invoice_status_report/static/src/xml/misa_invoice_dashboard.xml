@@ -183,11 +183,12 @@
 
                 <!-- ===== Theo nhân viên sale: tổng số phiếu vs đã xuất HĐ (cột+đường, bổ sung cho donut) ===== -->
                 <div class="miv-section" t-if="salerChart">
-                    <h3>
+                    <h3 class="miv-section-toggle" t-on-click="() => this.toggleSection('salerChart')">
+                        <i t-attf-class="fa miv-section-caret fa-chevron-{{ state.collapsedSections.salerChart ? 'right' : 'down' }}"/>
                         Theo nhân viên sale: tổng số phiếu vs đã xuất hóa đơn
                         <span class="miv-section-hint" t-if="salerChartTruncated">(top 15 theo số lượng phiếu)</span>
                     </h3>
-                    <div class="miv-chart-wrap">
+                    <div class="miv-chart-wrap" t-if="!state.collapsedSections.salerChart">
                         <svg t-attf-viewBox="0 0 {{salerChart.width}} {{salerChart.height}}" class="miv-chart" preserveAspectRatio="none">
                             <t t-foreach="salerChart.gridLines" t-as="gl" t-key="gl.key">
                                 <line class="miv-chart-grid" t-att-x1="salerChart.padding.left" t-att-x2="salerChart.width - salerChart.padding.right" t-att-y1="gl.y" t-att-y2="gl.y"/>
@@ -217,10 +218,13 @@
                     </div>
                 </div>
 
-                <!-- ===== Đối chiếu tổng tiền xuất kho (MISA + Shopee) ===== -->
+                <!-- ===== Đối chiếu tổng tiền xuất kho (MISA + Shopee + Hải quan) ===== -->
                 <div class="miv-section" t-if="reconciliationTotals">
-                    <h3>Đối chiếu tổng tiền xuất kho</h3>
-                    <div class="miv-tiles">
+                    <h3 class="miv-section-toggle" t-on-click="() => this.toggleSection('reconciliation')">
+                        <i t-attf-class="fa miv-section-caret fa-chevron-{{ state.collapsedSections.reconciliation ? 'right' : 'down' }}"/>
+                        Đối chiếu tổng tiền xuất kho
+                    </h3>
+                    <div class="miv-tiles" t-if="!state.collapsedSections.reconciliation">
                         <div class="miv-tile miv-tile-neutral" t-on-click="() => this.openReconciliationGroup('total')">
                             <div class="miv-tile-icon"><i class="fa fa-cubes"/></div>
                             <div class="miv-tile-body">
@@ -228,11 +232,19 @@
                                 <div class="miv-tile-label">Tổng tiền xuất kho</div>
                             </div>
                         </div>
-                        <div class="miv-tile miv-tile-good" t-on-click="() => this.openReconciliationGroup('misa')">
+                        <div class="miv-tile miv-tile-good" t-on-click="() => this.openReconciliationGroup('total_invoiced')">
                             <div class="miv-tile-icon"><i class="fa fa-check-circle"/></div>
                             <div class="miv-tile-body">
-                                <div class="miv-tile-value"><t t-esc="formatCurrency(reconciliationTotals.misa_invoiced_amount)"/></div>
-                                <div class="miv-tile-label">Đã xuất HĐ (MISA)</div>
+                                <div class="miv-tile-value"><t t-esc="formatCurrency(reconciliationTotals.total_invoiced_amount)"/></div>
+                                <div class="miv-tile-label">Tổng đã xuất HĐ (MISA+Shopee+Hải quan)</div>
+                            </div>
+                        </div>
+                        <div class="miv-tile miv-tile-critical" t-on-click="openDiscrepancyDrawer"
+                             title="Bấm để xem đúng danh sách phiếu đang gây ra khoản chênh lệch này.">
+                            <div class="miv-tile-icon"><i class="fa fa-balance-scale"/></div>
+                            <div class="miv-tile-body">
+                                <div class="miv-tile-value"><t t-esc="formatCurrency(reconciliationTotals.outstanding_amount)"/></div>
+                                <div class="miv-tile-label">Chênh lệch (xuất kho − xuất HĐ)</div>
                             </div>
                         </div>
                         <div class="miv-tile miv-tile-shopee" t-on-click="() => this.openReconciliationGroup('shopee')">
@@ -243,18 +255,11 @@
                             </div>
                         </div>
                         <div class="miv-tile miv-tile-customs" t-on-click="() => this.openReconciliationGroup('customs')"
-                             title="Chỉ tính phần hóa đơn hải quan CHƯA khớp phiếu xuất kho nào — phần đã khớp đã tính vào ô 'Đã xuất HĐ (MISA)' rồi.">
+                             title="Chỉ tính phần hóa đơn hải quan CHƯA khớp phiếu xuất kho nào — phần đã khớp đã tính vào ô 'Tổng đã xuất HĐ' rồi.">
                             <div class="miv-tile-icon"><i class="fa fa-ship"/></div>
                             <div class="miv-tile-body">
                                 <div class="miv-tile-value"><t t-esc="formatCurrency(reconciliationTotals.customs_invoiced_amount)"/></div>
                                 <div class="miv-tile-label">Đã xuất HĐ (Hải quan, chưa khớp PXK)</div>
-                            </div>
-                        </div>
-                        <div class="miv-tile miv-tile-critical" t-on-click="() => this.openReconciliationGroup('outstanding')">
-                            <div class="miv-tile-icon"><i class="fa fa-hourglass-half"/></div>
-                            <div class="miv-tile-body">
-                                <div class="miv-tile-value"><t t-esc="formatCurrency(reconciliationTotals.outstanding_amount)"/></div>
-                                <div class="miv-tile-label">Còn lại chưa xuất HĐ</div>
                             </div>
                         </div>
                     </div>
@@ -262,8 +267,11 @@
 
                 <!-- ===== Tình trạng xuất hóa đơn ===== -->
                 <div class="miv-section" t-if="state.statusSummary">
-                    <h3>Tình trạng xuất hóa đơn</h3>
-                    <table class="miv-table miv-table-compact">
+                    <h3 class="miv-section-toggle" t-on-click="() => this.toggleSection('statusTable')">
+                        <i t-attf-class="fa miv-section-caret fa-chevron-{{ state.collapsedSections.statusTable ? 'right' : 'down' }}"/>
+                        Tình trạng xuất hóa đơn
+                    </h3>
+                    <table class="miv-table miv-table-compact" t-if="!state.collapsedSections.statusTable">
                         <thead>
                             <tr>
                                 <th>Tình trạng</th>
@@ -315,6 +323,14 @@
                                 <td class="miv-col-num"><t t-esc="formatCurrency(state.statusSummary.shopee.actual_amount)"/></td>
                                 <td class="miv-col-num"><t t-esc="formatCurrency(state.statusSummary.shopee.invoice_amount)"/></td>
                                 <td class="miv-col-num"><t t-esc="state.statusSummary.shopee.percentage"/>%</td>
+                            </tr>
+                            <tr t-if="state.statusSummary.customs" t-on-click="() => this.openReconciliationGroup('customs')" class="miv-row-clickable"
+                                title="Đơn vị là DÒNG HÓA ĐƠN hải quan, không phải phiếu xuất kho — chỉ tính phần CHƯA khớp phiếu nào, không cộng vào SỐ PHIẾU/TỶ LỆ chung.">
+                                <td class="miv-cell-customs"><b>Đơn hải quan (chưa khớp PXK)</b></td>
+                                <td class="miv-col-num"><t t-esc="state.statusSummary.customs.count"/> dòng</td>
+                                <td class="miv-col-num">—</td>
+                                <td class="miv-col-num"><t t-esc="formatCurrency(state.statusSummary.customs.invoice_amount)"/></td>
+                                <td class="miv-col-num">—</td>
                             </tr>
                             <tr class="miv-total-row">
                                 <td><b>TỔNG CỘNG</b></td>
@@ -934,6 +950,11 @@
                                 <input type="checkbox" class="miv-cutoff-input" t-att-checked="state.customsTab.pendingOnly" t-on-change="onCustomsPendingOnlyToggle"/>
                                 Chỉ hiện đang chờ xuất kho (<t t-esc="state.customsTab.pendingCount"/>)
                             </label>
+                            <button class="btn btn-sm miv-cutoff-save" t-on-click="retryAllPendingCustomsMatches"
+                                    t-att-disabled="state.customsTab.checkingAll"
+                                    title="Thử khớp lại ngay toàn bộ dòng đang chờ/khớp một phần, không cần đợi quét định kỳ (30 phút/lần)">
+                                <i class="fa fa-refresh" t-att-class="{'fa-spin': state.customsTab.checkingAll}"/> Kiểm tra tất cả đang chờ
+                            </button>
                         </div>
                         <div class="miv-loading" t-if="state.customsTab.loading">
                             <i class="fa fa-spinner fa-spin"/> Đang tải...
@@ -1563,6 +1584,64 @@
                             </button>
                         </div>
                     </t>
+                </div>
+            </div>
+
+            <div class="miv-drawer-overlay" t-if="state.discrepancyOpen" t-on-click="onDiscrepancyOverlayClick">
+                <div class="miv-drawer">
+                    <div class="miv-drawer-header">
+                        <div>
+                            <div class="miv-drawer-eyebrow">Đối chiếu tổng</div>
+                            <div class="miv-drawer-title">Chênh lệch xuất kho vs xuất HĐ</div>
+                            <div class="miv-drawer-subtitle" t-if="state.discrepancy">
+                                <t t-esc="state.discrepancy.total_count"/> phiếu đang lệch — tổng lệch <t t-esc="formatCurrency(state.discrepancy.total_diff)"/>
+                            </div>
+                        </div>
+                        <i class="fa fa-times miv-drawer-close" t-on-click="closeDiscrepancyDrawer"/>
+                    </div>
+                    <div class="miv-drawer-body">
+                        <div class="miv-loading" t-if="state.discrepancyLoading">
+                            <i class="fa fa-spinner fa-spin"/> Đang tải...
+                        </div>
+                        <t t-if="!state.discrepancyLoading and state.discrepancy">
+                            <div class="miv-drawer-linking" t-if="state.discrepancy.customs_pending_amount">
+                                <i class="fa fa-ship"/> Ngoài ra còn <b><t t-esc="state.discrepancy.customs_pending_count"/></b> dòng hóa đơn hải
+                                quan (<t t-esc="formatCurrency(state.discrepancy.customs_pending_amount)"/>) đã xuất HĐ nhưng CHƯA khớp phiếu xuất
+                                kho nào — xem ở tab "Đơn hải quan".
+                            </div>
+                            <table class="miv-subtable miv-drawer-table" t-if="state.discrepancy.rows.length">
+                                <thead>
+                                    <tr>
+                                        <th>Phiếu</th>
+                                        <th class="miv-col-num">Tiền xuất kho</th>
+                                        <th class="miv-col-num">Tiền xuất HĐ</th>
+                                        <th class="miv-col-num">Lệch</th>
+                                        <th>Nguồn</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr t-foreach="state.discrepancy.rows" t-as="row" t-key="row.source + '-' + row.id"
+                                        t-on-click="() => this.openDiscrepancyRow(row)">
+                                        <td>
+                                            <b><t t-esc="row.name"/></b>
+                                            <div class="miv-subtable-hint"><t t-esc="row.partner_name"/></div>
+                                        </td>
+                                        <td class="miv-col-num"><t t-esc="formatCurrency(row.actual_amount)"/></td>
+                                        <td class="miv-col-num"><t t-esc="formatCurrency(row.invoice_amount)"/></td>
+                                        <td t-attf-class="miv-col-num {{ row.diff > 0 ? 'miv-cell-critical' : 'miv-cell-warning' }}">
+                                            <b><t t-esc="formatCurrency(row.diff)"/></b>
+                                        </td>
+                                        <td>
+                                            <span t-attf-class="miv-badge {{ row.source === 'shopee' ? 'miv-badge-shopee' : 'miv-badge-state-not_checked' }}">
+                                                <t t-esc="row.source === 'shopee' ? 'Shopee' : 'MISA'"/>
+                                            </span>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <div class="miv-empty" t-if="!state.discrepancy.rows.length">Không có phiếu nào đang lệch tiền — mọi thứ đã khớp.</div>
+                        </t>
+                    </div>
                 </div>
             </div>
         </div>

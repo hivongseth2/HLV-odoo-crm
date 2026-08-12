@@ -354,6 +354,23 @@
             }
         }
 
+        h3.miv-section-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            user-select: none;
+
+            .miv-section-caret {
+                font-size: 12px;
+                color: var(--miv-ink-muted);
+                width: 12px;
+                text-align: center;
+            }
+
+            &:hover .miv-section-caret { color: var(--miv-ink); }
+        }
+
         .miv-section-header {
             display: flex;
             align-items: center;
@@ -418,6 +435,7 @@
         .miv-cell-good { color: var(--miv-good-text); font-weight: 700; }
         .miv-cell-muted { color: var(--miv-ink-muted); font-weight: 700; }
         .miv-cell-shopee { color: #c9247a; font-weight: 700; }
+        .miv-cell-customs { color: #2a6f97; font-weight: 700; }
 
         &.miv-table-compact tbody tr.miv-row-clickable {
             cursor: pointer;
@@ -635,6 +653,7 @@
         &.miv-badge-state-submitted { background: rgba(250, 178, 25, 0.18); color: var(--miv-warning-text); }
         &.miv-badge-state-rejected { background: rgba(208, 59, 59, 0.12); color: var(--miv-critical-text); }
         &.miv-badge-state-accepted { background: rgba(12, 163, 12, 0.12); color: var(--miv-good-text); }
+        &.miv-badge-shopee { background: rgba(201, 36, 122, 0.12); color: #c9247a; }
     }
 
     // ===== Scan progress panel =====
