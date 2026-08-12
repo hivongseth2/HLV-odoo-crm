@@ -13,6 +13,7 @@ class BarcodeShipper {
         this.activePickingId = null;
         this.customerName = '';
         this.scannedBarcodes = new Set();
+        this._pendingRemainingPickingIds = null; // phiếu chưa quét, chờ hỏi hành động tiếp theo sau khi giao 1 phần
 
         // ---- Receive state ----
         this.receivePickingIds = [];
@@ -1081,15 +1082,42 @@ class BarcodeShipper {
         }, 100);
     }
 
+    // Trạng thái quét của 1 phiếu: 'done' (đủ kiện) / 'partial' (quét dở) / 'not_started'
+    _getPickingStatus(pickingId) {
+        const d = this.pickingDataMap[pickingId];
+        if (!d) return 'not_started';
+        const { scanned, total } = d.progress;
+        if (total > 0 && scanned >= total) return 'done';
+        if (scanned > 0) return 'partial';
+        return 'not_started';
+    }
+
+    // Loại 1 phiếu khỏi lượt giao hiện tại (dùng khi bỏ giao phiếu quét dở)
+    _removePickingFromDelivery(pickingId) {
+        delete this.pickingDataMap[pickingId];
+        this.soGroups.forEach(g => {
+            g.pickingIds = g.pickingIds.filter(id => id !== pickingId);
+        });
+        this.soGroups = this.soGroups.filter(g => g.pickingIds.length > 0);
+        if (this.activePickingId === pickingId) {
+            const remaining = [].concat(...this.soGroups.map(g => g.pickingIds));
+            this.activePickingId = remaining[0] || null;
+        }
+        this.renderAccordion();
+        this.updateGlobalProgress();
+    }
+
     updateGlobalProgress() {
         let totalQty = 0;
         let scannedQty = 0;
-        let allDone = true;
+        let doneCount = 0;
 
-        Object.values(this.pickingDataMap).forEach(d => {
+        const allIds = Object.keys(this.pickingDataMap).map(id => parseInt(id));
+        allIds.forEach(pid => {
+            const d = this.pickingDataMap[pid];
             totalQty += d.progress.total;
             scannedQty += d.progress.scanned;
-            if (!d.progress.isDone) allDone = false;
+            if (this._getPickingStatus(pid) === 'done') doneCount++;
         });
 
         const percent = totalQty ? (scannedQty / totalQty * 100) : 0;
@@ -1097,7 +1125,13 @@ class BarcodeShipper {
         document.getElementById('global-progress-fill').style.width = `${percent}%`;
 
         const btn = document.getElementById('complete-all-btn');
-        if (btn) btn.style.display = (allDone && totalQty > 0) ? 'block' : 'none';
+        if (btn) {
+            // Hiện nút ngay khi có ít nhất 1 phiếu đã quét đủ kiện, không cần chờ tất cả
+            btn.style.display = doneCount > 0 ? 'block' : 'none';
+            btn.innerHTML = doneCount > 0 && doneCount < allIds.length
+                ? `<i class="fa fa-arrow-right"></i> Tiếp theo (${doneCount}/${allIds.length} phiếu đã đủ)`
+                : `<i class="fa fa-arrow-right"></i> Tiếp theo`;
+        }
     }
 
     async scanItem() {
@@ -1228,10 +1262,37 @@ class BarcodeShipper {
     }
 
     async completeAllDelivery() {
-        const pickingIds = Object.keys(this.pickingDataMap).map(id => parseInt(id));
-        if (pickingIds.length === 0) return;
+        const allIds = Object.keys(this.pickingDataMap).map(id => parseInt(id));
+        if (allIds.length === 0) return;
 
-        // Chuyển sang bước chụp ảnh biên bản bàn giao (có chữ ký khách hàng)
+        const doneIds = allIds.filter(id => this._getPickingStatus(id) === 'done');
+        const partialIds = allIds.filter(id => this._getPickingStatus(id) === 'partial');
+        const notStartedIds = allIds.filter(id => this._getPickingStatus(id) === 'not_started');
+
+        if (doneIds.length === 0) {
+            this.showMessage('item-result', 'Chưa có phiếu nào được quét đủ kiện để giao.', 'danger');
+            return;
+        }
+
+        // Có phiếu quét dở (chưa đủ kiện) -> không cho xác nhận, phải quét đủ hoặc bỏ giao phiếu đó
+        if (partialIds.length > 0) {
+            this._showPartialBlockModal();
+            return;
+        }
+
+        if (notStartedIds.length === 0) {
+            // Tất cả phiếu đã quét đủ -> tiến hành như bình thường
+            this._startPhotoCaptureFor(doneIds);
+            return;
+        }
+
+        // Có phiếu đã đủ kiện + phiếu chưa quét -> hỏi xác nhận giao phần đã đủ trước
+        this._showPartialDeliverConfirmModal(doneIds, notStartedIds);
+    }
+
+    // Chuyển sang bước chụp ảnh biên bản bàn giao cho danh sách phiếu chỉ định
+    _startPhotoCaptureFor(pickingIds) {
+        if (!pickingIds || pickingIds.length === 0) return;
         this._photoPickingIds = pickingIds;
         this._capturedPhotos = [];
         this._photoBlob = null;
@@ -1246,6 +1307,160 @@ class BarcodeShipper {
         this._resetPhotoUI();
         this.showDeliverStep('step-photo');
         setTimeout(() => this._startPhotoCamera(), 400);
+    }
+
+    // ===== Modal: chặn xác nhận khi còn phiếu quét dở (chưa đủ kiện) =====
+    _showPartialBlockModal() {
+        let modal = document.getElementById('partial-block-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'partial-block-modal';
+            modal.className = 'modal-overlay';
+            modal.innerHTML = `
+                <div class="modal-content" style="max-height: 80vh;">
+                    <div class="modal-header">
+                        <h3 class="modal-title"><i class="fa fa-exclamation-triangle"></i> Chưa thể xác nhận</h3>
+                        <button class="modal-close">&times;</button>
+                    </div>
+                    <div id="partial-block-body" class="modal-body" style="background:#f5f6f8;"></div>
+                    <div class="modal-footer" style="padding: 15px; border-top: 1px solid #eee; background:#fff;">
+                        <button id="partial-block-close-btn" class="btn btn-secondary btn-lg btn-block">Đã hiểu, quét tiếp</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            modal.querySelector('.modal-close').addEventListener('click', () => this.closeModal(modal));
+            modal.querySelector('#partial-block-close-btn').addEventListener('click', () => this.closeModal(modal));
+        }
+        this._renderPartialBlockBody(modal);
+        this.showModal(modal);
+    }
+
+    _renderPartialBlockBody(modal) {
+        const body = modal.querySelector('#partial-block-body');
+        const allIds = Object.keys(this.pickingDataMap).map(id => parseInt(id));
+        const partialIds = allIds.filter(id => this._getPickingStatus(id) === 'partial');
+
+        if (partialIds.length === 0) {
+            this.closeModal(modal);
+            return;
+        }
+
+        const items = partialIds.map(pid => {
+            const d = this.pickingDataMap[pid];
+            return `
+            <div style="display:flex;align-items:center;gap:10px;padding:8px;background:#fff;border-radius:8px;margin-bottom:6px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+                <div style="flex:1;min-width:0;">
+                    <div style="font-weight:600;font-size:13px;">${d.info.name}</div>
+                    <div style="font-size:11px;color:#e65100;">Đã quét dở: ${d.progress.scanned}/${d.progress.total} kiện</div>
+                </div>
+                <button class="btn btn-secondary" style="font-size:12px;padding:6px 10px;white-space:nowrap;" onclick="window.barcodeShipper._skipPartialPicking(${pid})">Bỏ giao</button>
+            </div>`;
+        }).join('');
+
+        body.innerHTML = `
+            <div style="margin-bottom:10px;font-size:14px;">Các phiếu sau đang quét <b>dở</b> (chưa đủ kiện) nên chưa thể xác nhận giao. Vui lòng quét đủ, hoặc bỏ giao phiếu này:</div>
+            ${items}
+        `;
+    }
+
+    // Bỏ giao 1 phiếu đang quét dở, ngay trong modal chặn xác nhận
+    _skipPartialPicking(pickingId) {
+        this._removePickingFromDelivery(pickingId);
+        const modal = document.getElementById('partial-block-modal');
+        if (modal) this._renderPartialBlockBody(modal);
+    }
+
+    // ===== Modal: xác nhận giao trước các phiếu đã quét đủ, còn lại quét sau =====
+    _showPartialDeliverConfirmModal(doneIds, notStartedIds) {
+        let modal = document.getElementById('partial-deliver-confirm-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'partial-deliver-confirm-modal';
+            modal.className = 'modal-overlay';
+            modal.innerHTML = `
+                <div class="modal-content" style="max-height: 80vh;">
+                    <div class="modal-header">
+                        <h3 class="modal-title"><i class="fa fa-question-circle"></i> Xác nhận giao trước</h3>
+                        <button class="modal-close">&times;</button>
+                    </div>
+                    <div id="partial-deliver-confirm-body" class="modal-body" style="background:#f5f6f8;"></div>
+                    <div class="modal-footer" style="padding: 15px; border-top: 1px solid #eee; display:flex; gap:10px; background:#fff;">
+                        <button id="partial-deliver-cancel-btn" class="btn btn-secondary btn-lg" style="flex:1;">Hủy</button>
+                        <button id="partial-deliver-ok-btn" class="btn btn-success btn-lg" style="flex:2;">Xác nhận giao trước</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            modal.querySelector('.modal-close').addEventListener('click', () => this.closeModal(modal));
+            modal.querySelector('#partial-deliver-cancel-btn').addEventListener('click', () => this.closeModal(modal));
+        }
+
+        const body = modal.querySelector('#partial-deliver-confirm-body');
+        const doneNames = doneIds.map(id => this.pickingDataMap[id]?.info?.name).filter(Boolean);
+        const notStartedNames = notStartedIds.map(id => this.pickingDataMap[id]?.info?.name).filter(Boolean);
+
+        body.innerHTML = `
+            <div style="margin-bottom:10px;font-size:14px;">
+                Bạn chỉ mới quét đủ <b>${doneIds.length} phiếu</b>: ${doneNames.join(', ')}.
+                Giao (những) phiếu này trước nhé?
+            </div>
+            <div style="font-size:12px;color:#888;">Còn ${notStartedIds.length} phiếu chưa quét: ${notStartedNames.join(', ')}.</div>
+        `;
+
+        const okBtn = modal.querySelector('#partial-deliver-ok-btn');
+        okBtn.onclick = () => {
+            this.closeModal(modal);
+            // Lưu lại danh sách phiếu chưa quét để hỏi hành động tiếp theo sau khi hoàn tất
+            this._pendingRemainingPickingIds = notStartedIds;
+            this._startPhotoCaptureFor(doneIds);
+        };
+
+        this.showModal(modal);
+    }
+
+    // ===== Modal: hỏi hành động tiếp theo sau khi giao xong 1 phần =====
+    _showNextActionModal(remainingIds) {
+        let modal = document.getElementById('next-action-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'next-action-modal';
+            modal.className = 'modal-overlay';
+            modal.innerHTML = `
+                <div class="modal-content" style="max-height: 80vh;">
+                    <div class="modal-header">
+                        <h3 class="modal-title"><i class="fa fa-arrow-right"></i> Bước tiếp theo</h3>
+                    </div>
+                    <div id="next-action-body" class="modal-body"></div>
+                    <div class="modal-footer" style="padding: 15px; border-top: 1px solid #eee; display:flex; flex-direction:column; gap:10px; background:#fff;">
+                        <button id="next-action-continue-btn" class="btn btn-success btn-lg btn-block"></button>
+                        <button id="next-action-new-btn" class="btn btn-secondary btn-lg btn-block"><i class="fa fa-plus"></i> Quét phiếu mới</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+
+        const body = modal.querySelector('#next-action-body');
+        const names = remainingIds.map(id => this.pickingDataMap[id]?.info?.name).filter(Boolean).join(', ');
+        body.innerHTML = `<div style="font-size:14px;">Đã giao xong. Còn <b>${remainingIds.length} phiếu</b> chưa quét đủ kiện${names ? ` (${names})` : ''}. Bạn muốn làm gì tiếp theo?</div>`;
+
+        const continueBtn = modal.querySelector('#next-action-continue-btn');
+        continueBtn.innerHTML = `<i class="fa fa-barcode"></i> Quét tiếp ${remainingIds.length} phiếu còn lại`;
+        continueBtn.onclick = () => {
+            this.closeModal(modal);
+            this.activePickingId = remainingIds[0] || null;
+            this.renderAccordion();
+            this.updateGlobalProgress();
+            this.showDeliverStep('step-scan-items');
+        };
+
+        modal.querySelector('#next-action-new-btn').onclick = () => {
+            this.closeModal(modal);
+            this.startNewDelivery();
+        };
+
+        this.showModal(modal);
     }
 
     _resetPhotoUI() {
@@ -1727,7 +1942,20 @@ class BarcodeShipper {
                 this._stopPhotoCamera();
                 this.showDeliverStep('step-complete');
                 this.playSound('success');
-                this.pickingDataMap = {};
+
+                // Chỉ xoá các phiếu vừa hoàn tất, giữ lại phiếu chưa quét (nếu đây là giao trước 1 phần)
+                pickingIds.forEach(id => { delete this.pickingDataMap[id]; });
+                this.soGroups.forEach(g => { g.pickingIds = g.pickingIds.filter(id => !pickingIds.includes(id)); });
+                this.soGroups = this.soGroups.filter(g => g.pickingIds.length > 0);
+
+                const remainingIds = this._pendingRemainingPickingIds || [];
+                this._pendingRemainingPickingIds = null;
+                if (remainingIds.length > 0) {
+                    this._showNextActionModal(remainingIds);
+                } else {
+                    this.pickingDataMap = {};
+                    this.soGroups = [];
+                }
             } else {
                 this.showMessage('photo-result', res.error || 'Có lỗi xảy ra', 'danger');
                 this.playSound('error');
@@ -1752,6 +1980,7 @@ class BarcodeShipper {
         this.soGroups = [];
         this.activePickingId = null;
         this.customerName = '';
+        this._pendingRemainingPickingIds = null;
 
         // Reset pick-step state
         this._pickPhotoList = [];
