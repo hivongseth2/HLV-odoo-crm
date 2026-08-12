@@ -77,6 +77,8 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
             raw_data.encode('utf-8'),
             hashlib.sha256,
         ).hexdigest()
+        return mac
+
 
     def _build_checkout_payload(self, body, private_key):
         """
