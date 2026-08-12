@@ -7,6 +7,13 @@
         <field name="arch" type="xml">
             <list string="Đơn hàng Zalo Mini App" sample="1" decoration-muted="state == 'cancel'">
                 <field name="x_plan_need_cancel" string="Cần hủy" widget="boolean_toggle" optional="show"/>
+                <field name="x_zalo_order_id" string="Mã đơn Zalo SDK" optional="show"/>
+                <field name="x_zalo_payment_method" string="Phương thức TT" optional="show"/>
+                <field name="x_zalo_payment_status" string="TT Thanh toán Zalo" widget="badge"
+                       decoration-warning="x_zalo_payment_status == 'pending'"
+                       decoration-success="x_zalo_payment_status == 'paid'"
+                       decoration-danger="x_zalo_payment_status == 'failed'"
+                       optional="show"/>
                 <field name="x_return_requested" string="Khách đề nghị đổi/trả" widget="boolean_toggle" optional="show"/>
                 <field name="x_return_state" string="TT đổi/trả" widget="badge"
                        decoration-warning="x_return_state == 'pending'"
@@ -46,7 +53,7 @@
         </field>
     </record>
 
-    <!-- Form view riêng cho đơn Zalo - kế thừa form gốc, thêm tab Đổi trả và Smart Button -->
+    <!-- Form view riêng cho đơn Zalo - kế thừa form gốc, thêm tab Zalo Checkout & Đổi trả và Smart Button -->
     <record id="view_order_zalo_form" model="ir.ui.view">
         <field name="name">sale.order.zalo.form</field>
         <field name="model">sale.order</field>
@@ -67,10 +74,20 @@
                 </button>
             </xpath>
 
-            <!-- Tab Đổi/Trả Zalo trong notebook -->
+            <!-- Tab Zalo Checkout & Đổi/Trả trong notebook -->
             <xpath expr="//notebook" position="inside">
-                <page string="Đổi trả Zalo" name="zalo_return"
+                <page string="Zalo Checkout &amp; Đổi trả" name="zalo_info"
                       invisible="not x_is_zalo_order">
+                    <group string="Thông tin thanh toán Zalo Checkout SDK" colspan="4" col="2">
+                        <field name="x_zalo_order_id" string="Mã đơn Zalo SDK" readonly="1"/>
+                        <field name="x_zalo_payment_method" string="Phương thức thanh toán" readonly="1"/>
+                        <field name="x_zalo_payment_status" string="Trạng thái thanh toán Zalo" widget="badge"
+                               decoration-warning="x_zalo_payment_status == 'pending'"
+                               decoration-success="x_zalo_payment_status == 'paid'"
+                               decoration-danger="x_zalo_payment_status == 'failed'"/>
+                        <field name="x_zalo_trans_id" string="Mã giao dịch Zalo (Trans ID)" readonly="1"/>
+                        <field name="x_zalo_trans_time" string="Thời điểm giao dịch" readonly="1"/>
+                    </group>
                     <group string="Tổng quan đổi/trả hàng Zalo Mini App" colspan="4" col="2">
                         <field name="x_return_requested" string="Khách đề nghị đổi/trả"/>
                         <field name="x_return_state" string="Trạng thái tổng hợp"
