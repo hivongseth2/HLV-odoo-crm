@@ -349,10 +349,12 @@ class SaleOrder(models.Model):
         """
         Gửi yêu cầu Server-to-Server API getOrderStatus sang Zalo SDK Server
         để tra cứu trạng thái giao dịch thực tế của đơn hàng.
+        Endpoint: https://payment-mini.zalo.me/api/transaction/get-status (HTTP GET)
         """
         import requests
         import hmac
         import hashlib
+        import json
 
         ICP = self.env["ir.config_parameter"].sudo()
         app_id = str(ICP.get_param("hlv_zalo_miniapp.checkout_app_id", "") or ICP.get_param("zalo.checkout_app_id", "")).strip()
@@ -379,7 +381,7 @@ class SaleOrder(models.Model):
             ).hexdigest()
 
             target_url = "https://payment-mini.zalo.me/api/transaction/get-status"
-            payload = {
+            params = {
                 "appId": app_id,
                 "orderId": zalo_order_id,
                 "mac": mac,
@@ -387,17 +389,29 @@ class SaleOrder(models.Model):
             headers = {"Content-Type": "application/json"}
 
             try:
-                _logger.info("Đang tra cứu getOrderStatus cho đơn %s (orderId=%s)...", order.name, zalo_order_id)
-                resp = requests.post(target_url, json=payload, headers=headers, timeout=10)
-                _logger.info("Kết quả getOrderStatus: HTTP %s - Body: %s", resp.status_code, resp.text)
+                _logger.info("Đang tra cứu getOrderStatus (GET) cho đơn %s (orderId=%s)...", order.name, zalo_order_id)
+                resp = requests.get(target_url, params=params, headers=headers, timeout=10)
+                _logger.info("Kết quả getOrderStatus (GET): HTTP %s - Body: %s", resp.status_code, resp.text)
 
-                if resp.status_code == 200:
-                    res_json = resp.json()
+                # Thử POST nếu GET trả về lỗi hoặc rỗng
+                if resp.status_code != 200 or not resp.text or not resp.text.strip():
+                    _logger.info("Thử lại getOrderStatus bằng POST cho đơn %s...", order.name)
+                    resp = requests.post(target_url, json=params, headers=headers, timeout=10)
+                    _logger.info("Kết quả getOrderStatus (POST): HTTP %s - Body: %s", resp.status_code, resp.text)
+
+                res_json = {}
+                if resp.text and resp.text.strip():
+                    try:
+                        res_json = resp.json()
+                    except Exception as json_err:
+                        _logger.warning("Không thể parse JSON từ Zalo response: %s (Lỗi: %s)", resp.text, str(json_err))
+
+                if resp.status_code == 200 and res_json:
                     return_code = res_json.get("returnCode")
                     data = res_json.get("data", {})
-                    result_code = data.get("resultCode")
-                    trans_id = data.get("transId")
-                    message = data.get("message") or res_json.get("returnMessage") or ""
+                    result_code = data.get("resultCode") if isinstance(data, dict) else res_json.get("resultCode")
+                    trans_id = data.get("transId") if isinstance(data, dict) else res_json.get("transId")
+                    message = (data.get("message") if isinstance(data, dict) else False) or res_json.get("returnMessage") or res_json.get("message") or ""
 
                     vals = {}
                     if trans_id:
@@ -412,10 +426,10 @@ class SaleOrder(models.Model):
                             except Exception:
                                 pass
                         msg = _("Tra cứu Zalo getOrderStatus: Giao dịch THÀNH CÔNG (resultCode=1, transId=%s).") % (trans_id or "")
-                    elif result_code == 0:
+                    elif result_code == 0 or return_code == 0:
                         vals["x_zalo_payment_status"] = "pending"
                         msg = _("Tra cứu Zalo getOrderStatus: Giao dịch CHỜ XỬ LÝ (resultCode=0).")
-                    elif result_code == -1:
+                    elif result_code == -1 or return_code == -1:
                         vals["x_zalo_payment_status"] = "failed"
                         msg = _("Tra cứu Zalo getOrderStatus: Giao dịch THẤT BẠI (resultCode=-1, message=%s).") % message
                     else:
@@ -425,12 +439,14 @@ class SaleOrder(models.Model):
                         order.write(vals)
                     order.message_post(body=msg)
                 else:
-                    order.message_post(body=_("Lỗi tra cứu Zalo getOrderStatus (HTTP %s): %s") % (resp.status_code, resp.text))
+                    msg_body = resp.text.strip() if (resp.text and resp.text.strip()) else f"Mã HTTP {resp.status_code}"
+                    order.message_post(body=_("Phản hồi từ Zalo SDK Server khi tra cứu (HTTP %s): %s") % (resp.status_code, msg_body))
 
             except Exception as req_err:
                 _logger.exception("Lỗi khi tra cứu getOrderStatus cho đơn %s: %s", order.name, str(req_err))
                 raise UserError(_("Lỗi kết nối tới Zalo SDK Server: %s") % str(req_err))
         return True
+
 
     @api.model
     def cron_sync_pending_zalo_orders(self):
