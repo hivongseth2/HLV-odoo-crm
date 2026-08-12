@@ -345,5 +345,117 @@ class SaleOrder(models.Model):
             order.message_post(body=_("Nhân viên đã xác nhận thu tiền thành công và đồng bộ trạng thái đơn COD lên Zalo SDK Server."))
         return True
 
+    def action_query_zalo_order_status(self):
+        """
+        Gửi yêu cầu Server-to-Server API getOrderStatus sang Zalo SDK Server
+        để tra cứu trạng thái giao dịch thực tế của đơn hàng.
+        """
+        import requests
+        import hmac
+        import hashlib
+
+        ICP = self.env["ir.config_parameter"].sudo()
+        app_id = str(ICP.get_param("hlv_zalo_miniapp.checkout_app_id", "") or ICP.get_param("zalo.checkout_app_id", "")).strip()
+        private_key = str(
+            ICP.get_param("hlv_zalo_miniapp.checkout_private_key", "")
+            or ICP.get_param("checkout_private_key", "")
+            or ICP.get_param("zalo.checkout_private_key", "")
+        ).strip()
+
+        for order in self:
+            zalo_order_id = (order.x_zalo_order_id or "").strip()
+            if not zalo_order_id:
+                raise UserError(_("Đơn hàng này chưa có Mã đơn Zalo SDK (x_zalo_order_id)."))
+
+            if not app_id or not private_key:
+                raise UserError(_("Chưa cấu hình Zalo App ID hoặc Private Key trong Odoo System Parameters."))
+
+            # MAC formula: appId={appId}&orderId={orderId}&privateKey={privateKey}
+            raw_mac_str = f"appId={app_id}&orderId={zalo_order_id}&privateKey={private_key}"
+            mac = hmac.new(
+                private_key.encode("utf-8"),
+                raw_mac_str.encode("utf-8"),
+                hashlib.sha256,
+            ).hexdigest()
+
+            target_url = "https://payment-mini.zalo.me/api/transaction/get-status"
+            payload = {
+                "appId": app_id,
+                "orderId": zalo_order_id,
+                "mac": mac,
+            }
+            headers = {"Content-Type": "application/json"}
+
+            try:
+                _logger.info("Đang tra cứu getOrderStatus cho đơn %s (orderId=%s)...", order.name, zalo_order_id)
+                resp = requests.post(target_url, json=payload, headers=headers, timeout=10)
+                _logger.info("Kết quả getOrderStatus: HTTP %s - Body: %s", resp.status_code, resp.text)
+
+                if resp.status_code == 200:
+                    res_json = resp.json()
+                    return_code = res_json.get("returnCode")
+                    data = res_json.get("data", {})
+                    result_code = data.get("resultCode")
+                    trans_id = data.get("transId")
+                    message = data.get("message") or res_json.get("returnMessage") or ""
+
+                    vals = {}
+                    if trans_id:
+                        vals["x_zalo_trans_id"] = str(trans_id)
+
+                    if result_code == 1 or return_code == 1:
+                        vals["x_zalo_payment_status"] = "paid"
+                        vals["x_zalo_trans_time"] = fields.Datetime.now()
+                        if order.state == "draft":
+                            try:
+                                order.action_confirm()
+                            except Exception:
+                                pass
+                        msg = _("Tra cứu Zalo getOrderStatus: Giao dịch THÀNH CÔNG (resultCode=1, transId=%s).") % (trans_id or "")
+                    elif result_code == 0:
+                        vals["x_zalo_payment_status"] = "pending"
+                        msg = _("Tra cứu Zalo getOrderStatus: Giao dịch CHỜ XỬ LÝ (resultCode=0).")
+                    elif result_code == -1:
+                        vals["x_zalo_payment_status"] = "failed"
+                        msg = _("Tra cứu Zalo getOrderStatus: Giao dịch THẤT BẠI (resultCode=-1, message=%s).") % message
+                    else:
+                        msg = _("Tra cứu Zalo getOrderStatus: Phản hồi Zalo = %s") % resp.text
+
+                    if vals:
+                        order.write(vals)
+                    order.message_post(body=msg)
+                else:
+                    order.message_post(body=_("Lỗi tra cứu Zalo getOrderStatus (HTTP %s): %s") % (resp.status_code, resp.text))
+
+            except Exception as req_err:
+                _logger.exception("Lỗi khi tra cứu getOrderStatus cho đơn %s: %s", order.name, str(req_err))
+                raise UserError(_("Lỗi kết nối tới Zalo SDK Server: %s") % str(req_err))
+        return True
+
+    @api.model
+    def cron_sync_pending_zalo_orders(self):
+        """
+        Cronjob tự động chạy ngầm trong Odoo (15 phút/lần).
+        Tự động tìm tất cả các đơn hàng Zalo có x_zalo_payment_status = 'pending'
+        và gọi getOrderStatus sang Zalo SDK Server để đồng bộ trạng thái tự động 100%.
+        """
+        pending_orders = self.search(
+            [
+                ("x_zalo_payment_status", "=", "pending"),
+                ("x_zalo_order_id", "!=", False),
+                ("x_zalo_order_id", "!=", ""),
+            ],
+            limit=50,
+        )
+        _logger.info("Zalo Auto Sync Cronjob: Đang quét %s đơn hàng chờ thanh toán...", len(pending_orders))
+        for order in pending_orders:
+            try:
+                order.action_query_zalo_order_status()
+            except Exception as e:
+                _logger.warning("Zalo Auto Sync Cronjob lỗi ở đơn %s: %s", order.name, str(e))
+        return True
+
+
+
 
 

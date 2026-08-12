@@ -539,3 +539,114 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
             _logger.exception("Lỗi khi xử lý Notify Zalo Checkout: %s", str(e))
             return {'returnCode': -1, 'returnMessage': str(e)}
 
+    @http.route('/api/v1/zalo_checkout/get_status', type='http', auth='public', methods=['POST', 'OPTIONS'], csrf=False)
+    def query_zalo_order_status(self, **post):
+        """
+        API Server-to-Server chủ động tra cứu trạng thái giao dịch từ Zalo Checkout SDK Server.
+        Endpoint: POST https://payment-mini.zalo.me/api/transaction/get-status
+
+        Body:
+        {
+            "zalo_order_id": "154153230724310053847738335_1786506836347"
+        }
+        """
+        if request.httprequest.method == 'OPTIONS':
+            return self._response_options()
+        try:
+            import requests
+
+            body = self._request_json()
+            order_id = (body.get('zalo_order_id') or body.get('orderId') or '').strip()
+            if not order_id:
+                return self._response_error("INVALID_INPUT", "Thiếu zalo_order_id")
+
+            app_id = self._get_app_id()
+            private_key = self._get_private_key()
+
+            if not app_id or not private_key:
+                return self._response_error("CONFIG_ERROR", "Chưa cấu hình Zalo App ID hoặc Private Key")
+
+            # MAC formula: appId={appId}&orderId={orderId}&privateKey={privateKey}
+            raw_mac = f"appId={app_id}&orderId={order_id}&privateKey={private_key}"
+            mac = hmac.new(
+                private_key.encode('utf-8'),
+                raw_mac.encode('utf-8'),
+                hashlib.sha256,
+            ).hexdigest()
+
+            target_url = "https://payment-mini.zalo.me/api/transaction/get-status"
+            payload = {
+                "appId": app_id,
+                "orderId": order_id,
+                "mac": mac,
+            }
+            headers = {"Content-Type": "application/json"}
+
+            _logger.info("Gọi Zalo getOrderStatus cho orderId=%s...", order_id)
+            resp = requests.post(target_url, json=payload, headers=headers, timeout=10)
+            res_data = resp.json() if resp.status_code == 200 else {}
+            _logger.info("Zalo getOrderStatus Response: HTTP %s - Body: %s", resp.status_code, resp.text)
+
+            return self._response_success({
+                "status_code": resp.status_code,
+                "zalo_response": res_data,
+            })
+        except Exception as e:
+            _logger.exception("Lỗi tra cứu trạng thái giao dịch Zalo: %s", str(e))
+            return self._response_error("SERVER_ERROR", f"Lỗi hệ thống: {str(e)}", 500)
+
+    @http.route('/api/zalo/checkout/vnpay_ipn', type='json', auth='public', methods=['POST', 'OPTIONS'], csrf=False)
+    def zalo_checkout_vnpay_ipn(self, **post):
+        """
+        Webhook IPN riêng nhận thông báo giao dịch VNPay tích hợp qua Zalo Checkout SDK.
+        """
+        if request.httprequest.method == 'OPTIONS':
+            return self._response_options()
+        try:
+            body = self._request_json()
+            data = body.get('data', {})
+            order_id = str(data.get('orderId', ''))
+            vnp_response_code = str(data.get('vnp_ResponseCode', data.get('resultCode', '')))
+            trans_id = str(data.get('transId', data.get('vnp_TransactionNo', '')))
+
+            _logger.info("Nhận VNPay IPN Webhook cho orderId=%s (vnp_ResponseCode=%s)", order_id, vnp_response_code)
+
+            if not order_id:
+                return {'RspCode': '99', 'Message': 'Invalid OrderId'}
+
+            SaleOrder = request.env['sale.order'].sudo()
+            sale_order = SaleOrder.search([('x_zalo_order_id', '=', order_id)], limit=1) or SaleOrder.search([('name', '=', order_id)], limit=1)
+
+            if not sale_order:
+                return {'RspCode': '01', 'Message': 'Order not found'}
+
+            if sale_order.x_zalo_payment_status == 'paid':
+                return {'RspCode': '02', 'Message': 'Order already confirmed'}
+
+            if vnp_response_code in ('00', '1'):
+                try:
+                    if sale_order.state == 'draft':
+                        sale_order.action_confirm()
+                except Exception:
+                    pass
+
+                sale_order.write({
+                    'x_zalo_payment_status': 'paid',
+                    'x_zalo_trans_id': trans_id,
+                    'x_zalo_payment_method': 'VNPAY',
+                    'x_zalo_trans_time': fields.Datetime.now(),
+                })
+                return {'RspCode': '00', 'Message': 'Confirm Success'}
+            else:
+                sale_order.write({
+                    'x_zalo_payment_status': 'failed',
+                    'x_zalo_trans_id': trans_id,
+                    'x_zalo_payment_method': 'VNPAY',
+                })
+                return {'RspCode': '00', 'Message': 'Transaction Failed Recorded'}
+        except Exception as e:
+            _logger.exception("Lỗi khi xử lý VNPay IPN Webhook: %s", str(e))
+            return {'RspCode': '99', 'Message': f'Uncertain Error: {str(e)}'}
+
+
+

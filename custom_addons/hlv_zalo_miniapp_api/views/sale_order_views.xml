@@ -66,6 +66,10 @@
                         string="Xác nhận đã thu tiền Zalo/COD"
                         class="btn-success"
                         invisible="not x_is_zalo_order or x_zalo_payment_status == 'paid'"/>
+                <button name="action_query_zalo_order_status" type="object"
+                        string="Kiểm tra TT Zalo (getOrderStatus)"
+                        class="btn-info"
+                        invisible="not x_is_zalo_order or not x_zalo_order_id"/>
             </xpath>
 
             <!-- Field x_is_zalo_order để OWL view đọc trực tiếp -->

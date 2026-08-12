@@ -22,6 +22,7 @@
     ],
     "data": [
         "security/ir.model.access.csv",
+        "data/ir_cron_data.xml",
         "views/product_template_views.xml",
         "views/product_product_views.xml",
         "views/res_partner_views.xml",
