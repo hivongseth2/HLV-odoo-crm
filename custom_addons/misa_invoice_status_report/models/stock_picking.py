@@ -132,12 +132,36 @@ class StockPickingMisaInvoiceStatus(models.Model):
     misa_invoice_saler_code = fields.Char(
         string='Mã sale MISA', compute='_compute_misa_invoice_saler_code', store=True, index=True,
     )
-    # So tiền hóa đơn MISA với tiền thực xuất trên phiếu (field Studio x_studio_tng_tin_sau_thu).
+    # So tiền hóa đơn MISA với tiền thực xuất RÒNG trên phiếu (misa_invoice_net_actual_amount,
+    # xem field bên dưới) — không so trực tiếp với field Studio x_studio_tng_tin_sau_thu nữa vì
+    # field đó là giá trị GỘP chụp nhanh lúc validate, không tự trừ khi có trả hàng sau đó.
     misa_invoice_amount_diff = fields.Float(
         string='Chênh lệch tiền (Odoo - MISA)', compute='_compute_misa_invoice_amount_mismatch', store=True,
     )
     misa_invoice_amount_mismatch = fields.Boolean(
         string='Lệch tiền so với MISA', compute='_compute_misa_invoice_amount_mismatch', store=True,
+    )
+
+    # ==== Trả hàng (khách trả lại 1 phần/toàn bộ sau khi đã xuất kho) ====
+    # x_studio_tng_tin_sau_thu (field Studio, "tiền thực xuất GỘP") chỉ được set 1 LẦN lúc
+    # phiếu validate xong, KHÔNG tự giảm khi sau đó có phiếu trả hàng (stock.return.picking,
+    # tạo phiếu incoming reverse lại move gốc) — khiến mọi tổng đối soát trong module này bị
+    # tính DƯ đúng bằng phần khách đã trả. 2 field dưới đây tính lại "phần ròng" (net = gộp -
+    # đã trả), ghi tay tại 2 thời điểm: (1) phiếu xuất kho gốc validate xong (net = gộp, chưa
+    # có trả), (2) phiếu TRẢ HÀNG liên quan validate xong (tính lại net cho phiếu gốc bị ảnh
+    # hưởng) — xem button_validate()/_misa_invoice_recompute_net_amount(). KHÔNG dùng
+    # @api.depends vì quan hệ trả hàng đi NGƯỢC (phiếu trả trỏ về move gốc qua
+    # origin_returned_move_id) — Odoo không tự invalidate/recompute phiếu gốc chỉ vì có 1
+    # record MỚI ở nơi khác trỏ về nó, nên phải trigger ghi tay tại đúng 2 điểm trên.
+    misa_invoice_returned_amount = fields.Float(
+        string='Tiền hàng đã trả (sau khi xuất kho)', copy=False,
+        help='Giá trị (quy đổi theo giá bán sau thuế) của phần hàng đã bị khách trả lại, tính '
+             'từ các phiếu trả hàng (incoming) liên kết ngược tới move của phiếu này.',
+    )
+    misa_invoice_net_actual_amount = fields.Float(
+        string='Tiền thực xuất RÒNG (đã trừ hàng trả)', copy=False,
+        help='= x_studio_tng_tin_sau_thu (tiền thực xuất gộp) − misa_invoice_returned_amount. '
+             'Dùng số này thay cho x_studio_tng_tin_sau_thu ở mọi chỗ đối soát trong module.',
     )
 
     misa_invoice_exception = fields.Boolean(string='Ngoại lệ (chấp nhận chờ xuất HĐ)', copy=False)
@@ -217,23 +241,23 @@ class StockPickingMisaInvoiceStatus(models.Model):
             picking.misa_invoice_group_order_names = ', '.join(orders.mapped('name'))
 
     @api.depends(
-        'misa_invoice_state', 'misa_invoice_amount', 'x_studio_tng_tin_sau_thu',
-        'misa_invoice_master_picking_id', 'misa_invoice_covered_picking_ids.x_studio_tng_tin_sau_thu',
+        'misa_invoice_state', 'misa_invoice_amount', 'misa_invoice_net_actual_amount',
+        'misa_invoice_master_picking_id', 'misa_invoice_covered_picking_ids.misa_invoice_net_actual_amount',
     )
     def _compute_misa_invoice_amount_mismatch(self):
         for picking in self:
-            actual_amount = getattr(picking, 'x_studio_tng_tin_sau_thu', False) or 0.0
+            actual_amount = picking.misa_invoice_net_actual_amount or 0.0
             if picking.misa_invoice_master_picking_id:
                 # Phiếu "ăn theo" 1 đề nghị gộp chung — không tự so tiền ở đây (tiền hóa đơn
                 # đầy đủ được lưu ở phiếu gốc), xem đối chiếu tại misa_invoice_master_picking_id.
                 picking.misa_invoice_amount_diff = 0.0
                 picking.misa_invoice_amount_mismatch = False
             elif picking.misa_invoice_state == 'invoiced' and (actual_amount or picking.misa_invoice_covered_picking_ids):
-                # Nếu có phiếu đi kèm gộp chung đề nghị, so theo TỔNG tiền thực xuất của cả
+                # Nếu có phiếu đi kèm gộp chung đề nghị, so theo TỔNG tiền thực xuất RÒNG của cả
                 # nhóm với tiền hóa đơn (đã lưu đầy đủ ở phiếu gốc) — so từng phiếu riêng lẻ
                 # với tổng tiền hóa đơn gộp sẽ luôn báo lệch sai.
                 group_actual = actual_amount + sum(
-                    picking.misa_invoice_covered_picking_ids.mapped('x_studio_tng_tin_sau_thu')
+                    picking.misa_invoice_covered_picking_ids.mapped('misa_invoice_net_actual_amount')
                 )
                 diff = group_actual - (picking.misa_invoice_amount or 0.0)
                 picking.misa_invoice_amount_diff = diff
@@ -374,7 +398,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
             if picking.misa_invoice_amount_mismatch:
                 picking.message_post(
                     body=Markup("<b>⚠️ Lệch tiền với MISA:</b> Odoo %.0f đ vs MISA %.0f đ (chênh %.0f đ)") % (
-                        getattr(picking, 'x_studio_tng_tin_sau_thu', 0.0) or 0.0,
+                        picking.misa_invoice_net_actual_amount or 0.0,
                         picking.misa_invoice_amount or 0.0,
                         picking.misa_invoice_amount_diff,
                     )
@@ -729,7 +753,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
             'saler_code': picking.misa_invoice_saler_code or '',
             'date_done': fields.Date.to_string(done_date) if done_date else '',
             'days_pending': (today - done_date).days if done_date else 0,
-            'actual_amount': picking.x_studio_tng_tin_sau_thu or 0.0,
+            'actual_amount': picking.misa_invoice_net_actual_amount or 0.0,
             'state': state,
             'state_label': MISA_SHOPEE_INVOICE_STATE_LABELS.get(state, state),
             'invoice_no': invoice.inv_no or False,
@@ -835,8 +859,10 @@ class StockPickingMisaInvoiceStatus(models.Model):
             misa_domain = misa_domain + [('misa_invoice_saler_code', '=', value)]
             shopee_domain = shopee_domain + [('misa_invoice_saler_code', '=', value)]
 
-        misa_actual_group = Picking.read_group(misa_domain, ['x_studio_tng_tin_sau_thu:sum'], [])
-        misa_actual_total = (misa_actual_group[0]['x_studio_tng_tin_sau_thu'] or 0.0) if misa_actual_group else 0.0
+        misa_actual_group = Picking.read_group(misa_domain, ['misa_invoice_net_actual_amount:sum'], [])
+        misa_actual_total = (
+            (misa_actual_group[0]['misa_invoice_net_actual_amount'] or 0.0) if misa_actual_group else 0.0
+        )
         misa_invoiced_group = Picking.read_group(
             misa_domain + [('misa_invoice_state', '=', 'invoiced')], ['misa_invoice_amount:sum'], [],
         )
@@ -1097,9 +1123,29 @@ class StockPickingMisaInvoiceStatus(models.Model):
                     "cho đúng đơn bán %s."
                 ) % (item_code, line.sale_order_id.name)
             return False
+        # Trừ số lượng đã bị khách TRẢ LẠI (phiếu incoming reverse, liên kết qua
+        # origin_returned_move_id) — nếu không, hàng trả vẫn bị tính là "đã xuất kho", có thể
+        # khớp thừa với hóa đơn dù khách đã trả bớt.
+        returned_moves = self.env['stock.move'].sudo().search([
+            ('origin_returned_move_id', 'in', moves.ids), ('state', '=', 'done'),
+        ])
+        returned_qty_by_move = {}
+        for rm in returned_moves:
+            returned_qty_by_move[rm.origin_returned_move_id.id] = (
+                returned_qty_by_move.get(rm.origin_returned_move_id.id, 0.0) + rm.quantity
+            )
         qty_by_picking = {}
         for move in moves:
-            qty_by_picking[move.picking_id] = qty_by_picking.get(move.picking_id, 0.0) + move.quantity
+            net_qty = move.quantity - returned_qty_by_move.get(move.id, 0.0)
+            if net_qty <= 0:
+                continue
+            qty_by_picking[move.picking_id] = qty_by_picking.get(move.picking_id, 0.0) + net_qty
+        if not qty_by_picking:
+            line.match_note = (
+                "Có phiếu xuất kho cho mã hàng này nhưng toàn bộ số lượng đã bị khách trả lại — "
+                "cần kiểm tra lại thủ công."
+            )
+            return False
         picking_ids = [p.id for p in qty_by_picking]
         other_matches = self.env['misa.invoice.customs.match'].sudo().search([
             ('picking_id', 'in', picking_ids),
@@ -1321,21 +1367,88 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 )
 
     def button_validate(self):
-        """Case hải quan: hóa đơn MISA có TRƯỚC, phiếu xuất kho xác nhận SAU — thời điểm hợp lý
-        nhất để thử khớp là NGAY khi phiếu vừa validate xong, không phải chờ tới lượt cron định
-        kỳ (30 phút/lần) hay bấm tay 'Thử khớp lại'. Trước đây việc khớp chỉ chạy lúc ghi nhận
-        hóa đơn + cron định kỳ — phiếu xuất kho VALIDATE SAU khi hóa đơn đã tồn tại sẽ không có
-        gì trigger khớp ngay, phải đợi cron hoặc vào bấm tay mới thấy chạy."""
+        """2 việc cần trigger NGAY khi 1 phiếu validate xong, không đợi cron (30 phút/lần) hay
+        bấm tay:
+        1. Case hải quan: hóa đơn MISA có TRƯỚC, phiếu xuất kho xác nhận SAU — thử khớp ngay các
+           dòng hải quan pending/partial của đúng (các) đơn bán trên phiếu vừa xuất.
+        2. Case trả hàng: phiếu NÀY tự validate (outgoing) → tính lại misa_invoice_net_actual_amount
+           (ban đầu = gộp, chưa có trả). Phiếu NÀY là 1 phiếu TRẢ HÀNG (incoming, reverse move của
+           phiếu outgoing khác) validate xong → tìm phiếu outgoing gốc bị ảnh hưởng và tính lại
+           net_actual_amount cho phiếu đó (trừ đi phần vừa trả)."""
         res = super().button_validate()
         for picking in self:
-            if picking.picking_type_id.code == 'outgoing' and picking.state == 'done':
+            if picking.state != 'done':
+                continue
+            if picking.picking_type_id.code == 'outgoing':
+                try:
+                    picking._misa_invoice_recompute_net_amount()
+                except Exception:
+                    _logger.exception(
+                        "❌ [MISA RETURN] Lỗi tính lại tiền thực xuất ròng cho phiếu %s", picking.name,
+                    )
                 try:
                     picking._misa_invoice_customs_try_match_for_picking()
                 except Exception:
                     _logger.exception(
                         "❌ [MISA CUSTOMS] Lỗi thử khớp hải quan ngay khi xuất kho phiếu %s", picking.name,
                     )
+            elif picking.picking_type_id.code == 'incoming':
+                try:
+                    picking._misa_invoice_recompute_return_impact()
+                except Exception:
+                    _logger.exception(
+                        "❌ [MISA RETURN] Lỗi tính lại ảnh hưởng trả hàng cho phiếu %s", picking.name,
+                    )
         return res
+
+    def _misa_invoice_recompute_return_impact(self):
+        """Khi phiếu incoming này là phiếu TRẢ HÀNG (reverse 1 hay nhiều move xuất kho gốc, tạo
+        qua wizard stock.return.picking chuẩn của Odoo — mỗi move trả có origin_returned_move_id
+        trỏ về move gốc) — tìm đúng (các) phiếu xuất kho gốc bị ảnh hưởng và tính lại
+        misa_invoice_net_actual_amount cho phiếu đó, để tổng đối soát không bị đếm dư phần khách
+        đã trả lại. Không làm gì nếu đây không phải phiếu trả hàng (phiếu incoming bình thường
+        không có move nào set origin_returned_move_id)."""
+        self.ensure_one()
+        returned_moves = self.move_ids.filtered(lambda m: m.origin_returned_move_id and m.state == 'done')
+        if not returned_moves:
+            return
+        original_pickings = returned_moves.mapped('origin_returned_move_id.picking_id')
+        for picking in original_pickings:
+            picking._misa_invoice_recompute_net_amount()
+
+    def _misa_invoice_recompute_net_amount(self):
+        """Tính lại misa_invoice_returned_amount (tiền hàng đã trả, quy đổi theo đơn giá SAU
+        THUẾ của đúng sale.order.line gắn với từng move — line.price_total / line.product_uom_qty
+        × số lượng đã trả) và misa_invoice_net_actual_amount (= gộp − đã trả) cho 1 phiếu xuất
+        kho. Gọi lại mỗi khi: (1) phiếu này tự validate xong (chưa có trả, net = gộp), hoặc (2)
+        có phiếu trả hàng liên quan tới phiếu này được validate sau đó (xem
+        _misa_invoice_recompute_return_impact)."""
+        self.ensure_one()
+        returned_amount = 0.0
+        original_moves = self.move_ids.filtered(lambda m: m.state == 'done' and m.sale_line_id)
+        if original_moves:
+            returned_moves = self.env['stock.move'].sudo().search([
+                ('origin_returned_move_id', 'in', original_moves.ids), ('state', '=', 'done'),
+            ])
+            returned_qty_by_move = {}
+            for rm in returned_moves:
+                returned_qty_by_move[rm.origin_returned_move_id.id] = (
+                    returned_qty_by_move.get(rm.origin_returned_move_id.id, 0.0) + rm.quantity
+                )
+            for move in original_moves:
+                returned_qty = returned_qty_by_move.get(move.id, 0.0)
+                if not returned_qty:
+                    continue
+                line = move.sale_line_id
+                if not line.product_uom_qty:
+                    continue
+                unit_price_after_tax = line.price_total / line.product_uom_qty
+                returned_amount += unit_price_after_tax * returned_qty
+        gross = self.x_studio_tng_tin_sau_thu or 0.0
+        self.write({
+            'misa_invoice_returned_amount': returned_amount,
+            'misa_invoice_net_actual_amount': max(gross - returned_amount, 0.0),
+        })
 
     def _misa_invoice_customs_try_match_for_picking(self):
         """Thử khớp NGAY các dòng hải quan đang pending/partial của ĐÚNG (các) đơn bán trên
@@ -1523,9 +1636,9 @@ class StockPickingMisaInvoiceStatus(models.Model):
         invoiced = pickings.filtered(lambda p: p.misa_invoice_state == 'invoiced')
         not_invoiced = pickings - invoiced
         return {
-            'actual_amount_total': sum(pickings.mapped('x_studio_tng_tin_sau_thu')),
+            'actual_amount_total': sum(pickings.mapped('misa_invoice_net_actual_amount')),
             'invoice_amount_total': sum(invoiced.mapped('misa_invoice_amount')),
-            'outstanding_amount_total': sum(not_invoiced.mapped('x_studio_tng_tin_sau_thu')),
+            'outstanding_amount_total': sum(not_invoiced.mapped('misa_invoice_net_actual_amount')),
         }
 
     def _misa_invoice_grouped_breakdown(self, domain, groupby_field):
@@ -1546,7 +1659,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
         })
         rows = Picking.read_group(
             domain,
-            ['x_studio_tng_tin_sau_thu:sum', 'misa_invoice_amount:sum'],
+            ['misa_invoice_net_actual_amount:sum', 'misa_invoice_amount:sum'],
             [groupby_field, 'misa_invoice_state', 'misa_invoice_exception'],
             lazy=False,
         )
@@ -1556,7 +1669,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
             count = row['__count']
             state = row['misa_invoice_state']
             exception = row['misa_invoice_exception']
-            actual_sum = row['x_studio_tng_tin_sau_thu'] or 0.0
+            actual_sum = row['misa_invoice_net_actual_amount'] or 0.0
             invoice_sum = row['misa_invoice_amount'] or 0.0
 
             bucket = groups[key]
@@ -1707,7 +1820,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
 
         grouped = Picking.read_group(
             domain,
-            ['x_studio_tng_tin_sau_thu:sum', 'misa_invoice_amount:sum'],
+            ['misa_invoice_net_actual_amount:sum', 'misa_invoice_amount:sum'],
             ['misa_invoice_state', 'misa_invoice_exception'],
             lazy=False,
         )
@@ -1715,7 +1828,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
             count = grp['__count']
             state = grp['misa_invoice_state']
             exception = grp['misa_invoice_exception']
-            actual_sum = grp['x_studio_tng_tin_sau_thu'] or 0.0
+            actual_sum = grp['misa_invoice_net_actual_amount'] or 0.0
             invoice_sum = grp['misa_invoice_amount'] or 0.0
 
             rows['total']['count'] += count
@@ -1803,7 +1916,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
                 'label': label, 'actual_amount': 0.0, 'invoice_amount': 0.0,
                 'date_from': bucket_date_from, 'date_to': bucket_date_to,
             })
-            bucket['actual_amount'] += picking.x_studio_tng_tin_sau_thu or 0.0
+            bucket['actual_amount'] += picking.misa_invoice_net_actual_amount or 0.0
             if picking.misa_invoice_state == 'invoiced':
                 bucket['invoice_amount'] += picking.misa_invoice_amount or 0.0
 
@@ -1827,11 +1940,11 @@ class StockPickingMisaInvoiceStatus(models.Model):
             'days_pending': (today - done_date).days if done_date else 0,
             'state': picking.misa_invoice_state,
             'state_label': MISA_INVOICE_STATE_LABELS.get(picking.misa_invoice_state, picking.misa_invoice_state),
-            'actual_amount': picking.x_studio_tng_tin_sau_thu or 0.0,
+            'actual_amount': picking.misa_invoice_net_actual_amount or 0.0,
             'invoice_amount': invoice_amount,
             'invoice_no': picking.misa_invoice_no or False,
             'outstanding_amount': 0.0 if picking.misa_invoice_state == 'invoiced' else (
-                picking.x_studio_tng_tin_sau_thu or 0.0
+                picking.misa_invoice_net_actual_amount or 0.0
             ),
             'master_picking_id': master.id if master else False,
             'master_picking_name': master.name if master else False,
@@ -2225,7 +2338,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
                     'name': p.name,
                     'state': p.misa_invoice_state,
                     'state_label': MISA_INVOICE_STATE_LABELS.get(p.misa_invoice_state, p.misa_invoice_state),
-                    'actual_amount': p.x_studio_tng_tin_sau_thu or 0.0,
+                    'actual_amount': p.misa_invoice_net_actual_amount or 0.0,
                     'invoice_amount': (
                         p.misa_invoice_master_picking_id.misa_invoice_amount
                         if p.misa_invoice_master_picking_id else p.misa_invoice_amount
@@ -2627,7 +2740,7 @@ class StockPickingMisaInvoiceStatus(models.Model):
             'rows': rows,
             'group_picking_names': group_pickings.mapped('name'),
             'order_level': {
-                'actual_amount': sum(group_pickings.mapped('x_studio_tng_tin_sau_thu')),
+                'actual_amount': sum(group_pickings.mapped('misa_invoice_net_actual_amount')),
                 'invoice_amount': representative.misa_invoice_amount or 0.0,
                 'diff': representative.misa_invoice_amount_diff,
                 'mismatch': representative.misa_invoice_amount_mismatch,
