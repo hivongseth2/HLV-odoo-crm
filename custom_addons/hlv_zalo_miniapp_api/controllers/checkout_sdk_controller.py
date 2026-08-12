@@ -161,7 +161,7 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
         }
 
         # Cấp phát trước mã đơn bán hàng dự kiến (sale.order sequence) để gắn vào Ghi chú & Extradata Zalo SDK
-        order_name = request.env['ir.sequence'].next_by_code('sale.order') or 'S00000'
+        order_name = request.env['ir.sequence'].sudo().next_by_code('sale.order') or 'S00000'
 
         extradata_obj = {
             'contact_id': partner.id,
@@ -361,7 +361,7 @@ class ZaloCheckoutSDKController(ZaloBaseAPI, http.Controller):
                 pass
 
             order_vals = {
-                'name': prepare.order_name or request.env['ir.sequence'].next_by_code('sale.order'),
+                'name': prepare.order_name or request.env['ir.sequence'].sudo().next_by_code('sale.order'),
                 'partner_id': prepare.partner_id.id,
                 'partner_shipping_id': delivery_partner.id,
                 'order_line': order_lines,
