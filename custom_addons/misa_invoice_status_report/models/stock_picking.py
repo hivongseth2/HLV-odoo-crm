@@ -920,21 +920,25 @@ class StockPickingMisaInvoiceStatus(models.Model):
         }
 
     def _misa_invoice_customs_conflicting_picking(self, inv_no):
-        """Tìm phiếu xuất kho ĐÃ được gắn số hóa đơn này qua LUỒNG KHÁC (không phải chính lượt
-        khớp hải quan của hóa đơn này) — dùng để chặn ghi nhận trùng: nếu 1 phiếu xuất kho đã
-        có hóa đơn này rồi (thường là qua luồng thông thường theo refno=tên phiếu), ghi nhận
-        thêm lần nữa qua hải quan sẽ khiến tiền hóa đơn đó bị tính/hiện 2 lần. Loại trừ các
-        phiếu đã khớp qua CHÍNH tính năng hải quan này (từ 1 lượt lưu trước của hóa đơn này) vì
-        đó là re-sync bình thường, không phải trùng lặp."""
+        """Tìm phiếu xuất kho ĐÃ được gắn số hóa đơn này qua LUỒNG THÔNG THƯỜNG (sa_invoice_request
+        theo refno=tên phiếu, hoặc gắn tay qua wizard — cả 2 đều đi qua action_check_misa_invoice_status
+        nên đều set misa_invoice_request_refid) — dùng để chặn ghi nhận trùng, tránh 1 hóa đơn bị
+        tính tiền 2 lần (1 lần qua luồng thường, 1 lần qua hải quan).
+
+        CHỈ coi là trùng khi có misa_invoice_request_refid — field này CHỈ được set bởi luồng
+        thông thường, KHÔNG BAO GIỜ bởi luồng hải quan (_misa_invoice_customs_apply_to_picking).
+        Nhờ vậy phân biệt được với trường hợp phiếu chỉ có misa_invoice_no trùng do MỘT LƯỢT
+        HẢI QUAN TRƯỚC ĐÓ của CHÍNH hóa đơn này để lại (VD sau khi xóa hóa đơn để ghi nhận lại —
+        delete_misa_customs_invoice có revert nhưng dữ liệu cũ từ trước khi có fix này có thể
+        vẫn còn sót) — không dùng match_ids còn tồn tại để loại trừ vì sau khi xóa dòng, match_ids
+        cũng mất theo, sẽ nhận nhầm dữ liệu sót lại là "trùng từ luồng khác"."""
         inv_no = (inv_no or '').strip()
         if not inv_no:
             return self.browse()
-        existing_lines = self.env['misa.invoice.customs.line'].sudo().search([('invoice_no', '=', inv_no)])
-        already_matched_picking_ids = existing_lines.mapped('match_ids.picking_id').ids
-        domain = [('misa_invoice_no', '=', inv_no)]
-        if already_matched_picking_ids:
-            domain.append(('id', 'not in', already_matched_picking_ids))
-        return self.sudo().search(domain, limit=1)
+        return self.sudo().search([
+            ('misa_invoice_no', '=', inv_no),
+            ('misa_invoice_request_refid', '!=', False),
+        ], limit=1)
 
     @api.model
     def save_misa_customs_invoice(self, inv_no):
@@ -1347,9 +1351,30 @@ class StockPickingMisaInvoiceStatus(models.Model):
         inv_no = (inv_no or '').strip()
         if not inv_no:
             return 0
-        lines = self.env['misa.invoice.customs.line'].sudo().search([('invoice_no', '=', inv_no)])
+        Lines = self.env['misa.invoice.customs.line'].sudo()
+        lines = Lines.search([('invoice_no', '=', inv_no)])
         count = len(lines)
+        # Trả lại đúng trạng thái cho các phiếu đã được khớp qua hóa đơn NÀY trước khi xóa —
+        # nếu không, phiếu sẽ bị "kẹt" ở misa_invoice_state='invoiced'/misa_invoice_no=<hóa đơn
+        # vừa xóa> dù dữ liệu hải quan đã không còn, khiến lần ghi nhận lại sau này (re-sync)
+        # bị hiểu nhầm là "trùng với luồng khác" (xem _misa_invoice_customs_conflicting_picking).
+        affected_pickings = lines.mapped('match_ids.picking_id')
         lines.unlink()
+        Match = self.env['misa.invoice.customs.match'].sudo()
+        for picking in affected_pickings:
+            if picking.misa_invoice_state != 'invoiced':
+                continue
+            if Match.search_count([('picking_id', '=', picking.id)]):
+                continue
+            picking.write({
+                'misa_invoice_state': 'not_checked',
+                'misa_invoice_no': False,
+                'misa_invoice_date': False,
+                'misa_invoice_amount': 0.0,
+            })
+            picking.message_post(
+                body=_("Đã xóa hóa đơn hải quan %s — trả phiếu về 'Chưa kiểm tra' để đối soát lại.") % inv_no
+            )
         return count
 
     @api.model
