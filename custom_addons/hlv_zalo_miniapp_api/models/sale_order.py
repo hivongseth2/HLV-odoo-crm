@@ -39,6 +39,11 @@ class SaleOrder(models.Model):
         string="Thời điểm giao dịch Zalo",
         help="Thời gian hoàn tất giao dịch thanh toán phía Zalo SDK",
     )
+    x_zalo_order_id = fields.Char(
+        string="Mã đơn Zalo SDK",
+        help="orderId do Zalo Checkout SDK sinh ra trong createOrder, dùng để map callback/notify với đơn Odoo",
+        index=True,
+    )
 
     # Computed fields tổng hợp từ picking_ids để đảm bảo 100% tương thích REST API cũ
     x_return_requested = fields.Boolean(
